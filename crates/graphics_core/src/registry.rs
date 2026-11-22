@@ -291,6 +291,10 @@ mod tests {
     }
 
     fn binary_signature(left: Type, right: Type, output: Type) -> NodeIOTypes {
+        ranked_signature([left, right], output)
+    }
+
+    fn ranked_signature(inputs: impl IntoIterator<Item = Type>, output: Type) -> NodeIOTypes {
         let input = |value| {
             Type::Fn(
                 Box::new(concrete!(Context<'static>)),
@@ -300,8 +304,111 @@ mod tests {
         NodeIOTypes::new(
             concrete!(Context<'static>),
             Type::Future(Box::new(output)),
-            vec![input(left), input(right)],
+            inputs.into_iter().map(input).collect(),
         )
+    }
+
+    #[test]
+    fn at_gra_node_079_080_083_1_resolves_power_log_and_modulo_profiles() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::{NodeInput, value::TaggedValue};
+        use graphite_math_nodes::{exponent, logarithm, modulo};
+
+        fn signatures<Left: 'static, Right: 'static, Output: 'static>(
+            always_positive: bool,
+        ) -> [NodeIOTypes; 2] {
+            [
+                ranked_signature(
+                    [item!(Left), item!(Right)]
+                        .into_iter()
+                        .chain(always_positive.then(|| item!(bool))),
+                    concrete!(Item<Output>),
+                ),
+                ranked_signature(
+                    [list!(Left), list!(Right)]
+                        .into_iter()
+                        .chain(always_positive.then(|| list!(bool))),
+                    concrete!(List<Output>),
+                ),
+            ]
+        }
+
+        for (identifier, label, names) in [
+            (exponent::IDENTIFIER, "Exponent", ["Base", "Power"]),
+            (logarithm::IDENTIFIER, "Logarithm", ["Value", "Base"]),
+            (modulo::IDENTIFIER, "Modulo", ["Numerator", "Modulus"]),
+        ] {
+            assert_eq!(identifier.as_str(), format!("math_nodes::{label}Node"));
+            let registered =
+                registered_node(identifier.as_str()).expect("pinned arithmetic operation");
+            assert_eq!(registered.metadata.display_name, label);
+            assert_eq!(registered.metadata.category, "Math: Arithmetic");
+            assert!(registered.metadata.context_features.is_empty());
+            assert_eq!(registered.metadata.properties, None);
+            let has_flag = identifier == modulo::IDENTIFIER;
+            let fields = &registered.metadata.fields;
+            assert_eq!(fields.len(), if has_flag { 3 } else { 2 });
+            let [left, right, ..] = fields.as_slice() else {
+                panic!("ordered arithmetic inputs")
+            };
+            assert!(
+                fields
+                    .iter()
+                    .all(|field| matches!(field.widget_override, RegistryWidgetOverride::None))
+            );
+            let mut expected_inputs = vec![
+                NodeInput::value(TaggedValue::Numbers(Vec::new()), true),
+                NodeInput::value(TaggedValue::Number(2.), false),
+            ];
+            let [left_name, right_name] = names;
+            assert_eq!(left.name, left_name);
+            assert_eq!(left.default_type, Some(list!(f64)));
+            assert!(matches!(left.value_source, RegistryValueSource::None));
+            assert_eq!(right.name, right_name);
+            assert_eq!(right.default_type, Some(concrete!(f64)));
+            assert!(matches!(
+                right.value_source,
+                RegistryValueSource::Default("2.")
+            ));
+            if has_flag {
+                let flag = fields
+                    .get(modulo::AlwaysPositiveInput::INDEX)
+                    .expect("Always Positive port");
+                assert_eq!(flag.name, "Always Positive");
+                assert_eq!(flag.default_type, Some(concrete!(bool)));
+                assert!(matches!(
+                    flag.value_source,
+                    RegistryValueSource::Default("true")
+                ));
+                expected_inputs.push(NodeInput::value(TaggedValue::Bool(true), false));
+            }
+            let definition =
+                resolve_proto_node_type(identifier.clone()).expect("exact pinned node template");
+            let template = definition.default_node_template();
+            assert_eq!(
+                template.implementation,
+                NodeTemplateImplementation::ProtoNode(identifier.clone())
+            );
+            assert_eq!(template.inputs, expected_inputs);
+
+            let mut expected = HashSet::new();
+            expected.extend(signatures::<f64, f64, f64>(has_flag));
+            expected.extend(signatures::<f64, DVec2, DVec2>(has_flag));
+            expected.extend(signatures::<DVec2, f64, DVec2>(has_flag));
+            expected.extend(signatures::<DVec2, DVec2, DVec2>(has_flag));
+            if identifier != logarithm::IDENTIFIER {
+                expected.extend(signatures::<i64, i64, i64>(has_flag));
+            }
+            assert_eq!(registered.signatures.len(), expected.len());
+            assert_eq!(
+                registered.signatures.into_iter().collect::<HashSet<_>>(),
+                expected
+            );
+            assert!(matches!(
+                registered_node(label),
+                Err(RegistryError::MissingSourceNode)
+            ));
+        }
     }
 
     #[test]

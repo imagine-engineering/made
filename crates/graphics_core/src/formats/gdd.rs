@@ -60,6 +60,7 @@ use graphite_graph_craft::{
     runtime_delta::RuntimeDelta,
 };
 use graphite_interpreted_executor::node_registry::NODE_REGISTRY;
+use graphite_math_nodes::modulo;
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
@@ -4995,10 +4996,15 @@ fn collect_numeric_preview_node(
     let inputs =
         numeric_preview_inputs(document).ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
     let mut resolved = Vec::with_capacity(inputs.len());
-    let has_radians_port = matches!(
-        &document.implementation,
-        DocumentNodeImplementation::ProtoNode(identifier) if is_trigonometric_proto(identifier)
-    );
+    let boolean_input = match &document.implementation {
+        DocumentNodeImplementation::ProtoNode(identifier) if is_trigonometric_proto(identifier) => {
+            Some(TRIGONOMETRIC_RADIANS_INDEX)
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &modulo::IDENTIFIER => {
+            Some(modulo::AlwaysPositiveInput::INDEX)
+        }
+        _ => None,
+    };
     for (index, input) in inputs.iter().enumerate() {
         let input = match input {
             // A detached pure branch receives the same literal the enclosing network holds.
@@ -5010,9 +5016,7 @@ fn collect_numeric_preview_node(
         };
         match input {
             NodeInput::Value { tagged_value, .. } => {
-                if !(has_radians_port
-                    && index == TRIGONOMETRIC_RADIANS_INDEX
-                    && matches!(**tagged_value, TaggedValue::Bool(_)))
+                if !(boolean_input == Some(index) && matches!(**tagged_value, TaggedValue::Bool(_)))
                 {
                     preview_numeric_value(tagged_value)?;
                 }
@@ -5045,8 +5049,8 @@ fn numeric_preview_inputs(document: &DocumentNode) -> Option<&[NodeInput]> {
 
 fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> {
     use graphite_math_nodes::{
-        absolute_value, add, ceiling, divide, floor, multiply, reciprocal, root, round, sign,
-        subtract,
+        absolute_value, add, ceiling, divide, exponent, floor, logarithm, multiply, reciprocal,
+        root, round, sign, subtract,
     };
 
     if [
@@ -5063,6 +5067,8 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
     } else if [
         add::IDENTIFIER,
         divide::IDENTIFIER,
+        exponent::IDENTIFIER,
+        logarithm::IDENTIFIER,
         multiply::IDENTIFIER,
         root::IDENTIFIER,
         subtract::IDENTIFIER,
@@ -5071,6 +5077,8 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
         || is_trigonometric_proto(identifier)
     {
         Some(2)
+    } else if identifier == &modulo::IDENTIFIER {
+        Some(3)
     } else {
         None
     }
@@ -8843,6 +8851,221 @@ mod tests {
                     .await
                     .expect("original graph")
                     .is_empty()
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_079_080_083_2_evaluates_pinned_arithmetic_in_a_reopened_graph() {
+        use graphite_core_types::{Context, Node, list::Item};
+        use graphite_math_nodes::{LogarithmNode, exponent, logarithm};
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let number = TaggedValue::Number;
+            let integer = TaggedValue::Integer;
+            let numbers = |values: &[f64]| TaggedValue::Numbers(values.to_vec());
+            let vector = |x, y| TaggedValue::DVec2(DVec2::new(x, y));
+            let positive = TaggedValue::Bool(true);
+            let signed = TaggedValue::Bool(false);
+            let natural_base = std::f64::consts::E;
+            let natural_result = LogarithmNode::new(
+                crate::Input(Item::new_from_element(12.3_f64)),
+                crate::Input(Item::new_from_element(natural_base)),
+            )
+            .eval(Context::default())
+            .await
+            .into_element();
+            let cases = [
+                (
+                    exponent::IDENTIFIER,
+                    vec![number(-2.), number(3.)],
+                    GddNumericValue::Number(-8.),
+                ),
+                (
+                    exponent::IDENTIFIER,
+                    vec![integer(3_037_000_499), integer(2)],
+                    GddNumericValue::Integer(9_223_372_030_926_249_001),
+                ),
+                (
+                    exponent::IDENTIFIER,
+                    vec![integer(2), integer(63)],
+                    GddNumericValue::Integer(0),
+                ),
+                (
+                    exponent::IDENTIFIER,
+                    vec![vector(2., 3.), vector(3., 2.)],
+                    GddNumericValue::Vector([8., 9.]),
+                ),
+                (
+                    exponent::IDENTIFIER,
+                    vec![numbers(&[-2., 3.]), number(3.)],
+                    GddNumericValue::NumberList(Arc::from([-8., 27.])),
+                ),
+                (
+                    logarithm::IDENTIFIER,
+                    vec![number(12.3), number(natural_base)],
+                    GddNumericValue::Number(natural_result),
+                ),
+                (
+                    logarithm::IDENTIFIER,
+                    vec![number(1000.), number(10.)],
+                    GddNumericValue::Number(3.),
+                ),
+                (
+                    logarithm::IDENTIFIER,
+                    vec![number(16.), vector(2., 4.)],
+                    GddNumericValue::Vector([4., 2.]),
+                ),
+                (
+                    logarithm::IDENTIFIER,
+                    vec![numbers(&[4., 16.]), number(2.)],
+                    GddNumericValue::NumberList(Arc::from([2., 4.])),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![number(-11.), number(5.), signed],
+                    GddNumericValue::Number(-1.),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![number(-11.), number(5.), positive.clone()],
+                    GddNumericValue::Number(4.),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![
+                        integer(-9_007_199_254_740_993),
+                        integer(5),
+                        positive.clone(),
+                    ],
+                    GddNumericValue::Integer(2),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![vector(-11., 12.), vector(5., 7.), positive.clone()],
+                    GddNumericValue::Vector([4., 5.]),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![
+                        numbers(&[-11., 12., -13.]),
+                        numbers(&[5., 7.]),
+                        positive.clone(),
+                    ],
+                    GddNumericValue::NumberList(Arc::from([4., 5., 1.])),
+                ),
+                (
+                    modulo::IDENTIFIER,
+                    vec![numbers(&[]), number(2.), positive.clone()],
+                    GddNumericValue::NumberList(Arc::from([])),
+                ),
+            ];
+            let mut network = NodeNetwork::default();
+            let mut insert = |identifier, values: Vec<TaggedValue>| {
+                let id = NodeId(network.nodes.len() as u64 + 1);
+                network.nodes.insert(
+                    id,
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::ProtoNode(identifier),
+                        inputs: values
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, value)| NodeInput::value(value, index == 0))
+                            .collect(),
+                        ..Default::default()
+                    },
+                );
+                id
+            };
+            let expected = cases
+                .into_iter()
+                .map(|(identifier, values, output)| (insert(identifier, values), output))
+                .collect::<BTreeMap<_, _>>();
+            let invalid_domain = [
+                insert(exponent::IDENTIFIER, vec![number(-2.), number(0.5)]),
+                insert(logarithm::IDENTIFIER, vec![number(0.), number(2.)]),
+                insert(
+                    modulo::IDENTIFIER,
+                    vec![number(5.), number(0.), positive.clone()],
+                ),
+                insert(
+                    modulo::IDENTIFIER,
+                    vec![positive.clone(), number(5.), positive.clone()],
+                ),
+            ];
+            let wrong_flag = insert(modulo::IDENTIFIER, vec![number(5.), number(2.), number(1.)]);
+            let export = NodeId(1);
+            network.exports.push(NodeInput::node(export, 0));
+            let resources = HashMapResourceStorage::new();
+            let mut owner = document();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save actual pinned arithmetic nodes");
+            let bytes: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source ZIP")
+                .into();
+            let budget = GddArchiveBudget {
+                max_entries: 128,
+                ..budget()
+            };
+            let saved = open_gdd_zip(&bytes, budget)
+                .await
+                .expect("reopen actual arithmetic nodes");
+            let nodes = saved.graph_nodes().await.expect("reopened nodes");
+            assert_eq!(nodes.len(), expected.len() + invalid_domain.len() + 1);
+            let original_bytes = saved
+                .export_archive(ArchiveFormat::Zip, budget.max_archive_bytes)
+                .expect("saved snapshot");
+            for node in &nodes {
+                let result = saved.preview_graph_numeric_output(node).await;
+                if invalid_domain.contains(&node.local_id) {
+                    assert!(
+                        matches!(result, Err(GddArchiveError::UnsupportedGraphNumericPreview)),
+                        "{:?}: {result:?}",
+                        node.local_id
+                    );
+                } else if node.local_id == wrong_flag {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(GddArchiveError::GraphNumericPreviewEvaluation(_))
+                        ),
+                        "{result:?}"
+                    );
+                } else {
+                    let value = result.expect("typed arithmetic output");
+                    assert!(
+                        value.same_value(expected.get(&node.local_id).expect("source output")),
+                        "{:?}: {value:?}",
+                        node.local_id
+                    );
+                }
+            }
+            let node = nodes
+                .iter()
+                .find(|node| node.local_id == export)
+                .expect("actual root export");
+            let result = saved
+                .prepare_document_numeric_output(node, 0)
+                .await
+                .expect("pinned root export")
+                .evaluate()
+                .await
+                .expect("current numeric result");
+            assert!(result.same_value(expected.get(&export).expect("source export result")));
+            assert_eq!(
+                saved
+                    .export_archive(ArchiveFormat::Zip, budget.max_archive_bytes)
+                    .expect("unchanged source after rejection"),
+                original_bytes
             );
         });
     }
