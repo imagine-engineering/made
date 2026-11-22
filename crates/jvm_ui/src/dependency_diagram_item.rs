@@ -1465,6 +1465,12 @@ impl DependencyDiagramItem {
             .overflow_hidden()
             .block_mouse_except_scroll()
             .on_mouse_down(
+                gpui::MouseButton::Right,
+                cx.listener(|item, event: &gpui::MouseDownEvent, window, cx| {
+                    item.show_overview_pointer_menu(None, event, window, cx);
+                }),
+            )
+            .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|item, event: &gpui::MouseDownEvent, _, cx| {
                     item.overview_drag = true;
@@ -1516,12 +1522,19 @@ impl DependencyDiagramItem {
                     x: (origin.x - bounds.origin.x) * scale,
                     y: (origin.y - bounds.origin.y) * scale,
                 };
+                let pointer_node = node.id.clone();
                 let rect = div()
                     .absolute()
                     .left(px(position.x))
                     .top(px(position.y))
                     .w(px(width))
-                    .h(px(height));
+                    .h(px(height))
+                    .on_mouse_down(
+                        gpui::MouseButton::Right,
+                        cx.listener(move |item, event: &gpui::MouseDownEvent, window, cx| {
+                            item.show_overview_pointer_menu(Some(&pointer_node), event, window, cx);
+                        }),
+                    );
                 if selected {
                     let node_id = node.id.clone();
                     let menu_node = node_id.clone();
@@ -1555,6 +1568,25 @@ impl DependencyDiagramItem {
             }
         }
         overview
+    }
+
+    fn show_overview_pointer_menu(
+        &self,
+        node: Option<&str>,
+        event: &gpui::MouseDownEvent,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.stop_propagation();
+        if !self.receipt_is_current(cx) {
+            return;
+        }
+        let target = stage_dependency_diagram_target(node, &self.canvas.read(cx).selection);
+        let position = GraphPoint {
+            x: event.position.x.into(),
+            y: event.position.y.into(),
+        };
+        self.show_context_menu_at(target, position, window, cx);
     }
 
     fn show_overview_context_menu(
@@ -2616,6 +2648,68 @@ mod tests {
         cx.simulate_keystrokes("escape");
         assert!(!item.read_with(cx, |item, _| item.context_handle.is_deployed()));
         assert!(overview_block_has_focus(cx, label));
+
+        let overview_node_center = |node: &str, cx: &mut gpui::VisualTestContext| {
+            cx.update(|_, cx| {
+                let graph = &item.read(cx).canvas.read(cx).graph;
+                let origin = graph.positions.get(node).expect("overview node");
+                let size = graph.node_size();
+                overview_origin.translated(GraphPoint {
+                    x: (origin.x - bounds_origin.x) * scale + (size.width * scale).max(3.0) / 2.0,
+                    y: (origin.y - bounds_origin.y) * scale + (size.height * scale).max(2.0) / 2.0,
+                })
+            })
+        };
+        let viewport = cx.update(|_, cx| item.read(cx).canvas.read(cx).viewport.clone());
+        for (click, expected_target) in [
+            (
+                overview_node_center("c1", cx),
+                DependencyDiagramContextTarget::Selection("c1".into()),
+            ),
+            (
+                overview_node_center("root", cx),
+                DependencyDiagramContextTarget::Node("root".into()),
+            ),
+            (
+                overview_origin.translated(GraphPoint {
+                    x: STRUCTURE_OVERVIEW_SIZE.width - 6.0,
+                    y: STRUCTURE_OVERVIEW_SIZE.height - 6.0,
+                }),
+                DependencyDiagramContextTarget::Canvas,
+            ),
+        ] {
+            let position = gpui::point(px(click.x), px(click.y));
+            cx.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::MouseDownEvent {
+                        button: gpui::MouseButton::Right,
+                        position,
+                        modifiers: Default::default(),
+                        click_count: 1,
+                        first_mouse: false,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+                let item = item.read(cx);
+                let staged = item.context_state.invocation.lock().expect("staged menu");
+                let invocation = staged.as_ref().expect("overview pointer menu invocation");
+                assert_eq!(invocation.target, expected_target);
+                assert_eq!(invocation.screen_position, click);
+            });
+            cx.simulate_mouse_up(position, gpui::MouseButton::Right, Default::default());
+            assert!(item.read_with(cx, |item, _| item.context_handle.is_deployed()));
+            cx.simulate_keystrokes("escape");
+            assert!(!item.read_with(cx, |item, _| item.context_handle.is_deployed()));
+            assert!(overview_block_has_focus(cx, label));
+            cx.update(|_, cx| {
+                let canvas = item.read(cx).canvas.read(cx);
+                assert_eq!(canvas.selection, BTreeSet::from(["c1".into(), "c2".into()]));
+                assert_eq!(canvas.focus.as_deref(), Some("c2"));
+                assert_eq!(canvas.viewport, viewport);
+            });
+        }
+
         for activation_key in ["enter", "space"] {
             item.update(cx, |item, cx| item.move_viewport_to_overview(pointer, cx));
             cx.update(|window, cx| {

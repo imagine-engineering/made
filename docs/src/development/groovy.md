@@ -333,7 +333,9 @@ the focused dependency's coordinates and version.
 In the Structure overview, tab to a selected dependency and press Enter or
 Space to center the view on it while keeping the current selection and zoom.
 Use {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu} to open
-the menu for the focused overview dependency.
+the menu for the focused overview dependency. Secondary-click any dependency
+block to open its menu while keeping the current selection. Secondary-click
+empty overview space for view and layout commands.
 Search includes dependencies beyond the initial canvas view, including
 Gradle requests that failed to resolve. Choosing one brings the occurrence
 and its immediate connections into the bounded view of the graph.
