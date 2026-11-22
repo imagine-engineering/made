@@ -20,7 +20,7 @@ use workspace::{
     item::{Item, ItemEvent, SaveOptions},
 };
 
-use crate::layers::SavedLayerAction;
+use crate::layers::{SavedLayerAction, SavedLayerRow};
 use crate::session::{
     AddMode, ArtboardHistoryDirection, DivideMode, GraphicsSession, UnaryNumericMode,
 };
@@ -131,6 +131,10 @@ pub(crate) enum SavedGraphAction {
         index: usize,
         extend: bool,
         range: bool,
+    },
+    ToggleLayerExpansion {
+        index: usize,
+        recursive: bool,
     },
     EditLayer {
         index: usize,
@@ -245,6 +249,7 @@ pub(crate) struct SavedGraphView<'a> {
     pub focus: &'a FocusHandle,
     pub selected: Option<usize>,
     pub selection: &'a BTreeSet<usize>,
+    pub collapsed_layers: &'a BTreeSet<usize>,
     pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
     pub working: bool,
@@ -760,40 +765,62 @@ pub(crate) fn render_saved_graph(
         });
     let root_layers = match &geometry.root_layers {
         Ok(layers) if layers.is_empty() => None,
-        Ok(layers) => Some(
-            v_flex()
-                .gap_1()
-                .child(Label::new("Layers"))
-                .children(layers.iter().filter_map(|layer| {
-                    let &(index, node) = nodes_by_id.get(&layer.storage_id)?;
-                    let dispatch = dispatch.clone();
-                    Some(crate::layers::render_saved_layer(
-                        layer,
-                        index,
-                        node.display_name().to_owned(),
-                        view.selected == Some(index) || view.selection.contains(&index),
-                        view.pending_source.is_none(),
-                        view.working
-                            .then_some(view.pending_source.is_none() && view.can_start_connection),
-                        move |action, window, cx| {
-                            let action = match action {
-                                SavedLayerAction::Select { extend, range } => {
-                                    SavedGraphAction::SelectLayer {
-                                        index,
-                                        extend,
-                                        range,
+        Ok(layers) => {
+            let mut collapsed_depth = None;
+            Some(
+                v_flex()
+                    .gap_1()
+                    .child(Label::new("Layers"))
+                    .children(layers.iter().enumerate().filter_map(|(position, layer)| {
+                        if collapsed_depth.is_some_and(|depth| layer.depth > depth) {
+                            return None;
+                        }
+                        collapsed_depth = None;
+                        let &(index, node) = nodes_by_id.get(&layer.storage_id)?;
+                        let expanded = layers
+                            .get(position + 1)
+                            .filter(|next| next.depth > layer.depth)
+                            .map(|_| !view.collapsed_layers.contains(&index));
+                        if expanded == Some(false) {
+                            collapsed_depth = Some(layer.depth);
+                        }
+                        let dispatch = dispatch.clone();
+                        Some(crate::layers::render_saved_layer(
+                            SavedLayerRow {
+                                layer,
+                                index,
+                                name: node.display_name().to_owned(),
+                                selected: view.selected == Some(index)
+                                    || view.selection.contains(&index),
+                                can_select: view.pending_source.is_none(),
+                                edit_enabled: view.working.then_some(
+                                    view.pending_source.is_none() && view.can_start_connection,
+                                ),
+                                expanded,
+                            },
+                            move |action, window, cx| {
+                                let action = match action {
+                                    SavedLayerAction::Select { extend, range } => {
+                                        SavedGraphAction::SelectLayer {
+                                            index,
+                                            extend,
+                                            range,
+                                        }
                                     }
-                                }
-                                SavedLayerAction::Edit(change) => {
-                                    SavedGraphAction::EditLayer { index, change }
-                                }
-                            };
-                            dispatch(action, window, cx);
-                        },
-                    ))
-                }))
-                .into_any_element(),
-        ),
+                                    SavedLayerAction::Edit(change) => {
+                                        SavedGraphAction::EditLayer { index, change }
+                                    }
+                                    SavedLayerAction::ToggleExpansion { recursive } => {
+                                        SavedGraphAction::ToggleLayerExpansion { index, recursive }
+                                    }
+                                };
+                                dispatch(action, window, cx);
+                            },
+                        ))
+                    }))
+                    .into_any_element(),
+            )
+        }
         Err(error) => Some(
             Label::new(error.to_string())
                 .color(Color::Error)

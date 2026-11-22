@@ -601,6 +601,7 @@ struct NodeCopyForm {
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
     layer_selection_anchor: Option<usize>,
+    collapsed_layers: BTreeSet<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
     saved_graph_focus: FocusHandle,
@@ -638,6 +639,7 @@ impl NodeCopyForm {
             port_rename: None,
             node_selection: BTreeSet::new(),
             layer_selection_anchor: None,
+            collapsed_layers: BTreeSet::new(),
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_focus: cx.focus_handle(),
@@ -665,6 +667,12 @@ impl NodeCopyForm {
             .filter_map(|index| self.nodes.get(*index))
             .map(GddGraphNode::storage_id)
             .collect::<BTreeSet<_>>();
+        let collapsed = self
+            .collapsed_layers
+            .iter()
+            .filter_map(|&index| self.nodes.get(index))
+            .map(GddGraphNode::storage_id)
+            .collect::<BTreeSet<_>>();
         self.snapshot = snapshot;
         self.revision = revision;
         self.nodes.clone_from(&inspection.nodes);
@@ -682,6 +690,13 @@ impl NodeCopyForm {
             .iter()
             .enumerate()
             .filter(|(_, node)| self.includes_node(node) && group.contains(&node.storage_id()))
+            .map(|(index, _)| index)
+            .collect();
+        self.collapsed_layers = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| collapsed.contains(&node.storage_id()))
             .map(|(index, _)| index)
             .collect();
         selected_id.and_then(|id| {
@@ -706,6 +721,30 @@ impl NodeCopyForm {
                 .iter()
                 .find(|network| network.parent.is_none())
         })
+    }
+
+    fn saved_layer_order(&self) -> Option<Vec<(usize, usize)>> {
+        let SavedGraphPanel::Ready(graph) = &self.saved_graph else {
+            return None;
+        };
+        let layers = graph.root_layers.as_ref().ok()?;
+        let scope = self
+            .clipboard_scope()
+            .filter(|network| network.parent.is_none())?
+            .id;
+        let nodes_by_id = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.network_id() == scope)
+            .map(|(index, node)| (node.storage_id(), index))
+            .collect::<BTreeMap<_, _>>();
+        Some(
+            layers
+                .iter()
+                .filter_map(|layer| Some((*nodes_by_id.get(&layer.storage_id)?, layer.depth)))
+                .collect(),
+        )
     }
 
     fn selected_graph_nodes(&self) -> Vec<GddGraphNode> {
@@ -1710,6 +1749,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::MoveNode { index, position } => {
                 self.move_canvas_nodes(index, position, window, cx);
             }
+            SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
+                self.toggle_saved_layer_expansion(index, recursive, cx);
+            }
             SavedGraphAction::EditLayer { index, change } => {
                 self.edit_canvas_layer(index, change, window, cx);
             }
@@ -1987,33 +2029,16 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
-        let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
-            return;
-        };
-        let Ok(layers) = &graph.root_layers else {
-            return;
-        };
         if form.pending_canvas_source.is_some() {
             return;
         }
-        let Some(scope) = form
-            .clipboard_scope()
-            .filter(|network| network.parent.is_none())
-            .map(|network| network.id)
-        else {
+        let Some(scope) = form.clipboard_scope().map(|network| network.id) else {
             return;
         };
-        let nodes_by_id = form
-            .nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, node)| node.network_id() == scope)
-            .map(|(index, node)| (node.storage_id(), index))
-            .collect::<BTreeMap<_, _>>();
-        let order = layers
-            .iter()
-            .filter_map(|layer| nodes_by_id.get(&layer.storage_id).copied())
-            .collect::<Vec<_>>();
+        let Some(rows) = form.saved_layer_order() else {
+            return;
+        };
+        let order = rows.into_iter().map(|(index, _)| index).collect::<Vec<_>>();
         if !order.contains(&index) {
             return;
         }
@@ -2052,6 +2077,45 @@ impl GraphiteDocumentItem {
             form.output_preview = NodeOutputPreview::Hidden;
             cx.notify();
         }
+    }
+
+    fn toggle_saved_layer_expansion(
+        &mut self,
+        index: usize,
+        recursive: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let Some(order) = form.saved_layer_order() else {
+            return;
+        };
+        let mut subtree = order.into_iter().skip_while(|(row, _)| *row != index);
+        let Some((_, depth)) = subtree.next() else {
+            return;
+        };
+        let mut descendants = subtree
+            .take_while(|(_, row_depth)| *row_depth > depth)
+            .map(|(row, _)| row)
+            .peekable();
+        if descendants.peek().is_none() {
+            return;
+        }
+        let expanding = form.collapsed_layers.remove(&index);
+        if !expanding {
+            form.collapsed_layers.insert(index);
+        }
+        if recursive {
+            if expanding {
+                for row in descendants {
+                    form.collapsed_layers.remove(&row);
+                }
+            } else {
+                form.collapsed_layers.extend(descendants);
+            }
+        }
+        cx.notify();
     }
 
     fn select_saved_graph_box(
@@ -3279,6 +3343,7 @@ impl GraphiteDocumentItem {
                                         focus: &form.saved_graph_focus,
                                         selected: form.selected,
                                         selection: &form.node_selection,
+                                        collapsed_layers: &form.collapsed_layers,
                                         pending_source: form.pending_canvas_source,
                                         can_start_connection: self.copy_task.is_none(),
                                         working,
@@ -5408,6 +5473,10 @@ mod tests {
     }
 
     async fn graph_layer_archive() -> (Vec<u8>, usize) {
+        graph_layer_archive_with_grandchild(false).await
+    }
+
+    async fn graph_layer_archive_with_grandchild(with_grandchild: bool) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
         use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork};
@@ -5428,6 +5497,7 @@ mod tests {
                     NodeId(10) => Some("Background"),
                     NodeId(20) => Some("Artwork"),
                     NodeId(30) => Some("Child"),
+                    NodeId(35) => Some("Grandchild"),
                     NodeId(40) => Some("Unconnected"),
                     _ => None,
                 }
@@ -5441,6 +5511,7 @@ mod tests {
                     NodeId(10) => [8, 4],
                     NodeId(20) => [8, 0],
                     NodeId(30) => [0, 0],
+                    NodeId(35) => [-8, 0],
                     NodeId(40) => [16, 4],
                     _ => return None,
                 };
@@ -5461,7 +5532,13 @@ mod tests {
         *child = NodeInput::node(NodeId(30), 0);
         let mut hidden = merge.node_template.clone();
         hidden.visible = false;
-        let graph = NodeNetwork {
+        if with_grandchild {
+            *hidden
+                .inputs
+                .get_mut(1)
+                .expect("pinned Merge content input") = NodeInput::node(NodeId(35), 0);
+        }
+        let mut graph = NodeNetwork {
             nodes: [
                 (NodeId(10), merge.node_template.clone().into_parts().0),
                 (NodeId(20), artwork.into_parts().0),
@@ -5473,6 +5550,11 @@ mod tests {
             exports: vec![NodeInput::node(NodeId(20), 0)],
             ..Default::default()
         };
+        if with_grandchild {
+            graph
+                .nodes
+                .insert(NodeId(35), merge.node_template.clone().into_parts().0);
+        }
         let mut owner = GddV1::create_in(
             AnyContainer::Memory(MemoryBackend::new()),
             GddV1Layout,
@@ -8684,6 +8766,106 @@ mod tests {
         choose(window, sibling, shift, &[0, 2], 2);
         choose(window, child, accelerator, &[0], 2);
         choose(window, sibling, accelerator, &[], 0);
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_018_2_workspace_collapses_and_expands_saved_layer_subtrees(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) = graph_layer_archive_with_grandchild(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-layer-expansion.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the saved layer hierarchy")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-2");
+        paint(window);
+        let (revision, selected) = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready Inspector")
+            };
+            assert_eq!(form.layer_selection_anchor, Some(2));
+            (
+                item.model.read(cx).revision.clone(),
+                form.selected_node()
+                    .expect("selected hidden child")
+                    .storage_id(),
+            )
+        });
+        let check = |window: &mut gpui::VisualTestContext, child, grandchild| {
+            assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-0").is_some());
+            assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-1").is_some());
+            assert_eq!(
+                window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-2").is_some(),
+                child
+            );
+            assert_eq!(
+                window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-3").is_some(),
+                grandchild
+            );
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                assert_eq!(
+                    form.selected_node().map(GddGraphNode::storage_id),
+                    Some(selected)
+                );
+                assert_eq!(form.layer_selection_anchor, Some(2));
+                assert!(!item.is_dirty(cx));
+                let model = item.model.read(cx);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert_eq!(model.gdd_contents().expect("GDD").history_len(), history);
+            });
+        };
+        check(window, true, true);
+        let recursive = gpui::Modifiers {
+            alt: true,
+            ..Default::default()
+        };
+        let accelerator = gpui::Modifiers {
+            platform: cfg!(target_os = "macos"),
+            control: !cfg!(target_os = "macos"),
+            ..Default::default()
+        };
+        for (modifiers, child, grandchild) in [
+            (recursive, false, false),
+            (Default::default(), true, false),
+            (Default::default(), false, false),
+            (accelerator, true, true),
+        ] {
+            click_saved_graph(
+                window,
+                "GRAPHITE-GDD-LAYER-EXPANSION-1",
+                gpui::MouseButton::Left,
+                modifiers,
+            );
+            check(window, child, grandchild);
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&path)

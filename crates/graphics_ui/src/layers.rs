@@ -6,6 +6,7 @@ use ui::{Button, ButtonStyle, Color, Label, LabelSize, TintColor, prelude::*};
 pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
+    ToggleExpansion { recursive: bool },
 }
 
 pub(crate) fn update_layer_selection(
@@ -40,16 +41,31 @@ pub(crate) fn update_layer_selection(
     }
 }
 
+pub(crate) struct SavedLayerRow<'a> {
+    pub layer: &'a GddRootLayer,
+    pub index: usize,
+    pub name: String,
+    pub selected: bool,
+    pub can_select: bool,
+    pub edit_enabled: Option<bool>,
+    pub expanded: Option<bool>,
+}
+
 pub(crate) fn render_saved_layer(
-    layer: &GddRootLayer,
-    index: usize,
-    name: String,
-    selected: bool,
-    can_select: bool,
-    edit_enabled: Option<bool>,
+    row: SavedLayerRow<'_>,
     dispatch: impl Fn(SavedLayerAction, &mut Window, &mut App) + Clone + 'static,
 ) -> impl IntoElement {
+    let SavedLayerRow {
+        layer,
+        index,
+        name,
+        selected,
+        can_select,
+        edit_enabled,
+        expanded,
+    } = row;
     let select = dispatch.clone();
+    let toggle_expansion = dispatch.clone();
     h_flex()
         .gap_2()
         .flex_wrap()
@@ -82,6 +98,27 @@ pub(crate) fn render_saved_layer(
                         }),
                 ),
         )
+        .when_some(expanded, |row, expanded| {
+            let label = if expanded { "Collapse" } else { "Expand" };
+            row.child(
+                div()
+                    .debug_selector(move || format!("GRAPHITE-GDD-LAYER-EXPANSION-{index}"))
+                    .child(
+                        Button::new(("graphite-gdd-layer-expansion", index), label)
+                            .aria_label(format!("{label} {name}"))
+                            .on_click(move |event, window, cx| {
+                                let modifiers = event.modifiers();
+                                toggle_expansion(
+                                    SavedLayerAction::ToggleExpansion {
+                                        recursive: modifiers.alt || modifiers.secondary(),
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            }),
+                    ),
+            )
+        })
         .when(edit_enabled.is_none() && !layer.visible, |row| {
             row.child(
                 Label::new("Hidden")
