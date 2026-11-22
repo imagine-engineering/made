@@ -403,6 +403,24 @@ async fn read_approved_resource_files(
     Ok(approved)
 }
 
+async fn read_approved_legacy_document(
+    filesystem: &dyn project::Fs,
+    path: &Path,
+) -> anyhow::Result<PreservedLegacyDocument> {
+    let root = filesystem.capture_confined_root(path).await?;
+    let file = filesystem
+        .read_confined_file(&root, path, Path::new(""), ARCHIVE_BUDGET.max_archive_bytes)
+        .await?;
+    inspect_legacy_document(&file.bytes.into(), ARCHIVE_BUDGET.max_archive_bytes).with_context(
+        || {
+            format!(
+                "Reading selected legacy Graphite document {}",
+                path.display()
+            )
+        },
+    )
+}
+
 pub(crate) struct GraphiteDocumentItem {
     model: Entity<GraphiteDocumentProjectItem>,
     project: WeakEntity<Project>,
@@ -411,6 +429,7 @@ pub(crate) struct GraphiteDocumentItem {
     copy_feedback: Option<(SharedString, Color)>,
     export_content: GddExportContent,
     embed_linked_resources: bool,
+    embed_legacy_document: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -440,6 +459,7 @@ impl GraphiteDocumentItem {
             GddExportContent::default()
         };
         let embed_linked_resources = format.is_some() && self.embed_linked_resources;
+        let embed_legacy_document = format.is_some() && self.embed_legacy_document;
         if format.is_some()
             && let Err(error) = content.validate()
         {
@@ -515,6 +535,36 @@ impl GraphiteDocumentItem {
                     "Choose an absolute path for the Graphite copy."
                 );
                 let copy = if let Some((archive, format)) = export {
+                    let legacy_document = if embed_legacy_document {
+                        item.read_with(cx, |_, _| ())?;
+                        let chooser = cx.update(|_, cx| {
+                            cx.prompt_for_paths(PathPromptOptions {
+                                files: true,
+                                directories: false,
+                                multiple: false,
+                                prompt: Some("Choose a Legacy Graphite Document".into()),
+                            })
+                        })?;
+                        let Some(paths) = chooser.await?? else {
+                            return Ok(None);
+                        };
+                        let [path] = paths.as_slice() else {
+                            anyhow::bail!("Select one legacy Graphite document.");
+                        };
+                        item.read_with(cx, |_, _| ())?;
+                        Some(
+                            cx.background_spawn({
+                                let filesystem = filesystem.clone();
+                                let path = path.clone();
+                                async move {
+                                    read_approved_legacy_document(filesystem.as_ref(), &path).await
+                                }
+                            })
+                            .await?,
+                        )
+                    } else {
+                        None
+                    };
                     let approved_files = if embed_linked_resources
                         && !archive.missing_linked_resources()?.is_empty()
                     {
@@ -542,12 +592,13 @@ impl GraphiteDocumentItem {
                         Vec::new()
                     };
                     cx.background_spawn(async move {
-                        let enriched = if embed_linked_resources {
+                        let enriched = if embed_linked_resources || legacy_document.is_some() {
                             Some(
                                 archive
-                                    .with_embedded_linked_resources(
+                                    .with_export_attachments(
                                         content,
-                                        approved_files,
+                                        embed_linked_resources.then_some(approved_files),
+                                        legacy_document.as_ref(),
                                         ARCHIVE_BUDGET,
                                     )
                                     .await?,
@@ -641,6 +692,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             copy_feedback: None,
             export_content: GddExportContent::default(),
             embed_linked_resources: false,
+            embed_legacy_document: false,
         }
     }
 }
@@ -692,6 +744,7 @@ impl Item for GraphiteDocumentItem {
             copy_feedback: None,
             export_content: self.export_content,
             embed_linked_resources: self.embed_linked_resources,
+            embed_legacy_document: self.embed_legacy_document,
         })))
     }
 }
@@ -804,6 +857,25 @@ impl Render for GraphiteDocumentItem {
                                         },
                                     )),
                                 ),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-EXPORT-EMBED-LEGACY".into())
+                                .child(
+                                    Checkbox::new(
+                                        "graphite-export-embed-legacy",
+                                        ToggleState::from(self.embed_legacy_document),
+                                    )
+                                    .label("Embed legacy Graphite document")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(
+                                        |item, choice: &ToggleState, _, cx| {
+                                            item.embed_legacy_document = choice.selected();
+                                            item.copy_feedback = None;
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
                         ),
                 )
                 .child(
@@ -901,6 +973,110 @@ mod tests {
             )
             .await
             .expect("export actual Graphite storage")
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_015_2_workspace_embeds_a_legacy_document_selected_for_export(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_format::{Layout, manifest::SUPPORTED_FORMAT_VERSION};
+        use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
+
+        let fixture = DocumentMessageHandler::default();
+        let payload = format!("{}\n\n", fixture.serialize_document()).into_bytes();
+        let original = archive_bytes(SUPPORTED_FORMAT_VERSION, ExportFormat::Zip).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/source.gdd.zip");
+        let output_path = PathBuf::from("/project/with-legacy.gdd.tar.xz");
+        let legacy_path = PathBuf::from("/project/original.graphite");
+        let invalid_path = PathBuf::from("/project/invalid.graphite");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("original archive fixture");
+        filesystem
+            .write(&legacy_path, &payload)
+            .await
+            .expect("legacy fixture");
+        filesystem
+            .write(&invalid_path, b"{}")
+            .await
+            .expect("invalid fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open original archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        paint(window);
+        click(window, "GRAPHITE-EXPORT-EMBED-LEGACY");
+        for (selected, expect_publish) in [
+            (None, false),
+            (Some(invalid_path), false),
+            (Some(legacy_path.clone()), true),
+        ] {
+            click(window, "GRAPHITE-EXPORT-GDD-XZ");
+            window.simulate_new_path_selection(|_| Some(output_path.clone()));
+            window.run_until_parked();
+            window.simulate_path_prompt_response(|options| {
+                assert!(options.files && !options.multiple && !options.directories);
+                selected.map(|path| vec![path])
+            });
+            window.run_until_parked();
+            paint(window);
+            assert_eq!(
+                filesystem
+                    .metadata(&output_path)
+                    .await
+                    .expect("publication status")
+                    .is_some(),
+                expect_publish
+            );
+        }
+        let copy = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(output_path, Default::default(), window, cx)
+            })
+            .await
+            .expect("open the published XZ archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("reopened native Inspector");
+        copy.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents, .. } = &item.model.read(cx).document else {
+                panic!("expected GDD archive");
+            };
+            let embedded = contents
+                .read_entry(GddV1Layout.legacy_path())
+                .expect("legacy payload in the source layout");
+            assert_eq!(embedded.as_slice(), payload);
+        });
+        item.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents, .. } = &item.model.read(cx).document else {
+                panic!("expected GDD source");
+            };
+            assert!(contents.read_entry(GddV1Layout.legacy_path()).is_err());
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source GDD"),
+            original
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&legacy_path)
+                .await
+                .expect("legacy file"),
+            payload
+        );
     }
 
     #[gpui::test]

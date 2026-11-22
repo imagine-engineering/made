@@ -24,7 +24,7 @@ use graphite_graph_craft::application_io::resource::{
 };
 use zip::ZipArchive;
 
-use super::OriginalJson;
+use super::{OriginalJson, legacy::PreservedLegacyDocument};
 
 mod xz;
 
@@ -83,6 +83,8 @@ pub enum GddArchiveError {
     MissingDocument,
     #[error("The Graphite document has no history to export.")]
     NoExportableHistory,
+    #[error("This Graphite document already contains a different legacy document.")]
+    ConflictingLegacyDocument,
     #[error("{0}")]
     InvalidExportOptions(&'static str),
     #[error("An embedded Graphite resource has no recorded content hash.")]
@@ -186,17 +188,56 @@ impl InspectedGddV1 {
         approved_files: Vec<Vec<u8>>,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.with_export_attachments(content, Some(approved_files), None, budget)
+            .await
+    }
+
+    pub async fn with_export_attachments(
+        &self,
+        content: GddExportContent,
+        approved_resources: Option<Vec<Vec<u8>>>,
+        legacy_document: Option<&PreservedLegacyDocument>,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         content.validate()?;
         if !content.include_registry && self.history_len() == 0 {
             return Err(GddArchiveError::NoExportableHistory);
         }
-        let missing = self.missing_linked_resources()?;
-        let sources = approved_resource_storage(missing, approved_files, &budget)?;
         let layout = GddV1Layout;
+        let legacy_path = layout.legacy_path();
         let include_all = content.include_registry && content.include_history;
-        let legacy = (include_all && self.entries.names.contains(layout.legacy_path()))
-            .then(|| self.read_entry(layout.legacy_path()))
-            .transpose()?;
+        let supplied_legacy = legacy_document.map(PreservedLegacyDocument::original_bytes);
+        let original_legacy = ((include_all || supplied_legacy.is_some())
+            && self.entries.names.contains(legacy_path))
+        .then(|| self.read_entry(legacy_path))
+        .transpose()?;
+        if let Some(supplied) = supplied_legacy
+            && let Some(original) = &original_legacy
+            && supplied != original.as_slice()
+        {
+            return Err(GddArchiveError::ConflictingLegacyDocument);
+        }
+        let legacy = supplied_legacy.or(original_legacy.as_ref().map(ByteHolder::as_slice));
+        let Some(approved_resources) = approved_resources else {
+            if include_all {
+                let mut entries = StagedEntries::new(&budget);
+                for name in &self.entries.names {
+                    entries.install(name, self.read_entry(name)?.as_slice())?;
+                }
+                if let Some(legacy) = legacy
+                    && original_legacy.is_none()
+                {
+                    entries.install(legacy_path, legacy)?;
+                }
+                return open_staged_gdd(entries.finish()?).await;
+            }
+            let bytes = self
+                .export_filtered_archive(ArchiveFormat::Zip, content, legacy, &budget)
+                .await?;
+            return open_staged_gdd(stage_zip(&bytes, &budget)?).await;
+        };
+        let missing = self.missing_linked_resources()?;
+        let sources = approved_resource_storage(missing, approved_resources, &budget)?;
         let bytes = self
             .document
             .export_to_bytes(
@@ -206,7 +247,7 @@ impl InspectedGddV1 {
                     ..content.options()
                 },
                 &sources,
-                legacy.as_ref().map(ByteHolder::as_slice),
+                legacy,
             )
             .await?;
         let exported = stage_zip(
@@ -271,7 +312,7 @@ impl InspectedGddV1 {
             return Ok(self.folder_files()?);
         }
         let bytes = self
-            .export_filtered_archive(ArchiveFormat::Zip, content, &budget)
+            .export_filtered_archive(ArchiveFormat::Zip, content, None, &budget)
             .await?;
         Ok(stage_zip(&bytes, &budget)?.folder_files()?)
     }
@@ -297,13 +338,15 @@ impl InspectedGddV1 {
         if content.include_registry && content.include_history {
             return self.export_archive(format, budget.max_archive_bytes);
         }
-        self.export_filtered_archive(format, content, &budget).await
+        self.export_filtered_archive(format, content, None, &budget)
+            .await
     }
 
     async fn export_filtered_archive(
         &self,
         format: ArchiveFormat,
         content: GddExportContent,
+        legacy_document: Option<&[u8]>,
         budget: &GddArchiveBudget,
     ) -> Result<Vec<u8>, GddArchiveError> {
         content.validate()?;
@@ -320,7 +363,7 @@ impl InspectedGddV1 {
                 format,
                 content.options(),
                 &HashMapResourceStorage::new(),
-                None,
+                legacy_document,
             )
             .await?;
         if bytes.len() > budget.max_archive_bytes {
@@ -734,6 +777,94 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_015_1_embeds_original_legacy_bytes_under_the_pinned_path() {
+        use crate::formats::legacy::inspect_legacy_document;
+
+        futures::executor::block_on(async {
+            let fixture = DocumentMessageHandler::default();
+            let legacy_bytes: Arc<[u8]> = format!("{}\n\n", fixture.serialize_document())
+                .into_bytes()
+                .into();
+            let legacy = inspect_legacy_document(&legacy_bytes, budget().max_archive_bytes)
+                .expect("actual legacy document");
+            let source_bytes = export(&document(), None).await;
+            let source = open_gdd_zip(&source_bytes, budget())
+                .await
+                .expect("original GDD");
+            let path = GddV1Layout.legacy_path();
+            let portable = source
+                .with_export_attachments(GddExportContent::default(), None, Some(&legacy), budget())
+                .await
+                .expect("append the approved legacy document");
+            for format in [ArchiveFormat::Zip, ArchiveFormat::Xz] {
+                let bytes: Arc<[u8]> = portable
+                    .export_archive(format, budget().max_archive_bytes)
+                    .expect("write portable archive")
+                    .into();
+                let reopened = open_gdd_archive(&bytes, budget())
+                    .await
+                    .expect("reopen original container format");
+                assert_eq!(
+                    reopened.read_entry(path).expect("legacy bytes").as_slice(),
+                    legacy_bytes.as_ref()
+                );
+                for name in &source.entries.names {
+                    assert_eq!(
+                        reopened.read_entry(name).expect("copied entry").as_slice(),
+                        source.read_entry(name).expect("original entry").as_slice()
+                    );
+                }
+            }
+            let filtered = source
+                .with_export_attachments(
+                    GddExportContent {
+                        include_registry: true,
+                        include_history: false,
+                    },
+                    None,
+                    Some(&legacy),
+                    budget(),
+                )
+                .await
+                .expect("registry-only export with explicitly supplied legacy data");
+            assert_eq!(
+                filtered.read_entry(path).expect("legacy bytes").as_slice(),
+                legacy_bytes.as_ref()
+            );
+            assert!(matches!(
+                source
+                    .with_export_attachments(
+                        GddExportContent::default(),
+                        None,
+                        Some(&legacy),
+                        GddArchiveBudget {
+                            max_entries: source.entries.names.len(),
+                            ..budget()
+                        },
+                    )
+                    .await,
+                Err(GddArchiveError::BudgetExceeded)
+            ));
+            let different_bytes: Arc<[u8]> = fixture.serialize_document().into_bytes().into();
+            let different = inspect_legacy_document(&different_bytes, budget().max_archive_bytes)
+                .expect("valid, distinct original bytes");
+            assert!(matches!(
+                portable
+                    .with_export_attachments(
+                        GddExportContent::default(),
+                        None,
+                        Some(&different),
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::ConflictingLegacyDocument)
+            ));
+            assert!(source.read_entry(path).is_err());
+            assert_eq!(source.original_bytes(), source_bytes.as_ref());
+        });
     }
 
     #[test]
