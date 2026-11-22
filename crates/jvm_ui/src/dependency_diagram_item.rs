@@ -628,6 +628,12 @@ impl DependencyDiagramItem {
         let (selection_set_len, has_matching_pin, accepts_set) = panel
             .read(cx)
             .diagram_comparison_availability(&source.selection, target.node());
+        let maven_scope = match &self.scope {
+            DependencyDiagramScope::MavenScope(scope) => {
+                crate::dependencies_panel::maven_graph_scope_from_label(scope)
+            }
+            DependencyDiagramScope::GradleConfiguration(_) => Default::default(),
+        };
         DependencyDiagramMenuSnapshot {
             selection_set_len,
             has_inspection: !canvas.inspected.is_empty(),
@@ -640,6 +646,11 @@ impl DependencyDiagramItem {
             }),
             has_matching_pin,
             can_add_to_set: accepts_set && selection_set_len < 8,
+            has_conflict_origins: target.node().is_some_and(|node| {
+                self.receipt
+                    .as_ref()
+                    .is_some_and(|receipt| receipt.has_conflict_origins(node, maven_scope))
+            }),
         }
     }
 

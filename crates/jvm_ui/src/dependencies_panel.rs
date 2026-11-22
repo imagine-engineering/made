@@ -1113,6 +1113,23 @@ impl DependencyGraphReceipt {
             }),
         }
     }
+
+    pub(crate) fn has_conflict_origins(&self, node: &str, maven_scope: MavenGraphScope) -> bool {
+        match &self.graph {
+            DependencyGraphRevision::Maven(graph) => graph.upgrade().is_some_and(|graph| {
+                graph.edges.iter().any(|edge| {
+                    edge.omitted && edge.selected_node == node && maven_scope.matches(&edge.scope)
+                })
+            }),
+            DependencyGraphRevision::Gradle(graph) => graph.upgrade().is_some_and(|graph| {
+                graph
+                    .resolution
+                    .components
+                    .iter()
+                    .any(|component| component.id == node && component.conflict_resolution)
+            }),
+        }
+    }
 }
 
 fn current_dependency_graph_contains<'a>(
@@ -3098,7 +3115,7 @@ impl DependenciesPanel {
                         generation: snapshot.generation,
                         target: GraphQueryTarget::Maven(maven.pom.clone()),
                     };
-                    if *selected == graph_fact_id(&id, "maven", &[]) {
+                    if *selected == id || *selected == graph_fact_id(&id, "maven", &[]) {
                         return Some((selection, graph.root_node.clone()));
                     }
                     for node in &graph.nodes {
@@ -3121,7 +3138,12 @@ impl DependenciesPanel {
                             configuration: graph.resolution.configuration.clone(),
                         },
                     };
-                    if *selected == graph_fact_id(&id, "gradle", &[]) {
+                    if (*selected == id
+                        && (self.view == BuildToolView::Gradle || module.maven.is_none()))
+                        || *selected == graph_fact_id(&id, "gradle", &[])
+                        || *selected
+                            == gradle_configuration_node_id(&id, &graph.resolution.configuration)
+                    {
                         return Some((selection, graph.resolution.root_component.clone()));
                     }
                     for component in &graph.resolution.components {
@@ -3469,12 +3491,8 @@ impl DependenciesPanel {
     }
 
     fn show_dependency_diagram(&mut self, cx: &mut Context<Self>) {
-        let selection = self.selected_graph().or_else(|| {
-            self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
-                .map(|inspection| inspection.selection)
-        });
-        let Some(selection) = selection else {
-            self.show_graph_error(anyhow::anyhow!("Select a current Maven occurrence or Gradle configuration/component, refresh provider graph facts and retry Show diagram"), cx);
+        let Some((selection, _)) = self.resolve_selected_canvas_graph(cx) else {
+            self.show_graph_error(anyhow::anyhow!("Select a Maven project or a resolvable Gradle configuration and use Collect offline graph before opening the diagram"), cx);
             return;
         };
         self.graph_notice = None;
@@ -3614,14 +3632,6 @@ impl DependenciesPanel {
     }
 
     fn show_dependency_diagram_popup(&mut self, cx: &mut Context<Self>) {
-        let has_selection = self.selected_graph().is_some()
-            || self
-                .selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
-                .is_some();
-        if !has_selection {
-            self.show_graph_error(anyhow::anyhow!("Select a current Maven occurrence or Gradle configuration/component, refresh provider graph facts and retry Show diagram popup"), cx);
-            return;
-        }
         match self.canvas_diagram_load(cx.weak_entity(), cx) {
             Some(open) => {
                 let _ = self.workspace.update_in(cx, |workspace, window, cx| {
@@ -3640,18 +3650,11 @@ impl DependenciesPanel {
     /// Opens the dependency analyzer tab over the selected admitted graph
     /// facts, or focuses the matching open analyzer tab.
     fn analyze_dependencies(&mut self, cx: &mut Context<Self>) {
-        let selection = self.selected_graph().or_else(|| {
-            self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
-                .map(|inspection| inspection.selection)
-        });
-        let Some(selection) = selection else {
-            self.show_graph_error(anyhow::anyhow!("Select a current Maven occurrence or Gradle configuration/component, refresh provider graph facts and retry Analyze Dependencies"), cx);
+        let Some((selection, _)) = self.resolve_selected_canvas_graph(cx) else {
+            self.show_graph_error(anyhow::anyhow!("Select a Maven project or a resolvable Gradle configuration and use Collect offline graph before analyzing dependencies"), cx);
             return;
         };
-        if self.host_unavailable(cx) {
-            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Analyze Dependencies"), cx);
-            return;
-        }
+        let occurrence = self.resolve_selected_graph(cx).map(|(_, node)| node);
         let derivation = crate::dependencies_panel::derive_dependency_analyzer(
             self.project.read(cx),
             self.view,
@@ -3672,7 +3675,9 @@ impl DependenciesPanel {
             view: self.view,
             panel,
         };
-        if let Err(error) = self.open_or_focus_analyzer_tab(derivation, source, None, cx) {
+        if let Err(error) =
+            self.open_or_focus_analyzer_tab(derivation, source, occurrence.as_deref(), cx)
+        {
             self.show_graph_error(error, cx);
         }
     }
@@ -3752,7 +3757,47 @@ impl DependenciesPanel {
             .is_some_and(|selected| self.operation_selections.contains_key(selected));
         let queue = self.ordered_queue_menu(cx);
         let eligible = self.resolve_selected_canvas_graph(cx).is_some();
-        let can_cancel_import = self.build_phase_is_pending(cx);
+        let can_collect_graph = self.selected_graph().is_some()
+            && self.graph_query_token.is_none()
+            && !self.project.read(cx).is_remote();
+        let can_cancel_import = self.build_phase_is_pending(cx)
+            && self
+                .host
+                .selected()
+                .and_then(|id| self.navigation.get(id))
+                .is_some_and(|row| {
+                    self.build_phase_token
+                        .is_some_and(|token| token.worktree_id() == row.path.worktree_id)
+                });
+        let inspection = self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx);
+        let has_conflict_origins = inspection.as_ref().is_some_and(|inspection| {
+            current_dependency_graph_receipt(self.project.read(cx), &inspection.selection, cx)
+                .is_some_and(|receipt| {
+                    receipt.selection == inspection.selection
+                        && receipt.has_conflict_origins(&inspection.node, MavenGraphScope::All)
+                })
+        });
+        let (set_len, paths_to_pin, can_add_to_set) =
+            inspection.as_ref().map_or((0, false, false), |inspection| {
+                let (count, has_pin, accepts) = self
+                    .diagram_comparison_availability(&inspection.selection, Some(&inspection.node));
+                let is_member = self.graph_selection_set.iter().any(|member| {
+                    member.selection == inspection.selection && member.node == inspection.node
+                });
+                (count, has_pin, accepts && count < 8 && !is_member)
+            });
+        let has_inspection = self.graph_inspection.is_some();
+        if !is_operation_row
+            && !is_queue_row
+            && !eligible
+            && !can_collect_graph
+            && inspection.is_none()
+            && !has_inspection
+            && !can_cancel_import
+        {
+            cx.notify();
+            return;
+        }
         let focus_handle = self.focus_handle.clone();
         let context_menu = ui::ContextMenu::build(window, cx, move |menu, _, _| {
             menu.context(focus_handle).map(|menu| {
@@ -3807,29 +3852,77 @@ impl DependenciesPanel {
                         Box::new(RunOrderedOfflineOperations),
                     );
                 }
-                menu.action_disabled_when(
-                    !eligible,
-                    "Show Dependency Diagram",
-                    Box::new(ShowDependencyDiagram),
-                )
-                .action_disabled_when(
-                    !eligible,
-                    "Show Dependency Diagram Popup",
-                    Box::new(ShowDependencyDiagramPopup),
-                )
-                .action_disabled_when(
-                    !eligible,
-                    "Analyze Dependencies",
-                    Box::new(crate::dependency_analyzer_item::AnalyzeDependencies),
-                )
-                .action_disabled_when(
-                    !can_cancel_import,
-                    "Cancel selected import",
-                    Box::new(CancelSelectedImport),
-                )
+                if eligible {
+                    menu = menu
+                        .action("Show Dependency Diagram", Box::new(ShowDependencyDiagram))
+                        .action(
+                            "Show Dependency Diagram Popup",
+                            Box::new(ShowDependencyDiagramPopup),
+                        )
+                        .action("Analyze Dependencies", Box::new(AnalyzeDependencies));
+                }
+                if can_collect_graph {
+                    menu = menu.action("Collect offline graph", Box::new(CollectSelectedGraph));
+                }
+                if inspection.is_some() {
+                    menu = menu
+                        .separator()
+                        .action("Neighbours", Box::new(InspectGraphNeighbours))
+                        .action("Shortest root paths", Box::new(InspectGraphRootPaths))
+                        .action("Usages in the tree", Box::new(InspectGraphAllUsages))
+                        .submenu("More inspections", move |menu, _, _| {
+                            let menu =
+                                menu.action("All root paths", Box::new(InspectGraphAllRootPaths));
+                            if has_conflict_origins {
+                                menu.action(
+                                    "Conflict origins",
+                                    Box::new(InspectGraphConflictOrigins),
+                                )
+                            } else {
+                                menu
+                            }
+                        })
+                        .submenu("Compare", move |mut menu, _, _| {
+                            menu = menu.action("Pin dependency", Box::new(PinGraphSelection));
+                            if paths_to_pin {
+                                menu = menu
+                                    .action("Paths to pinned", Box::new(InspectGraphPathsBetween));
+                            }
+                            if can_add_to_set {
+                                menu = menu.action(
+                                    "Add to comparison set",
+                                    Box::new(AddGraphSelectionToSet),
+                                );
+                            }
+                            if set_len >= 2 {
+                                menu = menu
+                                    .action("Set relations", Box::new(InspectGraphSelectionSet));
+                            }
+                            if set_len > 0 {
+                                menu = menu.action(
+                                    "Clear comparison set",
+                                    Box::new(ClearGraphSelectionSet),
+                                );
+                            }
+                            menu
+                        });
+                }
+                if has_inspection {
+                    menu = menu.action("Clear inspection", Box::new(ClearGraphInspection));
+                }
+                if can_cancel_import {
+                    menu = menu
+                        .separator()
+                        .action("Cancel selected import", Box::new(CancelSelectedImport));
+                }
+                menu
             })
         });
         let menu_focus = context_menu.focus_handle(cx);
+        let return_focus = window
+            .focused(cx)
+            .filter(|_| self.focus_handle.contains_focused(window, cx))
+            .unwrap_or_else(|| self.focus_handle.clone());
         window.focus(&menu_focus, cx);
         let subscription = cx.subscribe_in(
             &context_menu,
@@ -3837,7 +3930,7 @@ impl DependenciesPanel {
             move |this, _, _: &gpui::DismissEvent, window, cx| {
                 this.graph_context_menu.take();
                 if menu_focus.contains_focused(window, cx) {
-                    this.focus_handle.focus(window, cx);
+                    return_focus.focus(window, cx);
                 }
                 cx.notify();
             },
@@ -7676,6 +7769,7 @@ impl Render for DependenciesPanel {
         let can_inspect_graph = self
             .selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
             .is_some();
+        let can_present_graph = self.resolve_selected_canvas_graph(cx).is_some();
         let click_panel = cx.weak_entity();
         let toggle_panel = cx.weak_entity();
         let menu_panel = cx.weak_entity();
@@ -8054,34 +8148,14 @@ impl Render for DependenciesPanel {
                             .disabled(!can_apply_build_selection).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.unlink_selected_gradle_project(cx)))
                     ))
-                    .child(Button::new("groovy-cancel-selected-import", "Cancel selected import")
-                        .aria_label("Cancel only the current build import started by this panel")
-                        .disabled(!can_cancel_import).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.cancel_selected_import(cx))))
-                    .child(
-                        Button::new(
-                            "groovy-quick-run-configuration",
-                            format!(
-                                "Run configuration: {}",
-                                self.recent_configurations
-                                    .front()
-                                    .map(|(_, label)| label.as_str())
-                                    .unwrap_or("none")
-                            ),
-                        )
-                        .aria_label(format!(
-                            "Quick-run the most recent saved configuration; the shortcut action and saved configuration tree rows select the same saved task identity{}",
-                            self.recent_configurations
-                                .front()
-                                .map(|(_, label)| format!("; most recent: {label}"))
-                                .unwrap_or_default()
-                        ))
-                        .disabled(self.recent_configurations.is_empty())
-                        .tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, window, cx| {
-                            panel.quick_run_recent_configuration(window, cx)
-                        })),
-                    )
+                    .when_some(self.recent_configurations.front(), |header, (_, label)| header.child(
+                        Button::new("groovy-quick-run-configuration", format!("Run {label}"))
+                            .aria_label(format!("Quick-run the most recent saved configuration: {label}"))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, window, cx| {
+                                panel.quick_run_recent_configuration(window, cx)
+                            })),
+                    ))
                     .when(!icon_toolbar_active, |header| header.child(
                         Button::new("groovy-graph-facts-filter", format!("Graph: {}", self.preferences.graph_fact_filter.label()))
                             .aria_label(format!("Dependency graph fact filter: {}; activate for {}; filters admitted metadata without resolving dependencies", self.preferences.graph_fact_filter.label(), self.preferences.graph_fact_filter.next().label()))
@@ -8097,65 +8171,42 @@ impl Render for DependenciesPanel {
                             .on_click(cx.listener(|panel, _, _, cx| panel.cycle_maven_graph_scope(cx)))
                     ))
                     .child(
-                        Button::new("groovy-graph-fact-presentation", format!("Graph facts: {}", self.preferences.graph_fact_presentation.label()))
+                        Button::new("groovy-graph-fact-presentation", self.preferences.graph_fact_presentation.label())
+                            .tooltip(Tooltip::text("Dependency fact presentation"))
                             .aria_label(format!("Dependency graph facts presentation: {}; activate for {}; both presentations report the same admitted provider facts", self.preferences.graph_fact_presentation.label(), self.preferences.graph_fact_presentation.next().label()))
                             .aria_value(self.preferences.graph_fact_presentation.label())
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_presentation(cx)))
                     )
-                    .child(Button::new("groovy-inspect-graph-neighbours", "Neighbours")
-                        .aria_label("Inspect selected dependency neighbours in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx))))
-                    .child(Button::new("groovy-inspect-graph-root-paths", "Shortest root paths")
-                        .aria_label("Inspect all shortest root paths to the selected dependency in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx))))
-                    .child(Button::new("groovy-inspect-graph-conflict-origins", "Conflict origins")
-                        .aria_label("Inspect the conflict origins and requested versions of the selected dependency in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ConflictOrigins) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ConflictOrigins, cx))))
-                    .child(Button::new("groovy-inspect-graph-all-usages", "All usages")
-                        .aria_label("Inspect every component that transitively reaches the selected dependency in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllUsages) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllUsages, cx))))
-                    .child(Button::new("groovy-inspect-graph-all-root-paths", "All root paths")
-                        .aria_label("Inspect every bounded root path to the selected dependency in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::AllRootPaths) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::AllRootPaths, cx))))
-                    .child(Button::new("groovy-pin-graph-selection", "Pin dependency")
-                        .aria_label("Pin the selected dependency for pair analysis; activate again on the pinned row to clear the pin")
-                        .aria_value(if self.graph_pin.is_some() { "Pinned" } else { "Not pinned" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.pin_selected_graph(cx))))
-                    .child(Button::new("groovy-inspect-graph-paths-between", "Paths to pinned")
-                        .aria_label("Inspect every bounded simple path from the pinned dependency to the selected dependency in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::PathsBetween) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::PathsBetween, cx))))
-                    .child(Button::new("groovy-add-graph-selection-to-set", "Add to set")
-                        .aria_label("Add the selected dependency to the selection set for multi-dependency analysis")
-                        .aria_value(if self.graph_selection_set.is_empty() { "Empty" } else { "Has members" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.add_graph_selection_to_set(cx))))
-                    .child(Button::new("groovy-clear-graph-selection-set", "Clear set")
-                        .aria_label("Clear the selection set without changing the current inspection")
-                        .disabled(self.graph_selection_set.is_empty()).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_selection_set(cx))))
-                    .child(Button::new("groovy-inspect-graph-selection-set", "Set relations")
-                        .aria_label("Inspect induced dependency edges and reachability among the selection set in admitted graph facts")
-                        .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::SelectionSetRelations) { "Active" } else { "Inactive" })
-                        .disabled(!can_inspect_graph).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::SelectionSetRelations, cx))))
-                    .child(Button::new("groovy-clear-graph-inspection", "Clear inspection")
-                        .aria_label("Clear selected dependency graph inspection")
-                        .disabled(self.graph_inspection.is_none()).tab_index(0_isize)
-                        .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_inspection(cx))))
+                    .when(can_inspect_graph, |header| header.child(
+                        h_flex().flex_wrap().gap_1()
+                            .child(Button::new("groovy-inspect-graph-neighbours", "Neighbours")
+                                .aria_label("Inspect selected dependency neighbours in admitted graph facts")
+                                .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours) { "Active" } else { "Inactive" })
+                                .toggle_state(self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours))
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx))))
+                            .child(Button::new("groovy-inspect-graph-root-paths", "Shortest root paths")
+                                .aria_label("Inspect all shortest root paths to the selected dependency in admitted graph facts")
+                                .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths) { "Active" } else { "Inactive" })
+                                .toggle_state(self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths))
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx))))
+                            .child(Button::new("groovy-dependency-row-actions", "Dependency actions")
+                                .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall))
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, event: &gpui::ClickEvent, window, cx| {
+                                    if let Some(id) = panel.host.selected().cloned() {
+                                        panel.show_graph_context_menu(id, event.position(), window, cx);
+                                    }
+                                }))),
+                    ))
+                    .when(self.graph_inspection.is_some(), |header| header.child(
+                        Button::new("groovy-clear-graph-inspection", "Clear inspection")
+                            .aria_label("Clear selected dependency graph inspection")
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_inspection(cx))),
+                    ))
                     .when(!icon_toolbar_active, |header| header.child(
                         Button::new("groovy-collect-offline-graph", "Collect offline graph")
                             .aria_label(if self.project.read(cx).is_remote() {
@@ -8239,19 +8290,24 @@ impl Render for DependenciesPanel {
                                 .aria_value(format!("{} selected", self.ordered_operations.len()))
                                 .disabled(!can_run_ordered).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx))))))))
-                    .child(Button::new("groovy-show-dependency-diagram", "Show diagram")
-                        .aria_label("Show a bounded diagram of current admitted dependency graph facts")
-                        .tab_index(0_isize).toggle_state(self.graph_diagram.is_some())
-                        .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram(cx))))
-                    .child(Button::new("groovy-close-dependency-diagram", "Close diagram")
-                        .aria_label("Close dependency diagram; retain current tree facts")
-                        .tab_index(0_isize).disabled(self.graph_diagram.is_none())
-                        .on_click(cx.listener(|panel, _, _, cx| panel.close_dependency_diagram(cx))))
-                    .child(Button::new("groovy-copy-dependency-diagram-source", "Copy diagram source")
-                        .aria_label("Copy the bounded diagram's Mermaid source to the clipboard as the accepted export equivalent")
-                        .aria_value(if self.graph_diagram_source.is_some() { "Available" } else { "Unavailable" })
-                        .tab_index(0_isize).disabled(self.graph_diagram_source.is_none())
-                        .on_click(cx.listener(|panel, _, _, cx| panel.copy_dependency_diagram_source(cx))))
+                    .when(can_present_graph, |header| header.child(
+                        Button::new("groovy-show-dependency-diagram", "Show diagram")
+                            .aria_label("Show a bounded diagram of current admitted dependency graph facts")
+                            .tab_index(0_isize).toggle_state(self.graph_diagram.is_some())
+                            .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram(cx))),
+                    ))
+                    .when(self.graph_diagram.is_some(), |header| header.child(
+                        Button::new("groovy-close-dependency-diagram", "Close diagram")
+                            .aria_label("Close dependency diagram; retain current tree facts")
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.close_dependency_diagram(cx))),
+                    ))
+                    .when(self.graph_diagram_source.is_some(), |header| header.child(
+                        Button::new("groovy-copy-dependency-diagram-source", "Copy diagram source")
+                            .aria_label("Copy the bounded diagram's Mermaid source to the clipboard as the accepted export equivalent")
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.copy_dependency_diagram_source(cx))),
+                    ))
                     .when(show_toolbar, |header| header.child(
                         h_flex()
                             .gap_1()
@@ -8373,6 +8429,12 @@ impl Render for DependenciesPanel {
                             .on_click(cx.listener(move |panel, _, _, cx| panel.toggle_option(option, cx)))
                     })))
             })
+            .when(can_cancel_import, |panel| panel.child(
+                div().key_context("GroovyDependenciesPanelControls").px_2().child(Button::new("groovy-cancel-selected-import", "Cancel selected import")
+                    .aria_label("Cancel only the current build import started by this panel")
+                    .tab_index(0_isize)
+                    .on_click(cx.listener(|panel, _, _, cx| panel.cancel_selected_import(cx)))),
+            ))
             .when_some(self.build_phase_notice.clone(), |panel, notice| panel.child(
                 div().id("groovy-selected-import-status").role(Role::Status)
                     .aria_label("Selected JVM build import status").aria_value(notice.clone())
@@ -14506,6 +14568,10 @@ mod tests {
             cx.dispatch_action(CollectSelectedGraph);
             pump(cx);
             assert_eq!(commands.load(Ordering::SeqCst), 3);
+            select(cx);
+            assert!(panel.read_with(cx, |panel, cx| {
+                panel.resolve_selected_canvas_graph(cx).is_some()
+            }));
             panel.update(cx, |panel, cx| {
                 panel.host.expand_all();
                 cx.notify();
@@ -14522,7 +14588,7 @@ mod tests {
                     )
                 );
             });
-            let inspection_target = lsp_store.read_with(cx, |store, _| {
+            let (module_row, inspection_target) = lsp_store.read_with(cx, |store, _| {
                 let (snapshot, current) = store
                     .jdtls_project_snapshot(worktree_id)
                     .expect("inspection snapshot");
@@ -14533,7 +14599,7 @@ mod tests {
                     .find(|module| module.module_root.path.as_unix_str() == "application")
                     .expect("inspection module");
                 let id = jdtls_module_node_id(snapshot, &module.module_root, view);
-                if provider == GraphFixtureProvider::Maven {
+                let dependency = if provider == GraphFixtureProvider::Maven {
                     let graph = module
                         .maven
                         .as_ref()
@@ -14566,9 +14632,13 @@ mod tests {
                         "gradle-component",
                         &[&graph.resolution.configuration, &component.id],
                     ))
-                }
+                };
+                (id, dependency)
             });
             panel.update(cx, |panel, cx| {
+                panel.host.select(module_row.clone());
+                assert_eq!(panel.host.selected(), Some(&module_row));
+                assert!(panel.resolve_selected_canvas_graph(cx).is_some());
                 assert!(
                     panel
                         .host
@@ -14583,6 +14653,48 @@ mod tests {
                         .is_some()
                 );
                 cx.notify();
+            });
+            cx.update(|window, cx| {
+                panel.read(cx).focus_handle(cx).focus(window, cx);
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value = serde_json::from_str(
+                    &window.debug_a11y_tree_json().expect("dependency controls"),
+                ).expect("accessibility JSON");
+                let nodes = tree["nodes"].as_object().expect("accessibility nodes");
+                assert!(nodes.values().any(|node| node["aria"]["label"] == "Dependency actions"));
+                assert!(!nodes.values().any(|node| node["aria"]["label"] == "Inspect every bounded root path to the selected dependency in admitted graph facts"));
+            });
+            cx.simulate_keystrokes("shift-f10");
+            cx.update(|window, cx| {
+                let (menu, _, _) = panel
+                    .read(cx)
+                    .graph_context_menu
+                    .as_ref()
+                    .expect("dependency menu");
+                let entries = menu.read(cx).accessibility_contracts();
+                for label in [
+                    "Show Dependency Diagram Popup",
+                    "Analyze Dependencies",
+                    "More inspections",
+                    "Compare",
+                ] {
+                    assert!(
+                        entries
+                            .iter()
+                            .any(|entry| entry.label == label && !entry.disabled),
+                        "{label}"
+                    );
+                }
+                assert!(
+                    !entries
+                        .iter()
+                        .any(|entry| entry.label == "Cancel selected import")
+                );
+                window.draw(cx).clear(cx);
+                let cancel = cx
+                    .build_action("menu::Cancel", None)
+                    .expect("menu cancel action");
+                window.dispatch_action(cancel, cx);
             });
             for (mode, label) in [
                 (
@@ -14766,6 +14878,10 @@ mod tests {
                     .expect("diagram entity")
                     .entity_id()
             });
+            cx.update(|window, cx| {
+                panel.read(cx).focus_handle(cx).focus(window, cx);
+                window.draw(cx).clear(cx);
+            });
             for _ in 0..4 {
                 cx.dispatch_action(CycleGraphFactFilter);
                 panel.read_with(cx, |panel, _| {
@@ -14808,7 +14924,13 @@ mod tests {
                     );
                     panel.host.select(inspection_target.clone());
                     panel.show_dependency_diagram(cx);
-                    assert!(panel.graph_diagram.is_some());
+                    assert!(
+                        panel.graph_diagram.is_some(),
+                        "diagram recovery with selected row {:?}, filter {:?}, notice {:?}",
+                        panel.host.selected(),
+                        panel.preferences.graph_fact_filter,
+                        panel.graph_notice
+                    );
                 });
             }
             focus_diagram_control("Close dependency diagram; retain current tree facts", cx);
@@ -15138,36 +15260,40 @@ mod tests {
 
             // Ineligible selection: a non-graph row cannot open a diagram and
             // the rejection never queries the provider.
-            let non_graph_row = panel.read_with(cx, |panel, _| {
+            let unrelated_rows = panel.read_with(cx, |panel, _| {
                 panel
                     .host
                     .visible_rows()
                     .iter()
-                    .find(|row| !row.id.0.starts_with("graph:"))
+                    .filter(|row| !row.id.0.starts_with("graph:") && row.id != module_row)
                     .map(|row| row.id.clone())
+                    .collect::<Vec<_>>()
             });
-            if let Some(non_graph_row) = non_graph_row {
-                panel.update(cx, |panel, cx| {
-                    panel.host.select(non_graph_row);
-                    panel.show_dependency_diagram(cx);
+            panel.update(cx, |panel, cx| {
+                let unrelated_row = unrelated_rows.into_iter().find(|row| {
+                    panel.host.select(row.clone());
+                    panel.resolve_selected_canvas_graph(cx).is_none()
                 });
                 assert!(
-                    panel.read_with(cx, |panel, _| panel.graph_notice.as_ref().is_some_and(
-                        |notice| {
-                            notice.contains("Select a current Maven occurrence")
-                                || notice.contains("A current admitted graph is required")
-                        }
-                    )),
+                    unrelated_row.is_some(),
+                    "fixture has a row outside the admitted graph"
+                );
+                panel.show_dependency_diagram(cx);
+                assert!(
+                    panel
+                        .graph_notice
+                        .as_deref()
+                        .is_some_and(|notice| notice.contains("Collect offline graph")),
                     "ineligible selection is rejected with selection or collection guidance"
                 );
-                assert_eq!(
-                    workspace.read_with(cx, |workspace, cx| workspace
-                        .items_of_type::<DependencyDiagramItem>(cx)
-                        .count()),
-                    tab_count,
-                    "ineligible selection opens no diagram tab"
-                );
-            }
+            });
+            assert_eq!(
+                workspace.read_with(cx, |workspace, cx| workspace
+                    .items_of_type::<DependencyDiagramItem>(cx)
+                    .count()),
+                tab_count,
+                "ineligible selection opens no diagram tab"
+            );
             assert_eq!(
                 commands.load(Ordering::SeqCst),
                 3,
@@ -16822,7 +16948,9 @@ mod tests {
                 panel
                     .build_phase_notice
                     .as_deref()
-                    .is_some_and(|notice| notice.contains("cancelled"))
+                    .is_some_and(|notice| notice.contains("cancelled")),
+                "owned cancellation status: {:?}",
+                panel.build_phase_notice
             );
         });
         let refresh = |cx: &mut TestAppContext| {

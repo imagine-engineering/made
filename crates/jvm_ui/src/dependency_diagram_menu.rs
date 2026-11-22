@@ -47,6 +47,7 @@ pub struct DependencyDiagramMenuSnapshot {
     pub has_admitted_node: bool,
     pub has_matching_pin: bool,
     pub can_add_to_set: bool,
+    pub has_conflict_origins: bool,
 }
 
 /// The commands the diagram menus can dispatch. Panel-level commands route
@@ -124,9 +125,11 @@ pub fn dependency_diagram_menu_available(
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours
         | DependencyDiagramMenuCommand::InspectRootPaths
-        | DependencyDiagramMenuCommand::InspectAllRootPaths
-        | DependencyDiagramMenuCommand::InspectConflictOrigins => {
+        | DependencyDiagramMenuCommand::InspectAllRootPaths => {
             node_or_selection && snapshot.has_source
+        }
+        DependencyDiagramMenuCommand::InspectConflictOrigins => {
+            node_or_selection && snapshot.has_source && snapshot.has_conflict_origins
         }
         DependencyDiagramMenuCommand::AllUsages => node_or_selection && snapshot.has_source,
         DependencyDiagramMenuCommand::PathsBetween => {
@@ -403,6 +406,7 @@ mod tests {
             can_add_to_set: true,
             has_inspection: true,
             has_source: true,
+            has_conflict_origins: true,
         };
         let groups = dependency_diagram_menu_groups(&node, &node_snapshot);
         assert_eq!(
@@ -421,6 +425,16 @@ mod tests {
             "frequent inspection actions lead the menu"
         );
         assert!(groups[0].contains(&DependencyDiagramMenuCommand::PathsBetween));
+        assert!(groups[0].contains(&DependencyDiagramMenuCommand::InspectConflictOrigins));
+        let without_conflict = DependencyDiagramMenuSnapshot {
+            has_conflict_origins: false,
+            ..node_snapshot
+        };
+        assert!(!dependency_diagram_menu_available(
+            DependencyDiagramMenuCommand::InspectConflictOrigins,
+            &node,
+            &without_conflict,
+        ));
         // Availability filtering: Copy Diagram Source requires a source.
         let without_source = DependencyDiagramMenuSnapshot {
             has_source: false,
