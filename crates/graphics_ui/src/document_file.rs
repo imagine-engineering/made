@@ -34,8 +34,8 @@ use workspace::{
 };
 
 use crate::graph::{
-    SavedGraphAction, SavedGraphConnectionSource, SavedGraphDragStart, SavedGraphMenuTarget,
-    SavedGraphView,
+    SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
+    SavedGraphMenuTarget, SavedGraphView,
 };
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
@@ -598,6 +598,7 @@ struct NodeCopyForm {
     saved_graph: SavedGraphPanel,
     saved_graph_focus: FocusHandle,
     saved_graph_drag_start: SavedGraphDragStart,
+    saved_graph_box_selection: SavedGraphBoxSelection,
     pending_canvas_source: Option<SavedGraphConnectionSource>,
 }
 
@@ -633,6 +634,7 @@ impl NodeCopyForm {
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_focus: cx.focus_handle(),
             saved_graph_drag_start: Default::default(),
+            saved_graph_box_selection: Default::default(),
             pending_canvas_source: None,
         }
     }
@@ -718,6 +720,7 @@ impl NodeCopyForm {
         self.node_selection.clear();
         self.saved_graph = SavedGraphPanel::Closed;
         self.saved_graph_drag_start.set(None);
+        self.saved_graph_box_selection.set(None);
         self.pending_canvas_source = None;
     }
 
@@ -1560,6 +1563,7 @@ impl GraphiteDocumentItem {
         ) {
             form.saved_graph = SavedGraphPanel::Closed;
             form.saved_graph_drag_start.set(None);
+            form.saved_graph_box_selection.set(None);
             form.pending_canvas_source = None;
             if form.saved_graph_focus.contains_focused(window, cx) {
                 self.focus_handle.focus(window, cx);
@@ -1675,6 +1679,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::CopySelection => self.copy_graph_clipboard(window, cx),
             SavedGraphAction::CutSelection => self.cut_graph_selection(window, cx),
             SavedGraphAction::PasteNodes => self.paste_graph_clipboard(window, cx),
+            SavedGraphAction::BoxSelection { bounds, modifiers } => {
+                self.select_saved_graph_box(bounds, modifiers, window, cx);
+            }
             SavedGraphAction::MoveNode { index, position } => {
                 self.move_canvas_nodes(index, position, window, cx);
             }
@@ -1862,6 +1869,79 @@ impl GraphiteDocumentItem {
             Some(index)
         };
         if let Some(active) = active {
+            self.select_copy_node(active, window, cx);
+        } else {
+            form.selected = None;
+            form.output_preview = NodeOutputPreview::Hidden;
+            cx.notify();
+        }
+    }
+
+    fn select_saved_graph_box(
+        &mut self,
+        bounds: [[f64; 2]; 2],
+        modifiers: gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let SavedGraphPanel::Ready(geometry) = &form.saved_graph else {
+            return;
+        };
+        if form.pending_canvas_source.is_some() {
+            return;
+        }
+        let Some(scope) = form.clipboard_scope().map(|network| network.id) else {
+            return;
+        };
+        let hits = geometry
+            .nodes_intersecting_box(bounds, modifiers.control)
+            .collect::<BTreeSet<_>>();
+        let selected = form.selected;
+        let matches = form.nodes.iter().enumerate().filter_map(|(index, node)| {
+            (node.network_id() == scope && hits.contains(&node.storage_id())).then_some(index)
+        });
+        if modifiers.alt || modifiers.shift {
+            let in_scope = |index: usize| {
+                form.nodes
+                    .get(index)
+                    .is_some_and(|node| node.network_id() == scope)
+            };
+            form.node_selection.retain(|&index| in_scope(index));
+            if form.node_selection.is_empty() {
+                form.node_selection
+                    .extend(selected.filter(|&index| in_scope(index)));
+            }
+            if modifiers.alt && modifiers.control {
+                // The pinned handler subtracts the remaining non-layer nodes from the prior selection.
+                let layers = geometry
+                    .nodes
+                    .iter()
+                    .filter(|node| node.is_layer)
+                    .map(|node| node.storage_id)
+                    .collect::<BTreeSet<_>>();
+                form.node_selection.retain(|&index| {
+                    form.nodes.get(index).is_some_and(|node| {
+                        let id = node.storage_id();
+                        layers.contains(&id) || hits.contains(&id)
+                    })
+                });
+            } else if modifiers.alt {
+                for index in matches {
+                    form.node_selection.remove(&index);
+                }
+            } else {
+                form.node_selection.extend(matches);
+            }
+        } else {
+            form.node_selection = matches.collect();
+        }
+        if let Some(active) = selected
+            .filter(|index| form.node_selection.contains(index))
+            .or_else(|| form.node_selection.first().copied())
+        {
             self.select_copy_node(active, window, cx);
         } else {
             form.selected = None;
@@ -3002,6 +3082,7 @@ impl GraphiteDocumentItem {
                                         can_start_connection: self.copy_task.is_none(),
                                         revision: &form.revision,
                                         drag_start: self.model.read(cx).working.as_ref().map(|_| &form.saved_graph_drag_start),
+                                        box_selection: &form.saved_graph_box_selection,
                                     },
                                     window, cx,
                                     move |action, window, cx| {
@@ -8661,6 +8742,149 @@ mod tests {
             saved.preview_graph_numeric_output(target).await,
             Ok(GddNumericValue::Integer(17))
         ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_015_2_workspace_selects_nodes_with_a_canvas_box(cx: &mut TestAppContext) {
+        let (original, history) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::Reconnection, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/canvas-box.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        let source = window
+            .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0")
+            .expect("first node");
+        let target = window
+            .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-1")
+            .expect("connected node");
+        let alternate = window
+            .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-2")
+            .expect("third node");
+        let margin = gpui::point(px(12.), px(8.));
+        let check = |window: &gpui::VisualTestContext, indexes: &[usize]| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready graph")
+                };
+                assert!(
+                    form.node_selection
+                        .iter()
+                        .copied()
+                        .eq(indexes.iter().copied())
+                );
+                assert_eq!(form.selected, indexes.first().copied());
+                assert!(!item.is_dirty(cx));
+                let model = item.model.read(cx);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                let InspectedDocument::Gdd { contents } = &model.document else {
+                    panic!("GDD")
+                };
+                assert_eq!(contents.history_len(), history);
+            });
+        };
+        let drag = |window: &mut gpui::VisualTestContext, start, end, modifiers, cancel| {
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                        position: start,
+                        button: gpui::MouseButton::Left,
+                        modifiers,
+                        click_count: 1,
+                        first_mouse: false,
+                    }),
+                    cx,
+                );
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                        position: end,
+                        pressed_button: Some(gpui::MouseButton::Left),
+                        modifiers,
+                    }),
+                    cx,
+                );
+            });
+            paint(window);
+            assert!(window.debug_bounds("GRAPHITE-GDD-BOX-SELECTION").is_some());
+            if cancel {
+                window.simulate_keystrokes("escape");
+                paint(window);
+                assert!(window.debug_bounds("GRAPHITE-GDD-BOX-SELECTION").is_none());
+            }
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                        position: end,
+                        button: gpui::MouseButton::Left,
+                        modifiers,
+                        click_count: 1,
+                    }),
+                    cx,
+                );
+            });
+            paint(window);
+            assert!(window.debug_bounds("GRAPHITE-GDD-BOX-SELECTION").is_none());
+        };
+        drag(
+            window,
+            alternate.bottom_right() + margin,
+            source.origin - margin,
+            Default::default(),
+            false,
+        );
+        check(window, &[0, 2]);
+        let target_start = target.origin - margin;
+        let target_end = target.bottom_right() + margin;
+        drag(
+            window,
+            target_start,
+            target_end,
+            gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+            false,
+        );
+        check(window, &[0, 1, 2]);
+        drag(
+            window,
+            target_start,
+            target_end,
+            gpui::Modifiers {
+                alt: true,
+                ..Default::default()
+            },
+            false,
+        );
+        check(window, &[0, 2]);
+        drag(window, target_start, target_end, Default::default(), true);
+        check(window, &[0, 2]);
         assert_eq!(
             filesystem
                 .load_bytes(&path)

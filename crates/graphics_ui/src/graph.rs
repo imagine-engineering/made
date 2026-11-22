@@ -114,8 +114,18 @@ pub(crate) fn render_saved_graph_ports(
 
 #[derive(Clone, Copy)]
 pub(crate) enum SavedGraphAction {
-    SelectNode { index: usize, extend: bool },
-    MoveNode { index: usize, position: [i32; 2] },
+    SelectNode {
+        index: usize,
+        extend: bool,
+    },
+    MoveNode {
+        index: usize,
+        position: [i32; 2],
+    },
+    BoxSelection {
+        bounds: [[f64; 2]; 2],
+        modifiers: Modifiers,
+    },
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -126,6 +136,20 @@ pub(crate) enum SavedGraphAction {
 }
 
 pub(crate) type SavedGraphDragStart = Rc<Cell<Option<(usize, Point<Pixels>)>>>;
+pub(crate) type SavedGraphBoxSelection = Rc<Cell<Option<SavedGraphBox>>>;
+
+#[derive(Clone, Copy)]
+pub(crate) struct SavedGraphBox {
+    start: Point<Pixels>,
+    end: Point<Pixels>,
+}
+
+impl SavedGraphBox {
+    fn moved(self) -> bool {
+        let difference = self.end - self.start;
+        f32::from(difference.x).hypot(f32::from(difference.y)) > 2.
+    }
+}
 
 struct SavedGraphNodeDrag {
     canvas: FocusHandle,
@@ -215,6 +239,7 @@ pub(crate) struct SavedGraphView<'a> {
     pub can_start_connection: bool,
     pub revision: &'a Arc<()>,
     pub drag_start: Option<&'a SavedGraphDragStart>,
+    pub box_selection: &'a SavedGraphBoxSelection,
 }
 
 pub(crate) fn render_saved_graph(
@@ -253,6 +278,12 @@ pub(crate) fn render_saved_graph(
             px(((y - min[1]) * scale + padding) as f32),
         )
     };
+    let unproject = move |local: Point<Pixels>| {
+        [
+            (f64::from(f32::from(local.x)) - padding) / scale + min[0],
+            (f64::from(f32::from(local.y)) - padding) / scale + min[1],
+        ]
+    };
     let nodes_by_id = nodes
         .iter()
         .enumerate()
@@ -277,10 +308,53 @@ pub(crate) fn render_saved_graph(
             .and_then(GddGraphNode::grid_position)
             .is_some()
     });
+    let origin = Rc::new(Cell::new(None));
+    let canvas_origin = origin.clone();
+    let node_bounds = geometry
+        .nodes
+        .iter()
+        .map(|node| node.bounds)
+        .collect::<Vec<_>>();
+    let ports = geometry
+        .boundary_ports
+        .iter()
+        .map(|(_, position)| *position)
+        .chain(geometry.nodes.iter().flat_map(|node| {
+            [node.primary_input, node.primary_output]
+                .into_iter()
+                .flatten()
+        }))
+        .collect::<Vec<_>>();
+    let occupied = Rc::new(move |source: [f64; 2]| {
+        let socket_radius = 9. / scale;
+        node_bounds.iter().any(|[top_left, bottom_right]| {
+            (top_left[0]..=bottom_right[0]).contains(&source[0])
+                && (top_left[1]..=bottom_right[1]).contains(&source[1])
+        }) || ports.iter().any(|port| {
+            (source[0] - port[0]).abs() <= socket_radius
+                && (source[1] - port[1]).abs() <= socket_radius
+        })
+    });
+    let start_box = view.box_selection.clone();
+    let move_box = view.box_selection.clone();
+    let finish_box = view.box_selection.clone();
+    let cancel_outside_box = view.box_selection.clone();
+    let cancel_key_box = view.box_selection.clone();
+    let start_origin = origin.clone();
+    let move_origin = origin.clone();
+    let finish_origin = origin.clone();
+    let start_occupied = occupied.clone();
+    let dispatch_box = dispatch.clone();
+    let can_start_box = view.pending_source.is_none();
+    let active_box = view.box_selection.get();
     let graph = div()
         .id("graphite-saved-graph")
         .track_focus(view.focus)
-        .key_context("GraphiteSavedGraph")
+        .key_context(if active_box.is_some() {
+            "GraphiteSavedGraph GraphiteBoxSelection"
+        } else {
+            "GraphiteSavedGraph"
+        })
         .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
         .relative()
         .overflow_hidden()
@@ -290,8 +364,52 @@ pub(crate) fn render_saved_graph(
         .w(px(width as f32))
         .flex_none()
         .h(px(height as f32))
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+        .on_mouse_down(MouseButton::Left, move |event, window, cx| {
             graph_focus.focus(window, cx);
+            if can_start_box && let Some(origin) = start_origin.get() {
+                let start = event.position - origin;
+                start_box.set(
+                    (!start_occupied(unproject(start)))
+                        .then_some(SavedGraphBox { start, end: start }),
+                );
+                if start_box.get().is_some() {
+                    window.refresh();
+                }
+            }
+        })
+        .on_mouse_move(move |event, window, _| {
+            if event.dragging()
+                && let Some(mut draft) = move_box.get()
+                && let Some(origin) = move_origin.get()
+            {
+                draft.end = event.position - origin;
+                move_box.set(Some(draft));
+                window.refresh();
+            }
+        })
+        .on_mouse_up(MouseButton::Left, move |event, window, cx| {
+            if let Some(mut draft) = finish_box.take()
+                && let Some(origin) = finish_origin.get()
+            {
+                draft.end = event.position - origin;
+                window.refresh();
+                if draft.moved() {
+                    cx.stop_propagation();
+                    dispatch_box(
+                        SavedGraphAction::BoxSelection {
+                            bounds: [draft.start, draft.end].map(unproject),
+                            modifiers: event.modifiers,
+                        },
+                        window,
+                        cx,
+                    );
+                }
+            }
+        })
+        .on_mouse_up_out(MouseButton::Left, move |_, window, _| {
+            if cancel_outside_box.take().is_some() {
+                window.refresh();
+            }
         })
         .when(movement.is_some(), |graph| {
             let canvas = view.focus.clone();
@@ -315,6 +433,13 @@ pub(crate) fn render_saved_graph(
                 }
             })
         })
+        .on_action(move |_: &CancelSavedGraphBox, window, cx| {
+            if cancel_key_box.take().is_some() {
+                window.refresh();
+            } else {
+                cx.propagate();
+            }
+        })
         .on_key_down(move |event, window, cx| {
             let modifiers = event.keystroke.modifiers;
             if !modifiers.secondary() || modifiers.shift || modifiers.alt {
@@ -331,54 +456,34 @@ pub(crate) fn render_saved_graph(
                 dispatch_clipboard(action, window, cx);
             }
         })
+        .child(
+            gpui::canvas(
+                move |bounds, _, _| canvas_origin.set(Some(bounds.origin)),
+                |_, (), _, _| {},
+            )
+            .absolute()
+            .size_full(),
+        )
         .when(
             view.can_start_connection && view.pending_source.is_none(),
             |graph| {
-                let origin = Rc::new(Cell::new(None));
-                let canvas_origin = origin.clone();
                 let position = Rc::new(Cell::new(None));
                 let clicked_position = position.clone();
                 let menu_handle = ui::RightClickMenuHandle::default();
                 let open_menu = menu_handle.clone();
                 let menu = context_menu.clone();
-                let node_bounds = geometry
-                    .nodes
-                    .iter()
-                    .map(|node| node.bounds)
-                    .collect::<Vec<_>>();
-                let ports = geometry
-                    .boundary_ports
-                    .iter()
-                    .map(|(_, position)| *position)
-                    .chain(geometry.nodes.iter().flat_map(|node| {
-                        [node.primary_input, node.primary_output]
-                            .into_iter()
-                            .flatten()
-                    }))
-                    .collect::<Vec<_>>();
                 graph
                     .on_mouse_down(MouseButton::Right, move |event, window, cx| {
                         let Some(origin) = origin.get() else {
                             return;
                         };
-                        let local: gpui::Point<gpui::Pixels> = event.position - origin;
-                        let [x, y] = [f32::from(local.x), f32::from(local.y)];
-                        let source = [
-                            (f64::from(x) - padding) / scale + min[0],
-                            (f64::from(y) - padding) / scale + min[1],
-                        ];
-                        let socket_radius = 9. / scale;
+                        let source = unproject(event.position - origin);
                         if source.iter().any(|&coordinate| {
                             !coordinate.is_finite()
                                 || coordinate < f64::from(i32::MIN)
                                 || coordinate > f64::from(i32::MAX)
-                        }) || node_bounds.iter().any(|[top_left, bottom_right]| {
-                            (top_left[0]..=bottom_right[0]).contains(&source[0])
-                                && (top_left[1]..=bottom_right[1]).contains(&source[1])
-                        }) || ports.iter().any(|port| {
-                            (source[0] - port[0]).abs() <= socket_radius
-                                && (source[1] - port[1]).abs() <= socket_radius
-                        }) {
+                        }) || occupied(source)
+                        {
                             return;
                         }
                         let grid = graphite_editor::consts::GRID_SIZE as i32;
@@ -389,14 +494,6 @@ pub(crate) fn render_saved_graph(
                             window.prevent_default();
                         }
                     })
-                    .child(
-                        gpui::canvas(
-                            move |bounds, _, _| canvas_origin.set(Some(bounds.origin)),
-                            |_, (), _, _| {},
-                        )
-                        .absolute()
-                        .size_full(),
-                    )
                     .child(
                         // The canvas supplies the hit target so the menu cannot intercept port clicks.
                         div().absolute().size(px(0.)).child(
@@ -614,7 +711,23 @@ pub(crate) fn render_saved_graph(
                             }),
                     ),
             )
-        }));
+        }))
+        .when_some(active_box.filter(|draft| draft.moved()), |graph, draft| {
+            let left = draft.start.x.min(draft.end.x);
+            let top = draft.start.y.min(draft.end.y);
+            graph.child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-BOX-SELECTION".into())
+                    .absolute()
+                    .left(left)
+                    .top(top)
+                    .w(draft.start.x.max(draft.end.x) - left)
+                    .h(draft.start.y.max(draft.end.y) - top)
+                    .border_1()
+                    .border_color(colors.text_accent)
+                    .bg(colors.text_accent.opacity(0.15)),
+            )
+        });
     v_flex()
         .gap_1()
         .child(
@@ -1676,6 +1789,7 @@ pub fn open_numeric_document(
 
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
+        gpui::KeyBinding::new("escape", CancelSavedGraphBox, Some("GraphiteBoxSelection")),
         gpui::KeyBinding::new("tab", FocusNextArtboardControl, Some("GraphiteArtboard")),
         gpui::KeyBinding::new(
             "shift-tab",
@@ -1701,6 +1815,8 @@ pub fn init(cx: &mut App) {
 actions!(
     graphite,
     [
+        /// Cancels the box selection in the focused saved graph.
+        CancelSavedGraphBox,
         /// Shows the original imported image in the focused Graphite item.
         ShowOriginalImage,
         /// Inverts the focused imported image with the original Graphite node.

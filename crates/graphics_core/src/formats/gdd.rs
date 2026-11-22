@@ -47,7 +47,7 @@ use graphite_editor::messages::portfolio::document::{
         },
     },
 };
-use graphite_glam::{DVec2, IVec2};
+use graphite_glam::{DAffine2, DVec2, IVec2};
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
@@ -346,11 +346,38 @@ pub struct GddGraphGeometry {
     pub wires: Vec<[[f64; 2]; 2]>,
 }
 
+impl GddGraphGeometry {
+    pub fn nodes_intersecting_box(
+        &self,
+        bounds: [[f64; 2]; 2],
+        exclude_layers: bool,
+    ) -> impl Iterator<Item = StorageNodeId> + '_ {
+        use graphite_std::math::{math_ext::QuadExt, quad::Quad};
+
+        let [start, end] = bounds.map(DVec2::from_array);
+        let quad = (start.is_finite() && end.is_finite())
+            .then(|| Quad::from_box([start.min(end), start.max(end)]));
+        self.nodes
+            .iter()
+            .filter(move |node| {
+                (!exclude_layers || !node.is_layer)
+                    && quad.as_ref().zip(node.click_target.as_ref()).is_some_and(
+                        |(quad, target)| {
+                            target.intersect_path(|| quad.to_lines(), DAffine2::IDENTITY)
+                        },
+                    )
+            })
+            .map(|node| node.storage_id)
+    }
+}
+
 pub struct GddGraphNodeGeometry {
     pub storage_id: StorageNodeId,
     pub bounds: [[f64; 2]; 2],
     pub primary_input: Option<[f64; 2]>,
     pub primary_output: Option<[f64; 2]>,
+    click_target: Option<graphite_std::vector::click_target::ClickTarget>,
+    pub is_layer: bool,
 }
 
 #[derive(Clone)]
@@ -1021,10 +1048,7 @@ impl InspectedGddV1 {
             .map(|node| (node.local_id, node.storage_id))
             .collect::<Vec<_>>();
         ids.sort_unstable();
-        let interface = graph.into_interface()?;
-        let nested = interface
-            .nested_network(path)
-            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let mut interface = graph.into_interface()?;
         let nodes = ids
             .iter()
             .filter_map(|(local_id, storage_id)| {
@@ -1043,9 +1067,16 @@ impl InspectedGddV1 {
                             interface
                                 .output_position(&OutputConnector::primary_output(*local_id), path),
                         ),
+                        click_target: interface
+                            .node_click_targets(local_id, path)
+                            .map(|targets| targets.node_click_target.clone()),
+                        is_layer: interface.is_layer(local_id, path),
                     })
             })
             .collect();
+        let nested = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
         let boundary_ports = (0..network.import_count)
             .filter_map(|index| {
                 let point = finite_graph_point(
