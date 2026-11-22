@@ -793,7 +793,8 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::UnsupportedGraphNodeDeletion);
         }
         let path = &node.network_path;
-        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let original = self.runtime_graph().await?.into_interface()?;
+        let mut interface = original.clone();
         let stored = self
             .document
             .registry()
@@ -827,7 +828,8 @@ impl InspectedGddV1 {
             });
         }
         let (owner, staged) = self.fork_working_copy(&budget).await?;
-        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        // The source deletion removes the persistent storage ID along with the node.
+        let batch = prepare_graph_node_edit(&owner, &original, &edits)?;
         let [RegistryDelta::RemoveNode { id, snapshot }, rest @ ..] = batch.ops.as_slice() else {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         };
@@ -2429,6 +2431,15 @@ mod tests {
         struct NumericMetadata;
 
         impl NodeMetadataSource for NumericMetadata {
+            fn storage_node_id(
+                &self,
+                network_path: &[NodeId],
+                local_id: NodeId,
+            ) -> Option<StorageNodeId> {
+                (network_path == [NodeId(24)] && local_id == NodeId(9))
+                    .then_some(StorageNodeId(0xbc11_824d_7ec3_201a))
+            }
+
             fn input_name(
                 &self,
                 network_path: &[NodeId],
@@ -2684,6 +2695,7 @@ mod tests {
             let [root, parent, source, isolated, wired, sibling] = nodes.as_slice() else {
                 panic!("expected original root and nested graph identities");
             };
+            assert_eq!(isolated.storage_id, StorageNodeId(0xbc11_824d_7ec3_201a));
             for node in [parent, source, wired] {
                 assert!(!node.can_delete_in_copy());
                 assert!(matches!(
