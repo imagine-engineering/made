@@ -1,5 +1,5 @@
 {
-  "format": "sim.source.conditioning-part-two.original-cpu-f32.v1",
+  "format": "comfy.source.conditioning-part-two.original-cpu-f32.v1",
   "producer_sha256": "e89d5073961b6a1cb1c6653417b4a2c7fe7112b39e32ec117c2581d12aa166f6",
   "source_sha256": {
     "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",

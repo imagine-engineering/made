@@ -13,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[5]
 HERE = Path(__file__).resolve().parent
 DA3_FIXTURE = HERE.parent / "depth-anything-3-resource-foundation"
 SOURCES = {
-    "projects/sim/ComfyUI/sim/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
-    "projects/sim/ComfyUI/sim/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
-    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
-    "projects/sim/ComfyUI/sim/ldm/depth_anything_3/reference_view_selector.py": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
+    "projects/comfy/ComfyUI/comfy/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+    "projects/comfy/ComfyUI/comfy/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/comfy/ComfyUI/comfy/ldm/depth_anything_3/reference_view_selector.py": "24e9428a820b5287d622bc865d4fd6520486294c4337a28de71fca6ec62e0c29",
 }
 MASK_TOKEN_KEY = "native.backbone.embeddings.mask_token"
 MASK_TOKEN_VALUES = [-0.035, -0.0025, 0.03, -0.01]

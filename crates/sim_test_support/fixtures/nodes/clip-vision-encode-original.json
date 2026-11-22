@@ -1,13 +1,13 @@
 {
-  "format": "sim.source.clip-vision-encode.reduced-original-cpu-f32.v1",
+  "format": "comfy.source.clip-vision-encode.reduced-original-cpu-f32.v1",
   "status": "ACTUAL_ORIGINAL_REDUCED_RESOURCE_NUMERICAL_CAPTURE",
   "source_sha256": {
     "nodes.py": "b8dfdde1de8975be762b085048143cc2dda8fc9202695e460ecc2c8dfe44bc4b",
-    "sim/clip_vision.py": "8e3cc5d5d257b52d120885ba7427ff3fdf56129a485fdadac3b6215ae2c67b20",
-    "sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
-    "sim/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
-    "sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
-    "sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
+    "comfy/clip_vision.py": "8e3cc5d5d257b52d120885ba7427ff3fdf56129a485fdadac3b6215ae2c67b20",
+    "comfy/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "comfy/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+    "comfy/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42"
   },
   "recipe_sha256": "8382ee4106fe9ef34755fc55c6612e3bc19221643845ce8f591592a1795e517b",
   "producer_sha256": "38fa756b2be93aa06fb3ce9c23025287f5a78038f7e3858946cc51d1a87bcc5a",
@@ -439,7 +439,7 @@
     "torch": "2.8.0+cpu",
     "torchvision": "0.23.0+cpu",
     "safetensors": "0.8.0",
-    "sim-aimdo": "0.4.10",
+    "comfy-aimdo": "0.4.10",
     "transformers": "5.18.0",
     "einops": "0.8.2"
   },

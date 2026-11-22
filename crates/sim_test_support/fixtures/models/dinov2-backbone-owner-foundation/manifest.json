@@ -1,12 +1,12 @@
 {
-  "da3_oracle_sha256": "c9e1de05a36f74277fc14e79bd147c8146029135ee76c3b0dd8af83e24c2d47c",
+  "da3_oracle_sha256": "cc73ed9f1d7abd4f8c9f0eec75137bab064407b2d6c99b5b9fb47e7fa2cdaf87",
   "da3_route": "get_intermediate_layers_da3",
   "format": "dinov2-backbone-owner-foundation-v1",
   "future_consumers": [
     "sim_model::moge"
   ],
-  "generator_sha256": "03fd2b1d03c0938a62280fdb4df1dc9ac596fc975da7203e04aa70ff0900f294",
-  "oracle_sha256": "a15373f41d84dd407399f4a943ef66b59045621305fea00231ee9d2cbf528519",
+  "generator_sha256": "d14062c45e3c8ba707a6cab11cc58de5ab302a93b49de3a15d10ff5c830a47b5",
+  "oracle_sha256": "8657b53e3804bf60e8294c7e89edf341fefe560d63b8b60b0df3d2aaa5631a1e",
   "ordinary_route": "forward/get_intermediate_layers",
   "owner": "sim_model::dino2::NativeDino2Backbone",
   "production_python": false,

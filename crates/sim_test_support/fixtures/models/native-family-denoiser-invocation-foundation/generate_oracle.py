@@ -8,12 +8,12 @@ from pathlib import Path
 
 
 PINNED_SOURCES = {
-    "projects/sim/ComfyUI/sim/ldm/aura/mmdit.py": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
-    "projects/sim/ComfyUI/sim/ldm/qwen_image/model.py": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
-    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
-    "projects/sim/ComfyUI/sim/ldm/lightricks/model.py": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
-    "projects/sim/ComfyUI/sim/ldm/flux/layers.py": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
-    "projects/sim/ComfyUI/sim/ldm/flux/math.py": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece",
+    "projects/comfy/ComfyUI/comfy/ldm/aura/mmdit.py": "0104396eda01a9f78e8aa5b9d15470fc551aa8b0e05137d264f3515fd1739db1",
+    "projects/comfy/ComfyUI/comfy/ldm/qwen_image/model.py": "14c805af8da13d31094c2c704e413cc282ef43f4afe17f77de9070bdca301f28",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/comfy/ComfyUI/comfy/ldm/lightricks/model.py": "edcdab6083e4e2b4c7c1ff51323174ba0308b7626895e5874238ca09c0bd5f43",
+    "projects/comfy/ComfyUI/comfy/ldm/flux/layers.py": "35f2dfbadb8b59de79c306f365f26c2baa0a7d54836414737cd781fc24e6a2bc",
+    "projects/comfy/ComfyUI/comfy/ldm/flux/math.py": "ee3473e262894884b12eb3af4caa22d069273eb87db3549fb46c42c37f910ece",
 }
 EXPECTED_AURA_SHA256 = "d4b51dc633cbc296d70d5eba222ccac3a6e4a29133e8caca50ae886e2a6208bc"
 EXPECTED_QWEN_SHA256 = "1fd6d5c61affabe7e2dd7ce573eb9d60eb77037d194586eb433ac916fe69609b"

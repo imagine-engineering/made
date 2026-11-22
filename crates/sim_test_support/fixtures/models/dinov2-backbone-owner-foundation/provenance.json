@@ -1,14 +1,14 @@
 {
   "cross_check": "The unchanged DA3 oracle, reference fixture, storage projection, alias-residency tests, and lifecycle tests remain authoritative for the DA3 adapter.",
-  "da3_oracle_sha256": "c9e1de05a36f74277fc14e79bd147c8146029135ee76c3b0dd8af83e24c2d47c",
-  "generator_sha256": "03fd2b1d03c0938a62280fdb4df1dc9ac596fc975da7203e04aa70ff0900f294",
+  "da3_oracle_sha256": "cc73ed9f1d7abd4f8c9f0eec75137bab064407b2d6c99b5b9fb47e7fa2cdaf87",
+  "generator_sha256": "d14062c45e3c8ba707a6cab11cc58de5ab302a93b49de3a15d10ff5c830a47b5",
   "independence": "The generator executes scalar source equations and never invokes production Rust.",
-  "manifest_sha256": "0bef490c7af5ddc9c05a5e81d43b21b82ddc6139fe84246b71870a4ff01350ef",
+  "manifest_sha256": "facc56cb5c2e03fa1a5b2d0dd6f6744da643ef0810eb83fae1f213886ecc4692",
   "oracle_kind": "pure-standard-library source-equation translation",
-  "oracle_sha256": "a15373f41d84dd407399f4a943ef66b59045621305fea00231ee9d2cbf528519",
-  "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+  "oracle_sha256": "8657b53e3804bf60e8294c7e89edf341fefe560d63b8b60b0df3d2aaa5631a1e",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "production_python": false,
-  "python": "3.14.4",
+  "python": "3.13.12",
   "source_graph_sha256": "8d0dcca62f0a8eaca1a5237e6630f0d4dede14a62f9a2f6f1df40ada0341ffcc",
   "source_profile": "pinned ComfyUI DINOv2 ordinary and DA3 routes"
 }

@@ -5057,13 +5057,13 @@ mod tests {
         assert_eq!(samples.last(), Some(&vec![3, 40, 68, 45, 54, 23, 58, 71]));
         assert_eq!(
             fixture_index_rows_sha256("zed.sim.depth-anything-3.ransac-samples.v1", &samples,),
-            "3ec843b71311674d0c4a0398c695277266171086b191b43d3439e5d102e67207"
+            "32fdbda16eb4fb7b5ba8b933f61e8fa14dd41a69e921cd9c4ced0a9ef1f7926f"
         );
         let (changed_seed, _) = ray_pose_random_samples(&backend, 76, 18, &context)?;
         assert_ne!(changed_seed, samples);
         assert_eq!(
             fixture_index_rows_sha256("zed.sim.depth-anything-3.ransac-samples.v1", &changed_seed,),
-            "e06d07bd06353a26e748280c7037adffd2a9ce0bb66bfd507504aa7c3e985874"
+            "52f1c3f993d40ed3f43ae82262f8e68685892b342aa3f92829b267f7c5bee1d2"
         );
         let changed_address = RngStreamAddress::new(
             "task390",
@@ -5086,7 +5086,7 @@ mod tests {
         assert_ne!(changed_phase, changed_seed);
         assert_eq!(
             fixture_index_rows_sha256("zed.sim.depth-anything-3.ransac-samples.v1", &changed_phase,),
-            "8732477ad3af2972b8280df320a79a17327300da47f918bdad66b78f4bf3b425"
+            "72a10fe51f0675852e15a4e01cc70f27ec68a6f288211a67987b5403405764f4"
         );
         Ok(())
     }

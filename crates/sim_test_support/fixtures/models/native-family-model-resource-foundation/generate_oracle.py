@@ -9,9 +9,9 @@ from pathlib import Path
 
 
 PINNED_SOURCES = {
-    "projects/sim/ComfyUI/sim/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
-    "projects/sim/ComfyUI/sim/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
-    "projects/sim/ComfyUI/sim/supported_models.py": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69",
+    "projects/comfy/ComfyUI/comfy/model_sampling.py": "8559ac2f700b788babf30cc16f410c93890e1f71485ac8f6a299ea36e2cb8717",
+    "projects/comfy/ComfyUI/comfy/samplers.py": "d882256ae9baa1d23f1367ab2ec3b021fdc15fe39ce4cb49ea2c1ee10026a649",
+    "projects/comfy/ComfyUI/comfy/supported_models.py": "3801a60d15fe0abf8573cfa60f90e796d773450370f80784f2e0603cda3ffd69",
 }
 BASE_GENERATOR = "crates/sim_test_support/fixtures/models/native-family-denoiser-invocation-foundation/generate_oracle.py"
 BASE_GENERATOR_SHA256 = "a3f204112a0b5847f0265c98421ed72c3c3f8b6f2487081e52bfe5dcc1ba104f"
