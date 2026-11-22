@@ -483,6 +483,7 @@ enum NodeCopyChange {
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
     DisconnectNumericInput,
+    ConnectNumericInput(Box<GddGraphNode>),
 }
 
 enum PreparedCopy {
@@ -592,7 +593,7 @@ impl GraphiteDocumentItem {
         };
         if let Some(node) = form
             .selected_node()
-            .filter(|node| node.can_disconnect_numeric_input())
+            .filter(|node| node.has_numeric_connection())
         {
             let request = GraphiteCopy::EditNode {
                 node: node.clone(),
@@ -600,6 +601,68 @@ impl GraphiteDocumentItem {
             };
             self.save_copy(request, window, cx);
         }
+    }
+
+    fn render_numeric_connection_menu(
+        &self,
+        form: &NodeCopyForm,
+        target: &GddGraphNode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement> {
+        let sources = form
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, source)| target.can_connect_numeric_input_from(source))
+            .collect::<Vec<_>>();
+        if sources.is_empty() || self.copy_task.is_some() {
+            return None;
+        }
+        let item = cx.entity().downgrade();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (index, source) in sources {
+                let item = item.clone();
+                let target = target.clone();
+                let source = source.clone();
+                let label = SharedString::from(source.label().to_owned());
+                menu = menu.custom_entry(
+                    move |_, _| {
+                        div()
+                            .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-SOURCE-{index}"))
+                            .p_2()
+                            .child(Label::new(label.clone()))
+                            .into_any_element()
+                    },
+                    move |window, cx| {
+                        if let Some(item) = item.upgrade() {
+                            item.update(cx, |item, cx| {
+                                item.save_copy(
+                                    GraphiteCopy::EditNode {
+                                        node: target.clone(),
+                                        change: NodeCopyChange::ConnectNumericInput(Box::new(
+                                            source.clone(),
+                                        )),
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            });
+                        }
+                    },
+                );
+            }
+            menu
+        });
+        Some(
+            div()
+                .debug_selector(|| "GRAPHITE-GDD-CONNECT-VALUE".into())
+                .child(DropdownMenu::new(
+                    "graphite-gdd-connect-value",
+                    "Connect Value in a Copy",
+                    menu,
+                )),
+        )
     }
 
     fn render_node_copy(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -826,7 +889,7 @@ impl GraphiteDocumentItem {
                                         ),
                                 )
                             })
-                            .when(selected.can_disconnect_numeric_input(), |panel| {
+                            .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
                                         .debug_selector(|| "GRAPHITE-GDD-DISCONNECT-VALUE".into())
@@ -842,6 +905,7 @@ impl GraphiteDocumentItem {
                                         ),
                                 )
                             })
+                            .children(self.render_numeric_connection_menu(form, selected, window, cx))
                     })
             }
             NodeCopyPanel::Failed(error) => {
@@ -1020,6 +1084,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::DisconnectNumericInput,
                         ..
                     } => "Disconnected",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::ConnectNumericInput(_),
+                        ..
+                    } => "Connected",
                 };
                 format!("{prefix} {stem}{suffix}")
             }
@@ -1176,6 +1244,15 @@ impl GraphiteDocumentItem {
                                     archive
                                         .disconnect_graph_numeric_input_in_copy(
                                             &node,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::ConnectNumericInput(source) => {
+                                    archive
+                                        .connect_graph_numeric_input_in_copy(
+                                            &node,
+                                            &source,
                                             ARCHIVE_BUDGET,
                                         )
                                         .await?
@@ -1710,7 +1787,13 @@ mod tests {
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
     }
 
-    async fn numeric_graph_archive(with_direct_connection: bool) -> (Vec<u8>, usize) {
+    enum NumericGraphFixture {
+        SingleNode,
+        ExposedInput,
+        Connection,
+    }
+
+    async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::NoMetadata;
         use graphite_graph_craft::document::{
             DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
@@ -1728,14 +1811,21 @@ mod tests {
             nodes: [(NodeId(7), node)].into_iter().collect(),
             ..Default::default()
         };
-        if with_direct_connection {
+        let second_input = match fixture {
+            NumericGraphFixture::SingleNode => None,
+            NumericGraphFixture::ExposedInput => {
+                Some(NodeInput::value(TaggedValue::Integer(0), true))
+            }
+            NumericGraphFixture::Connection => Some(NodeInput::node(NodeId(7), 0)),
+        };
+        if let Some(second_input) = second_input {
             graph.nodes.insert(
                 NodeId(8),
                 DocumentNode {
                     implementation: DocumentNodeImplementation::ProtoNode(
                         absolute_value::IDENTIFIER,
                     ),
-                    inputs: vec![NodeInput::node(NodeId(7), 0)],
+                    inputs: vec![second_input],
                     ..Default::default()
                 },
             );
@@ -1766,10 +1856,99 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_graph_007_2_workspace_connects_an_exposed_value_in_a_new_folder(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::ExposedInput).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/connect.gdd.zip");
+        let destination = PathBuf::from("/project/connected.gdd");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let original_item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        for publish in [false, true] {
+            click(window, "GRAPHITE-GDD-CONNECT-VALUE");
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
+                    .is_none()
+            );
+            click(window, "GRAPHITE-GDD-CONNECT-SOURCE-0");
+            window.simulate_new_path_selection(|_| publish.then(|| destination.clone()));
+            window.run_until_parked();
+            assert_eq!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("copy publication")
+                    .is_some(),
+                publish
+            );
+            paint(window);
+        }
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("new document");
+        assert_ne!(reopened, original_item);
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        assert!(window.debug_bounds("GRAPHITE-GDD-CONNECT-VALUE").is_none());
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-DISCONNECT-VALUE")
+                .is_some()
+        );
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected GDD document");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("original nodes");
+        let [source, connected] = nodes.as_slice() else {
+            panic!("expected the original two nodes");
+        };
+        assert!(matches!(
+            source.numeric_input(),
+            Some(GddNumericValue::Integer(-17))
+        ));
+        assert!(connected.has_numeric_connection());
+        assert_eq!(contents.history_len(), original_history + 1);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_graph_009_2_workspace_disconnects_a_value_and_reopens_its_fallback(
         cx: &mut TestAppContext,
     ) {
-        let (original, original_history) = numeric_graph_archive(true).await;
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::Connection).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -1880,7 +2059,7 @@ mod tests {
             disconnected.numeric_input(),
             Some(GddNumericValue::Vector([3.5, -2.]))
         ));
-        assert!(!disconnected.can_disconnect_numeric_input());
+        assert!(!disconnected.has_numeric_connection());
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
@@ -1894,7 +2073,8 @@ mod tests {
     async fn at_gra_graph_028_2_workspace_round_trips_the_exposed_value_port(
         cx: &mut TestAppContext,
     ) {
-        let (original, original_history) = numeric_graph_archive(false).await;
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -1992,7 +2172,8 @@ mod tests {
     async fn at_gra_graph_031_2_workspace_saves_and_reopens_a_typed_numeric_value(
         cx: &mut TestAppContext,
     ) {
-        let (original, original_history) = numeric_graph_archive(false).await;
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
