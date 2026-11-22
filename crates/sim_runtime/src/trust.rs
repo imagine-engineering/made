@@ -8031,7 +8031,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
     #[test]
     fn video_codec_dependency_closure_certifies_retains_and_orders_exact_graph()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -8110,7 +8110,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
     #[test]
     fn video_codec_dependency_closure_rejects_contract_path_and_resource_drift()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -8180,7 +8180,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
     #[test]
     fn video_codec_dependency_closure_cancellation_is_atomic_and_retryable()
     -> Result<(), Box<dyn std::error::Error>> {
@@ -8200,6 +8200,26 @@ mod tests {
             &CancellationToken::default(),
         )?;
         assert_eq!(closure.dependency_certificates().len(), 3);
+        Ok(())
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        not(all(target_arch = "x86_64", target_env = "gnu"))
+    ))]
+    #[test]
+    fn video_codec_dependency_closure_rejects_unsupported_linux_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_directory, primary, contract, paths) = video_codec_dependency_closure_fixture()?;
+        assert!(matches!(
+            certify_video_codec_dependency_closure(
+                primary,
+                contract,
+                paths,
+                &CancellationToken::default(),
+            ),
+            Err(VideoCodecDependencyClosureError::UnsupportedTarget)
+        ));
         Ok(())
     }
 

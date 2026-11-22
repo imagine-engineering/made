@@ -81,8 +81,9 @@ pub(crate) fn inspect_elf64_dynamic_contract(
     cancellation: &CancellationToken,
 ) -> Result<NativeElfDynamicContract, NativeElfInspectionError> {
     cancellation.check()?;
-    inspect_elf64_dynamic_contract_inner(bytes, expected_machine, cancellation)
-        .map_err(NativeElfInspectionError::Invalid)
+    let result = inspect_elf64_dynamic_contract_inner(bytes, expected_machine, cancellation);
+    cancellation.check()?;
+    result.map_err(NativeElfInspectionError::Invalid)
 }
 
 fn inspect_elf64_dynamic_contract_inner(
@@ -636,7 +637,26 @@ fn inspect_symbol_versions(
     Ok(Some(versions))
 }
 
+#[cfg(test)]
+thread_local! {
+    static ELF_CHECKS_BEFORE_CANCELLATION: std::cell::Cell<Option<usize>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+#[cfg(test)]
+pub(crate) fn inject_cancellation_after_elf_checks(checks: usize) {
+    ELF_CHECKS_BEFORE_CANCELLATION.set(Some(checks));
+}
+
 fn check(cancellation: &CancellationToken) -> Result<(), String> {
+    #[cfg(test)]
+    if let Some(remaining) = ELF_CHECKS_BEFORE_CANCELLATION.get() {
+        ELF_CHECKS_BEFORE_CANCELLATION.set(remaining.checked_sub(1));
+        if remaining == 0 {
+            cancellation.cancel();
+        }
+    }
     cancellation.check().map_err(|error| error.to_string())
 }
 
@@ -1223,6 +1243,15 @@ pub(crate) mod tests {
         cancellation.cancel();
         assert!(matches!(
             inspect_elf64_dynamic_contract(&bytes, 183, &cancellation),
+            Err(NativeElfInspectionError::Cancelled(_))
+        ));
+
+        let valid_bytes = fixture(183, &BTreeSet::new(), &[], None, "libavutil.so.59");
+        let cancellation = CancellationToken::default();
+        assert!(inspect_elf64_dynamic_contract(&valid_bytes, 183, &cancellation).is_ok());
+        inject_cancellation_after_elf_checks(2);
+        assert!(matches!(
+            inspect_elf64_dynamic_contract(&valid_bytes, 183, &cancellation),
             Err(NativeElfInspectionError::Cancelled(_))
         ));
     }

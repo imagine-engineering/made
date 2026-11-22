@@ -1,7 +1,9 @@
 use crate::{
     CertifiedNativeFfi, NativeFfiContract, NativeFfiRegistry, RocmPackageVerificationKey,
     TrustError,
-    native_ffi_elf::{NativeElfDynamicContract, inspect_elf64_dynamic_contract},
+    native_ffi_elf::{
+        NativeElfDynamicContract, NativeElfInspectionError, inspect_elf64_dynamic_contract,
+    },
     trust::{
         CapturedNativeLibraryImage, NativeLibraryImageError, RetainedNativeLibraryImage,
         capture_native_library_image_with_check,
@@ -595,9 +597,14 @@ fn prepare_certified_load(
         check_rocm_cancellation(cancellation)?;
         let dynamic =
             inspect_elf64_dynamic_contract(image.bytes(), 62, cancellation).map_err(|error| {
-                RocmCertificationError::InvalidElf {
-                    library_id: candidate.library_id.clone(),
-                    reason: error.to_string(),
+                match error {
+                    NativeElfInspectionError::Cancelled(error) => error.into(),
+                    error @ NativeElfInspectionError::Invalid(_) => {
+                        RocmCertificationError::InvalidElf {
+                            library_id: candidate.library_id.clone(),
+                            reason: error.to_string(),
+                        }
+                    }
                 }
             })?;
         let expected_soname = candidate_soname(&candidate)?;
@@ -1027,10 +1034,6 @@ mod tests {
         }
     }
 
-    fn write_u16(bytes: &mut [u8], offset: usize, value: u16) {
-        bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
-    }
-
     fn write_u32(bytes: &mut [u8], offset: usize, value: u32) {
         bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
     }
@@ -1049,181 +1052,7 @@ mod tests {
         runpath: Option<&str>,
         soname: &str,
     ) -> Vec<u8> {
-        let mut strings = vec![0_u8];
-        let mut names = Vec::new();
-        for symbol in symbols {
-            names.push(u32::try_from(strings.len()).unwrap_or_default());
-            strings.extend_from_slice(symbol.as_bytes());
-            strings.push(0);
-        }
-        let mut needed_offsets = Vec::new();
-        for dependency in needed {
-            needed_offsets.push(u64::try_from(strings.len()).unwrap_or_default());
-            strings.extend_from_slice(dependency.as_bytes());
-            strings.push(0);
-        }
-        let runpath_offset = runpath.map(|path| {
-            let offset = u64::try_from(strings.len()).unwrap_or_default();
-            strings.extend_from_slice(path.as_bytes());
-            strings.push(0);
-            offset
-        });
-        let soname_offset = u64::try_from(strings.len()).unwrap_or_default();
-        strings.extend_from_slice(soname.as_bytes());
-        strings.push(0);
-        let program_offset = 64;
-        let program_entry_size = 56;
-        let program_count = 2;
-        let string_offset = 192;
-        let symbol_offset = (string_offset + strings.len() + 7) & !7;
-        let symbol_size = (symbols.len() + 1) * 24;
-        let dynamic_offset = (symbol_offset + symbol_size + 7) & !7;
-        let dynamic_entries = 6 + needed_offsets.len() + usize::from(runpath_offset.is_some());
-        let dynamic_size = dynamic_entries * 16;
-        let section_offset = (dynamic_offset + dynamic_size + 7) & !7;
-        let mut bytes = vec![0_u8; section_offset + 4 * 64];
-        bytes[..4].copy_from_slice(b"\x7fELF");
-        bytes[4] = 2;
-        bytes[5] = 1;
-        bytes[6] = 1;
-        write_u16(&mut bytes, 16, 3);
-        write_u16(&mut bytes, 18, 62);
-        write_u64(
-            &mut bytes,
-            32,
-            u64::try_from(program_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            40,
-            u64::try_from(section_offset).unwrap_or_default(),
-        );
-        write_u16(&mut bytes, 54, program_entry_size);
-        write_u16(&mut bytes, 56, program_count);
-        write_u16(&mut bytes, 58, 64);
-        write_u16(&mut bytes, 60, 4);
-        let load_program = program_offset;
-        let file_length = u64::try_from(bytes.len()).unwrap_or_default();
-        write_u32(&mut bytes, load_program, 1);
-        write_u32(&mut bytes, load_program + 4, 4);
-        write_u64(&mut bytes, load_program + 32, file_length);
-        write_u64(&mut bytes, load_program + 40, file_length);
-        write_u64(&mut bytes, load_program + 48, 8);
-        let dynamic_program = program_offset + usize::from(program_entry_size);
-        write_u32(&mut bytes, dynamic_program, 2);
-        write_u32(&mut bytes, dynamic_program + 4, 4);
-        write_u64(
-            &mut bytes,
-            dynamic_program + 8,
-            u64::try_from(dynamic_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            dynamic_program + 16,
-            u64::try_from(dynamic_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            dynamic_program + 32,
-            u64::try_from(dynamic_size).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            dynamic_program + 40,
-            u64::try_from(dynamic_size).unwrap_or_default(),
-        );
-        write_u64(&mut bytes, dynamic_program + 48, 8);
-        bytes[string_offset..string_offset + strings.len()].copy_from_slice(&strings);
-        for (index, name_offset) in names.into_iter().enumerate() {
-            let entry = symbol_offset + (index + 1) * 24;
-            write_u32(&mut bytes, entry, name_offset);
-            bytes[entry + 4] = 0x12;
-            write_u16(&mut bytes, entry + 6, 1);
-        }
-        let strings_header = section_offset + 64;
-        write_u32(&mut bytes, strings_header + 4, 3);
-        write_u64(
-            &mut bytes,
-            strings_header + 16,
-            u64::try_from(string_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            strings_header + 24,
-            u64::try_from(string_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            strings_header + 32,
-            u64::try_from(strings.len()).unwrap_or_default(),
-        );
-        let symbols_header = section_offset + 128;
-        write_u32(&mut bytes, symbols_header + 4, 11);
-        write_u64(&mut bytes, symbols_header + 8, 2);
-        write_u64(
-            &mut bytes,
-            symbols_header + 16,
-            u64::try_from(symbol_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            symbols_header + 24,
-            u64::try_from(symbol_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            symbols_header + 32,
-            u64::try_from(symbol_size).unwrap_or_default(),
-        );
-        write_u32(&mut bytes, symbols_header + 40, 1);
-        write_u64(&mut bytes, symbols_header + 56, 24);
-        let mut dynamic_index = 0;
-        for (tag, value) in [
-            (5, u64::try_from(string_offset).unwrap_or_default()),
-            (10, u64::try_from(strings.len()).unwrap_or_default()),
-            (6, u64::try_from(symbol_offset).unwrap_or_default()),
-            (11, 24),
-            (14, soname_offset),
-        ] {
-            let entry = dynamic_offset + dynamic_index * 16;
-            write_u64(&mut bytes, entry, tag);
-            write_u64(&mut bytes, entry + 8, value);
-            dynamic_index += 1;
-        }
-        for offset in needed_offsets {
-            let entry = dynamic_offset + dynamic_index * 16;
-            write_u64(&mut bytes, entry, 1);
-            write_u64(&mut bytes, entry + 8, offset);
-            dynamic_index += 1;
-        }
-        if let Some(offset) = runpath_offset {
-            let entry = dynamic_offset + dynamic_index * 16;
-            write_u64(&mut bytes, entry, 29);
-            write_u64(&mut bytes, entry + 8, offset);
-            dynamic_index += 1;
-        }
-        let null_entry = dynamic_offset + dynamic_index * 16;
-        write_u64(&mut bytes, null_entry, 0);
-        let dynamic_header = section_offset + 192;
-        write_u32(&mut bytes, dynamic_header + 4, 6);
-        write_u64(
-            &mut bytes,
-            dynamic_header + 16,
-            u64::try_from(dynamic_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            dynamic_header + 24,
-            u64::try_from(dynamic_offset).unwrap_or_default(),
-        );
-        write_u64(
-            &mut bytes,
-            dynamic_header + 32,
-            u64::try_from(dynamic_size).unwrap_or_default(),
-        );
-        write_u32(&mut bytes, dynamic_header + 40, 1);
-        write_u64(&mut bytes, dynamic_header + 56, 16);
-        bytes
+        crate::native_ffi_elf::tests::fixture(62, symbols, needed, runpath, soname)
     }
 
     fn fixture_sha256(bytes: &[u8]) -> String {
@@ -2514,14 +2343,13 @@ mod tests {
         ));
 
         let cancellation = CancellationToken::default();
-        inject_cancellation_after_successful_checks(2);
-        assert!(
-            elf64_dynamic_contract(
-                &elf_fixture_with_dynamic(&input.required_symbols, &["libc.so.6"], None, filename,),
-                &cancellation,
-            )
-            .is_err_and(|reason| reason.contains("cancelled"))
-        );
+        let inputs = candidate_inputs(&set);
+        let registry = registry_for(&inputs, None)?;
+        crate::native_ffi_elf::inject_cancellation_after_elf_checks(2);
+        assert!(matches!(
+            prepare_certified_load(&registry, &set, &inputs, &cancellation),
+            Err(RocmCertificationError::Cancelled(_))
+        ));
 
         let cancellation = CancellationToken::default();
         let captured = capture_native_library_image_with_check(&input.path, || Ok(()))?;
@@ -2637,12 +2465,12 @@ mod tests {
         fs::write(&source, b"immutable")?;
         let snapshot = capture_native_library_image_with_check(&source, || Ok(()))?
             .seal("fixture", &CancellationToken::default())?;
-        assert!(
-            OpenOptions::new()
-                .write(true)
-                .open(snapshot.loader_path())
-                .is_err()
-        );
+        use std::io::Write;
+
+        let mut file = snapshot.file().try_clone()?;
+        assert!(file.write_all(b"changed").is_err());
+        assert!(file.set_len(0).is_err());
+        assert_eq!(fs::read(snapshot.loader_path())?, b"immutable");
         Ok(())
     }
 
