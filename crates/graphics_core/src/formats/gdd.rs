@@ -168,6 +168,12 @@ pub enum GddArchiveError {
         "Select an ordinary numeric Graphite node with room for its duplicate on the graph grid."
     )]
     UnsupportedGraphNodeDuplication,
+    #[error("Select an ordinary Graphite node with a free grid position.")]
+    UnsupportedGraphGridMove,
+    #[error("Enter a different Graphite grid position.")]
+    UnchangedGraphGridPosition,
+    #[error("The change in Graphite grid coordinates is outside the supported range.")]
+    GraphGridMoveOutOfRange,
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
     #[error("The Graphite copy could not save the addressed node's change.")]
@@ -271,6 +277,7 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
+    grid_position: Option<[i32; 2]>,
 }
 
 #[derive(Clone)]
@@ -423,6 +430,29 @@ impl GddGraphNode {
 
     pub fn can_duplicate_in_copy(&self) -> bool {
         self.can_duplicate_in_copy
+    }
+
+    pub fn grid_position(&self) -> Option<[i32; 2]> {
+        self.grid_position
+    }
+
+    pub fn validate_grid_move(&self, destination: [i32; 2]) -> Result<(), GddArchiveError> {
+        self.grid_move_offset(destination).map(|_| ())
+    }
+
+    fn grid_move_offset(&self, destination: [i32; 2]) -> Result<IVec2, GddArchiveError> {
+        let original = self
+            .grid_position
+            .ok_or(GddArchiveError::UnsupportedGraphGridMove)?;
+        if original == destination {
+            return Err(GddArchiveError::UnchangedGraphGridPosition);
+        }
+        let [x, y] = original;
+        let [destination_x, destination_y] = destination;
+        match (destination_x.checked_sub(x), destination_y.checked_sub(y)) {
+            (Some(horizontal), Some(vertical)) => Ok(IVec2::new(horizontal, vertical)),
+            _ => Err(GddArchiveError::GraphGridMoveOutOfRange),
+        }
     }
 
     pub fn numeric_input(&self) -> Option<&GddNumericValue> {
@@ -628,6 +658,7 @@ impl InspectedGddV1 {
                 numeric_input: None,
                 can_delete_in_copy: false,
                 can_duplicate_in_copy: false,
+                grid_position: None,
             })
             .collect();
         let mut interface = graph.into_interface()?;
@@ -673,9 +704,14 @@ impl InspectedGddV1 {
             let wired = wired_nodes
                 .entry(path.clone())
                 .or_insert_with(|| graph_wired_output_nodes(&mut interface, path));
-            node.can_delete_in_copy = wired.as_ref().is_some_and(|wired| {
-                !wired.contains(&node.local_id) && graph_node_has_isolated_layout(&interface, node)
-            });
+            if graph_node_has_isolated_layout(&interface, node) {
+                node.can_delete_in_copy = wired
+                    .as_ref()
+                    .is_some_and(|wired| !wired.contains(&node.local_id));
+                node.grid_position = interface
+                    .position(&node.local_id, path)
+                    .map(|position| position.to_array());
+            }
         }
         Ok(nodes)
     }
@@ -918,6 +954,54 @@ impl InspectedGddV1 {
                 metadata.persistent_metadata.pinned_node_order == *new_order
             })
         {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn move_graph_node_in_copy(
+        &self,
+        node: &GddGraphNode,
+        destination: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::ui::{IS_LAYER, POSITION};
+
+        self.check_node_edit_target(node)?;
+        let shift = node.grid_move_offset(destination)?;
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        interface.shift_absolute_node_position(&node.local_id, shift, path);
+        let expected = Some(IVec2::from_array(destination));
+        if interface.position(&node.local_id, path) != expected {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let metadata = interface
+            .node_metadata(&node.local_id, path)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let edit = EditorDelta::NodeMetadata {
+            network_path: path.clone(),
+            node_id: node.local_id,
+            change: NodeMetadataChange::NodeType(
+                metadata.persistent_metadata.node_type_metadata.clone(),
+            ),
+        };
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let mut batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        if !matches!(
+            batch.ops.as_slice(),
+            [RegistryDelta::ChangeNodeAttribute { id, delta },
+             RegistryDelta::ChangeNodeAttribute { id: mode_id, delta: mode }]
+                if *id == node.storage_id && *mode_id == *id
+                    && delta.key == POSITION && mode.key == IS_LAYER && mode.value.is_none()
+        ) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        // The layer mode is an independent stored attribute and a grid move leaves it intact.
+        batch.ops.truncate(1);
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.position(&node.local_id, path) != expected {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -2740,6 +2824,93 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_014_1_moves_the_nested_node_grid_position_without_rewriting_the_wire() {
+        use graphite_document_graph_storage::attr::node::ui::POSITION;
+
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let nodes = original.graph_nodes().await.expect("source nodes");
+            let [root, _, upstream, _, downstream, _] = nodes.as_slice() else {
+                panic!("expected repeated local IDs and a nested wire");
+            };
+            assert_eq!(root.local_id, upstream.local_id);
+            let original_position = upstream.grid_position().expect("free grid position");
+            assert!(matches!(
+                original
+                    .move_graph_node_in_copy(upstream, original_position, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphGridPosition)
+            ));
+            assert!(matches!(
+                original
+                    .move_graph_node_in_copy(downstream, [-12, 34], budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphGridMove)
+            ));
+            let moved = original
+                .move_graph_node_in_copy(upstream, [-12, 34], budget())
+                .await
+                .expect("move the selected node");
+            assert_eq!(moved.history_len(), original.history_len() + 1);
+            let saved = moved
+                .document
+                .session()
+                .history()
+                .last()
+                .expect("saved move");
+            assert!(
+                matches!(&saved.kind, RegistryDelta::ChangeNodeAttribute { id, delta }
+                if *id == upstream.storage_id && delta.key == POSITION)
+            );
+            let new_nodes = moved.graph_nodes().await.expect("reopened moved graph");
+            let new_upstream = new_nodes
+                .iter()
+                .find(|node| node.storage_id == upstream.storage_id)
+                .expect("same stable node");
+            assert_eq!(new_upstream.grid_position(), Some([-12, 34]));
+            assert!(matches!(
+                moved
+                    .move_graph_node_in_copy(new_upstream, [i32::MAX, 34], budget())
+                    .await,
+                Err(GddArchiveError::GraphGridMoveOutOfRange)
+            ));
+            assert!(matches!(
+                moved
+                    .move_graph_node_in_copy(upstream, [2, 5], budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let registry = moved.document.registry();
+            let before = original.document.registry();
+            for node in nodes
+                .iter()
+                .filter(|node| node.storage_id != upstream.storage_id)
+            {
+                assert_eq!(
+                    registry.node_instances[&node.storage_id],
+                    before.node_instances[&node.storage_id]
+                );
+            }
+            let moved_node = &registry.node_instances[&upstream.storage_id];
+            assert_eq!(
+                moved_node.inputs(),
+                before.node_instances[&upstream.storage_id].inputs()
+            );
+            let undo = moved
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores the position");
+            assert!(undo.document.registry().value_equal(before));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo moves the same node");
+            assert!(redo.document.registry().value_equal(registry));
         });
     }
 

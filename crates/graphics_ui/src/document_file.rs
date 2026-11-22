@@ -446,6 +446,7 @@ struct NodeCopyForm {
     selected: Option<usize>,
     name: Entity<Editor>,
     value: Entity<Editor>,
+    position: Entity<Editor>,
 }
 
 impl NodeCopyForm {
@@ -486,6 +487,7 @@ enum NodeCopyChange {
     Rename(String),
     DuplicateNumeric,
     DeleteIsolated,
+    GridPosition([i32; 2]),
     Pin(bool),
     MovePinned(GddPinnedNodeMove),
     NumericInput(GddNumericValue),
@@ -500,6 +502,15 @@ enum NodeCopyChange {
 enum PreparedCopy {
     File(Arc<[u8]>),
     Folder(Vec<(PathBuf, Vec<u8>)>),
+}
+
+fn parse_graph_grid_position(text: &str) -> anyhow::Result<[i32; 2]> {
+    const INVALID_POSITION: &str = "Enter two whole grid coordinates separated by a comma.";
+    let (x, y) = text.split_once(',').context(INVALID_POSITION)?;
+    Ok([
+        x.trim().parse().context(INVALID_POSITION)?,
+        y.trim().parse().context(INVALID_POSITION)?,
+    ])
 }
 
 impl GraphiteDocumentItem {
@@ -523,25 +534,19 @@ impl GraphiteDocumentItem {
         let Some(editor) = &self.new_node_position else {
             return;
         };
-        let text = editor.read(cx).text(cx);
-        let position = text.split_once(',').and_then(|(x, y)| {
-            Some([x.trim().parse::<i32>().ok()?, y.trim().parse::<i32>().ok()?])
-        });
-        if let Some(position) = position {
-            self.save_copy(
+        match parse_graph_grid_position(&editor.read(cx).text(cx)) {
+            Ok(position) => self.save_copy(
                 GraphiteCopy::InsertNumericNode {
                     operation,
                     position,
                 },
                 window,
                 cx,
-            );
-        } else {
-            self.copy_feedback = Some((
-                "Enter two whole grid coordinates separated by a comma.".into(),
-                Color::Error,
-            ));
-            cx.notify();
+            ),
+            Err(error) => {
+                self.copy_feedback = Some((error.to_string().into(), Color::Error));
+                cx.notify();
+            }
         }
     }
 
@@ -641,6 +646,7 @@ impl GraphiteDocumentItem {
                                     selected: None,
                                     name: cx.new(|cx| Editor::single_line(window, cx)),
                                     value: cx.new(|cx| Editor::single_line(window, cx)),
+                                    position: cx.new(|cx| Editor::single_line(window, cx)),
                                 }),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -668,7 +674,36 @@ impl GraphiteDocumentItem {
                     editor.set_text(value.to_string(), window, cx)
                 });
             }
+            if let Some([x, y]) = node.grid_position() {
+                form.position.update(cx, |editor, cx| {
+                    editor.set_text(format!("{x}, {y}"), window, cx)
+                });
+            }
             cx.notify();
+        }
+    }
+
+    fn save_node_grid_position(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form.selected_node() else {
+            return;
+        };
+        let request =
+            parse_graph_grid_position(&form.position.read(cx).text(cx)).and_then(|position| {
+                node.validate_grid_move(position)?;
+                Ok(GraphiteCopy::EditNode {
+                    node: node.clone(),
+                    change: NodeCopyChange::GridPosition(position),
+                })
+            });
+        match request {
+            Ok(request) => self.save_copy(request, window, cx),
+            Err(error) => {
+                self.copy_feedback = Some((error.to_string().into(), Color::Error));
+                cx.notify();
+            }
         }
     }
 
@@ -1103,6 +1138,34 @@ impl GraphiteDocumentItem {
                                 )
                             })
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
+                            .when(selected.grid_position().is_some(), |panel| {
+                                panel.child(
+                                    h_flex()
+                                        .gap_2()
+                                        .child(Label::new("Grid position (x, y)"))
+                                        .child(
+                                            div()
+                                                .id("graphite-gdd-grid-position")
+                                                .aria_label("Grid position (x, y)")
+                                                .w_32()
+                                                .child(form.position.clone()),
+                                        )
+                                        .child(
+                                            div()
+                                                .debug_selector(|| "GRAPHITE-GDD-SAVE-POSITION".into())
+                                                .child(
+                                                    Button::new(
+                                                        "graphite-gdd-save-position",
+                                                        "Move Node in a Copy",
+                                                    )
+                                                    .disabled(self.copy_task.is_some())
+                                                    .on_click(cx.listener(|item, _, window, cx| {
+                                                        item.save_node_grid_position(window, cx);
+                                                    })),
+                                                ),
+                                        ),
+                                )
+                            })
                     })
             }
             NodeCopyPanel::Failed(error) => {
@@ -1262,6 +1325,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::DeleteIsolated,
                         ..
                     } => "Removed node in",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::GridPosition(_),
+                        ..
+                    } => "Moved node in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::Pin(true),
                         ..
@@ -1437,6 +1504,11 @@ impl GraphiteDocumentItem {
                                 NodeCopyChange::DeleteIsolated => {
                                     archive
                                         .delete_isolated_graph_node_in_copy(&node, ARCHIVE_BUDGET)
+                                        .await?
+                                }
+                                NodeCopyChange::GridPosition(position) => {
+                                    archive
+                                        .move_graph_node_in_copy(&node, position, ARCHIVE_BUDGET)
                                         .await?
                                 }
                                 NodeCopyChange::Pin(pinned) => {
@@ -2124,6 +2196,91 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_014_2_workspace_moves_a_node_to_an_exact_saved_grid_position(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/position.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source node")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let editor = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected a selected node");
+            };
+            assert_eq!(form.position.read(cx).text(cx), "0, 0");
+            form.position.clone()
+        });
+        for (draft, feedback) in [
+            ("0, 0", "different Graphite grid position"),
+            ("2.5, -4", "two whole grid coordinates"),
+        ] {
+            editor.update_in(window, |editor, window, cx| {
+                editor.set_text(draft, window, cx)
+            });
+            paint(window);
+            click(window, "GRAPHITE-GDD-SAVE-POSITION");
+            item.read_with(window, |item, cx| {
+                assert!(item.copy_task.is_none());
+                assert!(!item.is_dirty(cx));
+                assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains(feedback)));
+            });
+        }
+        editor.update_in(window, |editor, window, cx| {
+            editor.set_text("-12, 34", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-POSITION");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-POSITION");
+        let destination = PathBuf::from("/project/moved.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened moved folder");
+        assert_ne!(reopened, item);
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the moved node");
+            };
+            assert_eq!(form.position.read(cx).text(cx), "-12, 34");
+            assert_eq!(form.value.read(cx).text(cx), "-17");
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained source archive"),
+            original
+        );
     }
 
     #[gpui::test]
