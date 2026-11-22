@@ -940,11 +940,18 @@ impl GraphiteDocumentItem {
         match &mut self.node_copy {
             NodeCopyPanel::Closed => {}
             NodeCopyPanel::Ready(form) if !Arc::ptr_eq(&form.revision, &revision) => {
+                let reopen_graph = matches!(
+                    form.saved_graph,
+                    SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
+                );
                 if form.saved_graph_focus.contains_focused(window, cx) {
                     self.focus_handle.focus(window, cx);
                 }
                 if let Some(index) = form.replace_inspection(contents, revision, &inspection) {
                     self.select_copy_node(index, window, cx);
+                }
+                if reopen_graph {
+                    self.toggle_saved_graph(window, cx);
                 }
             }
             NodeCopyPanel::Loading { .. } | NodeCopyPanel::Failed(_) => {
@@ -1105,23 +1112,70 @@ impl GraphiteDocumentItem {
                 cx,
             ),
             NodeInsertDestination::WorkingCopy => {
-                let model = self.model.read(cx);
-                let Some(contents) = model.gdd_contents().cloned() else {
-                    return;
-                };
-                let revision = model.revision.clone();
-                self.stage_working_snapshot(
-                    revision,
-                    async move {
-                        contents
-                            .insert_root_numeric_node_in_copy(operation, position, ARCHIVE_BUDGET)
-                            .await
-                    },
-                    window,
-                    cx,
-                );
+                let revision = self.model.read(cx).revision.clone();
+                self.insert_working_numeric_node(operation, position, revision, window, cx);
             }
         }
+    }
+
+    fn insert_working_numeric_node(
+        &mut self,
+        operation: UnaryNumericOperation,
+        position: [i32; 2],
+        revision: Arc<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(&model.revision, &revision) {
+            self.copy_feedback = Some((
+                "The Graphite working copy changed. Reopen the node picker.".into(),
+                Color::Error,
+            ));
+            cx.notify();
+            return;
+        }
+        let Some(contents) = model.gdd_contents().cloned() else {
+            return;
+        };
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                contents
+                    .insert_root_numeric_node_in_copy(operation, position, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn numeric_node_picker(
+        pick: impl Fn(UnaryNumericOperation, &mut Window, &mut App) + Clone + 'static,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<ContextMenu> {
+        ContextMenu::build(window, cx, |mut menu, _, _| {
+            for operation in GRAPHITE_NUMERIC_OPERATIONS {
+                let pick = pick.clone();
+                menu = menu.custom_entry(
+                    move |_, _| {
+                        div()
+                            .debug_selector(move || {
+                                format!("GRAPHITE-GDD-ADD-{}", operation.name())
+                            })
+                            .p_2()
+                            .child(Label::new(operation.name()))
+                            .into_any_element()
+                    },
+                    move |window, cx| pick(operation, window, cx),
+                );
+            }
+            menu
+        })
     }
 
     fn render_insert_node(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1165,30 +1219,17 @@ impl GraphiteDocumentItem {
                 self.node_insert.as_ref().map(|form| form.position.clone()),
                 |panel, position| {
                     let item = cx.entity().downgrade();
-                    let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
-                        for operation in GRAPHITE_NUMERIC_OPERATIONS {
-                            let item = item.clone();
-                            menu = menu.custom_entry(
-                                move |_, _| {
-                                    div()
-                                        .debug_selector(move || {
-                                            format!("GRAPHITE-GDD-ADD-{}", operation.name())
-                                        })
-                                        .p_2()
-                                        .child(Label::new(operation.name()))
-                                        .into_any_element()
-                                },
-                                move |window, cx| {
-                                    if let Some(item) = item.upgrade() {
-                                        item.update(cx, |item, cx| {
-                                            item.insert_numeric_node(operation, window, cx);
-                                        });
-                                    }
-                                },
-                            );
-                        }
-                        menu
-                    });
+                    let menu = Self::numeric_node_picker(
+                        move |operation, window, cx| {
+                            if let Some(item) = item.upgrade() {
+                                item.update(cx, |item, cx| {
+                                    item.insert_numeric_node(operation, window, cx);
+                                });
+                            }
+                        },
+                        window,
+                        cx,
+                    );
                     panel
                         .child(Label::new("Grid position (x, y)"))
                         .child(
@@ -2601,6 +2642,8 @@ impl GraphiteDocumentItem {
                                 let item = cx.entity().downgrade();
                                 let menu_item = item.clone();
                                 let scope = network.id;
+                                let visible_revision = form.revision.clone();
+                                let menu_revision = visible_revision.clone();
                                 panel.child(crate::graph::render_saved_graph(
                                     geometry, &form.nodes,
                                     SavedGraphView {
@@ -2615,6 +2658,7 @@ impl GraphiteDocumentItem {
                                     move |action, window, cx| {
                                         if let Err(error) = item.update(cx, |item, cx| {
                                             if let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                && Arc::ptr_eq(&form.revision, &visible_revision)
                                                 && form.clipboard_scope().is_some_and(|network| network.id == scope)
                                             {
                                                 item.handle_saved_graph_action(action, window, cx);
@@ -2632,11 +2676,33 @@ impl GraphiteDocumentItem {
                                         if item_state.copy_task.is_some()
                                             || form.pending_canvas_source.is_some()
                                             || !matches!(form.saved_graph, SavedGraphPanel::Ready(_))
+                                            || !Arc::ptr_eq(&form.revision, &menu_revision)
                                             || !form.clipboard_scope().is_some_and(|network| network.id == scope)
                                         {
                                             return None;
                                         }
                                         match target {
+                                            SavedGraphMenuTarget::Background(position) => {
+                                                form.clipboard_scope().filter(|network| network.parent.is_none())?;
+                                                let revision = form.revision.clone();
+                                                let item = item.downgrade();
+                                                Some(Self::numeric_node_picker(move |operation, window, cx| {
+                                                    if let Err(error) = item.update(cx, |item, cx| {
+                                                        if matches!(&item.node_copy, NodeCopyPanel::Ready(form) if
+                                                            matches!(form.saved_graph, SavedGraphPanel::Ready(_))
+                                                                && form.pending_canvas_source.is_none()
+                                                                && form.clipboard_scope().is_some_and(|network| network.id == scope))
+                                                        {
+                                                            item.insert_working_numeric_node(operation, position, revision.clone(), window, cx);
+                                                        } else {
+                                                            item.copy_feedback = Some(("The Graphite canvas changed. Reopen the node picker.".into(), Color::Error));
+                                                            cx.notify();
+                                                        }
+                                                    }) {
+                                                        log::debug!("Graphite canvas picker closed: {error:#}");
+                                                    }
+                                                }, window, cx))
+                                            }
                                             SavedGraphMenuTarget::NodeInput(index) => {
                                                 let target = form.nodes.get(index).filter(|node| {
                                                     node.network_id() == scope
@@ -4545,6 +4611,15 @@ mod tests {
             .debug_bounds(selector)
             .expect("visible saved graph control")
             .center();
+        click_graph_point(window, position, button, modifiers);
+    }
+
+    fn click_graph_point(
+        window: &mut gpui::VisualTestContext,
+        position: gpui::Point<gpui::Pixels>,
+        button: gpui::MouseButton,
+        modifiers: gpui::Modifiers,
+    ) {
         window.update(|window, cx| {
             window.dispatch_event(
                 gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
@@ -10089,6 +10164,117 @@ mod tests {
             workspace.read_with(window, |workspace, cx| workspace
                 .active_item_as::<GraphiteDocumentItem>(cx)),
             Some(item)
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_005_2_workspace_inserts_at_the_canvas_right_click_position(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/blank-pointer.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| Some(source.clone()));
+        window.run_until_parked();
+        let item = workspace.read_with(window, |workspace, cx| {
+            workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)
+                .expect("blank Graphite folder")
+        });
+        let original = read_graphite_folder(filesystem.as_ref(), &source)
+            .await
+            .expect("source folder")
+            .folder_files()
+            .expect("source entries");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            assert!(matches!(&item.node_copy, NodeCopyPanel::Ready(form) if
+                matches!(&form.saved_graph, SavedGraphPanel::Ready(graph) if graph.nodes.is_empty() && graph.boundary_ports.is_empty())));
+        });
+        let bounds = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("blank root canvas");
+        let position = bounds.origin + gpui::point(px(108.), px(91.));
+        click_graph_point(
+            window,
+            position,
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-ADD-Sign").is_some());
+        click_graph_point(
+            window,
+            bounds.origin + gpui::point(px(8.), px(8.)),
+            gpui::MouseButton::Left,
+            gpui::Modifiers::default(),
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-ADD-Sign").is_none());
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+
+        click_graph_point(
+            window,
+            position,
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        click(window, "GRAPHITE-GDD-ADD-Sign");
+        window.run_until_parked();
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_some());
+        let node_id = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working graph projection")
+            };
+            let [node] = form.nodes.as_slice() else {
+                panic!("one inserted node")
+            };
+            assert_eq!(node.display_name(), "Sign");
+            assert_eq!(node.grid_position(), Some([3, 2]));
+            node.storage_id()
+        });
+        right_click_saved_graph(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+        assert!(window.debug_bounds("GRAPHITE-GDD-ADD-Sign").is_none());
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH").is_some());
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_none());
+        click(window, "GRAPHITE-GDD-REDO");
+        window.run_until_parked();
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_some());
+
+        let destination = PathBuf::from("/project/pointer-position.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("published pointer-positioned graph");
+        let nodes = saved.graph_nodes().await.expect("reopened saved root");
+        let [node] = nodes.as_slice() else {
+            panic!("one saved node")
+        };
+        assert_eq!(node.storage_id(), node_id);
+        assert_eq!(node.grid_position(), Some([3, 2]));
+        assert_eq!(
+            read_graphite_folder(filesystem.as_ref(), &source)
+                .await
+                .expect("retained source folder")
+                .folder_files()
+                .expect("source bytes"),
+            original
         );
     }
 

@@ -8,7 +8,11 @@ use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
     ImportOrExport,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    cell::Cell,
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+};
 use ui::{ContextMenu, DropdownMenu, GraphWireStroke, TintColor, graph_wire_layer, prelude::*};
 use workspace::{
     Workspace,
@@ -141,6 +145,7 @@ pub(crate) enum SavedGraphConnectionSource {
 pub(crate) enum SavedGraphMenuTarget {
     NodeInput(usize),
     Boundary(ImportOrExport),
+    Background([i32; 2]),
 }
 
 pub(crate) struct SavedGraphView<'a> {
@@ -234,6 +239,90 @@ pub(crate) fn render_saved_graph(
                 dispatch_clipboard(action, window, cx);
             }
         })
+        .when(
+            view.network.parent.is_none()
+                && view.can_start_connection
+                && view.pending_source.is_none(),
+            |graph| {
+                let origin = Rc::new(Cell::new(None));
+                let canvas_origin = origin.clone();
+                let position = Rc::new(Cell::new(None));
+                let clicked_position = position.clone();
+                let menu_handle = ui::RightClickMenuHandle::default();
+                let open_menu = menu_handle.clone();
+                let menu = context_menu.clone();
+                let node_bounds = geometry
+                    .nodes
+                    .iter()
+                    .map(|node| node.bounds)
+                    .collect::<Vec<_>>();
+                let ports = geometry
+                    .boundary_ports
+                    .iter()
+                    .map(|(_, position)| *position)
+                    .chain(geometry.nodes.iter().flat_map(|node| {
+                        [node.primary_input, node.primary_output]
+                            .into_iter()
+                            .flatten()
+                    }))
+                    .collect::<Vec<_>>();
+                graph
+                    .on_mouse_down(MouseButton::Right, move |event, window, cx| {
+                        let Some(origin) = origin.get() else {
+                            return;
+                        };
+                        let local: gpui::Point<gpui::Pixels> = event.position - origin;
+                        let [x, y] = [f32::from(local.x), f32::from(local.y)];
+                        let source = [
+                            (f64::from(x) - padding) / scale + min[0],
+                            (f64::from(y) - padding) / scale + min[1],
+                        ];
+                        let socket_radius = 9. / scale;
+                        if source.iter().any(|&coordinate| {
+                            !coordinate.is_finite()
+                                || coordinate < f64::from(i32::MIN)
+                                || coordinate > f64::from(i32::MAX)
+                        }) || node_bounds.iter().any(|[top_left, bottom_right]| {
+                            (top_left[0]..=bottom_right[0]).contains(&source[0])
+                                && (top_left[1]..=bottom_right[1]).contains(&source[1])
+                        }) || ports.iter().any(|port| {
+                            (source[0] - port[0]).abs() <= socket_radius
+                                && (source[1] - port[1]).abs() <= socket_radius
+                        }) {
+                            return;
+                        }
+                        let grid = graphite_editor::consts::GRID_SIZE as i32;
+                        clicked_position
+                            .set(Some(source.map(|coordinate| coordinate as i32 / grid)));
+                        if open_menu.show_at(event.position, window, cx) {
+                            cx.stop_propagation();
+                            window.prevent_default();
+                        }
+                    })
+                    .child(
+                        gpui::canvas(
+                            move |bounds, _, _| canvas_origin.set(Some(bounds.origin)),
+                            |_, (), _, _| {},
+                        )
+                        .absolute()
+                        .size_full(),
+                    )
+                    .child(
+                        // The canvas supplies the hit target so the menu cannot intercept port clicks.
+                        div().absolute().size(px(0.)).child(
+                            ui::right_click_menu("graphite-saved-graph-background-menu")
+                                .with_handle(menu_handle)
+                                .maybe_menu(move |window, cx| {
+                                    menu(
+                                        SavedGraphMenuTarget::Background(position.get()?),
+                                        window,
+                                        cx,
+                                    )
+                                }),
+                        ),
+                    )
+            },
+        )
         .child(graph_wire_layer(
             geometry
                 .wires
