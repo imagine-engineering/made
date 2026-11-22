@@ -1,13 +1,15 @@
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    Subscription, Window, actions,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
+    Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
-    GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
+    GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
+    ImportOrExport,
 };
-use ui::{ContextMenu, DropdownMenu, TintColor, prelude::*};
+use std::collections::BTreeMap;
+use ui::{ContextMenu, DropdownMenu, GraphWireStroke, TintColor, graph_wire_layer, prelude::*};
 use workspace::{
     Workspace,
     item::{Item, ItemEvent, SaveOptions},
@@ -103,6 +105,120 @@ pub(crate) fn render_saved_graph_ports(
                     )
                 })
         })
+}
+
+pub(crate) fn render_saved_graph(
+    geometry: &GddGraphGeometry,
+    nodes: &[GddGraphNode],
+    selected: Option<usize>,
+    window: &Window,
+    cx: &App,
+    select: impl Fn(usize, &mut Window, &mut App) + Clone + 'static,
+) -> impl IntoElement {
+    let padding = 24.;
+    let height = 256.;
+    let viewport_width: f32 = window.viewport_size().width.into();
+    let width = f64::from((viewport_width - 96.).clamp(200., 800.));
+    let mut points = geometry
+        .nodes
+        .iter()
+        .flat_map(|node| node.bounds)
+        .chain(geometry.boundary_ports.iter().map(|(_, point)| *point));
+    let first = points.next().unwrap_or([0., 0.]);
+    let (min, max) = points.fold((first, first), |(min, max), [x, y]| {
+        (
+            [min[0].min(x), min[1].min(y)],
+            [max[0].max(x), max[1].max(y)],
+        )
+    });
+    let scale = ((width - 2. * padding) / (max[0] - min[0]).max(1.))
+        .min((height - 2. * padding) / (max[1] - min[1]).max(1.))
+        .min(1.);
+    let project = |[x, y]: [f64; 2]| {
+        point(
+            px(((x - min[0]) * scale + padding) as f32),
+            px(((y - min[1]) * scale + padding) as f32),
+        )
+    };
+    let nodes_by_id = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| (node.storage_id(), (index, node)))
+        .collect::<BTreeMap<_, _>>();
+    let colors = cx.theme().colors();
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
+        .relative()
+        .overflow_hidden()
+        .border_1()
+        .border_color(colors.border)
+        .bg(colors.editor_background)
+        .w(px(width as f32))
+        .max_w_full()
+        .h(px(height as f32))
+        .child(graph_wire_layer(
+            geometry
+                .wires
+                .iter()
+                .map(|wire| GraphWireStroke {
+                    points: wire.iter().copied().map(project).collect(),
+                    width: px(2.),
+                    color: rgb(0x77a7ff),
+                })
+                .collect(),
+        ))
+        .children(geometry.boundary_ports.iter().map(|(port, position)| {
+            let position = project(*position);
+            let (label, index) = match port {
+                ImportOrExport::Import(index) => ("Import", index),
+                ImportOrExport::Export(index) => ("Export", index),
+            };
+            let number = index.saturating_add(1);
+            div()
+                .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-{label}-{number}"))
+                .absolute()
+                .left(position.x - px(3.))
+                .top(position.y - px(3.))
+                .child(div().size(px(6.)).rounded_full().bg(colors.text_accent))
+                .child(Label::new(format!("{label} {number}")).size(LabelSize::XSmall))
+        }))
+        .children(geometry.nodes.iter().filter_map(|geometry| {
+            let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
+            let [top_left, bottom_right] = geometry.bounds.map(project);
+            let select = select.clone();
+            let select_with_key = select.clone();
+            Some(
+                div()
+                    .id(("graphite-saved-graph-node", index))
+                    .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-NODE-{index}"))
+                    .role(Role::Button)
+                    .aria_label(node.label().to_owned())
+                    .tab_stop(true)
+                    .absolute()
+                    .left(top_left.x)
+                    .top(top_left.y)
+                    .w(bottom_right.x - top_left.x)
+                    .h(bottom_right.y - top_left.y)
+                    .overflow_hidden()
+                    .border_1()
+                    .rounded_sm()
+                    .border_color(if selected == Some(index) {
+                        colors.text_accent
+                    } else {
+                        colors.border
+                    })
+                    .bg(colors.surface_background)
+                    .cursor_pointer()
+                    .child(Label::new(node.display_name().to_owned()).size(LabelSize::XSmall))
+                    .on_key_down(move |event, window, cx| {
+                        if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                            cx.stop_propagation();
+                            select_with_key(index, window, cx);
+                        }
+                    })
+                    .on_click(move |_, window, cx| select(index, window, cx)),
+            )
+        }))
 }
 
 actions!(

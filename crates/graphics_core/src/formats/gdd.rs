@@ -340,6 +340,17 @@ pub struct GddGraphInspection {
     pub networks: Vec<GddGraphNetwork>,
 }
 
+pub struct GddGraphGeometry {
+    pub nodes: Vec<GddGraphNodeGeometry>,
+    pub boundary_ports: Vec<(ImportOrExport, [f64; 2])>,
+    pub wires: Vec<[[f64; 2]; 2]>,
+}
+
+pub struct GddGraphNodeGeometry {
+    pub storage_id: StorageNodeId,
+    pub bounds: [[f64; 2]; 2],
+}
+
 #[derive(Clone)]
 pub struct GddGraphNetwork {
     pub id: NetworkId,
@@ -499,6 +510,7 @@ pub struct GddGraphNode {
     network_id: NetworkId,
     nested_network: Option<NetworkId>,
     label: String,
+    display_name: String,
     name: String,
     pinned: bool,
     pinned_order: Option<(usize, usize)>,
@@ -713,6 +725,10 @@ impl GddGraphNode {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
     }
 
     pub fn name(&self) -> &str {
@@ -959,6 +975,76 @@ impl InspectedGddV1 {
         Ok(self.graph_inspection().await?.nodes)
     }
 
+    pub async fn graph_geometry(
+        &self,
+        network: &GddGraphNetwork,
+    ) -> Result<GddGraphGeometry, GddArchiveError> {
+        if !Arc::ptr_eq(&self.snapshot, &network.snapshot) {
+            return Err(GddArchiveError::StaleGraphNetwork);
+        }
+        let path = network.path.as_slice();
+        let graph = self.runtime_graph().await?;
+        let mut ids = graph
+            .nodes
+            .iter()
+            .filter(|node| node.network_path == path)
+            .map(|node| (node.local_id, node.storage_id))
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        let interface = graph.into_interface()?;
+        let nested = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let nodes = ids
+            .iter()
+            .filter_map(|(local_id, storage_id)| {
+                let bounds = interface.node_bounding_box(local_id, path)?;
+                bounds
+                    .iter()
+                    .all(|point| point.is_finite())
+                    .then(|| GddGraphNodeGeometry {
+                        storage_id: *storage_id,
+                        bounds: bounds.map(|point| point.to_array()),
+                    })
+            })
+            .collect();
+        let boundary_ports = (0..network.import_count)
+            .filter_map(|index| {
+                let point = finite_graph_point(
+                    interface.output_position(&OutputConnector::Import(index), path),
+                )?;
+                Some((ImportOrExport::Import(index), point))
+            })
+            .chain((0..network.export_count).filter_map(|index| {
+                let point = finite_graph_point(
+                    interface.input_position(&InputConnector::Export(index), path),
+                )?;
+                Some((ImportOrExport::Export(index), point))
+            }))
+            .collect();
+        let wires = ids
+            .iter()
+            .flat_map(|(node, _)| {
+                nested.nodes.get(node).into_iter().flat_map(|document| {
+                    (0..document.inputs.len())
+                        .map(|index| InputConnector::node_at_index(*node, index))
+                })
+            })
+            .chain((0..nested.exports.len()).map(InputConnector::Export))
+            .filter_map(|input| {
+                let output = interface.upstream_output_connector(&input, path)?;
+                let start = finite_graph_point(interface.output_position(&output, path))?;
+                let end = finite_graph_point(interface.input_position(&input, path))?;
+                Some([start, end])
+            })
+            .collect();
+        Ok(GddGraphGeometry {
+            nodes,
+            boundary_ports,
+            wires,
+        })
+    }
+
     pub async fn graph_inspection(&self) -> Result<GddGraphInspection, GddArchiveError> {
         let graph = self.runtime_graph().await?;
         let mut network_ids = network_ids_from_entries(&graph.networks);
@@ -981,6 +1067,7 @@ impl InspectedGddV1 {
                         .ok_or(GddArchiveError::MissingGraphNetwork)?,
                     nested_network: network_ids.get(&owned_path).copied(),
                     label: String::new(),
+                    display_name: String::new(),
                     name: node.display_name.clone().unwrap_or_default(),
                     pinned: node.pinned,
                     pinned_order: None,
@@ -1138,8 +1225,8 @@ impl InspectedGddV1 {
                     .collect::<Vec<_>>()
                     .join(" / ")
             };
-            let label = interface.display_name(&node.local_id, path);
-            node.label = format!("{parent} · {label} [{}]", node.local_id.0);
+            node.display_name = interface.display_name(&node.local_id, path);
+            node.label = format!("{parent} · {} [{}]", node.display_name, node.local_id.0);
             let metadata = interface
                 .node_metadata(&node.local_id, path)
                 .map(|node| &node.persistent_metadata);
@@ -4130,6 +4217,12 @@ fn project_graph_input(
         stored_type,
         source,
     }
+}
+
+fn finite_graph_point(point: Option<DVec2>) -> Option<[f64; 2]> {
+    point
+        .filter(|point| point.is_finite())
+        .map(|point| point.to_array())
 }
 
 fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {

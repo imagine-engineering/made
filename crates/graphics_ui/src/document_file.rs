@@ -14,9 +14,9 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNetwork, GddGraphNode,
-        GddHistoryDirection, GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddSavedView,
-        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphGeometry, GddGraphNetwork,
+        GddGraphNode, GddHistoryDirection, GddNumericValue, GddPinnedNodeMove, GddRecoverySource,
+        GddSavedView, ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
         open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
@@ -480,6 +480,14 @@ struct NodeCopyForm {
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
     show_saved_ports: bool,
+    saved_graph: SavedGraphPanel,
+}
+
+enum SavedGraphPanel {
+    Closed,
+    Loading { _task: Task<()> },
+    Ready(GddGraphGeometry),
+    Failed(SharedString),
 }
 
 impl NodeCopyForm {
@@ -527,6 +535,7 @@ impl NodeCopyForm {
         self.output_preview = NodeOutputPreview::Hidden;
         self.port_rename = None;
         self.node_selection.clear();
+        self.saved_graph = SavedGraphPanel::Closed;
     }
 }
 
@@ -927,6 +936,7 @@ impl GraphiteDocumentItem {
                                     port_rename: None,
                                     node_selection: BTreeSet::new(),
                                     show_saved_ports: false,
+                                    saved_graph: SavedGraphPanel::Closed,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -968,6 +978,51 @@ impl GraphiteDocumentItem {
             }
             cx.notify();
         }
+    }
+
+    fn toggle_saved_graph(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if matches!(
+            form.saved_graph,
+            SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
+        ) {
+            form.saved_graph = SavedGraphPanel::Closed;
+            cx.notify();
+            return;
+        }
+        let Some(network) = form.clipboard_scope().cloned() else {
+            return;
+        };
+        let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+            return;
+        };
+        let contents = contents.clone();
+        let scope = network.id;
+        let load = cx.background_spawn(async move { contents.graph_geometry(&network).await });
+        form.saved_graph = SavedGraphPanel::Loading {
+            _task: cx.spawn_in(window, async move |item, cx| {
+                let result = load.await;
+                if let Err(error) = item.update_in(cx, |item, _, cx| {
+                    if let NodeCopyPanel::Ready(form) = &mut item.node_copy
+                        && matches!(form.saved_graph, SavedGraphPanel::Loading { .. })
+                        && form
+                            .clipboard_scope()
+                            .is_some_and(|network| network.id == scope)
+                    {
+                        form.saved_graph = match result {
+                            Ok(geometry) => SavedGraphPanel::Ready(geometry),
+                            Err(error) => SavedGraphPanel::Failed(error.to_string().into()),
+                        };
+                        cx.notify();
+                    }
+                }) {
+                    log::debug!("Graphite saved graph view closed: {error:#}");
+                }
+            }),
+        };
+        cx.notify();
     }
 
     fn enter_copy_network(&mut self, cx: &mut Context<Self>) {
@@ -1930,6 +1985,32 @@ impl GraphiteDocumentItem {
                                 network, parent, selected, &form.nodes,
                             ))
                         })
+                    })
+                    .when(form.clipboard_scope().is_some(), |panel| {
+                        let label = match &form.saved_graph {
+                            SavedGraphPanel::Closed | SavedGraphPanel::Failed(_) => "Show Saved Graph",
+                            SavedGraphPanel::Loading { .. } => "Cancel Graph Loading",
+                            SavedGraphPanel::Ready(_) => "Hide Saved Graph",
+                        };
+                        let panel = panel.child(div().debug_selector(|| "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH".into()).child(
+                            Button::new("graphite-gdd-toggle-saved-graph", label)
+                                .on_click(cx.listener(|item, _, window, cx| item.toggle_saved_graph(window, cx))),
+                        ));
+                        match &form.saved_graph {
+                            SavedGraphPanel::Ready(geometry) => {
+                                let item = cx.entity().downgrade();
+                                panel.child(crate::graph::render_saved_graph(
+                                    geometry, &form.nodes, form.selected, window, cx,
+                                    move |index, window, cx| {
+                                        if let Err(error) = item.update(cx, |item, cx| item.select_copy_node(index, window, cx)) {
+                                            log::debug!("Graphite saved graph selection closed: {error:#}");
+                                        }
+                                    },
+                                ))
+                            }
+                            SavedGraphPanel::Failed(error) => panel.child(Label::new(error.clone()).color(Color::Error)),
+                            SavedGraphPanel::Closed | SavedGraphPanel::Loading { .. } => panel,
+                        }
                     })
                     .child(h_flex().gap_2().flex_wrap().children([
                         div().debug_selector(|| "GRAPHITE-GDD-COPY-NODES".into()).child(
@@ -3674,7 +3755,7 @@ mod tests {
     }
 
     async fn graph_navigation_archive_with_number_target(number_target: bool) -> (Vec<u8>, usize) {
-        use graphite_document_graph_storage::NodeMetadataSource;
+        use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_graph_craft::{
             ProtoNodeIdentifier, concrete,
             document::{
@@ -3688,6 +3769,19 @@ mod tests {
         struct Names;
 
         impl NodeMetadataSource for Names {
+            fn position(&self, _: &[NodeId], local_id: NodeId) -> Option<Position> {
+                let position = match local_id {
+                    NodeId(7) => [0, 0],
+                    NodeId(9) => [7, 0],
+                    NodeId(10) => [0, 3],
+                    NodeId(11) => [7, 3],
+                    NodeId(12) => [0, 6],
+                    NodeId(24) => [7, 6],
+                    _ => return None,
+                };
+                Some(Position::Absolute(position))
+            }
+
             fn display_name(&self, _: &[NodeId], local_id: NodeId) -> Option<&str> {
                 (local_id == NodeId(7)).then_some("Repeated value")
             }
@@ -5531,6 +5625,79 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r17_2_workspace_paints_saved_graph_wires_and_selects_their_scoped_node(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-graph-canvas.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("original archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open saved graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        for selector in [
+            "GRAPHITE-GDD-SAVED-GRAPH",
+            "GRAPHITE-GDD-GRAPH-Import-1",
+            "GRAPHITE-GDD-GRAPH-Export-2",
+            "GRAPHITE-GDD-GRAPH-NODE-3",
+        ] {
+            assert!(
+                window.debug_bounds(selector).is_some(),
+                "missing {selector}"
+            );
+        }
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_none());
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-3");
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the scoped graph");
+            };
+            let SavedGraphPanel::Ready(geometry) = &form.saved_graph else {
+                panic!("expected the saved graph geometry");
+            };
+            let node = form.selected_node().expect("selected node from the canvas");
+            assert_eq!(node.numeric_import_source(), Some(1));
+            assert_eq!(
+                node.network_id(),
+                form.active_network().expect("nested scope").id
+            );
+            assert_eq!(geometry.nodes.len(), 6);
+            assert_eq!(geometry.wires.len(), 5);
+            assert!(!item.is_dirty(cx));
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected source history");
+            };
+            assert_eq!(contents.history_len(), original_history);
+        });
+        click(window, "GRAPHITE-GDD-PARENT-NETWORK");
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH").is_none());
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source archive"),
             original
         );
     }

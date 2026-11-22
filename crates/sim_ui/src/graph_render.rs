@@ -17,6 +17,7 @@ use sim_runtime::{
 };
 use std::collections::BTreeSet;
 use ui::prelude::*;
+use ui::{GraphWireStroke, graph_wire_layer};
 
 pub(crate) fn render_graph_item(
     item: &mut GraphWorkspaceItem,
@@ -1762,46 +1763,22 @@ fn render_links(
             {
                 return None;
             }
-            Some((
-                link_route_points(graph, link, drag_delta)?,
-                graph.selection.links.contains(&link.identifier),
-            ))
+            let selected = graph.selection.links.contains(&link.identifier);
+            Some(GraphWireStroke {
+                points: link_route_points(graph, link, drag_delta)?
+                    .into_iter()
+                    .map(|route| point(px(route.x), px(route.y)))
+                    .collect(),
+                width: px(if selected { 3.0 } else { 2.0 }),
+                color: if selected {
+                    rgb(0xf2c14e)
+                } else {
+                    rgb(0x77a7ff)
+                },
+            })
         })
         .collect::<Vec<_>>();
-    canvas(
-        move |_, _, _| {},
-        move |bounds, _, window, _| {
-            for (points, selected) in &links {
-                let mut builder = PathBuilder::stroke(px(if *selected { 3.0 } else { 2.0 }));
-                let Some(first) = points.first() else {
-                    continue;
-                };
-                builder.move_to(point(
-                    bounds.origin.x + px(first.x),
-                    bounds.origin.y + px(first.y),
-                ));
-                for point_value in points.iter().skip(1) {
-                    builder.line_to(point(
-                        bounds.origin.x + px(point_value.x),
-                        bounds.origin.y + px(point_value.y),
-                    ));
-                }
-                if let Ok(path) = builder.build() {
-                    window.paint_path(
-                        path,
-                        if *selected {
-                            rgb(0xf2c14e)
-                        } else {
-                            rgb(0x77a7ff)
-                        },
-                    );
-                }
-            }
-        },
-    )
-    .absolute()
-    .size_full()
-    .into_any_element()
+    graph_wire_layer(links)
 }
 
 fn render_link_hit_targets(
