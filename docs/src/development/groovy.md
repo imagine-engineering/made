@@ -286,6 +286,10 @@ Diagram** reveals the selected occurrence in the diagram. Declaration navigation
 requires a current provider-reported location. Stale data, trust revocation,
 and changed provider ownership invalidate the derived presentation.
 
+**All Usages** shows the exact linked dependency in the Usages pane while
+keeping the current list filter. If the dependency is outside the list,
+the pane offers **Show in Diagram** to return to it.
+
 ### Ordered offline operations {#ordered-offline-operations}
 
 For a current local task, phase or goal, **Run selected offline operation**

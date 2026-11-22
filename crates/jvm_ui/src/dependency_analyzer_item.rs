@@ -194,6 +194,7 @@ pub struct DependencyAnalyzerItem {
     presentation: DependencyAnalyzerPresentation,
     show_group_ids: bool,
     selected_key: Option<String>,
+    selected_outside_tree: bool,
     usages: Vec<AnalyzerUsage>,
     usages_truncated: bool,
     notice: Option<String>,
@@ -868,6 +869,7 @@ impl DependencyAnalyzerItem {
             presentation: DependencyAnalyzerPresentation::Tree,
             show_group_ids: true,
             selected_key: None,
+            selected_outside_tree: false,
             usages: Vec::new(),
             usages_truncated: false,
             notice: None,
@@ -924,6 +926,10 @@ impl DependencyAnalyzerItem {
         let receipt = current_dependency_graph_receipt(project, &source.selection, cx);
         if receipt == self.receipt {
             return;
+        }
+        if self.selected_outside_tree {
+            self.selected_key = None;
+            self.selected_outside_tree = false;
         }
         let derivation = receipt.as_ref().and_then(|receipt| {
             derive_dependency_analyzer(
@@ -1056,6 +1062,15 @@ impl DependencyAnalyzerItem {
             self.host.reveal_selection(ScrollStrategy::Center);
             self.notice = None;
             self.refresh_selection(cx);
+        } else if let Some(key) = analyzer_node_key(&id)
+            && self.node_label(key).is_some()
+        {
+            self.host.clear_selection();
+            self.selected_key = Some(key.to_owned());
+            self.selected_outside_tree = true;
+            self.notice = None;
+            self.refresh_usages();
+            cx.notify();
         } else {
             self.notice = Some(
                 "The dependency is no longer part of the admitted facts; refresh the analyzer and retry".into(),
@@ -1081,6 +1096,7 @@ impl DependencyAnalyzerItem {
             Some(derivation) => {
                 self.derivation = derivation;
                 self.selected_key = None;
+                self.selected_outside_tree = false;
                 self.usages.clear();
                 self.usages_truncated = false;
                 self.notice = None;
@@ -1304,21 +1320,7 @@ impl DependencyAnalyzerItem {
     }
 
     pub fn preselect_node(&mut self, key: &str, cx: &mut Context<Self>) {
-        let id = analyzer_row_id_for_node(key);
-        if self.filter != DependencyAnalyzerFilter::All
-            && !self.search_entries(cx).iter().any(|entry| entry.id == id.0)
-            && analyzer_rows(
-                &self.derivation.graph,
-                DependencyAnalyzerFilter::All,
-                DependencyAnalyzerPresentation::Flat,
-                self.show_group_ids,
-            )
-            .iter()
-            .any(|row| row.id == id)
-        {
-            self.apply_filter(DependencyAnalyzerFilter::All, cx);
-        }
-        self.reveal_row(id, cx);
+        self.reveal_row(analyzer_row_id_for_node(key), cx);
     }
 
     pub fn select_node_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
@@ -1341,6 +1343,7 @@ impl DependencyAnalyzerItem {
     }
 
     fn refresh_selection(&mut self, cx: &mut Context<Self>) {
+        self.selected_outside_tree = false;
         self.selected_key = self
             .host
             .selected()
@@ -1357,6 +1360,27 @@ impl DependencyAnalyzerItem {
             let usages = analyzer_usages(&self.derivation.graph, key);
             self.usages = usages.rows;
             self.usages_truncated = usages.truncated;
+        }
+    }
+
+    fn node_label(&self, key: &str) -> Option<String> {
+        match &self.derivation.graph {
+            DependencyAnalyzerGraph::Gradle { components, .. } => {
+                let component = components.iter().find(|component| component.id == key)?;
+                let coordinate = gradle_coordinate(component, self.show_group_ids);
+                Some(match &component.version {
+                    Some(version) => format!("{coordinate}:{version}"),
+                    None => coordinate,
+                })
+            }
+            DependencyAnalyzerGraph::Maven {
+                nodes, components, ..
+            } => {
+                let node = nodes.iter().find(|node| node.id == key)?;
+                let component = maven_component(components, &node.component)?;
+                let coordinate = maven_coordinate(component, self.show_group_ids);
+                Some(format!("{coordinate}:{}", component.version))
+            }
         }
     }
 
@@ -1382,9 +1406,11 @@ impl DependencyAnalyzerItem {
                 .find(|row| row.id == id)
                 .map(|_| id)
         });
-        match retained {
-            Some(id) => self.host.select(id),
-            None => self.selected_key = None,
+        if let Some(id) = retained {
+            self.host.select(id);
+            self.selected_outside_tree = false;
+        } else if !self.selected_outside_tree {
+            self.selected_key = None;
         }
         self.refresh_usages();
         cx.notify();
@@ -1420,10 +1446,14 @@ impl Render for DependencyAnalyzerItem {
             })
             .collect();
         let usages_truncated = self.usages_truncated;
-        let usages_selected = self
+        let selected_label = self
+            .selected_key
+            .as_deref()
+            .and_then(|key| self.node_label(key));
+        let hidden_key = self
             .selected_key
             .clone()
-            .unwrap_or_else(|| "no selection".into());
+            .filter(|_| self.selected_outside_tree);
         let notice = self.notice.clone();
         let rows = self.host.visible_rows_snapshot();
         let selected = self.host.selected().cloned();
@@ -1757,20 +1787,35 @@ impl Render for DependencyAnalyzerItem {
                         div()
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
-                            .child(if usages_rows.is_empty() {
+                            .child(if self.selected_key.is_none() {
                                 "Usages — select an artifact to see its usages".to_owned()
                             } else {
-                                let mut header = format!(
-                                    "Usages — {} occurrence{}",
-                                    usages_rows.len(),
-                                    if usages_rows.len() == 1 { "" } else { "s" }
-                                );
+                                let count = usages_rows.len();
+                                let occurrences = if count == 1 { "occurrence" } else { "occurrences" };
+                                let mut header = match selected_label {
+                                    Some(label) => format!("Usages for {label} — {count} {occurrences}"),
+                                    None => format!("Usages — {count} {occurrences}"),
+                                };
                                 if usages_truncated {
-                                    header.push_str("; more admitted usages exist beyond the bounded pane");
+                                    header.push_str(". More usages are available than the pane can show.");
                                 }
                                 header
                             }),
                     )
+                    .when_some(hidden_key, |this, key| {
+                        this.child(
+                            h_flex().gap_2().items_center()
+                                .child(Label::new("This dependency is outside the current list.").size(LabelSize::Small))
+                                .child(
+                                    Button::new("show-hidden-dependency-in-diagram", "Show in Diagram")
+                                        .tab_index(0_isize)
+                                        .aria_label("Show selected dependency in diagram")
+                                        .on_click(cx.listener(move |item, _, _, cx| {
+                                            item.show_in_dependency_diagram(&key, cx)
+                                        })),
+                                )
+                        )
+                    })
                     .children(
                         usages_rows
                             .iter()
@@ -1794,15 +1839,7 @@ impl Render for DependencyAnalyzerItem {
                                             }),
                                     )
                             }),
-                    )
-                    .when(usages_rows.is_empty(), |this| {
-                        this.child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(theme.text_muted)
-                                .child(format!("Selected: {usages_selected}")),
-                        )
-                    }),
+                    ),
             )
     }
 }

@@ -14303,7 +14303,7 @@ mod tests {
                                                 let component_template = graph["components"][1].clone();
                                                 let edge_template = graph["edges"][0].clone();
                                                 let mut parent = graph["rootComponent"].clone();
-                                                for index in 0..80 {
+                                                for index in 0..280 {
                                                     let module = format!("growth-dependency-{index}");
                                                     let id = serde_json::json!(["module", "evidence", module, "1.0"]).to_string();
                                                     let mut component = component_template.clone();
@@ -14752,8 +14752,12 @@ mod tests {
                 panel.resolve_selected_canvas_graph(cx).is_some()
             }));
             if outcome == MavenGraphOutcome::LargeGraphSearch {
-                let target = r#"["module","evidence","growth-dependency-79","1.0"]"#;
-                let parent = r#"["module","evidence","growth-dependency-78","1.0"]"#;
+                use crate::dependency_diagram_menu::{
+                    DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
+                };
+
+                let target = r#"["module","evidence","growth-dependency-279","1.0"]"#;
+                let parent = r#"["module","evidence","growth-dependency-278","1.0"]"#;
                 panel.update(cx, |panel, cx| panel.show_dependency_diagram(cx));
                 let diagram = workspace
                     .read_with(cx, |workspace, cx| {
@@ -14787,7 +14791,7 @@ mod tests {
                         window.simulate_next_frame(cx);
                     });
                 }
-                cx.simulate_input("79");
+                cx.simulate_input("279");
                 cx.update(|window, cx| {
                     window.draw(cx).clear(cx);
                     let tree: serde_json::Value = serde_json::from_str(
@@ -14800,7 +14804,7 @@ mod tests {
                             .expect("a11y nodes")
                             .values()
                             .any(|node| {
-                                node["aria"]["label"] == "evidence:growth-dependency-79:1.0"
+                                node["aria"]["label"] == "evidence:growth-dependency-279:1.0"
                             }),
                         "search result is rendered"
                     );
@@ -14846,7 +14850,7 @@ mod tests {
                 assert!(copied.contains("Bounded diagram of the current canvas"));
                 assert!(copied.contains("flowchart TB"));
                 rendered_diagram(&copied);
-                let selected_label: String = "evidence:growth-dependency-79:1.0"
+                let selected_label: String = "evidence:growth-dependency-279:1.0"
                     .chars()
                     .map(|character| format!("#{};", u32::from(character)))
                     .collect();
@@ -14867,6 +14871,85 @@ mod tests {
                             .count(),
                         graph.edges.len()
                     );
+                });
+                diagram.update(cx, |item, cx| {
+                    item.inspect_canvas_target(
+                        DependencyDiagramMenuCommand::AllUsages,
+                        &DependencyDiagramContextTarget::Node(target.to_owned()),
+                        cx,
+                    )
+                });
+                cx.run_until_parked();
+                let analyzer = workspace
+                    .read_with(cx, |workspace, cx| {
+                        workspace.items_of_type::<DependencyAnalyzerItem>(cx).next()
+                    })
+                    .expect("All usages opens the analyzer");
+                analyzer.update(cx, |item, cx| {
+                    item.apply_filter(
+                        crate::dependency_analyzer_item::DependencyAnalyzerFilter::Conflicts,
+                        cx,
+                    );
+                });
+                diagram.update(cx, |item, cx| {
+                    item.inspect_canvas_target(
+                        DependencyDiagramMenuCommand::AllUsages,
+                        &DependencyDiagramContextTarget::Node(target.to_owned()),
+                        cx,
+                    )
+                });
+                cx.run_until_parked();
+                analyzer.read_with(cx, |item, cx| {
+                    assert_eq!(item.selected_key(), Some(target));
+                    assert_eq!(
+                        item.usages().first().map(|usage| usage.user_node.as_str()),
+                        Some(parent)
+                    );
+                    assert!(
+                        !item
+                            .search_entries(cx)
+                            .iter()
+                            .any(|entry| entry.id.ends_with(target))
+                    );
+                });
+                assert!(
+                    (0..48).any(|_| cx.update(|window, cx| {
+                        window.focus_next(cx);
+                        window.draw(cx).clear(cx);
+                        let tree: serde_json::Value = serde_json::from_str(
+                            &window.debug_a11y_tree_json().expect("usage controls"),
+                        )
+                        .expect("accessibility JSON");
+                        tree["gpui_focus"].as_str().is_some_and(|focus| {
+                            tree["nodes"][focus]["aria"]["label"]
+                                == "Show selected dependency in diagram"
+                        })
+                    })),
+                    "keyboard focus reaches the linked dependency action"
+                );
+                press_button(cx, "enter");
+                cx.run_until_parked();
+                workspace.read_with(cx, |workspace, cx| {
+                    assert_eq!(
+                        workspace.active_item(cx).map(|item| item.item_id()),
+                        Some(diagram.entity_id())
+                    );
+                    assert_eq!(
+                        diagram.read(cx).canvas().read(cx).focus.as_deref(),
+                        Some(target)
+                    );
+                });
+                trust.update(cx, |trusted, cx| {
+                    trusted.restrict(
+                        worktree_store.downgrade(),
+                        HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                        cx,
+                    )
+                });
+                cx.run_until_parked();
+                analyzer.read_with(cx, |item, _| {
+                    assert_eq!(item.selected_key(), None);
+                    assert!(item.usages().is_empty());
                 });
                 assert_eq!(commands.load(Ordering::SeqCst), 3);
                 return;
@@ -15621,6 +15704,28 @@ mod tests {
                 assert_eq!(item.selected_key(), Some(node.as_str()));
                 assert_eq!(item.scope(), diagram_item.read(cx).scope());
                 assert!(item.usages().iter().any(|usage| usage.user_node == root));
+            });
+            use crate::dependency_analyzer_item::DependencyAnalyzerFilter;
+            linked_analyzer.update(cx, |item, cx| {
+                item.apply_filter(DependencyAnalyzerFilter::Unresolved, cx)
+            });
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(DependencyDiagramMenuCommand::AllUsages, &target, cx);
+            });
+            cx.run_until_parked();
+            linked_analyzer.read_with(cx, |item, cx| {
+                assert_eq!(item.filter(), DependencyAnalyzerFilter::Unresolved);
+                assert_eq!(item.selected_key(), Some(node.as_str()));
+                assert!(item.usages().iter().any(|usage| usage.user_node == root));
+                assert!(
+                    !item
+                        .search_entries(cx)
+                        .iter()
+                        .any(|entry| entry.id.ends_with(&node))
+                );
+            });
+            linked_analyzer.update(cx, |item, cx| {
+                item.apply_filter(DependencyAnalyzerFilter::All, cx)
             });
             linked_analyzer.update(cx, |item, cx| item.collapse_all_rows(cx));
             diagram_item.update(cx, |item, cx| {

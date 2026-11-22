@@ -367,6 +367,10 @@ impl LanguageToolTreeHost {
         self.selected.as_ref()
     }
 
+    pub fn clear_selection(&mut self) {
+        self.selected = None;
+    }
+
     pub fn expanded(&self) -> &HashSet<LanguageToolNodeId> {
         &self.expanded
     }

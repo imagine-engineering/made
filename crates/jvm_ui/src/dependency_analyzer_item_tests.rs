@@ -668,18 +668,39 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
 
     // Tab switch: opening a second analyzer tab and coming back preserves
     // the first item's state.
+    let mut large_maven = maven_graph();
+    let DependencyAnalyzerGraph::Maven { nodes, edges, .. } = &mut large_maven else {
+        panic!("Maven fixture");
+    };
+    nodes.extend((0..270).map(|index| maven_node(&format!("n-extra-{index}"), "c-leaf")));
+    nodes.push(maven_node("n-late", "c-leaf"));
+    edges.push(maven_edge("n-root", "n-late", "n-late", "test", false, 3));
     let second = DependencyAnalyzerDerivation {
         target: DependencyDiagramTarget {
             module_label: "other".into(),
-            provider: DependencyDiagramProvider::Gradle,
-            configuration: Some(":core".into()),
+            provider: DependencyDiagramProvider::Maven,
+            configuration: None,
         },
-        graph: gradle_graph(),
-        scope: DependencyDiagramScope::GradleConfiguration(":core".into()),
-        scope_options: vec![":core".into()],
+        graph: large_maven,
+        scope: DependencyDiagramScope::MavenScope("All scopes".into()),
+        scope_options: vec!["All scopes".into()],
     };
-    let _second = workspace.update_in(cx, |workspace, window, cx| {
+    let second = workspace.update_in(cx, |workspace, window, cx| {
         DependencyAnalyzerItem::open(second, None, workspace, window, cx)
+    });
+    second.update(cx, |item, cx| item.preselect_node("n-late", cx));
+    second.read_with(cx, |item, cx| {
+        assert_eq!(item.selected_key(), Some("n-late"));
+        assert_eq!(
+            item.usages().first().map(|usage| usage.user_node.as_str()),
+            Some("n-root")
+        );
+        assert!(
+            !item
+                .search_entries(cx)
+                .iter()
+                .any(|entry| entry.id.ends_with("n-late"))
+        );
     });
     workspace.update_in(cx, |workspace, window, cx| {
         workspace.activate_item(&item, true, true, window, cx)
