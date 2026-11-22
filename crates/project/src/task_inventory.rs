@@ -235,6 +235,56 @@ fn jdtls_task_path<'a>(
 }
 
 #[cfg(feature = "jvm-tools")]
+fn jdtls_task_preferences(worktree_id: WorktreeId, cx: &App) -> Option<&serde_json::Value> {
+    let location = settings::SettingsLocation {
+        worktree_id,
+        path: RelPath::empty(),
+    };
+    crate::lsp_store::language_server_settings_for(
+        location,
+        &LanguageServerName::new_static("jdtls"),
+        cx,
+    )
+    .and_then(|settings| settings.settings.as_ref())
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Copy)]
+pub enum MavenSettingsFile {
+    Global,
+    User,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl MavenSettingsFile {
+    const fn preference_key(self) -> &'static str {
+        match self {
+            Self::Global => "java.configuration.maven.globalSettings",
+            Self::User => "java.configuration.maven.userSettings",
+        }
+    }
+
+    const fn flag(self) -> &'static str {
+        match self {
+            Self::Global => "--global-settings",
+            Self::User => "--settings",
+        }
+    }
+
+    pub fn configured_path(
+        self,
+        worktree_id: WorktreeId,
+        path_style: PathStyle,
+        cx: &App,
+    ) -> Result<Option<&str>> {
+        match jdtls_task_preferences(worktree_id, cx) {
+            Some(preferences) => jdtls_task_path(preferences, self.preference_key(), path_style),
+            None => Ok(None),
+        }
+    }
+}
+
+#[cfg(feature = "jvm-tools")]
 fn apply_maven_task_settings(
     plan: &mut crate::jvm_project::JvmBuildOperationPlan,
     preferences: Option<&serde_json::Value>,
@@ -244,16 +294,9 @@ fn apply_maven_task_settings(
         return Ok(());
     };
     let mut arguments = Vec::new();
-    for (key, flag) in [
-        ("globalSettings", "--global-settings"),
-        ("userSettings", "--settings"),
-    ] {
-        if let Some(path) = jdtls_task_path(
-            preferences,
-            &format!("java.configuration.maven.{key}"),
-            path_style,
-        )? {
-            arguments.extend([flag.to_owned(), path.to_owned()]);
+    for file in [MavenSettingsFile::Global, MavenSettingsFile::User] {
+        if let Some(path) = jdtls_task_path(preferences, file.preference_key(), path_style)? {
+            arguments.extend([file.flag().to_owned(), path.to_owned()]);
         }
     }
     plan.template.args.splice(1..1, arguments);
@@ -412,16 +455,7 @@ fn jvm_operation_plan(
             .entry_for_path(path)
             .is_some_and(jvm_build_entry_is_available)
     })?;
-    let location = settings::SettingsLocation {
-        worktree_id: receipt.worktree_id,
-        path: RelPath::empty(),
-    };
-    let preferences = crate::lsp_store::language_server_settings_for(
-        location,
-        &LanguageServerName::new_static("jdtls"),
-        cx,
-    )
-    .and_then(|settings| settings.settings.as_ref());
+    let preferences = jdtls_task_preferences(receipt.worktree_id, cx);
     let maven = matches!(plan.wrapper.path.file_name(), Some("mvnw" | "mvnw.cmd"));
     if maven {
         apply_maven_task_settings(&mut plan, preferences, path_style)?;
@@ -445,8 +479,8 @@ fn jvm_operation_plan(
     if let Some(preferences) = preferences {
         let paths: &[(&str, Option<&str>)] = if maven {
             &[
-                ("java.configuration.maven.globalSettings", None),
-                ("java.configuration.maven.userSettings", None),
+                (MavenSettingsFile::Global.preference_key(), None),
+                (MavenSettingsFile::User.preference_key(), None),
             ]
         } else {
             let (gradle, java) = if path_style.is_windows() {

@@ -23,14 +23,15 @@ use project::{
         KotlinWorkspaceDependency, KotlinWorkspaceSnapshot, MavenOperationOptions,
         MavenOperationProfile,
     },
-    task_inventory::TaskSourceKind,
+    task_inventory::{MavenSettingsFile, TaskSourceKind},
     trusted_worktrees::TrustedWorktrees,
 };
 use task::{TaskContext, TaskTemplate, VariableName};
 use ui::{Tooltip, prelude::*};
 use util::rel_path::RelPath;
 use workspace::{
-    Panel, Workspace, dock::DockPosition, dock::PanelEvent, workspace_scoped_state_key,
+    Panel, Workspace, dock::DockPosition, dock::PanelEvent, notifications::DetachAndPromptErr as _,
+    workspace_scoped_state_key,
 };
 
 use crate::dependency_analyzer_item::{
@@ -702,6 +703,12 @@ struct DependencyNavigation {
     generation: u64,
     provider: DependencyProvider,
     kind: DependencyNavigationKind,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct MavenSettingsNavigation {
+    build: GraphSelection,
+    file: ProjectPath,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3901,6 +3908,95 @@ impl DependenciesPanel {
     /// Offline), and graph fact rows offer the diagram entry points grouped
     /// above the shared tree commands — availability-filtered through the
     /// same eligibility logic as the panel controls.
+    fn selected_maven_settings_file(
+        &self,
+        kind: MavenSettingsFile,
+        cx: &App,
+    ) -> Option<MavenSettingsNavigation> {
+        let project = self.project.read(cx);
+        if self.view != BuildToolView::Maven || !project.is_local() || project.is_shared() {
+            return None;
+        }
+        let selected = self.host.selected()?;
+        let navigation = self.navigation.get(selected)?;
+        if navigation.provider != DependencyProvider::Jdtls
+            || navigation.kind != DependencyNavigationKind::File
+        {
+            return None;
+        }
+        let worktree_id = navigation.path.worktree_id;
+        let snapshot = admitted_dependency_snapshot(project, worktree_id, cx)?;
+        if !navigation.matches(
+            snapshot.server_id,
+            snapshot.worktree_id,
+            snapshot.generation,
+            true,
+        ) {
+            return None;
+        }
+        let pom = snapshot.projects.iter().find_map(|module| {
+            let maven = module.maven.as_ref()?;
+            (&jdtls_module_node_id(snapshot, &module.module_root, self.view) == selected)
+                .then_some(maven.pom.clone())
+        })?;
+        let source_worktree = project.worktree_for_id(worktree_id, cx)?;
+        let source_worktree = source_worktree.read(cx);
+        visible_build_file(source_worktree, &pom)?;
+        let path = kind
+            .configured_path(worktree_id, source_worktree.path_style(), cx)
+            .ok()??;
+        let path = std::path::Path::new(path);
+        if path
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+        {
+            return None;
+        }
+        let (file_worktree, path) = project.find_worktree(path, cx)?;
+        let file_worktree = file_worktree.read(cx);
+        let file = ProjectPath {
+            worktree_id: file_worktree.id(),
+            path,
+        };
+        let trust = TrustedWorktrees::try_get_global(cx)?;
+        if trust
+            .read(cx)
+            .restricted_worktrees(&project.worktree_store(), cx)
+            .iter()
+            .any(|(id, _)| *id == file.worktree_id)
+        {
+            return None;
+        }
+        visible_build_file(file_worktree, &file)?;
+        Some(MavenSettingsNavigation {
+            build: GraphSelection {
+                server_id: snapshot.server_id,
+                generation: snapshot.generation,
+                target: GraphQueryTarget::Maven(pom),
+            },
+            file,
+        })
+    }
+
+    fn open_maven_settings_file(
+        &self,
+        kind: MavenSettingsFile,
+        target: &MavenSettingsNavigation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_maven_settings_file(kind, cx).as_ref() != Some(target) {
+            return;
+        }
+        if let Some(workspace) = self.workspace.upgrade() {
+            workspace
+                .update(cx, |workspace, cx| {
+                    workspace.open_path(target.file.clone(), None, true, window, cx)
+                })
+                .detach_and_prompt_err("Could not open Maven settings", window, cx, |_, _, _| None);
+        }
+    }
+
     fn show_graph_context_menu(
         &mut self,
         id: LanguageToolNodeId,
@@ -3919,6 +4015,15 @@ impl DependenciesPanel {
         let can_collect_graph = self.selected_graph().is_some()
             && self.graph_query_token.is_none()
             && !self.project.read(cx).is_remote();
+        let maven_settings_files: Vec<_> = [
+            (MavenSettingsFile::User, "Open Maven user settings"),
+            (MavenSettingsFile::Global, "Open Maven global settings"),
+        ]
+        .into_iter()
+        .filter_map(|(kind, label)| {
+            Some((kind, label, self.selected_maven_settings_file(kind, cx)?))
+        })
+        .collect();
         let can_cancel_import = self.build_phase_is_pending(cx)
             && self
                 .host
@@ -3953,11 +4058,13 @@ impl DependenciesPanel {
             && inspection.is_none()
             && !has_inspection
             && !can_cancel_import
+            && maven_settings_files.is_empty()
         {
             cx.notify();
             return;
         }
         let focus_handle = self.focus_handle.clone();
+        let panel = cx.weak_entity();
         let context_menu = ui::ContextMenu::build(window, cx, move |menu, _, _| {
             menu.context(focus_handle).map(|menu| {
                 let mut menu = menu;
@@ -4022,6 +4129,23 @@ impl DependenciesPanel {
                 }
                 if can_collect_graph {
                     menu = menu.action("Collect offline graph", Box::new(CollectSelectedGraph));
+                }
+                if !maven_settings_files.is_empty() {
+                    if eligible || can_collect_graph {
+                        menu = menu.separator();
+                    }
+                    for (kind, label, target) in &maven_settings_files {
+                        let kind = *kind;
+                        let target = target.clone();
+                        let panel = panel.clone();
+                        menu = menu.entry(*label, None, move |window, cx| {
+                            if let Some(panel) = panel.upgrade() {
+                                panel.update(cx, |panel, cx| {
+                                    panel.open_maven_settings_file(kind, &target, window, cx);
+                                });
+                            }
+                        });
+                    }
                 }
                 if inspection.is_some() {
                     menu = menu
@@ -24295,7 +24419,19 @@ mod tests {
     #[gpui::test]
     async fn local_panel_uses_current_jdtls_data_and_shared_tree_status(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            let settings = settings::SettingsStore::test(cx);
+            let mut settings = settings::SettingsStore::test(cx);
+            settings
+                .set_user_settings(
+                    r#"{"lsp":{"jdtls":{"settings":{
+                "java":{"configuration":{"maven":{
+                    "userSettings":"/groovy-panel/maven/default-user.xml",
+                    "globalSettings":"/groovy-panel/maven/global.xml"
+                }}},
+                "java.configuration.maven.userSettings":"/groovy-panel/maven/active-user.xml"
+            }}}}"#,
+                    cx,
+                )
+                .expect("Maven settings fixture");
             cx.set_global(settings);
             trusted_worktrees::init(DbTrustedPaths::default(), cx);
             theme_settings::init(LoadThemes::JustBase, cx);
@@ -24306,6 +24442,11 @@ mod tests {
         fs.insert_tree(
             "/groovy-panel",
             serde_json::json!({
+                "maven": {
+                    "global.xml": "<settings/>",
+                    "default-user.xml": "<settings/>",
+                    "active-user.xml": "<settings/>"
+                },
                 "application": {
                     "pom.xml": "<project/>",
                     "Main.java": "class Main {}",
@@ -24868,6 +25009,85 @@ mod tests {
                         .expect("parent POM");
                     assert_eq!(path.worktree_id, worktree_id);
                     assert_eq!(path.path.as_unix_str(), "pom.xml");
+                });
+                assert_eq!(
+                    project_queries.load(Ordering::SeqCst),
+                    reads_before_navigation
+                );
+                for (label, expected) in [
+                    ("Open Maven global settings", "maven/global.xml"),
+                    ("Open Maven user settings", "maven/active-user.xml"),
+                ] {
+                    workspace.update_in(cx, |workspace, window, cx| {
+                        workspace.focus_panel::<DependenciesPanel>(window, cx);
+                    });
+                    panel.update(cx, |panel, cx| {
+                        let module = panel.host.visible_rows().first().expect("Maven module");
+                        panel.host.select(module.id.clone());
+                        panel.host.reveal_selection(ScrollStrategy::Center);
+                        cx.notify();
+                    });
+                    cx.simulate_keystrokes("shift-f10");
+                    let entry = panel.read_with(cx, |panel, cx| {
+                        let (menu, _, _) = panel
+                            .graph_context_menu
+                            .as_ref()
+                            .expect("Maven project menu");
+                        menu.read(cx)
+                            .accessibility_contracts()
+                            .iter()
+                            .filter(|entry| !entry.disabled)
+                            .position(|entry| entry.label == label)
+                            .expect("configured settings command")
+                    });
+                    cx.update(|window, cx| {
+                        window.draw(cx).clear(cx);
+                        let actions = std::iter::once("menu::SelectFirst")
+                            .chain(std::iter::repeat_n("menu::SelectNext", entry))
+                            .chain(std::iter::once("menu::Confirm"));
+                        for action in actions {
+                            let action = cx.build_action(action, None).expect("menu action");
+                            window.dispatch_action(action, cx);
+                        }
+                    });
+                    cx.run_until_parked();
+                    workspace.read_with(cx, |workspace, cx| {
+                        let path = workspace
+                            .active_item(cx)
+                            .and_then(|item| item.project_path(cx))
+                            .expect("configured settings open in the editor");
+                        assert_eq!(path.worktree_id, worktree_id);
+                        assert_eq!(path.path.as_unix_str(), expected);
+                    });
+                }
+                let global = panel.read_with(cx, |panel, cx| {
+                    panel
+                        .selected_maven_settings_file(MavenSettingsFile::Global, cx)
+                        .expect("captured global settings target")
+                });
+                project::Fs::remove_file(
+                    fs.as_ref(),
+                    std::path::Path::new("/groovy-panel/maven/global.xml"),
+                    Default::default(),
+                )
+                .await
+                .expect("remove the synthetic settings file");
+                cx.run_until_parked();
+                panel.update_in(cx, |panel, window, cx| {
+                    assert!(
+                        panel
+                            .selected_maven_settings_file(MavenSettingsFile::Global, cx)
+                            .is_none()
+                    );
+                    panel.open_maven_settings_file(MavenSettingsFile::Global, &global, window, cx);
+                });
+                cx.run_until_parked();
+                workspace.read_with(cx, |workspace, cx| {
+                    let path = workspace
+                        .active_item(cx)
+                        .and_then(|item| item.project_path(cx))
+                        .expect("previous editor remains open");
+                    assert_eq!(path.path.as_unix_str(), "maven/active-user.xml");
                 });
                 assert_eq!(
                     project_queries.load(Ordering::SeqCst),
@@ -25973,6 +26193,17 @@ mod tests {
                 .find(|row| row.label == "parent-profile")
                 .expect("stale profile remains readable");
             assert!(!panel.navigation.contains_key(&parent.id));
+            let module = panel
+                .host
+                .visible_rows()
+                .first()
+                .expect("stale Maven module");
+            panel.host.select(module.id.clone());
+            assert!(
+                panel
+                    .selected_maven_settings_file(MavenSettingsFile::User, cx)
+                    .is_none()
+            );
             panel.set_view(BuildToolView::Gradle, window, cx);
         });
         fail_queries.store(true, Ordering::SeqCst);

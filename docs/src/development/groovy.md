@@ -241,6 +241,11 @@ POM that declares the profile, including a parent POM when the provider reports
 it. Definitions from the cache can still show their source coordinates when
 the POM is unavailable to the project.
 
+The Maven project row menu also offers **Open Maven user settings** and
+**Open Maven global settings** for configured files in a visible, trusted
+worktree of the local workspace. The commands use the same JDTLS settings paths
+as Maven Tasks.
+
 Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
 [Maven 3.9.16 project builder](https://maven.apache.org/ref/3.9.16/maven-core/xref/org/apache/maven/project/DefaultProjectBuilder.html#L698)
