@@ -831,12 +831,17 @@ struct PortRenameForm {
 
 enum NodeOutputPreview {
     Hidden,
-    Pending { _task: Task<()> },
+    Pending { request: Arc<()>, _task: Task<()> },
+    Cancelled,
     Ready(GddNumericValue),
     Failed(SharedString),
 }
 
 impl NodeOutputPreview {
+    fn is_pending_request(&self, request: &Arc<()>) -> bool {
+        matches!(self, Self::Pending { request: current, .. } if Arc::ptr_eq(current, request))
+    }
+
     fn feedback(&self) -> Option<(String, Color)> {
         match self {
             Self::Ready(GddNumericValue::NumberList(values)) if values.is_empty() => {
@@ -844,6 +849,7 @@ impl NodeOutputPreview {
             }
             Self::Ready(value) => Some((value.to_string(), Color::Default)),
             Self::Failed(error) => Some((error.to_string(), Color::Error)),
+            Self::Cancelled => Some(("Graph run canceled.".into(), Color::Muted)),
             Self::Hidden | Self::Pending { .. } => None,
         }
     }
@@ -2609,7 +2615,9 @@ impl GraphiteDocumentItem {
         let evaluation = cx.background_spawn(async move {
             futures::executor::block_on(contents.preview_graph_numeric_output(&node))
         });
+        let request = Arc::new(());
         form.output_preview = NodeOutputPreview::Pending {
+            request: request.clone(),
             _task: cx.spawn(async move |item, cx| {
                 let result = evaluation.await;
                 if let Err(error) = item.update(cx, |item, cx| {
@@ -2617,7 +2625,7 @@ impl GraphiteDocumentItem {
                         return;
                     };
                     if form.selected != selected
-                        || !matches!(form.output_preview, NodeOutputPreview::Pending { .. })
+                        || !form.output_preview.is_pending_request(&request)
                     {
                         return;
                     }
@@ -2643,7 +2651,7 @@ impl GraphiteDocumentItem {
         }
         if matches!(form.document_run, NodeOutputPreview::Pending { .. }) {
             if !force {
-                form.document_run = NodeOutputPreview::Hidden;
+                form.document_run = NodeOutputPreview::Cancelled;
                 cx.notify();
             }
             return;
@@ -2679,7 +2687,9 @@ impl GraphiteDocumentItem {
             })
             .map_err(|error| format!("{}: {error}", node.label()))
         });
+        let request = Arc::new(());
         form.document_run = NodeOutputPreview::Pending {
+            request: request.clone(),
             _task: cx.spawn(async move |item, cx| {
                 let result = evaluation.await;
                 if let Err(error) = item.update(cx, |item, cx| {
@@ -2688,7 +2698,7 @@ impl GraphiteDocumentItem {
                     };
                     if !Arc::ptr_eq(&form.revision, &revision)
                         || !Arc::ptr_eq(&item.model.read(cx).revision, &revision)
-                        || !matches!(form.document_run, NodeOutputPreview::Pending { .. })
+                        || !form.document_run.is_pending_request(&request)
                     {
                         return;
                     }
@@ -2851,7 +2861,7 @@ impl GraphiteDocumentItem {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let label = match preview {
-            NodeOutputPreview::Hidden => "Preview Saved Output",
+            NodeOutputPreview::Hidden | NodeOutputPreview::Cancelled => "Preview Saved Output",
             NodeOutputPreview::Pending { .. } => "Cancel Numeric Preview",
             NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
             NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
@@ -5430,6 +5440,17 @@ mod tests {
         button: gpui::MouseButton,
         modifiers: gpui::Modifiers,
     ) {
+        dispatch_graph_click(window, position, button, modifiers);
+        window.run_until_parked();
+        paint(window);
+    }
+
+    fn dispatch_graph_click(
+        window: &mut gpui::VisualTestContext,
+        position: gpui::Point<gpui::Pixels>,
+        button: gpui::MouseButton,
+        modifiers: gpui::Modifiers,
+    ) {
         window.update(|window, cx| {
             window.dispatch_event(
                 gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
@@ -5451,8 +5472,6 @@ mod tests {
                 cx,
             );
         });
-        window.run_until_parked();
-        paint(window);
     }
 
     fn drag_graph_point(
@@ -9702,6 +9721,56 @@ mod tests {
         let initial = evaluator(window);
         invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
         assert!(Arc::ptr_eq(&initial, &evaluator(window)));
+
+        let click_before_completion = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            let position = window
+                .debug_bounds(selector)
+                .expect("visible run button")
+                .center();
+            dispatch_graph_click(
+                window,
+                position,
+                gpui::MouseButton::Left,
+                gpui::Modifiers::default(),
+            );
+        };
+        click_before_completion(window, "GRAPHITE-GDD-FORCE-RUN-GRAPH");
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            assert!(matches!(
+                form.document_run,
+                NodeOutputPreview::Pending { .. }
+            ));
+        });
+        click_before_completion(window, "GRAPHITE-GDD-RUN-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-GRAPH-RUN-RESULT")
+                .is_some()
+        );
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            assert!(matches!(form.document_run, NodeOutputPreview::Cancelled));
+            assert!(Arc::ptr_eq(
+                form.document_run_evaluator
+                    .as_ref()
+                    .expect("last successful evaluator"),
+                &initial
+            ));
+            assert!(Arc::ptr_eq(
+                &item.model.read(cx).revision,
+                &original_revision
+            ));
+            assert!(!item.is_dirty(cx));
+        });
+
         invoke(window, "GRAPHITE-GDD-FORCE-RUN-GRAPH");
         let forced = evaluator(window);
         assert!(!Arc::ptr_eq(&initial, &forced));
