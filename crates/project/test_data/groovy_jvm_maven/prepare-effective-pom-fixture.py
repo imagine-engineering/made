@@ -43,6 +43,14 @@ def main():
     <artifactId>maven-dependency-plugin</artifactId>
     <version>3.10.0</version>
   </plugin></plugins></build>
+  <profiles><profile>
+    <id>artifact-javadocs</id>
+    <build><plugins><plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-dependency-plugin</artifactId>
+      <configuration><classifier>javadoc</classifier><type>jar</type></configuration>
+    </plugin></plugins></build>
+  </profile></profiles>
 </project>
 """
         active_profiles = ""

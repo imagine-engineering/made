@@ -7908,18 +7908,37 @@ fn annotate_operation_rows(
                 &mut row.accessibility_label,
                 "select this row and use Run selected offline operation or Task options",
             );
-            if matches!(
-                receipt.operations.as_slice(),
-                [JvmBuildOperation::MavenGoal { group, artifact, goal, .. }]
-                    if group == "org.apache.maven.plugins"
-                        && artifact == "maven-dependency-plugin"
-                        && goal == "resolve-sources"
-            ) {
-                let source_results =
-                    "Check resolved sources in the Task terminal even if Maven succeeds.";
+            let artifact_guidance = match receipt.operations.as_slice() {
+                [
+                    JvmBuildOperation::MavenGoal {
+                        group,
+                        artifact,
+                        goal,
+                        ..
+                    },
+                ] if group == "org.apache.maven.plugins"
+                    && artifact == "maven-dependency-plugin" =>
+                {
+                    match goal.as_str() {
+                        "resolve-sources" => Some(
+                            "Check resolved sources in the Task terminal even if Maven succeeds.",
+                        ),
+                        "resolve" => Some(
+                            "For Javadoc, use Task options to activate a profile with the javadoc classifier and jar type.",
+                        ),
+                        "go-offline" => Some(
+                            "Check cached dependencies, plugins and reports in the Task terminal.",
+                        ),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            if let Some(artifact_guidance) = artifact_guidance {
                 row.accessibility_label.push_str(". ");
-                row.accessibility_label.push_str(source_results);
-                row.secondary_label = Some(format!("Run offline through Tasks. {source_results}"));
+                row.accessibility_label.push_str(artifact_guidance);
+                row.secondary_label =
+                    Some(format!("Run offline through Tasks. {artifact_guidance}"));
             } else if let Some(detail) = &mut row.secondary_label {
                 describe_run(detail, "run offline through Tasks");
             }
