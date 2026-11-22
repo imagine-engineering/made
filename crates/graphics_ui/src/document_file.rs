@@ -26,7 +26,8 @@ use graphics_core::formats::{
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{
-    Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, ToggleState, prelude::*,
+    Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, Switch,
+    SwitchLabelPosition, ToggleState, prelude::*,
 };
 use workspace::{
     Item, Pane, Workspace,
@@ -1071,6 +1072,7 @@ enum NodeCopyChange {
     MovePinned(GddPinnedNodeMove),
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
+    Radians(bool),
     DisconnectNumericInput,
     InsertNumericOnWire(UnaryNumericOperation),
     ConnectNumericInput {
@@ -1124,6 +1126,11 @@ impl NodeCopyChange {
             Self::NumericInputExposure(exposed) => {
                 archive
                     .set_graph_numeric_input_exposed_in_copy(node, exposed, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::Radians(radians) => {
+                archive
+                    .set_graph_radians_in_copy(node, radians, ARCHIVE_BUDGET)
                     .await
             }
             Self::DisconnectNumericInput => {
@@ -4086,6 +4093,26 @@ impl GraphiteDocumentItem {
                                         ),
                                 )
                             })
+                            .when_some(selected.radians(), |panel, radians| {
+                                let node = Box::new(selected.clone());
+                                panel.child(
+                                    div().debug_selector(|| "GRAPHITE-GDD-RADIANS".into()).child(
+                                        Switch::new("graphite-gdd-radians", ToggleState::from(radians))
+                                            .label("Radians")
+                                            .label_position(SwitchLabelPosition::End)
+                                            .tab_index(0isize)
+                                            .disabled(!working || self.copy_task.is_some())
+                                            .on_click(cx.listener(move |item, choice: &ToggleState, window, cx| {
+                                                if item.model.read(cx).working.is_some() {
+                                                    item.apply_graph_edit(GraphiteCopy::EditNode {
+                                                        node: node.clone(),
+                                                        change: NodeCopyChange::Radians(choice.selected()),
+                                                    }, window, cx);
+                                                }
+                                            })),
+                                    ),
+                                )
+                            })
                             .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
@@ -4515,7 +4542,7 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Reordered",
                     GraphiteCopy::EditNode {
-                        change: NodeCopyChange::NumericInput(_),
+                        change: NodeCopyChange::NumericInput(_) | NodeCopyChange::Radians(_),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -10779,6 +10806,142 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_prop_002_2_workspace_edits_and_reopens_radians_from_native_input(
+        cx: &mut TestAppContext,
+    ) {
+        let source = create_gdd_folder(624, 220, "Pinned Graphite".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source folder")
+            .insert_root_catalog_node_in_copy(
+                "PROTONODE:math_nodes::CosineInverseNode",
+                [4, 6],
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("pinned Cosine Inverse");
+        let original = source
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/cosine-inverse.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let check = |window: &gpui::VisualTestContext, radians, result, dirty| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready trigonometric node") };
+                let node = form.selected_node().expect("selected trigonometric node");
+                assert_eq!(node.radians(), Some(radians));
+                assert!(matches!(form.output_preview, NodeOutputPreview::Ready(GddNumericValue::Number(value)) if value == result));
+                assert_eq!(item.is_dirty(cx), dirty);
+                node.storage_id()
+            })
+        };
+        click(window, "NATIVE-SWITCH-CONTROL");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        let node_id = check(window, false, 90., false);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        window.update(|window, _| window.activate_window());
+        let handle = window.window_handle();
+        assert!(
+            window
+                .cx
+                .simulate_accessibility_activation(handle)
+                .is_some()
+        );
+        window.run_until_parked();
+        paint(window);
+        let mut switch_focused = false;
+        for _ in 0..32 {
+            window.update(|window, cx| window.focus_next(cx));
+            window.run_until_parked();
+            paint(window);
+            let tree = window
+                .update(|window, _| window.debug_a11y_tree_json())
+                .expect("native accessibility tree");
+            let tree: serde_json::Value =
+                serde_json::from_str(&tree).expect("native accessibility JSON");
+            let focused = tree["gpui_focus"]
+                .as_str()
+                .and_then(|id| tree["nodes"].get(id));
+            if focused.is_some_and(|node| {
+                node["aria"]["role"] == "Switch" && node["aria"]["label"] == "Radians"
+            }) {
+                switch_focused = true;
+                break;
+            }
+        }
+        assert!(switch_focused, "Radians is keyboard reachable");
+        window.update(|window, cx| {
+            let keystroke = gpui::Keystroke::parse("space").expect("space keystroke");
+            window.dispatch_event(
+                gpui::PlatformInput::KeyDown(gpui::KeyDownEvent {
+                    keystroke: keystroke.clone(),
+                    is_held: false,
+                    prefer_character_input: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::KeyUp(gpui::KeyUpEvent { keystroke }),
+                cx,
+            );
+        });
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        let radians = std::f64::consts::FRAC_PI_2;
+        assert_eq!(check(window, true, radians, true), node_id);
+        click(window, "GRAPHITE-GDD-UNDO");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        assert_eq!(check(window, false, 90., true), node_id);
+        click(window, "GRAPHITE-GDD-REDO");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        assert_eq!(check(window, true, radians, true), node_id);
+
+        let destination = PathBuf::from("/project/cosine-inverse-radians.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved folder");
+        let nodes = reopened.graph_nodes().await.expect("reopened node");
+        let [node] = nodes.as_slice() else {
+            panic!("one saved node")
+        };
+        assert_eq!(node.storage_id(), node_id);
+        assert_eq!(node.radians(), Some(true));
+        assert!(
+            node.input_ports()
+                .get(1)
+                .is_some_and(|port| !port.exposed && port.source.is_none())
+        );
+        assert!(
+            matches!(reopened.preview_graph_numeric_output(node).await, Ok(GddNumericValue::Number(value)) if value == radians)
+        );
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("original ZIP"),
             original
         );
     }
