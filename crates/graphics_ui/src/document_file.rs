@@ -3492,6 +3492,7 @@ mod tests {
         ExposedInput,
         Connection,
         Reconnection,
+        NestedConnection,
     }
 
     async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
@@ -3517,9 +3518,9 @@ mod tests {
             NumericGraphFixture::ExposedInput => {
                 Some(NodeInput::value(TaggedValue::Integer(0), true))
             }
-            NumericGraphFixture::Connection | NumericGraphFixture::Reconnection => {
-                Some(NodeInput::node(NodeId(7), 0))
-            }
+            NumericGraphFixture::Connection
+            | NumericGraphFixture::Reconnection
+            | NumericGraphFixture::NestedConnection => Some(NodeInput::node(NodeId(7), 0)),
         };
         if let Some(second_input) = second_input {
             graph.nodes.insert(
@@ -3544,6 +3545,21 @@ mod tests {
                     ..Default::default()
                 },
             );
+        }
+        if matches!(fixture, NumericGraphFixture::NestedConnection) {
+            graph.exports = vec![NodeInput::node(NodeId(8), 0)];
+            graph = NodeNetwork {
+                nodes: [(
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(graph),
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
         }
         let mut owner = GddV1::create_in(
             AnyContainer::Memory(MemoryBackend::new()),
@@ -4087,6 +4103,122 @@ mod tests {
                 .await
                 .expect("original archive"),
             original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_pastes_and_enters_a_copied_nested_graph(
+        cx: &mut TestAppContext,
+    ) {
+        let (bytes, _) = numeric_graph_archive(NumericGraphFixture::NestedConnection).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/clipboard-nested-source.gdd.zip");
+        filesystem
+            .write(&source_path, &bytes)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let original = source.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected original node scope");
+            };
+            form.selected_node()
+                .and_then(|node| node.nested_network())
+                .expect("original nested identity")
+        });
+        click(window, "GRAPHITE-GDD-COPY-NODES");
+        window.run_until_parked();
+        assert!(
+            window
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .is_some_and(|text| text.starts_with("graphite: "))
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-PASTE-NODES");
+        let destination = PathBuf::from("/project/clipboard-nested-paste.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopen the pasted graph");
+        assert_ne!(reopened, source);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the native pasted Graphite folder");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let graph = contents.graph_inspection().await.expect("pasted hierarchy");
+        let scope = graph
+            .networks
+            .iter()
+            .find(|network| network.parent.is_some() && network.id != original)
+            .expect("new stable network identity");
+        let selected = match graph
+            .nodes
+            .iter()
+            .position(|node| node.nested_network() == Some(scope.id))
+        {
+            Some(0) => "GRAPHITE-GDD-NODE-COPY-ITEM-0",
+            Some(1) => "GRAPHITE-GDD-NODE-COPY-ITEM-1",
+            _ => panic!("expected two encapsulating nodes in root"),
+        };
+        choose_copy_node(window, selected);
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        reopened.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the copied inner scope");
+            };
+            assert_eq!(
+                form.active_network().map(|network| network.id),
+                Some(scope.id)
+            );
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| form.includes_node(node))
+                    .count(),
+                2
+            );
+        });
+        let consumer = graph
+            .nodes
+            .iter()
+            .find(|node| node.network_id() == scope.id && node.has_numeric_connection())
+            .expect("new linked inner node");
+        assert!(matches!(
+            contents
+                .preview_graph_numeric_output(consumer)
+                .await
+                .expect("execute the copied linkage"),
+            GddNumericValue::Integer(17)
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            bytes
         );
     }
 

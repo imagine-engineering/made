@@ -1052,7 +1052,10 @@ impl InspectedGddV1 {
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
                 && interface.number_of_outputs(&node.local_id, path) == 1;
-            node.can_copy_graph_node = node.can_supply_numeric_export
+            node.can_copy_graph_node = (node.can_supply_numeric_export
+                || node.nested_network.is_some())
+                && !interface.is_layer(&node.local_id, path)
+                && !interface.is_chain(&node.local_id, path)
                 && interface
                     .position(&node.local_id, path)
                     .is_some_and(|position| {
@@ -2277,6 +2280,9 @@ impl InspectedGddV1 {
         if nodes.len() != targets.len() || !valid_graph_clipboard_nodes(&nodes) {
             return Err(unsupported());
         }
+        if graph_clipboard_node_count(&nodes) > budget.max_entries {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
         let encoded = serde_json::to_string(&[ClipboardItem::Nodes(nodes)])
             .map_err(GddArchiveError::GraphClipboardFormat)?;
         let text = format!("graphite: {encoded}");
@@ -2307,7 +2313,7 @@ impl InspectedGddV1 {
         let [ClipboardItem::Nodes(mut nodes)] = items else {
             return Err(GddArchiveError::UnsupportedGraphClipboard);
         };
-        if nodes.len() > budget.max_entries {
+        if graph_clipboard_node_count(&nodes) > budget.max_entries {
             return Err(GddArchiveError::BudgetExceeded);
         }
         if !valid_graph_clipboard_nodes(&nodes) {
@@ -2330,11 +2336,10 @@ impl InspectedGddV1 {
             .nested_network(path)
             .ok_or(GddArchiveError::StaleGraphNetwork)?;
         let mut expected = BTreeMap::new();
+        let mut expected_networks = BTreeSet::new();
+        let mut expected_nodes = 0;
         let mut edits = Vec::with_capacity(used.len() * 2);
         for node_id in used {
-            let detached = numeric_preview_network(nested, node_id, &[])?;
-            typecheck_detached_numeric_network(detached)
-                .map_err(GddArchiveError::GraphClipboardTypeMismatch)?;
             let node = interface
                 .document_node(&node_id, path)
                 .cloned()
@@ -2346,6 +2351,19 @@ impl InspectedGddV1 {
             let template = interface
                 .create_node_template(&node_id, path)
                 .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            expected_nodes += 1;
+            match &node.implementation {
+                DocumentNodeImplementation::Network(inner) => {
+                    let mut child_path = path.to_vec();
+                    child_path.push(node_id);
+                    expected_networks.insert(child_path);
+                    expected_nodes += inner.nodes.len();
+                    for &child in inner.nodes.keys() {
+                        check_clipboard_numeric_branch(inner, child, &node.inputs)?;
+                    }
+                }
+                _ => check_clipboard_numeric_branch(nested, node_id, &[])?,
+            }
             expected.insert(node_id, template);
             edits.push(EditorDelta::Graph(RuntimeDelta::AddNode {
                 network_path: path.to_vec(),
@@ -2363,21 +2381,36 @@ impl InspectedGddV1 {
             initialize_graph_root_history(&mut owner)?;
         }
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let added_networks = batch
+            .ops
+            .iter()
+            .filter_map(|operation| match operation {
+                RegistryDelta::AddNetwork { id, .. } => Some(*id),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
         let added = batch
             .ops
             .iter()
             .filter_map(|operation| match operation {
-                RegistryDelta::AddNode { id, node } if node.network() == network.id => Some(*id),
+                RegistryDelta::AddNode { id, node }
+                    if node.network() == network.id || added_networks.contains(&node.network()) =>
+                {
+                    Some(*id)
+                }
                 _ => None,
             })
             .collect::<BTreeSet<_>>();
-        if added.len() != expected.len()
+        if added.len() != expected_nodes
+            || added_networks.len() != expected_networks.len()
             || !batch.ops.iter().all(|operation| match operation {
                 RegistryDelta::AddNode { id, .. } => {
                     added.contains(id) && !owner.registry().node_instances.contains_key(id)
                 }
                 RegistryDelta::ChangeNodeAttribute { id, .. }
                 | RegistryDelta::ChangeNodeInputAttribute { id, .. } => added.contains(id),
+                RegistryDelta::AddNetwork { id, .. } => !owner.registry().networks.contains_key(id),
+                RegistryDelta::ChangeNetworkAttribute { id, .. } => added_networks.contains(id),
                 RegistryDelta::AddResource { entry, .. } => {
                     entry.has_embedded_source()
                         && entry
@@ -2391,6 +2424,18 @@ impl InspectedGddV1 {
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let graph = copy.runtime_graph().await?;
+        if graph
+            .networks
+            .iter()
+            .filter(|network| {
+                added_networks.contains(&network.network_id)
+                    && expected_networks.contains(&network.network_path)
+            })
+            .count()
+            != expected_networks.len()
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
         if graph
             .nodes
             .iter()
@@ -3749,22 +3794,95 @@ fn valid_graph_clipboard_nodes(nodes: &[(NodeId, NodeTemplate)]) -> bool {
     !identifiers.is_empty()
         && identifiers.len() == nodes.len()
         && nodes.iter().all(|(_, node)| {
-            matches!(
-                node.implementation,
-                NodeTemplateImplementation::ProtoNode(_)
-            ) && matches!(&node.node_type_metadata, NodeTypePersistentMetadata::Node(metadata)
-                    if matches!(metadata.position(), NodePosition::Absolute(_)))
-                && node.inputs.iter().all(|input| match input {
-                    NodeInput::Value { tagged_value, .. } => {
-                        preview_numeric_value(tagged_value).is_ok()
+            graph_clipboard_node_position(node)
+                && node
+                    .inputs
+                    .iter()
+                    .all(|input| graph_clipboard_input(input, &identifiers, &[]))
+                && match &node.implementation {
+                    NodeTemplateImplementation::ProtoNode(identifier) => {
+                        numeric_proto_input_count(identifier) == Some(node.inputs.len())
+                            && node.context_features == Default::default()
                     }
-                    NodeInput::Node {
-                        node_id,
-                        output_index: 0,
-                    } => identifiers.contains(node_id),
-                    _ => false,
-                })
+                    NodeTemplateImplementation::Network(inner) => {
+                        if inner.reference.is_some()
+                            || inner.previewing != Previewing::No
+                            || inner.navigation_metadata != NavigationMetadata::default()
+                            || !inner.scope_injections.is_empty()
+                            || !node
+                                .inputs
+                                .iter()
+                                .all(|input| matches!(input, NodeInput::Value { .. }))
+                        {
+                            return false;
+                        }
+                        let ids = inner.nodes.keys().copied().collect::<BTreeSet<_>>();
+                        inner.nodes.values().all(|child| {
+                            graph_clipboard_node_position(child)
+                                && matches!(
+                                    &child.implementation,
+                                    NodeTemplateImplementation::ProtoNode(identifier)
+                                        if numeric_proto_input_count(identifier)
+                                            == Some(child.inputs.len())
+                                            && child.context_features == Default::default()
+                                )
+                                && child
+                                    .inputs
+                                    .iter()
+                                    .all(|input| graph_clipboard_input(input, &ids, &node.inputs))
+                        }) && inner
+                            .exports
+                            .iter()
+                            .all(|input| graph_clipboard_input(input, &ids, &[]))
+                    }
+                    NodeTemplateImplementation::Extract => false,
+                }
         })
+}
+
+fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {
+    matches!(&node.node_type_metadata, NodeTypePersistentMetadata::Node(metadata)
+        if matches!(metadata.position(), NodePosition::Absolute(_)))
+}
+
+fn graph_clipboard_node_count(nodes: &[(NodeId, NodeTemplate)]) -> usize {
+    nodes
+        .iter()
+        .map(|(_, node)| {
+            1 + match &node.implementation {
+                NodeTemplateImplementation::Network(inner) => inner.nodes.len(),
+                _ => 0,
+            }
+        })
+        .sum()
+}
+
+fn graph_clipboard_input(
+    input: &NodeInput,
+    local_ids: &BTreeSet<NodeId>,
+    imports: &[NodeInput],
+) -> bool {
+    match input {
+        NodeInput::Value { tagged_value, .. } => preview_numeric_value(tagged_value).is_ok(),
+        NodeInput::Node {
+            node_id,
+            output_index: 0,
+        } => local_ids.contains(node_id),
+        NodeInput::Import { import_index, .. } => imports
+            .get(*import_index)
+            .is_some_and(|input| matches!(input, NodeInput::Value { .. })),
+        _ => false,
+    }
+}
+
+fn check_clipboard_numeric_branch(
+    network: &NodeNetwork,
+    node: NodeId,
+    imports: &[NodeInput],
+) -> Result<(), GddArchiveError> {
+    let detached = numeric_preview_network(network, node, imports)?;
+    typecheck_detached_numeric_network(detached)
+        .map_err(GddArchiveError::GraphClipboardTypeMismatch)
 }
 
 fn empty_graph_export(input: &NodeInput) -> bool {
@@ -3855,15 +3973,21 @@ fn collect_numeric_preview_node(
 }
 
 fn numeric_preview_inputs(document: &DocumentNode) -> Option<&[NodeInput]> {
+    let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation else {
+        return None;
+    };
+    (numeric_proto_input_count(identifier) == Some(document.inputs.len())
+        && document.context_features == Default::default())
+    .then_some(document.inputs.as_slice())
+}
+
+fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> {
     use graphite_math_nodes::{
         absolute_value, add, ceiling, divide, floor, multiply, reciprocal, root, round, sign,
         subtract,
     };
 
-    let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation else {
-        return None;
-    };
-    let count = if [
+    if [
         absolute_value::IDENTIFIER,
         ceiling::IDENTIFIER,
         floor::IDENTIFIER,
@@ -3873,7 +3997,7 @@ fn numeric_preview_inputs(document: &DocumentNode) -> Option<&[NodeInput]> {
     ]
     .contains(identifier)
     {
-        1
+        Some(1)
     } else if [
         add::IDENTIFIER,
         divide::IDENTIFIER,
@@ -3883,12 +4007,10 @@ fn numeric_preview_inputs(document: &DocumentNode) -> Option<&[NodeInput]> {
     ]
     .contains(identifier)
     {
-        2
+        Some(2)
     } else {
-        return None;
-    };
-    (document.inputs.len() == count && document.context_features == Default::default())
-        .then_some(document.inputs.as_slice())
+        None
+    }
 }
 
 fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArchiveError> {
@@ -5392,6 +5514,102 @@ mod tests {
                 .move_history_in_copy(GddHistoryDirection::Redo, budget())
                 .await
                 .expect("one redo");
+            assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_011_1_pastes_a_nested_numeric_template_with_a_fresh_network_identity() {
+        use graphite_document_graph_storage::attr::node::input::ui::NAME;
+
+        futures::executor::block_on(async {
+            let (original, owner_id) = network_import_fixture().await;
+            let graph = original.graph_inspection().await.expect("source topology");
+            let [root, source_network] = graph.networks.as_slice() else {
+                panic!("expected the source root and one nested network");
+            };
+            let holder = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == owner_id)
+                .expect("original encapsulating node");
+            assert!(holder.can_copy_graph_node());
+            let clipboard = original
+                .copy_graph_nodes_to_clipboard(std::slice::from_ref(holder), budget())
+                .await
+                .expect("copy the complete published nested template");
+            let copy = original
+                .paste_graph_nodes_in_copy(root, &clipboard, budget())
+                .await
+                .expect("paste a nested graph under fresh storage IDs");
+            let pasted = copy
+                .graph_inspection()
+                .await
+                .expect("reopen the nested scope");
+            assert_eq!(pasted.networks.len(), 3);
+            let network = pasted
+                .networks
+                .iter()
+                .find(|network| network.parent == Some(root.id) && network.id != source_network.id)
+                .expect("fresh nested identity");
+            assert_eq!(network.import_count, source_network.import_count);
+            assert_eq!(network.export_count, source_network.export_count);
+            assert_eq!(
+                network.primary_import_exposed(),
+                source_network.primary_import_exposed()
+            );
+            let child = pasted
+                .nodes
+                .iter()
+                .find(|node| node.network_id() == network.id && node.local_id == NodeId(9))
+                .expect("remapped original inner consumer");
+            let original_child = graph
+                .nodes
+                .iter()
+                .find(|node| {
+                    node.network_id() == source_network.id && node.local_id == child.local_id
+                })
+                .expect("original inner consumer");
+            assert_ne!(child.storage_id, original_child.storage_id);
+            assert_eq!(child.numeric_import_source(), Some(1));
+            let registry = copy.document.registry();
+            let [stored] = registry.node_instances[&child.storage_id].inputs() else {
+                panic!("expected one copied inner input");
+            };
+            assert_eq!(
+                stored.attributes.get_typed::<String>(NAME).as_deref(),
+                Some("Saved operand")
+            );
+            let result = pasted
+                .nodes
+                .iter()
+                .find(|node| node.network_id() == network.id && node.local_id == NodeId(13))
+                .expect("copied two-input output node");
+            assert!(matches!(
+                copy.preview_graph_numeric_output(result)
+                    .await
+                    .expect("execute the copied numeric network"),
+                GddNumericValue::Number(9.)
+            ));
+            for (id, node) in &original.document.registry().node_instances {
+                assert_eq!(registry.node_instances.get(id), Some(node));
+            }
+            for (id, scope) in &original.document.registry().networks {
+                assert_eq!(registry.networks.get(id), Some(scope));
+            }
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo removes the nested network and the whole copied subtree");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the complete group");
             assert!(redo.document.registry().value_equal(registry));
         });
     }
