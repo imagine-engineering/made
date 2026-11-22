@@ -15820,6 +15820,79 @@ pub(crate) mod artboard_workspace_controls {
         }
 
         #[gpui::test]
+        async fn at_gra_hist_003_004_native_artboard_history_routes_keys_and_edit_menu(
+            cx: &mut TestAppContext,
+        ) {
+            let (item, _workspace, window) = native_artboard(cx, parameters(), PIXEL_BYTES).await;
+            let session = item.read_with(window, |item, _| item.session().clone());
+            let initial = session.read_with(window, |session, _| session.document().edit_state());
+            click(window, "GRAPHITE-ARTBOARD-CLIP");
+            let edited = session.read_with(window, |session, _| session.document().edit_state());
+            assert_ne!(edited, initial);
+
+            let width = item.read_with(window, |item, _| item.artboard_editors[2].clone());
+            let committed_text = width.read_with(window, |editor, cx| editor.text(cx));
+            window.update(|window, cx| width.focus_handle(cx).focus(window, cx));
+            window.simulate_keystrokes("end 9");
+            assert_ne!(
+                width.read_with(window, |editor, cx| editor.text(cx)),
+                committed_text
+            );
+            window.simulate_keystrokes("ctrl-z");
+            assert_eq!(
+                width.read_with(window, |editor, cx| editor.text(cx)),
+                committed_text
+            );
+            assert_eq!(
+                session.read_with(window, |session, _| session.revision()),
+                1
+            );
+
+            window.update(|window, cx| item.focus_handle(cx).focus(window, cx));
+            for (key, expected, revision) in [("ctrl-z", initial, 2), ("ctrl-shift-z", edited, 3)] {
+                window.simulate_keystrokes(key);
+                window.run_until_parked();
+                session.read_with(window, |session, _| {
+                    assert_eq!(session.document().edit_state(), expected);
+                    assert_eq!(session.revision(), revision);
+                });
+            }
+            window.dispatch_action(editor::actions::Undo);
+            window.run_until_parked();
+            session.read_with(window, |session, _| {
+                assert_eq!(session.document().edit_state(), initial);
+                assert_eq!(session.revision(), 4);
+            });
+            window.dispatch_action(editor::actions::Redo);
+            window.run_until_parked();
+            session.read_with(window, |session, _| {
+                assert_eq!(session.document().edit_state(), edited);
+                assert_eq!(session.revision(), 5);
+            });
+
+            window.update(|_, cx| {
+                for asset in ["keymaps/default-macos.json", "keymaps/default-windows.json"] {
+                    let bindings =
+                        settings::KeymapFile::load_asset_allow_partial_failure(asset, cx)
+                            .expect("actual platform keymap");
+                    cx.bind_keys(bindings);
+                }
+            });
+            window.simulate_keystrokes("cmd-z");
+            window.run_until_parked();
+            session.read_with(window, |session, _| {
+                assert_eq!(session.document().edit_state(), initial);
+                assert_eq!(session.revision(), 6);
+            });
+            window.simulate_keystrokes("ctrl-y");
+            window.run_until_parked();
+            session.read_with(window, |session, _| {
+                assert_eq!(session.document().edit_state(), edited);
+                assert_eq!(session.revision(), 7);
+            });
+        }
+
+        #[gpui::test]
         async fn at_gra_hist_003_004_native_artboard_history_moves_one_committed_interaction(
             cx: &mut TestAppContext,
         ) {

@@ -60,6 +60,16 @@
     },
   },
   {
+    "context": "GraphiteArtboard",
+    "bindings": {
+      "undo": "editor::Undo",
+      "ctrl-z": "editor::Undo",
+      "redo": "editor::Redo",
+      "ctrl-y": "editor::Redo",
+      "ctrl-shift-z": "editor::Redo"
+    }
+  },
+  {
     "context": "Editor",
     "bindings": {
       "escape": "editor::Cancel",

@@ -3500,6 +3500,25 @@ impl GraphiteArtboardItem {
         cx.notify();
     }
 
+    fn route_history_action(
+        &mut self,
+        direction: ArtboardHistoryDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .artboard_editors
+            .iter()
+            .any(|editor| editor.read(cx).is_focused(window))
+        {
+            cx.propagate();
+            return;
+        }
+        let revision = self.session.read(cx).revision();
+        self.move_history(direction, revision, cx);
+        cx.stop_propagation();
+    }
+
     fn begin_gesture(&mut self, cx: &mut Context<Self>) {
         let outcome = self.session.update(cx, |session, cx| {
             session.begin_gesture(session.revision(), cx)
@@ -3738,6 +3757,12 @@ impl Render for GraphiteArtboardItem {
             .tab_index(0isize)
             .tab_stop(false)
             .key_context("GraphiteArtboard")
+            .on_action(cx.listener(|item, _: &editor::actions::Undo, window, cx| {
+                item.route_history_action(ArtboardHistoryDirection::Undo, window, cx);
+            }))
+            .on_action(cx.listener(|item, _: &editor::actions::Redo, window, cx| {
+                item.route_history_action(ArtboardHistoryDirection::Redo, window, cx);
+            }))
             .on_action(cx.listener(|_, _: &FocusNextArtboardControl, window, cx| {
                 window.focus_next(cx);
                 cx.stop_propagation();
