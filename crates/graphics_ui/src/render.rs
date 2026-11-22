@@ -183,7 +183,7 @@ pub fn prepare_accepted_cpu_svg_preview_at_target(
     )
 }
 
-fn prepare_svg_bytes_at_target(
+pub(crate) fn prepare_svg_bytes_at_target(
     svg_bytes: &[u8],
     width: u32,
     height: u32,

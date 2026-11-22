@@ -702,6 +702,7 @@ pub struct GddGraphNode {
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
+    can_preview_merge_output: bool,
     can_supply_numeric_export: bool,
     can_copy_graph_node: bool,
     grid_position: Option<[i32; 2]>,
@@ -944,6 +945,10 @@ impl GddGraphNode {
 
     pub fn can_preview_numeric_output(&self) -> bool {
         self.can_preview_numeric_output
+    }
+
+    pub fn can_preview_merge_output(&self) -> bool {
+        self.can_preview_merge_output
     }
 
     pub fn can_copy_graph_node(&self) -> bool {
@@ -1309,6 +1314,7 @@ impl InspectedGddV1 {
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
+                    can_preview_merge_output: false,
                     can_supply_numeric_export: false,
                     can_copy_graph_node: false,
                     grid_position: None,
@@ -1504,6 +1510,12 @@ impl InspectedGddV1 {
                     .document_node(&node.local_id, path)
                     .and_then(graph_boolean_literal);
             }
+            node.can_preview_merge_output = path.is_empty()
+                && node.nested_network.is_some()
+                && interface.document_network().exports == [NodeInput::node(node.local_id, 0)]
+                && interface
+                    .document_node(&node.local_id, path)
+                    .is_some_and(|document| checked_merge_preview_node(document).is_some());
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
                 && interface.number_of_outputs(&node.local_id, path) == 1;

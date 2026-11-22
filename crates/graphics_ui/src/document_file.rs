@@ -9,10 +9,10 @@ use anyhow::{Context as _, anyhow, ensure};
 use editor::Editor;
 use gpui::{
     App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EntityId,
-    EventEmitter, FocusHandle, Focusable, PathPromptOptions, Render, ScrollHandle, SharedString,
-    Subscription, Task, WeakEntity, Window, actions,
+    EventEmitter, FocusHandle, Focusable, ImageSource, PathPromptOptions, Render, RenderImage,
+    ScrollHandle, SharedString, Subscription, SvgRenderer, Task, WeakEntity, Window, actions, img,
 };
-use graphics_core::evaluate::UnaryNumericOperation;
+use graphics_core::evaluate::{CpuSvgEvaluationBudget, UnaryNumericOperation};
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
@@ -24,6 +24,11 @@ use graphics_core::formats::{
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
+use graphite_graph_craft::document::value::{DAffine2, RenderOutputType, UVec2};
+use graphite_std::{
+    application_io::{ExportFormat as RenderFormat, RenderConfig},
+    transform::Footprint,
+};
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{
     Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, Switch,
@@ -78,6 +83,47 @@ const GRAPHITE_NUMERIC_OPERATIONS: [UnaryNumericOperation; 5] = [
     UnaryNumericOperation::Round,
     UnaryNumericOperation::Sign,
 ];
+
+const MERGE_PREVIEW_SIZE: u32 = 128;
+
+async fn preview_merge_image(
+    contents: &InspectedGddV1,
+    node: &GddGraphNode,
+    renderer: &SvgRenderer,
+) -> Result<Arc<RenderImage>, String> {
+    let resolution = UVec2::splat(MERGE_PREVIEW_SIZE);
+    let configuration = RenderConfig {
+        viewport: Footprint {
+            transform: DAffine2::from_translation(resolution.as_dvec2() / 2.),
+            resolution,
+            ..Footprint::DEFAULT
+        },
+        scale: 1.,
+        export_format: RenderFormat::Svg,
+        for_export: true,
+        ..Default::default()
+    };
+    let budget = CpuSvgEvaluationBudget {
+        max_viewport_pixels: MERGE_PREVIEW_SIZE * MERGE_PREVIEW_SIZE,
+        max_output_bytes: 64 * 1024,
+    };
+    let output = contents
+        .render_document_merge_svg(node, configuration, budget)
+        .await
+        .map_err(|error| error.to_string())?;
+    let RenderOutputType::Svg { svg, .. } = output.data else {
+        return Err("Graphite did not return an SVG preview.".to_owned());
+    };
+    crate::render::prepare_svg_bytes_at_target(
+        svg.as_bytes(),
+        resolution.x,
+        resolution.y,
+        configuration.scale,
+        renderer,
+        (MERGE_PREVIEW_SIZE * MERGE_PREVIEW_SIZE * 4) as usize,
+    )
+    .map_err(|error| error.to_string())
+}
 
 enum InspectedDocument {
     Gdd { contents: Arc<InspectedGddV1> },
@@ -855,6 +901,7 @@ enum NodeOutputPreview {
     Pending { request: Arc<()>, _task: Task<()> },
     Cancelled,
     Ready(GddNumericValue),
+    ReadyImage(Arc<RenderImage>),
     Failed(SharedString),
 }
 
@@ -871,7 +918,7 @@ impl NodeOutputPreview {
             Self::Ready(value) => Some((value.to_string(), Color::Default)),
             Self::Failed(error) => Some((error.to_string(), Color::Error)),
             Self::Cancelled => Some(("Graph run canceled.".into(), Color::Muted)),
-            Self::Hidden | Self::Pending { .. } => None,
+            Self::Hidden | Self::Pending { .. } | Self::ReadyImage(_) => None,
         }
     }
 }
@@ -2676,7 +2723,9 @@ impl GraphiteDocumentItem {
         };
         if matches!(
             form.output_preview,
-            NodeOutputPreview::Pending { .. } | NodeOutputPreview::Ready(_)
+            NodeOutputPreview::Pending { .. }
+                | NodeOutputPreview::Ready(_)
+                | NodeOutputPreview::ReadyImage(_)
         ) {
             form.output_preview = NodeOutputPreview::Hidden;
             cx.notify();
@@ -2684,18 +2733,31 @@ impl GraphiteDocumentItem {
         }
         let Some(node) = form
             .selected_node()
-            .filter(|node| node.can_preview_numeric_output())
+            .filter(|node| node.can_preview_numeric_output() || node.can_preview_merge_output())
         else {
             return;
         };
-        let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(&form.revision, &model.revision) {
+            return;
+        }
+        let InspectedDocument::Gdd { contents } = &model.document else {
             return;
         };
         let selected = form.selected;
         let node = node.clone();
         let contents = contents.clone();
+        let revision = form.revision.clone();
+        let renderer = node.can_preview_merge_output().then(|| cx.svg_renderer());
         let evaluation = cx.background_spawn(async move {
-            futures::executor::block_on(contents.preview_graph_numeric_output(&node))
+            if let Some(renderer) = renderer {
+                futures::executor::block_on(preview_merge_image(&contents, &node, &renderer))
+                    .map(NodeOutputPreview::ReadyImage)
+            } else {
+                futures::executor::block_on(contents.preview_graph_numeric_output(&node))
+                    .map(NodeOutputPreview::Ready)
+                    .map_err(|error| error.to_string())
+            }
         });
         let request = Arc::new(());
         form.output_preview = NodeOutputPreview::Pending {
@@ -2707,13 +2769,14 @@ impl GraphiteDocumentItem {
                         return;
                     };
                     if form.selected != selected
+                        || !Arc::ptr_eq(&revision, &item.model.read(cx).revision)
                         || !form.output_preview.is_pending_request(&request)
                     {
                         return;
                     }
                     form.output_preview = match result {
-                        Ok(value) => NodeOutputPreview::Ready(value),
-                        Err(error) => NodeOutputPreview::Failed(error.to_string().into()),
+                        Ok(output) => output,
+                        Err(error) => NodeOutputPreview::Failed(error.into()),
                     };
                     cx.notify();
                 }) {
@@ -2940,30 +3003,64 @@ impl GraphiteDocumentItem {
 
     fn render_node_output_preview(
         preview: &NodeOutputPreview,
+        merge: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let label = match preview {
-            NodeOutputPreview::Hidden | NodeOutputPreview::Cancelled => "Preview Saved Output",
-            NodeOutputPreview::Pending { .. } => "Cancel Numeric Preview",
-            NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
-            NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
+        let (button_id, selector, result_selector, label) = if merge {
+            (
+                "graphite-gdd-preview-merge",
+                "GRAPHITE-GDD-PREVIEW-MERGE",
+                "GRAPHITE-GDD-MERGE-RESULT",
+                match preview {
+                    NodeOutputPreview::Pending { .. } => "Cancel Merge Preview",
+                    NodeOutputPreview::ReadyImage(_) => "Hide Merge Preview",
+                    NodeOutputPreview::Failed(_) => "Retry Merge Preview",
+                    _ => "Preview Saved Merge",
+                },
+            )
+        } else {
+            (
+                "graphite-gdd-preview-numeric",
+                "GRAPHITE-GDD-PREVIEW-NUMERIC",
+                "GRAPHITE-GDD-NUMERIC-RESULT",
+                match preview {
+                    NodeOutputPreview::Pending { .. } => "Cancel Numeric Preview",
+                    NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
+                    NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
+                    _ => "Preview Saved Output",
+                },
+            )
         };
         v_flex()
             .gap_2()
             .child(
-                div()
-                    .debug_selector(|| "GRAPHITE-GDD-PREVIEW-NUMERIC".into())
-                    .child(Button::new("graphite-gdd-preview-numeric", label).on_click(
+                div().debug_selector(move || selector.into()).child(
+                    Button::new(button_id, label).on_click(
                         cx.listener(|item, _, _, cx| item.toggle_node_output_preview(cx)),
-                    )),
+                    ),
+                ),
             )
             .when_some(preview.feedback(), |panel, (message, color)| {
                 panel.child(
                     div()
-                        .debug_selector(|| "GRAPHITE-GDD-NUMERIC-RESULT".into())
+                        .debug_selector(move || result_selector.into())
                         .child(Label::new(message).color(color)),
                 )
             })
+            .when_some(
+                match preview {
+                    NodeOutputPreview::ReadyImage(image) => Some(image.clone()),
+                    _ => None,
+                },
+                |panel, image| {
+                    panel.child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-MERGE-IMAGE".into())
+                            .size(px(MERGE_PREVIEW_SIZE as f32))
+                            .child(img(ImageSource::Render(image)).size_full()),
+                    )
+                },
+            )
     }
 
     fn render_document_run(run: &NodeOutputPreview, cx: &mut Context<Self>) -> impl IntoElement {
@@ -4140,8 +4237,8 @@ impl GraphiteDocumentItem {
                                 |panel| panel.child(self.render_numeric_wire_insertion(selected, window, cx)),
                             )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
-                            .when(selected.can_preview_numeric_output(), |panel| {
-                                panel.child(Self::render_node_output_preview(&form.output_preview, cx))
+                            .when(selected.can_preview_numeric_output() || selected.can_preview_merge_output(), |panel| {
+                                panel.child(Self::render_node_output_preview(&form.output_preview, selected.can_preview_merge_output(), cx))
                             })
                             .when(selected.grid_position().is_some(), |panel| {
                                 panel.child(
@@ -11148,6 +11245,188 @@ mod tests {
         });
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_281_3_workspace_previews_the_saved_merge_layers(cx: &mut TestAppContext) {
+        use graphite_core_types::{Color, NodeParameter};
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{resolve_network_node_type, resolve_proto_node_type};
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::vector_nodes::{fill, generator_nodes::rectangle};
+
+        let layer = |rectangle_id, fill_id, layer_id, base, width, height, color| {
+            let mut shape = resolve_proto_node_type(rectangle::IDENTIFIER)
+                .expect("pinned Rectangle")
+                .default_node_template();
+            *shape
+                .inputs
+                .get_mut(rectangle::WidthInput::INDEX)
+                .expect("width") = NodeInput::value(TaggedValue::Number(width), false);
+            *shape
+                .inputs
+                .get_mut(rectangle::HeightInput::INDEX)
+                .expect("height") = NodeInput::value(TaggedValue::Number(height), false);
+            let mut paint = resolve_proto_node_type(fill::IDENTIFIER)
+                .expect("pinned Fill")
+                .default_node_template();
+            *paint
+                .inputs
+                .get_mut(fill::ContentInput::INDEX)
+                .expect("paint input") = NodeInput::node(rectangle_id, 0);
+            *paint
+                .inputs
+                .get_mut(fill::PaintInput::INDEX)
+                .expect("paint color") = NodeInput::value(TaggedValue::Color(color), false);
+            let mut merge = resolve_network_node_type("Merge")
+                .expect("pinned Merge")
+                .default_node_template();
+            let [base_port, content] = merge.inputs.as_mut_slice() else {
+                panic!("two Merge inputs")
+            };
+            if let Some(base) = base {
+                *base_port = NodeInput::node(base, 0);
+            }
+            *content = NodeInput::node(fill_id, 0);
+            [
+                (rectangle_id, shape.into_parts().0),
+                (fill_id, paint.into_parts().0),
+                (layer_id, merge.into_parts().0),
+            ]
+        };
+        let bottom = NodeId(14);
+        let top = NodeId(25);
+        let graph = NodeNetwork {
+            nodes: layer(NodeId(11), NodeId(12), bottom, None, 60., 18., Color::RED)
+                .into_iter()
+                .chain(layer(
+                    NodeId(21),
+                    NodeId(22),
+                    top,
+                    Some(bottom),
+                    14.,
+                    44.,
+                    Color::BLUE,
+                ))
+                .collect(),
+            exports: vec![NodeInput::node(top, 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            655,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("saved GDD");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &NoMetadata, &ResourceRegistry::new(), &resources)
+            .expect("save exact layered source");
+        let history = owner.session().history().count();
+        let original = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/pinned-merge-preview.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("original ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open saved Merge")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-5");
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        let preview = "GRAPHITE-GDD-PREVIEW-MERGE";
+        let click_before_completion = |window: &mut gpui::VisualTestContext| {
+            paint(window);
+            let position = window
+                .debug_bounds(preview)
+                .expect("visible Merge preview control")
+                .center();
+            dispatch_graph_click(
+                window,
+                position,
+                gpui::MouseButton::Left,
+                gpui::Modifiers::default(),
+            );
+        };
+        click_before_completion(window);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready Merge form")
+            };
+            assert!(matches!(
+                form.output_preview,
+                NodeOutputPreview::Pending { .. }
+            ));
+        });
+        click_before_completion(window);
+        window.run_until_parked();
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-MERGE-IMAGE").is_none());
+        click(window, preview);
+        let image = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready Merge form")
+            };
+            let NodeOutputPreview::ReadyImage(image) = &form.output_preview else {
+                panic!(
+                    "expected Merge pixels, got {:?}",
+                    form.output_preview.feedback()
+                );
+            };
+            assert!(Arc::ptr_eq(&revision, &item.model.read(cx).revision));
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("GDD")
+                    .history_len(),
+                history
+            );
+            assert!(!item.is_dirty(cx));
+            image.clone()
+        });
+        let bytes = image.as_bytes(0).expect("native BGRA pixels");
+        let pixel = |x, y| {
+            let offset = (y * MERGE_PREVIEW_SIZE as usize + x) * 4;
+            bytes
+                .get(offset..offset + 4)
+                .expect("sample inside preview")
+        };
+        assert_eq!(pixel(40, 64), [0, 0, 255, 255]);
+        assert_eq!(pixel(64, 64), [255, 0, 0, 255]);
+        assert_eq!(pixel(8, 8), [0, 0, 0, 0]);
+        assert!(window.debug_bounds("GRAPHITE-GDD-MERGE-IMAGE").is_some());
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&image)));
+        click(window, preview);
+        assert!(window.debug_bounds("GRAPHITE-GDD-MERGE-IMAGE").is_none());
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("original ZIP"),
             original
         );
     }
