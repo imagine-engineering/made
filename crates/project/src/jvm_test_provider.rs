@@ -1776,6 +1776,7 @@ impl JvmTestProviderStore {
             self.generation = self.generation.wrapping_add(1);
             self.current_remote_discovery = None;
             self.selectors.clear();
+            cx.notify();
             return;
         }
         for handle in self.run_handles.values() {
@@ -1828,6 +1829,7 @@ impl JvmTestProviderStore {
         self.generation = self.generation.wrapping_add(1);
         self.selectors.clear();
         self.authorized_remote_runs.clear();
+        cx.notify();
     }
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) -> Task<Result<StructuredProviderSnapshot>> {
@@ -2038,12 +2040,13 @@ impl JvmTestProviderStore {
                     None => source_diagnostic,
                 });
             }
-            this.update(cx, |store, _| {
+            this.update(cx, |store, cx| {
                 ensure!(
                     !store.closed && store.generation == generation.0,
                     "stale Java test discovery generation"
                 );
                 store.selectors = discovery.selectors;
+                cx.notify();
                 Ok(())
             })??;
             structured_store.update(cx, |store, cx| {

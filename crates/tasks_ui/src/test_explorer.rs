@@ -1316,6 +1316,7 @@ impl TestExplorerProjection {
         self.debug_disabled_reasons.get(id).map(String::as_str)
     }
 
+    #[cfg(test)]
     fn can_debug(&self, id: &LanguageToolNodeId) -> bool {
         self.debug_disabled_reason(id).is_none()
     }
@@ -1345,6 +1346,7 @@ impl TestExplorerProjection {
             .or_else(|| self.debug_disabled_reason(id).map(str::to_owned))
     }
 
+    #[cfg(test)]
     fn can_debug_with_flags(&self, id: &LanguageToolNodeId, cx: &App) -> bool {
         self.can_debug(id) && self.experimental_disabled_reason(id, cx).is_none()
     }
@@ -1933,6 +1935,24 @@ impl TestsPanel {
                     .providers()
                     .map(|provider| provider.provider_id.clone())
                     .collect();
+                let subscriptions = vec![
+                    store_subscription,
+                    flag_subscription,
+                    query_subscription,
+                    #[cfg(feature = "jvm-test-actions")]
+                    lsp_subscription,
+                ];
+                #[cfg(feature = "jvm-test-actions")]
+                let subscriptions = {
+                    let mut subscriptions = subscriptions;
+                    if let Some(provider) = project.read(cx).jvm_test_provider_store().cloned() {
+                        subscriptions.push(cx.observe(&provider, |panel, _, cx| {
+                            panel.context_menu = None;
+                            cx.notify();
+                        }));
+                    }
+                    subscriptions
+                };
                 TestsPanel {
                     project,
                     workspace: workspace_handle,
@@ -1965,13 +1985,7 @@ impl TestsPanel {
                     java_discovery_pending: false,
                     action_notice: None,
                     context_menu: None,
-                    _subscriptions: vec![
-                        store_subscription,
-                        flag_subscription,
-                        query_subscription,
-                        #[cfg(feature = "jvm-test-actions")]
-                        lsp_subscription,
-                    ],
+                    _subscriptions: subscriptions,
                 }
             })
         })
@@ -2406,13 +2420,55 @@ impl TestsPanel {
         self.handle_action_result(delegate.run(&selection, &workspace, window, cx), cx);
     }
 
+    fn selected_debug_disabled_reason(&self, cx: &App) -> Option<String> {
+        let Some(id) = self.host.selected() else {
+            return Some("Select an individual test case to debug".into());
+        };
+        #[cfg(feature = "jvm-test-actions")]
+        if self.projection.node_kinds.get(id) == Some(&StructuredNodeKind::Case)
+            && let Some(selection) = self.projection.selection(id)
+            && selection.provider_id.0 == JVM_JUNIT_PROVIDER_ID
+        {
+            use project::trusted_worktrees::TrustedWorktrees;
+
+            if let Some(reason) = self.projection.experimental_disabled_reason(id, cx) {
+                return Some(reason);
+            }
+            let project = self.project.read(cx);
+            let admission = || {
+                anyhow::ensure!(
+                    !project.is_remote(),
+                    "Remote Java test Debug needs the host action protocol"
+                );
+                let provider = project
+                    .jvm_test_provider_store()
+                    .context("The project host does not support Java test actions")?;
+                // A cached JUnit result is stale even when its source selector is current.
+                let plan = provider.read(cx).plan_selected_case_debug(
+                    &selection.node_id,
+                    selection.discovery_generation,
+                    cx,
+                )?;
+                let worktrees = project.worktree_store();
+                let trusted = TrustedWorktrees::try_get_global(cx).and_then(|trusted| {
+                    trusted
+                        .read(cx)
+                        .observed_worktree_trust(&worktrees, plan.worktree_id, cx)
+                });
+                anyhow::ensure!(
+                    trusted == Some(true)
+                        && !TrustedWorktrees::has_restricted_worktrees(&worktrees, cx),
+                    "Trust the project before debugging the selected Java test"
+                );
+                anyhow::Ok(())
+            };
+            return admission().err().map(|error| error.to_string());
+        }
+        self.projection.debug_disabled_reason_with_flags(id, cx)
+    }
+
     fn debug_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let disabled_reason = self
-            .host
-            .selected()
-            .map(|id| self.projection.debug_disabled_reason_with_flags(id, cx))
-            .unwrap_or(Some("Select an individual test case to debug".to_string()));
-        if let Some(reason) = disabled_reason {
+        if let Some(reason) = self.selected_debug_disabled_reason(cx) {
             self.set_notice(reason, cx);
             return;
         }
@@ -2519,20 +2575,15 @@ impl TestsPanel {
             .host
             .selected()
             .is_some_and(|id| self.projection.can_run_with_flags(id, cx));
-        let can_debug = self
-            .host
-            .selected()
-            .is_some_and(|id| self.projection.can_debug_with_flags(id, cx));
         let run_label = self
             .host
             .selected()
             .and_then(|id| self.projection.experimental_disabled_reason(id, cx))
             .map(|reason| format!("Run: {reason}"))
             .unwrap_or_else(|| "Run".to_string());
-        let debug_label = self
-            .host
-            .selected()
-            .and_then(|id| self.projection.debug_disabled_reason_with_flags(id, cx))
+        let debug_disabled_reason = self.selected_debug_disabled_reason(cx);
+        let can_debug = debug_disabled_reason.is_none();
+        let debug_label = debug_disabled_reason
             .map(|reason| format!("Debug: {reason}"))
             .unwrap_or_else(|| "Debug".to_string());
         let has_failed = !self.projection.enabled_failed(cx).is_empty();
@@ -2679,15 +2730,8 @@ impl Render for TestsPanel {
         let can_run = selected
             .as_ref()
             .is_some_and(|id| self.projection.can_run_with_flags(id, cx));
-        let can_debug = selected
-            .as_ref()
-            .is_some_and(|id| self.projection.can_debug_with_flags(id, cx));
-        let debug_disabled_reason = selected
-            .as_ref()
-            .and_then(|id| self.projection.debug_disabled_reason_with_flags(id, cx))
-            .or_else(|| {
-                (!has_selection).then(|| "Select an individual test case to debug".to_string())
-            });
+        let debug_disabled_reason = self.selected_debug_disabled_reason(cx);
+        let can_debug = debug_disabled_reason.is_none();
         let debug_tooltip = debug_disabled_reason
             .clone()
             .unwrap_or_else(|| "Debug Selected Test".to_string());

@@ -440,8 +440,10 @@ its bounded loopback breakpoint evidence does not establish every topology.
 
 The installed Java extension exposes a `Java` debug adapter. In a trusted
 local project, select a verified Java case in Tests and choose
-**Debug Selected Test**. The debugger waits for the selected test JVM to
-suspend, then attaches through the Java adapter. Gradle uses its test Debug
+**Debug Selected Test**. A freshly verified source selector is enough to start
+Debug while Tests still shows the previous JUnit result. The debugger waits for
+the selected test JVM to suspend, then attaches through the Java adapter.
+Gradle uses its test Debug
 port 5005. Maven uses a separate loopback port for each launch. Stopping the
 Debug session or restricting project trust cancels its selected test Task,
 including during terminal preparation.

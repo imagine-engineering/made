@@ -16,14 +16,22 @@ pub struct JvmWorkflowDebugTarget {
     pub process_id: u32,
 }
 
-pub struct JvmWorkflowDebugHooks {
-    // Debug UI depends on Tasks UI, so the Debug owner supplies this phase to
-    // the cached test fixture instead of introducing a reverse dependency.
-    pub initialize: fn(&mut App),
-    pub run: for<'a> fn(
-        JvmWorkflowDebugContext,
-        &'a mut VisualTestContext,
-    ) -> futures::future::LocalBoxFuture<'a, JvmWorkflowDebugTarget>,
+// Passing the Debug phase in keeps the test support dependency directed from Debug UI to Tasks UI.
+pub enum JvmWorkflowDebugHooks {
+    JavaMain {
+        initialize: fn(&mut App),
+        run: for<'a> fn(
+            JvmWorkflowDebugContext,
+            &'a mut VisualTestContext,
+        ) -> futures::future::LocalBoxFuture<'a, JvmWorkflowDebugTarget>,
+    },
+    SelectedJavaTest {
+        initialize: fn(&mut App),
+        run: for<'a> fn(
+            JvmWorkflowDebugContext,
+            &'a mut VisualTestContext,
+        ) -> futures::future::LocalBoxFuture<'a, ()>,
+    },
 }
 
 pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkflowDebugHooks) {
@@ -48,6 +56,19 @@ pub enum JavaTestOutcome {
     DisconnectJavaProcess,
     MissingMavenCache,
     CombinedGradleWorkflow,
+}
+
+pub async fn run_cached_selected_java_debug(
+    cx: &mut TestAppContext,
+    build_tool: JvmTestBuildTool,
+    hooks: JvmWorkflowDebugHooks,
+) {
+    assert!(matches!(
+        hooks,
+        JvmWorkflowDebugHooks::SelectedJavaTest { .. }
+    ));
+    selected_java_case_with_debug_hooks(cx, build_tool, JavaTestOutcome::Pass, false, Some(hooks))
+        .await;
 }
 
 #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
@@ -194,6 +215,10 @@ async fn selected_java_case_with_debug_hooks(
 
     let use_gradle = build_tool == JvmTestBuildTool::Gradle;
     let with_real_providers = outcome == JavaTestOutcome::CombinedGradleWorkflow;
+    let debug_selected = matches!(
+        debug_hooks,
+        Some(JvmWorkflowDebugHooks::SelectedJavaTest { .. })
+    );
     let should_fail = outcome == JavaTestOutcome::FailAndRerun || with_real_providers;
     assert!(!with_real_providers || (use_gradle && !use_ssh));
     let passing_assertion = if use_gradle {
@@ -231,8 +256,12 @@ async fn selected_java_case_with_debug_hooks(
     #[cfg(not(target_os = "macos"))]
     drop(app_state);
     cx.update(|cx| terminal_view::init(cx));
-    if let Some(hooks) = debug_hooks.as_ref() {
-        cx.update(|cx| (hooks.initialize)(cx));
+    if let Some(
+        JvmWorkflowDebugHooks::JavaMain { initialize, .. }
+        | JvmWorkflowDebugHooks::SelectedJavaTest { initialize, .. },
+    ) = debug_hooks.as_ref()
+    {
+        cx.update(initialize);
     }
     let (fixture_name, files, wrapper_name, report_path) = if use_gradle {
         (
@@ -279,7 +308,7 @@ async fn selected_java_case_with_debug_hooks(
         .join("../project/test_data")
         .join(fixture_name);
     let root = tempfile::tempdir().expect("temporary JVM worktree");
-    let project_root = if with_real_providers {
+    let project_root = if with_real_providers || debug_selected {
         // Providers canonicalize macOS's /var symlink in workspace exports.
         root.path()
             .canonicalize()
@@ -299,9 +328,9 @@ async fn selected_java_case_with_debug_hooks(
         std::fs::Permissions::from_mode(0o755),
     )
     .expect("make project wrapper executable");
-    let provider_state =
-        with_real_providers.then(|| tempfile::tempdir().expect("isolated JVM provider state"));
-    let java_settings = serde_json::json!({
+    let provider_state = (with_real_providers || debug_selected)
+        .then(|| tempfile::tempdir().expect("isolated JVM provider state"));
+    let mut java_settings = serde_json::json!({
         "import": {"gradle": {"enabled": true,
             "java": {"home": std::env::var("GROOVY_BUILD_JAVA_HOME").ok()},
             "offline": {"enabled": true}}},
@@ -314,24 +343,49 @@ async fn selected_java_case_with_debug_hooks(
         for home in [&server_java_home, &build_java_home] {
             assert!(Path::new(home).is_absolute() && Path::new(home).join("bin/java").is_file());
         }
-        std::fs::write(
-            root.path().join("gradle.properties"),
-            format!("org.gradle.java.home={build_java_home}\norg.gradle.daemon=false\n"),
-        )
-        .expect("explicit Gradle fixture JDK");
-        let wrapper = root.path().join(wrapper_name);
-        let original = std::fs::read_to_string(&wrapper).expect("Gradle wrapper");
-        assert!(original.starts_with("#!/bin/sh"));
-        std::fs::write(
-            wrapper,
-            original.replacen("#!/bin/sh", "#!/bin/sh\nset -- --offline \"$@\"", 1),
-        )
-        .expect("require cached Gradle fixture");
+        if use_gradle {
+            std::fs::write(
+                root.path().join("gradle.properties"),
+                format!("org.gradle.java.home={build_java_home}\norg.gradle.daemon=false\n"),
+            )
+            .expect("explicit Gradle fixture JDK");
+            let wrapper = root.path().join(wrapper_name);
+            let original = std::fs::read_to_string(&wrapper).expect("Gradle wrapper");
+            assert!(original.starts_with("#!/bin/sh"));
+            std::fs::write(
+                wrapper,
+                original.replacen("#!/bin/sh", "#!/bin/sh\nset -- --offline \"$@\"", 1),
+            )
+            .expect("require cached Gradle fixture");
+        } else {
+            let repository =
+                std::env::var("GROOVY_MAVEN_REPOSITORY").expect("explicit primed Maven repository");
+            assert!(Path::new(&repository).is_absolute() && Path::new(&repository).is_dir());
+            let settings_file = state.path().join("maven-settings.xml");
+            let repository_xml = repository.replace('&', "&amp;").replace('<', "&lt;");
+            std::fs::write(
+                &settings_file,
+                format!("<settings><localRepository>{repository_xml}</localRepository><offline>true</offline></settings>"),
+            )
+            .expect("isolated JDTLS Maven settings");
+            std::fs::write(
+                root.path().join(".mvn/maven.config"),
+                format!("--offline\n-Dmaven.repo.local={repository}\n"),
+            )
+            .expect("isolated offline Maven wrapper");
+            java_settings = serde_json::json!({
+                "import": {"maven": {"enabled": true, "offline": {"enabled": true}}},
+                "configuration": {"maven": {"userSettings": settings_file}},
+            });
+        }
         let mut servers = serde_json::Map::new();
         for (name, variable) in [
             ("jdtls", "GROOVY_JDTLS_LAUNCHER"),
             ("kotlin-lsp", "GROOVY_KOTLIN_LSP"),
-        ] {
+        ]
+        .into_iter()
+        .filter(|(name, _)| *name == "jdtls" || with_real_providers)
+        {
             let launcher = std::env::var(variable).expect("explicit cached provider launcher");
             assert!(Path::new(&launcher).is_absolute() && Path::new(&launcher).is_file());
             let arguments = if name == "jdtls" {
@@ -444,6 +498,18 @@ async fn selected_java_case_with_debug_hooks(
         )
         .expect("require Maven offline from an empty repository");
     }
+    if debug_selected {
+        let path = root
+            .path()
+            .join("application/src/test/java/evidence/GreetingTest.java");
+        let source = std::fs::read_to_string(&path).expect("selected Java test source");
+        let (body, suffix) = source.rsplit_once('}').expect("fixture class body");
+        std::fs::write(
+            path,
+            format!("{body}\n    @Test\n    void unselectedTest() {{\n        throw new AssertionError(\"Unselected test ran\");\n    }}\n}}{suffix}"),
+        )
+        .expect("add a second test that must remain unselected");
+    }
     if should_fail && !with_real_providers {
         let source = root
             .path()
@@ -526,6 +592,21 @@ async fn selected_java_case_with_debug_hooks(
     })
     .expect("pinned Java extension runnable contract");
     languages.add(Arc::new(java));
+    if debug_selected {
+        let debug_jar = std::env::var("GROOVY_JAVA_DEBUG_JAR").expect("verified Java Debug bundle");
+        assert!(Path::new(&debug_jar).is_absolute() && Path::new(&debug_jar).is_file());
+        languages.register_fake_lsp_adapter(
+            "Java",
+            language::FakeLspAdapter {
+                name: "jdtls",
+                initialization_options: Some(serde_json::json!({
+                    "settings": {"java": &java_settings},
+                    "bundles": [debug_jar],
+                })),
+                ..Default::default()
+            },
+        );
+    }
 
     let (worktree_store, worktree_id) = project.read_with(cx, |project, cx| {
         let worktree_store = project.worktree_store();
@@ -1449,6 +1530,40 @@ async fn selected_java_case_with_debug_hooks(
     let tests_panel = TestsPanel::load(workspace.downgrade(), async_cx)
         .await
         .expect("existing Tests panel");
+    if let Some(JvmWorkflowDebugHooks::SelectedJavaTest { run, .. }) = debug_hooks.as_ref() {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.add_panel(tests_panel.clone(), window, cx);
+            workspace.focus_panel::<TestsPanel>(window, cx);
+        });
+        tests_panel.update(cx, |panel, cx| {
+            panel.active = true;
+            panel.refresh(cx);
+        });
+        cx.run_until_parked();
+        tests_panel.update(cx, |panel, cx| {
+            let id = find_node(&panel.projection.snapshot.roots, case_label)
+                .expect("selected Java case in Tests")
+                .id
+                .clone();
+            assert!(panel.projection.can_run(&id));
+            panel.host.expand_all();
+            panel.host.select(id);
+            cx.notify();
+        });
+        run(
+            JvmWorkflowDebugContext {
+                project,
+                workspace,
+                project_root,
+                worktree_id,
+            },
+            cx,
+        )
+        .await;
+        cx.deactivate_window();
+        container.update_in(cx, |_, window, _| window.remove_window());
+        return;
+    }
     tests_panel.update(cx, |panel, cx| {
         panel.active = true;
         if with_real_providers {
@@ -2273,9 +2388,9 @@ async fn selected_java_case_with_debug_hooks(
         }
     }
     if with_real_providers {
-        let active_debug = if let Some(hooks) = debug_hooks {
+        let active_debug = if let Some(JvmWorkflowDebugHooks::JavaMain { run, .. }) = debug_hooks {
             Some(
-                (hooks.run)(
+                run(
                     JvmWorkflowDebugContext {
                         project: project.clone(),
                         workspace: workspace.clone(),
