@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "stable_task_id": "sim-parity-native-video-save-webm-node-foundation",
+  "stable_task_id": "comfy-parity-native-video-save-webm-node-foundation",
   "feature_id": "COMFY-NODE-0602",
   "source": {
     "path": "sim_extras/nodes_video.py",

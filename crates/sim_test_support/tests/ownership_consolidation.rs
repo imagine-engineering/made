@@ -11884,7 +11884,8 @@ fn run_ownership_validation(
             "workspace_persistence_uses_serializable_item_owner",
             workflow_item.contains("impl SerializableItem for GraphWorkspaceItem")
                 && workflow_item
-                    .contains("db::static_connection!(ComfyWorkflowDb, [WorkspaceDb]);")
+                    .contains("db::static_connection!(SimWorkflowDb, [WorkspaceDb]);")
+                && workflow_item.contains("const NAME: &str = \"ComfyWorkflowDb\";")
                 && !workflow_item.contains("struct RuntimeWorkspace"),
         ),
         (

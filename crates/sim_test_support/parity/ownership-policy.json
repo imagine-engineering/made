@@ -1420,7 +1420,7 @@
         {
           "name": "task102-quantlinear-reuses-canonical-function-context",
           "path": "crates/sim_model/src/quantized_autograd.rs",
-          "pattern": "use comfy_tensor[\\s\\S]*FunctionContext[\\s\\S]*context: FunctionContext",
+          "pattern": "use sim_tensor[\\s\\S]*FunctionContext[\\s\\S]*context: FunctionContext",
           "activation_task": "comfy-parity-quantized-autograd-adapter",
           "activation_reason": "Task 102 maps quantized autograd saved state to the canonical custom-function context"
         },
@@ -2166,7 +2166,7 @@
         {
           "name": "task38-production-feature-forwarding-preserves-disjoint-owners",
           "path": "crates/sim_test_support/parity/validate_backend_dependencies.py",
-          "pattern": "validate_production_feature_manifests[\\s\\S]*crates/sim_worker/Cargo.toml[\\s\\S]*comfy_runtime/\\{adapter\\}[\\s\\S]*comfy_tensor/\\{adapter\\}[\\s\\S]*crates/sim_test_support/Cargo.toml[\\s\\S]*crates/zed/Cargo.toml"
+          "pattern": "validate_production_feature_manifests[\\s\\S]*crates/sim_worker/Cargo.toml[\\s\\S]*sim_runtime/\\{adapter\\}[\\s\\S]*sim_tensor/\\{adapter\\}[\\s\\S]*crates/sim_test_support/Cargo.toml[\\s\\S]*crates/zed/Cargo.toml"
         },
         {
           "name": "task38-adapter-source-policy-rejects-bindgen-and-sdk-downloads",
@@ -2176,7 +2176,7 @@
         {
           "name": "task38-platform-loaders-are-checked-compute-non-owners",
           "path": "crates/sim_test_support/parity/validate_backend_dependencies.py",
-          "pattern": "PLATFORM_LOADER_NON_OWNER_PATHS[\\s\\S]*COMFY_COMPUTE_OWNER_SYMBOLS[\\s\\S]*validate_platform_loader_non_ownership"
+          "pattern": "PLATFORM_LOADER_NON_OWNER_PATHS[\\s\\S]*SIM_COMPUTE_OWNER_SYMBOLS[\\s\\S]*validate_platform_loader_non_ownership"
         }
       ],
       "known_open_reasons": [],
@@ -2843,12 +2843,12 @@
         {
           "name": "device-certificate-format-is-strict-canonical-and-domain-separated",
           "path": "crates/sim_test_support/src/device_certification.rs",
-          "pattern": "zed-comfy-device-certification-v2[\\s\\S]*DeviceCertificationTrustAnchor[\\s\\S]*CertificationImplementationManifest[\\s\\S]*to_canonical_json[\\s\\S]*parse_and_verify"
+          "pattern": "zed-sim-device-certification-v2[\\s\\S]*DeviceCertificationTrustAnchor[\\s\\S]*CertificationImplementationManifest[\\s\\S]*to_canonical_json[\\s\\S]*parse_and_verify"
         },
         {
           "name": "cpu-certificate-binds-transitive-manifest-and-pinned-trust-anchor",
           "path": "crates/sim_test_support/tests/device_cpu_sim_model_0016.rs",
-          "pattern": "ATTESTATION_PUBLIC_KEY[\\s\\S]*COMFY_CPU_CERTIFICATION_SIGNING_KEY_PKCS8_PATH[\\s\\S]*cpu_certification_implementation_manifest[\\s\\S]*validate_implementation_manifest"
+          "pattern": "ATTESTATION_PUBLIC_KEY[\\s\\S]*SIM_CPU_CERTIFICATION_SIGNING_KEY_PKCS8_PATH[\\s\\S]*cpu_certification_implementation_manifest[\\s\\S]*validate_implementation_manifest"
         },
         {
           "name": "cpu-lab-adapter-delegates-to-canonical-backend-and-records-no-vendor-package",
@@ -3538,7 +3538,7 @@
         {
           "name": "native-output-effects-bind-checked-media-identity",
           "path": "crates/sim_nodes/src/execution.rs",
-          "pattern": "pub enum NativeOutputMediaKind[\\s\\S]*pub fn accepts[\\s\\S]*pub fn checked_media[\\s\\S]*media_kind\\.accepts[\\s\\S]*zed\\.comfy\\.native-output-effect\\.v2"
+          "pattern": "pub enum NativeOutputMediaKind[\\s\\S]*pub fn accepts[\\s\\S]*pub fn checked_media[\\s\\S]*media_kind\\.accepts[\\s\\S]*zed\\.sim\\.native-output-effect\\.v2"
         },
         {
           "name": "output-committer-revalidates-relative-prefix-containment",
@@ -6706,7 +6706,7 @@
         {
           "name": "runtime-cache-binds-guidance-version",
           "path": "crates/sim_runtime/src/native_execution_controller.rs",
-          "pattern": "sha256_tagged\\(\\s*\"zed\\.comfy\\.guidance-adapter\\.identity\\.v1\",\\s*\\[GUIDANCE_ADAPTER_ID\\.as_bytes\\(\\)\\]"
+          "pattern": "sha256_tagged\\(\\s*\"zed\\.sim\\.guidance-adapter\\.identity\\.v1\",\\s*\\[GUIDANCE_ADAPTER_ID\\.as_bytes\\(\\)\\]"
         },
         {
           "name": "fixture-generator-uses-runtime-guidance-adapter",
@@ -6920,7 +6920,7 @@
         {
           "name": "qwen2-artifacts-bind-semantic-identity-and-owned-residency",
           "path": "crates/sim_model/src/clip_tokenizer.rs",
-          "pattern": "zed\\.comfy\\.qwen2-byte-bpe\\.v1[\\s\\S]*tokenizer_configuration_json\\.as_bytes\\(\\)[\\s\\S]*vocabulary_json\\.as_bytes\\(\\)[\\s\\S]*merges\\.as_bytes\\(\\)[\\s\\S]*fn resident_bytes\\(&self\\)"
+          "pattern": "zed\\.sim\\.qwen2-byte-bpe\\.v1[\\s\\S]*tokenizer_configuration_json\\.as_bytes\\(\\)[\\s\\S]*vocabulary_json\\.as_bytes\\(\\)[\\s\\S]*merges\\.as_bytes\\(\\)[\\s\\S]*fn resident_bytes\\(&self\\)"
         },
         {
           "name": "qwen2-source-fingerprinted-tests-cover-specials-nfc-profiles-and-failures",
@@ -7779,7 +7779,7 @@
     },
     {
       "concern": "native_ffi_corex_provenance_and_structural_package_foundation",
-      "canonical_owner": "comfy_backend_corex",
+      "canonical_owner": "sim_backend_corex",
       "owner_files": [
         "crates/sim_backend_corex/src/abi.rs",
         "crates/sim_backend_corex/src/loader.rs",
@@ -7870,7 +7870,7 @@
     },
     {
       "concern": "native_ffi_cuda_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_cuda",
+      "canonical_owner": "sim_backend_cuda",
       "owner_files": [
         "crates/sim_backend_cuda/src/abi.rs",
         "crates/sim_backend_cuda/src/execution.rs",
@@ -8013,7 +8013,7 @@
     },
     {
       "concern": "native_ffi_directml_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_directml",
+      "canonical_owner": "sim_backend_directml",
       "owner_files": [
         "crates/sim_backend_directml/src/abi.rs",
         "crates/sim_backend_directml/src/loader.rs",
@@ -8387,7 +8387,7 @@
     },
     {
       "concern": "native_ffi_metal_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_metal",
+      "canonical_owner": "sim_backend_metal",
       "owner_files": [
         "crates/sim_backend_metal/src/abi.rs",
         "crates/sim_backend_metal/src/loader.rs",
@@ -8618,7 +8618,7 @@
         {
           "name": "task111-metal-execution-abi-fixes-exact-selectors-reviewed-headers-kernels-and-digests",
           "path": "crates/sim_backend_metal/src/execution_abi.rs",
-          "pattern": "(?=[\\s\\S]*const RESOURCE_SELECTORS:[\\s\\S]*29)(?=[\\s\\S]*const REVIEWED_HEADERS:[\\s\\S]*12)(?=[\\s\\S]*pub return_nullability: ReturnNullability)(?=[\\s\\S]*pub reviewed_headers: Vec<ReviewedHeaderContract>)(?=[\\s\\S]*resource selector names, exact encodings, or return nullability differ)(?=[\\s\\S]*reviewed SDK header identities differ)(?=[\\s\\S]*zed_comfy_metal_add_f16_v1)(?=[\\s\\S]*zed_comfy_metal_add_f32_v1)(?=[\\s\\S]*is_sha256)"
+          "pattern": "(?=[\\s\\S]*const RESOURCE_SELECTORS:[\\s\\S]*29)(?=[\\s\\S]*const REVIEWED_HEADERS:[\\s\\S]*12)(?=[\\s\\S]*pub return_nullability: ReturnNullability)(?=[\\s\\S]*pub reviewed_headers: Vec<ReviewedHeaderContract>)(?=[\\s\\S]*resource selector names, exact encodings, or return nullability differ)(?=[\\s\\S]*reviewed SDK header identities differ)(?=[\\s\\S]*zed_sim_metal_add_f16_v1)(?=[\\s\\S]*zed_sim_metal_add_f32_v1)(?=[\\s\\S]*is_sha256)"
         },
         {
           "name": "task111-metal-execution-sdk-verifier-resolves-every-declared-selector-encoding",
@@ -8699,7 +8699,7 @@
     },
     {
       "concern": "native_ffi_mlu_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_mlu",
+      "canonical_owner": "sim_backend_mlu",
       "owner_files": [
         "crates/sim_backend_mlu/src/abi.rs",
         "crates/sim_backend_mlu/src/loader.rs",
@@ -9056,7 +9056,7 @@
     },
     {
       "concern": "native_ffi_npu_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_npu",
+      "canonical_owner": "sim_backend_npu",
       "owner_files": [
         "crates/sim_backend_npu/src/abi.rs",
         "crates/sim_backend_npu/src/loader.rs",
@@ -9424,7 +9424,7 @@
     },
     {
       "concern": "native_ffi_xpu_abi_and_package_foundation",
-      "canonical_owner": "comfy_backend_xpu",
+      "canonical_owner": "sim_backend_xpu",
       "owner_files": [
         "crates/sim_backend_xpu/src/abi.rs",
         "crates/sim_backend_xpu/src/loader.rs",
@@ -12316,7 +12316,7 @@
         {
           "name": "model-source-auxiliary-artifact-wire-is-append-only-and-digest-bound",
           "path": "crates/sim_types/src/worker_protocol.rs",
-          "pattern": "pub enum WorkerModelSourceOperation \\{[\\s\\S]*Close,[\\s\\S]*ReadArtifact \\{[\\s\\S]*artifact_sha256: WorkerSha256Digest[\\s\\S]*pub enum WorkerModelSourceResponse \\{[\\s\\S]*Rejected \\{[\\s\\S]*ArtifactChunk\\(WorkerModelSourceArtifactChunk\\)[\\s\\S]*zed-comfy-model-source-artifact-chunk-v1"
+          "pattern": "pub enum WorkerModelSourceOperation \\{[\\s\\S]*Close,[\\s\\S]*ReadArtifact \\{[\\s\\S]*artifact_sha256: WorkerSha256Digest[\\s\\S]*pub enum WorkerModelSourceResponse \\{[\\s\\S]*Rejected \\{[\\s\\S]*ArtifactChunk\\(WorkerModelSourceArtifactChunk\\)[\\s\\S]*zed-sim-model-source-artifact-chunk-v1"
         },
         {
           "name": "model-source-auxiliary-artifact-read-remains-model-store-owned",
@@ -12598,7 +12598,7 @@
         {
           "name": "moge-fixture-is-source-pinned-independent-and-bounded",
           "path": "crates/sim_test_support/fixtures/models/moge-resource-foundation/provenance.json",
-          "pattern": "Pure Python standard-library source equations[\\s\\S]*independent f64 finite-difference source-equation oracle[\\s\\S]*SciPy is not executed or certified"
+          "pattern": "independently derived binary32 foundation[\\s\\S]*unchanged tagged geometry functions[\\s\\S]*CPU Torch 2\\.8\\.0, NumPy 1\\.26\\.4 and SciPy 1\\.16\\.2[\\s\\S]*genuine SciPy observations[\\s\\S]*Native numerical results do not supply gold values"
         },
         {
           "name": "moge-e2e-publishes-typed-source-oracle-geometry",
@@ -16806,7 +16806,7 @@
         {
           "name": "video-component-digest-binds-depth-rate-and-components",
           "path": "crates/sim_media/src/native_node_payload.rs",
-          "pattern": "zed\\.comfy\\.media\\.video\\.v2[\\s\\S]*frame_rate_numerator\\.to_le_bytes[\\s\\S]*frame_rate_denominator\\.to_le_bytes[\\s\\S]*bit_depth\\.bits[\\s\\S]*hash_tensor\\(b\"frames\""
+          "pattern": "zed\\.sim\\.media\\.video\\.v2[\\s\\S]*frame_rate_numerator\\.to_le_bytes[\\s\\S]*frame_rate_denominator\\.to_le_bytes[\\s\\S]*bit_depth\\.bits[\\s\\S]*hash_tensor\\(b\"frames\""
         },
         {
           "name": "provider-transport-preserves-video-component-identity",
@@ -16821,7 +16821,7 @@
         {
           "name": "video-payload-owns-distinct-component-and-encoded-representations",
           "path": "crates/sim_media/src/native_node_payload.rs",
-          "pattern": "pub enum NativeVideoPayload[\\s\\S]*Components\\(NativeVideoComponentsPayload\\)[\\s\\S]*Encoded\\(NativeEncodedVideoPayload\\)[\\s\\S]*checked_h264_mp4_from_component[\\s\\S]*bit_depth = components\\.bit_depth[\\s\\S]*Yuv420p10le[\\s\\S]*zed\\.comfy\\.media\\.video\\.encoded-h264-mp4\\.v1"
+          "pattern": "pub enum NativeVideoPayload[\\s\\S]*Components\\(NativeVideoComponentsPayload\\)[\\s\\S]*Encoded\\(NativeEncodedVideoPayload\\)[\\s\\S]*checked_h264_mp4_from_component[\\s\\S]*bit_depth = components\\.bit_depth[\\s\\S]*Yuv420p10le[\\s\\S]*zed\\.sim\\.media\\.video\\.encoded-h264-mp4\\.v1"
         },
         {
           "name": "video-encoded-backing-fixture-bounds-representation-claims",
@@ -16934,7 +16934,7 @@
         {
           "name": "component-h264-mp4-backing-service-identity-binds-actor-and-all-limit-values",
           "path": "crates/sim_runtime/src/native_video_codec_service.rs",
-          "pattern": "zed.comfy.component-h264-mp4-backing-service.v2[\\s\\S]*max_audio_samples[\\s\\S]*h264_mp4_sequence_limits_configuration_u64[\\s\\S]*configuration_sha256"
+          "pattern": "zed.sim.component-h264-mp4-backing-service.v2[\\s\\S]*max_audio_samples[\\s\\S]*h264_mp4_sequence_limits_configuration_u64[\\s\\S]*configuration_sha256"
         },
         {
           "name": "component-h264-mp4-backing-service-propagates-through-engine-and-cache-identity",
@@ -16949,7 +16949,7 @@
         {
           "name": "component-h264-mp4-10bit-backing-fixture-bounds-depth-and-evidence",
           "path": "crates/sim_test_support/fixtures/video/component-h264-mp4-10bit-backing/manifest.json",
-          "pattern": "synthetic-component-h264-mp4-eight-and-ten-bit-backing[\\s\\S]*zed.comfy.component-h264-mp4-backing-service.v2[\\s\\S]*Ten/Yuv420p10le[\\s\\S]*aac_audio_or_container_metadata[\\s\\S]*trim_window_video_slice_or_save_video_effect"
+          "pattern": "synthetic-component-h264-mp4-eight-and-ten-bit-backing[\\s\\S]*zed.sim.component-h264-mp4-backing-service.v2[\\s\\S]*Ten/Yuv420p10le[\\s\\S]*aac_audio_or_container_metadata[\\s\\S]*trim_window_video_slice_or_save_video_effect"
         }
       ],
       "known_open_reasons": [],
@@ -17838,7 +17838,7 @@
         {
           "name": "av1-webm-thread-bridge-reuses-current-mixed-actor-and-accounting-tests",
           "path": "crates/sim_runtime/src/native_video_codec_service.rs",
-          "pattern": "zed.comfy.video-codec-thread.v9[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv[\\s\\S]*owned_encoded_output_materialization_is_accounted_atomic_and_retryable"
+          "pattern": "zed.sim.video-codec-thread.v9[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv[\\s\\S]*owned_encoded_output_materialization_is_accounted_atomic_and_retryable"
         },
         {
           "name": "av1-webm-thread-bridge-fixture-bounds-evidence-claims",
@@ -18072,7 +18072,7 @@
         {
           "name": "h264-mp4-thread-bridge-reuses-v9-mixed-actor-and-accounting-tests",
           "path": "crates/sim_runtime/src/native_video_codec_service.rs",
-          "pattern": "zed.comfy.video-codec-thread.v9[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv[\\s\\S]*owned_encoded_output_materialization_is_accounted_atomic_and_retryable"
+          "pattern": "zed.sim.video-codec-thread.v9[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv[\\s\\S]*owned_encoded_output_materialization_is_accounted_atomic_and_retryable"
         },
         {
           "name": "h264-mp4-thread-bridge-fixture-bounds-evidence-claims",
@@ -18082,7 +18082,7 @@
         {
           "name": "h264-mp4-10bit-thread-bridge-fixture-bounds-evidence-claims",
           "path": "crates/sim_test_support/fixtures/video/codec-h264-mp4-10bit-thread-bridge/manifest.json",
-          "pattern": "synthetic-retained-h264-mp4-10bit-owned-tensor-thread-bridge[\\s\\S]*zed.comfy.video-codec-thread.v9[\\s\\S]*one_deliberate_post_encode_copy_observed[\\s\\S]*native_or_workspace_owner_crosses_thread_response[\\s\\S]*public_node_backing_video_slice_save_effect_path_or_output_committer_reachable[\\s\\S]*media_payload_or_handle_published"
+          "pattern": "synthetic-retained-h264-mp4-10bit-owned-tensor-thread-bridge[\\s\\S]*zed.sim.video-codec-thread.v9[\\s\\S]*one_deliberate_post_encode_copy_observed[\\s\\S]*native_or_workspace_owner_crosses_thread_response[\\s\\S]*public_node_backing_video_slice_save_effect_path_or_output_committer_reachable[\\s\\S]*media_payload_or_handle_published"
         }
       ],
       "known_open_reasons": [],
@@ -19351,7 +19351,7 @@
         {
           "name": "vp9-webm-thread-bridge-carries-source-alpha-projection-without-a-second-actor",
           "path": "crates/sim_runtime/src/native_video_codec_service.rs",
-          "pattern": "zed.comfy.video-codec-thread.v9[\\s\\S]*has_alpha[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv"
+          "pattern": "zed.sim.video-codec-thread.v9[\\s\\S]*has_alpha[\\s\\S]*retained_video_codec_thread_returns_owned_codec_bytes_and_preserves_ltxv"
         }
       ],
       "known_open_reasons": [],
@@ -19906,7 +19906,7 @@
         {
           "name": "webm-node-service-identity-binds-actor-and-all-limit-values",
           "path": "crates/sim_runtime/src/native_video_codec_service.rs",
-          "pattern": "zed.comfy.webm-node-service.v1[\\s\\S]*configuration_sha256[\\s\\S]*batch_limits_configuration_u64[\\s\\S]*metadata_limits_configuration_u64"
+          "pattern": "zed.sim.webm-node-service.v1[\\s\\S]*configuration_sha256[\\s\\S]*batch_limits_configuration_u64[\\s\\S]*metadata_limits_configuration_u64"
         },
         {
           "name": "webm-node-service-propagates-through-engine-and-cache-identity",
@@ -21150,7 +21150,7 @@
         {
           "name": "gemma4-audio-binds-source-semantic-state-and-size-checked-storage-residency",
           "path": "crates/sim_model/src/clip_text_encoder_multimodal.rs",
-          "pattern": "zed.comfy.gemma4-audio.v1[\\s\\S]*GEMMA4_MULTIMODAL_SOURCE_SHA256[\\s\\S]*pub fn resident_tensor_allocations[\\s\\S]*insert_gemma4_resident_allocation"
+          "pattern": "zed.sim.gemma4-audio.v1[\\s\\S]*GEMMA4_MULTIMODAL_SOURCE_SHA256[\\s\\S]*pub fn resident_tensor_allocations[\\s\\S]*insert_gemma4_resident_allocation"
         },
         {
           "name": "gemma4-audio-tests-reduced-exactness-capability-aliasing-and-failure-atomicity",
@@ -21355,7 +21355,7 @@
         {
           "name": "qwen-multimodal-resource-binds-source-and-component-identities",
           "path": "crates/sim_model/src/clip_text_encoder_multimodal.rs",
-          "pattern": "zed.comfy.qwen-multimodal-resource.v2[\\s\\S]*QWEN_MULTIMODAL_ROUTING_SOURCE_SHA256[\\s\\S]*SD1_CLIP_SOURCE_SHA256[\\s\\S]*tokenizer.semantic_digest[\\s\\S]*decoder.semantic_state_digest[\\s\\S]*vision.semantic_state_digest"
+          "pattern": "zed.sim.qwen-multimodal-resource.v2[\\s\\S]*QWEN_MULTIMODAL_ROUTING_SOURCE_SHA256[\\s\\S]*SD1_CLIP_SOURCE_SHA256[\\s\\S]*tokenizer.semantic_digest[\\s\\S]*decoder.semantic_state_digest[\\s\\S]*vision.semantic_state_digest"
         },
         {
           "name": "qwen-multimodal-resource-unions-storage-residency",
@@ -21473,7 +21473,7 @@
         {
           "name": "gemma-multimodal-resource-binds-source-and-component-identities",
           "path": "crates/sim_model/src/clip_text_encoder_multimodal.rs",
-          "pattern": "zed.comfy.gemma-multimodal-resource.v1[\\s\\S]*QWEN_MULTIMODAL_ROUTING_SOURCE_SHA256[\\s\\S]*LLAMA_SOURCE_SHA256[\\s\\S]*SD1_CLIP_SOURCE_SHA256[\\s\\S]*SPIECE_TOKENIZER_SOURCE_SHA256[\\s\\S]*tokenizer.semantic_digest[\\s\\S]*decoder.semantic_state_digest[\\s\\S]*vision.semantic_state_digest_sha256[\\s\\S]*audio.semantic_state_digest_sha256"
+          "pattern": "zed.sim.gemma-multimodal-resource.v1[\\s\\S]*QWEN_MULTIMODAL_ROUTING_SOURCE_SHA256[\\s\\S]*LLAMA_SOURCE_SHA256[\\s\\S]*SD1_CLIP_SOURCE_SHA256[\\s\\S]*SPIECE_TOKENIZER_SOURCE_SHA256[\\s\\S]*tokenizer.semantic_digest[\\s\\S]*decoder.semantic_state_digest[\\s\\S]*vision.semantic_state_digest_sha256[\\s\\S]*audio.semantic_state_digest_sha256"
         },
         {
           "name": "gemma-multimodal-resource-unions-size-consistent-storage-residency",
@@ -24346,7 +24346,7 @@
         {
           "name": "desktop-consumes-canonical-packaged-worker-config",
           "path": "crates/zed/src/zed.rs",
-          "pattern": "native_comfy_worker_launch[\\s\\S]*WorkerLaunchConfig::for_packaged_worker_profile"
+          "pattern": "native_sim_worker_launch[\\s\\S]*WorkerLaunchConfig::for_packaged_worker_profile"
         },
         {
           "name": "cli-consumes-canonical-packaged-worker-config",
@@ -31014,12 +31014,12 @@
         {
           "name": "patch-graph-cache-composition-preserves-model-identity-and-orders-digests",
           "path": "crates/sim_model/src/model_family.rs",
-          "pattern": "pub\\(crate\\) fn with_patch_graph_identity\\([\\s\\S]*zed\\.comfy\\.model-weights-cache-identity\\.v1[\\s\\S]*self\\.cache_identity\\.as_bytes\\(\\)[\\s\\S]*ordered_patch_graph_digest\\.as_bytes\\(\\)[\\s\\S]*pub\\(crate\\) fn with_tensors_preserving_identity\\([\\s\\S]*base_artifact_digest: self\\.base_artifact_digest\\.clone\\(\\)[\\s\\S]*cache_identity: self\\.cache_identity\\.clone\\(\\)[\\s\\S]*binding: self\\.binding\\.clone\\(\\)"
+          "pattern": "pub\\(crate\\) fn with_patch_graph_identity\\([\\s\\S]*zed\\.sim\\.model-weights-cache-identity\\.v1[\\s\\S]*self\\.cache_identity\\.as_bytes\\(\\)[\\s\\S]*ordered_patch_graph_digest\\.as_bytes\\(\\)[\\s\\S]*pub\\(crate\\) fn with_tensors_preserving_identity\\([\\s\\S]*base_artifact_digest: self\\.base_artifact_digest\\.clone\\(\\)[\\s\\S]*cache_identity: self\\.cache_identity\\.clone\\(\\)[\\s\\S]*binding: self\\.binding\\.clone\\(\\)"
         },
         {
           "name": "patch-graph-applied-cache-identity-binds-resolved-compute-and-storage-dtypes",
           "path": "crates/sim_model/src/patch_graph.rs",
-          "pattern": "fn applied_patch_digest\\([\\s\\S]*zed-comfy-patch-applied-compute-v1[\\s\\S]*for \\(target_key, \\(compute_dtype, output_dtype\\)\\) in touched_dtypes[\\s\\S]*patch_compute_dtype_tag\\(\\*compute_dtype\\)[\\s\\S]*patch_compute_dtype_tag\\(\\*output_dtype\\)[\\s\\S]*fn checked_compute_boundary_distinguishes_normal_and_low_vram_across_ordered_bf16_patches[\\s\\S]*assert_eq!\\(graph\\.identity\\(\\), structural_identity\\)[\\s\\S]*assert_ne!\\(normal\\.cache_identity\\(\\), low_vram\\.cache_identity\\(\\)\\)"
+          "pattern": "fn applied_patch_digest\\([\\s\\S]*zed-sim-patch-applied-compute-v1[\\s\\S]*for \\(target_key, \\(compute_dtype, output_dtype\\)\\) in touched_dtypes[\\s\\S]*patch_compute_dtype_tag\\(\\*compute_dtype\\)[\\s\\S]*patch_compute_dtype_tag\\(\\*output_dtype\\)[\\s\\S]*fn checked_compute_boundary_distinguishes_normal_and_low_vram_across_ordered_bf16_patches[\\s\\S]*assert_eq!\\(graph\\.identity\\(\\), structural_identity\\)[\\s\\S]*assert_ne!\\(normal\\.cache_identity\\(\\), low_vram\\.cache_identity\\(\\)\\)"
         },
         {
           "name": "patch-graph-tests-execute-semantic-family-and-rollback-closure",
@@ -32732,12 +32732,12 @@
         {
           "name": "invalid-profile-to-error-scope",
           "path": "crates/zed/src/zed.rs",
-          "pattern": "configured_native_comfy_profile_id"
+          "pattern": "configured_native_sim_profile_id"
         },
         {
           "name": "same-profile-policy-change-to-service-rebind",
           "path": "crates/zed/src/zed.rs",
-          "pattern": "NativeSimRuntimeBinding::new[\\s\\S]*requires_rebind[\\s\\S]*register_native_comfy_execution"
+          "pattern": "NativeSimRuntimeBinding::new[\\s\\S]*requires_rebind[\\s\\S]*register_native_sim_execution"
         },
         {
           "name": "legacy-evidence-to-disabled-settings-projection",
