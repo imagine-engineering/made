@@ -46,14 +46,14 @@ pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkf
 }
 
 #[cfg(all(test, unix))]
-fn graph_fixture_path(name: &str) -> std::path::PathBuf {
+fn cached_jvm_fixture_path(name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var_os(name).expect(name))
         .canonicalize()
         .expect(name)
 }
 
 #[cfg(all(test, unix))]
-async fn start_graph_jdtls(
+async fn start_cached_fixture_jdtls(
     root: &std::path::Path,
     options: serde_json::Value,
     bundles: &[std::path::PathBuf],
@@ -79,8 +79,8 @@ async fn start_graph_jdtls(
     if log::set_logger(&FixtureLogger).is_ok() {
         log::set_max_level(log::LevelFilter::Warn);
     }
-    let launcher = graph_fixture_path("GROOVY_JDTLS_LAUNCHER");
-    let provider_java = graph_fixture_path("GROOVY_LSP_JAVA_HOME");
+    let launcher = cached_jvm_fixture_path("GROOVY_JDTLS_LAUNCHER");
+    let provider_java = cached_jvm_fixture_path("GROOVY_LSP_JAVA_HOME");
     let provider_data = tempfile::tempdir().expect("fresh JDTLS provider state");
     let settings = serde_json::json!({"lsp": {"jdtls": {
         "binary": {"path": launcher, "arguments": [
@@ -198,10 +198,10 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
     };
     use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
 
-    let root = graph_fixture_path("GROOVY_GRADLE_GRAPH_ROOT");
-    let build_java = graph_fixture_path("GROOVY_BUILD_JAVA_HOME");
-    let gradle_installation = graph_fixture_path("GROOVY_GRADLE_HOME");
-    let gradle_user_home = graph_fixture_path("GRADLE_USER_HOME");
+    let root = cached_jvm_fixture_path("GROOVY_GRADLE_GRAPH_ROOT");
+    let build_java = cached_jvm_fixture_path("GROOVY_BUILD_JAVA_HOME");
+    let gradle_installation = cached_jvm_fixture_path("GROOVY_GRADLE_HOME");
+    let gradle_user_home = cached_jvm_fixture_path("GRADLE_USER_HOME");
     let options = serde_json::json!({
         "autobuild": {"enabled": false},
         "configuration": {"updateBuildConfiguration": "disabled"},
@@ -211,10 +211,10 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
             "user": {"home": gradle_user_home}, "arguments": ["--offline"],
         }},
     });
-    let (project, worktree_id, _provider_data) = start_graph_jdtls(
+    let (project, worktree_id, _provider_data) = start_cached_fixture_jdtls(
         &root,
         options,
-        &[graph_fixture_path("GROOVY_GRADLE_MODEL_JAR")],
+        &[cached_jvm_fixture_path("GROOVY_GRADLE_MODEL_JAR")],
         cx,
     )
     .await;
@@ -652,48 +652,13 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
 }
 
 #[cfg(all(test, unix))]
-#[gpui::test]
-#[ignore = "requires a disposable offline Maven graph, pinned JDTLS and its Maven provider"]
-async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestAppContext) {
-    use jvm_ui::{
-        DependenciesPanel, ShowMaven,
-        dependency_analyzer_item::{
-            DependencyAnalyzerFilter, DependencyAnalyzerItem, DependencyAnalyzerPresentation,
-            SelectDependencyAnalyzerFilter, ShowInDependencyDiagram,
-            ToggleDependencyAnalyzerPresentation,
-        },
-        dependency_diagram_item::{DependencyDiagramItem, SelectDependencyDiagramScope},
-        dependency_graph_canvas::{CanvasEdgeVariant, CanvasNodeKind},
-    };
-    use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
-
-    let root = graph_fixture_path("GROOVY_MAVEN_GRAPH_ROOT");
-    let settings = graph_fixture_path("GROOVY_MAVEN_GRAPH_SETTINGS");
-    let options = serde_json::json!({
-        "autobuild": {"enabled": false},
-        "configuration": {"maven": {"userSettings": settings}},
-        "import": {"gradle": {"enabled": false}, "maven": {
-            "enabled": true, "offline": {"enabled": true},
-        }},
-    });
-    let (project, worktree_id, _provider_data) = start_graph_jdtls(
-        &root,
-        options,
-        &[graph_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
-        cx,
-    )
-    .await;
-    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
-    let (_source, _open_source) = project
-        .update(cx, |project, cx| {
-            project.open_local_buffer_with_lsp(
-                root.join("application/src/main/java/evidence/GraphProbe.java"),
-                cx,
-            )
-        })
-        .await
-        .expect("Maven module source");
-    let pom = "application/pom.xml";
+async fn wait_for_maven_module(
+    lsp_store: &Entity<project::LspStore>,
+    worktree_id: WorktreeId,
+    pom: &str,
+    ready: impl Fn(&project::jvm_project::MavenProject) -> bool,
+    cx: &mut TestAppContext,
+) {
     let deadline = Instant::now() + Duration::from_secs(90);
     let mut refresh_at = Instant::now();
     loop {
@@ -704,10 +669,9 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
                 .is_some_and(|(snapshot, current)| {
                     current
                         && snapshot.projects.iter().any(|module| {
-                            module
-                                .maven
-                                .as_ref()
-                                .is_some_and(|maven| maven.pom.path.as_unix_str() == pom)
+                            module.maven.as_ref().is_some_and(|maven| {
+                                maven.pom.path.as_unix_str() == pom && ready(maven)
+                            })
                         })
                 })
         }) {
@@ -725,7 +689,17 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
             .timer(Duration::from_millis(100))
             .await;
     }
-    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+}
+
+#[cfg(all(test, unix))]
+async fn show_ready_maven_view(
+    lsp_store: &Entity<project::LspStore>,
+    worktree_id: WorktreeId,
+    cx: &mut VisualTestContext,
+) {
+    use jvm_ui::ShowMaven;
+    use language_tools::language_tool_tree::Refresh;
+
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.dispatch_action(ShowMaven);
     cx.run_until_parked();
@@ -746,6 +720,54 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
             .timer(Duration::from_millis(100))
             .await;
     }
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires a disposable offline Maven graph, pinned JDTLS and its Maven provider"]
+async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestAppContext) {
+    use jvm_ui::{
+        DependenciesPanel,
+        dependency_analyzer_item::{
+            DependencyAnalyzerFilter, DependencyAnalyzerItem, DependencyAnalyzerPresentation,
+            SelectDependencyAnalyzerFilter, ShowInDependencyDiagram,
+            ToggleDependencyAnalyzerPresentation,
+        },
+        dependency_diagram_item::{DependencyDiagramItem, SelectDependencyDiagramScope},
+        dependency_graph_canvas::{CanvasEdgeVariant, CanvasNodeKind},
+    };
+    use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
+
+    let root = cached_jvm_fixture_path("GROOVY_MAVEN_GRAPH_ROOT");
+    let settings = cached_jvm_fixture_path("GROOVY_MAVEN_GRAPH_SETTINGS");
+    let options = serde_json::json!({
+        "autobuild": {"enabled": false},
+        "configuration": {"maven": {"userSettings": settings}},
+        "import": {"gradle": {"enabled": false}, "maven": {
+            "enabled": true, "offline": {"enabled": true},
+        }},
+    });
+    let (project, worktree_id, _provider_data) = start_cached_fixture_jdtls(
+        &root,
+        options,
+        &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+        cx,
+    )
+    .await;
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let (_source, _open_source) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(
+                root.join("application/src/main/java/evidence/GraphProbe.java"),
+                cx,
+            )
+        })
+        .await
+        .expect("Maven module source");
+    let pom = "application/pom.xml";
+    wait_for_maven_module(&lsp_store, worktree_id, pom, |_| true, cx).await;
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    show_ready_maven_view(&lsp_store, worktree_id, cx).await;
     let select_application = |cx: &mut VisualTestContext| {
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.focus_panel::<DependenciesPanel>(window, cx);
@@ -1015,6 +1037,175 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
     });
     eprintln!(
         "Mounted Maven checked mediation and missing descriptors, diagram–analyzer navigation, and conflict and unresolved filters"
+    );
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires a cached Maven Help goal, pinned Maven wrapper and pinned JDTLS"]
+async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAppContext) {
+    use futures::future::{Either, select};
+    use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
+    use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
+
+    let root = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_ROOT");
+    let settings = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_SETTINGS");
+    let options = serde_json::json!({
+        "autobuild": {"enabled": false},
+        "configuration": {"maven": {"userSettings": settings}},
+        "import": {"gradle": {"enabled": false}, "maven": {
+            "enabled": true, "offline": {"enabled": true},
+        }},
+    });
+    let (project, worktree_id, _provider_data) = start_cached_fixture_jdtls(
+        &root,
+        options,
+        &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+        cx,
+    )
+    .await;
+    cx.update(terminal_view::init);
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let (_source, _open_source) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(
+                root.join("src/main/java/evidence/EffectivePomProbe.java"),
+                cx,
+            )
+        })
+        .await
+        .expect("Maven module source");
+    let goal = "org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom";
+    wait_for_maven_module(
+        &lsp_store,
+        worktree_id,
+        "pom.xml",
+        |maven| {
+            maven.profiles.get("evidence-selected") == Some(&true)
+                && maven.plugins.iter().any(|plugin| {
+                    plugin.group_id == "org.apache.maven.plugins"
+                        && plugin.artifact_id == "maven-help-plugin"
+                        && plugin.version.as_deref() == Some("3.5.2")
+                        && !plugin.managed_only
+                        && plugin.goals_known
+                        && plugin.goals.iter().any(|goal| goal.name == "effective-pom")
+                })
+        },
+        cx,
+    )
+    .await;
+
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    let async_cx = cx.update(|window, cx| window.to_async(cx));
+    let terminal_panel = TerminalPanel::load(workspace.downgrade(), async_cx)
+        .await
+        .expect("production terminal panel");
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_panel(terminal_panel.clone(), window, cx);
+    });
+    show_ready_maven_view(&lsp_store, worktree_id, cx).await;
+    cx.dispatch_action(ExpandAll);
+    let goal_row = panel.read_with(cx, |panel, _| {
+        let (status, rows, _) = panel.snapshot_for_test();
+        let (index, row) = rows
+            .iter()
+            .enumerate()
+            .find(|(_, row)| row.label == "effective-pom" && row.id.0.contains(":maven:goal:"))
+            .unwrap_or_else(|| panic!("the effective POM goal is selectable: {status:?}"));
+        assert!(
+            row.secondary_label.as_deref().is_some_and(|label| {
+                label.contains("run offline through Tasks")
+                    && !label.contains("execution unavailable")
+            }),
+            "the visible Maven goal description matches execution availability"
+        );
+        index
+    });
+    cx.dispatch_action(SelectFirst);
+    for _ in 0..goal_row {
+        cx.dispatch_action(SelectNext);
+    }
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let output = root.join("target/groovy-effective.xml");
+    assert!(
+        !output.exists(),
+        "the fixture starts without an effective model"
+    );
+    dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let terminal = loop {
+        cx.run_until_parked();
+        let terminal = terminal_panel.read_with(cx, |panel, cx| {
+            panel.panes().into_iter().find_map(|pane| {
+                pane.read(cx).items().find_map(|item| {
+                    let view = item.downcast::<TerminalView>()?;
+                    let terminal = view.read(cx).terminal();
+                    terminal.read(cx).task().map(|_| terminal.clone())
+                })
+            })
+        });
+        if let Some(terminal) = terminal {
+            break terminal;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the selected Maven goal did not open a Task terminal"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    let completed = terminal.read_with(cx, |terminal, cx| {
+        let task = &terminal.task().expect("Maven Task").spawned_task;
+        let arguments = [
+            "--offline",
+            "--settings",
+            settings.to_str().expect("settings path"),
+            "--file",
+            "pom.xml",
+            goal,
+        ]
+        .map(str::to_owned);
+        let (shell, shell_arguments) = task::ShellBuilder::new(&task.shell, false)
+            .build_with_command_intent(
+                Some(root.join("mvnw").to_str().expect("wrapper path").to_owned()),
+                &arguments,
+                true,
+                arguments.len(),
+            );
+        assert_eq!(task.command.as_deref(), Some(shell.as_str()));
+        assert_eq!(task.args, shell_arguments);
+        assert_eq!(
+            task.cwd.as_deref(),
+            Some(root.as_path()),
+            "the goal runs from the imported Maven root"
+        );
+        terminal.wait_for_completed_task(cx)
+    });
+    let result = match select(
+        completed,
+        cx.background_executor.timer(Duration::from_secs(70)),
+    )
+    .await
+    {
+        Either::Left((result, _)) => result.expect("Maven exit status"),
+        Either::Right(_) => panic!("the Maven Effective POM Task did not finish"),
+    };
+    assert!(
+        result.success(),
+        "the Maven Task failed: {}",
+        terminal.read_with(cx, |terminal, _| terminal.get_content())
+    );
+    let effective = std::fs::read_to_string(output).expect("generated effective POM");
+    let (_, properties) = effective
+        .split_once("<properties>")
+        .expect("effective properties");
+    let (properties, _) = properties
+        .split_once("</properties>")
+        .expect("end effective properties");
+    assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));
+    eprintln!(
+        "Mounted Maven ran the pinned Effective POM goal through the offline Task terminal with the selected settings profile"
     );
 }
 

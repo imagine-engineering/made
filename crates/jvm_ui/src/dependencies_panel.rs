@@ -7808,6 +7808,15 @@ fn annotate_operation_rows(
     selections: &HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
     unavailable: &HashMap<LanguageToolNodeId, String>,
 ) {
+    let describe_run = |label: &mut String, instruction: &str| {
+        if let Some(prefix) = label
+            .strip_suffix("execution unavailable in this view")
+            .or_else(|| label.strip_suffix("execution unavailable"))
+        {
+            label.truncate(prefix.len());
+            label.push_str(instruction);
+        }
+    };
     for row in rows {
         if let Some(receipt) = selections.get(&row.id) {
             let instruction = if matches!(
@@ -7818,10 +7827,10 @@ fn annotate_operation_rows(
             } else {
                 "select this row and use Run selected offline operation; configurable arguments unavailable"
             };
-            row.accessibility_label = row
-                .accessibility_label
-                .replace("execution unavailable in this view", instruction)
-                .replace("execution unavailable", instruction);
+            describe_run(&mut row.accessibility_label, instruction);
+            if let Some(detail) = &mut row.secondary_label {
+                describe_run(detail, "run offline through Tasks");
+            }
         }
         if let Some(reason) = unavailable.get(&row.id) {
             row.accessibility_label.push_str("; ");
@@ -13986,6 +13995,22 @@ mod tests {
         });
         let selections = panel.read_with(cx, |panel, _| {
             assert_eq!(panel.operation_selections.len(), 2);
+            if provider == GraphFixtureProvider::Maven {
+                for id in panel.operation_selections.keys() {
+                    let row = panel
+                        .host
+                        .visible_rows()
+                        .iter()
+                        .find(|row| &row.id == id)
+                        .expect("runnable Maven row");
+                    assert!(
+                        row.secondary_label
+                            .as_deref()
+                            .is_some_and(|detail| detail.contains("run offline through Tasks")),
+                        "runnable Maven rows should show their execution status"
+                    );
+                }
+            }
             let mut selections = panel
                 .operation_selections
                 .iter()

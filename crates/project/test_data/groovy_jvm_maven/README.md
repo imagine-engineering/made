@@ -114,3 +114,26 @@ cargo test --locked --offline -p tasks_ui --features jvm-workflow-test-support -
 
 The mounted test exercises cached collection, diagram and analyzer navigation,
 and conflict and unresolved filters against the real provider response.
+
+## Mounted Effective POM Task
+
+Use a disposable copy of the cached Maven home under `$fixture/maven-home`.
+Keep the existing fixture's compiler plugin cache and the pinned wrapper
+distribution, and include Maven Help Plugin 3.5.2 and its dependencies.
+Run `python3 crates/project/test_data/groovy_jvm_maven/prepare-effective-pom-fixture.py "$fixture"`
+to create the Java project and its offline settings.
+
+Set `GROOVY_EFFECTIVE_POM_ROOT` to `$fixture/effective-pom-project` and
+`GROOVY_EFFECTIVE_POM_SETTINGS` to `$fixture/settings with spaces.xml`. Use
+the same pinned JDTLS inputs as the mounted diagram test. Set
+`MAVEN_USER_HOME` to `$fixture/maven-home` and set `JAVA_HOME` to the pinned
+build JDK. Use the same offline test build and loopback-only sandbox.
+
+```sh
+<tasks_ui-test-binary> --ignored --exact --nocapture \
+  test_explorer::jvm_workflow::cached_effective_pom_runs_from_maven_view_through_tasks
+```
+
+The test selects the provider-reported goal in the Maven view and waits for
+the real Task terminal to exit. The generated effective POM must contain the
+settings-selected value in its top-level project properties.
