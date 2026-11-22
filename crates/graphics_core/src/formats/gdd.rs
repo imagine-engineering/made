@@ -173,6 +173,10 @@ pub enum GddArchiveError {
     GraphWireInsertionTypeMismatch(String),
     #[error("Select supported numeric nodes in one Graphite network.")]
     UnsupportedGraphClipboardSelection,
+    #[error(
+        "To cut a numeric group, select both ends of every connected wire in a network outside an active preview."
+    )]
+    UnsupportedGraphCutSelection,
     #[error("The clipboard does not contain an eligible Graphite numeric node group.")]
     UnsupportedGraphClipboard,
     #[error("Could not encode or decode the Graphite clipboard. {0}")]
@@ -2722,29 +2726,111 @@ impl InspectedGddV1 {
         node: &GddGraphNode,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
-        use graphite_document_graph_storage::attr::network::PINNED_ORDER;
-
         self.check_node_edit_target(node)?;
         if !node.can_delete_in_copy() {
             return Err(GddArchiveError::UnsupportedGraphNodeDeletion);
         }
-        let path = &node.network_path;
-        let original = self.runtime_graph().await?.into_interface()?;
+        self.remove_graph_nodes_in_copy(
+            std::slice::from_ref(node),
+            &node.network_path,
+            self.runtime_graph().await?.into_interface()?,
+            budget,
+        )
+        .await
+    }
+
+    pub async fn cut_graph_nodes_in_copy(
+        &self,
+        targets: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, String), GddArchiveError> {
+        let clipboard = self.copy_graph_nodes_to_clipboard(targets, budget).await?;
+        if let [node] = targets {
+            let copy = self
+                .delete_isolated_graph_node_in_copy(node, budget)
+                .await?;
+            return Ok((copy, clipboard));
+        }
+        let path = &targets
+            .first()
+            .ok_or(GddArchiveError::UnsupportedGraphCutSelection)?
+            .network_path;
+        let mut original = self.runtime_graph().await?.into_interface()?;
+        let identifiers = targets.iter().map(|node| node.local_id).collect();
+        if original.previewing(path) != Previewing::No
+            || !targets.iter().all(|target| {
+                target.can_supply_numeric_export
+                    && original
+                        .document_node(&target.local_id, path)
+                        .is_some_and(|node| {
+                            node.inputs
+                                .iter()
+                                .all(|input| graph_clipboard_input(input, &identifiers, &[]))
+                        })
+            })
+            || !original.outward_wires(path).is_some_and(|wires| {
+                wires
+                    .iter()
+                    .filter(|(output, _)| {
+                        output
+                            .node_id()
+                            .is_some_and(|node| identifiers.contains(&node))
+                    })
+                    .flat_map(|(_, inputs)| inputs)
+                    .all(|input| {
+                        input
+                            .node_id()
+                            .is_some_and(|node| identifiers.contains(&node))
+                    })
+            })
+        {
+            return Err(GddArchiveError::UnsupportedGraphCutSelection);
+        }
+        let network = original
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        for target in targets {
+            check_clipboard_numeric_branch(network, target.local_id, &[])?;
+        }
+        let copy = self
+            .remove_graph_nodes_in_copy(targets, path, original, budget)
+            .await?;
+        Ok((copy, clipboard))
+    }
+
+    async fn remove_graph_nodes_in_copy(
+        &self,
+        targets: &[GddGraphNode],
+        path: &[NodeId],
+        original: NodeNetworkInterface,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::network::PINNED_ORDER;
+
+        let network_id = targets
+            .first()
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
+            .network_id;
+        let expected = targets
+            .iter()
+            .map(|node| node.storage_id)
+            .collect::<BTreeSet<_>>();
         let mut interface = original.clone();
-        let stored = self
-            .document
-            .registry()
-            .node_instances
-            .get(&node.storage_id)
-            .ok_or(GddArchiveError::StaleGraphNode)?;
         let old_order = interface
             .network_metadata(path)
             .ok_or(GddArchiveError::StaleGraphNode)?
             .persistent_metadata
             .pinned_node_order
             .clone();
-        interface.delete_nodes(vec![node.local_id], false, path);
-        if interface.document_node(&node.local_id, path).is_some() {
+        interface.delete_nodes(
+            targets.iter().map(|node| node.local_id).collect(),
+            false,
+            path,
+        );
+        if targets
+            .iter()
+            .any(|node| interface.document_node(&node.local_id, path).is_some())
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let new_order = &interface
@@ -2753,44 +2839,53 @@ impl InspectedGddV1 {
             .persistent_metadata
             .pinned_node_order;
         let order_changed = *new_order != old_order;
-        let mut edits = vec![EditorDelta::Graph(RuntimeDelta::RemoveNode {
-            network_path: path.clone(),
-            node_id: node.local_id,
-        })];
+        let mut edits = targets
+            .iter()
+            .map(|node| {
+                EditorDelta::Graph(RuntimeDelta::RemoveNode {
+                    network_path: path.to_vec(),
+                    node_id: node.local_id,
+                })
+            })
+            .collect::<Vec<_>>();
         if order_changed {
             edits.push(EditorDelta::NetworkMetadata {
-                network_path: path.clone(),
+                network_path: path.to_vec(),
                 change: NetworkMetadataChange::PinnedOrder(new_order.clone()),
             });
         }
         let (owner, staged) = self.fork_working_copy(&budget).await?;
         // The source deletion removes the persistent storage ID along with the node.
         let batch = prepare_graph_node_edit(&owner, &original, &edits)?;
-        let [RegistryDelta::RemoveNode { id, snapshot }, rest @ ..] = batch.ops.as_slice() else {
-            return Err(GddArchiveError::IncompleteGraphNodeEdit);
-        };
-        let resources = if order_changed {
-            match rest {
-                [
-                    RegistryDelta::ChangeNetworkAttribute { id, delta },
-                    resources @ ..,
-                ] if *id == stored.network() && delta.key == PINNED_ORDER => resources,
-                _ => return Err(GddArchiveError::IncompleteGraphNodeEdit),
+        let mut removed = BTreeSet::new();
+        let mut order_updates = 0;
+        if !batch.ops.iter().all(|operation| match operation {
+            RegistryDelta::RemoveNode { id, snapshot } => {
+                removed.insert(*id)
+                    && owner
+                        .registry()
+                        .node_instances
+                        .get(id)
+                        .is_some_and(|stored| snapshot.value_equal(stored))
             }
-        } else {
-            rest
-        };
-        if *id != node.storage_id
-            || !snapshot.value_equal(stored)
-            || !resources
-                .iter()
-                .all(|operation| matches!(operation, RegistryDelta::RemoveResource { .. }))
+            RegistryDelta::ChangeNetworkAttribute { id, delta }
+                if *id == network_id && delta.key == PINNED_ORDER =>
+            {
+                order_updates += 1;
+                true
+            }
+            RegistryDelta::RemoveResource { .. } => true,
+            _ => false,
+        }) || removed != expected
+            || order_updates != usize::from(order_changed)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if actual.document_node(&node.local_id, path).is_some()
+        if targets
+            .iter()
+            .any(|node| actual.document_node(&node.local_id, path).is_some())
             || !actual.network_metadata(path).is_some_and(|metadata| {
                 metadata.persistent_metadata.pinned_node_order == *new_order
             })
@@ -5686,6 +5781,88 @@ mod tests {
                 empty.folder_files().expect("original blank folder"),
                 original
             );
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_011_1_cuts_a_closed_numeric_group_in_one_interaction() {
+        futures::executor::block_on(async {
+            let original = open_gdd_zip(&numeric_graph_fixture().await, budget())
+                .await
+                .expect("source graph");
+            let nodes = original.graph_nodes().await.expect("source nodes");
+            let consumer = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("downstream node");
+            let source = consumer
+                .numeric_connection_source(&nodes)
+                .expect("upstream node");
+            let unrelated = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(9))
+                .expect("unrelated node in the same scope");
+            for linked in [source, consumer] {
+                assert!(matches!(
+                    original
+                        .cut_graph_nodes_in_copy(&[linked.clone(), unrelated.clone()], budget())
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphCutSelection)
+                ));
+            }
+            let (cut, clipboard) = original
+                .cut_graph_nodes_in_copy(&[source.clone(), consumer.clone()], budget())
+                .await
+                .expect("cut both connected nodes");
+            let surviving = &cut.document.registry().node_instances;
+            for (id, node) in &original.document.registry().node_instances {
+                if [source.storage_id, consumer.storage_id].contains(id) {
+                    assert!(!surviving.contains_key(id));
+                } else {
+                    assert_eq!(surviving.get(id), Some(node));
+                }
+            }
+            let undo = cut
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores both nodes and their wire");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo cuts both nodes again");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(cut.document.registry())
+            );
+            let graph = cut.graph_inspection().await.expect("saved cut graph");
+            let network = graph
+                .networks
+                .iter()
+                .find(|network| network.id == consumer.network_id())
+                .expect("original nested scope");
+            let pasted = cut
+                .paste_graph_nodes_in_copy(network, &clipboard, budget())
+                .await
+                .expect("paste the cut nodes");
+            let nodes = pasted.graph_nodes().await.expect("restored group");
+            let pasted_consumer = nodes
+                .iter()
+                .find(|node| node.has_numeric_connection())
+                .expect("restored internal wire");
+            assert_ne!(pasted_consumer.storage_id, consumer.storage_id);
+            assert!(matches!(
+                pasted
+                    .preview_graph_numeric_output(pasted_consumer)
+                    .await
+                    .expect("evaluate the pasted group"),
+                GddNumericValue::Number(-1.)
+            ));
         });
     }
 
