@@ -2879,6 +2879,9 @@ impl Workspace {
         };
 
         let opposite_dock = self.dock_at_position(opposite_position).read(cx);
+        if opposite_dock.is_overlay_visible(cx) {
+            return None;
+        }
         let panel = opposite_dock.visible_panel()?;
         let mut size_state = opposite_dock
             .stored_panel_size_state(panel.as_ref())
@@ -9559,6 +9562,9 @@ impl Workspace {
                 continue;
             }
             let dock = self.dock_at_position(position).read(cx);
+            if dock.is_overlay_visible(cx) {
+                continue;
+            }
             let Some(panel) = dock.visible_panel() else {
                 continue;
             };
@@ -9610,7 +9616,19 @@ impl Workspace {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<Stateful<Div>> {
-        if self.zoomed_position == Some(position) {
+        self.render_dock_at(position, dock, false, window, cx)
+    }
+
+    fn render_dock_at(
+        &self,
+        position: DockPosition,
+        dock: &Entity<Dock>,
+        overlay: bool,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<Stateful<Div>> {
+        if self.zoomed_position == Some(position) || overlay != dock.read(cx).is_overlay_visible(cx)
+        {
             return None;
         }
 
@@ -9637,6 +9655,7 @@ impl Workspace {
 
         let mut container = div()
             .id(dock_element_id)
+            .debug_selector(|| dock_element_id.to_owned())
             .when(dock_is_open, |this| {
                 this.role(gpui::Role::Complementary)
                     .aria_label(dock_label)
@@ -9656,6 +9675,21 @@ impl Workspace {
         let dock = dock.read(cx);
         if let Some(panel) = dock.visible_panel() {
             let size_state = dock.stored_panel_size_state(panel.as_ref());
+            if overlay {
+                let size = size_state
+                    .and_then(|state| state.size)
+                    .unwrap_or_else(|| panel.default_size(window, cx));
+                let overlay = container.absolute().occlude().shadow_lg();
+                return Some(match position {
+                    DockPosition::Left => overlay.left_0().top_0().bottom_0().w(size).max_w_full(),
+                    DockPosition::Right => {
+                        overlay.right_0().top_0().bottom_0().w(size).max_w_full()
+                    }
+                    DockPosition::Bottom => {
+                        overlay.bottom_0().left_0().right_0().h(size).max_h_full()
+                    }
+                });
+            }
             let min_size = panel.min_size(window, cx);
             if position.axis() == Axis::Horizontal {
                 let flex_grow =
@@ -9862,6 +9896,7 @@ impl Workspace {
     ) -> impl IntoElement {
         div()
             .id("editor-region")
+            .debug_selector(|| "editor-region".to_owned())
             .role(gpui::Role::Main)
             .aria_label("Editor")
             .when(window.is_a11y_active(), |this| {
@@ -9962,14 +9997,17 @@ impl Workspace {
         let workspace_width = self.bounds.size.width;
         let mut size = new_size.min(workspace_width - RESIZE_HANDLE_SIZE);
 
-        self.right_dock.read_with(cx, |right_dock, cx| {
+        if !self.left_dock.read(cx).is_overlay_visible(cx)
+            && !self.right_dock.read(cx).is_overlay_visible(cx)
+        {
+            let right_dock = self.right_dock.read(cx);
             let right_dock_size = right_dock
                 .stored_active_panel_size(window, cx)
                 .unwrap_or(Pixels::ZERO);
             if right_dock_size + size > workspace_width {
                 size = workspace_width - right_dock_size
             }
-        });
+        }
 
         let flex_grow = self.dock_flex_for_size(DockPosition::Left, size, window, cx);
         self.left_dock.update(cx, |left_dock, cx| {
@@ -9987,14 +10025,17 @@ impl Workspace {
     fn resize_right_dock(&mut self, new_size: Pixels, window: &mut Window, cx: &mut App) {
         let workspace_width = self.bounds.size.width;
         let mut size = new_size.min(workspace_width - RESIZE_HANDLE_SIZE);
-        self.left_dock.read_with(cx, |left_dock, cx| {
+        if !self.right_dock.read(cx).is_overlay_visible(cx)
+            && !self.left_dock.read(cx).is_overlay_visible(cx)
+        {
+            let left_dock = self.left_dock.read(cx);
             let left_dock_size = left_dock
                 .stored_active_panel_size(window, cx)
                 .unwrap_or(Pixels::ZERO);
             if left_dock_size + size > workspace_width {
                 size = workspace_width - left_dock_size
             }
-        });
+        }
         let flex_grow = self.dock_flex_for_size(DockPosition::Right, size, window, cx);
         self.right_dock.update(cx, |right_dock, cx| {
             if WorkspaceSettings::get_global(cx)
@@ -11006,6 +11047,19 @@ impl Render for Workspace {
                                     "effective workspace presentation is always Editor without multiplayer-tools"
                                 ),
                             })
+                            .children([
+                                (DockPosition::Left, &self.left_dock),
+                                (DockPosition::Right, &self.right_dock),
+                                (DockPosition::Bottom, &self.bottom_dock),
+                            ].into_iter().filter_map(|(position, dock)| {
+                                #[cfg(feature = "multiplayer-tools")]
+                                if self.workspace_presentation() == WorkspacePresentation::Collaborative
+                                    && !self.collaborative_workspace.read(cx).layout_state(cx).dock_requested(position)
+                                {
+                                    return None;
+                                }
+                                self.render_dock_at(position, dock, true, window, cx)
+                            }))
                             .children(self.zoomed.as_ref().and_then(|view| {
                                 let zoomed_view = view.upgrade()?;
                                 let div = div()

@@ -80,8 +80,8 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn starts_open(&self, _window: &Window, _cx: &App) -> bool {
         false
     }
-    fn hide_on_focus_loss(&self) -> bool {
-        false
+    fn dock_mode(&self) -> DockMode {
+        DockMode::Pinned
     }
     fn set_zoomed(&mut self, _zoomed: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn set_active(&mut self, _active: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
@@ -117,7 +117,7 @@ pub trait PanelHandle: Send + Sync {
     fn position_is_valid(&self, position: DockPosition, cx: &App) -> bool;
     fn set_position(&self, position: DockPosition, window: &mut Window, cx: &mut App);
     fn is_zoomed(&self, window: &Window, cx: &App) -> bool;
-    fn hide_on_focus_loss(&self, cx: &App) -> bool;
+    fn dock_mode(&self, cx: &App) -> DockMode;
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App);
     fn set_active(&self, active: bool, window: &mut Window, cx: &mut App);
     fn remote_id(&self) -> Option<proto::PanelId>;
@@ -195,8 +195,8 @@ where
         self.read(cx).is_zoomed(window, cx)
     }
 
-    fn hide_on_focus_loss(&self, cx: &App) -> bool {
-        self.read(cx).hide_on_focus_loss()
+    fn dock_mode(&self, cx: &App) -> DockMode {
+        self.read(cx).dock_mode()
     }
 
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App) {
@@ -323,6 +323,21 @@ pub enum DockPosition {
     Right,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DockMode {
+    #[default]
+    Pinned,
+    Unpinned,
+    Overlay,
+}
+
+impl DockMode {
+    pub fn is_pinned(&self) -> bool {
+        *self == Self::Pinned
+    }
+}
+
 impl From<settings::DockPosition> for DockPosition {
     fn from(value: settings::DockPosition) -> Self {
         match value {
@@ -396,7 +411,9 @@ fn panel_uses_flexible_width(
     window: &Window,
     cx: &App,
 ) -> bool {
-    position.axis() == Axis::Horizontal && panel.has_flexible_size(window, cx)
+    position.axis() == Axis::Horizontal
+        && panel.dock_mode(cx) != DockMode::Overlay
+        && panel.has_flexible_size(window, cx)
 }
 
 fn resize_panel_entry(
@@ -510,6 +527,11 @@ impl Dock {
         self.is_open
     }
 
+    pub(crate) fn is_overlay_visible(&self, cx: &App) -> bool {
+        self.visible_panel()
+            .is_some_and(|panel| panel.dock_mode(cx) == DockMode::Overlay)
+    }
+
     fn resizable(&self, cx: &App) -> bool {
         !(self.zoom_layer_open || self.modal_layer.read(cx).has_active_modal())
     }
@@ -590,7 +612,7 @@ impl Dock {
             .visible_panel()
             .filter(|panel| {
                 panel.panel_id() == panel_id
-                    && panel.hide_on_focus_loss(cx)
+                    && !panel.dock_mode(cx).is_pinned()
                     && !panel.panel_focus_handle(cx).contains_focused(window, cx)
             })
             .cloned()
@@ -881,7 +903,7 @@ impl Dock {
             let visible = serialized.visible
                 && self
                     .active_panel()
-                    .is_none_or(|panel| !panel.hide_on_focus_loss(cx));
+                    .is_none_or(|panel| panel.dock_mode(cx).is_pinned());
             if serialized.zoom
                 && visible
                 && let Some(panel) = self.active_panel()

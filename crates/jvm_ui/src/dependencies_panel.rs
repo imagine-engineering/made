@@ -30,7 +30,9 @@ use task::{TaskContext, VariableName};
 use ui::{Tooltip, prelude::*};
 use util::rel_path::RelPath;
 use workspace::{
-    Panel, Workspace, dock::DockPosition, dock::PanelEvent, notifications::DetachAndPromptErr as _,
+    Panel, Workspace,
+    dock::{DockMode, DockPosition, PanelEvent},
+    notifications::DetachAndPromptErr as _,
     workspace_scoped_state_key,
 };
 
@@ -235,7 +237,7 @@ impl MavenGraphScope {
 
 const PANEL_KEY: &str = "GroovyDependenciesPanel";
 const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
-const VIEW_STATE_VERSION: u32 = 10;
+const VIEW_STATE_VERSION: u32 = 11;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
 const BASIC_MAVEN_PHASES: &[&str] = &[
@@ -261,8 +263,8 @@ struct BuildViewPreferences {
     maven_graph_scope: MavenGraphScope,
     graph_fact_presentation: GraphFactPresentation,
     ordered_operations_expanded: bool,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    dock_unpinned: bool,
+    #[serde(default, skip_serializing_if = "DockMode::is_pinned")]
+    dock_mode: DockMode,
 }
 
 impl Default for BuildViewPreferences {
@@ -284,7 +286,7 @@ impl Default for BuildViewPreferences {
             maven_graph_scope: MavenGraphScope::All,
             graph_fact_presentation: GraphFactPresentation::Tree,
             ordered_operations_expanded: false,
-            dock_unpinned: false,
+            dock_mode: DockMode::Pinned,
         }
     }
 }
@@ -592,11 +594,27 @@ impl BuildViewPreferences {
                     ..Default::default()
                 })
             }
-            9 | VIEW_STATE_VERSION => {
-                let mut preferences: Self = serde_json::from_str(serialized)?;
-                preferences.version = VIEW_STATE_VERSION;
-                Ok(preferences)
+            9 | 10 => {
+                let mut previous: serde_json::Value = serde_json::from_str(serialized)?;
+                let fields = previous
+                    .as_object_mut()
+                    .context("Invalid build view preferences")?;
+                if header.version == 10
+                    && fields
+                        .remove("dock_unpinned")
+                        .map(serde_json::from_value::<bool>)
+                        .transpose()?
+                        .unwrap_or_default()
+                {
+                    fields.insert(
+                        "dock_mode".into(),
+                        serde_json::to_value(DockMode::Unpinned)?,
+                    );
+                }
+                fields.insert("version".into(), VIEW_STATE_VERSION.into());
+                Ok(serde_json::from_value(previous)?)
             }
+            VIEW_STATE_VERSION => Ok(serde_json::from_str(serialized)?),
             _ => anyhow::bail!("Unsupported build view preferences version"),
         }
     }
@@ -2950,6 +2968,13 @@ impl DependencyNavigation {
 }
 
 impl DependenciesPanel {
+    fn set_dock_mode(&mut self, mode: DockMode, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_handle.focus(window, cx);
+        self.preferences.dock_mode = mode;
+        self.persist_preferences(cx);
+        cx.notify();
+    }
+
     fn toggle_panel_zoom(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_handle.focus(window, cx);
         cx.emit(if self.zoomed {
@@ -8303,8 +8328,8 @@ impl Panel for DependenciesPanel {
         cx.notify();
     }
 
-    fn hide_on_focus_loss(&self) -> bool {
-        self.preferences.dock_unpinned
+    fn dock_mode(&self) -> DockMode {
+        self.preferences.dock_mode
     }
 
     fn icon(&self, _: &Window, _: &App) -> Option<ui::IconName> {
@@ -8408,10 +8433,17 @@ impl Render for DependenciesPanel {
         } else {
             "Maximize Groovy panel"
         };
-        let pin_label = if self.preferences.dock_unpinned {
-            "Pin Groovy panel"
-        } else {
+        let pinned = self.preferences.dock_mode.is_pinned();
+        let pin_label = if pinned {
             "Unpin Groovy panel"
+        } else {
+            "Pin Groovy panel"
+        };
+        let overlay = self.preferences.dock_mode == DockMode::Overlay;
+        let overlay_label = if overlay {
+            "Dock Groovy panel"
+        } else {
+            "Undock Groovy panel"
         };
         v_flex()
             .id("groovy-dependencies-panel")
@@ -8557,15 +8589,21 @@ impl Render for DependenciesPanel {
                     .child(self.view.label())
                     .child(
                         IconButton::new("groovy-panel-pin", ui::IconName::Pin)
-                            .toggle_state(!self.preferences.dock_unpinned)
+                            .toggle_state(pinned)
                             .shape(ui::IconButtonShape::Square)
                             .tab_index(0_isize)
                             .aria_label(pin_label)
                             .tooltip(Tooltip::text(pin_label))
-                            .on_click(cx.listener(|panel, _, _, cx| {
-                                panel.preferences.dock_unpinned = !panel.preferences.dock_unpinned;
-                                panel.persist_preferences(cx);
-                                cx.notify();
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.set_dock_mode(if pinned { DockMode::Unpinned } else { DockMode::Pinned }, window, cx);
+                            })),
+                    )
+                    .child(
+                        Button::new("groovy-panel-undock", if overlay { "Dock" } else { "Undock" })
+                            .aria_label(overlay_label)
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.set_dock_mode(if overlay { DockMode::Unpinned } else { DockMode::Overlay }, window, cx);
                             })),
                     )
                     .child(
@@ -9693,13 +9731,24 @@ mod tests {
             pinned
         );
         let unpinned = BuildViewPreferences {
-            dock_unpinned: true,
+            dock_mode: DockMode::Unpinned,
             ..pinned
         };
-        let serialized = serde_json::to_string(&unpinned).expect("workspace preferences");
+        previous["version"] = serde_json::json!(10);
+        previous["dock_unpinned"] = serde_json::json!(true);
+        assert_eq!(
+            BuildViewPreferences::restore(Some(&previous.to_string()))
+                .expect("version 10 migration"),
+            unpinned
+        );
+        let overlay = BuildViewPreferences {
+            dock_mode: DockMode::Overlay,
+            ..unpinned
+        };
+        let serialized = serde_json::to_string(&overlay).expect("workspace preferences");
         assert_eq!(
             BuildViewPreferences::restore(Some(&serialized)).expect("restored preferences"),
-            unpinned
+            overlay
         );
     }
 
@@ -26421,7 +26470,10 @@ mod tests {
         assert!(dock.read_with(cx, |dock, _| dock.is_open()));
         focus_groovy(cx);
         activate_dock_control(cx, "Unpin Groovy panel");
-        assert!(panel.read_with(cx, |panel, _| panel.preferences.dock_unpinned));
+        assert_eq!(
+            panel.read_with(cx, |panel, _| panel.preferences.dock_mode),
+            DockMode::Unpinned
+        );
         focus_groovy(cx);
         assert!(dock.read_with(cx, |dock, _| dock.is_open()));
 
@@ -26470,6 +26522,54 @@ mod tests {
         });
         assert!(!dock.read_with(cx, |dock, _| dock.is_open()));
         focus_groovy(cx);
+        let docked_editor = cx
+            .debug_bounds("editor-region")
+            .expect("docked editor bounds");
+        activate_dock_control(cx, "Undock Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let overlay_editor = cx
+            .debug_bounds("editor-region")
+            .expect("overlay editor bounds");
+        let right_overlay = cx.debug_bounds("right-dock").expect("right overlay bounds");
+        assert!(overlay_editor.size.width > docked_editor.size.width);
+        assert_eq!(right_overlay.size.width, px(324.));
+        assert_eq!(right_overlay.right(), overlay_editor.right());
+        for (position, selector) in [
+            (DockPosition::Left, "left-dock"),
+            (DockPosition::Right, "right-dock"),
+        ] {
+            panel.update_in(cx, |panel, window, cx| {
+                panel.set_position(position, window, cx)
+            });
+            cx.run_until_parked();
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            assert_eq!(cx.debug_bounds("editor-region"), Some(overlay_editor));
+            let overlay = cx
+                .debug_bounds(selector)
+                .expect("overlay at the moved edge");
+            assert_eq!(overlay.size.width, px(324.));
+            if position == DockPosition::Left {
+                assert_eq!(overlay.left(), overlay_editor.left());
+            } else {
+                assert_eq!(overlay.right(), overlay_editor.right());
+            }
+        }
+        focus_editor(cx);
+        assert!(!dock.read_with(cx, |dock, _| dock.is_open()));
+        assert_eq!(cx.debug_bounds("editor-region"), Some(overlay_editor));
+        focus_groovy(cx);
+        assert_eq!(cx.debug_bounds("editor-region"), Some(overlay_editor));
+        assert_eq!(cx.debug_bounds("right-dock"), Some(right_overlay));
+        panel.read_with(cx, |panel, _| {
+            assert_eq!(panel.host.selected(), Some(&member_id))
+        });
+        activate_dock_control(cx, "Dock Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(cx.debug_bounds("editor-region"), Some(docked_editor));
+        assert_eq!(
+            panel.read_with(cx, |panel, _| panel.preferences.dock_mode),
+            DockMode::Unpinned
+        );
         activate_dock_control(cx, "Pin Groovy panel");
         focus_editor(cx);
         assert!(dock.read_with(cx, |dock, _| dock.is_open()));
@@ -26668,6 +26768,24 @@ mod tests {
             project_queries.load(Ordering::SeqCst),
             queries_before_options
         );
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let docked_editor = cx
+            .debug_bounds("editor-region")
+            .expect("editor above bottom dock");
+        activate_dock_control(cx, "Undock Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let overlay_editor = cx
+            .debug_bounds("editor-region")
+            .expect("editor behind bottom overlay");
+        let bottom_overlay = cx
+            .debug_bounds("bottom-dock")
+            .expect("bottom overlay bounds");
+        assert!(overlay_editor.size.height > docked_editor.size.height);
+        assert_eq!(bottom_overlay.bottom(), overlay_editor.bottom());
+        assert_eq!(bottom_overlay.size.width, overlay_editor.size.width);
+        activate_dock_control(cx, "Pin Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(cx.debug_bounds("editor-region"), Some(docked_editor));
         let write = panel
             .update(cx, |panel, _| panel.preferences_write.take())
             .expect("ordered preferences write");
