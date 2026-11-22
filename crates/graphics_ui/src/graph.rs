@@ -6,7 +6,7 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-    ImportOrExport,
+    GddRootLayerChange, ImportOrExport,
 };
 use std::{
     cell::Cell,
@@ -20,6 +20,7 @@ use workspace::{
     item::{Item, ItemEvent, SaveOptions},
 };
 
+use crate::layers::SavedLayerAction;
 use crate::session::{
     AddMode, ArtboardHistoryDirection, DivideMode, GraphicsSession, UnaryNumericMode,
 };
@@ -125,6 +126,10 @@ pub(crate) enum SavedGraphAction {
     BoxSelection {
         bounds: [[f64; 2]; 2],
         modifiers: Modifiers,
+    },
+    EditLayer {
+        index: usize,
+        change: GddRootLayerChange,
     },
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
@@ -237,6 +242,7 @@ pub(crate) struct SavedGraphView<'a> {
     pub selection: &'a BTreeSet<usize>,
     pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
+    pub working: bool,
     pub revision: &'a Arc<()>,
     pub drag_start: Option<&'a SavedGraphDragStart>,
     pub box_selection: &'a SavedGraphBoxSelection,
@@ -288,6 +294,14 @@ pub(crate) fn render_saved_graph(
         .iter()
         .enumerate()
         .map(|(index, node)| (node.storage_id(), (index, node)))
+        .collect::<BTreeMap<_, _>>();
+    let layers_by_id = geometry
+        .root_layers
+        .as_ref()
+        .ok()
+        .into_iter()
+        .flatten()
+        .map(|layer| (layer.storage_id, layer))
         .collect::<BTreeMap<_, _>>();
     let can_connect_export = view.can_start_connection
         && view.pending_source.is_none()
@@ -596,6 +610,9 @@ pub(crate) fn render_saved_graph(
         }))
         .children(geometry.nodes.iter().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
+            let hidden = layers_by_id
+                .get(&geometry.storage_id)
+                .is_some_and(|layer| !layer.visible);
             let [top_left, bottom_right] = geometry.bounds.map(project);
             let button = saved_graph_button(
                 div()
@@ -616,8 +633,16 @@ pub(crate) fn render_saved_graph(
                             colors.border
                         },
                     )
-                    .bg(colors.surface_background)
-                    .child(Label::new(node.display_name().to_owned()).size(LabelSize::XSmall)),
+                    .bg(if hidden {
+                        colors.surface_background.opacity(0.5)
+                    } else {
+                        colors.surface_background
+                    })
+                    .child(
+                        Label::new(node.display_name().to_owned())
+                            .size(LabelSize::XSmall)
+                            .color(if hidden { Color::Muted } else { Color::Default }),
+                    ),
                 node.label().to_owned(),
                 SavedGraphAction::SelectNode {
                     index,
@@ -743,15 +768,19 @@ pub(crate) fn render_saved_graph(
                         node.display_name().to_owned(),
                         view.selected == Some(index) || view.selection.contains(&index),
                         view.pending_source.is_none(),
-                        move |window, cx| {
-                            dispatch(
-                                SavedGraphAction::SelectNode {
+                        view.working
+                            .then_some(view.pending_source.is_none() && view.can_start_connection),
+                        move |action, window, cx| {
+                            let action = match action {
+                                SavedLayerAction::Select => SavedGraphAction::SelectNode {
                                     index,
                                     extend: false,
                                 },
-                                window,
-                                cx,
-                            );
+                                SavedLayerAction::Edit(change) => {
+                                    SavedGraphAction::EditLayer { index, change }
+                                }
+                            };
+                            dispatch(action, window, cx);
                         },
                     ))
                 }))

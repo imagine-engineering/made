@@ -17,8 +17,8 @@ use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddSavedView, ImportOrExport, InspectedGddV1,
-        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayerChange, GddSavedView, ImportOrExport,
+        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -1691,6 +1691,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::MoveNode { index, position } => {
                 self.move_canvas_nodes(index, position, window, cx);
             }
+            SavedGraphAction::EditLayer { index, change } => {
+                self.edit_canvas_layer(index, change, window, cx);
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -1730,6 +1733,51 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn edit_canvas_layer(
+        &mut self,
+        index: usize,
+        change: GddRootLayerChange,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+            return;
+        };
+        let Some(node) = form
+            .nodes
+            .get(index)
+            .filter(|node| {
+                form.pending_canvas_source.is_none()
+                    && graph.root_layers.as_ref().is_ok_and(|layers| {
+                        layers
+                            .iter()
+                            .any(|layer| layer.storage_id == node.storage_id())
+                    })
+            })
+            .cloned()
+        else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .edit_root_layer_in_copy(&node, change, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
     }
 
     fn move_canvas_nodes(
@@ -3136,8 +3184,9 @@ impl GraphiteDocumentItem {
                                         selection: &form.node_selection,
                                         pending_source: form.pending_canvas_source,
                                         can_start_connection: self.copy_task.is_none(),
+                                        working,
                                         revision: &form.revision,
-                                        drag_start: self.model.read(cx).working.as_ref().map(|_| &form.saved_graph_drag_start),
+                                        drag_start: working.then_some(&form.saved_graph_drag_start),
                                         box_selection: &form.saved_graph_box_selection,
                                     },
                                     window, cx,
@@ -8447,6 +8496,137 @@ mod tests {
         }
         assert_eq!(
             filesystem.load_bytes(&path).await.expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_019_020_2_workspace_edits_working_layer_visibility_and_locking(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = graph_layer_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/working-layer-settings.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the layer graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        let invoke = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        invoke(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-LAYER-VISIBILITY-2")
+                .is_none()
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-LAYER-LOCK-2").is_none());
+        let (initial_revision, parent_id, child_id, sibling_id) =
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                let [sibling, parent, child, ..] = form.nodes.as_slice() else {
+                    panic!("root layers")
+                };
+                assert_eq!(
+                    form.selected_node().map(GddGraphNode::storage_id),
+                    Some(parent.storage_id())
+                );
+                (
+                    item.model.read(cx).revision.clone(),
+                    parent.storage_id(),
+                    child.storage_id(),
+                    sibling.storage_id(),
+                )
+            });
+        let check = |graph: &GddGraphGeometry, visible, locked| {
+            let layers = graph.root_layers.as_ref().expect("saved layer tree");
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| (layer.storage_id, layer.depth, layer.visible, layer.locked))
+                    .collect::<Vec<_>>(),
+                [
+                    (parent_id, 0, true, false),
+                    (child_id, 1, visible, locked),
+                    (sibling_id, 0, true, false)
+                ]
+            );
+        };
+        let check_view = |window: &gpui::VisualTestContext, visible, locked, edited: bool| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                    panic!("working graph")
+                };
+                assert_eq!(
+                    form.selected_node().map(GddGraphNode::storage_id),
+                    Some(parent_id)
+                );
+                assert_eq!(
+                    Arc::ptr_eq(&item.model.read(cx).revision, &initial_revision),
+                    !edited
+                );
+                assert_eq!(item.is_dirty(cx), edited);
+                check(graph, visible, locked);
+            });
+        };
+        invoke(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        check_view(window, false, true, false);
+        for (selector, visible, locked) in [
+            ("GRAPHITE-GDD-LAYER-VISIBILITY-2", true, true),
+            ("GRAPHITE-GDD-LAYER-LOCK-2", true, false),
+            ("GRAPHITE-GDD-UNDO", true, true),
+            ("GRAPHITE-GDD-UNDO", false, true),
+            ("GRAPHITE-GDD-REDO", true, true),
+            ("GRAPHITE-GDD-REDO", true, false),
+        ] {
+            invoke(window, selector);
+            check_view(window, visible, locked, true);
+        }
+        let destination = PathBuf::from("/project/saved-working-layer-settings.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopen working layer settings");
+        let inspection = saved.graph_inspection().await.expect("saved graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("saved root scope");
+        check(
+            &saved.graph_geometry(root).await.expect("saved layers"),
+            true,
+            false,
+        );
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }

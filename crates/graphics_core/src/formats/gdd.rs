@@ -250,6 +250,10 @@ pub enum GddArchiveError {
     GraphNodeIdentityCollision,
     #[error("Saved layers could not be read from this Graphite layer graph.")]
     InvalidRootLayerGraph,
+    #[error("Choose a layer in the Graphite document network.")]
+    UnsupportedRootLayerEdit,
+    #[error("The Graphite layer already has this setting.")]
+    UnchangedRootLayer,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -389,6 +393,12 @@ pub struct GddRootLayer {
     pub depth: usize,
     pub visible: bool,
     pub locked: bool,
+}
+
+#[derive(Clone, Copy)]
+pub enum GddRootLayerChange {
+    Visibility(bool),
+    Locked(bool),
 }
 
 #[derive(Clone)]
@@ -3384,6 +3394,71 @@ impl InspectedGddV1 {
                     .unwrap_or_default()
             });
         if updated_name.as_deref() != Some(name.as_str()) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn edit_root_layer_in_copy(
+        &self,
+        node: &GddGraphNode,
+        change: GddRootLayerChange,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::{
+            Value,
+            attr::node::{VISIBLE, ui::LOCKED},
+        };
+
+        self.check_node_edit_target(node)?;
+        let node_id = node.local_id;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        if !node.network_path.is_empty() || !interface.is_layer(&node_id, &[]) {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        }
+        let (key, value, edit) = match change {
+            GddRootLayerChange::Visibility(visible)
+                if interface.is_visible(&node_id, &[]) != visible =>
+            {
+                interface.set_visibility(&node_id, &[], visible);
+                (
+                    VISIBLE,
+                    (!visible).then_some(Value::Bool(false)),
+                    EditorDelta::Graph(RuntimeDelta::SetVisibility {
+                        network_path: Vec::new(),
+                        node_id,
+                        visible,
+                    }),
+                )
+            }
+            GddRootLayerChange::Locked(locked) if interface.is_locked(&node_id, &[]) != locked => {
+                interface.set_locked(&node_id, &[], locked);
+                (
+                    LOCKED,
+                    locked.then_some(Value::Bool(true)),
+                    EditorDelta::NodeMetadata {
+                        network_path: Vec::new(),
+                        node_id,
+                        change: NodeMetadataChange::Locked(locked),
+                    },
+                )
+            }
+            _ => return Err(GddArchiveError::UnchangedRootLayer),
+        };
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        if !matches!(batch.ops.as_slice(), [RegistryDelta::ChangeNodeAttribute { id, delta }]
+            if *id == node.storage_id && delta.key == key && delta.value == value)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        let matches = match change {
+            GddRootLayerChange::Visibility(visible) => actual.is_visible(&node_id, &[]) == visible,
+            GddRootLayerChange::Locked(locked) => actual.is_locked(&node_id, &[]) == locked,
+        };
+        if !matches {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
