@@ -1340,7 +1340,20 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
         let template = numeric_node_template(operation)?;
-        self.insert_root_node_template_in_copy(template, position, budget)
+        self.insert_node_template_in_copy(&[], template, position, budget)
+            .await
+    }
+
+    pub async fn insert_numeric_node_in_network_copy(
+        &self,
+        network: &GddGraphNetwork,
+        operation: UnaryNumericOperation,
+        position: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        let template = numeric_node_template(operation)?;
+        self.insert_node_template_in_copy(&network.path, template, position, budget)
             .await
     }
 
@@ -2755,19 +2768,22 @@ impl InspectedGddV1 {
         }
         let definition = catalog_copy_node_definition(identifier)
             .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?;
-        self.insert_root_node_template_in_copy(definition.default_node_template(), position, budget)
+        self.insert_node_template_in_copy(&[], definition.default_node_template(), position, budget)
             .await
     }
 
-    async fn insert_root_node_template_in_copy(
+    async fn insert_node_template_in_copy(
         &self,
+        path: &[NodeId],
         mut template: NodeTemplate,
         position: [i32; 2],
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         template.node_type_metadata = NodeTypePersistentMetadata::node(IVec2::from_array(position));
-        let path = &[];
         let mut interface = self.runtime_graph().await?.into_interface()?;
+        if interface.nested_network(path).is_none() {
+            return Err(GddArchiveError::StaleGraphNetwork);
+        }
         let node_id = NodeId::new();
         if interface.document_node(&node_id, path).is_some() {
             return Err(GddArchiveError::GraphNodeIdentityCollision);
@@ -5331,6 +5347,98 @@ mod tests {
             .expect("export the source graph and its node definitions")
             .into();
         bytes
+    }
+
+    #[test]
+    fn at_gra_graph_005_1_inserts_only_in_the_addressed_nested_network() {
+        futures::executor::block_on(async {
+            let source = document_with_nested_graph_nodes();
+            let bytes: Arc<[u8]> = source
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &HashMapResourceStorage::new(),
+                    None,
+                )
+                .await
+                .expect("source with repeated local IDs")
+                .into();
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("open nested graph");
+            let original_graph = original
+                .graph_inspection()
+                .await
+                .expect("original scope IDs");
+            let nested = original_graph
+                .networks
+                .iter()
+                .find(|network| network.path == [NodeId(24)])
+                .expect("target nested network");
+            let foreign = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("independently opened source");
+            let operation = UnaryNumericOperation::Sign;
+            let position = [6, -9];
+            assert!(matches!(
+                foreign
+                    .insert_numeric_node_in_network_copy(nested, operation, position, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+
+            let edited = original
+                .insert_numeric_node_in_network_copy(nested, operation, position, budget())
+                .await
+                .expect("insert in exact scope");
+            let graph = edited.graph_inspection().await.expect("new scoped graph");
+            assert_eq!(graph.networks.len(), original_graph.networks.len());
+            let added = graph
+                .nodes
+                .iter()
+                .filter(|node| {
+                    !original_graph
+                        .nodes
+                        .iter()
+                        .any(|old| old.storage_id == node.storage_id)
+                })
+                .collect::<Vec<_>>();
+            let [node] = added.as_slice() else {
+                panic!("one added node")
+            };
+            assert_eq!(node.network_id(), nested.id);
+            assert_eq!(node.grid_position(), Some(position));
+            assert_eq!(node.display_name(), "Sign");
+            let node_id = node.storage_id();
+            assert!(matches!(
+                edited
+                    .insert_numeric_node_in_network_copy(nested, operation, position, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let undone = edited
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one interaction");
+            assert!(
+                undone
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("restore insertion");
+            assert!(
+                redone
+                    .graph_nodes()
+                    .await
+                    .expect("redone graph")
+                    .iter()
+                    .any(|node| node.storage_id() == node_id && node.network_id() == nested.id)
+            );
+        });
     }
 
     #[test]

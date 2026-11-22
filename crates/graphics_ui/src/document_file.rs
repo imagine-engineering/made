@@ -1113,7 +1113,7 @@ impl GraphiteDocumentItem {
             ),
             NodeInsertDestination::WorkingCopy => {
                 let revision = self.model.read(cx).revision.clone();
-                self.insert_working_numeric_node(operation, position, revision, window, cx);
+                self.insert_working_numeric_node(operation, position, None, revision, window, cx);
             }
         }
     }
@@ -1122,6 +1122,7 @@ impl GraphiteDocumentItem {
         &mut self,
         operation: UnaryNumericOperation,
         position: [i32; 2],
+        network: Option<Arc<GddGraphNetwork>>,
         revision: Arc<()>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -1144,9 +1145,20 @@ impl GraphiteDocumentItem {
         self.stage_working_snapshot(
             revision,
             async move {
-                contents
-                    .insert_root_numeric_node_in_copy(operation, position, ARCHIVE_BUDGET)
-                    .await
+                if let Some(network) = network {
+                    contents
+                        .insert_numeric_node_in_network_copy(
+                            &network,
+                            operation,
+                            position,
+                            ARCHIVE_BUDGET,
+                        )
+                        .await
+                } else {
+                    contents
+                        .insert_root_numeric_node_in_copy(operation, position, ARCHIVE_BUDGET)
+                        .await
+                }
             },
             window,
             cx,
@@ -2683,7 +2695,7 @@ impl GraphiteDocumentItem {
                                         }
                                         match target {
                                             SavedGraphMenuTarget::Background(position) => {
-                                                form.clipboard_scope().filter(|network| network.parent.is_none())?;
+                                                let network = Arc::new(form.clipboard_scope()?.clone());
                                                 let revision = form.revision.clone();
                                                 let item = item.downgrade();
                                                 Some(Self::numeric_node_picker(move |operation, window, cx| {
@@ -2693,7 +2705,7 @@ impl GraphiteDocumentItem {
                                                                 && form.pending_canvas_source.is_none()
                                                                 && form.clipboard_scope().is_some_and(|network| network.id == scope))
                                                         {
-                                                            item.insert_working_numeric_node(operation, position, revision.clone(), window, cx);
+                                                            item.insert_working_numeric_node(operation, position, Some(network.clone()), revision.clone(), window, cx);
                                                         } else {
                                                             item.copy_feedback = Some(("The Graphite canvas changed. Reopen the node picker.".into(), Color::Error));
                                                             cx.notify();
@@ -10164,6 +10176,103 @@ mod tests {
             workspace.read_with(window, |workspace, cx| workspace
                 .active_item_as::<GraphiteDocumentItem>(cx)),
             Some(item)
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_005_2_workspace_inserts_in_the_visible_nested_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = nested_graph_archive_with_sibling(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/nested-insertion.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("nested source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open nested archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let (network, original_nodes) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("saved scoped graph")
+            };
+            let network = form
+                .active_network()
+                .filter(|network| network.parent.is_some())
+                .expect("nested network");
+            (
+                network.id,
+                form.nodes
+                    .iter()
+                    .map(|node| (node.storage_id(), node.network_id()))
+                    .collect::<BTreeSet<_>>(),
+            )
+        });
+        let bounds = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("open nested canvas");
+        click_graph_point(
+            window,
+            bounds.origin + gpui::point(px(250.), px(177.)),
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        click(window, "GRAPHITE-GDD-ADD-Sign");
+        window.run_until_parked();
+        paint(window);
+        let (new_id, position) = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("working scoped graph") };
+            assert_eq!(form.active_network().expect("same active scope").id, network);
+            let added = form.nodes.iter().filter(|node| !original_nodes.contains(&(node.storage_id(), node.network_id()))).collect::<Vec<_>>();
+            let [node] = added.as_slice() else { panic!("one added scoped node") };
+            assert_eq!(node.network_id(), network);
+            assert_eq!(node.display_name(), "Sign");
+            assert!(matches!(&form.saved_graph, SavedGraphPanel::Ready(geometry) if geometry.nodes.iter().any(|geometry| geometry.storage_id == node.storage_id())));
+            (node.storage_id(), node.grid_position().expect("saved snapped position"))
+        });
+        let destination = PathBuf::from("/project/saved-nested-insertion.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopened nested insertion");
+        let nodes = saved.graph_nodes().await.expect("reopened graph");
+        assert_eq!(nodes.len(), original_nodes.len() + 1);
+        let new = nodes
+            .iter()
+            .find(|node| node.storage_id() == new_id)
+            .expect("same new storage ID");
+        assert_eq!(new.network_id(), network);
+        assert_eq!(new.grid_position(), Some(position));
+        assert!(original_nodes.iter().all(|address| {
+            nodes
+                .iter()
+                .any(|node| (node.storage_id(), node.network_id()) == *address)
+        }));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source ZIP remains exact"),
+            original
         );
     }
 

@@ -240,9 +240,7 @@ pub(crate) fn render_saved_graph(
             }
         })
         .when(
-            view.network.parent.is_none()
-                && view.can_start_connection
-                && view.pending_source.is_none(),
+            view.can_start_connection && view.pending_source.is_none(),
             |graph| {
                 let origin = Rc::new(Cell::new(None));
                 let canvas_origin = origin.clone();
