@@ -137,3 +137,9 @@ build JDK. Use the same offline test build and loopback-only sandbox.
 The test selects the provider-reported goal in the Maven view and waits for
 the real Task terminal to exit. The generated effective POM must contain the
 settings-selected value in its top-level project properties.
+
+With a fresh copy of the same fixture, run
+`test_explorer::jvm_workflow::cached_maven_help_goals_run_in_queue_order_with_task_options`
+using the same test binary and flags. The queue test sets a profile override
+through **Task options**, removes and re-adds the last goal, then checks the
+ordered Maven process and the overridden effective model.

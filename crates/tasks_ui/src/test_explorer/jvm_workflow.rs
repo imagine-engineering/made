@@ -185,11 +185,50 @@ fn dispatch_graph_action(cx: &mut VisualTestContext, action_name: &str) {
 }
 
 #[cfg(all(test, unix))]
+fn focus_control(cx: &mut VisualTestContext, label: &str) {
+    assert!(
+        (0..48).any(|_| cx.update(|window, cx| {
+            window.focus_next(cx);
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value = serde_json::from_str(
+                &window
+                    .debug_a11y_tree_json()
+                    .expect("window accessibility tree"),
+            )
+            .expect("accessibility JSON");
+            tree["gpui_focus"]
+                .as_str()
+                .is_some_and(|focus| tree["nodes"][focus]["aria"]["label"] == label)
+        })),
+        "keyboard focus reaches {label}"
+    );
+}
+
+#[cfg(all(test, unix))]
+fn press_enter(cx: &mut VisualTestContext) {
+    use gpui::InputEvent as _;
+
+    let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
+    cx.update(|window, cx| {
+        window.dispatch_event(
+            gpui::KeyDownEvent {
+                keystroke: keystroke.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
+    });
+    cx.run_until_parked();
+}
+
+#[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires a disposable offline Gradle graph, pinned JDTLS and its Gradle delegate"]
 async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestAppContext) {
     use self::dispatch_graph_action as dispatch;
-    use gpui::InputEvent as _;
     use jvm_ui::{
         DependenciesPanel, ShowGradle,
         dependency_analyzer_item::{DependencyAnalyzerItem, ShowInDependencyDiagram},
@@ -258,40 +297,6 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
             .await;
     }
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
-    let focus_control = |cx: &mut VisualTestContext, label| {
-        assert!(
-            (0..48).any(|_| cx.update(|window, cx| {
-                window.focus_next(cx);
-                window.draw(cx).clear(cx);
-                let tree: serde_json::Value = serde_json::from_str(
-                    &window
-                        .debug_a11y_tree_json()
-                        .expect("window accessibility tree"),
-                )
-                .expect("accessibility JSON");
-                tree["gpui_focus"]
-                    .as_str()
-                    .is_some_and(|focus| tree["nodes"][focus]["aria"]["label"] == label)
-            })),
-            "keyboard focus reaches {label}"
-        );
-    };
-    let press_enter = |cx: &mut VisualTestContext| {
-        let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
-        cx.update(|window, cx| {
-            window.dispatch_event(
-                gpui::KeyDownEvent {
-                    keystroke: keystroke.clone(),
-                    is_held: false,
-                    prefer_character_input: false,
-                }
-                .to_platform_input(),
-                cx,
-            );
-            window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
-        });
-        cx.run_until_parked();
-    };
     cx.run_until_parked();
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.dispatch_action(ShowGradle);
@@ -1044,10 +1049,37 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
 #[gpui::test]
 #[ignore = "requires a cached Maven Help goal, pinned Maven wrapper and pinned JDTLS"]
 async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAppContext) {
+    run_cached_maven_help_goals(MavenHelpRun::Selected, cx).await;
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires cached Maven Help goals, pinned Maven wrapper and pinned JDTLS"]
+async fn cached_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut TestAppContext) {
+    run_cached_maven_help_goals(MavenHelpRun::Ordered, cx).await;
+}
+
+#[cfg(all(test, unix))]
+enum MavenHelpRun {
+    Selected,
+    Ordered,
+}
+
+#[cfg(all(test, unix))]
+async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext) {
     use futures::future::{Either, select};
+    use jvm_ui::DependenciesPanel;
     use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
     use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 
+    let goals: &[&str] = match run {
+        MavenHelpRun::Selected => &["effective-pom"],
+        MavenHelpRun::Ordered => &["active-profiles", "effective-pom"],
+    };
+    let coordinates: Vec<_> = goals
+        .iter()
+        .map(|goal| format!("org.apache.maven.plugins:maven-help-plugin:3.5.2:{goal}"))
+        .collect();
     let root = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_ROOT");
     let settings = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_SETTINGS");
     let options = serde_json::json!({
@@ -1075,7 +1107,6 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
         })
         .await
         .expect("Maven module source");
-    let goal = "org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom";
     wait_for_maven_module(
         &lsp_store,
         worktree_id,
@@ -1088,7 +1119,9 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
                         && plugin.version.as_deref() == Some("3.5.2")
                         && !plugin.managed_only
                         && plugin.goals_known
-                        && plugin.goals.iter().any(|goal| goal.name == "effective-pom")
+                        && goals
+                            .iter()
+                            .all(|name| plugin.goals.iter().any(|goal| goal.name == *name))
                 })
         },
         cx,
@@ -1105,33 +1138,107 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
     });
     show_ready_maven_view(&lsp_store, worktree_id, cx).await;
     cx.dispatch_action(ExpandAll);
-    let goal_row = panel.read_with(cx, |panel, _| {
-        let (status, rows, _) = panel.snapshot_for_test();
-        let (index, row) = rows
-            .iter()
-            .enumerate()
-            .find(|(_, row)| row.label == "effective-pom" && row.id.0.contains(":maven:goal:"))
-            .unwrap_or_else(|| panic!("the effective POM goal is selectable: {status:?}"));
-        assert!(
-            row.secondary_label.as_deref().is_some_and(|label| {
-                label.contains("run offline through Tasks")
-                    && !label.contains("execution unavailable")
-            }),
-            "the visible Maven goal description matches execution availability"
-        );
-        index
-    });
-    cx.dispatch_action(SelectFirst);
-    for _ in 0..goal_row {
-        cx.dispatch_action(SelectNext);
-    }
-    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let select_goal = |cx: &mut VisualTestContext, goal| {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let goal_row = panel.read_with(cx, |panel, _| {
+            let (status, rows, _) = panel.snapshot_for_test();
+            let (index, row) = rows
+                .iter()
+                .enumerate()
+                .find(|(_, row)| row.label == goal && row.id.0.contains(":maven:goal:"))
+                .unwrap_or_else(|| panic!("the {goal} goal is selectable: {status:?}"));
+            assert!(
+                row.secondary_label.as_deref().is_some_and(|label| {
+                    label.contains("run offline through Tasks")
+                        && !label.contains("execution unavailable")
+                }),
+                "the visible Maven goal description matches execution availability"
+            );
+            assert!(row.accessibility_label.contains("or Task options"));
+            index
+        });
+        cx.dispatch_action(SelectFirst);
+        for _ in 0..goal_row {
+            cx.dispatch_action(SelectNext);
+        }
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    };
     let output = root.join("target/groovy-effective.xml");
     assert!(
         !output.exists(),
         "the fixture starts without an effective model"
     );
-    dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+    match run {
+        MavenHelpRun::Selected => {
+            select_goal(cx, "effective-pom");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+        }
+        MavenHelpRun::Ordered => {
+            select_goal(cx, "active-profiles");
+            focus_control(
+                cx,
+                "Configure profiles, test settings and reactor behavior for the selected Maven operation",
+            );
+            press_enter(cx);
+            for _ in 0..2 {
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                    window.simulate_next_frame(cx);
+                });
+            }
+            let options = r#"["-P!evidence-selected"]"#;
+            cx.simulate_input(options);
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value = serde_json::from_str(
+                    &window.debug_a11y_tree_json().expect("Maven options editor"),
+                )
+                .expect("accessibility JSON");
+                assert!(
+                    tree["nodes"]
+                        .as_object()
+                        .expect("accessibility nodes")
+                        .values()
+                        .any(|node| node["aria"]["label"] == "Maven operation options"
+                            && node["aria"]["value"] == options),
+                    "keyboard input reaches the Maven operation options editor"
+                );
+            });
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            select_goal(cx, "effective-pom");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+            let queue_labels = |cx: &VisualTestContext| {
+                panel.read_with(cx, |panel, _| {
+                    panel
+                        .snapshot_for_test()
+                        .1
+                        .into_iter()
+                        .filter(|row| row.id.0.starts_with("groovy-ordered-operation:"))
+                        .map(|row| row.label.clone())
+                        .collect::<Vec<_>>()
+                })
+            };
+            let [first, second] = coordinates.as_slice() else {
+                panic!("the ordered fixture has two goals");
+            };
+            let expected_queue = [
+                format!("1. {first} (1 Maven options)"),
+                format!("2. {second}"),
+            ];
+            assert_eq!(queue_labels(cx), expected_queue);
+            dispatch_graph_action(cx, "groovy_dependencies_panel::RemoveLastOrderedOperation");
+            assert_eq!(queue_labels(cx), expected_queue[..1]);
+            select_goal(cx, "effective-pom");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            assert_eq!(queue_labels(cx), expected_queue);
+            assert!(!output.exists(), "editing the queue does not start a Task");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
+        }
+    }
     let deadline = Instant::now() + Duration::from_secs(30);
     let terminal = loop {
         cx.run_until_parked();
@@ -1157,15 +1264,20 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
     };
     let completed = terminal.read_with(cx, |terminal, cx| {
         let task = &terminal.task().expect("Maven Task").spawned_task;
-        let arguments = [
+        let mut arguments = [
             "--offline",
             "--settings",
             settings.to_str().expect("settings path"),
             "--file",
             "pom.xml",
-            goal,
         ]
-        .map(str::to_owned);
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+        if matches!(run, MavenHelpRun::Ordered) {
+            arguments.extend(["--activate-profiles", "!evidence-selected"].map(str::to_owned));
+        }
+        arguments.extend(coordinates);
         let (shell, shell_arguments) = task::ShellBuilder::new(&task.shell, false)
             .build_with_command_intent(
                 Some(root.join("mvnw").to_str().expect("wrapper path").to_owned()),
@@ -1203,10 +1315,28 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
     let (properties, _) = properties
         .split_once("</properties>")
         .expect("end effective properties");
-    assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));
-    eprintln!(
-        "Mounted Maven ran the pinned Effective POM goal through the offline Task terminal with the selected settings profile"
-    );
+    match run {
+        MavenHelpRun::Selected => {
+            assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));
+            eprintln!(
+                "Mounted Maven ran the pinned Effective POM goal through the offline Task terminal with the selected settings profile"
+            );
+        }
+        MavenHelpRun::Ordered => {
+            let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+            let profile_report = transcript
+                .find("Active profile report written to:")
+                .expect("active profiles ran in Maven");
+            let effective_pom = transcript
+                .find("Effective-POM written to:")
+                .expect("effective POM ran in Maven");
+            assert!(profile_report < effective_pom);
+            assert!(properties.contains("<effective.fixture>base</effective.fixture>"));
+            eprintln!(
+                "Mounted Maven ran active-profiles before effective-pom in one offline Task and applied the profile override"
+            );
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

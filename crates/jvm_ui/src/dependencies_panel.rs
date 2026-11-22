@@ -7818,16 +7818,11 @@ fn annotate_operation_rows(
         }
     };
     for row in rows {
-        if let Some(receipt) = selections.get(&row.id) {
-            let instruction = if matches!(
-                receipt.operations.as_slice(),
-                [JvmBuildOperation::GradleTask { .. }]
-            ) {
-                "select this row and use Run selected offline operation or Task options"
-            } else {
-                "select this row and use Run selected offline operation; configurable arguments unavailable"
-            };
-            describe_run(&mut row.accessibility_label, instruction);
+        if selections.contains_key(&row.id) {
+            describe_run(
+                &mut row.accessibility_label,
+                "select this row and use Run selected offline operation or Task options",
+            );
             if let Some(detail) = &mut row.secondary_label {
                 describe_run(detail, "run offline through Tasks");
             }
