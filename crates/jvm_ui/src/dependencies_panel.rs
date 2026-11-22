@@ -28,7 +28,7 @@ use project::{
 };
 use task::{TaskContext, VariableName};
 use ui::{Tooltip, prelude::*};
-use util::rel_path::RelPath;
+use util::{ResultExt as _, rel_path::RelPath};
 use workspace::{
     Panel, Workspace,
     dock::{DockMode, DockPosition, PanelEvent},
@@ -2968,6 +2968,20 @@ impl DependencyNavigation {
 }
 
 impl DependenciesPanel {
+    fn with_workspace_window<T>(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) -> T,
+    ) -> anyhow::Result<T> {
+        if Workspace::is_tool_window(window) {
+            self.workspace.update_in(cx, update)
+        } else {
+            self.workspace
+                .update(cx, |workspace, cx| update(workspace, window, cx))
+        }
+    }
+
     fn set_dock_mode(&mut self, mode: DockMode, window: &mut Window, cx: &mut Context<Self>) {
         self.focus_handle.focus(window, cx);
         self.preferences.dock_mode = mode;
@@ -2975,7 +2989,42 @@ impl DependenciesPanel {
         cx.notify();
     }
 
+    fn toggle_window_mode(&self, cx: &mut Context<Self>) {
+        let workspace = self.workspace.clone();
+        let weak_panel = cx.weak_entity();
+        let windowed = self.preferences.dock_mode != DockMode::Window;
+        cx.defer(move |cx| {
+            let Some(panel) = weak_panel.upgrade() else {
+                return;
+            };
+            let result = workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.set_panel_windowed(&panel, windowed, window, cx)
+                })
+                .and_then(|result| result);
+            panel.update(cx, |panel, cx| {
+                if let Err(error) = result {
+                    log::error!("Could not change the Groovy tool window mode: {error:#}");
+                    panel.preferences_notice =
+                        Some("Could not change the Groovy tool window mode.".into());
+                } else {
+                    panel.preferences.dock_mode = if windowed {
+                        DockMode::Window
+                    } else {
+                        DockMode::Pinned
+                    };
+                    panel.persist_preferences(cx);
+                }
+                cx.notify();
+            });
+        });
+    }
+
     fn toggle_panel_zoom(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preferences.dock_mode == DockMode::Window {
+            cx.propagate();
+            return;
+        }
         self.focus_handle.focus(window, cx);
         cx.emit(if self.zoomed {
             PanelEvent::ZoomOut
@@ -3187,7 +3236,11 @@ impl DependenciesPanel {
         self.preferences.view = view;
         self.persist_preferences(cx);
         self.rebuild(cx);
-        window.focus(&self.focus_handle, cx);
+        if self.preferences.dock_mode != DockMode::Window
+            || self.focus_handle.contains_focused(window, cx)
+        {
+            window.focus(&self.focus_handle, cx);
+        }
     }
 
     fn resolve_selected_graph(&self, cx: &App) -> Option<(GraphSelection, String)> {
@@ -3833,17 +3886,13 @@ impl DependenciesPanel {
                 "The declaring module {declaring} has no build script in the project; Go to Gradle Declaration is unavailable"
             );
         };
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace
-                .update(cx, |workspace, cx| {
-                    workspace.open_path(declaration_path, None, true, window, cx)
-                })
-                .detach_and_log_err(cx);
-        } else {
-            anyhow::bail!(
+        self.with_workspace_window(window, cx, |workspace, window, cx| {
+            workspace.open_path(declaration_path, None, true, window, cx)
+        })
+            .context(
                 "The workspace is unavailable; reopen the project before navigating to a Gradle declaration"
-            );
-        }
+            )?
+            .detach_and_log_err(cx);
         Ok(())
     }
 
@@ -4074,12 +4123,13 @@ impl DependenciesPanel {
         if self.selected_maven_settings_file(kind, cx).as_ref() != Some(target) {
             return;
         }
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace
-                .update(cx, |workspace, cx| {
-                    workspace.open_path(file.clone(), None, true, window, cx)
-                })
-                .detach_and_prompt_err("Could not open Maven settings", window, cx, |_, _, _| None);
+        if let Some(open) = self
+            .with_workspace_window(window, cx, |workspace, window, cx| {
+                workspace.open_path(file.clone(), None, true, window, cx)
+            })
+            .log_err()
+        {
+            open.detach_and_prompt_err("Could not open Maven settings", window, cx, |_, _, _| None);
         }
     }
 
@@ -5267,15 +5317,14 @@ impl DependenciesPanel {
                 "The project host is unavailable; reconnect and refresh before running operations"
             );
             let receipt = self.selected_operation_for_run(cx)?;
-            self.workspace
-                .update(cx, |workspace, cx| {
-                    workspace.run_jvm_operation(receipt, window, cx)
-                })
-                .map_err(|_| {
-                    anyhow::anyhow!(
-                        "The workspace is unavailable; reopen the project before running operations"
-                    )
-                })??;
+            self.with_workspace_window(window, cx, |workspace, window, cx| {
+                workspace.run_jvm_operation(receipt, window, cx)
+            })
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "The workspace is unavailable; reopen the project before running operations"
+                )
+            })??;
             Ok(())
         })();
         self.operation_notice=Some(match result {
@@ -5354,17 +5403,12 @@ impl DependenciesPanel {
         &self,
         target: &SavedConfiguration,
         cx: &App,
-    ) -> anyhow::Result<(Entity<Workspace>, task::ResolvedTask)> {
+    ) -> anyhow::Result<task::ResolvedTask> {
         let worktree_id = target.worktree_id;
         anyhow::ensure!(
             !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
             "The project host is unavailable; reconnect and refresh before running configurations"
         );
-        let workspace = self.workspace.upgrade().ok_or_else(|| {
-            anyhow::anyhow!(
-                "The workspace is unavailable; reopen the project before running configurations"
-            )
-        })?;
         let project = self.project.read(cx);
         let worktree_store = project.worktree_store();
         let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
@@ -5422,7 +5466,7 @@ impl DependenciesPanel {
             "Named configuration '{}' did not resolve in the current project context; run it from the task list",
             target.label
         ))?;
-        Ok((workspace, resolved))
+        Ok(resolved)
     }
 
     fn run_configuration(
@@ -5431,9 +5475,8 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.configuration_notice = Some(match self.prepare_configuration_dispatch(&target, cx) {
-            Ok((workspace, resolved)) => {
-                workspace.update(cx, |workspace, cx| {
+        let result = self.prepare_configuration_dispatch(&target, cx).and_then(|resolved| {
+            self.with_workspace_window(window, cx, |workspace, window, cx| {
                     workspace.schedule_resolved_task(
                         target.source.clone(),
                         resolved,
@@ -5441,7 +5484,11 @@ impl DependenciesPanel {
                         window,
                         cx,
                     );
-                });
+                })
+                .context("The workspace is unavailable; reopen the project before running configurations")
+        });
+        self.configuration_notice = Some(match result {
+            Ok(()) => {
                 let label = target.label.clone();
                 self.record_recent_configuration(target);
                 format!(
@@ -5630,15 +5677,14 @@ impl DependenciesPanel {
             );
             let receipt =
                 compose_ordered_operations(&self.ordered_operations, &self.operation_selections)?;
-            self.workspace
-                .update(cx, |workspace, cx| {
-                    workspace.run_jvm_operation(receipt, window, cx)
-                })
-                .map_err(|_| {
-                    anyhow::anyhow!(
-                        "The workspace is unavailable; reopen the project before running operations"
-                    )
-                })??;
+            self.with_workspace_window(window, cx, |workspace, window, cx| {
+                workspace.run_jvm_operation(receipt, window, cx)
+            })
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "The workspace is unavailable; reopen the project before running operations"
+                )
+            })??;
             Ok(())
         })();
         self.operation_notice = Some(match result {
@@ -6063,12 +6109,13 @@ impl DependenciesPanel {
             });
             return;
         }
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace
-                .update(cx, |workspace, cx| {
-                    workspace.open_path(path, None, true, window, cx)
-                })
-                .detach_and_log_err(cx);
+        if let Some(open) = self
+            .with_workspace_window(window, cx, |workspace, window, cx| {
+                workspace.open_path(path, None, true, window, cx)
+            })
+            .log_err()
+        {
+            open.detach_and_log_err(cx);
         }
     }
 }
@@ -8437,6 +8484,7 @@ impl Render for DependenciesPanel {
             "Pin Groovy panel"
         };
         let overlay = self.preferences.dock_mode == DockMode::Overlay;
+        let windowed = self.preferences.dock_mode == DockMode::Window;
         let overlay_label = if overlay {
             "Dock Groovy panel"
         } else {
@@ -8584,7 +8632,7 @@ impl Render for DependenciesPanel {
                     .gap_1()
                     .justify_between()
                     .child(self.view.label())
-                    .child(
+                    .when(!windowed, |header| header.child(
                         IconButton::new("groovy-panel-pin", ui::IconName::Pin)
                             .toggle_state(pinned)
                             .shape(ui::IconButtonShape::Square)
@@ -8594,16 +8642,16 @@ impl Render for DependenciesPanel {
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.set_dock_mode(if pinned { DockMode::Unpinned } else { DockMode::Pinned }, window, cx);
                             })),
-                    )
-                    .child(
+                    ))
+                    .when(!windowed, |header| header.child(
                         Button::new("groovy-panel-undock", if overlay { "Dock" } else { "Undock" })
                             .aria_label(overlay_label)
                             .tab_index(0_isize)
                             .on_click(cx.listener(move |panel, _, window, cx| {
                                 panel.set_dock_mode(if overlay { DockMode::Unpinned } else { DockMode::Overlay }, window, cx);
                             })),
-                    )
-                    .child(
+                    ))
+                    .when(!windowed, |header| header.child(
                         IconButton::new("groovy-panel-zoom", ui::IconName::Maximize)
                             .toggle_state(self.zoomed)
                             .selected_icon(ui::IconName::Minimize)
@@ -8612,6 +8660,12 @@ impl Render for DependenciesPanel {
                             .aria_label(zoom_label)
                             .tooltip(Tooltip::text(zoom_label))
                             .on_click(cx.listener(|panel, _, window, cx| panel.toggle_panel_zoom(window, cx))),
+                    ))
+                    .child(
+                        Button::new("groovy-panel-window", if windowed { "Return to Dock" } else { "Open in Window" })
+                            .aria_label(if windowed { "Return Groovy to its dock" } else { "Open Groovy in a separate window" })
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.toggle_window_mode(cx))),
                     )
                     .when(icon_toolbar_active, |header| {
                         header.child(
@@ -26821,6 +26875,85 @@ mod tests {
         activate_dock_control(cx, "Pin Groovy panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
+
+        let workspace_windows = cx.read(|cx| cx.windows());
+        let owner_window = cx.update(|window, _| window.window_handle());
+        let retained_selection = panel.update(cx, |panel, cx| {
+            let selection = panel
+                .host
+                .visible_rows()
+                .iter()
+                .find(|row| row.label == "pre-integration-test")
+                .expect("visible Maven phase")
+                .id
+                .clone();
+            panel.host.select(selection.clone());
+            cx.notify();
+            selection
+        });
+        activate_dock_control(cx, "Open Groovy in a separate window");
+        let detached_window = cx
+            .read(|cx| cx.windows())
+            .into_iter()
+            .find(|window| !workspace_windows.contains(window))
+            .expect("separate Groovy window");
+        assert_eq!(
+            cx.read(|cx| cx.windows()).len(),
+            workspace_windows.len() + 1
+        );
+        assert!(!workspace.read_with(cx, |workspace, cx| workspace.top_dock().read(cx).is_open()));
+        panel.read_with(cx, |panel, _| {
+            assert_eq!(panel.preferences.dock_mode, DockMode::Window);
+            assert_eq!(panel.host.selected(), Some(&retained_selection));
+            assert!(panel.active);
+        });
+        detached_window
+            .update(cx, |_, window, cx| {
+                window.draw(cx).clear(cx);
+                assert!(panel.read(cx).focus_handle.contains_focused(window, cx));
+                window.dispatch_action(Box::new(workspace::CloseWindow), cx);
+            })
+            .expect("close the separate tool window");
+        cx.run_until_parked();
+        assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+        assert!(!panel.read_with(cx, |panel, _| panel.active));
+
+        cx.dispatch_action(ToggleDependenciesPanel);
+        cx.run_until_parked();
+        let reopened_window = cx
+            .read(|cx| cx.windows())
+            .into_iter()
+            .find(|window| !workspace_windows.contains(window))
+            .expect("reopened Groovy window");
+        assert_ne!(reopened_window, detached_window);
+        let mut reopened = gpui::VisualTestContext::from_window(reopened_window, cx);
+        reopened.update(|window, cx| {
+            window.activate_a11y_for_test();
+            window.draw(cx).clear(cx);
+        });
+        panel.update_in(&mut reopened, |panel, window, cx| {
+            assert_eq!(window.window_handle(), reopened_window);
+            let routed_window = panel
+                .with_workspace_window(window, cx, |_, window, _| window.window_handle())
+                .expect("route detached panel actions to their workspace");
+            assert_eq!(routed_window, owner_window);
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            let routed_window = panel
+                .with_workspace_window(window, cx, |_, window, _| window.window_handle())
+                .expect("keep actions already dispatched from the workspace in that window");
+            assert_eq!(routed_window, owner_window);
+        });
+        activate_dock_control(&mut reopened, "Return Groovy to its dock");
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+        assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
+        panel.read_with(cx, |panel, _| {
+            assert_eq!(panel.preferences.dock_mode, DockMode::Pinned);
+            assert_eq!(panel.host.selected(), Some(&retained_selection));
+            assert!(panel.active);
+        });
 
         let write = panel
             .update(cx, |panel, _| panel.preferences_write.take())

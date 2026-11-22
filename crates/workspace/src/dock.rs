@@ -5,13 +5,15 @@ use crate::{DraggedDock, Event, FocusFollowsMouse, ModalLayer, Pane, WorkspaceSe
 use crate::{Workspace, status_bar::StatusItemView};
 use anyhow::Context as _;
 use client::proto;
+use collections::HashMap;
 use db::kvp::KeyValueStore;
 
 use gpui::{
-    Action, Anchor, AnyView, App, Axis, Context, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, IntoElement, KeyContext, MouseButton, MouseDownEvent, MouseUpEvent, ParentElement,
-    Render, SharedString, StyleRefinement, Styled, Subscription, WeakEntity, Window, deferred, div,
-    px,
+    Action, Anchor, AnyView, AnyWindowHandle, App, Axis, Context, Entity, EntityId, EventEmitter,
+    FocusHandle, Focusable, IntoElement, KeyContext, MouseButton, MouseDownEvent, MouseUpEvent,
+    ParentElement, Render, SharedString, StyleRefinement, Styled, Subscription, TitlebarOptions,
+    WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, deferred, div, px,
+    size,
 };
 use serde::{Deserialize, Serialize};
 use settings::{Settings, SettingsStore, TerminalDockPosition};
@@ -298,6 +300,7 @@ impl From<&dyn PanelHandle> for AnyView {
 pub struct Dock {
     position: DockPosition,
     panel_entries: Vec<PanelEntry>,
+    panel_windows: HashMap<EntityId, WindowHandle<PanelWindow>>,
     workspace: WeakEntity<Workspace>,
     is_open: bool,
     active_panel_index: Option<usize>,
@@ -306,7 +309,23 @@ pub struct Dock {
     pub(crate) serialized_dock: Option<DockData>,
     zoom_layer_open: bool,
     modal_layer: Entity<ModalLayer>,
-    _subscriptions: [Subscription; 2],
+    _subscriptions: [Subscription; 4],
+}
+
+pub(crate) struct PanelWindow {
+    panel: Arc<dyn PanelHandle>,
+}
+
+impl Render for PanelWindow {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex()
+            .id("workspace-panel-window")
+            .size_full()
+            .overflow_hidden()
+            .bg(cx.theme().colors().panel_background)
+            .on_action(cx.listener(|_, _: &crate::CloseWindow, window, _| window.remove_window()))
+            .child(self.panel.to_any())
+    }
 }
 
 impl Focusable for Dock {
@@ -330,11 +349,16 @@ pub enum DockMode {
     Pinned,
     Unpinned,
     Overlay,
+    Window,
 }
 
 impl DockMode {
     pub fn is_pinned(&self) -> bool {
         *self == Self::Pinned
+    }
+
+    fn hides_on_focus_loss(self) -> bool {
+        matches!(self, Self::Unpinned | Self::Overlay)
     }
 }
 
@@ -465,15 +489,64 @@ impl Dock {
                     dock.zoom_layer_open = is_zoomed;
                 }
             });
+            let owner_window = window.window_handle();
+            let closed_subscription = cx.on_window_closed({
+                let dock = cx.weak_entity();
+                move |cx, window_id| {
+                    if window_id == owner_window.window_id() {
+                        return;
+                    }
+                    cx.defer({
+                        let dock = dock.clone();
+                        move |cx| {
+                            let Some(dock) = dock.upgrade() else {
+                                return;
+                            };
+                            let panel_id = dock.read(cx).panel_windows.iter().find_map(
+                                |(panel_id, handle)| {
+                                    (AnyWindowHandle::from(*handle).window_id() == window_id)
+                                        .then_some(*panel_id)
+                                },
+                            );
+                            if let Some(panel_id) = panel_id {
+                                owner_window
+                                    .update(cx, |_, window, cx| {
+                                        dock.update(cx, |dock, cx| {
+                                            dock.panel_windows.remove(&panel_id);
+                                            if let Some(panel) = dock.panel_for_id(panel_id) {
+                                                panel.set_active(false, window, cx);
+                                            }
+                                            cx.notify();
+                                        });
+                                    })
+                                    .log_err();
+                            }
+                        }
+                    });
+                }
+            });
+            let release_subscription = cx.on_release(|dock: &mut Dock, cx| {
+                for (_, handle) in dock.panel_windows.drain() {
+                    handle
+                        .update(cx, |_, window, _| window.remove_window())
+                        .log_err();
+                }
+            });
             Self {
                 position,
                 workspace: workspace.downgrade(),
                 panel_entries: Default::default(),
+                panel_windows: Default::default(),
                 active_panel_index: None,
                 is_open: false,
                 focus_handle: focus_handle.clone(),
                 focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
-                _subscriptions: [focus_subscription, zoom_subscription],
+                _subscriptions: [
+                    focus_subscription,
+                    zoom_subscription,
+                    closed_subscription,
+                    release_subscription,
+                ],
                 serialized_dock: None,
                 zoom_layer_open: false,
                 modal_layer,
@@ -572,10 +645,87 @@ impl Dock {
             .map(|entry| &entry.panel)
     }
 
+    pub(crate) fn panel_at(&self, index: usize) -> Option<Arc<dyn PanelHandle>> {
+        self.panel_entries
+            .get(index)
+            .map(|entry| entry.panel.clone())
+    }
+
+    pub(crate) fn open_panel_window(
+        &mut self,
+        panel: Arc<dyn PanelHandle>,
+        focus: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let panel_id = panel.panel_id();
+        if let Some(handle) = self.panel_windows.get(&panel_id) {
+            if focus {
+                handle.update(cx, |_, window, cx| {
+                    window.activate_window();
+                    panel.activation_focus_handle(cx).focus(window, cx);
+                })?;
+            }
+            return Ok(());
+        }
+
+        let title = panel
+            .icon_tooltip(window, cx)
+            .unwrap_or_else(|| panel.persistent_name());
+        let bounds = WindowBounds::centered(size(px(640.), px(560.)), cx);
+        let handle = cx.open_window(
+            WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: Some(title.into()),
+                    ..Default::default()
+                }),
+                window_bounds: Some(bounds),
+                focus,
+                kind: WindowKind::Normal,
+                ..Default::default()
+            },
+            |window, cx| {
+                if focus {
+                    panel.activation_focus_handle(cx).focus(window, cx);
+                }
+                cx.new(|_| PanelWindow {
+                    panel: panel.clone(),
+                })
+            },
+        )?;
+
+        if self
+            .active_panel()
+            .is_some_and(|active| active.panel_id() == panel_id)
+        {
+            self.is_open = false;
+            self.active_panel_index = None;
+        }
+        panel.set_active(true, window, cx);
+        self.panel_windows.insert(panel_id, handle);
+        cx.notify();
+        Ok(())
+    }
+
+    pub(crate) fn close_panel_window(
+        &mut self,
+        panel_id: EntityId,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<bool> {
+        let Some(handle) = self.panel_windows.remove(&panel_id) else {
+            return Ok(false);
+        };
+        cx.notify();
+        handle.update(cx, |_, window, _| window.remove_window())?;
+        Ok(true)
+    }
+
     pub fn first_enabled_panel_idx(&mut self, cx: &mut Context<Self>) -> anyhow::Result<usize> {
         self.panel_entries
             .iter()
-            .position(|entry| entry.panel.enabled(cx))
+            .position(|entry| {
+                entry.panel.enabled(cx) && entry.panel.dock_mode(cx) != DockMode::Window
+            })
             .with_context(|| {
                 format!(
                     "Couldn't find any enabled panel for the {} dock.",
@@ -617,7 +767,7 @@ impl Dock {
             .visible_panel()
             .filter(|panel| {
                 panel.panel_id() == panel_id
-                    && !panel.dock_mode(cx).is_pinned()
+                    && panel.dock_mode(cx).hides_on_focus_loss()
                     && !panel.panel_focus_handle(cx).contains_focused(window, cx)
             })
             .cloned()
@@ -719,6 +869,7 @@ impl Dock {
             PanelSizeState::default()
         };
 
+        let panel_window = self.panel_windows.remove(&panel_id);
         if !self.remove_panel(panel, window, cx) {
             // Panel was already moved from this dock
             return;
@@ -726,6 +877,9 @@ impl Dock {
 
         new_dock.update(cx, |new_dock, cx| {
             let index = new_dock.add_panel(panel.clone(), workspace.clone(), window, cx);
+            if let Some(panel_window) = panel_window {
+                new_dock.panel_windows.insert(panel_id, panel_window);
+            }
             if let Some(added_panel) = new_dock.panel_for_id(panel_id).cloned() {
                 new_dock.set_panel_size_state(added_panel.as_ref(), size_state, cx);
             }
@@ -900,6 +1054,9 @@ impl Dock {
         if let Some(serialized) = self.serialized_dock.clone() {
             if let Some(active_panel) = serialized.active_panel.filter(|_| serialized.visible)
                 && let Some(idx) = self.panel_index_for_persistent_name(active_panel.as_str(), cx)
+                && self
+                    .panel_at(idx)
+                    .is_some_and(|panel| panel.dock_mode(cx) != DockMode::Window)
             {
                 self.activate_panel(idx, window, cx);
             }
@@ -931,6 +1088,13 @@ impl Dock {
             .iter()
             .position(|entry| entry.panel.panel_id() == Entity::entity_id(panel))
         {
+            if self
+                .close_panel_window(Entity::entity_id(panel), cx)
+                .log_err()
+                == Some(true)
+            {
+                PanelHandle::set_active(panel, false, window, cx);
+            }
             if let Some(active_panel_index) = self.active_panel_index.as_mut() {
                 match panel_ix.cmp(active_panel_index) {
                     std::cmp::Ordering::Less => {

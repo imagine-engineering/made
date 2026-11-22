@@ -180,6 +180,10 @@ and size. The editor keeps its layout while the overlay is open. It hides
 when focus moves to another work area. **Dock** returns it to unpinned docked
 mode, and **Pin Groovy panel** keeps it docked and visible.
 
+Choose **Open in Window** to move Groovy into a separate window. You can
+reopen it from the normal Groovy view action after closing that window.
+Choose **Return to Dock** to pin the panel at its saved edge.
+
 The `jvm-tools` development build has a Dependencies panel for trusted
 Maven and Gradle projects. Open it from **View → Dependencies**. It shows
 provider-labeled rows from both JDTLS and Kotlin LSP when both snapshots are

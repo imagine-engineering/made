@@ -130,7 +130,7 @@ use collaborative_timeline::{
 #[cfg(feature = "multiplayer-tools")]
 use collaborative_workspace::CollaborativeWorkspace;
 use collections::{HashMap, HashSet, TypeIdHashMap, hash_map};
-use dock::{Dock, DockPosition, PanelButtons, PanelHandle, RESIZE_HANDLE_SIZE};
+use dock::{Dock, DockMode, DockPosition, PanelButtons, PanelHandle, RESIZE_HANDLE_SIZE};
 use fs::Fs;
 use futures::{
     Future, FutureExt, StreamExt,
@@ -4731,6 +4731,56 @@ impl Workspace {
         panel.to_any().downcast().ok()
     }
 
+    pub fn set_panel_windowed<T: Panel>(
+        &mut self,
+        panel: &Entity<T>,
+        windowed: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let dock = self
+            .dock_at_position(panel.read(cx).position(window, cx))
+            .clone();
+        let panel_id = panel.entity_id();
+        let handle = dock
+            .read(cx)
+            .panel_for_id(panel_id)
+            .cloned()
+            .context("Panel is unavailable in its dock")?;
+        dock.update(cx, |dock, cx| {
+            if windowed {
+                dock.open_panel_window(handle.clone(), true, window, cx)?;
+                handle.set_zoomed(false, window, cx);
+            } else {
+                dock.close_panel_window(panel_id, cx)?;
+                let index = dock
+                    .panel_index_for_type::<T>()
+                    .context("Panel is unavailable in its dock")?;
+                dock.activate_panel(index, window, cx);
+                dock.set_open(true, window, cx);
+            }
+            Ok::<_, anyhow::Error>(())
+        })?;
+        if windowed {
+            if self.zoomed_position == Some(dock.read(cx).position()) {
+                self.zoomed = None;
+                self.zoomed_position = None;
+                cx.emit(Event::ZoomChanged);
+            }
+        } else {
+            #[cfg(feature = "multiplayer-tools")]
+            self.request_collaborative_dock(dock.read(cx).position(), cx);
+            window.activate_window();
+            window.on_next_frame({
+                let panel = panel.clone();
+                move |window, cx| panel.read(cx).activation_focus_handle(cx).focus(window, cx)
+            });
+        }
+        self.serialize_workspace(window, cx);
+        cx.notify();
+        Ok(())
+    }
+
     /// Focus the panel of the given type if it isn't already focused. If it is
     /// already focused, then transfer focus back to the workspace center.
     /// When the `close_panel_on_toggle` setting is enabled, also closes the
@@ -4840,6 +4890,20 @@ impl Workspace {
         let mut serialize = false;
         for dock in self.all_docks().map(Clone::clone) {
             if let Some(panel_index) = dock.read(cx).panel_index_for_type::<T>() {
+                if let Some(panel) = dock.read(cx).panel_at(panel_index)
+                    && panel.dock_mode(cx) == DockMode::Window
+                {
+                    let result = dock.update(cx, |dock, cx| {
+                        if should_focus(panel.as_ref(), window, cx) {
+                            dock.open_panel_window(panel.clone(), true, window, cx)?;
+                        }
+                        Ok::<_, anyhow::Error>(())
+                    });
+                    if let Err(error) = result {
+                        self.show_error(format!("Could not open the tool window: {error}"), cx);
+                    }
+                    return Some(panel);
+                }
                 #[cfg(feature = "multiplayer-tools")]
                 self.request_collaborative_dock(dock.read(cx).position(), cx);
                 let mut focus_center = false;
@@ -4880,6 +4944,16 @@ impl Workspace {
     pub fn open_panel<T: Panel>(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for dock in self.all_docks().map(Clone::clone) {
             if let Some(panel_index) = dock.read(cx).panel_index_for_type::<T>() {
+                if let Some(panel) = dock.read(cx).panel_at(panel_index)
+                    && panel.dock_mode(cx) == DockMode::Window
+                {
+                    if let Err(error) = dock.update(cx, |dock, cx| {
+                        dock.open_panel_window(panel, false, window, cx)
+                    }) {
+                        self.show_error(format!("Could not open the tool window: {error}"), cx);
+                    }
+                    return;
+                }
                 #[cfg(feature = "multiplayer-tools")]
                 self.request_collaborative_dock(dock.read(cx).position(), cx);
                 dock.update(cx, |dock, cx| {
@@ -4904,8 +4978,14 @@ impl Workspace {
     pub fn close_panel<T: Panel>(&self, window: &mut Window, cx: &mut Context<Self>) {
         for dock in self.all_docks().iter() {
             dock.update(cx, |dock, cx| {
-                if dock.panel::<T>().is_some() {
-                    dock.set_open(false, window, cx)
+                if let Some(panel) = dock.panel::<T>() {
+                    if panel.read(cx).dock_mode() == DockMode::Window {
+                        if dock.close_panel_window(panel.entity_id(), cx).log_err() == Some(true) {
+                            PanelHandle::set_active(&panel, false, window, cx);
+                        }
+                    } else {
+                        dock.set_open(false, window, cx);
+                    }
                 }
             })
         }
@@ -9941,6 +10021,10 @@ impl Workspace {
             .root::<MultiWorkspace>()
             .flatten()
             .map(|multi_workspace| multi_workspace.read(cx).workspace().clone())
+    }
+
+    pub fn is_tool_window(window: &Window) -> bool {
+        window.root::<dock::PanelWindow>().flatten().is_some()
     }
 
     pub fn zoomed_item(&self) -> Option<&AnyWeakView> {
