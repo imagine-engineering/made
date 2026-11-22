@@ -1130,14 +1130,18 @@ impl gpui::Render for CanvasState {
         for node in &self.graph.nodes {
             self.node_focus
                 .entry(node.id.clone())
-                .or_insert_with(|| cx.focus_handle());
+                .or_insert_with(|| cx.focus_handle().tab_stop(true));
         }
         let focused = self.focused_node(window).map(str::to_owned);
 
         let viewport = self.viewport.clone();
         let node_size = self.graph.node_size();
         let scale = viewport.scale;
-        let overlay_node = self.hover.as_ref().or(focused.as_ref());
+        let (overlay_node, hovered_edge) = if window.last_input_was_keyboard() {
+            (focused.as_ref(), None)
+        } else {
+            (self.hover.as_ref().or(focused.as_ref()), self.hovered_edge)
+        };
         let selection = self.selection.clone();
         let inspected: HashSet<String> = self.inspected.iter().cloned().collect();
         let box_selection = self.box_selection;
@@ -1157,7 +1161,7 @@ impl gpui::Render for CanvasState {
                         .map(|point| viewport.graph_to_screen(*point))
                         .collect::<Vec<_>>(),
                     edge.variant,
-                    self.hovered_edge == Some(index)
+                    hovered_edge == Some(index)
                         || self.inspected_edges.contains(&edge.provider_index)
                         || (self.inspected.is_empty()
                             && (selection.contains(&edge.from) || selection.contains(&edge.to))),
@@ -1206,8 +1210,7 @@ impl gpui::Render for CanvasState {
             )
         });
 
-        let hover_label = self
-            .hovered_edge
+        let hover_label = hovered_edge
             .and_then(|index| self.graph.edges.get(index))
             .map(|edge| {
                 let source = self
@@ -1535,9 +1538,7 @@ impl gpui::Render for CanvasState {
                         .overflow_hidden()
                         .role(gpui::Role::Button)
                         .aria_label(accessible)
-                        .when_some(focus_handle, |node, focus| {
-                            node.track_focus(&focus).tab_index(0_isize)
-                        })
+                        .when_some(focus_handle, |node, focus| node.track_focus(&focus))
                         .on_click(cx.listener(move |state, event: &gpui::ClickEvent, _, cx| {
                             if matches!(event, gpui::ClickEvent::Keyboard(_))
                                 && state.select_node(&id, false, false)
@@ -2071,6 +2072,57 @@ mod tests {
         assert!(state.selection.contains("root"));
         assert!(state.selection.contains("c1"));
         assert!(state.box_selection.is_none());
+    }
+
+    #[gpui::test]
+    fn canvas_details_follow_keyboard_focus_after_pointer_hover(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        let (canvas, cx) = cx.add_window_view(|_, _| canvas_state_fixture());
+        let details = |cx: &mut gpui::VisualTestContext| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("a11y tree"))
+                        .expect("a11y json");
+                tree["nodes"]
+                    .as_object()
+                    .expect("a11y nodes")
+                    .values()
+                    .find(|node| node["aria"]["label"] == "Dependency details")
+                    .and_then(|node| node["aria"]["value"].as_str())
+                    .map(str::to_owned)
+            })
+        };
+        cx.update(|window, cx| {
+            window.activate_a11y_for_test();
+            window.draw(cx).clear(cx);
+        });
+        let pointer = canvas.read_with(cx, |state, _| {
+            let origin = *state.canvas_origin.lock().expect("canvas origin");
+            let left = state.node_screen_position("c1").expect("left dependency");
+            gpui::point(px(origin.x + left.x + 10.0), px(origin.y + left.y + 10.0))
+        });
+        cx.simulate_mouse_move(pointer, None, Default::default());
+        assert_eq!(details(cx).as_deref(), Some("org.example:left 1.0"));
+        cx.simulate_keystrokes("tab");
+        cx.update(|window, cx| {
+            let focus = canvas
+                .read(cx)
+                .focus_handle_for_node("c2")
+                .expect("right dependency focus");
+            window.focus(&focus, cx);
+        });
+        assert_eq!(details(cx).as_deref(), Some("org.example:right 2.0"));
+        cx.simulate_mouse_move(pointer, None, Default::default());
+        assert_eq!(details(cx).as_deref(), Some("org.example:left 1.0"));
+        canvas.read_with(cx, |state, _| {
+            assert!(state.selection.is_empty());
+            assert_eq!(state.viewport.offset, GraphPoint::ZERO);
+        });
     }
 
     #[gpui::test]

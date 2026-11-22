@@ -43,6 +43,10 @@ actions!(
         ToggleDependencyDiagramStructure,
         UseHorizontalDependencyLayout,
         UseVerticalDependencyLayout,
+        /// Focus the next dependency diagram control or node.
+        FocusNextDependencyDiagramControl,
+        /// Focus the previous dependency diagram control or node.
+        FocusPreviousDependencyDiagramControl,
         ShowDependencyDiagramContextMenu,
         DismissDependencyDiagramMenu
     ]
@@ -1260,10 +1264,15 @@ impl Render for DependencyDiagramItem {
             .id("groovy-dependency-diagram-item")
             .key_context("DependencyDiagram")
             .track_focus(&self.focus_handle)
+            .tab_group()
             .size_full()
             .flex()
             .flex_col()
             .bg(theme.background)
+            .on_action(|_: &FocusNextDependencyDiagramControl, window, cx| window.focus_next(cx))
+            .on_action(|_: &FocusPreviousDependencyDiagramControl, window, cx| {
+                window.focus_prev(cx)
+            })
             .on_action(cx.listener(|item, _: &FitDependencyDiagram, _, cx| item.fit_canvas(cx)))
             .on_action(
                 cx.listener(|item, _: &ZoomDependencyDiagramIn, _, cx| item.zoom_canvas(1.25, cx)),
@@ -1746,6 +1755,20 @@ impl DependencyDiagramPopup {
             cx.notify();
         });
     }
+
+    fn move_focus(&self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let previous = window.focused(cx);
+        if forward {
+            window.focus_next(cx);
+        } else {
+            window.focus_prev(cx);
+        }
+        if !self.focus_handle.contains_focused(window, cx)
+            && let Some(previous) = previous
+        {
+            window.focus(&previous, cx);
+        }
+    }
 }
 
 impl Render for DependencyDiagramPopup {
@@ -1767,6 +1790,17 @@ impl Render for DependencyDiagramPopup {
         div()
             .key_context("DependencyDiagramPopup")
             .track_focus(&self.focus_handle)
+            .tab_group()
+            .on_action(
+                cx.listener(|popup, _: &FocusNextDependencyDiagramControl, window, cx| {
+                    popup.move_focus(true, window, cx);
+                }),
+            )
+            .on_action(cx.listener(
+                |popup, _: &FocusPreviousDependencyDiagramControl, window, cx| {
+                    popup.move_focus(false, window, cx);
+                },
+            ))
             .on_action(
                 cx.listener(|popup, _: &DismissDependencyDiagramPopup, _, cx| {
                     if popup.search_handle.is_deployed() {
@@ -1933,6 +1967,7 @@ mod tests {
         });
         cx.run_until_parked();
         let canvas = cx.update(|window, cx| {
+            window.activate_a11y_for_test();
             window.draw(cx).clear(cx);
             let popup = workspace
                 .read(cx)
@@ -1948,6 +1983,32 @@ mod tests {
             assert!(origin.y >= 0. && origin.y + size.height <= f32::from(viewport.height));
             canvas
         });
+        let focused_label = |cx: &mut gpui::VisualTestContext| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("a11y tree"))
+                        .expect("a11y json");
+                let focus = tree["gpui_focus"].as_str()?;
+                tree["nodes"][focus]["aria"]["label"]
+                    .as_str()
+                    .map(str::to_owned)
+            })
+        };
+        cx.simulate_keystrokes("tab");
+        assert_eq!(
+            focused_label(cx).as_deref(),
+            Some("Search dependency preview nodes")
+        );
+        cx.simulate_keystrokes("tab");
+        assert_eq!(focused_label(cx).as_deref(), Some("Fit dependency diagram"));
+        cx.simulate_keystrokes("tab");
+        assert_eq!(
+            focused_label(cx).as_deref(),
+            Some("Dependency org.example:app")
+        );
+        cx.simulate_keystrokes("shift-tab");
+        assert_eq!(focused_label(cx).as_deref(), Some("Fit dependency diagram"));
         canvas.update(cx, |canvas, cx| {
             canvas.viewport.scale = 8.;
             cx.notify();
@@ -2393,9 +2454,8 @@ mod tests {
 
         let label =
             "Structure overview selected node org.example:left; activate to centre the viewport";
-        assert!(
-            (0..32).any(|_| cx.update(|window, cx| {
-                window.focus_next(cx);
+        let overview_block_has_focus = |cx: &mut gpui::VisualTestContext, label: &str| {
+            cx.update(|window, cx| {
                 window.draw(cx).clear(cx);
                 let tree: serde_json::Value =
                     serde_json::from_str(&window.debug_a11y_tree_json().expect("a11y tree"))
@@ -2404,9 +2464,26 @@ mod tests {
                     tree["nodes"][id]["aria"]["label"] == label
                         && tree["nodes"][id]["aria"]["role"] == "Button"
                 })
-            })),
-            "keyboard focus reaches the selected overview block"
+            })
+        };
+        cx.update(|window, cx| {
+            let focus = item.read(cx).focus_handle.clone();
+            window.focus(&focus, cx);
+        });
+        assert!(
+            (0..32).any(|_| {
+                cx.simulate_keystrokes("tab");
+                overview_block_has_focus(cx, label)
+            }),
+            "Tab reaches the selected overview block"
         );
+        cx.simulate_keystrokes("tab");
+        assert!(overview_block_has_focus(
+            cx,
+            "Structure overview selected node org.example:right; activate to centre the viewport"
+        ));
+        cx.simulate_keystrokes("shift-tab");
+        assert!(overview_block_has_focus(cx, label));
         for activation_key in ["enter", "space"] {
             item.update(cx, |item, cx| item.move_viewport_to_overview(pointer, cx));
             cx.update(|window, cx| {

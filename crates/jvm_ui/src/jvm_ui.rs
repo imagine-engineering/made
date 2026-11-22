@@ -47,7 +47,19 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
 
 pub fn bind_keys(cx: &mut App) {
     const DEPENDENCY_TREE: &str = "(GroovyDependenciesPanel && !GroovyDependenciesPanelControls) || (DependencyAnalyzer && !DependencyAnalyzerControls)";
+    const DIAGRAM_CONTROLS: &str =
+        "(DependencyDiagram || DependencyDiagramPopup) && !menu && !Picker";
     cx.bind_keys([
+        KeyBinding::new(
+            "tab",
+            dependency_diagram_item::FocusNextDependencyDiagramControl,
+            Some(DIAGRAM_CONTROLS),
+        ),
+        KeyBinding::new(
+            "shift-tab",
+            dependency_diagram_item::FocusPreviousDependencyDiagramControl,
+            Some(DIAGRAM_CONTROLS),
+        ),
         KeyBinding::new(
             "escape",
             dependency_diagram_item::DismissDependencyDiagramPopup,
