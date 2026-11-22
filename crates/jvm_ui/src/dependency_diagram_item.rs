@@ -674,14 +674,11 @@ impl DependencyDiagramItem {
             .surface_focus_handle
             .as_ref()
             .is_some_and(|focus| focus.is_focused(window));
-        let focused = if surface_focused {
-            None
-        } else {
-            canvas
-                .focused_node(window)
-                .or(canvas.focus.as_deref())
-                .or_else(|| canvas.selection.iter().next().map(String::as_str))
-        };
+        let focused = canvas.focused_node(window);
+        if focused.is_none() && !surface_focused && !self.focus_handle.is_focused(window) {
+            cx.propagate();
+            return;
+        }
         let target = stage_dependency_diagram_target(focused, &canvas.selection);
         let origin = *canvas.canvas_origin.lock().expect("canvas origin");
         let screen = if let Some(position) = focused.and_then(|id| canvas.node_screen_position(id))
@@ -2907,50 +2904,72 @@ mod tests {
                 canvas.viewport.clone()
             })
         });
-        cx.update(|window, cx| {
+        let item_focus = cx.update(|window, cx| {
             window.activate_a11y_for_test();
-            window.focus(&item.read(cx).focus_handle(cx), cx);
+            let focus = item.read(cx).focus_handle(cx);
+            window.focus(&focus, cx);
             window.draw(cx).clear(cx);
+            focus
         });
+        let aria_focus = |cx: &mut gpui::VisualTestContext, label: &str, role: &str| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram"))
+                        .expect("accessibility JSON");
+                tree["gpui_focus"].as_str().is_some_and(|focus| {
+                    let aria = &tree["nodes"][focus]["aria"];
+                    aria["label"] == label && aria["role"] == role
+                })
+            })
+        };
+        assert!((0..32).any(|_| {
+            cx.simulate_keystrokes("tab");
+            aria_focus(cx, "Fit dependency diagram", "Button")
+        }));
+        cx.simulate_keystrokes("shift-f10");
+        assert!(
+            !context_handle.is_deployed(),
+            "toolbar focus must not open a menu for a previously selected dependency"
+        );
+        assert!(aria_focus(cx, "Fit dependency diagram", "Button"));
+
         assert!(
             (0..32).any(|_| {
                 cx.simulate_keystrokes("tab");
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value =
-                        serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram"))
-                            .expect("accessibility JSON");
-                    tree["gpui_focus"].as_str().is_some_and(|focus| {
-                        let aria = &tree["nodes"][focus]["aria"];
-                        aria["label"] == "Dependency diagram" && aria["role"] == "Application"
-                    })
-                })
+                aria_focus(cx, "Dependency diagram", "Application")
             }),
             "Tab reaches the diagram canvas with nodes selected"
         );
         let canvas_focus = cx.update(|window, cx| window.focused(cx).expect("canvas focus"));
-        cx.simulate_keystrokes("shift-f10");
-        assert!(
-            context_handle.is_deployed(),
-            "the gesture can open the blank-canvas menu"
-        );
-        cx.update(|window, cx| {
-            window.draw(cx).clear(cx);
-            let tree: serde_json::Value =
-                serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram menu"))
-                    .expect("accessibility JSON");
+        for focus in [canvas_focus, item_focus] {
+            cx.update(|window, cx| {
+                window.focus(&focus, cx);
+                window.draw(cx).clear(cx);
+            });
+            cx.simulate_keystrokes("shift-f10");
             assert!(
-                tree["nodes"]
-                    .as_object()
-                    .expect("menu nodes")
-                    .values()
-                    .any(|node| { node["aria"]["label"] == "Layout" }),
-                "the menu offers the canvas-only Layout submenu"
+                context_handle.is_deployed(),
+                "the focused diagram can open the blank-canvas menu"
             );
-        });
-        cx.simulate_keystrokes("escape");
-        assert!(!context_handle.is_deployed());
-        assert!(cx.update(|window, _| canvas_focus.is_focused(window)));
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram menu"))
+                        .expect("accessibility JSON");
+                assert!(
+                    tree["nodes"]
+                        .as_object()
+                        .expect("menu nodes")
+                        .values()
+                        .any(|node| node["aria"]["label"] == "Layout"),
+                    "the menu offers the canvas-only Layout submenu"
+                );
+            });
+            cx.simulate_keystrokes("escape");
+            assert!(!context_handle.is_deployed());
+            assert!(cx.update(|window, _| focus.is_focused(window)));
+        }
         item.read_with(cx, |item, cx| {
             let canvas = item.canvas.read(cx);
             assert_eq!(canvas.selection, BTreeSet::from(["c1".into(), "c2".into()]));
