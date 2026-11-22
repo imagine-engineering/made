@@ -45,6 +45,469 @@ pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkf
     .await;
 }
 
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires a disposable offline Gradle graph, pinned JDTLS and its Gradle delegate"]
+async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestAppContext) {
+    use gpui::InputEvent as _;
+    use jvm_ui::{
+        DependenciesPanel, ShowGradle,
+        dependency_analyzer_item::DependencyAnalyzerItem,
+        dependency_diagram_item::{DependencyDiagramItem, DependencyDiagramPopup},
+        dependency_graph_canvas::{CanvasEdgeVariant, MAX_CANVAS_EDGES, MAX_CANVAS_NODES},
+    };
+    use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher};
+    use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
+    use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
+    use std::path::PathBuf;
+
+    struct FixtureLogger;
+    impl log::Log for FixtureLogger {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() <= log::Level::Warn && metadata.target().starts_with("project::")
+        }
+
+        fn log(&self, record: &log::Record<'_>) {
+            if self.enabled(record.metadata()) {
+                eprintln!("{}: {}", record.target(), record.args());
+            }
+        }
+
+        fn flush(&self) {}
+    }
+    if log::set_logger(&FixtureLogger).is_ok() {
+        log::set_max_level(log::LevelFilter::Warn);
+    }
+    let input_path = |name| {
+        PathBuf::from(std::env::var_os(name).expect(name))
+            .canonicalize()
+            .expect(name)
+    };
+    let root = input_path("GROOVY_GRADLE_GRAPH_ROOT");
+    let launcher = input_path("GROOVY_JDTLS_LAUNCHER");
+    let delegate = input_path("GROOVY_GRADLE_MODEL_JAR");
+    let provider_java = input_path("GROOVY_LSP_JAVA_HOME");
+    let build_java = input_path("GROOVY_BUILD_JAVA_HOME");
+    let gradle_installation = input_path("GROOVY_GRADLE_HOME");
+    let gradle_user_home = input_path("GRADLE_USER_HOME");
+    let provider_data = tempfile::tempdir().expect("fresh Gradle provider state");
+    let options = serde_json::json!({
+        "autobuild": {"enabled": false},
+        "configuration": {"updateBuildConfiguration": "disabled"},
+        "import": {"maven": {"enabled": false}, "gradle": {
+            "enabled": true, "offline": {"enabled": true}, "wrapper": {"enabled": false},
+            "home": gradle_installation, "java": {"home": build_java},
+            "user": {"home": gradle_user_home}, "arguments": ["--offline"],
+        }},
+    });
+    let settings = serde_json::json!({"lsp": {"jdtls": {
+        "binary": {"path": launcher, "arguments": [
+            format!("--java-executable={}/bin/java", provider_java.display()),
+            "-data", provider_data.path().display().to_string(),
+        ], "env": {"JAVA_HOME": provider_java, "JAVA_TOOL_OPTIONS": "-Djava.net.preferIPv4Stack=true"}},
+        "settings": {"java": &options},
+    }}});
+    cx.executor().allow_parking();
+    cx.update(|cx| {
+        let _app_state = workspace::AppState::test(cx);
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store
+                .set_user_settings(&settings.to_string(), cx)
+                .expect("offline JDTLS fixture settings");
+        });
+        trusted_worktrees::init(Default::default(), cx);
+        editor::init(cx);
+        jvm_ui::init(cx);
+    });
+    let project = Project::test(
+        Arc::new(fs::RealFs::new(None, cx.executor())),
+        [root.as_path()],
+        cx,
+    )
+    .await;
+    let (worktrees, worktree_id, languages, lsp_store) = project.read_with(cx, |project, cx| {
+        let worktrees = project.worktree_store();
+        let worktree_id = worktrees
+            .read(cx)
+            .worktrees()
+            .next()
+            .expect("Gradle graph worktree")
+            .read(cx)
+            .id();
+        (
+            worktrees,
+            worktree_id,
+            project.languages().clone(),
+            project.lsp_store(),
+        )
+    });
+    cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("fixture trust"))
+        .update(cx, |trust, cx| {
+            trust.trust(
+                &worktrees,
+                collections::HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            );
+        });
+    languages.add(Arc::new(Language::new(
+        LanguageConfig {
+            name: "Java".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["java".into()],
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        },
+        None,
+    )));
+    languages.register_fake_lsp_adapter(
+        "Java",
+        FakeLspAdapter {
+            name: "jdtls",
+            initialization_options: Some(serde_json::json!({
+                "settings": {"java": options},
+                "bundles": [delegate],
+            })),
+            ..Default::default()
+        },
+    );
+    let (_source, _open_source) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(
+                root.join("application/src/main/java/GraphProbe.java"),
+                cx,
+            )
+        })
+        .await
+        .expect("Gradle module source");
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now();
+    loop {
+        cx.run_until_parked();
+        if lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot
+                            .projects
+                            .iter()
+                            .any(|module| module.module_root.path.as_unix_str() == "application")
+                })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "JDTLS did not import the Gradle module"
+        );
+        if Instant::now() >= refresh_at {
+            lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let (container, cx) = cx.add_window_view(|window, cx| {
+        workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+    });
+    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+    let async_cx = cx.update(|window, cx| window.to_async(cx));
+    let panel = DependenciesPanel::load(workspace.downgrade(), async_cx)
+        .await
+        .expect("existing Dependencies panel");
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_panel(panel.clone(), window, cx);
+        workspace.right_dock().update(cx, |dock, cx| {
+            dock.set_open(true, window, cx);
+        });
+        workspace.focus_panel::<DependenciesPanel>(window, cx);
+        window.activate_a11y_for_test();
+    });
+    let focus_control = |cx: &mut VisualTestContext, label| {
+        assert!(
+            (0..48).any(|_| cx.update(|window, cx| {
+                window.focus_next(cx);
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value = serde_json::from_str(
+                    &window
+                        .debug_a11y_tree_json()
+                        .expect("window accessibility tree"),
+                )
+                .expect("accessibility JSON");
+                tree["gpui_focus"]
+                    .as_str()
+                    .is_some_and(|focus| tree["nodes"][focus]["aria"]["label"] == label)
+            })),
+            "keyboard focus reaches {label}"
+        );
+    };
+    let press_enter = |cx: &mut VisualTestContext| {
+        let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
+        cx.update(|window, cx| {
+            window.dispatch_event(
+                gpui::KeyDownEvent {
+                    keystroke: keystroke.clone(),
+                    is_held: false,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
+        });
+        cx.run_until_parked();
+    };
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ShowGradle);
+    focus_control(
+        cx,
+        "Synchronize local Gradle metadata; executes trusted build configuration scripts",
+    );
+    press_enter(cx);
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.focus_panel::<DependenciesPanel>(window, cx);
+    });
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        cx.run_until_parked();
+        cx.dispatch_action(ExpandAll);
+        if panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            rows.iter().any(|row| row.label == "qualificationGraph")
+        }) {
+            break;
+        }
+        if Instant::now() >= deadline
+            || lsp_store.read_with(cx, |store, _| store.jdtls_project_query_failed(worktree_id))
+        {
+            let (status, rows, _) = panel.read_with(cx, |panel, _| panel.snapshot_for_test());
+            let modules = lsp_store.read_with(cx, |store, _| {
+                let (snapshot, current) = store
+                    .jdtls_project_snapshot(worktree_id)
+                    .expect("imported modules");
+                (
+                    current,
+                    snapshot
+                        .projects
+                        .iter()
+                        .map(|module| {
+                            (
+                                module.module_root.path.to_string(),
+                                module.gradle.as_ref().map(|gradle| {
+                                    gradle
+                                        .configurations
+                                        .iter()
+                                        .map(|config| config.name.clone())
+                                        .collect::<Vec<_>>()
+                                }),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            });
+            let labels: Vec<_> = rows.iter().map(|row| row.label.as_str()).collect();
+            panic!(
+                "the Dependencies tree did not receive the real Gradle configuration: {status:?}, {modules:?}, {labels:?}"
+            );
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    cx.dispatch_action(Refresh);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        cx.run_until_parked();
+        if lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(_, current)| current)
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Gradle ownership did not refresh"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let select_configuration = |cx: &mut VisualTestContext| {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.dispatch_action(ExpandAll);
+        let configuration = panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            rows.iter()
+                .position(|row| row.label == "qualificationGraph")
+                .expect("current Gradle configuration")
+        });
+        cx.dispatch_action(SelectFirst);
+        for _ in 0..configuration {
+            cx.dispatch_action(SelectNext);
+        }
+    };
+    select_configuration(cx);
+    let dispatch = |cx: &mut VisualTestContext, action_name| {
+        cx.update(|window, cx| {
+            let action = cx.build_action(action_name, None).expect(action_name);
+            window.dispatch_action(action, cx);
+        });
+    };
+    dispatch(cx, "groovy_dependencies_panel::CollectSelectedGraph");
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let graph = loop {
+        cx.run_until_parked();
+        if let Some(graph) = lsp_store.read_with(cx, |store, _| {
+            let (snapshot, current) = store.jdtls_project_snapshot(worktree_id)?;
+            if !current {
+                return None;
+            }
+            snapshot.projects.iter().find_map(|module| {
+                let graph = module.gradle.as_ref()?.dependency_graph.as_ref()?;
+                (graph.resolution.configuration == "qualificationGraph")
+                    .then(|| graph.resolution.clone())
+            })
+        }) {
+            break graph;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the selected offline Gradle graph was not admitted"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    assert_eq!((graph.components.len(), graph.edges.len()), (126, 413));
+    assert!(!graph.resolution_complete);
+    eprintln!("Gradle Dependencies admitted 126 components and 413 edges");
+    let leaf = graph
+        .components
+        .iter()
+        .find(|component| component.module.as_deref() == Some("leaf-12-08"))
+        .expect("late transitive leaf");
+    let (incoming_index, incoming) = graph
+        .edges
+        .iter()
+        .enumerate()
+        .find(|(_, edge)| edge.selected.as_deref() == Some(&leaf.id))
+        .expect("actual provider edge to the leaf");
+    select_configuration(cx);
+    focus_control(
+        cx,
+        "Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies",
+    );
+    press_enter(cx);
+    let diagram = workspace
+        .read_with(cx, |workspace, cx| {
+            workspace.item_of_type::<DependencyDiagramItem>(cx)
+        })
+        .unwrap_or_else(|| {
+            let notice = cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("window tree"))
+                        .expect("accessibility JSON");
+                tree["nodes"]
+                    .as_object()
+                    .expect("accessibility nodes")
+                    .values()
+                    .find(|node| node["aria"]["label"] == "Dependency graph status")
+                    .map(|node| node["aria"]["value"].clone())
+            });
+            panic!("editor diagram from the selected Gradle configuration: {notice:?}")
+        });
+    diagram.read_with(cx, |diagram, cx| {
+        let canvas = diagram.canvas().read(cx);
+        assert!(canvas.graph.truncated);
+        assert!(canvas.graph.node(&leaf.id).is_none());
+    });
+
+    focus_control(cx, "Search dependency diagram nodes");
+    press_enter(cx);
+    for _ in 0..2 {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.simulate_next_frame(cx);
+        });
+    }
+    cx.simulate_input("leaf-12-08");
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let tree: serde_json::Value =
+            serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram search"))
+                .expect("accessibility JSON");
+        let nodes = tree["nodes"].as_object().expect("accessibility nodes");
+        assert_eq!(
+            nodes
+                .values()
+                .filter(|node| { node["aria"]["label"] == "verification:leaf-12-08:1.0" })
+                .count(),
+            1,
+            "the picker renders one exact transitive dependency",
+        );
+        assert!(!nodes.values().any(|node| {
+            node["aria"]["label"] == "Dependency graph status"
+                && node["aria"]["value"]
+                    .as_str()
+                    .is_some_and(|status| status.contains("Diagram unavailable"))
+        }));
+    });
+    dispatch(cx, "menu::Confirm");
+    cx.run_until_parked();
+    diagram.read_with(cx, |diagram, cx| {
+        let canvas = diagram.canvas().read(cx);
+        assert_eq!(canvas.focus.as_deref(), Some(leaf.id.as_str()));
+        assert!(canvas.selection.contains(&leaf.id));
+        assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
+        assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
+        assert!(canvas.graph.edges.iter().any(|edge| {
+            edge.from == incoming.from
+                && edge.to == leaf.id
+                && edge.provider_index == incoming_index
+                && edge.variant == CanvasEdgeVariant::Dependency
+        }));
+    });
+    eprintln!(
+        "Mounted Gradle Dependencies admitted 126 components and 413 edges and searched to the exact provider edge for verification:leaf-12-08:1.0"
+    );
+    select_configuration(cx);
+    dispatch(cx, "groovy_dependencies_panel::ShowDependencyDiagramPopup");
+    cx.run_until_parked();
+    assert!(workspace.read_with(cx, |workspace, cx| {
+        workspace
+            .active_modal::<DependencyDiagramPopup>(cx)
+            .is_some()
+    }));
+    cx.simulate_keystrokes("escape");
+    assert!(workspace.read_with(cx, |workspace, cx| {
+        workspace
+            .active_modal::<DependencyDiagramPopup>(cx)
+            .is_none()
+    }));
+    select_configuration(cx);
+    dispatch(cx, "groovy_dependencies_panel::AnalyzeDependencies");
+    cx.run_until_parked();
+    let analyzer = workspace
+        .read_with(cx, |workspace, cx| {
+            workspace.item_of_type::<DependencyAnalyzerItem>(cx)
+        })
+        .expect("analyzer from the selected Gradle configuration");
+    analyzer.read_with(cx, |analyzer, _| {
+        assert_eq!(analyzer.scope().label(), "qualificationGraph");
+    });
+    eprintln!("Mounted Gradle opened the diagram popup and analyzer from the same admitted scope");
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum JavaTestOutcome {
     Pass,

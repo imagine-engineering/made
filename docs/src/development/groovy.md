@@ -267,6 +267,16 @@ refresh. They do not grant trust, prove full synchronization or provide a
 remote fallback. **Cancel selected import** applies only to this panel's
 current import.
 
+The scoped Gradle provider uses a cached Gradle installation for **Synchronize
+metadata**. In your host's `lsp.jdtls.settings`, set
+`java.import.gradle.home` to the absolute installation directory, set
+`java.import.gradle.wrapper.enabled` to `false`, and set
+`java.import.gradle.offline.enabled` to `true`. Clear any explicit
+`java.import.gradle.version` so JDTLS uses that installation. Use an
+installation compatible with the build and a Gradle user home with the
+dependencies already cached. Refresh the imported project after changing
+these settings.
+
 To inspect dependency relationships, select a Maven project or a resolvable
 Gradle configuration and use **Collect offline graph**. This local operation
 executes trusted configuration and resolves cached metadata; offline does not

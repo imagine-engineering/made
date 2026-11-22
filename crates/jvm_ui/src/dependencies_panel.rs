@@ -3673,30 +3673,37 @@ impl DependenciesPanel {
         })
     }
 
+    fn defer_graph_presentation(
+        present: fn(&mut Self, &mut Context<Self>),
+        cx: &mut Context<Self>,
+    ) {
+        let panel = cx.weak_entity();
+        // Opening a workspace item needs the window returned by action dispatch.
+        cx.defer(move |cx| {
+            if let Some(panel) = panel.upgrade() {
+                panel.update(cx, present);
+            }
+        });
+    }
+
     fn show_dependency_diagram(&mut self, cx: &mut Context<Self>) {
-        let Some((selection, _)) = self.resolve_selected_canvas_graph(cx) else {
+        let Some(open) = self.canvas_diagram_load(cx.weak_entity(), cx) else {
             self.show_graph_error(anyhow::anyhow!("Select a Maven project or a resolvable Gradle configuration and use Collect offline graph before opening the diagram"), cx);
             return;
         };
         self.graph_notice = None;
-        self.graph_diagram_selection = Some(selection);
+        self.graph_diagram_selection = Some(open.source.selection.clone());
         self.graph_diagram = None;
         self.graph_diagram_source = None;
         self.graph_diagram_legend.clear();
         self.rebuild(cx);
-        if self.graph_diagram.is_none() && self.graph_notice.is_none() {
-            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram"), cx);
-            return;
-        }
-        if let Some(open) = self.canvas_diagram_load(cx.weak_entity(), cx) {
-            if let Err(error) = self.open_or_focus_diagram_tab(open, cx) {
-                self.show_graph_error(error, cx);
+        match self.open_or_focus_diagram_tab(open, cx) {
+            Ok(_) => {
+                if self.graph_notice.take().is_some() {
+                    cx.notify();
+                }
             }
-        } else {
-            // No admitted facts: show the collection affordance without
-            // starting a provider query.
-            self.graph_notice = Some("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram".into());
-            cx.notify();
+            Err(error) => self.show_graph_error(error, cx),
         }
     }
 
@@ -3822,11 +3829,13 @@ impl DependenciesPanel {
     fn show_dependency_diagram_popup(&mut self, cx: &mut Context<Self>) {
         match self.canvas_diagram_load(cx.weak_entity(), cx) {
             Some(open) => {
-                let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+                if let Err(error) = self.workspace.update_in(cx, |workspace, window, cx| {
                     workspace.toggle_modal(window, cx, |_window, cx| {
                         DependencyDiagramPopup::new(open, cx)
                     });
-                });
+                }) {
+                    self.show_graph_error(error, cx);
+                }
             }
             None => {
                 // Collection affordance without a provider query.
@@ -8473,7 +8482,7 @@ impl Render for DependenciesPanel {
                     cx.notify();
                 }),
             )
-            .on_action(cx.listener(|panel, _: &ShowDependencyDiagram, _, cx| panel.show_dependency_diagram(cx)))
+            .on_action(cx.listener(|_, _: &ShowDependencyDiagram, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram, cx)))
             .on_action(cx.listener(|panel, _: &ShowDependencyRowMenu, window, cx| {
                 if let Some(id) = panel.host.selected().cloned()
                     && let Some(position) = crate::selected_dependency_row_menu_position(&panel.host)
@@ -8481,8 +8490,8 @@ impl Render for DependenciesPanel {
                     panel.show_graph_context_menu(id, position, window, cx);
                 }
             }))
-            .on_action(cx.listener(|panel, _: &ShowDependencyDiagramPopup, _, cx| panel.show_dependency_diagram_popup(cx)))
-            .on_action(cx.listener(|panel, _: &AnalyzeDependencies, _, cx| panel.analyze_dependencies(cx)))
+            .on_action(cx.listener(|_, _: &ShowDependencyDiagramPopup, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram_popup, cx)))
+            .on_action(cx.listener(|_, _: &AnalyzeDependencies, _, cx| Self::defer_graph_presentation(Self::analyze_dependencies, cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &CopyDependencyDiagramSource, _, cx| panel.copy_dependency_diagram_source(cx)))
             .on_action(
@@ -8647,7 +8656,7 @@ impl Render for DependenciesPanel {
                                     .tab_index(0_isize)
                                     .aria_label("Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies")
                                     .tooltip(Tooltip::text("Show dependency diagram"))
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram(cx))),
+                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram, cx))),
                                 )
                                 .child(
                                     IconButton::new(
@@ -8658,7 +8667,7 @@ impl Render for DependenciesPanel {
                                     .tab_index(0_isize)
                                     .aria_label("Show the dependency diagram popup over the current admitted dependency graph facts; dismissed by Escape")
                                     .tooltip(Tooltip::text("Show diagram popup"))
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram_popup(cx))),
+                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram_popup, cx))),
                                 )
                                 .child(
                                     IconButton::new(
@@ -8669,7 +8678,7 @@ impl Render for DependenciesPanel {
                                     .tab_index(0_isize)
                                     .aria_label("Analyze Dependencies: open the searchable dependency analyzer over the current admitted dependency graph facts")
                                     .tooltip(Tooltip::text("Analyze Dependencies"))
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.analyze_dependencies(cx))),
+                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::analyze_dependencies, cx))),
                                 )
                                 .when(self.view != BuildToolView::Dependencies, |row| {
                                     row.child(
@@ -8886,7 +8895,7 @@ impl Render for DependenciesPanel {
                         Button::new("groovy-show-dependency-diagram", "Show diagram")
                             .aria_label("Show a bounded diagram of current admitted dependency graph facts")
                             .tab_index(0_isize).toggle_state(self.graph_diagram.is_some())
-                            .on_click(cx.listener(|panel, _, _, cx| panel.show_dependency_diagram(cx))),
+                            .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram, cx))),
                     ))
                     .when(self.graph_diagram.is_some(), |header| header.child(
                         Button::new("groovy-close-dependency-diagram", "Close diagram")

@@ -69,3 +69,33 @@ buildRootUri and moduleUri bindings are normalized to synthetic test paths.
 The graphJson bytes, composite/project/module identities, selectors, variants,
 selection causes, rich constraint, cycle and unresolved metadata remain unchanged.
 This is a Rust admission fixture; it does not qualify product/native/platform parity.
+
+## Offline dependency diagram journey
+
+Run the fixture generator with an empty disposable directory. It copies the
+pinned wrapper and creates a separate Gradle project and local module repository.
+
+```sh
+python3 crates/project/test_data/groovy_jvm_gradle/prepare-diagram-fixture.py "$fixture"
+export GROOVY_GRADLE_GRAPH_ROOT="$fixture/graph-project"
+```
+
+Provide the pinned executable `GROOVY_JDTLS_LAUNCHER` and
+`GROOVY_GRADLE_MODEL_JAR`, the provider and build JDK directories in
+`GROOVY_LSP_JAVA_HOME` and `GROOVY_BUILD_JAVA_HOME`, and a cached Gradle 8.13
+installation in `GROOVY_GRADLE_HOME`. Use an isolated `GRADLE_USER_HOME`.
+Run the mounted test with external networking denied.
+
+```sh
+cargo test --locked --offline -p debugger_ui -p tasks_ui \
+  --features debugger_ui/jvm-workflow-tests --lib \
+  test_explorer::jvm_workflow::cached_gradle_graph_reaches_mounted_dependency_diagram \
+  -- --ignored --exact --nocapture
+```
+
+Both scopes resolve 126 components and 413 edges. The selected version of
+`verification:shared-version` is `2.0`. The graph includes an unresolved
+request, a two-node cycle, and 96 paths to `verification:shared-observer:1.0`.
+The generated `fixture-inputs.json` records the expected provider facts and
+source file digests. The mounted test exercises GPUI and the real provider.
+Desktop screenshots and timings use the separate native journey.
