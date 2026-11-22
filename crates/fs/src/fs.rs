@@ -182,6 +182,20 @@ pub trait Fs: Send + Sync {
         .into())
     }
 
+    async fn list_confined_directory(
+        &self,
+        _root: &ConfinedRoot,
+        _named_root: &Path,
+        _path: &Path,
+        _max_entries: usize,
+    ) -> Result<Vec<ConfinedDirectoryEntry>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Retained-root directory listing is unsupported by this filesystem",
+        )
+        .into())
+    }
+
     /// A true result confirms a missing entry under a verified root without
     /// following aliases. Existing final entries, including symlinks, return false.
     async fn is_confined_file_absent(
@@ -499,6 +513,29 @@ impl TrashId {
 #[derive(Clone)]
 pub struct ConfinedRoot {
     inner: Arc<ConfinedRootInner>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfinedDirectoryEntry {
+    pub name: OsString,
+    pub is_dir: bool,
+    pub len: u64,
+    version: ConfinedDirectoryEntryVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ConfinedDirectoryEntryVersion {
+    #[cfg(unix)]
+    Native {
+        device: u64,
+        inode: u64,
+        changed_seconds: i128,
+        changed_nanoseconds: i128,
+        modified_seconds: i128,
+        modified_nanoseconds: i128,
+    },
+    #[cfg(feature = "test-support")]
+    Fake { inode: u64, modified: MTime },
 }
 
 struct ConfinedRootInner {
@@ -1285,18 +1322,103 @@ impl ConfinedNativeParent {
     }
 
     fn validate_file(&self, file: &std::fs::File) -> Result<()> {
+        self.validate_target(file, rustix::fs::FileType::RegularFile)
+            .context("Confined file binding changed")
+    }
+
+    fn validate_target(&self, file: &std::fs::File, kind: rustix::fs::FileType) -> Result<()> {
         use rustix::fs::{AtFlags, statat};
         let bound = statat(self.parent()?, &self.target, AtFlags::SYMLINK_NOFOLLOW)?;
         let actual = file.metadata()?;
         anyhow::ensure!(
             bound.st_dev as u64 == actual.dev()
                 && bound.st_ino as u64 == actual.ino()
-                && rustix::fs::FileType::from_raw_mode(bound.st_mode)
-                    == rustix::fs::FileType::RegularFile,
-            "Confined file binding changed"
+                && rustix::fs::FileType::from_raw_mode(bound.st_mode) == kind,
+            "Confined target binding changed"
         );
         Ok(())
     }
+}
+
+#[cfg(unix)]
+async fn native_confined_directory_entries(
+    root: &ConfinedRoot,
+    named_root: &Path,
+    path: &Path,
+    max_entries: usize,
+) -> Result<Vec<ConfinedDirectoryEntry>> {
+    use rustix::fs::{AtFlags, Dir, FileType, Mode, openat, statat};
+    let _operation = root.inner.operation.lock().await;
+    anyhow::ensure!(
+        root.inner.metadata.is_dir,
+        "Confined root is not a directory"
+    );
+    let (directory, parent) = if path.as_os_str().is_empty() {
+        (confined_native_named_root(root, named_root)?, None)
+    } else {
+        let parent = ConfinedNativeParent::walk(root, named_root, path)?;
+        anyhow::ensure!(
+            !parent.missing_parent,
+            "Confined directory parent does not exist"
+        );
+        let directory = std::fs::File::from(openat(
+            parent.parent()?,
+            &parent.target,
+            confined_native_flags(true),
+            Mode::empty(),
+        )?);
+        parent.validate_target(&directory, FileType::Directory)?;
+        parent.validate(root, named_root)?;
+        (directory, Some(parent))
+    };
+    let before = directory.metadata()?;
+    let mut entries = Vec::new();
+    for entry in Dir::read_from(&directory)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if matches!(name.to_bytes(), b"." | b"..") {
+            continue;
+        }
+        anyhow::ensure!(
+            entries.len() < max_entries,
+            "Confined directory exceeds its entry budget"
+        );
+        let metadata = statat(&directory, name, AtFlags::SYMLINK_NOFOLLOW)?;
+        let kind = FileType::from_raw_mode(metadata.st_mode);
+        anyhow::ensure!(
+            matches!(kind, FileType::Directory | FileType::RegularFile),
+            "Confined directory entry is neither a regular file nor a directory"
+        );
+        entries.push(ConfinedDirectoryEntry {
+            name: std::ffi::OsStr::from_bytes(name.to_bytes()).to_owned(),
+            is_dir: kind == FileType::Directory,
+            len: u64::try_from(metadata.st_size).context("Confined entry has an invalid length")?,
+            version: ConfinedDirectoryEntryVersion::Native {
+                device: metadata.st_dev as u64,
+                inode: metadata.st_ino as u64,
+                changed_seconds: i128::from(metadata.st_ctime),
+                changed_nanoseconds: i128::from(metadata.st_ctime_nsec),
+                modified_seconds: i128::from(metadata.st_mtime),
+                modified_nanoseconds: i128::from(metadata.st_mtime_nsec),
+            },
+        });
+    }
+    let after = directory.metadata()?;
+    anyhow::ensure!(
+        before.ctime() == after.ctime()
+            && before.ctime_nsec() == after.ctime_nsec()
+            && before.mtime() == after.mtime()
+            && before.mtime_nsec() == after.mtime_nsec(),
+        "Confined directory changed during listing"
+    );
+    if let Some(parent) = parent {
+        parent.validate_target(&directory, FileType::Directory)?;
+        parent.validate(root, named_root)?;
+    } else {
+        confined_native_named_root(root, named_root)?;
+    }
+    entries.sort_unstable_by(|first, second| first.name.cmp(&second.name));
+    Ok(entries)
 }
 
 #[cfg(unix)]
@@ -2126,6 +2248,24 @@ impl Fs for RealFs {
         let named_root = named_root.to_path_buf();
         let path = path.to_path_buf();
         self.executor.spawn(async move { read_native_confined_file(&root, &named_root, &path, max_bytes).await }).await
+    }
+
+    #[cfg(unix)]
+    async fn list_confined_directory(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+        max_entries: usize,
+    ) -> Result<Vec<ConfinedDirectoryEntry>> {
+        let root = root.clone();
+        let named_root = named_root.to_path_buf();
+        let path = path.to_path_buf();
+        self.executor
+            .spawn(async move {
+                native_confined_directory_entries(&root, &named_root, &path, max_entries).await
+            })
+            .await
     }
 
     #[cfg(unix)]
@@ -4886,6 +5026,44 @@ impl Fs for FakeFs {
         let mut state = self.state.lock();
         let entry = self.confined_root_entry(&mut state, root, named_root)?;
         Ok(Self::confined_entry(entry, &components)?.is_none())
+    }
+
+    async fn list_confined_directory(
+        &self,
+        root: &ConfinedRoot,
+        named_root: &Path,
+        path: &Path,
+        max_entries: usize,
+    ) -> Result<Vec<ConfinedDirectoryEntry>> {
+        let components = confined_components(path, true)?;
+        let _operation = root.inner.operation.lock().await;
+        self.simulate_random_delay().await;
+        let mut state = self.state.lock();
+        let entry = self.confined_root_entry(&mut state, root, named_root)?;
+        let directory =
+            Self::confined_entry(entry, &components)?.context("Confined directory is missing")?;
+        let FakeFsEntry::Dir { entries, .. } = directory else {
+            anyhow::bail!("Confined path is not a directory");
+        };
+        anyhow::ensure!(
+            entries.len() <= max_entries,
+            "Confined directory exceeds its entry budget"
+        );
+        entries
+            .iter()
+            .map(|(name, entry)| {
+                let metadata = entry.confined_metadata()?;
+                Ok(ConfinedDirectoryEntry {
+                    name: name.into(),
+                    is_dir: metadata.is_dir,
+                    len: metadata.len,
+                    version: ConfinedDirectoryEntryVersion::Fake {
+                        inode: metadata.inode,
+                        modified: metadata.mtime,
+                    },
+                })
+            })
+            .collect()
     }
 
     async fn read_confined_file(

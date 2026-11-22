@@ -1,17 +1,43 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context as _, anyhow, ensure};
 use gpui::{
-    App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Task, WeakEntity, Window,
+    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
+    Focusable, PathPromptOptions, Render, SharedString, Task, WeakEntity, Window, actions,
 };
 use graphics_core::formats::{
-    gdd::{ArchiveFormat, GddArchiveBudget, GddExportContent, PreservedGddV1, open_gdd_archive},
+    gdd::{
+        ArchiveFormat, GddArchiveBudget, GddExportContent, InspectedGddV1,
+        inspect_gdd_folder_files, open_gdd_archive,
+    },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use project::{Project, ProjectEntryId, ProjectPath};
 use ui::{Button, Checkbox, Color, Label, LabelSize, ToggleState, prelude::*};
-use workspace::{Item, Pane, item::ItemBufferKind};
+use workspace::{
+    Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
+};
+
+actions!(
+    graphite,
+    [
+        /// Opens a local Graphite GDD folder for inspection.
+        OpenGraphiteFolder,
+    ]
+);
+
+pub(crate) fn init(cx: &mut App) {
+    workspace::register_project_item::<GraphiteDocumentItem>(cx);
+    cx.observe_new(|workspace: &mut Workspace, _, _cx| {
+        workspace.register_action(|workspace, _: &OpenGraphiteFolder, window, cx| {
+            open_graphite_folder(workspace, window, cx);
+        });
+    })
+    .detach();
+}
 
 const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
     max_archive_bytes: 64 * 1024 * 1024,
@@ -21,19 +47,31 @@ const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
 };
 
 enum InspectedDocument {
-    Archive {
-        archive: Arc<PreservedGddV1>,
+    Gdd {
+        contents: Arc<InspectedGddV1>,
         history_len: usize,
         hot_log_len: usize,
     },
     Legacy(PreservedLegacyDocument),
 }
 
+impl InspectedDocument {
+    fn gdd(contents: InspectedGddV1) -> Self {
+        Self::Gdd {
+            history_len: contents.history_len(),
+            hot_log_len: contents.hot_log_len(),
+            contents: Arc::new(contents),
+        }
+    }
+}
+
 pub(crate) struct GraphiteDocumentProjectItem {
     name: SharedString,
     path: ProjectPath,
     entry_id: Option<ProjectEntryId>,
-    original: Arc<[u8]>,
+    // The project tracks hidden worktrees weakly.
+    _worktree: AnyEntity,
+    original: Option<Arc<[u8]>>,
     document: InspectedDocument,
 }
 
@@ -92,14 +130,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 }
                 let archive =
                     futures::executor::block_on(open_gdd_archive(&bytes, ARCHIVE_BUDGET))?;
-                Ok((
-                    bytes,
-                    InspectedDocument::Archive {
-                        history_len: archive.history_len(),
-                        hot_log_len: archive.hot_log_len(),
-                        archive: Arc::new(archive),
-                    },
-                ))
+                Ok((bytes, InspectedDocument::gdd(archive.into_inspected())))
             }
         });
         Some(cx.spawn(async move |cx| {
@@ -122,7 +153,8 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 name,
                 path,
                 entry_id,
-                original,
+                _worktree: worktree.into_any(),
+                original: Some(original),
                 document,
             }))
         }))
@@ -139,6 +171,142 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
     fn is_dirty(&self) -> bool {
         false
     }
+}
+
+fn open_graphite_folder(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    let project = workspace.project().clone();
+    let project_model = project.read(cx);
+    let filesystem = project_model.fs().clone();
+    let selection = project_model.is_local().then(|| {
+        cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Open Graphite Folder".into()),
+        })
+    });
+    cx.spawn_in(window, async move |workspace, cx| {
+        let Some(paths) = selection
+            .context("Open a Graphite folder from a local workspace.")?
+            .await??
+        else {
+            return Ok(());
+        };
+        let [path] = paths.as_slice() else {
+            return Err(anyhow!("Choose one Graphite folder."));
+        };
+        let path = path.clone();
+        let name = path
+            .file_name()
+            .context("Graphite folder has no name")?
+            .to_string_lossy()
+            .into_owned();
+        let contents = cx
+            .background_spawn({
+                let path = path.clone();
+                async move { read_graphite_folder(filesystem.as_ref(), &path).await }
+            })
+            .await
+            .with_context(|| format!("Opening Graphite folder {name}"))?;
+        ensure!(
+            workspace.read_with(cx, |workspace, _| workspace.project() == &project)?,
+            "The Graphite workspace has changed."
+        );
+        let (worktree, project_path) = cx
+            .update(|_, cx| Workspace::project_path_for_path(project.clone(), &path, false, cx))?
+            .await?;
+        workspace.update_in(cx, |workspace, window, cx| {
+            ensure!(
+                workspace.project() == &project,
+                "The Graphite workspace has changed."
+            );
+            let entry_id = workspace
+                .project()
+                .read(cx)
+                .entry_for_path(&project_path, cx)
+                .map(|entry| entry.id);
+            let model = cx.new(|_| GraphiteDocumentProjectItem {
+                name: name.into(),
+                path: project_path,
+                entry_id,
+                _worktree: worktree.into_any(),
+                original: None,
+                document: InspectedDocument::gdd(contents),
+            });
+            workspace.open_project_item::<GraphiteDocumentItem>(
+                workspace.active_pane().clone(),
+                model,
+                true,
+                true,
+                false,
+                false,
+                window,
+                cx,
+            );
+            anyhow::Ok(())
+        })??;
+        Ok(())
+    })
+    .detach_and_prompt_err("Could not open Graphite folder", window, cx, |_, _, _| None);
+}
+
+async fn read_graphite_folder(
+    filesystem: &dyn project::Fs,
+    root_path: &Path,
+) -> anyhow::Result<InspectedGddV1> {
+    let root = filesystem.capture_confined_root(root_path).await?;
+    let mut pending = vec![PathBuf::new()];
+    let mut snapshots = Vec::new();
+    let mut remaining_entries = ARCHIVE_BUDGET.max_entries;
+    let mut remaining_bytes = ARCHIVE_BUDGET.max_total_entry_bytes;
+    let mut files = Vec::new();
+    while let Some(directory) = pending.pop() {
+        let entries = filesystem
+            .list_confined_directory(&root, root_path, &directory, remaining_entries)
+            .await?;
+        remaining_entries = remaining_entries
+            .checked_sub(entries.len())
+            .context("Graphite folder exceeds its entry budget")?;
+        for entry in &entries {
+            let path = directory.join(&entry.name);
+            if entry.is_dir {
+                pending.push(path);
+                continue;
+            }
+            let max_bytes = remaining_bytes.min(ARCHIVE_BUDGET.max_entry_bytes);
+            ensure!(
+                entry.len <= max_bytes,
+                "Graphite folder exceeds its byte budget"
+            );
+            let file = filesystem
+                .read_confined_file(&root, root_path, &path, usize::try_from(max_bytes)?)
+                .await?;
+            ensure!(
+                file.bytes.len() as u64 == entry.len,
+                "Graphite folder changed while opening"
+            );
+            remaining_bytes -= entry.len;
+            let name = path
+                .to_str()
+                .context("Graphite folder entries must be UTF-8")?;
+            files.push((name.replace(std::path::MAIN_SEPARATOR, "/"), file.bytes));
+        }
+        snapshots.push((directory, entries));
+    }
+    for (directory, entries) in snapshots {
+        ensure!(
+            filesystem
+                .list_confined_directory(&root, root_path, &directory, entries.len())
+                .await?
+                == entries,
+            "Graphite folder changed while opening"
+        );
+    }
+    Ok(inspect_gdd_folder_files(files, ARCHIVE_BUDGET).await?)
 }
 
 pub(crate) struct GraphiteDocumentItem {
@@ -171,7 +339,11 @@ impl GraphiteDocumentItem {
         if self.copy_task.is_some() {
             return;
         }
-        let content = self.export_content;
+        let content = if format.is_some() {
+            self.export_content
+        } else {
+            GddExportContent::default()
+        };
         if format.is_some()
             && let Err(error) = content.validate()
         {
@@ -182,9 +354,10 @@ impl GraphiteDocumentItem {
         let model = self.model.read(cx);
         let source = model.path.clone();
         let project = self.project.clone();
+        let format = format.or_else(|| model.original.is_none().then_some(GddCopyFormat::Folder));
         let export = match (&model.document, format) {
-            (InspectedDocument::Archive { archive, .. }, Some(format)) => {
-                Some((archive.clone(), format))
+            (InspectedDocument::Gdd { contents, .. }, Some(format)) => {
+                Some((contents.clone(), format))
             }
             (_, None) => None,
             (InspectedDocument::Legacy(_), Some(_)) => return,
@@ -263,7 +436,9 @@ impl GraphiteDocumentItem {
                     })
                     .await?
                 } else {
-                    PreparedCopy::File(original)
+                    PreparedCopy::File(
+                        original.context("The original Graphite bytes are unavailable.")?,
+                    )
                 };
                 item.read_with(cx, |_, _| ())?;
                 ensure!(
@@ -402,14 +577,19 @@ impl Render for GraphiteDocumentItem {
                 view.child(Label::new(message).color(color))
             });
         match &model.document {
-            InspectedDocument::Archive {
-                archive,
+            InspectedDocument::Gdd {
+                contents,
                 history_len,
                 hot_log_len,
             } => {
-                let manifest = archive.manifest();
+                let manifest = contents.manifest();
+                let label = if model.original.is_none() {
+                    "Graphite GDD folder"
+                } else {
+                    "Graphite GDD"
+                };
                 view.child(Label::new(format!(
-                    "Graphite GDD v{} · Read-only",
+                    "{label} v{} · Read-only",
                     manifest.format_version
                 )))
                 .child(Label::new(format!("Document ID {}", manifest.document_id)))
@@ -585,11 +765,11 @@ mod tests {
         item.read_with(window, |item, cx| {
             let model = item.model.read(cx);
             assert_eq!(item.tab_content_text(0, cx).as_ref(), "original.gdd.zip");
-            let InspectedDocument::Archive { archive, .. } = &model.document else {
+            let InspectedDocument::Gdd { contents, .. } = &model.document else {
                 panic!("expected the Graphite archive model");
             };
-            assert_eq!(archive.manifest().document_id, 171);
-            assert_eq!(archive.original_bytes(), original);
+            assert_eq!(contents.manifest().document_id, 171);
+            assert_eq!(model.original.as_deref(), Some(original.as_slice()));
             assert!(!item.is_dirty(cx));
             assert!(!item.can_save(cx));
             assert!(!item.can_save_as(cx));
@@ -653,10 +833,11 @@ mod tests {
             .expect("native Graphite archive inspection");
         item.read_with(window, |item, cx| {
             assert_eq!(item.tab_content_text(0, cx), "source.gdd.tar.xz");
-            let InspectedDocument::Archive { archive, .. } = &item.model.read(cx).document else {
+            let model = item.model.read(cx);
+            let InspectedDocument::Gdd { .. } = &model.document else {
                 panic!("expected the Graphite archive model");
             };
-            assert_eq!(archive.original_bytes(), bytes);
+            assert_eq!(model.original.as_deref(), Some(bytes.as_slice()));
             assert!(!item.is_dirty(cx));
         });
         assert_eq!(
@@ -666,6 +847,88 @@ mod tests {
                 .expect("source file is intact"),
             bytes
         );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_003_2_opens_local_folder_and_preserves_its_entries(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let selected = PathBuf::from("/source.gdd");
+        let saved_copy = PathBuf::from("/project/copy.gdd");
+        let archive = Arc::<[u8]>::from(archive_bytes(1, ExportFormat::Zip).await);
+        let mut entries = open_gdd_archive(&archive, ARCHIVE_BUDGET)
+            .await
+            .expect("source archive")
+            .folder_files()
+            .expect("literal source entries");
+        let opaque = PathBuf::from("opaque/new/value.bin");
+        entries.push((opaque.clone(), vec![0, 255, 9]));
+        filesystem
+            .create_new_directory_atomically(selected.clone(), entries.clone())
+            .await
+            .expect("source-qualified working folder");
+        window.run_until_parked();
+
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|options| {
+            assert!(!options.files && options.directories && !options.multiple);
+            Some(vec![selected.clone()])
+        });
+        window.run_until_parked();
+        let item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("opened native folder item");
+        item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            assert!(model.original.is_none());
+            let InspectedDocument::Gdd { contents, .. } = &model.document else {
+                panic!("expected folder-backed source");
+            };
+            assert_eq!(contents.manifest().document_id, 171);
+            assert_eq!(
+                contents
+                    .read_entry("opaque/new/value.bin")
+                    .expect("retained opaque bytes")
+                    .as_slice(),
+                [0, 255, 9]
+            );
+            assert!(!item.is_dirty(cx));
+        });
+
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| None);
+        window.run_until_parked();
+        assert_eq!(
+            workspace.read_with(window, |workspace, cx| workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)),
+            Some(item.clone())
+        );
+        paint(window);
+        click(window, "GRAPHITE-SAVE-COPY");
+        window.simulate_new_path_selection(|_| Some(saved_copy.clone()));
+        window.run_until_parked();
+        for (entry, bytes) in entries {
+            assert_eq!(
+                filesystem
+                    .load_bytes(&selected.join(&entry))
+                    .await
+                    .expect("original folder entry"),
+                bytes
+            );
+            assert_eq!(
+                filesystem
+                    .load_bytes(&saved_copy.join(entry))
+                    .await
+                    .expect("preserved folder copy"),
+                bytes
+            );
+        }
     }
 
     #[gpui::test]
@@ -938,12 +1201,12 @@ mod tests {
                 .downcast::<GraphiteDocumentItem>()
                 .expect("saved Graphite archive");
             copy.read_with(window, |copy, cx| {
-                let InspectedDocument::Archive { archive, .. } = &copy.model.read(cx).document
-                else {
+                let model = copy.model.read(cx);
+                let InspectedDocument::Gdd { contents, .. } = &model.document else {
                     panic!("expected an archive");
                 };
-                assert_eq!(archive.manifest().document_id, 171);
-                assert_eq!(archive.original_bytes(), exported);
+                assert_eq!(contents.manifest().document_id, 171);
+                assert_eq!(model.original.as_deref(), Some(exported.as_slice()));
             });
             workspace
                 .update_in(window, |workspace, window, cx| {

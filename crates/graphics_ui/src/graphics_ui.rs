@@ -276,7 +276,7 @@ fn add_asset_artboard_acquisition(
 
 pub fn init(cx: &mut gpui::App) {
     graph::init(cx);
-    workspace::register_project_item::<document_file::GraphiteDocumentItem>(cx);
+    document_file::init(cx);
     png_workflow::init(cx);
 }
 

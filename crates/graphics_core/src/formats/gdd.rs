@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
-    ops::Bound,
+    ops::{Bound, Deref},
     path::PathBuf,
     sync::Arc,
 };
@@ -107,6 +107,10 @@ struct ManifestHeader {
 
 pub struct PreservedGddV1 {
     original_bytes: Arc<[u8]>,
+    inspected: InspectedGddV1,
+}
+
+pub struct InspectedGddV1 {
     entries: StagedArchive,
     document: GddV1,
 }
@@ -116,6 +120,20 @@ impl PreservedGddV1 {
         &self.original_bytes
     }
 
+    pub fn into_inspected(self) -> InspectedGddV1 {
+        self.inspected
+    }
+}
+
+impl Deref for PreservedGddV1 {
+    type Target = InspectedGddV1;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inspected
+    }
+}
+
+impl InspectedGddV1 {
     pub fn manifest(&self) -> &Manifest {
         self.document.manifest()
     }
@@ -253,7 +271,10 @@ pub async fn open_gdd_zip(
     budget: GddArchiveBudget,
 ) -> Result<PreservedGddV1, GddArchiveError> {
     let working = stage_zip(bytes, &budget)?;
-    open_staged_gdd(bytes, working).await
+    Ok(PreservedGddV1 {
+        original_bytes: bytes.clone(),
+        inspected: open_staged_gdd(working).await?,
+    })
 }
 
 pub async fn open_gdd_archive(
@@ -264,16 +285,27 @@ pub async fn open_gdd_archive(
         Some(ArchiveFormat::Zip) => open_gdd_zip(bytes, budget).await,
         Some(ArchiveFormat::Xz) => {
             let working = xz::stage_xz(bytes, &budget)?;
-            open_staged_gdd(bytes, working).await
+            Ok(PreservedGddV1 {
+                original_bytes: bytes.clone(),
+                inspected: open_staged_gdd(working).await?,
+            })
         }
         None => Err(GddArchiveError::UnsupportedEnvelope),
     }
 }
 
-async fn open_staged_gdd(
-    bytes: &Arc<[u8]>,
-    entries: StagedArchive,
-) -> Result<PreservedGddV1, GddArchiveError> {
+pub async fn inspect_gdd_folder_files(
+    files: Vec<(String, Vec<u8>)>,
+    budget: GddArchiveBudget,
+) -> Result<InspectedGddV1, GddArchiveError> {
+    let mut entries = StagedEntries::new(&budget);
+    for (name, bytes) in files {
+        entries.install(name, bytes)?;
+    }
+    open_staged_gdd(entries.finish()?).await
+}
+
+async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddArchiveError> {
     let working = &entries.working;
     let layout = GddV1Layout;
     let path = path_for(layout.manifest_basename(), MANIFEST_CODEC);
@@ -310,11 +342,7 @@ async fn open_staged_gdd(
             }
         }
     }
-    Ok(PreservedGddV1 {
-        original_bytes: bytes.clone(),
-        entries,
-        document,
-    })
+    Ok(InspectedGddV1 { entries, document })
 }
 
 fn stage_zip(bytes: &[u8], budget: &GddArchiveBudget) -> Result<StagedArchive, GddArchiveError> {
@@ -390,17 +418,7 @@ impl<'a> StagedEntries<'a> {
     }
 
     fn stage(&mut self, name: String, size: u64, input: impl Read) -> Result<(), GddArchiveError> {
-        self.total_bytes = self.total_bytes.saturating_add(size);
-        if self.names.len() >= self.budget.max_entries
-            || size > self.budget.max_entry_bytes
-            || self.total_bytes > self.budget.max_total_entry_bytes
-        {
-            return Err(GddArchiveError::BudgetExceeded);
-        }
-        validate_path(&name)?;
-        if name.contains('\0') || !self.names.insert(name.clone()) {
-            return Err(GddArchiveError::InconsistentEntries);
-        }
+        self.admit(&name, size)?;
         let mut materialized = Vec::new();
         input
             .take(size.saturating_add(1))
@@ -408,14 +426,38 @@ impl<'a> StagedEntries<'a> {
         if u64::try_from(materialized.len()) != Ok(size) {
             return Err(GddArchiveError::InconsistentEntries);
         }
+        self.write(&name, &materialized)
+    }
+
+    fn install(&mut self, name: String, bytes: Vec<u8>) -> Result<(), GddArchiveError> {
+        self.admit(&name, bytes.len() as u64)?;
+        self.write(&name, &bytes)
+    }
+
+    fn admit(&mut self, name: &str, size: u64) -> Result<(), GddArchiveError> {
+        self.total_bytes = self.total_bytes.saturating_add(size);
+        if self.names.len() >= self.budget.max_entries
+            || size > self.budget.max_entry_bytes
+            || self.total_bytes > self.budget.max_total_entry_bytes
+        {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        validate_path(name)?;
+        if name.contains('\0') || !self.names.insert(name.to_owned()) {
+            return Err(GddArchiveError::InconsistentEntries);
+        }
+        Ok(())
+    }
+
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<(), GddArchiveError> {
         if let Some((directory, filename)) = name.split_once('/')
             && directory == GddV1Layout.resources_dir()
             && let Ok(hash) = filename.parse::<ResourceHash>()
-            && ResourceHash::from(materialized.as_slice()) != hash
+            && ResourceHash::from(bytes) != hash
         {
             return Err(GddArchiveError::InvalidResource(hash));
         }
-        self.working.write(&name, &materialized)?;
+        self.working.write(name, bytes)?;
         Ok(())
     }
 

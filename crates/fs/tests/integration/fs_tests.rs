@@ -921,6 +921,69 @@ async fn test_realfs_create_new_directory_atomically_preserves_existing_entries(
 }
 
 #[gpui::test]
+#[cfg(unix)]
+async fn test_realfs_lists_confined_directory_entries_and_detects_changes(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fs = RealFs::new(None, cx.executor());
+    let base = TempDir::new().expect("native test tree");
+    let named = base.path().join("copy.gdd");
+    let directory = named.join("data");
+    let file = directory.join("entry.bin");
+    std::fs::create_dir_all(&directory).expect("nested Graphite directory");
+    std::fs::write(&file, b"binary data").expect("native file");
+    let root = fs
+        .capture_confined_root(&named)
+        .await
+        .expect("admit directory");
+    let root_entries = fs
+        .list_confined_directory(&root, &named, Path::new(""), 1)
+        .await
+        .expect("list retained root");
+    let first = root_entries.first().expect("one regular directory");
+    assert_eq!(first.name, "data");
+    assert!(first.is_dir);
+    let initial = fs
+        .list_confined_directory(&root, &named, Path::new("data"), 1)
+        .await
+        .expect("list nested entries");
+    let entry = initial.first().expect("one regular file");
+    assert_eq!(entry.name, "entry.bin");
+    assert_eq!(entry.len, 11);
+    assert!(!entry.is_dir);
+    std::fs::write(&file, b"modified").expect("replace file contents");
+    let current = fs
+        .list_confined_directory(&root, &named, Path::new("data"), 1)
+        .await
+        .expect("list updated files");
+    assert_ne!(initial, current);
+    assert!(
+        fs.list_confined_directory(&root, &named, Path::new("data"), 0)
+            .await
+            .is_err()
+    );
+
+    let link = named.join("alias");
+    std::os::unix::fs::symlink(base.path(), &link).expect("alias fixture");
+    assert!(
+        fs.list_confined_directory(&root, &named, Path::new(""), 2)
+            .await
+            .is_err()
+    );
+    assert!(
+        fs.list_confined_directory(&root, &named, Path::new("alias"), 2)
+            .await
+            .is_err()
+    );
+    std::fs::rename(&named, base.path().join("former.gdd")).expect("move the admitted directory");
+    std::fs::create_dir(&named).expect("install a replacement name");
+    assert!(
+        fs.list_confined_directory(&root, &named, Path::new(""), 2)
+            .await
+            .is_err()
+    );
+}
+
+#[gpui::test]
 #[cfg(target_os = "windows")]
 async fn test_realfs_canonicalize(executor: BackgroundExecutor) {
     use util::paths::SanitizedPath;
