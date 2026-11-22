@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
     ops::{Bound, Deref},
     path::PathBuf,
@@ -118,6 +118,8 @@ pub enum GddArchiveError {
     UnchangedGraphNodeName,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
+    #[error("The selected Graphite node cannot move in that direction in pinned order.")]
+    InvalidPinnedNodeMove,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -215,6 +217,13 @@ pub struct GddGraphNode {
     label: String,
     name: String,
     pinned: bool,
+    pinned_order: Option<(usize, usize)>,
+}
+
+#[derive(Clone, Copy)]
+pub enum GddPinnedNodeMove {
+    Up,
+    Down,
 }
 
 impl GddGraphNode {
@@ -228,6 +237,25 @@ impl GddGraphNode {
 
     pub fn is_pinned(&self) -> bool {
         self.pinned
+    }
+
+    pub fn pinned_position(&self) -> Option<(usize, usize)> {
+        self.pinned_order.map(|(index, count)| (index + 1, count))
+    }
+
+    pub fn can_move_pinned(&self, movement: GddPinnedNodeMove) -> bool {
+        self.pinned_insertion_index(movement).is_some()
+    }
+
+    fn pinned_insertion_index(&self, movement: GddPinnedNodeMove) -> Option<usize> {
+        let (index, count) = self.pinned_order?;
+        match movement {
+            GddPinnedNodeMove::Up => index.checked_sub(1),
+            // Source insertion slots include the moving node. Moving down one skips
+            // both the node and its following neighbor before source removal.
+            GddPinnedNodeMove::Down if index + 1 < count => Some(index + 2),
+            GddPinnedNodeMove::Down => None,
+        }
     }
 }
 
@@ -348,6 +376,7 @@ impl InspectedGddV1 {
                 label: String::new(),
                 name: node.display_name.clone().unwrap_or_default(),
                 pinned: node.pinned,
+                pinned_order: None,
             })
             .collect();
         let interface = graph.into_interface()?;
@@ -356,8 +385,20 @@ impl InspectedGddV1 {
                 .cmp(&right.network_path)
                 .then_with(|| left.local_id.cmp(&right.local_id))
         });
+        let mut pinned_indexes = BTreeMap::new();
         for node in &mut nodes {
             let path = &node.network_path;
+            if node.pinned {
+                let (indexes, count) = pinned_indexes.entry(path.clone()).or_insert_with(|| {
+                    let order = interface.ordered_pinned_nodes(path);
+                    let mut indexes = BTreeMap::new();
+                    for (index, node_id) in order.iter().enumerate() {
+                        indexes.entry(*node_id).or_insert(index);
+                    }
+                    (indexes, order.len())
+                });
+                node.pinned_order = indexes.get(&node.local_id).map(|index| (*index, *count));
+            }
             let parent = if path.is_empty() {
                 "Root graph".into()
             } else {
@@ -497,6 +538,54 @@ impl InspectedGddV1 {
                 })
                 != Some(pinned)
         {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn move_pinned_graph_node_in_copy(
+        &self,
+        node: &GddGraphNode,
+        movement: GddPinnedNodeMove,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::network::PINNED_ORDER;
+
+        self.check_node_edit_target(node)?;
+        let insertion_index = node
+            .pinned_insertion_index(movement)
+            .ok_or(GddArchiveError::InvalidPinnedNodeMove)?;
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        interface.reorder_pinned_node(node.local_id, insertion_index, path);
+        let order = &interface
+            .network_metadata(path)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .persistent_metadata
+            .pinned_node_order;
+        let expected = interface.ordered_pinned_nodes(path);
+        let edit = EditorDelta::NetworkMetadata {
+            network_path: path.clone(),
+            change: NetworkMetadataChange::PinnedOrder(order.clone()),
+        };
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let network = owner
+            .registry()
+            .node_instances
+            .get(&node.storage_id)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .network();
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        if !matches!(
+            batch.ops.as_slice(),
+            [RegistryDelta::ChangeNetworkAttribute { id, delta }]
+                if *id == network && delta.key == PINNED_ORDER
+        ) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.ordered_pinned_nodes(path) != expected {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -1579,6 +1668,117 @@ mod tests {
                 .expect("unpinned properties metadata");
             assert_eq!(interface.ordered_pinned_nodes(&path), [NodeId(7)]);
             assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_034_1_moves_pinned_nodes_in_source_order_with_one_history_step() {
+        futures::executor::block_on(async {
+            let bytes = export(&document_with_nested_graph_nodes(), None).await;
+            let mut pinned = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original ZIP")
+                .into_inspected();
+            let path = [NodeId(24)];
+            for local_id in [NodeId(9), NodeId(7)] {
+                let nodes = pinned.graph_nodes().await.expect("source nodes");
+                let target = nodes
+                    .iter()
+                    .find(|node| node.network_path == path && node.local_id == local_id)
+                    .expect("nested node");
+                pinned = pinned
+                    .set_graph_node_pinned_in_copy(target, true, budget())
+                    .await
+                    .expect("pinned copy");
+            }
+            let nodes = pinned.graph_nodes().await.expect("pinned nodes");
+            let first = nodes
+                .iter()
+                .find(|node| node.pinned_position() == Some((1, 2)))
+                .expect("first pinned node");
+            let root = nodes
+                .iter()
+                .find(|node| node.network_path.is_empty())
+                .expect("root node");
+            for target in [first, root] {
+                assert!(matches!(
+                    pinned
+                        .move_pinned_graph_node_in_copy(target, GddPinnedNodeMove::Up, budget())
+                        .await,
+                    Err(GddArchiveError::InvalidPinnedNodeMove)
+                ));
+            }
+
+            let reordered = pinned
+                .move_pinned_graph_node_in_copy(first, GddPinnedNodeMove::Down, budget())
+                .await
+                .expect("move first node down");
+            assert_eq!(reordered.history_len(), pinned.history_len() + 1);
+            assert_eq!(
+                reordered.document.registry().node_instances,
+                pinned.document.registry().node_instances
+            );
+            let interface = reordered
+                .runtime_graph()
+                .await
+                .expect("read registry")
+                .into_interface()
+                .expect("source network");
+            assert_eq!(
+                interface.ordered_pinned_nodes(&path),
+                [NodeId(7), NodeId(9)]
+            );
+            assert!(interface.ordered_pinned_nodes(&[]).is_empty());
+            assert!(matches!(
+                reordered
+                    .move_pinned_graph_node_in_copy(first, GddPinnedNodeMove::Up, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+
+            let undone = reordered
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(
+                undone
+                    .document
+                    .registry()
+                    .value_equal(pinned.document.registry())
+            );
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .value_equal(reordered.document.registry())
+            );
+
+            let nodes = reordered.graph_nodes().await.expect("reordered nodes");
+            let last = nodes
+                .iter()
+                .find(|node| node.pinned_position() == Some((2, 2)))
+                .expect("moved node");
+            assert_eq!(last.storage_id, first.storage_id);
+            assert!(matches!(
+                reordered
+                    .move_pinned_graph_node_in_copy(last, GddPinnedNodeMove::Down, budget())
+                    .await,
+                Err(GddArchiveError::InvalidPinnedNodeMove)
+            ));
+            let restored = reordered
+                .move_pinned_graph_node_in_copy(last, GddPinnedNodeMove::Up, budget())
+                .await
+                .expect("move the same node back up");
+            assert!(
+                restored
+                    .document
+                    .registry()
+                    .value_equal(pinned.document.registry())
+            );
         });
     }
 

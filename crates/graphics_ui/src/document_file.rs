@@ -12,7 +12,7 @@ use gpui::{
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddHistoryDirection,
-        GddRecoverySource, GddSavedView, InspectedGddV1, create_gdd_folder,
+        GddPinnedNodeMove, GddRecoverySource, GddSavedView, InspectedGddV1, create_gdd_folder,
         inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
@@ -478,6 +478,7 @@ enum GraphiteCopy {
 enum NodeCopyChange {
     Rename(String),
     Pin(bool),
+    MovePinned(GddPinnedNodeMove),
 }
 
 enum PreparedCopy {
@@ -662,6 +663,55 @@ impl GraphiteDocumentItem {
                                             })),
                                     ),
                             )
+                            .when_some(selected.pinned_position(), |panel, (position, count)| {
+                                panel
+                                    .child(Label::new(format!("Pinned order · {position} of {count}")))
+                                    .child(h_flex().gap_2().children(
+                                        [
+                                            (
+                                                GddPinnedNodeMove::Up,
+                                                "GRAPHITE-GDD-MOVE-PIN-UP",
+                                                "Move Up in a Copy",
+                                            ),
+                                            (
+                                                GddPinnedNodeMove::Down,
+                                                "GRAPHITE-GDD-MOVE-PIN-DOWN",
+                                                "Move Down in a Copy",
+                                            ),
+                                        ]
+                                        .into_iter()
+                                        .map(|(movement, selector, label)| {
+                                            div()
+                                                .debug_selector(move || selector.into())
+                                                .child(
+                                                    Button::new(selector, label)
+                                                        .disabled(
+                                                            self.copy_task.is_some()
+                                                                || !selected.can_move_pinned(movement),
+                                                        )
+                                                        .on_click(cx.listener(
+                                                            move |item, _, window, cx| {
+                                                                let NodeCopyPanel::Ready(form) =
+                                                                    &item.node_copy
+                                                                else {
+                                                                    return;
+                                                                };
+                                                                if let Some(node) = form
+                                                                    .selected_node()
+                                                                    .filter(|node| node.can_move_pinned(movement))
+                                                                {
+                                                                    let request = GraphiteCopy::EditNode {
+                                                                        node: node.clone(),
+                                                                        change: NodeCopyChange::MovePinned(movement),
+                                                                    };
+                                                                    item.save_copy(request, window, cx);
+                                                                }
+                                                            },
+                                                        )),
+                                                )
+                                        }),
+                                    ))
+                            })
                     })
             }
             NodeCopyPanel::Failed(error) => {
@@ -820,6 +870,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::Pin(false),
                         ..
                     } => "Unpinned",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::MovePinned(_),
+                        ..
+                    } => "Reordered",
                 };
                 format!("{prefix} {stem}{suffix}")
             }
@@ -941,6 +995,15 @@ impl GraphiteDocumentItem {
                                         .set_graph_node_pinned_in_copy(
                                             &node,
                                             pinned,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::MovePinned(movement) => {
+                                    archive
+                                        .move_pinned_graph_node_in_copy(
+                                            &node,
+                                            movement,
                                             ARCHIVE_BUDGET,
                                         )
                                         .await?
@@ -1406,6 +1469,10 @@ mod tests {
     }
 
     async fn nested_graph_archive() -> (Vec<u8>, usize) {
+        nested_graph_archive_with_sibling(false).await
+    }
+
+    async fn nested_graph_archive_with_sibling(include_sibling: bool) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::NoMetadata;
         use graphite_graph_craft::document::{
             DocumentNode, DocumentNodeImplementation, NodeId, NodeNetwork,
@@ -1416,16 +1483,18 @@ mod tests {
             implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
             ..Default::default()
         };
+        let mut nested = NodeNetwork::default();
+        nested.nodes.insert(NodeId(7), leaf());
+        if include_sibling {
+            nested.nodes.insert(NodeId(9), leaf());
+        }
         let network = NodeNetwork {
             nodes: [
                 (NodeId(7), leaf()),
                 (
                     NodeId(24),
                     DocumentNode {
-                        implementation: DocumentNodeImplementation::Network(NodeNetwork {
-                            nodes: [(NodeId(7), leaf())].into_iter().collect(),
-                            ..Default::default()
-                        }),
+                        implementation: DocumentNodeImplementation::Network(nested),
                         ..Default::default()
                     },
                 ),
@@ -1753,6 +1822,97 @@ mod tests {
                 .await
                 .expect("retained source"),
             original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_034_2_workspace_reorders_pinned_nodes_in_a_new_folder(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = nested_graph_archive_with_sibling(true).await;
+        let mut pinned = open_gdd_archive(&original.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source archive")
+            .into_inspected();
+        for index in [2, 3] {
+            let nodes = pinned.graph_nodes().await.expect("nested nodes");
+            pinned = pinned
+                .set_graph_node_pinned_in_copy(
+                    nodes.get(index).expect("selected nested node"),
+                    true,
+                    ARCHIVE_BUDGET,
+                )
+                .await
+                .expect("pin nested node in the source fixture");
+        }
+        let bytes = pinned
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("serialize the pinned fixture");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/pins.gdd.zip");
+        let destination = PathBuf::from("/project/reordered.gdd");
+        filesystem
+            .write(&source_path, &bytes)
+            .await
+            .expect("write source fixture");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_nested_copy_node(window);
+        click(window, "GRAPHITE-GDD-MOVE-PIN-DOWN");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(
+            filesystem
+                .metadata(&destination)
+                .await
+                .expect("no saved folder")
+                .is_none()
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-MOVE-PIN-DOWN");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("select the reopened destination");
+        assert_ne!(reopened, source);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the native GDD model");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("reopened nodes");
+        let [root, parent, first, second] = nodes.as_slice() else {
+            panic!("expected two root nodes and two nested nodes");
+        };
+        assert_eq!(root.pinned_position(), None);
+        assert_eq!(parent.pinned_position(), None);
+        assert_eq!(first.pinned_position(), Some((2, 2)));
+        assert_eq!(second.pinned_position(), Some((1, 2)));
+        assert_eq!(contents.history_len(), original_history + 5);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source archive"),
+            bytes
         );
     }
 
