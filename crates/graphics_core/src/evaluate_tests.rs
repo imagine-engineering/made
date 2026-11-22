@@ -9,6 +9,42 @@ use std::{collections::HashSet, error::Error, time::Duration};
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn at_gra_node_085_2_reciprocal_keeps_source_types_and_zero_semantics() -> TestResult {
+    assert_eq!(evaluate_reciprocal(-4.)?, -0.25);
+    assert_eq!(evaluate_reciprocal(-0.)?.to_bits(), 0_f64.to_bits());
+    assert_eq!(
+        evaluate_reciprocal(f64::NEG_INFINITY)?.to_bits(),
+        (-0_f64).to_bits()
+    );
+    assert!(evaluate_reciprocal(f64::NAN)?.is_nan());
+    assert_eq!(evaluate_reciprocal_vector([4., -2.])?, [0.25, -0.5]);
+    assert_eq!(evaluate_reciprocal_list(&[2., 0., -8.])?, [0.5, 0., -0.125]);
+    assert!(evaluate_reciprocal_list(&[])?.is_empty());
+    assert_eq!(
+        evaluate_reciprocal_vector_list(&[[0., -4.], [2., 8.]])?,
+        [[0., -0.25], [0.5, 0.125]]
+    );
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_085_2_reciprocal_preserves_ordered_input_attributes() -> TestResult {
+    let first = Item::new_from_element(DVec2::new(-4., 0.)).with_attribute("value", 1_i64);
+    let second = Item::new_from_element(DVec2::new(0., 8.)).with_attribute("value", 2_i64);
+    let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(
+        [first, second].into_iter().collect::<List<_>>(),
+    ));
+    let result = evaluate_reciprocal_node(&node)?;
+    assert_eq!(
+        result.iter_element_values().copied().collect::<Vec<_>>(),
+        [DVec2::new(-0.25, 0.), DVec2::new(0., 0.125)]
+    );
+    assert_eq!(result.attribute::<i64>("value", 0), Some(&1));
+    assert_eq!(result.attribute::<i64>("value", 1), Some(&2));
+    Ok(())
+}
+
+#[test]
 fn at_gra_node_086_2_root_preserves_source_degree_and_domain_semantics() -> TestResult {
     assert_eq!(evaluate_root(81., 2.)?, 9.);
     assert_eq!(evaluate_root(-64., 3.)?, -4.);

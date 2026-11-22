@@ -1177,6 +1177,74 @@ fn at_graphite_sort_malformed_inputs_and_operation_changes_preserve_commit() {
 }
 
 #[gpui::test]
+fn at_gra_node_085_native_reciprocal_preserves_typed_outputs_and_invalid_drafts(
+    cx: &mut TestAppContext,
+) {
+    use workspace::item::Item as _;
+
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let (value, value_y) = item.read_with(cx, |item, _| {
+        (item.augend_editor.clone(), item.augend_y_editor.clone())
+    });
+    for (selector, input, input_y, expected) in [
+        ("GRAPHITE-MODE-RECIPROCAL-SCALAR", "-4", "", "-0.25"),
+        (
+            "GRAPHITE-MODE-RECIPROCAL-VECTOR",
+            "0",
+            "-8",
+            "[0.0, -0.125]",
+        ),
+        (
+            "GRAPHITE-MODE-RECIPROCAL-LIST",
+            "2, -4, 0",
+            "",
+            "[0.5, -0.25, 0.0]",
+        ),
+        (
+            "GRAPHITE-MODE-RECIPROCAL-VECTOR-LIST",
+            "2, 0",
+            "-4, 8",
+            "[[0.5, -0.25], [0.0, 0.125]]",
+        ),
+    ] {
+        let button = cx.debug_bounds(selector).expect("admitted Reciprocal mode");
+        cx.simulate_click(button.center(), gpui::Modifiers::default());
+        value.update_in(cx, |editor, window, cx| editor.set_text(input, window, cx));
+        value_y.update_in(cx, |editor, window, cx| {
+            editor.set_text(input_y, window, cx)
+        });
+        cx.run_until_parked();
+        item.read_with(cx, |item, cx| {
+            let session = item.session.read(cx);
+            assert!(
+                session.diagnostic().is_none(),
+                "{selector}: {:?}",
+                session.diagnostic()
+            );
+            assert_eq!(session.result_text(), expected, "{selector}");
+            assert_eq!(item.tab_content_text(0, cx), "Graphite Reciprocal");
+        });
+    }
+    let revision = item.read_with(cx, |item, cx| item.session.read(cx).revision());
+    value_y.update_in(cx, |editor, window, cx| editor.set_text("-4", window, cx));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_some());
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert_eq!(session.revision(), revision);
+        assert_eq!(session.result_text(), "[[0.5, -0.25], [0.0, 0.125]]");
+    });
+    value_y.update_in(cx, |editor, window, cx| editor.set_text("0, 4", window, cx));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_none());
+    assert!(
+        cx.debug_bounds("GRAPHITE-RESULT-[[0.5, 0.0], [0.0, 0.25]]")
+            .is_some()
+    );
+}
+
+#[gpui::test]
 fn at_gra_node_086_native_root_matches_each_typed_mode_and_recovers(cx: &mut TestAppContext) {
     use workspace::item::Item as _;
 

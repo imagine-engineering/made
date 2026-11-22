@@ -20,6 +20,10 @@ pub(crate) enum AddMode {
     SubtractVectorLists,
     SubtractScalarVectorLists,
     SubtractVectorScalarLists,
+    ReciprocalScalar,
+    ReciprocalVector,
+    ReciprocalList,
+    ReciprocalVectorList,
     RootScalar,
     RootLists,
     RootVector,
@@ -94,6 +98,16 @@ impl AddMode {
         )
     }
 
+    pub(crate) fn is_reciprocal(self) -> bool {
+        matches!(
+            self,
+            Self::ReciprocalScalar
+                | Self::ReciprocalVector
+                | Self::ReciprocalList
+                | Self::ReciprocalVectorList
+        )
+    }
+
     pub(crate) fn is_affine(self) -> bool {
         matches!(self, Self::MultiplyAffine | Self::MultiplyAffineLists)
     }
@@ -111,6 +125,8 @@ impl AddMode {
                 | Self::SubtractVectorLists
                 | Self::SubtractScalarVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::ReciprocalList
+                | Self::ReciprocalVectorList
                 | Self::RootLists
                 | Self::RootVectorLists
                 | Self::RootScalarVectorLists
@@ -135,6 +151,8 @@ impl AddMode {
                 | Self::SubtractVectorScalar
                 | Self::SubtractVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::ReciprocalVector
+                | Self::ReciprocalVectorList
                 | Self::RootVector
                 | Self::RootVectorScalar
                 | Self::RootVectorLists
@@ -181,6 +199,7 @@ enum Inputs {
     ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
     Subtract(SubtractInputs),
+    Reciprocal(ReciprocalInputs),
     Root(RootInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
@@ -336,6 +355,55 @@ impl Output {
             Self::Affine(value) => format!("{value:?}"),
             Self::AffineLists(value) => format!("{value:?}"),
             Self::Color(value) => format!("{value:?}"),
+        }
+    }
+}
+
+enum ReciprocalInputs {
+    Scalar(f64),
+    Vector([f64; 2]),
+    List(Vec<f64>),
+    VectorList(Vec<[f64; 2]>),
+}
+
+impl ReciprocalInputs {
+    fn mode(&self) -> AddMode {
+        match self {
+            Self::Scalar(_) => AddMode::ReciprocalScalar,
+            Self::Vector(_) => AddMode::ReciprocalVector,
+            Self::List(_) => AddMode::ReciprocalList,
+            Self::VectorList(_) => AddMode::ReciprocalVectorList,
+        }
+    }
+
+    fn same_values(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Scalar(first), Self::Scalar(second)) => first.to_bits() == second.to_bits(),
+            (Self::Vector(first), Self::Vector(second)) => same_values(first, second),
+            (Self::List(first), Self::List(second)) => same_values(first, second),
+            (Self::VectorList(first), Self::VectorList(second)) => same_vectors(first, second),
+            _ => false,
+        }
+    }
+
+    fn evaluate(&self) -> Result<Output, EvaluationError> {
+        use graphics_core::evaluate;
+        Ok(match self {
+            Self::Scalar(value) => Output::Scalar(evaluate::evaluate_reciprocal(*value)?),
+            Self::Vector(value) => Output::Vector(evaluate::evaluate_reciprocal_vector(*value)?),
+            Self::List(values) => Output::Lists(evaluate::evaluate_reciprocal_list(values)?),
+            Self::VectorList(values) => {
+                Output::VectorLists(evaluate::evaluate_reciprocal_vector_list(values)?)
+            }
+        })
+    }
+
+    fn expression(&self) -> String {
+        match self {
+            Self::Scalar(value) => format!("Reciprocal of {value}"),
+            Self::Vector(value) => format!("Reciprocal of {value:?}"),
+            Self::List(values) => format!("Reciprocal of {values:?}"),
+            Self::VectorList(values) => format!("Reciprocal of {values:?}"),
         }
     }
 }
@@ -712,6 +780,9 @@ impl Inputs {
             (Self::Subtract(inputs), Self::Subtract(other_inputs)) => {
                 inputs.same_values(other_inputs)
             }
+            (Self::Reciprocal(inputs), Self::Reciprocal(other_inputs)) => {
+                inputs.same_values(other_inputs)
+            }
             (Self::Root(inputs), Self::Root(other_inputs)) => inputs.same_values(other_inputs),
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
                 same_values(augend, other_augend) && same_values(addend, other_addend)
@@ -779,6 +850,7 @@ impl Inputs {
             ),
             Self::Multiply(inputs) => inputs.evaluate()?,
             Self::Subtract(inputs) => inputs.evaluate()?,
+            Self::Reciprocal(inputs) => inputs.evaluate()?,
             Self::Root(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
@@ -833,6 +905,7 @@ impl Inputs {
             Self::InvertColor(channels) => format!("Invert RGBA {channels:?}"),
             Self::Multiply(inputs) => inputs.expression(),
             Self::Subtract(inputs) => inputs.expression(),
+            Self::Reciprocal(inputs) => inputs.expression(),
             Self::Root(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
@@ -1406,6 +1479,18 @@ impl GraphicsSession {
                     parse_number_list(addend, "subtrahends")?,
                 ))
             }
+            AddMode::ReciprocalScalar => {
+                Inputs::Reciprocal(ReciprocalInputs::Scalar(parse_number(augend, "value")?))
+            }
+            AddMode::ReciprocalVector => Inputs::Reciprocal(ReciprocalInputs::Vector(
+                parse_vector(augend, augend_y, "value")?,
+            )),
+            AddMode::ReciprocalList => {
+                Inputs::Reciprocal(ReciprocalInputs::List(parse_number_list(augend, "values")?))
+            }
+            AddMode::ReciprocalVectorList => Inputs::Reciprocal(ReciprocalInputs::VectorList(
+                parse_vector_list(augend, augend_y, "value")?,
+            )),
             AddMode::RootScalar => Inputs::Root(RootInputs::Scalar(
                 parse_number(augend, "radicand")?,
                 parse_number(addend, "degree")?,
@@ -1543,6 +1628,9 @@ impl GraphicsSession {
             || self.mode.is_multiply() != matches!(self.evaluation.inputs, Inputs::Multiply(..))
             || (self.mode.is_subtract() || matches!(&self.evaluation.inputs, Inputs::Subtract(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Subtract(inputs) if inputs.mode() == self.mode)
+            || (self.mode.is_reciprocal()
+                || matches!(&self.evaluation.inputs, Inputs::Reciprocal(_)))
+                && !matches!(&self.evaluation.inputs, Inputs::Reciprocal(inputs) if inputs.mode() == self.mode)
             || (self.mode.is_root() || matches!(&self.evaluation.inputs, Inputs::Root(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Root(inputs) if inputs.mode() == self.mode)
         {

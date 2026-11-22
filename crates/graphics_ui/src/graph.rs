@@ -439,12 +439,21 @@ impl Render for GraphicsWorkspaceItem {
         } else {
             "degree"
         };
+        let reciprocal_label = if mode.augend_is_vector() {
+            "value.x"
+        } else if mode.is_list() {
+            "values"
+        } else {
+            "value"
+        };
         let first_y_label = if mode == AddMode::InvertColor {
             "green"
         } else if mode.is_multiply() {
             "multiplier.y"
         } else if mode.is_subtract() {
             "minuend.y"
+        } else if mode.is_reciprocal() {
+            "value.y"
         } else if mode.is_root() {
             "radicand.y"
         } else {
@@ -482,6 +491,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Graphite Sort"
             } else if mode.is_subtract() {
                 "Graphite Subtract"
+            } else if mode.is_reciprocal() {
+                "Graphite Reciprocal"
             } else if mode.is_root() {
                 "Graphite Root"
             } else if mode.is_multiply() {
@@ -499,6 +510,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Enter comma-separated numbers in each list."
             } else if mode.is_subtract() {
                 "Edit the inputs to calculate their difference."
+            } else if mode.is_reciprocal() {
+                "Each zero input produces zero."
             } else if mode.is_root() {
                 "Degrees of zero or less produce zero."
             } else if mode.is_multiply() {
@@ -568,6 +581,10 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::MultiplyVectorScalarLists, "Multiply Vector × Scalar Lists", "GRAPHITE-MODE-MULTIPLY-VECTOR-SCALAR-LISTS"),
                         (AddMode::MultiplyAffine, "Multiply Affine", "GRAPHITE-MODE-MULTIPLY-AFFINE"),
                         (AddMode::MultiplyAffineLists, "Multiply Affine Lists", "GRAPHITE-MODE-MULTIPLY-AFFINE-LISTS"),
+                        (AddMode::ReciprocalScalar, "Reciprocal Scalar", "GRAPHITE-MODE-RECIPROCAL-SCALAR"),
+                        (AddMode::ReciprocalVector, "Reciprocal Vector", "GRAPHITE-MODE-RECIPROCAL-VECTOR"),
+                        (AddMode::ReciprocalList, "Reciprocal List", "GRAPHITE-MODE-RECIPROCAL-LIST"),
+                        (AddMode::ReciprocalVectorList, "Reciprocal Vector List", "GRAPHITE-MODE-RECIPROCAL-VECTOR-LIST"),
                         (AddMode::RootScalar, "Root Scalar", "GRAPHITE-MODE-ROOT-SCALAR"),
                         (AddMode::RootLists, "Root Lists", "GRAPHITE-MODE-ROOT-LISTS"),
                         (AddMode::RootVector, "Root Vector with Vector Degree", "GRAPHITE-MODE-ROOT-VECTOR"),
@@ -704,6 +721,8 @@ impl Render for GraphicsWorkspaceItem {
                         "values"
                     } else if mode.is_subtract() {
                         minuend_label
+                    } else if mode.is_reciprocal() {
+                        reciprocal_label
                     } else if mode.is_root() {
                         radicand_label
                     } else if mode.is_multiply() {
@@ -724,6 +743,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "values"
                             } else if mode.is_subtract() {
                                 minuend_label
+                            } else if mode.is_reciprocal() {
+                                reciprocal_label
                             } else if mode.is_root() {
                                 radicand_label
                             } else if mode.is_multiply() {
@@ -744,7 +765,7 @@ impl Render for GraphicsWorkspaceItem {
                     ),
                 )
             })
-            .child(
+            .when(!mode.is_reciprocal(), |view| view.child(
                 v_flex()
                     .gap_1()
                     .child(Label::new(if mode == AddMode::MixColor {
@@ -784,7 +805,7 @@ impl Render for GraphicsWorkspaceItem {
                             })
                             .child(self.addend_editor.clone()),
                     ),
-            )
+            ))
             .when(mode.addend_is_vector() || mode == AddMode::InvertColor, |view| {
                 view.child(
                     v_flex().gap_1().child(Label::new(second_y_label)).child(
@@ -862,6 +883,8 @@ impl Item for GraphicsWorkspaceItem {
             "Graphite Sort".into()
         } else if self.session.read(cx).mode().is_subtract() {
             "Graphite Subtract".into()
+        } else if self.session.read(cx).mode().is_reciprocal() {
+            "Graphite Reciprocal".into()
         } else if self.session.read(cx).mode().is_root() {
             "Graphite Root".into()
         } else if self.session.read(cx).mode().is_multiply() {

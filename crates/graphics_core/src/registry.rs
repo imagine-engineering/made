@@ -72,7 +72,7 @@ mod tests {
         registry::{RegistryValueSource, RegistryWidgetOverride},
     };
     use graphite_glam::DVec2;
-    use graphite_math_nodes::{root, subtract};
+    use graphite_math_nodes::{reciprocal, root, subtract};
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
@@ -105,6 +105,39 @@ mod tests {
             Type::Future(Box::new(output)),
             vec![input(left), input(right)],
         )
+    }
+
+    #[test]
+    fn at_gra_node_085_1_reciprocal_has_the_exact_source_port_and_four_signatures() {
+        let identifier = reciprocal::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "math_nodes::ReciprocalNode");
+        assert_eq!(reciprocal::ValueInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(reciprocal::ValueInput::INDEX, 0);
+        let registered = registered_node(identifier.as_str()).expect("native Reciprocal entry");
+        assert_eq!(registered.metadata.display_name, "Reciprocal");
+        assert_eq!(registered.metadata.category, "Math: Arithmetic");
+        assert_eq!(registered.metadata.properties, None);
+        assert!(registered.metadata.context_features.is_empty());
+        assert_eq!(registered.metadata.fields.len(), 1);
+        let input = registered.metadata.fields.first().expect("the Value port");
+        assert_eq!(input.name, "Value");
+        assert_eq!(input.default_type, Some(list!(f64)));
+        assert!(matches!(input.value_source, RegistryValueSource::None));
+        assert!(matches!(
+            input.widget_override,
+            RegistryWidgetOverride::None
+        ));
+        let expected = HashSet::from([
+            item_signature::<f64>(),
+            item_signature::<DVec2>(),
+            list_signature::<f64>(),
+            list_signature::<DVec2>(),
+        ]);
+        assert_eq!(registered.signatures.len(), expected.len());
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            expected
+        );
     }
 
     #[test]

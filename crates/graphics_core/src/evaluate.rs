@@ -1,4 +1,4 @@
-use std::{fmt, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
+use std::{fmt, future::Future, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
 
 use futures::FutureExt as _;
 use graphite_core_types::{
@@ -142,6 +142,37 @@ where
     Left::Output: Clone + Send + Sync + 'static,
 {
     let node = graphite_math_nodes::SubtractNodeMapped::new(Input(minuends), Input(subtrahends));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map_err(|_| AddEvaluationError)
+}
+
+pub fn evaluate_reciprocal(value: f64) -> Result<f64, AddEvaluationError> {
+    let node = graphite_math_nodes::ReciprocalNode::new(Input(Item::new_from_element(value)));
+    evaluate_reciprocal_node(&node).map(Item::into_element)
+}
+
+pub fn evaluate_reciprocal_vector(value: [f64; 2]) -> Result<[f64; 2], AddEvaluationError> {
+    let node = graphite_math_nodes::ReciprocalNode::new(Input(Item::new_from_element(
+        DVec2::from_array(value),
+    )));
+    evaluate_reciprocal_node(&node).map(|item| item.into_element().to_array())
+}
+
+pub fn evaluate_reciprocal_list(values: &[f64]) -> Result<Vec<f64>, AddEvaluationError> {
+    let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(numeric_items(values)));
+    evaluate_reciprocal_node(&node).map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_reciprocal_vector_list(
+    values: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(vector_items(values)));
+    evaluate_reciprocal_node(&node).map(vector_elements)
+}
+
+fn evaluate_reciprocal_node<'node, Output, Evaluation: Future<Output = Output>>(
+    node: &'node impl Node<'node, Context<'node>, Output = Evaluation>,
+) -> Result<Output, AddEvaluationError> {
     futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
         .map_err(|_| AddEvaluationError)
 }
