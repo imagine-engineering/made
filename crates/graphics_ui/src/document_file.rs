@@ -440,6 +440,12 @@ enum GddCopyFormat {
     Folder,
 }
 
+enum GraphiteCopy {
+    Original,
+    Export(GddCopyFormat),
+    RecoverFolder,
+}
+
 enum PreparedCopy {
     File(Arc<[u8]>),
     Folder(Vec<(PathBuf, Vec<u8>)>),
@@ -531,15 +537,15 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn save_copy(
-        &mut self,
-        format: Option<GddCopyFormat>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn save_copy(&mut self, request: GraphiteCopy, window: &mut Window, cx: &mut Context<Self>) {
         if self.copy_task.is_some() {
             return;
         }
+        let (format, recover_pending) = match request {
+            GraphiteCopy::Original => (None, false),
+            GraphiteCopy::Export(format) => (Some(format), false),
+            GraphiteCopy::RecoverFolder => (None, true),
+        };
         let content = if format.is_some() {
             self.export_content
         } else {
@@ -557,7 +563,9 @@ impl GraphiteDocumentItem {
         let model = self.model.read(cx);
         let source = model.path.clone();
         let project = self.project.clone();
-        let format = format.or_else(|| model.original.is_none().then_some(GddCopyFormat::Folder));
+        let format = format.or_else(|| {
+            (recover_pending || model.original.is_none()).then_some(GddCopyFormat::Folder)
+        });
         let export = match (&model.document, format) {
             (InspectedDocument::Gdd { contents, .. }, Some(format)) => {
                 Some((contents.clone(), format))
@@ -580,7 +588,11 @@ impl GraphiteDocumentItem {
                     GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
                     GddCopyFormat::Folder => ".gdd",
                 };
-                format!("Copy of {stem}{suffix}")
+                if recover_pending {
+                    format!("Recovered {stem}{suffix}")
+                } else {
+                    format!("Copy of {stem}{suffix}")
+                }
             }
             None => format!("Copy of {}", model.name),
         };
@@ -679,6 +691,10 @@ impl GraphiteDocumentItem {
                         Vec::new()
                     };
                     cx.background_spawn(async move {
+                        if recover_pending {
+                            let recovered = archive.recover_pending_edits(ARCHIVE_BUDGET).await?;
+                            return Ok(PreparedCopy::Folder(recovered.folder_files()?));
+                        }
                         let enriched = if embed_linked_resources || legacy_document.is_some() {
                             Some(
                                 archive
@@ -853,9 +869,9 @@ impl Render for GraphiteDocumentItem {
                 div().debug_selector(|| "GRAPHITE-SAVE-COPY".into()).child(
                     Button::new("graphite-save-copy", "Save a Copy")
                         .disabled(self.copy_task.is_some())
-                        .on_click(
-                            cx.listener(|item, _, window, cx| item.save_copy(None, window, cx)),
-                        ),
+                        .on_click(cx.listener(|item, _, window, cx| {
+                            item.save_copy(GraphiteCopy::Original, window, cx)
+                        })),
                 ),
             )
             .when_some(self.copy_feedback.clone(), |view, (message, color)| {
@@ -922,6 +938,28 @@ impl Render for GraphiteDocumentItem {
                         )
                         .when(contents.has_saved_view(), |view| {
                             view.child(self.render_saved_view(cx))
+                        })
+                        .when(recovery.hot_log_len > 0, |view| {
+                            view.child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-SAVE-RECOVERED".into())
+                                    .child(
+                                        Button::new(
+                                            "graphite-gdd-save-recovered",
+                                            "Save Recovered Folder",
+                                        )
+                                        .disabled(self.copy_task.is_some())
+                                        .on_click(
+                                            cx.listener(|item, _, window, cx| {
+                                                item.save_copy(
+                                                    GraphiteCopy::RecoverFolder,
+                                                    window,
+                                                    cx,
+                                                )
+                                            }),
+                                        ),
+                                    ),
+                            )
                         })
                         .child(
                             div()
@@ -1005,7 +1043,7 @@ impl Render for GraphiteDocumentItem {
                                 Button::new(selector, label)
                                     .disabled(self.copy_task.is_some())
                                     .on_click(cx.listener(move |item, _, window, cx| {
-                                        item.save_copy(Some(format), window, cx)
+                                        item.save_copy(GraphiteCopy::Export(format), window, cx)
                                     })),
                             )
                         }),
@@ -1320,8 +1358,66 @@ mod tests {
             workspace.read_with(window, |workspace, cx| {
                 workspace.active_item_as::<GraphiteDocumentItem>(cx)
             }),
-            Some(item)
+            Some(item.clone())
         );
+        let occupied = PathBuf::from("/project/occupied.gdd");
+        filesystem
+            .create_new_directory_atomically(
+                occupied.clone(),
+                vec![(PathBuf::from("original.txt"), b"keep this folder".to_vec())],
+            )
+            .await
+            .expect("existing directory fixture");
+        window.run_until_parked();
+        let recovered_path = PathBuf::from("/project/recovered.gdd");
+        for (selection, published) in [
+            (None, false),
+            (Some(occupied.clone()), false),
+            (Some(recovered_path.clone()), true),
+        ] {
+            paint(window);
+            click(window, "GRAPHITE-GDD-SAVE-RECOVERED");
+            window.simulate_new_path_selection(|_| selection);
+            window.run_until_parked();
+            assert_eq!(
+                filesystem
+                    .metadata(&recovered_path)
+                    .await
+                    .expect("recovered folder publication")
+                    .is_some(),
+                published,
+            );
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&occupied.join("original.txt"))
+                .await
+                .expect("existing folder data"),
+            b"keep this folder",
+        );
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|options| {
+            assert!(options.directories && !options.files && !options.multiple);
+            Some(vec![recovered_path])
+        });
+        window.run_until_parked();
+        let recovered = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened recovered folder");
+        assert_ne!(recovered, item);
+        recovered.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected a reopened GDD");
+            };
+            let summary = contents.recovery();
+            assert_eq!(summary.source, GddRecoverySource::RegistryAndHistory);
+            assert_eq!(summary.network_count, 2);
+            assert_eq!(summary.history_len, 2);
+            assert_eq!(summary.hot_log_len, 0);
+            assert!(!item.is_dirty(cx));
+        });
         assert_eq!(
             filesystem
                 .load_bytes(&original_path)

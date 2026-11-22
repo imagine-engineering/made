@@ -99,6 +99,10 @@ pub enum GddArchiveError {
     MissingDocument,
     #[error("The Graphite document has no history to export.")]
     NoExportableHistory,
+    #[error("The Graphite document has no pending edits to recover.")]
+    NoPendingEdits,
+    #[error("The recovered Graphite folder did not retain the replayed edits.")]
+    IncompleteRecovery,
     #[error("This Graphite document already contains a different legacy document.")]
     ConflictingLegacyDocument,
     #[error("{0}")]
@@ -222,6 +226,79 @@ impl InspectedGddV1 {
         self.recovery
     }
 
+    pub async fn recover_pending_edits(
+        &self,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        if self.hot_log_len() == 0 {
+            return Err(GddArchiveError::NoPendingEdits);
+        }
+        let synthesized_history =
+            self.recovery.source == GddRecoverySource::RegistryOnly && self.history_len() > 0;
+        let entries = if synthesized_history {
+            // Registry-only recovery synthesizes its history in memory. Materialize that lineage
+            // before appending new revisions whose parents refer to it.
+            let bytes = self
+                .document
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &HashMapResourceStorage::new(),
+                    None,
+                )
+                .await?;
+            let entries = stage_zip(
+                &bytes,
+                &GddArchiveBudget {
+                    max_archive_bytes: bytes.len(),
+                    ..budget
+                },
+            )?;
+            self.restore_export_entries(entries, &budget, true)?
+        } else {
+            self.copy_entries(&budget)?.finish()?
+        };
+        let working = entries.working;
+        let mut owner = GddV1::open_in(AnyContainer::Memory(working.clone()), GddV1Layout).await?;
+        owner
+            .session()
+            .verify_history()
+            .map_err(graphite_document_format::Error::from)?;
+        if synthesized_history && let Some(base) = owner.session().head_rev() {
+            use graphite_document_graph_storage::{Value, attr};
+
+            // The synthetic base has no interaction marker for the recovered edit to undo to.
+            owner.annotate_delta(base, attr::delta::INTERACTION_END, Value::Bool(true))?;
+        }
+        owner.retire_pending_interaction()?;
+        let recovered = inspect_working_copy(&working, &budget).await?;
+        recovered
+            .document
+            .session()
+            .verify_history()
+            .map_err(graphite_document_format::Error::from)?;
+        if recovered.hot_log_len() != 0
+            || !recovered
+                .document
+                .registry()
+                .value_equal(self.document.registry())
+        {
+            return Err(GddArchiveError::IncompleteRecovery);
+        }
+        Ok(recovered)
+    }
+
+    fn copy_entries<'budget>(
+        &self,
+        budget: &'budget GddArchiveBudget,
+    ) -> Result<StagedEntries<'budget>, GddArchiveError> {
+        let mut entries = StagedEntries::new(budget);
+        for name in &self.entries.names {
+            entries.install(name, self.read_entry(name)?.as_slice())?;
+        }
+        Ok(entries)
+    }
+
     pub fn has_saved_view(&self) -> bool {
         !self.document.view_settings().is_empty()
             || !self.document.network_view_settings().is_empty()
@@ -336,10 +413,7 @@ impl InspectedGddV1 {
         let legacy = supplied_legacy.or(original_legacy.as_ref().map(ByteHolder::as_slice));
         let Some(approved_resources) = approved_resources else {
             if include_all {
-                let mut entries = StagedEntries::new(&budget);
-                for name in &self.entries.names {
-                    entries.install(name, self.read_entry(name)?.as_slice())?;
-                }
+                let mut entries = self.copy_entries(&budget)?;
                 if let Some(legacy) = legacy
                     && original_legacy.is_none()
                 {
@@ -615,7 +689,14 @@ pub async fn create_gdd_folder(
         editor_version,
         crate::resources::GRAPHITE_IMAGE_SOURCE_REVISION.into(),
     )?;
-    let mut entries = StagedEntries::new(&budget);
+    inspect_working_copy(&working, &budget).await
+}
+
+async fn inspect_working_copy(
+    working: &MemoryBackend,
+    budget: &GddArchiveBudget,
+) -> Result<InspectedGddV1, GddArchiveError> {
+    let mut entries = StagedEntries::new(budget);
     for name in working.list("")? {
         entries.install(&name, working.read(&name)?.as_slice())?;
     }
@@ -1028,35 +1109,38 @@ mod tests {
         });
     }
 
-    #[test]
-    fn at_gra_gdd_016_1_recovers_registry_history_and_hot_frames_with_the_original_owner() {
+    fn document_with_pending_network() -> (GddV1, NetworkId) {
         use graphite_document_graph_storage::{HotOp, Network, NetworkId, ROOT_NETWORK, TimeStamp};
 
+        let mut owner = document();
+        let pending_network = NetworkId(42);
+        let peer = owner.session().peer();
+        for (id, counter) in [(ROOT_NETWORK, 1), (pending_network, 2)] {
+            owner
+                .apply_hot_op(HotOp {
+                    op: RegistryDelta::AddNetwork {
+                        id,
+                        network: Network::default(),
+                    },
+                    timestamp: TimeStamp { counter, peer },
+                })
+                .expect("source graph operation");
+            if id == ROOT_NETWORK {
+                owner
+                    .retire_pending_interaction()
+                    .expect("one retired interaction");
+            }
+        }
+        (owner, pending_network)
+    }
+
+    #[test]
+    fn at_gra_gdd_016_1_recovers_registry_history_and_hot_frames_with_the_original_owner() {
+        use graphite_document_graph_storage::TimeStamp;
+
         futures::executor::block_on(async {
-            let mut owner = document();
-            let pending_network = NetworkId(42);
+            let (owner, pending_network) = document_with_pending_network();
             let peer = owner.session().peer();
-            owner
-                .apply_hot_op(HotOp {
-                    op: RegistryDelta::AddNetwork {
-                        id: ROOT_NETWORK,
-                        network: Network::default(),
-                    },
-                    timestamp: TimeStamp { counter: 1, peer },
-                })
-                .expect("first source operation");
-            owner
-                .retire_pending_interaction()
-                .expect("one retired interaction");
-            owner
-                .apply_hot_op(HotOp {
-                    op: RegistryDelta::AddNetwork {
-                        id: pending_network,
-                        network: Network::default(),
-                    },
-                    timestamp: TimeStamp { counter: 2, peer },
-                })
-                .expect("pending original operation");
             for (source, include_registry, include_history) in [
                 (GddRecoverySource::RegistryAndHistory, true, true),
                 (GddRecoverySource::RegistryOnly, true, false),
@@ -1106,6 +1190,105 @@ mod tests {
                 }
                 assert_eq!(recovered.original_bytes(), original.as_ref());
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_gdd_016_1_saves_pending_edits_as_one_undoable_interaction() {
+        use graphite_document_graph_storage::ROOT_NETWORK;
+
+        futures::executor::block_on(async {
+            let (owner, pending_network) = document_with_pending_network();
+            let bytes = export(&owner, Some(b"original legacy data")).await;
+            let source = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original GDD with an unfinished edit");
+            let layout = GddV1Layout;
+            let codecs = owner.manifest().codecs;
+            let history_path = path_for(layout.history_basename(), codecs.history);
+            let hot_log_path = path_for(layout.hot_log_basename(), codecs.hot_log);
+            let source_files = source.folder_files().expect("exact working entries");
+            for retain_history in [true, false] {
+                let files = source_files
+                    .iter()
+                    .filter(|(path, _)| retain_history || path != Path::new(&history_path))
+                    .map(|(path, bytes)| {
+                        (
+                            path.to_str().expect("admitted path").to_owned(),
+                            bytes.clone(),
+                        )
+                    })
+                    .collect();
+                let original = inspect_gdd_folder_files(files, budget())
+                    .await
+                    .expect("source copy for recovery");
+                let recovery = original
+                    .recover_pending_edits(budget())
+                    .await
+                    .expect("retire pending Graphite state in isolated storage");
+                assert_eq!(recovery.history_len(), original.history_len() + 1);
+                assert_eq!(recovery.hot_log_len(), 0);
+                assert!(
+                    recovery
+                        .document
+                        .registry()
+                        .value_equal(original.document.registry())
+                );
+                assert_eq!(
+                    recovery
+                        .read_entry(layout.legacy_path())
+                        .expect("retained legacy entry")
+                        .as_slice(),
+                    b"original legacy data",
+                );
+                assert_eq!(
+                    original
+                        .read_entry(&hot_log_path)
+                        .expect("source hot log")
+                        .as_slice(),
+                    source
+                        .read_entry(&hot_log_path)
+                        .expect("original hot log")
+                        .as_slice(),
+                );
+                let working = recovery
+                    .copy_entries(&budget())
+                    .expect("inspect durable output")
+                    .finish()
+                    .expect("valid folder layout")
+                    .working;
+                let mut original_editor = GddV1::open_in(AnyContainer::Memory(working), layout)
+                    .await
+                    .expect("original editor reopens the recovered working folder");
+                original_editor
+                    .undo()
+                    .expect("one-step undo of the recovered edit");
+                assert!(
+                    original_editor
+                        .registry()
+                        .networks
+                        .contains_key(&ROOT_NETWORK)
+                );
+                assert!(
+                    !original_editor
+                        .registry()
+                        .networks
+                        .contains_key(&pending_network)
+                );
+                original_editor
+                    .redo()
+                    .expect("one-step redo of the recovered edit");
+                assert!(
+                    original_editor
+                        .registry()
+                        .value_equal(original.document.registry())
+                );
+                assert!(matches!(
+                    recovery.recover_pending_edits(budget()).await,
+                    Err(GddArchiveError::NoPendingEdits)
+                ));
+            }
+            assert_eq!(source.original_bytes(), bytes.as_ref());
         });
     }
 
