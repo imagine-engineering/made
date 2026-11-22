@@ -690,11 +690,13 @@ impl NodeCopyForm {
         network
             .compatible_numeric_imports(target)
             .any(|index| index == import_index)
-            .then(|| GraphiteCopy::ConnectNetworkImport {
-                network: Box::new(network.clone()),
-                target: Box::new(target.clone()),
-                import_index,
-                reconnect: target.numeric_import_source().is_some(),
+            .then(|| {
+                GraphiteCopy::EditNetworkWire(NetworkWireChange::Import {
+                    network: Box::new(network.clone()),
+                    target: Box::new(target.clone()),
+                    import_index,
+                    reconnect: target.numeric_import_source().is_some(),
+                })
             })
     }
 
@@ -785,21 +787,76 @@ enum GraphiteCopy {
         network: Box<GddGraphNetwork>,
         nodes: Vec<GddGraphNode>,
     },
-    ConnectNetworkExport {
+    EditNetworkWire(NetworkWireChange),
+    EditNode {
+        node: Box<GddGraphNode>,
+        change: NodeCopyChange,
+    },
+}
+
+enum NetworkWireChange {
+    Export {
         network: Box<GddGraphNetwork>,
         source: Box<GddGraphNode>,
         export_index: usize,
     },
-    ConnectNetworkImport {
+    Import {
         network: Box<GddGraphNetwork>,
         target: Box<GddGraphNode>,
         import_index: usize,
         reconnect: bool,
     },
-    EditNode {
-        node: Box<GddGraphNode>,
-        change: NodeCopyChange,
-    },
+}
+
+impl NetworkWireChange {
+    async fn stage(self, archive: &InspectedGddV1) -> Result<InspectedGddV1, GddArchiveError> {
+        match self {
+            Self::Export {
+                network,
+                source,
+                export_index,
+            } => {
+                archive
+                    .connect_numeric_network_export_in_copy(
+                        &network,
+                        &source,
+                        export_index,
+                        ARCHIVE_BUDGET,
+                    )
+                    .await
+            }
+            Self::Import {
+                network,
+                target,
+                import_index,
+                reconnect: true,
+            } => {
+                archive
+                    .reconnect_numeric_network_import_in_copy(
+                        &network,
+                        import_index,
+                        &target,
+                        ARCHIVE_BUDGET,
+                    )
+                    .await
+            }
+            Self::Import {
+                network,
+                target,
+                import_index,
+                reconnect: false,
+            } => {
+                archive
+                    .connect_numeric_network_import_in_copy(
+                        &network,
+                        import_index,
+                        &target,
+                        ARCHIVE_BUDGET,
+                    )
+                    .await
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1593,15 +1650,28 @@ impl GraphiteDocumentItem {
             return;
         }
         let model = self.model.read(cx);
+        let Some(contents) = model
+            .gdd_contents()
+            .filter(|_| model.working.is_some())
+            .cloned()
+        else {
+            self.save_copy(request, window, cx);
+            return;
+        };
+        let revision = model.revision.clone();
         match request {
-            GraphiteCopy::EditNode { node, change } if model.working.is_some() => {
-                let Some(contents) = model.gdd_contents().cloned() else {
-                    return;
-                };
-                let revision = model.revision.clone();
+            GraphiteCopy::EditNode { node, change } => {
                 self.stage_working_snapshot(
                     revision,
                     async move { change.stage(&contents, &node).await },
+                    window,
+                    cx,
+                );
+            }
+            GraphiteCopy::EditNetworkWire(change) => {
+                self.stage_working_snapshot(
+                    revision,
+                    async move { change.stage(&contents).await },
                     window,
                     cx,
                 );
@@ -1713,12 +1783,12 @@ impl GraphiteDocumentItem {
         if network.can_connect_export_from(source)
             && network.empty_exports().contains(&export_index)
         {
-            self.save_copy(
-                GraphiteCopy::ConnectNetworkExport {
+            self.edit_numeric_wire(
+                GraphiteCopy::EditNetworkWire(NetworkWireChange::Export {
                     network: Box::new(network.clone()),
                     source: Box::new(source.clone()),
                     export_index,
-                },
+                }),
                 window,
                 cx,
             );
@@ -1735,7 +1805,7 @@ impl GraphiteDocumentItem {
             return;
         };
         if let Some(command) = form.connect_network_import(import_index) {
-            self.save_copy(command, window, cx);
+            self.edit_numeric_wire(command, window, cx);
         }
     }
 
@@ -2497,6 +2567,11 @@ impl GraphiteDocumentItem {
         );
         match &self.node_copy {
             NodeCopyPanel::Ready(form) => {
+                let wire_suffix = if self.model.read(cx).working.is_some() {
+                    ""
+                } else {
+                    " in a Copy"
+                };
                 let item = cx.entity().downgrade();
                 let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
                     for (index, node) in form
@@ -2693,8 +2768,8 @@ impl GraphiteDocumentItem {
                                 panel.when(imports.peek().is_some(), |panel| {
                                     panel.child(h_flex().gap_2().flex_wrap().children(imports.map(|index| {
                                         let label = match network.import_name(index) {
-                                            Some(name) => format!("{action} Import {} ({name}) in a Copy", index + 1),
-                                            None => format!("{action} Import {} in a Copy", index + 1),
+                                            Some(name) => format!("{action} Import {} ({name}){wire_suffix}", index + 1),
+                                            None => format!("{action} Import {}{wire_suffix}", index + 1),
                                         };
                                         div()
                                             .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-IMPORT-{index}"))
@@ -2885,7 +2960,7 @@ impl GraphiteDocumentItem {
                                     .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-EXPORT-{export_index}"))
                                     .child(Button::new(
                                         ("graphite-gdd-connect-export", export_index),
-                                        format!("Connect to Export {} in a Copy", export_index + 1),
+                                        format!("Connect to Export {}{wire_suffix}", export_index + 1),
                                     )
                                     .disabled(self.copy_task.is_some())
                                     .on_click(cx.listener(move |item, _, window, cx| {
@@ -3508,13 +3583,17 @@ impl GraphiteDocumentItem {
                         kind: NetworkPortKind::Export,
                         ..
                     } => "Added export in",
-                    GraphiteCopy::ConnectNetworkExport { .. } => "Connected export in",
-                    GraphiteCopy::ConnectNetworkImport {
-                        reconnect: false, ..
-                    } => "Connected import in",
-                    GraphiteCopy::ConnectNetworkImport {
-                        reconnect: true, ..
-                    } => "Reconnected import in",
+                    GraphiteCopy::EditNetworkWire(NetworkWireChange::Export { .. }) => {
+                        "Connected export in"
+                    }
+                    GraphiteCopy::EditNetworkWire(NetworkWireChange::Import {
+                        reconnect: false,
+                        ..
+                    }) => "Connected import in",
+                    GraphiteCopy::EditNetworkWire(NetworkWireChange::Import {
+                        reconnect: true,
+                        ..
+                    }) => "Reconnected import in",
                     GraphiteCopy::SetPrimaryNetworkPortExposure {
                         kind: NetworkPortKind::Import,
                         exposed: true,
@@ -3783,44 +3862,9 @@ impl GraphiteDocumentItem {
                                         .await?
                                 }
                             }),
-                            GraphiteCopy::ConnectNetworkExport {
-                                network,
-                                source,
-                                export_index,
-                            } => Some(
-                                archive
-                                    .connect_numeric_network_export_in_copy(
-                                        &network,
-                                        &source,
-                                        export_index,
-                                        ARCHIVE_BUDGET,
-                                    )
-                                    .await?,
-                            ),
-                            GraphiteCopy::ConnectNetworkImport {
-                                network,
-                                target,
-                                import_index,
-                                reconnect,
-                            } => Some(if reconnect {
-                                archive
-                                    .reconnect_numeric_network_import_in_copy(
-                                        &network,
-                                        import_index,
-                                        &target,
-                                        ARCHIVE_BUDGET,
-                                    )
-                                    .await?
-                            } else {
-                                archive
-                                    .connect_numeric_network_import_in_copy(
-                                        &network,
-                                        import_index,
-                                        &target,
-                                        ARCHIVE_BUDGET,
-                                    )
-                                    .await?
-                            }),
+                            GraphiteCopy::EditNetworkWire(change) => {
+                                Some(change.stage(&archive).await?)
+                            }
                             GraphiteCopy::SetPrimaryNetworkPortExposure {
                                 network,
                                 kind,
@@ -7047,6 +7091,202 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_007_022_2_workspace_wires_nested_ports_in_the_working_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        use graphics_core::formats::gdd::GddGraphPortSource;
+
+        let (bytes, _) = graph_navigation_archive_with_number_target(true).await;
+        let seed = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("pinned source network");
+        let graph = seed.graph_inspection().await.expect("pinned nested scopes");
+        let scope = graph
+            .networks
+            .iter()
+            .find(|network| network.parent.is_some() && network.export_count == 2)
+            .expect("nested network with pinned ports");
+        let original = seed
+            .append_nested_network_export_in_copy(scope, ARCHIVE_BUDGET)
+            .await
+            .expect("source with an empty third export")
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source archive contents");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/live-nested-ports.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("write pinned source");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite Inspector");
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let canvas = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("open nested canvas");
+        click_graph_point(
+            window,
+            canvas.origin + gpui::point(px(650.), px(170.)),
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        click(window, "GRAPHITE-GDD-ADD-Sign");
+        window.run_until_parked();
+        paint(window);
+        let (target_id, base_history) = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working scoped document")
+            };
+            (
+                form.selected_node()
+                    .expect("retained numeric target")
+                    .storage_id(),
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("working snapshot")
+                    .history_len(),
+            )
+        });
+
+        click(window, "GRAPHITE-GDD-GRAPH-Import-2");
+        paint(window);
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-6");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working canvas")
+            };
+            assert_eq!(
+                form.selected_node()
+                    .expect("wired target")
+                    .numeric_import_source(),
+                Some(1)
+            );
+            assert!(matches!(
+                form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::Number(23.))
+            ));
+        });
+
+        click(window, "GRAPHITE-GDD-GRAPH-Export-3");
+        window.run_until_parked();
+        paint(window);
+        let assert_exports = |window: &gpui::VisualTestContext, connected: bool| {
+            item.read_with(window, |item, cx| {
+                assert!(item.is_dirty(cx));
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("working canvas")
+                };
+                let network = form.active_network().expect("original scoped network");
+                assert_eq!(network.id, scope.id);
+                assert_eq!(network.export_count, 3);
+                assert_eq!(network.empty_exports().is_empty(), connected);
+                assert_eq!(
+                    network
+                        .exports()
+                        .get(2)
+                        .and_then(|port| port.source.clone()),
+                    connected.then_some(GddGraphPortSource::Node {
+                        storage_id: target_id,
+                        output_index: 0
+                    })
+                );
+                assert!(matches!(form.saved_graph, SavedGraphPanel::Ready(_)));
+            });
+        };
+        assert_exports(window, true);
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        paint(window);
+        assert_exports(window, false);
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working canvas")
+            };
+            assert_eq!(
+                form.selected_node()
+                    .expect("target input")
+                    .numeric_import_source(),
+                None
+            );
+        });
+        for _ in 0..2 {
+            click(window, "GRAPHITE-GDD-REDO");
+            window.run_until_parked();
+            paint(window);
+        }
+        assert_exports(window, true);
+
+        let destination = PathBuf::from("/project/saved-working-ports.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("read published working graph");
+        let graph = saved
+            .graph_inspection()
+            .await
+            .expect("reopened working graph");
+        let network = graph
+            .networks
+            .iter()
+            .find(|network| network.id == scope.id)
+            .expect("same nested scope");
+        let target = graph
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == target_id)
+            .expect("same target ID");
+        assert_eq!(target.numeric_import_source(), Some(1));
+        assert!(matches!(
+            saved.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Number(23.))
+        ));
+        assert_eq!(
+            network
+                .exports()
+                .get(2)
+                .and_then(|port| port.source.as_ref()),
+            Some(&GddGraphPortSource::Node {
+                storage_id: target_id,
+                output_index: 0
+            })
+        );
+        assert_eq!(saved.history_len(), base_history + 2);
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original source ZIP"),
             original
         );
     }
