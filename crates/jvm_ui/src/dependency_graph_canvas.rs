@@ -7,6 +7,7 @@
 //! deterministically. The same admitted facts always produce the same canvas,
 //! including positions, so the viewport stays stable across re-derivation.
 
+use gpui::px;
 use project::jvm_project::{GradleResolutionGraph, MavenDependencyGraph};
 use sim_runtime::graph::{GraphPoint, GraphRect, GraphSize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -669,12 +670,12 @@ impl CanvasState {
         } else if additive {
             self.selection.insert(id.to_owned())
         } else {
-            let already = self.selection.len() == 1 && self.selection.contains(id);
-            self.selection.clear();
-            if !already {
+            let changed = self.selection.len() != 1 || !self.selection.contains(id);
+            if changed {
+                self.selection.clear();
                 self.selection.insert(id.to_owned());
             }
-            !already
+            changed
         };
         if changed {
             self.focus = Some(id.to_owned());
@@ -703,7 +704,7 @@ impl CanvasState {
 
     /// Extends the selection to every node inside the current box selection.
     pub fn apply_box_selection(&mut self) -> bool {
-        let Some((start, end)) = self.box_selection else {
+        let Some((start, end)) = self.box_selection.take() else {
             return false;
         };
         let rect = GraphRect {
@@ -716,17 +717,51 @@ impl CanvasState {
                 height: (start.y - end.y).abs(),
             },
         };
+        if start == end {
+            return false;
+        }
+        let size = self.graph.node_size();
         let mut changed = false;
         for node in &self.graph.nodes {
             let Some(origin) = self.graph.positions.get(&node.id).copied() else {
                 continue;
             };
-            if rect.contains(origin) && self.selection.insert(node.id.clone()) {
+            if rect.intersects(GraphRect { origin, size }) && self.selection.insert(node.id.clone())
+            {
                 changed = true;
             }
         }
-        self.box_selection = None;
         changed
+    }
+
+    fn canvas_position(&self, position: gpui::Point<gpui::Pixels>) -> GraphPoint {
+        let origin = *self.canvas_origin.lock().expect("canvas origin");
+        GraphPoint {
+            x: (position.x - px(origin.x)).into(),
+            y: (position.y - px(origin.y)).into(),
+        }
+    }
+
+    fn update_box_selection(&mut self, position: GraphPoint) -> bool {
+        if let Some((_, end)) = &mut self.box_selection {
+            *end = self.viewport.screen_to_graph(position);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn finish_pointer_selection(
+        &mut self,
+        event: &gpui::MouseUpEvent,
+        _: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if self.update_box_selection(self.canvas_position(event.position)) {
+            self.apply_box_selection();
+            cx.notify();
+        }
+        self.end_pan();
     }
 
     /// Begins a viewport pan at a canvas-relative anchor point.
@@ -778,7 +813,7 @@ impl gpui::Render for CanvasState {
     ) -> impl gpui::IntoElement {
         use gpui::{
             InteractiveElement as _, ParentElement as _, PathBuilder, Rgba, ScrollWheelEvent,
-            StatefulInteractiveElement as _, Styled as _, canvas, point, px,
+            StatefulInteractiveElement as _, Styled as _, canvas, point,
         };
         use ui::prelude::*;
 
@@ -886,11 +921,7 @@ impl gpui::Render for CanvasState {
             .on_scroll_wheel(cx.listener(
                 move |state, event: &ScrollWheelEvent, _, cx: &mut gpui::Context<Self>| {
                     let delta = event.delta.pixel_delta(px(20.0));
-                    let origin = *state.canvas_origin.lock().expect("canvas origin");
-                    let anchor = GraphPoint {
-                        x: (event.position.x - px(origin.x)).into(),
-                        y: (event.position.y - px(origin.y)).into(),
-                    };
+                    let anchor = state.canvas_position(event.position);
                     if event.modifiers.control || event.modifiers.alt {
                         let vertical: f32 = delta.y.into();
                         let factor = if vertical < 0.0 { 1.1 } else { 1.0 / 1.1 };
@@ -908,17 +939,13 @@ impl gpui::Render for CanvasState {
                 gpui::MouseButton::Left,
                 cx.listener(
                     move |state, event: &gpui::MouseDownEvent, _, cx: &mut gpui::Context<Self>| {
-                        let origin = *state.canvas_origin.lock().expect("canvas origin");
-                        let position = GraphPoint {
-                            x: (event.position.x - px(origin.x)).into(),
-                            y: (event.position.y - px(origin.y)).into(),
-                        };
+                        let position = state.canvas_position(event.position);
                         if let Some(node) = state.node_at(position) {
-                            state.select_node(
-                                &node,
-                                event.modifiers.shift,
-                                event.modifiers.control || event.modifiers.alt,
-                            );
+                            let toggle = event.modifiers.platform || event.modifiers.control;
+                            state.select_node(&node, event.modifiers.shift || toggle, toggle);
+                        } else if event.modifiers.shift {
+                            let start = state.viewport.screen_to_graph(position);
+                            state.box_selection = Some((start, start));
                         } else {
                             state.begin_pan(position);
                         }
@@ -928,12 +955,10 @@ impl gpui::Render for CanvasState {
             )
             .on_mouse_move(cx.listener(
                 move |state, event: &gpui::MouseMoveEvent, _, cx: &mut gpui::Context<Self>| {
-                    let origin = *state.canvas_origin.lock().expect("canvas origin");
-                    let position = GraphPoint {
-                        x: (event.position.x - px(origin.x)).into(),
-                        y: (event.position.y - px(origin.y)).into(),
-                    };
-                    if event.pressed_button.is_some() {
+                    let position = state.canvas_position(event.position);
+                    if event.pressed_button == Some(gpui::MouseButton::Left)
+                        && !state.update_box_selection(position)
+                    {
                         state.update_pan(position);
                     }
                     let hover = state.node_at(position);
@@ -945,12 +970,11 @@ impl gpui::Render for CanvasState {
             ))
             .on_mouse_up(
                 gpui::MouseButton::Left,
-                cx.listener(
-                    move |state, _: &gpui::MouseUpEvent, _, cx: &mut gpui::Context<Self>| {
-                        state.end_pan();
-                        cx.notify();
-                    },
-                ),
+                cx.listener(Self::finish_pointer_selection),
+            )
+            .on_mouse_up_out(
+                gpui::MouseButton::Left,
+                cx.listener(Self::finish_pointer_selection),
             )
             .on_mouse_down(
                 gpui::MouseButton::Right,
@@ -959,11 +983,7 @@ impl gpui::Render for CanvasState {
                     // unselected node targets it, an in-selection click
                     // preserves the selection, blank canvas acts on the view.
                     move |state, event: &gpui::MouseDownEvent, window, cx| {
-                        let origin = *state.canvas_origin.lock().expect("canvas origin");
-                        let position = GraphPoint {
-                            x: (event.position.x - px(origin.x)).into(),
-                            y: (event.position.y - px(origin.y)).into(),
-                        };
+                        let position = state.canvas_position(event.position);
                         let hit = state.node_at(position);
                         state.focus = hit.clone();
                         let target =
@@ -1556,6 +1576,8 @@ mod tests {
         let mut state = canvas_state_fixture();
         assert!(state.select_node("root", false, false));
         assert_eq!(state.selection.len(), 1);
+        assert!(!state.select_node("root", false, false));
+        assert!(state.selection.contains("root"));
         assert!(state.select_node("c1", true, false));
         assert_eq!(state.selection.len(), 2, "shift extends the selection");
         assert!(state.select_node("c1", true, true));
@@ -1588,5 +1610,62 @@ mod tests {
         assert!(state.selection.contains("root"));
         assert!(state.selection.contains("c1"));
         assert!(state.box_selection.is_none());
+    }
+
+    #[gpui::test]
+    fn canvas_pointer_selection_keeps_the_viewport_and_toggles_exact_nodes(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+        let (canvas, cx) = cx.add_window_view(|_, _| canvas_state_fixture());
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let (first, second, start, end) = canvas.read_with(cx, |state, _| {
+            let origin = *state.canvas_origin.lock().expect("canvas origin");
+            let point = |node: &str, horizontal: f32, vertical: f32| {
+                let node = state.node_screen_position(node).expect("fixture node");
+                gpui::point(
+                    px(origin.x + node.x + horizontal),
+                    px(origin.y + node.y + vertical),
+                )
+            };
+            (
+                point("root", 20.0, 10.0),
+                point("c1", 20.0, 10.0),
+                point("c1", NODE_WIDTH + 10.0, 10.0),
+                point("c1", NODE_WIDTH - 10.0, 20.0),
+            )
+        });
+        cx.simulate_click(first, gpui::Modifiers::default());
+        cx.simulate_click(first, gpui::Modifiers::default());
+        let toggle = gpui::Modifiers {
+            platform: true,
+            ..Default::default()
+        };
+        cx.simulate_click(second, toggle);
+        assert_eq!(
+            canvas.read_with(cx, |state, _| state.selection.clone()),
+            BTreeSet::from(["root".into(), "c1".into()])
+        );
+        cx.simulate_click(second, toggle);
+        let extend = gpui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        cx.simulate_mouse_down(start, gpui::MouseButton::Left, extend);
+        cx.simulate_mouse_move(end, gpui::MouseButton::Left, extend);
+        assert!(canvas.read_with(cx, |state, _| state.box_selection.is_some()));
+        cx.simulate_mouse_up(end, gpui::MouseButton::Left, extend);
+        canvas.read_with(cx, |state, _| {
+            assert_eq!(
+                state.selection,
+                BTreeSet::from(["root".into(), "c1".into()])
+            );
+            assert_eq!(state.viewport.offset, GraphPoint::ZERO);
+            assert!(state.box_selection.is_none());
+        });
     }
 }
