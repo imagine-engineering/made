@@ -372,6 +372,57 @@ impl UnaryNumericOperation {
     }
 }
 
+pub(crate) async fn evaluate_detached_numeric_network(
+    network: NodeNetwork,
+) -> Result<TaggedValue, String> {
+    AssertUnwindSafe(async {
+        let branch_id = NodeId(0);
+        let mut network = NodeNetwork {
+            nodes: [(
+                branch_id,
+                DocumentNode {
+                    implementation: DocumentNodeImplementation::Network(network),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(branch_id, 0)],
+            ..Default::default()
+        };
+        graphite_preprocessor::Preprocessor::new()
+            .preprocess(&mut network, &|_| None)
+            .map_err(|error| error.to_string())?;
+        if !network.nodes.get(&branch_id).is_some_and(|branch| {
+            matches!(
+                branch.implementation,
+                DocumentNodeImplementation::Network(_)
+            )
+        }) {
+            return Err(
+                "Graphite changed the selected numeric branch during preprocessing.".into(),
+            );
+        }
+        // The preprocessor injects registered scopes that the pure branch never uses.
+        network.remove_dead_nodes(0);
+        let proto = Compiler {}.compile_single(network)?;
+        let executor = DynamicExecutor::new(proto)
+            .await
+            .map_err(|errors| format!("{errors:?}"))?;
+        if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>)) {
+            return Err("Unexpected Graphite evaluation context.".into());
+        }
+        Executor::execute(&&executor, Context::default())
+            .await
+            .map_err(|error| error.to_string())
+    })
+    .catch_unwind()
+    .await
+    .unwrap_or_else(|_| {
+        Err("The pinned Graphite evaluator stopped while preparing the numeric graph.".into())
+    })
+}
+
 pub fn evaluate_absolute_value_i64(value: i64) -> Result<i64, AddEvaluationError> {
     let node = graphite_math_nodes::AbsoluteValueNode::new(Input(Item::new_from_element(value)));
     evaluate_source_node(&node).map(Item::into_element)

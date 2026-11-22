@@ -55,7 +55,7 @@ use graphite_graph_craft::{
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
-use crate::evaluate::UnaryNumericOperation;
+use crate::evaluate::{UnaryNumericOperation, evaluate_detached_numeric_network};
 
 mod xz;
 
@@ -174,6 +174,14 @@ pub enum GddArchiveError {
     UnchangedGraphGridPosition,
     #[error("The change in Graphite grid coordinates is outside the supported range.")]
     GraphGridMoveOutOfRange,
+    #[error("Graphite preview requires a supported numeric chain with literal inputs.")]
+    UnsupportedGraphNumericPreview,
+    #[error("The selected Graphite numeric chain has a cycle.")]
+    CyclicGraphNumericPreview,
+    #[error("The selected Graphite numeric chain exceeds the preview budget.")]
+    GraphNumericPreviewBudget,
+    #[error("Graphite could not evaluate the selected node. {0}")]
+    GraphNumericPreviewEvaluation(String),
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
     #[error("The Graphite copy could not save the addressed node's change.")]
@@ -434,6 +442,10 @@ impl GddGraphNode {
 
     pub fn grid_position(&self) -> Option<[i32; 2]> {
         self.grid_position
+    }
+
+    pub fn can_preview_numeric_output(&self) -> bool {
+        self.numeric_input.is_some()
     }
 
     pub fn validate_grid_move(&self, destination: [i32; 2]) -> Result<(), GddArchiveError> {
@@ -756,6 +768,26 @@ impl InspectedGddV1 {
         }
         self.save_added_graph_node(interface, path, node_id, template, budget)
             .await
+    }
+
+    pub async fn preview_graph_numeric_output(
+        &self,
+        node: &GddGraphNode,
+    ) -> Result<GddNumericValue, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !node.can_preview_numeric_output() {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        }
+        let graph = self.runtime_graph().await?;
+        let source = graph
+            .network
+            .nested_network(&node.network_path)
+            .ok_or(GddArchiveError::StaleGraphNode)?;
+        let detached = numeric_preview_network(source, node.local_id)?;
+        let output = evaluate_detached_numeric_network(detached)
+            .await
+            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)?;
+        preview_numeric_value(&output)
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(
@@ -1888,6 +1920,80 @@ fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentif
     }
 }
 
+fn numeric_preview_network(
+    source: &NodeNetwork,
+    selected: NodeId,
+) -> Result<NodeNetwork, GddArchiveError> {
+    const MAX_PREVIEW_NODES: usize = 32;
+    let identifiers = [
+        UnaryNumericOperation::AbsoluteValue,
+        UnaryNumericOperation::Ceiling,
+        UnaryNumericOperation::Floor,
+        UnaryNumericOperation::Round,
+        UnaryNumericOperation::Sign,
+    ]
+    .map(numeric_node_identifier);
+    let mut detached = NodeNetwork {
+        exports: vec![NodeInput::node(selected, 0)],
+        ..Default::default()
+    };
+    let mut current = selected;
+    loop {
+        if detached.nodes.contains_key(&current) {
+            return Err(GddArchiveError::CyclicGraphNumericPreview);
+        }
+        if detached.nodes.len() >= MAX_PREVIEW_NODES {
+            return Err(GddArchiveError::GraphNumericPreviewBudget);
+        }
+        let document = source
+            .nodes
+            .get(&current)
+            .ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
+        if !matches!(&document.implementation, DocumentNodeImplementation::ProtoNode(identifier)
+            if identifiers.contains(identifier))
+            || document.context_features != Default::default()
+        {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        }
+        let upstream = match document.inputs.as_slice() {
+            [NodeInput::Value { tagged_value, .. }] => {
+                preview_numeric_value(tagged_value)?;
+                None
+            }
+            [
+                NodeInput::Node {
+                    node_id,
+                    output_index: 0,
+                },
+            ] => Some(*node_id),
+            _ => return Err(GddArchiveError::UnsupportedGraphNumericPreview),
+        };
+        detached.nodes.insert(current, document.clone());
+        let Some(upstream) = upstream else {
+            return Ok(detached);
+        };
+        current = upstream;
+    }
+}
+
+fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArchiveError> {
+    const MAX_PREVIEW_VALUES: usize = 1024;
+    match value {
+        TaggedValue::Number(value) if value.is_finite() => Ok(GddNumericValue::Number(*value)),
+        TaggedValue::Integer(value) => Ok(GddNumericValue::Integer(*value)),
+        TaggedValue::DVec2(value) if value.is_finite() => {
+            Ok(GddNumericValue::Vector(value.to_array()))
+        }
+        TaggedValue::Numbers(values) if values.len() > MAX_PREVIEW_VALUES => {
+            Err(GddArchiveError::GraphNumericPreviewBudget)
+        }
+        TaggedValue::Numbers(values) if values.iter().all(|value| value.is_finite()) => {
+            Ok(GddNumericValue::NumberList(values.as_slice().into()))
+        }
+        _ => Err(GddArchiveError::UnsupportedGraphNumericPreview),
+    }
+}
+
 fn is_only_graph_wire(
     interface: &mut NodeNetworkInterface,
     path: &[NodeId],
@@ -2650,6 +2756,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            exports: vec![NodeInput::node(NodeId(7), 0)],
             ..Default::default()
         };
         let mut owner = document();
@@ -2824,6 +2931,131 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_035_1_evaluates_only_the_selected_numeric_branch() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let nodes = original.graph_nodes().await.expect("source graph nodes");
+            let [integer, unsupported, _, _, selected, _] = nodes.as_slice() else {
+                panic!("expected the root number and nested wire");
+            };
+            let original_registry = original.document.registry().clone();
+            let original_history = original.history_len();
+            let original_head = original.document.session().head_rev();
+            assert_eq!(
+                original
+                    .runtime_graph()
+                    .await
+                    .expect("source export")
+                    .network
+                    .exports,
+                vec![NodeInput::node(integer.local_id, 0)]
+            );
+            assert!(matches!(
+                original.preview_graph_numeric_output(unsupported).await,
+                Err(GddArchiveError::UnsupportedGraphNumericPreview)
+            ));
+            assert!(matches!(
+                original
+                    .preview_graph_numeric_output(integer)
+                    .await
+                    .expect("integer output"),
+                GddNumericValue::Integer(17)
+            ));
+            assert!(matches!(
+                original
+                    .preview_graph_numeric_output(selected)
+                    .await
+                    .expect("connected scalar output"),
+                GddNumericValue::Number(-1.)
+            ));
+            assert!(original.document.registry().value_equal(&original_registry));
+            assert_eq!(original.history_len(), original_history);
+            assert_eq!(original.document.session().head_rev(), original_head);
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn numeric_preview_preserves_literal_vector_and_list_outputs_and_rejects_unbounded_branches() {
+        use graphite_graph_craft::document::DocumentNode;
+
+        futures::executor::block_on(async {
+            let operation = |input| DocumentNode {
+                implementation: DocumentNodeImplementation::ProtoNode(numeric_node_identifier(
+                    UnaryNumericOperation::Round,
+                )),
+                inputs: vec![input],
+                ..Default::default()
+            };
+            let selected = NodeId(232);
+            for (input, expected) in [
+                (
+                    TaggedValue::DVec2(DVec2::new(-1.5, 2.49)),
+                    GddNumericValue::Vector([-2., 2.]),
+                ),
+                (
+                    TaggedValue::Numbers(vec![2.5, -2.5, 2.5]),
+                    GddNumericValue::NumberList(Arc::from([3., -3., 3.])),
+                ),
+            ] {
+                let source = NodeNetwork {
+                    nodes: [(selected, operation(NodeInput::value(input, false)))]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                };
+                let detached =
+                    numeric_preview_network(&source, selected).expect("bounded pure branch");
+                let actual = evaluate_detached_numeric_network(detached)
+                    .await
+                    .expect("pinned typed result");
+                assert!(
+                    preview_numeric_value(&actual)
+                        .expect("numeric preview")
+                        .same_value(&expected)
+                );
+            }
+            let cyclic = NodeNetwork {
+                nodes: [
+                    (selected, operation(NodeInput::node(NodeId(445), 0))),
+                    (NodeId(445), operation(NodeInput::node(selected, 0))),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            assert!(matches!(
+                numeric_preview_network(&cyclic, selected),
+                Err(GddArchiveError::CyclicGraphNumericPreview)
+            ));
+            let overlong = NodeNetwork {
+                nodes: (0..33)
+                    .map(|index| {
+                        (
+                            NodeId(index),
+                            operation(if index == 32 {
+                                NodeInput::value(TaggedValue::Number(1.), false)
+                            } else {
+                                NodeInput::node(NodeId(index + 1), 0)
+                            }),
+                        )
+                    })
+                    .collect(),
+                ..Default::default()
+            };
+            assert!(matches!(
+                numeric_preview_network(&overlong, NodeId(0)),
+                Err(GddArchiveError::GraphNumericPreviewBudget)
+            ));
+            assert!(matches!(
+                preview_numeric_value(&TaggedValue::Numbers(vec![0.; 1025])),
+                Err(GddArchiveError::GraphNumericPreviewBudget)
+            ));
         });
     }
 

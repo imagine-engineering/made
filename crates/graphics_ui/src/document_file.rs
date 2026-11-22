@@ -447,12 +447,20 @@ struct NodeCopyForm {
     name: Entity<Editor>,
     value: Entity<Editor>,
     position: Entity<Editor>,
+    output_preview: NodeOutputPreview,
 }
 
 impl NodeCopyForm {
     fn selected_node(&self) -> Option<&GddGraphNode> {
         self.selected.and_then(|index| self.nodes.get(index))
     }
+}
+
+enum NodeOutputPreview {
+    Hidden,
+    Pending { _task: Task<()> },
+    Ready(GddNumericValue),
+    Failed(SharedString),
 }
 
 enum SavedViewPanel {
@@ -647,6 +655,7 @@ impl GraphiteDocumentItem {
                                     name: cx.new(|cx| Editor::single_line(window, cx)),
                                     value: cx.new(|cx| Editor::single_line(window, cx)),
                                     position: cx.new(|cx| Editor::single_line(window, cx)),
+                                    output_preview: NodeOutputPreview::Hidden,
                                 }),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -666,6 +675,9 @@ impl GraphiteDocumentItem {
             return;
         };
         if let Some(node) = form.nodes.get(index) {
+            if form.selected != Some(index) {
+                form.output_preview = NodeOutputPreview::Hidden;
+            }
             form.selected = Some(index);
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
@@ -681,6 +693,94 @@ impl GraphiteDocumentItem {
             }
             cx.notify();
         }
+    }
+
+    fn toggle_node_output_preview(&mut self, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if matches!(
+            form.output_preview,
+            NodeOutputPreview::Pending { .. } | NodeOutputPreview::Ready(_)
+        ) {
+            form.output_preview = NodeOutputPreview::Hidden;
+            cx.notify();
+            return;
+        }
+        let Some(node) = form
+            .selected_node()
+            .filter(|node| node.can_preview_numeric_output())
+        else {
+            return;
+        };
+        let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+            return;
+        };
+        let selected = form.selected;
+        let node = node.clone();
+        let contents = contents.clone();
+        let evaluation = cx.background_spawn(async move {
+            futures::executor::block_on(contents.preview_graph_numeric_output(&node))
+        });
+        form.output_preview = NodeOutputPreview::Pending {
+            _task: cx.spawn(async move |item, cx| {
+                let result = evaluation.await;
+                if let Err(error) = item.update(cx, |item, cx| {
+                    let NodeCopyPanel::Ready(form) = &mut item.node_copy else {
+                        return;
+                    };
+                    if form.selected != selected
+                        || !matches!(form.output_preview, NodeOutputPreview::Pending { .. })
+                    {
+                        return;
+                    }
+                    form.output_preview = match result {
+                        Ok(value) => NodeOutputPreview::Ready(value),
+                        Err(error) => NodeOutputPreview::Failed(error.to_string().into()),
+                    };
+                    cx.notify();
+                }) {
+                    log::debug!("Graphite node preview closed: {error:#}");
+                }
+            }),
+        };
+        cx.notify();
+    }
+
+    fn render_node_output_preview(
+        preview: &NodeOutputPreview,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let label = match preview {
+            NodeOutputPreview::Hidden => "Preview Saved Output",
+            NodeOutputPreview::Pending { .. } => "Cancel Numeric Preview",
+            NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
+            NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
+        };
+        let result = match preview {
+            NodeOutputPreview::Ready(GddNumericValue::NumberList(values)) if values.is_empty() => {
+                Some(("[]".into(), Color::Default))
+            }
+            NodeOutputPreview::Ready(value) => Some((value.to_string(), Color::Default)),
+            NodeOutputPreview::Failed(error) => Some((error.to_string(), Color::Error)),
+            NodeOutputPreview::Hidden | NodeOutputPreview::Pending { .. } => None,
+        };
+        v_flex()
+            .gap_2()
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-PREVIEW-NUMERIC".into())
+                    .child(Button::new("graphite-gdd-preview-numeric", label).on_click(
+                        cx.listener(|item, _, _, cx| item.toggle_node_output_preview(cx)),
+                    )),
+            )
+            .when_some(result, |panel, (message, color)| {
+                panel.child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-NUMERIC-RESULT".into())
+                        .child(Label::new(message).color(color)),
+                )
+            })
     }
 
     fn save_node_grid_position(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1138,6 +1238,9 @@ impl GraphiteDocumentItem {
                                 )
                             })
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
+                            .when(selected.can_preview_numeric_output(), |panel| {
+                                panel.child(Self::render_node_output_preview(&form.output_preview, cx))
+                            })
                             .when(selected.grid_position().is_some(), |panel| {
                                 panel.child(
                                     h_flex()
@@ -2196,6 +2299,71 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_035_2_workspace_previews_a_wired_numeric_output_without_dirtying(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::Connection).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/preview.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the numeric graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the selected numeric node");
+            };
+            assert!(matches!(
+                form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::Integer(17))
+            ));
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the unchanged GDD document");
+            };
+            assert_eq!(contents.history_len(), original_history);
+            assert!(item.copy_task.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-NUMERIC-RESULT").is_some());
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-NUMERIC-RESULT").is_none());
+
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-NUMERIC-RESULT").is_none());
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("byte-exact source archive"),
+            original
+        );
     }
 
     #[gpui::test]
