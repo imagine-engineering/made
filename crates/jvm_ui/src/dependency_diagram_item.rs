@@ -2007,6 +2007,54 @@ mod tests {
             focused_label(cx).as_deref(),
             Some("Dependency org.example:app")
         );
+        let (scale, selection, offscreen_offset) = canvas.update(cx, |canvas, cx| {
+            canvas.select_node("c2", false, false);
+            let size = *canvas.canvas_size.lock().expect("painted size");
+            let left = canvas.node_screen_position("c1").expect("left dependency");
+            canvas.pan(GraphPoint {
+                x: size.width + 16.0 - left.x,
+                y: 0.0,
+            });
+            cx.notify();
+            (
+                canvas.viewport.scale,
+                canvas.selection.clone(),
+                canvas.viewport.offset,
+            )
+        });
+        cx.simulate_keystrokes("tab");
+        assert_eq!(
+            focused_label(cx).as_deref(),
+            Some("Dependency org.example:left 1.0")
+        );
+        let revealed_offset = canvas.read_with(cx, |canvas, _| {
+            let size = *canvas.canvas_size.lock().expect("painted size");
+            let left = canvas.node_screen_position("c1").expect("left dependency");
+            let node_size = canvas.graph.node_size();
+            assert!(left.x >= 0.0 && left.x + node_size.width * scale <= size.width + 0.01);
+            assert!(left.y >= 0.0 && left.y + node_size.height * scale <= size.height + 0.01);
+            assert_eq!(canvas.viewport.scale, scale);
+            assert_eq!(canvas.selection, selection);
+            assert!(canvas.viewport.offset.x < offscreen_offset.x);
+            canvas.viewport.offset
+        });
+        let manual_offset = revealed_offset.translated(GraphPoint { x: 40.0, y: 0.0 });
+        canvas.update(cx, |canvas, cx| {
+            canvas.pan(GraphPoint { x: 40.0, y: 0.0 });
+            cx.notify();
+        });
+        assert_eq!(
+            focused_label(cx).as_deref(),
+            Some("Dependency org.example:left 1.0")
+        );
+        canvas.read_with(cx, |canvas, _| {
+            assert_eq!(canvas.viewport.offset, manual_offset)
+        });
+        cx.simulate_keystrokes("shift-tab");
+        assert_eq!(
+            focused_label(cx).as_deref(),
+            Some("Dependency org.example:app")
+        );
         cx.simulate_keystrokes("shift-tab");
         assert_eq!(focused_label(cx).as_deref(), Some("Fit dependency diagram"));
         canvas.update(cx, |canvas, cx| {

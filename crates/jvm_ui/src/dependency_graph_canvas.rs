@@ -791,6 +791,7 @@ pub struct CanvasState {
     edge_paths: Vec<Vec<GraphPoint>>,
     pub focus: Option<String>,
     node_focus: BTreeMap<String, gpui::FocusHandle>,
+    last_rendered_focus: Option<String>,
     /// Box selection in graph coordinates, if one is being drawn.
     pub box_selection: Option<(GraphPoint, GraphPoint)>,
     drag_anchor: Option<GraphPoint>,
@@ -821,6 +822,7 @@ impl CanvasState {
             hovered_edge: None,
             focus: None,
             node_focus: BTreeMap::new(),
+            last_rendered_focus: None,
             box_selection: None,
             drag_anchor: None,
             drag_origin: GraphPoint::ZERO,
@@ -880,8 +882,9 @@ impl CanvasState {
     }
 
     pub(crate) fn fit_to_canvas(&mut self) {
-        let available = *self.canvas_size.lock().expect("canvas size");
-        self.fit(available);
+        if let Some(available) = self.painted_size() {
+            self.fit(available);
+        }
     }
 
     /// Zooms by `factor` around a canvas-relative anchor point.
@@ -996,19 +999,42 @@ impl CanvasState {
     }
 
     pub(crate) fn center_viewport_on(&mut self, position: GraphPoint) {
-        let size = match self.canvas_size.lock() {
-            Ok(size) => *size,
-            Err(error) => {
-                log::error!("Could not read the dependency diagram canvas size: {error}");
-                return;
-            }
-        };
-        if size.width > 0.0 && size.height > 0.0 {
+        if let Some(size) = self.painted_size() {
             self.viewport.offset = GraphPoint {
                 x: size.width / 2.0 - position.x * self.viewport.scale,
                 y: size.height / 2.0 - position.y * self.viewport.scale,
             };
         }
+    }
+
+    fn painted_size(&self) -> Option<GraphSize> {
+        match self.canvas_size.lock() {
+            Ok(size) if size.width > 0.0 && size.height > 0.0 => Some(*size),
+            Ok(_) => None,
+            Err(error) => {
+                log::error!("Could not read the dependency diagram canvas size: {error}");
+                None
+            }
+        }
+    }
+
+    fn pan_to_focused_node(&mut self, id: &str) {
+        let (Some(size), Some(position)) = (self.painted_size(), self.node_screen_position(id))
+        else {
+            return;
+        };
+        let node_size = self.graph.node_size();
+        let scale = self.viewport.scale;
+        self.pan(GraphPoint {
+            x: position
+                .x
+                .clamp(0.0, (size.width - node_size.width * scale).max(0.0))
+                - position.x,
+            y: position
+                .y
+                .clamp(0.0, (size.height - node_size.height * scale).max(0.0))
+                - position.y,
+        });
     }
 
     /// Extends the selection to every node inside the current box selection.
@@ -1133,6 +1159,15 @@ impl gpui::Render for CanvasState {
                 .or_insert_with(|| cx.focus_handle().tab_stop(true));
         }
         let focused = self.focused_node(window).map(str::to_owned);
+        if focused != self.last_rendered_focus {
+            // Reveal once on entry so subsequent panning can move away from the focused node.
+            if window.last_input_was_keyboard()
+                && let Some(id) = &focused
+            {
+                self.pan_to_focused_node(id);
+            }
+            self.last_rendered_focus.clone_from(&focused);
+        }
 
         let viewport = self.viewport.clone();
         let node_size = self.graph.node_size();
