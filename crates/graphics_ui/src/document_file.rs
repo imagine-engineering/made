@@ -2648,16 +2648,15 @@ impl GraphiteDocumentItem {
             }
             return;
         }
-        let Some(node) = form
+        let Some((node, output_index)) = form
             .networks
             .iter()
             .find(|network| network.parent.is_none())
-            .and_then(|network| network.connected_export_node(&form.nodes))
-            .cloned()
+            .and_then(|network| network.connected_export(&form.nodes))
+            .map(|(node, output_index)| (node.clone(), output_index))
         else {
             form.document_run = NodeOutputPreview::Failed(
-                "Run Graph requires a single document export connected to a node's primary output."
-                    .into(),
+                "Run Graph requires a single connected document export.".into(),
             );
             cx.notify();
             return;
@@ -2669,7 +2668,11 @@ impl GraphiteDocumentItem {
             futures::executor::block_on(async {
                 let evaluator = match cached {
                     Some(evaluator) => evaluator,
-                    None => Arc::new(contents.prepare_graph_numeric_output(&node).await?),
+                    None => Arc::new(
+                        contents
+                            .prepare_document_numeric_output(&node, output_index)
+                            .await?,
+                    ),
                 };
                 let value = evaluator.evaluate().await?;
                 Ok::<_, GddArchiveError>((evaluator, value))
@@ -5698,7 +5701,7 @@ mod tests {
     }
 
     async fn graph_navigation_archive() -> (Vec<u8>, usize) {
-        graph_navigation_archive_with_number_target(false).await
+        graph_navigation_archive_with_options(false, 0).await
     }
 
     async fn graph_layer_archive() -> (Vec<u8>, usize) {
@@ -5809,7 +5812,10 @@ mod tests {
         (source, owner.session().history().count())
     }
 
-    async fn graph_navigation_archive_with_number_target(number_target: bool) -> (Vec<u8>, usize) {
+    async fn graph_navigation_archive_with_options(
+        number_target: bool,
+        root_output: usize,
+    ) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_graph_craft::{
             ProtoNodeIdentifier, concrete,
@@ -5950,7 +5956,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
-            exports: vec![NodeInput::node(NodeId(24), 0)],
+            exports: vec![NodeInput::node(NodeId(24), root_output)],
             ..Default::default()
         };
         let mut owner = GddV1::create_in(
@@ -6128,7 +6134,7 @@ mod tests {
             )
         };
         let (original, original_history) =
-            graph_navigation_archive_with_number_target(!reconnect).await;
+            graph_navigation_archive_with_options(!reconnect, 0).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -8387,7 +8393,7 @@ mod tests {
     ) {
         use graphics_core::formats::gdd::GddGraphPortSource;
 
-        let (bytes, _) = graph_navigation_archive_with_number_target(true).await;
+        let (bytes, _) = graph_navigation_archive_with_options(true, 0).await;
         let seed = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
             .await
             .expect("pinned source network");
@@ -9529,9 +9535,10 @@ mod tests {
                 .iter()
                 .find(|network| network.parent.is_none())
                 .expect("document network");
-            let node = root
-                .connected_export_node(&form.nodes)
+            let (node, output_index) = root
+                .connected_export(&form.nodes)
                 .expect("linked document output");
+            assert_eq!(output_index, 0);
             assert_ne!(
                 form.selected_node()
                     .expect("unrelated selection")
@@ -9547,7 +9554,7 @@ mod tests {
                 assert!(matches!(&form.output_preview, NodeOutputPreview::Hidden));
                 assert!(Arc::ptr_eq(&item.model.read(cx).revision, revision));
                 let root = form.networks.iter().find(|network| network.parent.is_none()).expect("document network");
-                assert_eq!(root.connected_export_node(&form.nodes).map(GddGraphNode::storage_id), Some(exported_id));
+                assert_eq!(root.connected_export(&form.nodes).map(|(node, index)| (node.storage_id(), index)), Some((exported_id, 0)));
             });
         };
         invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
@@ -9707,6 +9714,72 @@ mod tests {
                 .expect("unchanged source ZIP"),
             original
         );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_037_2_workspace_runs_the_wired_nested_export(cx: &mut TestAppContext) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let invoke = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        for (ordinal, value) in [(0, 17.), (1, 23.)] {
+            let (original, history) = graph_navigation_archive_with_options(false, ordinal).await;
+            let path = PathBuf::from(format!("/project/nested-export-{ordinal}.gdd.zip"));
+            filesystem
+                .write(&path, &original)
+                .await
+                .expect("source ZIP");
+            window.run_until_parked();
+            let item = workspace
+                .update_in(window, |workspace, window, cx| {
+                    workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+                })
+                .await
+                .expect("open the document")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("native Inspector");
+            choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-7");
+            invoke(window, "GRAPHITE-GDD-ENTER-NETWORK");
+            let revision = item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready graph")
+                };
+                let scope = form.active_network().expect("unrelated nested scope");
+                assert_eq!((scope.import_count, scope.export_count), (0, 0));
+                item.model.read(cx).revision.clone()
+            });
+            invoke(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            for selector in ["GRAPHITE-GDD-RUN-GRAPH", "GRAPHITE-GDD-FORCE-RUN-GRAPH"] {
+                invoke(window, selector);
+                item.read_with(window, |item, cx| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready graph") };
+                    assert!(matches!(form.document_run, NodeOutputPreview::Ready(GddNumericValue::Number(result)) if result == value),
+                        "expected the stored document export {ordinal}, resolved as {:?}", form.document_run.feedback());
+                    assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+                    assert!(!item.is_dirty(cx));
+                    assert_eq!(item.model.read(cx).gdd_contents().expect("GDD").history_len(), history);
+                    assert!(form.selected.is_none());
+                });
+                assert!(
+                    window
+                        .debug_bounds("GRAPHITE-GDD-GRAPH-RUN-RESULT")
+                        .is_some()
+                );
+            }
+            assert_eq!(
+                filesystem
+                    .load_bytes(&path)
+                    .await
+                    .expect("unchanged source ZIP"),
+                original
+            );
+        }
     }
 
     #[gpui::test]

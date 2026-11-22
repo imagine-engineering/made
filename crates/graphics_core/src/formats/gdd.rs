@@ -350,6 +350,13 @@ pub struct GddGraphInspection {
 pub struct GddNumericGraphEvaluator(NumericGraphEvaluator);
 
 impl GddNumericGraphEvaluator {
+    async fn prepare(detached: NodeNetwork) -> Result<Self, GddArchiveError> {
+        NumericGraphEvaluator::prepare(detached)
+            .await
+            .map(Self)
+            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)
+    }
+
     pub async fn evaluate(&self) -> Result<GddNumericValue, GddArchiveError> {
         let output = self
             .0
@@ -445,25 +452,26 @@ impl GddGraphNetwork {
         &self.exports
     }
 
-    pub fn connected_export_node<'nodes>(
+    pub fn connected_export<'nodes>(
         &self,
         nodes: &'nodes [GddGraphNode],
-    ) -> Option<&'nodes GddGraphNode> {
+    ) -> Option<(&'nodes GddGraphNode, usize)> {
         let [export] = self.exports.as_slice() else {
             return None;
         };
         let Some(GddGraphPortSource::Node {
             storage_id,
-            output_index: 0,
+            output_index,
         }) = &export.source
         else {
             return None;
         };
-        nodes.iter().find(|node| {
+        let node = nodes.iter().find(|node| {
             node.storage_id == *storage_id
                 && node.network_id == self.id
                 && Arc::ptr_eq(&self.snapshot, &node.snapshot)
-        })
+        })?;
+        Some((node, *output_index))
     }
 
     pub fn import_name(&self, index: usize) -> Option<&str> {
@@ -2983,7 +2991,7 @@ impl InspectedGddV1 {
             .await
     }
 
-    pub async fn prepare_graph_numeric_output(
+    async fn prepare_graph_numeric_output(
         &self,
         node: &GddGraphNode,
     ) -> Result<GddNumericGraphEvaluator, GddArchiveError> {
@@ -2999,10 +3007,36 @@ impl InspectedGddV1 {
         let imports = enclosing_network_inputs(&graph.network, &node.network_path)
             .ok_or(GddArchiveError::StaleGraphNode)?;
         let detached = numeric_preview_network(source, node.local_id, imports)?;
-        NumericGraphEvaluator::prepare(detached)
-            .await
-            .map(GddNumericGraphEvaluator)
-            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)
+        GddNumericGraphEvaluator::prepare(detached).await
+    }
+
+    pub async fn prepare_document_numeric_output(
+        &self,
+        node: &GddGraphNode,
+        output_index: usize,
+    ) -> Result<GddNumericGraphEvaluator, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !node.network_path.is_empty() {
+            return Err(GddArchiveError::StaleGraphNode);
+        }
+        let graph = self.runtime_graph().await?;
+        let [
+            NodeInput::Node {
+                node_id,
+                output_index: saved_output,
+            },
+        ] = graph.network.exports.as_slice()
+        else {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        };
+        if *node_id != node.local_id || *saved_output != output_index {
+            return Err(GddArchiveError::StaleGraphNode);
+        }
+        if node.nested_network.is_none() && !node.can_preview_numeric_output() {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        }
+        let detached = document_numeric_export_network(&graph.network, *node_id, output_index)?;
+        GddNumericGraphEvaluator::prepare(detached).await
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(
@@ -4614,6 +4648,43 @@ fn enclosing_network_inputs<'a>(root: &'a NodeNetwork, path: &[NodeId]) -> Optio
         }
         None => Some(&[]),
     }
+}
+
+fn document_numeric_export_network(
+    mut network: &NodeNetwork,
+    mut node_id: NodeId,
+    mut output_index: usize,
+) -> Result<NodeNetwork, GddArchiveError> {
+    const MAX_EXPORT_DEPTH: usize = 32;
+    let mut imports = &[][..];
+    for _ in 0..MAX_EXPORT_DEPTH {
+        let document = network
+            .nodes
+            .get(&node_id)
+            .ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
+        let DocumentNodeImplementation::Network(nested) = &document.implementation else {
+            if output_index != 0 {
+                return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+            }
+            return numeric_preview_network(network, node_id, imports);
+        };
+        // The pinned compiler replaces a hidden wrapper with a passthrough.
+        if !document.visible || document.context_features != Default::default() {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        }
+        let Some(NodeInput::Node {
+            node_id: source_id,
+            output_index: source_output,
+        }) = nested.exports.get(output_index)
+        else {
+            return Err(GddArchiveError::UnsupportedGraphNumericPreview);
+        };
+        network = nested;
+        imports = &document.inputs;
+        node_id = *source_id;
+        output_index = *source_output;
+    }
+    Err(GddArchiveError::GraphNumericPreviewBudget)
 }
 
 fn numeric_preview_network(
