@@ -524,6 +524,7 @@ enum GraphiteCopy {
         identifier: &'static str,
         position: [i32; 2],
     },
+    AppendNetworkExport(Box<GddGraphNetwork>),
     EditNode {
         node: Box<GddGraphNode>,
         change: NodeCopyChange,
@@ -872,6 +873,22 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn append_network_export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        if let Some(network) = form
+            .active_network()
+            .filter(|network| network.can_append_export_in_copy())
+        {
+            self.save_copy(
+                GraphiteCopy::AppendNetworkExport(Box::new(network.clone())),
+                window,
+                cx,
+            );
+        }
+    }
+
     fn toggle_node_output_preview(&mut self, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
@@ -1176,6 +1193,7 @@ impl GraphiteDocumentItem {
                             .child(
                                 h_flex()
                                     .gap_2()
+                                    .flex_wrap()
                                     .when(network.parent.is_some(), |bar| {
                                         bar.child(
                                             div()
@@ -1191,7 +1209,23 @@ impl GraphiteDocumentItem {
                                             .child(Button::new("graphite-gdd-all-graph-nodes", "Show All Nodes").on_click(
                                                 cx.listener(|item, _, _, cx| item.show_all_graph_nodes(cx)),
                                             )),
-                                    ),
+                                    )
+                                    .when(network.can_append_export_in_copy(), |bar| {
+                                        let label = if network.export_count == 0 {
+                                            "Add Primary Export in a Copy"
+                                        } else {
+                                            "Add Secondary Export in a Copy"
+                                        };
+                                        bar.child(
+                                            div().debug_selector(|| "GRAPHITE-GDD-ADD-NETWORK-EXPORT".into())
+                                                .child(Button::new("graphite-gdd-add-network-export", label)
+                                                    .disabled(self.copy_task.is_some())
+                                                    .on_click(cx.listener(|item, _, window, cx| {
+                                                        item.append_network_export(window, cx);
+                                                    })),
+                                                ),
+                                        )
+                                    }),
                             )
                     })
                     .when(has_nodes, |panel| panel.child(
@@ -1633,6 +1667,7 @@ impl GraphiteDocumentItem {
                 let prefix = match &request {
                     GraphiteCopy::Original | GraphiteCopy::Export(_) => "Copy of",
                     GraphiteCopy::RecoverFolder => "Recovered",
+                    GraphiteCopy::AppendNetworkExport(_) => "Added export in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -1800,6 +1835,11 @@ impl GraphiteDocumentItem {
                             GraphiteCopy::MoveHistory(direction) => Some(
                                 archive
                                     .move_history_in_copy(direction, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
+                            GraphiteCopy::AppendNetworkExport(network) => Some(
+                                archive
+                                    .append_nested_network_export_in_copy(&network, ARCHIVE_BUDGET)
                                     .await?,
                             ),
                             GraphiteCopy::InsertNumericNode {
@@ -2659,6 +2699,84 @@ mod tests {
             .await
             .expect("source ZIP");
         (source, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_022_2_workspace_appends_a_nested_export_in_a_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/export-network.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        let original_network = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected scoped graph");
+            };
+            let network = form.active_network().expect("source nested network");
+            assert_eq!(network.export_count, 2);
+            network.id
+        });
+        click(window, "GRAPHITE-GDD-ADD-NETWORK-EXPORT");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-ADD-NETWORK-EXPORT");
+        let destination = PathBuf::from("/project/added-export.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened export copy");
+        assert_ne!(reopened, item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the new Graphite folder");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let networks = contents
+            .graph_inspection()
+            .await
+            .expect("saved network list")
+            .networks;
+        let network = networks
+            .iter()
+            .find(|network| network.id == original_network)
+            .expect("same saved network");
+        assert_eq!((network.import_count, network.export_count), (2, 3));
+        assert_eq!(contents.history_len(), original_history + 2);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
     }
 
     #[gpui::test]
