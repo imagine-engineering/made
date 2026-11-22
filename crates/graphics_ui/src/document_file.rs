@@ -309,6 +309,31 @@ async fn read_graphite_folder(
     Ok(inspect_gdd_folder_files(files, ARCHIVE_BUDGET).await?)
 }
 
+async fn read_approved_resource_files(
+    filesystem: &dyn project::Fs,
+    paths: Vec<PathBuf>,
+) -> anyhow::Result<Vec<Vec<u8>>> {
+    ensure!(
+        paths.len() <= ARCHIVE_BUDGET.max_entries,
+        "Too many Graphite resource files were selected."
+    );
+    let mut remaining = ARCHIVE_BUDGET.max_total_entry_bytes;
+    let mut approved = Vec::new();
+    for path in paths {
+        let root = filesystem.capture_confined_root(&path).await?;
+        let limit = usize::try_from(remaining.min(ARCHIVE_BUDGET.max_entry_bytes))?;
+        let file = filesystem
+            .read_confined_file(&root, &path, Path::new(""), limit)
+            .await
+            .with_context(|| format!("Reading selected Graphite resource {}", path.display()))?;
+        remaining = remaining
+            .checked_sub(file.bytes.len() as u64)
+            .context("Selected Graphite resources exceed the byte budget.")?;
+        approved.push(file.bytes);
+    }
+    Ok(approved)
+}
+
 pub(crate) struct GraphiteDocumentItem {
     model: Entity<GraphiteDocumentProjectItem>,
     project: WeakEntity<Project>,
@@ -316,6 +341,7 @@ pub(crate) struct GraphiteDocumentItem {
     copy_task: Option<Task<()>>,
     copy_feedback: Option<(SharedString, Color)>,
     export_content: GddExportContent,
+    embed_linked_resources: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -344,6 +370,7 @@ impl GraphiteDocumentItem {
         } else {
             GddExportContent::default()
         };
+        let embed_linked_resources = format.is_some() && self.embed_linked_resources;
         if format.is_some()
             && let Err(error) = content.validate()
         {
@@ -419,16 +446,61 @@ impl GraphiteDocumentItem {
                     "Choose an absolute path for the Graphite copy."
                 );
                 let copy = if let Some((archive, format)) = export {
+                    let approved_files = if embed_linked_resources
+                        && !archive.missing_linked_resources()?.is_empty()
+                    {
+                        item.read_with(cx, |_, _| ())?;
+                        let chooser = cx.update(|_, cx| {
+                            cx.prompt_for_paths(PathPromptOptions {
+                                files: true,
+                                directories: false,
+                                multiple: true,
+                                prompt: Some("Choose Graphite Resource Files to Embed".into()),
+                            })
+                        })?;
+                        let Some(paths) = chooser.await?? else {
+                            return Ok(None);
+                        };
+                        item.read_with(cx, |_, _| ())?;
+                        cx.background_spawn({
+                                let filesystem = filesystem.clone();
+                                async move {
+                                    read_approved_resource_files(filesystem.as_ref(), paths).await
+                                }
+                            })
+                            .await?
+                    } else {
+                        Vec::new()
+                    };
                     cx.background_spawn(async move {
+                        let enriched = if embed_linked_resources {
+                            Some(
+                                archive
+                                    .with_embedded_linked_resources(
+                                        content,
+                                        approved_files,
+                                        ARCHIVE_BUDGET,
+                                    )
+                                    .await?,
+                            )
+                        } else {
+                            None
+                        };
+                        let contents = enriched.as_ref().unwrap_or(&archive);
+                        let content = if enriched.is_some() {
+                            GddExportContent::default()
+                        } else {
+                            content
+                        };
                         Ok::<_, anyhow::Error>(match format {
                             GddCopyFormat::Archive(format) => PreparedCopy::File(
-                                archive
+                                contents
                                     .export_archive_with_content(format, content, ARCHIVE_BUDGET)
                                     .await?
                                     .into(),
                             ),
                             GddCopyFormat::Folder => PreparedCopy::Folder(
-                                archive
+                                contents
                                     .export_folder_files_with_content(content, ARCHIVE_BUDGET)
                                     .await?,
                             ),
@@ -499,6 +571,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             copy_task: None,
             copy_feedback: None,
             export_content: GddExportContent::default(),
+            embed_linked_resources: false,
         }
     }
 }
@@ -549,6 +622,7 @@ impl Item for GraphiteDocumentItem {
             copy_task: None,
             copy_feedback: None,
             export_content: self.export_content,
+            embed_linked_resources: self.embed_linked_resources,
         })))
     }
 }
@@ -602,6 +676,7 @@ impl Render for GraphiteDocumentItem {
                 )))
                 .child(
                     h_flex()
+                        .flex_wrap()
                         .gap_3()
                         .child(
                             div()
@@ -636,6 +711,25 @@ impl Render for GraphiteDocumentItem {
                                     .on_click(cx.listener(
                                         |item, choice: &ToggleState, _, cx| {
                                             item.export_content.include_history = choice.selected();
+                                            item.copy_feedback = None;
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-EXPORT-EMBED-RESOURCES".into())
+                                .child(
+                                    Checkbox::new(
+                                        "graphite-export-embed-resources",
+                                        ToggleState::from(self.embed_linked_resources),
+                                    )
+                                    .label("Embed linked resources")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(
+                                        |item, choice: &ToggleState, _, cx| {
+                                            item.embed_linked_resources = choice.selected();
                                             item.copy_feedback = None;
                                             cx.notify();
                                         },
@@ -738,6 +832,156 @@ mod tests {
             )
             .await
             .expect("export actual Graphite storage")
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_013_2_embeds_only_matching_files_chosen_in_workspace(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_format::Layout;
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_graph_craft::{
+            ProtoNodeIdentifier,
+            document::{
+                DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+                value::TaggedValue,
+            },
+        };
+        use graphite_resource::{DataSource, ResourceHash, ResourceId, ResourceRegistry};
+
+        let mut source = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            175,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("original Graphite working copy");
+        let resource_id = ResourceId::from(77_u64);
+        let payload = b"exact local resource bytes";
+        let hash = ResourceHash::from(payload.as_slice());
+        let mut resources = ResourceRegistry::new();
+        resources.push_source_back(
+            &resource_id,
+            DataSource::Url(
+                "https://example.invalid/linked.bin"
+                    .parse()
+                    .expect("fixture URL"),
+            ),
+        );
+        resources.resolve(&resource_id, hash);
+        let network = NodeNetwork {
+            nodes: [(
+                NodeId(0),
+                DocumentNode {
+                    inputs: vec![NodeInput::value(TaggedValue::Resource(resource_id), false)],
+                    implementation: DocumentNodeImplementation::ProtoNode(
+                        ProtoNodeIdentifier::new("graphene_core::ops::identity::IdentityNode"),
+                    ),
+                    ..Default::default()
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        let source_store = HashMapResourceStorage::new();
+        source
+            .commit_from_runtime(&network, &NoMetadata, &resources, &source_store)
+            .expect("original URL-linked resource");
+        let original = source
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &source_store,
+                None,
+            )
+            .await
+            .expect("source ZIP retaining the link");
+
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/linked.gdd.zip");
+        let output = PathBuf::from("/project/portable.gdd.zip");
+        let approved = PathBuf::from("/project/selected.bin");
+        let wrong = PathBuf::from("/project/unmatched.bin");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source fixture");
+        filesystem
+            .write(&approved, payload)
+            .await
+            .expect("selected resource file");
+        filesystem
+            .write(&wrong, b"bytes with a different hash")
+            .await
+            .expect("unmatched fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open linked archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        paint(window);
+        click(window, "GRAPHITE-EXPORT-EMBED-RESOURCES");
+        for (selected, expect_publish) in
+            [(None, false), (Some(wrong), false), (Some(approved), true)]
+        {
+            click(window, "GRAPHITE-EXPORT-GDD-ZIP");
+            window.simulate_new_path_selection(|_| Some(output.clone()));
+            window.run_until_parked();
+            window.simulate_path_prompt_response(|options| {
+                assert!(options.files && options.multiple && !options.directories);
+                selected.map(|path| vec![path])
+            });
+            window.run_until_parked();
+            paint(window);
+            assert_eq!(
+                filesystem
+                    .metadata(&output)
+                    .await
+                    .expect("check publication")
+                    .is_some(),
+                expect_publish
+            );
+        }
+        let bytes = Arc::<[u8]>::from(
+            filesystem
+                .load_bytes(&output)
+                .await
+                .expect("portable archive"),
+        );
+        let copy = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("portable archive reopens");
+        let resource_path = GddV1Layout.resource_path(&hash);
+        assert_eq!(
+            copy.read_entry(&resource_path)
+                .expect("embedded file")
+                .as_slice(),
+            payload
+        );
+        item.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents, .. } = &item.model.read(cx).document else {
+                panic!("expected source archive");
+            };
+            assert!(contents.read_entry(&resource_path).is_err());
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("unchanged source"),
+            original
+        );
     }
 
     #[gpui::test]

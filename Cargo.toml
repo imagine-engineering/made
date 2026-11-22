@@ -319,6 +319,7 @@ graphite-resource = { package = "graphene-resource", git = "https://github.com/G
 graphite-editor = { git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
 graphite-document-container = { package = "document-container", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
 graphite-document-format = { package = "document-format", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
+graphite-document-graph-storage = { package = "document-graph-storage", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
 graphite-graph-craft = { package = "graph-craft", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
 graphite-preprocessor = { package = "preprocessor", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }
 graphite-interpreted-executor = { package = "interpreted-executor", git = "https://github.com/GraphiteEditor/Graphite", rev = "28ed22824fae8828756f6f4163db62f3585f21e0", default-features = false }

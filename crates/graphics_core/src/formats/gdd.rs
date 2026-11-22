@@ -18,13 +18,16 @@ use graphite_document_format::{
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
-use graphite_graph_craft::application_io::resource::{HashMapResourceStorage, ResourceHash};
+use graphite_graph_craft::application_io::resource::{
+    HashMapResourceStorage, ResourceHash, ResourceStorage,
+};
 use zip::ZipArchive;
 
 use super::OriginalJson;
 
 mod xz;
 
+#[derive(Clone, Copy)]
 pub struct GddArchiveBudget {
     pub max_archive_bytes: usize,
     pub max_entry_bytes: u64,
@@ -83,6 +86,12 @@ pub enum GddArchiveError {
     InvalidExportOptions(&'static str),
     #[error("An embedded Graphite resource has no recorded content hash.")]
     UnresolvedResource,
+    #[error("A linked Graphite resource has no recorded content hash.")]
+    UnresolvedLinkedResource,
+    #[error("No selected file matches the linked Graphite resource {0}.")]
+    MissingApprovedResource(ResourceHash),
+    #[error("The selected file with hash {0} does not match a missing linked Graphite resource.")]
+    UnexpectedApprovedResource(ResourceHash),
     #[error("The embedded Graphite resource {0} is missing or does not match its content hash.")]
     InvalidResource(ResourceHash),
     #[error("An archive entry could not be read: {0}")]
@@ -148,6 +157,104 @@ impl InspectedGddV1 {
 
     pub fn hot_log_len(&self) -> usize {
         self.document.session().hot_log().len()
+    }
+
+    pub fn missing_linked_resources(&self) -> Result<BTreeSet<ResourceHash>, GddArchiveError> {
+        let mut missing = BTreeSet::new();
+        for resource in self.document.registry().resources.values() {
+            if resource.has_embedded_source() {
+                continue;
+            }
+            let hash = resource
+                .hash
+                .ok_or(GddArchiveError::UnresolvedLinkedResource)?;
+            if !self
+                .entries
+                .working
+                .exists(&GddV1Layout.resource_path(&hash))
+            {
+                missing.insert(hash);
+            }
+        }
+        Ok(missing)
+    }
+
+    pub async fn with_embedded_linked_resources(
+        &self,
+        content: GddExportContent,
+        approved_files: Vec<Vec<u8>>,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        content.validate()?;
+        if !content.include_registry && self.history_len() == 0 {
+            return Err(GddArchiveError::NoExportableHistory);
+        }
+        let missing = self.missing_linked_resources()?;
+        let sources = approved_resource_storage(missing, approved_files, &budget)?;
+        let layout = GddV1Layout;
+        let include_all = content.include_registry && content.include_history;
+        let legacy = (include_all && self.entries.names.contains(layout.legacy_path()))
+            .then(|| self.read_entry(layout.legacy_path()))
+            .transpose()?;
+        let bytes = self
+            .document
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions {
+                    embed_all_resources: true,
+                    ..content.options()
+                },
+                &sources,
+                legacy.as_ref().map(ByteHolder::as_slice),
+            )
+            .await?;
+        let exported = stage_zip(
+            &bytes,
+            &GddArchiveBudget {
+                max_archive_bytes: bytes.len(),
+                ..budget
+            },
+        )?;
+        let exported = self.restore_export_entries(exported, &budget, include_all)?;
+        open_staged_gdd(exported).await
+    }
+
+    fn restore_export_entries(
+        &self,
+        exported: StagedArchive,
+        budget: &GddArchiveBudget,
+        include_opaque: bool,
+    ) -> Result<StagedArchive, GddArchiveError> {
+        let layout = GddV1Layout;
+        let codecs = self.manifest().codecs;
+        let manifest_path = path_for(layout.manifest_basename(), MANIFEST_CODEC);
+        let owned = [
+            path_for(layout.registry_basename(), codecs.registry),
+            path_for(layout.history_basename(), codecs.history),
+            path_for(layout.hot_log_basename(), codecs.hot_log),
+            path_for(layout.session_basename(), codecs.session),
+        ];
+        let mut entries = StagedEntries {
+            budget,
+            working: exported.working,
+            names: exported.names,
+            total_bytes: exported.total_bytes,
+        };
+        let previous_length = entries.working.read(&manifest_path)?.as_slice().len() as u64;
+        entries.total_bytes = entries
+            .total_bytes
+            .checked_sub(previous_length)
+            .ok_or(GddArchiveError::InconsistentEntries)?;
+        entries.names.remove(&manifest_path);
+        entries.install(&manifest_path, self.read_entry(&manifest_path)?.as_slice())?;
+        if include_opaque {
+            for path in &self.entries.names {
+                if !owned.contains(path) && !entries.names.contains(path) {
+                    entries.install(path, self.read_entry(path)?.as_slice())?;
+                }
+            }
+        }
+        entries.finish()
     }
 
     pub fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
@@ -239,6 +346,34 @@ impl InspectedGddV1 {
     }
 }
 
+fn approved_resource_storage(
+    mut missing: BTreeSet<ResourceHash>,
+    approved_files: Vec<Vec<u8>>,
+    budget: &GddArchiveBudget,
+) -> Result<HashMapResourceStorage, GddArchiveError> {
+    if approved_files.len() > budget.max_entries {
+        return Err(GddArchiveError::BudgetExceeded);
+    }
+    let storage = HashMapResourceStorage::new();
+    let mut total = 0_u64;
+    for bytes in approved_files {
+        let length = bytes.len() as u64;
+        total = total.saturating_add(length);
+        if length > budget.max_entry_bytes || total > budget.max_total_entry_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let hash = ResourceHash::from(bytes.as_slice());
+        if !missing.remove(&hash) {
+            return Err(GddArchiveError::UnexpectedApprovedResource(hash));
+        }
+        storage.store(&bytes);
+    }
+    if let Some(hash) = missing.into_iter().next() {
+        return Err(GddArchiveError::MissingApprovedResource(hash));
+    }
+    Ok(storage)
+}
+
 struct BoundedArchive {
     bytes: Cursor<Vec<u8>>,
     limit: u64,
@@ -300,7 +435,7 @@ pub async fn inspect_gdd_folder_files(
 ) -> Result<InspectedGddV1, GddArchiveError> {
     let mut entries = StagedEntries::new(&budget);
     for (name, bytes) in files {
-        entries.install(name, bytes)?;
+        entries.install(&name, &bytes)?;
     }
     open_staged_gdd(entries.finish()?).await
 }
@@ -389,6 +524,7 @@ struct StagedEntries<'a> {
 struct StagedArchive {
     working: MemoryBackend,
     names: BTreeSet<String>,
+    total_bytes: u64,
 }
 
 impl StagedArchive {
@@ -429,9 +565,9 @@ impl<'a> StagedEntries<'a> {
         self.write(&name, &materialized)
     }
 
-    fn install(&mut self, name: String, bytes: Vec<u8>) -> Result<(), GddArchiveError> {
-        self.admit(&name, bytes.len() as u64)?;
-        self.write(&name, &bytes)
+    fn install(&mut self, name: &str, bytes: &[u8]) -> Result<(), GddArchiveError> {
+        self.admit(name, bytes.len() as u64)?;
+        self.write(name, bytes)
     }
 
     fn admit(&mut self, name: &str, size: u64) -> Result<(), GddArchiveError> {
@@ -474,6 +610,7 @@ impl<'a> StagedEntries<'a> {
         Ok(StagedArchive {
             working: self.working,
             names: self.names,
+            total_bytes: self.total_bytes,
         })
     }
 }
@@ -551,6 +688,172 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_013_1_embeds_only_approved_matching_bytes_in_the_copy() {
+        use graphite_document_graph_storage::{NoMetadata, to_value};
+        use graphite_graph_craft::{
+            ProtoNodeIdentifier,
+            document::{
+                DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+                value::TaggedValue,
+            },
+        };
+        use graphite_resource::{DataSource, ResourceRegistry};
+
+        futures::executor::block_on(async {
+            let mut owner = document();
+            let resource_id = ResourceId::from(71_u64);
+            let approved = b"bytes of the linked artwork resource".to_vec();
+            let hash = ResourceHash::from(approved.as_slice());
+            let link = DataSource::Url(
+                "https://example.invalid/resource.bin"
+                    .parse()
+                    .expect("fixture URL"),
+            );
+            let mut resources = ResourceRegistry::new();
+            resources.push_source_back(&resource_id, link.clone());
+            resources.resolve(&resource_id, hash);
+            let network = NodeNetwork {
+                nodes: [(
+                    NodeId(0),
+                    DocumentNode {
+                        inputs: vec![NodeInput::value(TaggedValue::Resource(resource_id), false)],
+                        implementation: DocumentNodeImplementation::ProtoNode(
+                            ProtoNodeIdentifier::new("graphene_core::ops::identity::IdentityNode"),
+                        ),
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            let source_store = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &resources, &source_store)
+                .expect("original source link ownership");
+            let bytes = Arc::<[u8]>::from(
+                owner
+                    .export_to_bytes(
+                        ExportFormat::Zip,
+                        ExportOptions::default(),
+                        &source_store,
+                        Some(b"retained embedded legacy"),
+                    )
+                    .await
+                    .expect("actual Graphite ZIP export"),
+            );
+            let zip = open_gdd_archive(&bytes, budget())
+                .await
+                .expect("original linked archive");
+            let mut files = zip
+                .folder_files()
+                .expect("original files")
+                .into_iter()
+                .map(|(path, bytes)| {
+                    (
+                        path.into_os_string()
+                            .into_string()
+                            .expect("UTF-8 source paths"),
+                        bytes,
+                    )
+                })
+                .collect::<Vec<_>>();
+            let manifest = files
+                .iter_mut()
+                .find(|(path, _)| path == "manifest.json")
+                .expect("manifest");
+            let mut raw_manifest: serde_json::Value =
+                serde_json::from_slice(&manifest.1).expect("original manifest codec");
+            raw_manifest
+                .as_object_mut()
+                .expect("manifest object")
+                .insert("unknown_field".into(), serde_json::json!("retain this"));
+            manifest.1 = serde_json::to_vec(&raw_manifest).expect("literal unrecognized metadata");
+            let original_manifest = manifest.1.clone();
+            files.push(("opaque/extras.bin".into(), vec![0, 1, 255]));
+            let source = inspect_gdd_folder_files(files, budget())
+                .await
+                .expect("staged source with opaque records");
+            assert_eq!(
+                source.missing_linked_resources().expect("source link hash"),
+                BTreeSet::from([hash])
+            );
+            let missing = source
+                .with_embedded_linked_resources(GddExportContent::default(), Vec::new(), budget())
+                .await;
+            assert!(
+                matches!(missing, Err(GddArchiveError::MissingApprovedResource(missing)) if missing == hash)
+            );
+            let unapproved = source
+                .with_embedded_linked_resources(
+                    GddExportContent::default(),
+                    vec![b"different data".to_vec()],
+                    budget(),
+                )
+                .await;
+            assert!(matches!(
+                unapproved,
+                Err(GddArchiveError::UnexpectedApprovedResource(_))
+            ));
+
+            let copy = source
+                .with_embedded_linked_resources(
+                    GddExportContent::default(),
+                    vec![approved.clone()],
+                    budget(),
+                )
+                .await
+                .expect("embed an explicitly matched file");
+            let resource_file = GddV1Layout.resource_path(&hash);
+            assert_eq!(
+                copy.read_entry(&resource_file)
+                    .expect("embedded bytes")
+                    .as_slice(),
+                approved
+            );
+            let resource = copy
+                .document
+                .registry()
+                .resources
+                .get(&resource_id)
+                .expect("original resource identity retained");
+            assert!(resource.has_embedded_source());
+            let link = to_value(&link).expect("original URL fallback");
+            assert!(
+                resource
+                    .sources
+                    .iter()
+                    .any(|(_, entry)| entry.source == link)
+            );
+            assert_eq!(
+                copy.read_entry("manifest.json")
+                    .expect("original manifest retained")
+                    .as_slice(),
+                original_manifest
+            );
+            assert_eq!(
+                copy.read_entry("opaque/extras.bin")
+                    .expect("opaque entry retained")
+                    .as_slice(),
+                [0, 1, 255]
+            );
+            assert_eq!(
+                copy.read_entry(GddV1Layout.legacy_path())
+                    .expect("legacy entry retained")
+                    .as_slice(),
+                b"retained embedded legacy"
+            );
+            assert!(source.read_entry(&resource_file).is_err());
+            assert_eq!(
+                source
+                    .missing_linked_resources()
+                    .expect("original links unchanged"),
+                BTreeSet::from([hash])
+            );
+        });
     }
 
     #[test]
