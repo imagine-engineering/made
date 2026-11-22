@@ -267,9 +267,11 @@ impl From<dap::BuildTaskDefinition> for extension::BuildTaskDefinition {
     }
 }
 
-impl From<extension::BuildTaskDefinition> for dap::BuildTaskDefinition {
-    fn from(value: extension::BuildTaskDefinition) -> Self {
-        match value {
+impl TryFrom<extension::BuildTaskDefinition> for dap::BuildTaskDefinition {
+    type Error = anyhow::Error;
+
+    fn try_from(value: extension::BuildTaskDefinition) -> Result<Self> {
+        Ok(match value {
             extension::BuildTaskDefinition::ByName(name) => Self::ByName(name.into()),
             extension::BuildTaskDefinition::Template {
                 task_template,
@@ -278,7 +280,12 @@ impl From<extension::BuildTaskDefinition> for dap::BuildTaskDefinition {
                 template: task_template.into(),
                 locator_name: locator_name.map(String::from),
             }),
-        }
+            extension::BuildTaskDefinition::SelectedJavaTest { .. } => {
+                bail!(
+                    "The selected Java test Debug build is only available in the current workspace"
+                );
+            }
+        })
     }
 }
 impl From<BuildTaskTemplate> for extension::BuildTaskTemplate {
@@ -319,15 +326,17 @@ impl TryFrom<DebugScenario> for extension::DebugScenario {
     }
 }
 
-impl From<extension::DebugScenario> for DebugScenario {
-    fn from(value: extension::DebugScenario) -> Self {
-        Self {
+impl TryFrom<extension::DebugScenario> for DebugScenario {
+    type Error = anyhow::Error;
+
+    fn try_from(value: extension::DebugScenario) -> Result<Self> {
+        Ok(Self {
             adapter: value.adapter.into(),
             label: value.label.into(),
-            build: value.build.map(Into::into),
+            build: value.build.map(TryInto::try_into).transpose()?,
             config: value.config.to_string(),
             tcp_connection: value.tcp_connection.map(Into::into),
-        }
+        })
     }
 }
 
