@@ -41,7 +41,10 @@ use crate::dependency_diagram_item::{
     DependencyDiagramPopup, DependencyDiagramProvider, DependencyDiagramScope,
     DependencyDiagramSource, DependencyDiagramTarget, ShowDependencyDiagramPopup,
 };
-use crate::dependency_graph_canvas::{canvas_graph_from_gradle, canvas_graph_from_maven};
+use crate::dependency_graph_canvas::{
+    CanvasNode, canvas_graph_from_gradle, canvas_graph_from_maven, gradle_canvas_nodes,
+    maven_canvas_nodes,
+};
 
 actions!(
     groovy_dependencies_panel,
@@ -990,9 +993,11 @@ fn dependency_canvas_for_selection(
                 let mut selected = BTreeSet::new();
                 selected.insert(node.to_owned());
                 return Some(DependencyDiagramDerivation {
-                    canvas: canvas_graph_from_maven(graph, |edge| {
-                        chosen_scope.matches(&edge.scope)
-                    }),
+                    canvas: canvas_graph_from_maven(
+                        graph,
+                        |edge| chosen_scope.matches(&edge.scope),
+                        Some(node),
+                    ),
                     target: DependencyDiagramTarget {
                         module_label: dependency_module_label(&module.module_root),
                         provider: DependencyDiagramProvider::Maven,
@@ -1042,7 +1047,7 @@ fn dependency_canvas_for_selection(
                 let mut selected = BTreeSet::new();
                 selected.insert(node.to_owned());
                 return Some(DependencyDiagramDerivation {
-                    canvas: canvas_graph_from_gradle(&graph.resolution),
+                    canvas: canvas_graph_from_gradle(&graph.resolution, Some(node)),
                     target: DependencyDiagramTarget {
                         module_label: dependency_module_label(&module.module_root),
                         provider: DependencyDiagramProvider::Gradle,
@@ -1114,6 +1119,15 @@ fn admitted_dependency_snapshot<'a>(
 }
 
 impl DependencyGraphReceipt {
+    pub(crate) fn canvas_nodes(&self) -> Option<Vec<CanvasNode>> {
+        Some(match &self.graph {
+            DependencyGraphRevision::Maven(graph) => maven_canvas_nodes(graph.upgrade()?.as_ref()),
+            DependencyGraphRevision::Gradle(graph) => {
+                gradle_canvas_nodes(&graph.upgrade()?.resolution)
+            }
+        })
+    }
+
     fn contains_nodes<'a>(&self, nodes: impl IntoIterator<Item = &'a str>) -> bool {
         match &self.graph {
             DependencyGraphRevision::Maven(graph) => graph.upgrade().is_some_and(|graph| {
@@ -3626,12 +3640,15 @@ impl DependenciesPanel {
         self.rebuild(cx);
 
         let item = self.open_or_focus_diagram_tab(open, cx)?;
-        item.update(cx, |item, cx| {
-            if item.scope() != scope {
-                item.apply_scope(scope.label(), cx);
-            }
-            item.select_analyzer_node(node, cx);
-        });
+        anyhow::ensure!(
+            item.update(cx, |item, cx| {
+                if item.scope() != scope {
+                    item.apply_scope(scope.label(), cx);
+                }
+                item.select_analyzer_node(node, cx)
+            }),
+            "This dependency is no longer available in the diagram. Refresh provider graph facts and retry."
+        );
         Ok(())
     }
 
@@ -12918,6 +12935,7 @@ mod tests {
     enum MavenGraphOutcome {
         Success,
         PanelControls,
+        LargeGraphSearch,
         OperationControls,
         OrderedOperationControls,
         Unavailable,
@@ -14010,6 +14028,18 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn dependency_diagram_search_reveals_a_node_outside_the_canvas_budget(
+        cx: &mut TestAppContext,
+    ) {
+        graph_lifecycle(
+            cx,
+            GraphFixtureProvider::Gradle,
+            MavenGraphOutcome::LargeGraphSearch,
+        )
+        .await;
+    }
+
+    #[gpui::test]
     async fn gradle_graph_admission_preserves_resolution_and_switches_configuration(
         cx: &mut TestAppContext,
     ) {
@@ -14237,6 +14267,25 @@ mod tests {
                                         if provider == GraphFixtureProvider::Gradle {
                                             let mut graph: serde_json::Value = serde_json::from_str(response["projects"][0]["graphJson"].as_str().expect("graph JSON")).expect("graph");
                                             graph["configuration"] = serde_json::json!(configuration);
+                                            if outcome == MavenGraphOutcome::LargeGraphSearch {
+                                                let component_template = graph["components"][1].clone();
+                                                let edge_template = graph["edges"][0].clone();
+                                                let mut parent = graph["rootComponent"].clone();
+                                                for index in 0..80 {
+                                                    let module = format!("growth-dependency-{index}");
+                                                    let id = serde_json::json!(["module", "evidence", module, "1.0"]).to_string();
+                                                    let mut component = component_template.clone();
+                                                    component["module"] = serde_json::json!(module);
+                                                    component["id"] = serde_json::json!(id);
+                                                    let mut edge = edge_template.clone();
+                                                    edge["from"] = parent;
+                                                    edge["requested"]["module"] = serde_json::json!(module);
+                                                    edge["selected"] = serde_json::json!(id);
+                                                    parent = serde_json::json!(id);
+                                                    graph["components"].as_array_mut().expect("components").push(component);
+                                                    graph["edges"].as_array_mut().expect("edges").push(edge);
+                                                }
+                                            }
                                             response["projects"][0]["graphJson"] = serde_json::json!(graph.to_string());
                                         }
                                         Ok(Some(response))
@@ -14434,7 +14483,10 @@ mod tests {
             .await;
             return;
         }
-        if outcome == MavenGraphOutcome::PanelControls {
+        if matches!(
+            outcome,
+            MavenGraphOutcome::PanelControls | MavenGraphOutcome::LargeGraphSearch
+        ) {
             let view = if provider == GraphFixtureProvider::Maven {
                 BuildToolView::Maven
             } else {
@@ -14667,6 +14719,85 @@ mod tests {
             assert!(panel.read_with(cx, |panel, cx| {
                 panel.resolve_selected_canvas_graph(cx).is_some()
             }));
+            if outcome == MavenGraphOutcome::LargeGraphSearch {
+                use crate::dependency_graph_canvas::{MAX_CANVAS_EDGES, MAX_CANVAS_NODES};
+
+                let target = r#"["module","evidence","growth-dependency-79","1.0"]"#;
+                let parent = r#"["module","evidence","growth-dependency-78","1.0"]"#;
+                panel.update(cx, |panel, cx| panel.show_dependency_diagram(cx));
+                let diagram = workspace
+                    .read_with(cx, |workspace, cx| {
+                        workspace.items_of_type::<DependencyDiagramItem>(cx).next()
+                    })
+                    .expect("diagram tab");
+                diagram.read_with(cx, |item, cx| {
+                    let graph = &item.canvas().read(cx).graph;
+                    assert!(graph.truncated);
+                    assert!(graph.node(target).is_none());
+                });
+                assert!(
+                    (0..32).any(|_| cx.update(|window, cx| {
+                        window.focus_next(cx);
+                        window.draw(cx).clear(cx);
+                        let tree: serde_json::Value = serde_json::from_str(
+                            &window.debug_a11y_tree_json().expect("diagram toolbar"),
+                        )
+                        .expect("accessibility JSON");
+                        tree["gpui_focus"].as_str().is_some_and(|focus| {
+                            tree["nodes"][focus]["aria"]["label"]
+                                == "Search dependency diagram nodes"
+                        })
+                    })),
+                    "keyboard focus reaches diagram search"
+                );
+                press_button(cx, "enter");
+                for _ in 0..2 {
+                    cx.update(|window, cx| {
+                        window.draw(cx).clear(cx);
+                        window.simulate_next_frame(cx);
+                    });
+                }
+                cx.simulate_input("79");
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                    let tree: serde_json::Value = serde_json::from_str(
+                        &window.debug_a11y_tree_json().expect("dependency search"),
+                    )
+                    .expect("accessibility JSON");
+                    assert!(
+                        tree["nodes"]
+                            .as_object()
+                            .expect("a11y nodes")
+                            .values()
+                            .any(|node| {
+                                node["aria"]["label"] == "evidence:growth-dependency-79:1.0"
+                            }),
+                        "search result is rendered"
+                    );
+                    let confirm = cx
+                        .build_action("menu::Confirm", None)
+                        .expect("picker confirm action");
+                    window.dispatch_action(confirm, cx);
+                });
+                cx.run_until_parked();
+                diagram.read_with(cx, |item, cx| {
+                    let canvas = item.canvas().read(cx);
+                    assert_eq!(canvas.selection, BTreeSet::from([target.to_owned()]));
+                    assert_eq!(canvas.focus.as_deref(), Some(target));
+                    assert!(canvas.graph.node(parent).is_some());
+                    assert!(
+                        canvas
+                            .graph
+                            .edges
+                            .iter()
+                            .any(|edge| edge.from == parent && edge.to == target)
+                    );
+                    assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
+                    assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
+                });
+                assert_eq!(commands.load(Ordering::SeqCst), 3);
+                return;
+            }
             panel.update(cx, |panel, cx| {
                 panel.host.expand_all();
                 cx.notify();

@@ -15,7 +15,7 @@ use crate::dependency_diagram_menu::{
     DependencyDiagramContextTarget, DependencyDiagramMenuCommand, DependencyDiagramMenuSnapshot,
     dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
-use crate::dependency_graph_canvas::{CanvasNodeKind, CanvasState};
+use crate::dependency_graph_canvas::{CanvasNode, CanvasNodeKind, CanvasState};
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     Render, SharedString, Task, Window, actions,
@@ -544,36 +544,73 @@ impl DependencyDiagramItem {
         if !self.receipt_is_current(cx) {
             return Vec::new();
         }
-        self.canvas
-            .read(cx)
-            .graph
-            .nodes
-            .iter()
-            .map(|node| DependencySearchEntry {
-                id: node.id.clone(),
-                label: match &node.version {
-                    Some(version) => format!("{}:{version}", node.label),
-                    None => node.label.clone(),
-                },
-            })
-            .collect()
+        let graph = &self.canvas.read(cx).graph;
+        let entry = |node: &CanvasNode| DependencySearchEntry {
+            id: node.id.clone(),
+            label: match &node.version {
+                Some(version) => format!("{}:{version}", node.label),
+                None => node.label.clone(),
+            },
+        };
+        if graph.truncated
+            && let Some(nodes) = self
+                .receipt
+                .as_ref()
+                .and_then(DependencyGraphReceipt::canvas_nodes)
+        {
+            return nodes
+                .iter()
+                .chain(
+                    graph
+                        .nodes
+                        .iter()
+                        .filter(|node| node.kind == CanvasNodeKind::Unresolved),
+                )
+                .map(entry)
+                .collect();
+        }
+        graph.nodes.iter().map(entry).collect()
     }
 
     pub fn reveal_node_by_id(&mut self, id: &str, cx: &mut Context<Self>) {
         if !self.receipt_is_current(cx) {
             return;
         }
-        let revealed = self.canvas.update(cx, |canvas, cx| {
-            let revealed = canvas.reveal_node(id);
-            if revealed {
-                cx.notify();
-            }
-            revealed
-        });
+        let revealed = self.include_node(id, cx)
+            && self.canvas.update(cx, |canvas, cx| {
+                let revealed = canvas.reveal_node(id);
+                if revealed {
+                    cx.notify();
+                }
+                revealed
+            });
         self.notice = (!revealed).then(|| {
             "The dependency is no longer part of the admitted graph; refresh the diagram and retry".into()
         });
         cx.notify();
+    }
+
+    fn include_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        if self.canvas.read(cx).graph.node(id).is_some() {
+            return true;
+        }
+        let Some(source) = &mut self.source else {
+            return false;
+        };
+        let Some(derivation) = derive_dependency_diagram(
+            source.project.read(cx),
+            source.view,
+            &source.selection,
+            id,
+            Some(&self.scope),
+            cx,
+        )
+        .filter(|derivation| derivation.canvas.node(id).is_some()) else {
+            return false;
+        };
+        source.node = id.to_owned();
+        self.replace_derivation(derivation, cx);
+        true
     }
 
     /// Toggles the minimap-style Structure overview panel.
@@ -856,7 +893,10 @@ impl DependencyDiagramItem {
         });
     }
 
-    pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        if !self.receipt_is_current(cx) || !self.include_node(id, cx) {
+            return false;
+        }
         self.canvas.update(cx, |canvas, cx| {
             let size = *canvas.canvas_size.lock().expect("canvas size");
             let node_size = canvas.graph.node_size();
@@ -874,6 +914,7 @@ impl DependencyDiagramItem {
             }
             cx.notify();
         });
+        true
     }
 
     /// Exports the current canvas as a deterministic SVG image and copies it

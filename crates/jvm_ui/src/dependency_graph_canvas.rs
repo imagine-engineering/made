@@ -132,9 +132,7 @@ fn component_label(group: Option<&str>, name: &str) -> String {
     }
 }
 
-/// Adapts an admitted Gradle resolution graph. Unresolved edges receive one
-/// numbered synthetic node each, matching the panel's per-edge placeholders.
-pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
+pub(crate) fn gradle_canvas_nodes(graph: &GradleResolutionGraph) -> Vec<CanvasNode> {
     let mut nodes = Vec::new();
     for component in &graph.components {
         let (label, kind) = match (&component.group, &component.module, component.kind) {
@@ -166,7 +164,13 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
     {
         root.kind = CanvasNodeKind::Root;
     }
+    nodes
+}
 
+/// Adapts an admitted Gradle resolution graph. Unresolved edges receive one
+/// numbered synthetic node each, matching the panel's per-edge placeholders.
+pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph, focus: Option<&str>) -> CanvasGraph {
+    let mut nodes = gradle_canvas_nodes(graph);
     let mut edges = Vec::new();
     let mut unresolved_count = 0usize;
     for (provider_index, edge) in graph.edges.iter().enumerate() {
@@ -219,15 +223,10 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
         });
     }
 
-    assemble_canvas_graph(nodes, edges)
+    assemble_canvas_graph(nodes, edges, focus)
 }
 
-/// Adapts an admitted Maven dependency graph. Nodes are occurrences (the
-/// provider reports one node per placement), preserving repeated artifacts.
-pub fn canvas_graph_from_maven(
-    graph: &MavenDependencyGraph,
-    include_edge: impl Fn(&project::jvm_project::MavenDependencyEdge) -> bool,
-) -> CanvasGraph {
+pub(crate) fn maven_canvas_nodes(graph: &MavenDependencyGraph) -> Vec<CanvasNode> {
     let mut components = HashMap::new();
     for component in &graph.components {
         let artifact = if component.classifier.is_empty() {
@@ -265,6 +264,17 @@ pub fn canvas_graph_from_maven(
     if let Some(root) = nodes.iter_mut().find(|node| node.id == graph.root_node) {
         root.kind = CanvasNodeKind::Root;
     }
+    nodes
+}
+
+/// Adapts an admitted Maven dependency graph. Nodes are occurrences (the
+/// provider reports one node per placement), preserving repeated artifacts.
+pub fn canvas_graph_from_maven(
+    graph: &MavenDependencyGraph,
+    include_edge: impl Fn(&project::jvm_project::MavenDependencyEdge) -> bool,
+    focus: Option<&str>,
+) -> CanvasGraph {
+    let nodes = maven_canvas_nodes(graph);
     let mut edges = Vec::new();
     for (provider_index, edge) in graph.edges.iter().enumerate() {
         if !include_edge(edge) {
@@ -300,24 +310,79 @@ pub fn canvas_graph_from_maven(
         });
     }
 
-    assemble_canvas_graph(nodes, edges)
+    assemble_canvas_graph(nodes, edges, focus)
 }
 
-/// Applies the visible budgets in provider order and lays the graph out.
-fn assemble_canvas_graph(mut nodes: Vec<CanvasNode>, mut edges: Vec<CanvasEdge>) -> CanvasGraph {
-    let mut truncated = false;
-    if nodes.len() > MAX_CANVAS_NODES {
-        let retained: HashSet<String> = nodes
+fn assemble_canvas_graph(
+    mut nodes: Vec<CanvasNode>,
+    mut edges: Vec<CanvasEdge>,
+    focus: Option<&str>,
+) -> CanvasGraph {
+    let mut truncated = nodes.len() > MAX_CANVAS_NODES;
+    let outside_window = focus.filter(|focus| {
+        nodes
             .iter()
-            .take(MAX_CANVAS_NODES)
-            .map(|node| node.id.clone())
-            .collect();
-        nodes.truncate(MAX_CANVAS_NODES);
+            .skip(MAX_CANVAS_NODES)
+            .any(|node| node.id == *focus)
+    });
+    if truncated {
+        let mut retained = HashSet::new();
+        if let Some(root) = nodes.iter().find(|node| node.kind == CanvasNodeKind::Root) {
+            retained.insert(root.id.clone());
+        }
+        if let Some(focus) = focus.filter(|focus| nodes.iter().any(|node| node.id == *focus)) {
+            retained.insert(focus.to_owned());
+        }
+        if let Some(focus) = outside_window {
+            for neighbour in edges.iter().filter_map(|edge| {
+                if edge.to == focus {
+                    Some(&edge.from)
+                } else if edge.from == focus {
+                    Some(&edge.to)
+                } else {
+                    None
+                }
+            }) {
+                if retained.len() == MAX_CANVAS_NODES {
+                    break;
+                }
+                retained.insert(neighbour.clone());
+            }
+        }
+        for node in &nodes {
+            if retained.len() == MAX_CANVAS_NODES {
+                break;
+            }
+            retained.insert(node.id.clone());
+        }
         edges.retain(|edge| retained.contains(&edge.from) && retained.contains(&edge.to));
-        truncated = true;
+        nodes.retain(|node| retained.remove(&node.id));
     }
     if edges.len() > MAX_CANVAS_EDGES {
-        edges.truncate(MAX_CANVAS_EDGES);
+        if let Some(focus) = outside_window {
+            let touches_focus = |edge: &CanvasEdge| edge.from == focus || edge.to == focus;
+            let focus_budget = edges
+                .iter()
+                .filter(|edge| touches_focus(edge))
+                .count()
+                .min(MAX_CANVAS_EDGES);
+            let mut remaining_focus = focus_budget;
+            let mut remaining_other = MAX_CANVAS_EDGES - focus_budget;
+            edges.retain(|edge| {
+                let remaining = if touches_focus(edge) {
+                    &mut remaining_focus
+                } else {
+                    &mut remaining_other
+                };
+                if *remaining == 0 {
+                    return false;
+                }
+                *remaining -= 1;
+                true
+            });
+        } else {
+            edges.truncate(MAX_CANVAS_EDGES);
+        }
         truncated = true;
     }
     let mut graph = CanvasGraph {
@@ -1579,7 +1644,7 @@ mod tests {
 
     #[test]
     fn gradle_adapter_preserves_shared_descendants_and_unresolved_targets() {
-        let graph = canvas_graph_from_gradle(&gradle_fixture());
+        let graph = canvas_graph_from_gradle(&gradle_fixture(), None);
         assert_eq!(graph.nodes.len(), 5, "4 components + 1 unresolved target");
         let shared = graph
             .nodes
@@ -1630,10 +1695,13 @@ mod tests {
         back.selected = Some("c3".into());
         fixture.edges.push(back);
 
-        let graph = canvas_graph_from_gradle(&fixture);
+        let graph = canvas_graph_from_gradle(&fixture, None);
         let state = CanvasState::new(graph);
         let paths = &state.edge_paths;
-        assert_eq!(*paths, edge_paths(&canvas_graph_from_gradle(&fixture)));
+        assert_eq!(
+            *paths,
+            edge_paths(&canvas_graph_from_gradle(&fixture, None))
+        );
         let root = state.graph.positions["root"];
         let left = state.graph.positions["c1"];
         let shared = state.graph.positions["c3"];
@@ -1692,8 +1760,8 @@ mod tests {
 
     #[test]
     fn layout_is_deterministic_and_layered() {
-        let first = canvas_graph_from_gradle(&gradle_fixture());
-        let mut second = canvas_graph_from_gradle(&gradle_fixture());
+        let first = canvas_graph_from_gradle(&gradle_fixture(), None);
+        let mut second = canvas_graph_from_gradle(&gradle_fixture(), None);
         layout_canvas_graph(&mut second);
         assert_eq!(first.positions, second.positions);
         let root_position = first.positions["root"];
@@ -1723,7 +1791,7 @@ mod tests {
         assert!(state.inspected_edges.contains(&0));
         assert!(!state.set_layout(CanvasLayout::TopToBottom));
 
-        state.replace_graph(canvas_graph_from_gradle(&gradle_fixture()));
+        state.replace_graph(canvas_graph_from_gradle(&gradle_fixture(), None));
         assert_eq!(state.graph.positions, vertical);
         assert!(state.selection.contains("c1"));
         assert!(state.set_layout(CanvasLayout::LeftToRight));
@@ -1739,7 +1807,7 @@ mod tests {
             fixture.components.push(gradle_component_json(&id, &module));
             fixture.edges.push(gradle_edge_json("root", &module, &id));
         }
-        let graph = canvas_graph_from_gradle(&fixture);
+        let graph = canvas_graph_from_gradle(&fixture, None);
         assert!(graph.truncated);
         assert!(graph.nodes.len() <= MAX_CANVAS_NODES);
         assert!(graph.edges.len() <= MAX_CANVAS_EDGES);
@@ -1783,7 +1851,7 @@ mod tests {
             }"#,
         )
         .expect("maven fixture");
-        let canvas = canvas_graph_from_maven(&graph, |_| true);
+        let canvas = canvas_graph_from_maven(&graph, |_| true, None);
         assert_eq!(canvas.nodes.len(), 4, "one node per occurrence");
         let occurrences = canvas
             .nodes
@@ -1815,7 +1883,7 @@ mod tests {
     }
 
     fn canvas_state_fixture() -> CanvasState {
-        CanvasState::new(canvas_graph_from_gradle(&gradle_fixture()))
+        CanvasState::new(canvas_graph_from_gradle(&gradle_fixture(), None))
     }
 
     #[test]
