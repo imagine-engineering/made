@@ -6,8 +6,8 @@ from pathlib import Path
 from types import ModuleType,SimpleNamespace
 import numpy as np,torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_tripo.py','sim_api_nodes/apis/tripo.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py','sim_api/latest/_util/geometry_types.py','sim/utils.py']
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+FILES=['comfy_api_nodes/nodes_tripo.py','comfy_api_nodes/apis/tripo.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api/latest/_util/geometry_types.py','comfy/utils.py']
 NODES=['TripoConversionNode','TripoImageToModelNode','TripoImportModelNode','TripoMultiviewToModelNode','TripoP1ImageToModelNode','TripoP1MultiviewToModelNode','TripoP1TextToModelNode','TripoRefineNode','TripoRetargetNode','TripoRigNode','TripoTextToModelNode','TripoTextureNode'];torch.set_num_threads(1)
 GLB=ROOT.parent/'ComfyUI-Frontend/browser_tests/assets/workflowInMedia/workflow.glb';OBJ=ROOT.parent/'ComfyUI-Frontend/browser_tests/assets/cube.obj'
 def selected(file,names,namespace,classes=False):
@@ -41,7 +41,7 @@ async def generate():
     if isinstance(target,ast.Name):namespace[target.id]=value
  async def upload(cls,stream,filename,mime,wait_label='Uploading',progress_origin_ts=None):
   index=len(uploads);uploads.append({'file_name':filename,'mime_type':mime,'wait_label':wait_label,'bytes_hex':stream.getvalue().hex()});events.append({'upload':index});return f'https://source.fixture.invalid/input-{index+1}.bin'
- namespace['upload_file_to_simapi']=upload;selected(FILES[2],{'upload_images_to_simapi','upload_3d_model_to_simapi'},namespace)
+ namespace['upload_file_to_comfyapi']=upload;selected(FILES[2],{'upload_images_to_comfyapi','upload_3d_model_to_comfyapi'},namespace)
  async def sync(cls,endpoint,response_model,data=None,**kwargs):
   payload={'code':options.get('code',0),'data':{'task_id':options.get('task_id','source-task-42')}}
   if options.get('missing_task_id'):payload['data']={}

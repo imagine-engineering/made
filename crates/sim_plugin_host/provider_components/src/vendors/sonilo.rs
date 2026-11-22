@@ -813,7 +813,9 @@ fn decode_hex(value: &Value) -> Result<Vec<u8>, ConformanceError> {
     }
     value
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             std::str::from_utf8(pair)
                 .map_err(|_| ConformanceError::InvalidRequest)
@@ -1166,7 +1168,7 @@ fn compare_case(case: &Value, failure: bool, fragment: usize) -> Result<(), Box<
                 != case["requests"][0]["url"]
                     .as_str()
                     .ok_or("source URL")?
-                    .strip_prefix("https://fixture.invalid/api")
+                    .strip_prefix("https://api.comfy.org")
                     .ok_or("source URL prefix")?
         {
             return Err("Sonilo source audio/path differs".into());
@@ -1252,7 +1254,7 @@ pub fn run_conformance(fixture: &str) -> Result<(), ConformanceError> {
                 case["requests"][0]["url"]
                     .as_str()
                     .ok_or("URL")?
-                    .strip_prefix("https://fixture.invalid/api")
+                    .strip_prefix("https://api.comfy.org")
                     .ok_or("URL prefix")?
                     .to_owned(),
             );

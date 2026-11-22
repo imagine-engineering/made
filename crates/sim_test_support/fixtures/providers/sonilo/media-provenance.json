@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "source_sha256": {
-    "sim_api_nodes/nodes_sonilo.py": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+    "comfy_api_nodes/nodes_sonilo.py": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
   },
   "audio": {
     "bytes": 60,

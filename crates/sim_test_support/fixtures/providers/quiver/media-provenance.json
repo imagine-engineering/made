@@ -1,7 +1,7 @@
 {
   "source-svg.svg": {
     "producer": "actual pinned SVG ordered BytesIO wrapper in executed node AST with hermetic synthetic provider response",
-    "source_wrapper": "sim_api/latest/_util/image_types.py SVG.__init__",
+    "source_wrapper": "comfy_api/latest/_util/image_types.py SVG.__init__",
     "source_wrapper_sha256": "1704789d3bbb5570eb7dae16537a20aa88b63cd551dd54b5ee91781732efc606",
     "oracle_case": 0,
     "bytes": 73,

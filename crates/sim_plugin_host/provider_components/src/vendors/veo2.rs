@@ -931,7 +931,9 @@ fn decode_hex(value: &Value) -> Result<Vec<u8>, ConformanceError> {
         return Err(ConformanceError::InvalidRequest);
     }
     text.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             std::str::from_utf8(pair)
                 .map_err(|_| ConformanceError::InvalidRequest)

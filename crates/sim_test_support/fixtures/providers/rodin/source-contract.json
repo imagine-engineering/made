@@ -3,12 +3,12 @@
   "namespace": "zed.sim.provider.rodin",
   "scope": "Actual node/helper/client polling AST/Pydantic/PIL/multipart and File3D byte wrapper. NumPy input and virtual filesystem stand in for canonical native preparation/storage; no native allocation/codec/publication/live calls.",
   "source_sha256": {
-    "sim_api_nodes/nodes_rodin.py": "e833ab2c68c6c619b4666b269e04e2f3c36a076f6a9e2b44f1bc845ba3614555",
-    "sim_api_nodes/apis/rodin.py": "4bf1fc63db9d74ea9f0cb126f350950fee1d79fb9d452675a0b6dc3c113e4344",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api/latest/_util/geometry_types.py": "e40ac0a0e0918867e4462b5b500c59fb41ed31609420233f26f7d704c3e3b118"
+    "comfy_api_nodes/nodes_rodin.py": "e833ab2c68c6c619b4666b269e04e2f3c36a076f6a9e2b44f1bc845ba3614555",
+    "comfy_api_nodes/apis/rodin.py": "4bf1fc63db9d74ea9f0cb126f350950fee1d79fb9d452675a0b6dc3c113e4344",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api/latest/_util/geometry_types.py": "e40ac0a0e0918867e4462b5b500c59fb41ed31609420233f26f7d704c3e3b118"
   },
   "contracts": {
     "Rodin3D_Regular": {
@@ -19,8 +19,8 @@
         "Polygon_count"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Regular', display_name='Rodin 3D Generate - Regular Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Regular', display_name='Rodin 3D Generate - Regular Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')]"
     },
     "Rodin3D_Detail": {
@@ -31,8 +31,8 @@
         "Polygon_count"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Detail', display_name='Rodin 3D Generate - Detail Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Detail', display_name='Rodin 3D Generate - Detail Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')]"
     },
     "Rodin3D_Smooth": {
@@ -43,8 +43,8 @@
         "Polygon_count"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Smooth', display_name='Rodin 3D Generate - Smooth Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Smooth', display_name='Rodin 3D Generate - Smooth Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), *COMMON_PARAMETERS], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')]"
     },
     "Rodin3D_Sketch": {
@@ -53,8 +53,8 @@
         "Seed"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Sketch', display_name='Rodin 3D Generate - Sketch Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), IO.Int.Input('Seed', default=0, min=0, max=65535, display_mode=IO.NumberDisplay.number, optional=True)], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Sketch', display_name='Rodin 3D Generate - Sketch Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), IO.Int.Input('Seed', default=0, min=0, max=65535, display_mode=IO.NumberDisplay.number, optional=True)], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')]"
     },
     "Rodin3D_Gen2": {
@@ -66,8 +66,8 @@
         "TAPose"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Gen2', display_name='Rodin 3D Generate - Gen-2 Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), IO.Int.Input('Seed', default=0, min=0, max=65535, display_mode=IO.NumberDisplay.number, optional=True), IO.Combo.Input('Material_Type', options=['PBR', 'Shaded'], default='PBR', optional=True), IO.Combo.Input('Polygon_count', options=['4K-Quad', '8K-Quad', '18K-Quad', '50K-Quad', '2K-Triangle', '20K-Triangle', '150K-Triangle', '500K-Triangle'], default='500K-Triangle', optional=True), IO.Boolean.Input('TAPose', default=False, advanced=True)], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Gen2', display_name='Rodin 3D Generate - Gen-2 Generate', category='partner/3d/Rodin', description=cleandoc(cls.__doc__ or ''), inputs=[IO.Image.Input('Images'), IO.Int.Input('Seed', default=0, min=0, max=65535, display_mode=IO.NumberDisplay.number, optional=True), IO.Combo.Input('Material_Type', options=['PBR', 'Shaded'], default='PBR', optional=True), IO.Combo.Input('Polygon_count', options=['4K-Quad', '8K-Quad', '18K-Quad', '50K-Quad', '2K-Triangle', '20K-Triangle', '150K-Triangle', '500K-Triangle'], default='500K-Triangle', optional=True), IO.Boolean.Input('TAPose', default=False, advanced=True)], outputs=[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.4}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='3D Model Path'), IO.File3DGLB.Output(display_name='GLB')]"
     },
     "Rodin3D_Gen25_Image": {
@@ -89,8 +89,8 @@
         "height_cm"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Gen25_Image', display_name='Rodin 3D Gen-2.5 - Image to 3D', category='partner/3d/Rodin', description='Generate a 3D model from 1-5 reference images via Rodin Gen-2.5. Pick a mode (Fast / Regular / Extreme-High) to tune quality vs. cost.', inputs=[IO.Autogrow.Input('images', template=IO.Autogrow.TemplatePrefix(IO.Image.Input('image'), prefix='image', min=1, max=5), tooltip='1-5 images. The first image is used for materials when multi-view.'), _build_mode_input(), *_build_common_inputs(include_image_only=True)], outputs=[IO.File3DAny.Output(display_name='model_file')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['mode', 'addon_highpack']), expr=_PRICE_EXPR))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Gen25_Image', display_name='Rodin 3D Gen-2.5 - Image to 3D', category='partner/3d/Rodin', description='Generate a 3D model from 1-5 reference images via Rodin Gen-2.5. Pick a mode (Fast / Regular / Extreme-High) to tune quality vs. cost.', inputs=[IO.Autogrow.Input('images', template=IO.Autogrow.TemplatePrefix(IO.Image.Input('image'), prefix='image', min=1, max=5), tooltip='1-5 images. The first image is used for materials when multi-view.'), _build_mode_input(), *_build_common_inputs(include_image_only=True)], outputs=[IO.File3DAny.Output(display_name='model_file')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['mode', 'addon_highpack']), expr=_PRICE_EXPR))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.File3DAny.Output(display_name='model_file')]"
     },
     "Rodin3D_Gen25_Text": {
@@ -111,8 +111,8 @@
         "height_cm"
       ],
       "defaults": {},
-      "schema": "IO.Schema(node_id='Rodin3D_Gen25_Text', display_name='Rodin 3D Gen-2.5 - Text to 3D', category='partner/3d/Rodin', description='Generate a 3D model from a text prompt via Rodin Gen-2.5. Pick a mode (Fast / Regular / Extreme-High) to tune quality vs. cost.', inputs=[IO.String.Input('prompt', multiline=True, default='', tooltip='Text prompt for the 3D model.'), _build_mode_input(), *_build_common_inputs(include_image_only=False)], outputs=[IO.File3DAny.Output(display_name='model_file')], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['mode', 'addon_highpack']), expr=_PRICE_EXPR))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='Rodin3D_Gen25_Text', display_name='Rodin 3D Gen-2.5 - Text to 3D', category='partner/3d/Rodin', description='Generate a 3D model from a text prompt via Rodin Gen-2.5. Pick a mode (Fast / Regular / Extreme-High) to tune quality vs. cost.', inputs=[IO.String.Input('prompt', multiline=True, default='', tooltip='Text prompt for the 3D model.'), _build_mode_input(), *_build_common_inputs(include_image_only=False)], outputs=[IO.File3DAny.Output(display_name='model_file')], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['mode', 'addon_highpack']), expr=_PRICE_EXPR))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.File3DAny.Output(display_name='model_file')]"
     }
   },

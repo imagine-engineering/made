@@ -2,14 +2,14 @@
   "schema_version": 1,
   "namespace": "zed.sim.provider.gemini",
   "source_sha256": {
-    "sim_api_nodes/nodes_gemini.py": "e760f41dad8e26c44b9e4d5c283c7ffafffb2d1839200c3b471da81992d463db",
-    "sim_api_nodes/apis/gemini.py": "cdd43a44aed3a5117b6d504f5c76c578828108cce0c375156ec48f8a58e6429c",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+    "comfy_api_nodes/nodes_gemini.py": "e760f41dad8e26c44b9e4d5c283c7ffafffb2d1839200c3b471da81992d463db",
+    "comfy_api_nodes/apis/gemini.py": "cdd43a44aed3a5117b6d504f5c76c578828108cce0c375156ec48f8a58e6429c",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
   },
   "scope": "Actual request/helper/response filtering/token price AST. Native encodings and materialization are explicit boundary probes, never decoded outputs.",
   "contracts": {
@@ -32,7 +32,7 @@
         "system_prompt": ""
       },
       "node_identifier": "GeminiNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output()]"
     },
     "GeminiNodeV2": {
@@ -46,7 +46,7 @@
         "system_prompt": ""
       },
       "node_identifier": "GeminiNodeV2",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output()]"
     },
     "GeminiInputFiles": {
@@ -80,7 +80,7 @@
         "system_prompt": ""
       },
       "node_identifier": "GeminiImageNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output(), IO.String.Output()]"
     },
     "GeminiImage2": {
@@ -101,7 +101,7 @@
         "system_prompt": ""
       },
       "node_identifier": "GeminiImage2Node",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output(), IO.String.Output()]"
     },
     "GeminiNanoBanana2": {
@@ -123,7 +123,7 @@
         "system_prompt": ""
       },
       "node_identifier": "GeminiNanoBanana2",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output(), IO.String.Output(), IO.Image.Output(display_name='thought_image', tooltip=\"First image from the model's thinking process. Only available with thinking_level HIGH and IMAGE+TEXT modality.\")]"
     },
     "GeminiNanoBanana2V2": {
@@ -142,7 +142,7 @@
         "top_p": 0.95
       },
       "node_identifier": "GeminiNanoBanana2V2",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output(), IO.String.Output(), IO.Image.Output(display_name='thought_image', tooltip=\"First image from the model's thinking process. Only available with thinking_level HIGH and IMAGE+TEXT modality.\")]"
     },
     "GeminiVideoOmni": {
@@ -152,7 +152,7 @@
       ],
       "defaults": {},
       "node_identifier": "GeminiVideoOmni",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output(), IO.String.Output()]"
     }
   },

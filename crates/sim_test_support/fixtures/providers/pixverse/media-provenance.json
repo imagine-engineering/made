@@ -7,7 +7,7 @@
     "acceptance": "Encoded owner-injected bytes only; no native tensor encoding or video decode/allocation claim."
   },
   "downloaded-video.mp4": {
-    "source": "projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+    "source": "projects/comfy/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
     "producer": "pinned frontend browser asset",
     "bytes": 6163,
     "sha256": "ab3896e8a35d2be240b4c48c3fb034c449f4381e6518789dd2080ec998476439",

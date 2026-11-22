@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "source_sha256": {
-    "sim_api_nodes/nodes_veo2.py": "90c1e81fcc00499d43786cf947c07ae7123e8112b88586e324c2952d39468e85",
-    "sim_api_nodes/apis/veo.py": "5f6fdbf413254f290dd0b08e73624fced09818c1646a09132d0d87ac945dbe30",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
+    "comfy_api_nodes/nodes_veo2.py": "90c1e81fcc00499d43786cf947c07ae7123e8112b88586e324c2952d39468e85",
+    "comfy_api_nodes/apis/veo.py": "5f6fdbf413254f290dd0b08e73624fced09818c1646a09132d0d87ac945dbe30",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api/latest/_input_impl/video_types.py": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
   },
   "source_history": "checksum-locked source snapshot; no ComfyUI Git metadata or original per-file history available",
   "video": {

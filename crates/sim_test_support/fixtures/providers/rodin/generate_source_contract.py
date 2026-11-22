@@ -6,9 +6,9 @@ import aiohttp
 import numpy as np
 from PIL import Image
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-FRONTEND_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI-Frontend')
-SOURCES=['sim_api_nodes/nodes_rodin.py','sim_api_nodes/apis/rodin.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/download_helpers.py','sim_api/latest/_util/geometry_types.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+FRONTEND_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI-Frontend')
+SOURCES=['comfy_api_nodes/nodes_rodin.py','comfy_api_nodes/apis/rodin.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/download_helpers.py','comfy_api/latest/_util/geometry_types.py']
 class TensorProbe:
  def __init__(self,slot='image',count=1,batched=True,channels=3):self.slot=slot;self.shape=(count,1,1,channels) if batched else (1,1,channels);self.channels=channels
  def __getitem__(self,index):
@@ -38,7 +38,7 @@ async def generate():
   def close(self):
    if not self.closed:writes.append({'path':self.path,'bytes':len(self.getvalue()),'sha256':hashlib.sha256(self.getvalue()).hexdigest()})
    super().close()
- namespace.update(os=SimpleNamespace(path=os.path,makedirs=lambda *args,**options:None),sim_paths=SimpleNamespace(get_output_directory=lambda:'/source-output'),open=lambda path,mode:StorageProbe(path,mode),Types=SimpleNamespace(File3D=namespace['File3D']))
+ namespace.update(os=SimpleNamespace(path=os.path,makedirs=lambda *args,**options:None),comfy_paths=SimpleNamespace(get_output_directory=lambda:'/source-output'),open=lambda path,mode:StorageProbe(path,mode),Types=SimpleNamespace(File3D=namespace['File3D']))
  async def download_bytes(url,dest,**options):
   data=assets['glb'] if url.endswith('.glb') else assets['obj'];downloads.append({'kind':'bytes','url':url,'destination':dest if isinstance(dest,str) else 'BytesIO','options':options})
   if isinstance(dest,str):writes.append({'path':dest,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})

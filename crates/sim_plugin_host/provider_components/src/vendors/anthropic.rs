@@ -8,6 +8,7 @@ use crate::common::{
     TypeRegistry, ValueFamily, publish_validated, validate_outputs,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const NAMESPACE: &str = "zed.sim.provider.anthropic";
 pub const SOURCE_SHA256: &str = "36ca216053c7a84cc847d5a88d971b76a945240e58aef88148efcfb969d62edb";
@@ -24,6 +25,7 @@ const MAXIMUM_RECEIPT_BYTES: usize = 32 * 1024;
 const MAXIMUM_IMAGES: usize = 20;
 const MAXIMUM_POLLS: u32 = 64;
 const WAIT_MILLISECONDS: u64 = 1_000;
+const COMPONENT_SHA256: &str = "6208fd784fdc386c37988fd5f90e448288cd8fce703db124fcb66461e13c4cf5";
 
 const REQUIRED_FIXTURE_KEYS: &[&str] = &[
     "aliases",
@@ -1504,26 +1506,18 @@ fn validate_unsigned_artifacts() -> Result<(), AnthropicError> {
         env!("CARGO_MANIFEST_DIR"),
         "/../../sim_test_support/fixtures/providers/anthropic/provider_v2_component"
     ));
-    let signing = include_str!(concat!(
+    let historical_payload = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../sim_test_support/fixtures/providers/anthropic/signing_payload.fixture"
     ));
-    if component.len() != 161_751
-        || !component.starts_with(b"\0asm")
-        || component.get(4..8) != Some(&[0x0d, 0x00, 0x01, 0x00])
-        || !signing.contains(NAMESPACE)
-        || !signing.contains(NODE_FEATURE_ID)
-        || !signing.contains(ROUTE_FEATURE_ID)
-        || !signing.contains(SOURCE_SHA256)
-        || !signing.contains(
-            "component_sha256=f4b54f14702753f93b9a09495afbd4d1ceb5e1ec216a066207e668908d9aad50",
-        )
-    {
+    let digest = format!("{:x}", Sha256::digest(component));
+    if !component.starts_with(b"\0asm\x0d\0\x01\0") || digest != COMPONENT_SHA256 {
         return Err(AnthropicError::Contract(
-            "anthropic unsigned component or signing payload changed",
+            "anthropic unsigned component differs from the reproducible fixture",
         ));
     }
-    let lowercase = signing.to_ascii_lowercase();
+    let payload = unsigned_payload(historical_payload, &digest, component.len())?;
+    let lowercase = payload.to_ascii_lowercase();
     for forbidden in [
         "sk-ant",
         "private_key",
@@ -1540,6 +1534,49 @@ fn validate_unsigned_artifacts() -> Result<(), AnthropicError> {
     Ok(())
 }
 
+fn unsigned_payload(
+    historical_payload: &str,
+    digest: &str,
+    component_bytes: usize,
+) -> Result<String, AnthropicError> {
+    let mut fields = BTreeMap::new();
+    let mut payload = String::new();
+    for line in historical_payload.lines() {
+        let (name, value) = line.split_once('=').ok_or(AnthropicError::Contract(
+            "malformed anthropic unsigned payload field",
+        ))?;
+        if fields.insert(name, value).is_some() {
+            return Err(AnthropicError::Contract(
+                "duplicate anthropic unsigned payload field",
+            ));
+        }
+        let replacement = match name {
+            "component_sha256" => format!("{name}={digest}"),
+            "component_bytes" => format!("{name}={component_bytes}"),
+            _ => line.to_owned(),
+        };
+        payload.push_str(&replacement);
+        payload.push('\n');
+    }
+    if fields.get("schema") != Some(&"zed.sim.provider-signing-payload.v1")
+        || fields.get("namespace") != Some(&NAMESPACE)
+        || !fields
+            .get("node")
+            .is_some_and(|node| *node == format!("{NODE_FEATURE_ID}:{NODE_IDENTIFIER}"))
+        || !fields
+            .get("route")
+            .is_some_and(|route| *route == format!("{ROUTE_FEATURE_ID}:POST:{MESSAGES_PATH}"))
+        || fields.get("source_sha256") != Some(&SOURCE_SHA256)
+        || !fields.contains_key("component_sha256")
+        || !fields.contains_key("component_bytes")
+    {
+        return Err(AnthropicError::Contract(
+            "anthropic unsigned payload claims differ from the source contract",
+        ));
+    }
+    Ok(payload)
+}
+
 fn decode_hex(value: &str) -> Result<Vec<u8>, AnthropicError> {
     if value.is_empty() || !value.len().is_multiple_of(2) || value.len() > MAXIMUM_REQUEST_BYTES * 2
     {
@@ -1549,7 +1586,7 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, AnthropicError> {
     output
         .try_reserve(value.len() / 2)
         .map_err(|_| AnthropicError::Contract("anthropic upload allocation failed"))?;
-    for pair in value.as_bytes().chunks_exact(2) {
+    for pair in value.as_bytes().as_chunks::<2>().0.iter() {
         let high = hex_nibble(pair[0])?;
         let low = hex_nibble(pair[1])?;
         output.push((high << 4) | low);

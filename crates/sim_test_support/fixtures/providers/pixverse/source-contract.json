@@ -3,13 +3,13 @@
   "namespace": "zed.sim.provider.pixverse",
   "scope": "Pinned source AST and Pydantic execution; PNG preparation uses injected real encoded bytes, not native tensor encoding. Download is structural wrapper probe; native allocation and real clock continuation remain gates.",
   "source_sha256": {
-    "sim_api_nodes/nodes_pixverse.py": "3b96c96e9b5f6458e8ec6e93392f0cf9dae76b733b721ac55ead15a5351e7f84",
-    "sim_api_nodes/apis/pixverse.py": "65283c394fc513f8b8197fcca00b14fdec7cbc4509ebcebb757d31026f4f7f59",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+    "comfy_api_nodes/nodes_pixverse.py": "3b96c96e9b5f6458e8ec6e93392f0cf9dae76b733b721ac55ead15a5351e7f84",
+    "comfy_api_nodes/apis/pixverse.py": "65283c394fc513f8b8197fcca00b14fdec7cbc4509ebcebb757d31026f4f7f59",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
   },
   "registered_symbols": [
     "PixverseTextToVideoNode",
@@ -42,8 +42,8 @@
         "negative_prompt": null,
         "pixverse_template": null
       },
-      "schema": "IO.Schema(node_id='PixverseTextToVideoNode', display_name='PixVerse Text to Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('aspect_ratio', options=PixverseAspectRatio), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True), IO.Custom(PixverseIO.TEMPLATE).Input('pixverse_template', tooltip='An optional template to influence style of generation, created by the PixVerse Template node.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='PixverseTextToVideoNode', display_name='PixVerse Text to Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('aspect_ratio', options=PixverseAspectRatio), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True), IO.Custom(PixverseIO.TEMPLATE).Input('pixverse_template', tooltip='An optional template to influence style of generation, created by the PixVerse Template node.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     },
     "PixverseImageToVideoNode": {
@@ -61,8 +61,8 @@
         "negative_prompt": null,
         "pixverse_template": null
       },
-      "schema": "IO.Schema(node_id='PixverseImageToVideoNode', display_name='PixVerse Image to Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.Image.Input('image'), IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True), IO.Custom(PixverseIO.TEMPLATE).Input('pixverse_template', tooltip='An optional template to influence style of generation, created by the PixVerse Template node.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='PixverseImageToVideoNode', display_name='PixVerse Image to Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.Image.Input('image'), IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True), IO.Custom(PixverseIO.TEMPLATE).Input('pixverse_template', tooltip='An optional template to influence style of generation, created by the PixVerse Template node.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     },
     "PixverseTransitionVideoNode": {
@@ -79,8 +79,8 @@
       "defaults": {
         "negative_prompt": null
       },
-      "schema": "IO.Schema(node_id='PixverseTransitionVideoNode', display_name='PixVerse Transition Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.Image.Input('first_frame'), IO.Image.Input('last_frame'), IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='PixverseTransitionVideoNode', display_name='PixVerse Transition Video', category='partner/video/PixVerse', description='Generates videos based on prompt and output_size.', inputs=[IO.Image.Input('first_frame'), IO.Image.Input('last_frame'), IO.String.Input('prompt', multiline=True, default='', tooltip='Prompt for the video generation'), IO.Combo.Input('quality', options=PixverseQuality, default=PixverseQuality.res_540p), IO.Combo.Input('duration_seconds', options=PixverseDuration), IO.Combo.Input('motion_mode', options=PixverseMotionMode), IO.Int.Input('seed', default=0, min=0, max=2147483647, control_after_generate=True, tooltip='Seed for video generation.'), IO.String.Input('negative_prompt', default='', multiline=True, tooltip='An optional text description of undesired elements on an image.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=PRICE_BADGE_VIDEO)",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     }
   },

@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/sim/ComfyUI'
+SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI'
 DESTINATION = Path(__file__).with_name('source-contract.json')
-SOURCES = ['sim_api_nodes/nodes_bria.py','sim_api_nodes/apis/bria.py','sim_api_nodes/util/client.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/conversions.py']
+SOURCES = ['comfy_api_nodes/nodes_bria.py','comfy_api_nodes/apis/bria.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/conversions.py']
 
 class MediaProbe:
     def __init__(self,name,kind='image',duration=2.5,channels=4):
@@ -55,7 +55,7 @@ async def generate():
         return 'image-frames-probe','inverted-alpha-mask-probe'
     namespace={'__builtins__':__builtins__,'classmethod':classmethod,'Field':field,'BaseModel':RequestProbe,'IO':SimpleNamespace(ComfyNode=object,NodeOutput=lambda *values:values),
                'ApiEndpoint':lambda path,method='GET':SimpleNamespace(path=path,method=method),
-               'sync_op':sync_op,'poll_op':poll_op,'upload_image_to_simapi':upload,'upload_video_to_simapi':upload,
+               'sync_op':sync_op,'poll_op':poll_op,'upload_image_to_comfyapi':upload,'upload_video_to_comfyapi':upload,
                'convert_mask_to_image':lambda mask:mask,'download_url_to_image_tensor':download,'download_url_to_video_output':download,
                '_video_to_images_and_mask':decode_alpha,'logging':SimpleNamespace(error=lambda *args:None)}
     validation=ast.parse((SOURCE_ROOT/SOURCES[5]).read_text())

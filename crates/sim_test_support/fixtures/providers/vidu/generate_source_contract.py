@@ -7,7 +7,7 @@ from pathlib import Path
 from types import ModuleType,SimpleNamespace
 import numpy as np,torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
 FILES=['comfy_api_nodes/nodes_vidu.py','comfy_api_nodes/apis/vidu.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy/utils.py','comfy_api_nodes/util/client.py']
 NODES=['Vidu2ImageToVideoNode','Vidu2ReferenceVideoNode','Vidu2StartEndToVideoNode','Vidu2TextToVideoNode','Vidu3ImageToVideoNode','Vidu3StartEndToVideoNode','Vidu3TextToVideoNode','ViduExtendVideoNode','ViduImageToVideoNode','ViduMultiFrameVideoNode','ViduReferenceVideoNode','ViduStartEndToVideoNode','ViduTextToVideoNode']
 VIDEO=Path(__file__).with_name('encoded-video.mp4');torch.set_num_threads(1)

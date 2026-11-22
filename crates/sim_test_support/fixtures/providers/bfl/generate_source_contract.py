@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/sim/ComfyUI'
+SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI'
 DESTINATION = Path(__file__).with_name('source-contract.json')
-SOURCES = ['sim_api_nodes/nodes_bfl.py', 'sim_api_nodes/apis/bfl.py', 'sim_api_nodes/util/client.py', 'sim_api_nodes/util/_helpers.py', 'sim_api_nodes/util/validation_utils.py', 'sim_api_nodes/util/download_helpers.py', 'sim_api_nodes/util/conversions.py']
+SOURCES = ['comfy_api_nodes/nodes_bfl.py', 'comfy_api_nodes/apis/bfl.py', 'comfy_api_nodes/util/client.py', 'comfy_api_nodes/util/_helpers.py', 'comfy_api_nodes/util/validation_utils.py', 'comfy_api_nodes/util/download_helpers.py', 'comfy_api_nodes/util/conversions.py']
 
 class MediaProbe:
     def __init__(self, encoded='aW1hZ2U=', shape=(1, 256, 256, 3)):

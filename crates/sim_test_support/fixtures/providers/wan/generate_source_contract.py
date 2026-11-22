@@ -21,8 +21,8 @@ import numpy as np
 import pydantic
 from PIL import Image
 
-SOURCE = Path('/home/asvegah/repos/sim/projects/comfy/ComfyUI')
-FRONTEND = Path('/home/asvegah/repos/sim/projects/comfy/ComfyUI-Frontend')
+SOURCE = (Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+FRONTEND = (Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI-Frontend')
 ROOT = Path(__file__).resolve().parent
 MP4 = (FRONTEND / 'browser_tests/assets/plain_video.mp4').read_bytes()
 MP3 = (FRONTEND / 'src/scripts/metadata/__fixtures__/with_metadata.mp3').read_bytes()

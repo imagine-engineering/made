@@ -2,9 +2,9 @@
 import argparse, ast, asyncio, base64, copy, hashlib, json, logging, math, re, unicodedata
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 FOLDER=Path(__file__).parent
-SOURCES=['sim_api_nodes/nodes_kling.py','sim_api_nodes/apis/kling.py','sim_api_nodes/apis/__init__.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/_helpers.py']
+SOURCES=['comfy_api_nodes/nodes_kling.py','comfy_api_nodes/apis/kling.py','comfy_api_nodes/apis/__init__.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/_helpers.py']
 class TensorProbe:
     def __init__(self,slot,shape=(1,720,720,3)):self.slot=slot;self.shape=shape;self.ndim=len(shape)
     def __iter__(self):return iter([TensorProbe(self.slot+'-'+str(index),self.shape[1:]) for index in range(self.shape[0])])
@@ -32,7 +32,7 @@ async def generate():
         return {'canonical_image_batch':serial(tensors),'dim':dim}
     namespace={'__builtins__':__builtins__,'classmethod':classmethod,'logging':logging,'math':math,'re':re,'torch':SimpleNamespace(Tensor=TensorProbe,cat=concatenate),'IO':SimpleNamespace(NodeOutput=lambda *values:values),'ApiEndpoint':lambda path,method='GET',query_params=None:SimpleNamespace(path=path,method=method,query_params=query_params)}
     tree=ast.parse((SOURCE_ROOT/SOURCES[0]).read_text());legacy=ast.parse((SOURCE_ROOT/SOURCES[2]).read_text());classes={node.name:node for node in legacy.body if isinstance(node,ast.ClassDef)}
-    required={alias.name for node in tree.body if isinstance(node,ast.ImportFrom) and node.module=='sim_api_nodes.apis' for alias in node.names}
+    required={alias.name for node in tree.body if isinstance(node,ast.ImportFrom) and node.module=='comfy_api_nodes.apis' for alias in node.names}
     while True:
         expanded=required|{member.id for name in required for member in ast.walk(classes[name]) if isinstance(member,ast.Name) and member.id in classes}
         if expanded==required:break
@@ -64,7 +64,7 @@ async def generate():
     async def video(cls,video,**options):media.append({'operation':'upload_video','video':serial(video),'container':'mp4','codec':'h264',**options});return 'https://storage.fixture.invalid/'+video.slot
     async def audio(cls,audio,**options):media.append({'operation':'upload_audio','audio':serial(audio),**options});return 'https://storage.fixture.invalid/audio'
     async def download(url,kind):return {'canonical_media_owner':kind,'url':url}
-    namespace.update(sync_op=sync,poll_op=poll,tensor_to_base64_string=inline,upload_images_to_simapi=images,upload_image_to_simapi=image,upload_video_to_simapi=video,upload_audio_to_simapi=audio,download_url_to_image_tensor=lambda url:download(url,'RGBA'),download_url_to_video_output=lambda url:download(url,'VIDEO'))
+    namespace.update(sync_op=sync,poll_op=poll,tensor_to_base64_string=inline,upload_images_to_comfyapi=images,upload_image_to_comfyapi=image,upload_video_to_comfyapi=video,upload_audio_to_comfyapi=audio,download_url_to_image_tensor=lambda url:download(url,'RGBA'),download_url_to_video_output=lambda url:download(url,'VIDEO'))
     validation=ast.parse((SOURCE_ROOT/SOURCES[4]).read_text());exec(compile(strip(ast.Module(body=[copy.deepcopy(node) for node in validation.body if isinstance(node,ast.FunctionDef)],type_ignores=[])),'<source-validation>','exec'),namespace)
     selected=[];contracts={}
     for node in tree.body:

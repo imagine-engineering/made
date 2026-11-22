@@ -2,9 +2,9 @@
 import argparse, ast, asyncio, copy, hashlib, json, logging
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/sim/ComfyUI'
+SOURCE_ROOT = Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI'
 DESTINATION = Path(__file__).with_name('source-contract.json')
-SOURCES = ['sim_api_nodes/nodes_grok.py', 'sim_api_nodes/apis/grok.py', 'sim_api_nodes/util/client.py', 'sim_api_nodes/util/validation_utils.py', 'sim_api_nodes/util/upload_helpers.py', 'sim_api_nodes/util/conversions.py', 'sim_api_nodes/util/download_helpers.py', 'sim_api_nodes/util/_helpers.py']
+SOURCES = ['comfy_api_nodes/nodes_grok.py', 'comfy_api_nodes/apis/grok.py', 'comfy_api_nodes/util/client.py', 'comfy_api_nodes/util/validation_utils.py', 'comfy_api_nodes/util/upload_helpers.py', 'comfy_api_nodes/util/conversions.py', 'comfy_api_nodes/util/download_helpers.py', 'comfy_api_nodes/util/_helpers.py']
 class Request:
     defaults = {}
     def __init__(self, **fields): self.__dict__.update(copy.deepcopy(self.defaults)); self.__dict__.update(fields)
@@ -66,7 +66,7 @@ async def generate():
     async def upload_video(cls,video): media.append({'operation':'upload_video','slot':video.slot,'mime_type':'video/mp4','codec':'h264'}); return f'https://storage.fixture.invalid/{video.slot}.mp4'
     async def download_image(url): downloads.append({'kind':'image','url':url}); return {'native_materializer':'image','url':url}
     async def download_video(url): downloads.append({'kind':'video','url':url}); return {'native_materializer':'video','url':url}
-    namespace.update(sync_op=sync,poll_op=poll,tensor_to_base64_string=inline,upload_images_to_simapi=upload_images,upload_video_to_simapi=upload_video,download_url_to_image_tensor=download_image,download_url_to_video_output=download_video,get_fs_object_size=lambda stream:stream.size)
+    namespace.update(sync_op=sync,poll_op=poll,tensor_to_base64_string=inline,upload_images_to_comfyapi=upload_images,upload_video_to_comfyapi=upload_video,download_url_to_image_tensor=download_image,download_url_to_video_output=download_video,get_fs_object_size=lambda stream:stream.size)
     validation=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text())
     selected=[copy.deepcopy(node) for node in validation.body if isinstance(node,ast.FunctionDef) and node.name in {'validate_string','validate_video_duration','get_number_of_images'}]
     exec(compile(strip(ast.Module(body=selected,type_ignores=[])),'<source-validation>','exec'),namespace)

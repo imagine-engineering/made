@@ -2,9 +2,9 @@
 import argparse, ast, asyncio, contextlib, copy, hashlib, io, json
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 DESTINATION=Path(__file__).with_name('source-contract.json')
-SOURCES=['sim_api_nodes/nodes_ideogram.py','sim_api_nodes/apis/ideogram.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/_helpers.py']
+SOURCES=['comfy_api_nodes/nodes_ideogram.py','comfy_api_nodes/apis/ideogram.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/_helpers.py']
 class NativeProbe:
     def __init__(self,slot,shape): self.slot=slot;self.shape=shape
     def squeeze(self): return self

@@ -2,8 +2,8 @@ import argparse,ast,asyncio,copy,hashlib,io,itertools,json,re
 from pathlib import Path
 from types import SimpleNamespace
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_quiver.py','sim_api_nodes/apis/quiver.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api/latest/_util/image_types.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_quiver.py','comfy_api_nodes/apis/quiver.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api/latest/_util/image_types.py']
 class TensorProbe:
  def __init__(self,slot='image',count=1):self.slot=slot;self.shape=(count,720,720,3)
 def serial(value):
@@ -26,7 +26,7 @@ async def generate():
   return f'https://storage.fixture.invalid/{image.slot}.png'
  async def sync(cls,endpoint,response_model,data=None,**options):
   requests.append({'path':endpoint.path,'method':endpoint.method,'body':data.model_dump(mode='json',exclude_none=True),'options':options});return response_model.model_validate(override.get('response',{'id':'source','data':[{'svg':'<svg xmlns="http://www.w3.org/2000/svg"><text>source α 😀</text></svg>'},{'svg':'','mime_type':'ignored/source'}],'usage':{'total_tokens':5}}))
- namespace.update(upload_image_to_simapi=upload,sync_op=sync,ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method))
+ namespace.update(upload_image_to_comfyapi=upload,sync_op=sync,ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method))
  validation=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text());exec(compile(strip(ast.Module(body=[copy.deepcopy(node) for node in validation.body if isinstance(node,ast.FunctionDef) and node.name=='validate_string'],type_ignores=[])),'<source-validation>','exec'),namespace)
  selected=[]
  for node in tree.body:

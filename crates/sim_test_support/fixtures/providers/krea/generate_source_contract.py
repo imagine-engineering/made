@@ -7,9 +7,9 @@ import numpy as np
 import torch
 from PIL import Image
 import aiohttp
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
 DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_krea.py','sim_api_nodes/apis/krea.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/client.py','sim_api_nodes/util/download_helpers.py']
+FILES=['comfy_api_nodes/nodes_krea.py','comfy_api_nodes/apis/krea.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/download_helpers.py']
 torch.set_num_threads(1)
 def select(path,names,namespace,classes=False):
     nodes=[]

@@ -3,8 +3,8 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_pixverse.py','sim_api_nodes/apis/pixverse.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/_helpers.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_pixverse.py','comfy_api_nodes/apis/pixverse.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/_helpers.py']
 class TensorProbe:
  def __init__(self,slot='image',count=1):self.slot=slot;self.shape=(count,720,720,3)
 def serial(value):

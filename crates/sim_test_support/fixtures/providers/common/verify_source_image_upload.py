@@ -16,12 +16,12 @@ from PIL import Image, __version__ as pillow_version
 
 def source_results():
     root = Path(__file__).resolve().parents[5]
-    source = root / "projects/sim/ComfyUI"
+    source = root / "projects/comfy/ComfyUI"
     namespace = {"np": np, "torch": torch, "Image": Image, "math": math}
     sources = {}
     for relative, names in [
-        ("sim/utils.py", {"lanczos", "common_upscale"}),
-        ("sim_api_nodes/util/conversions.py", {
+        ("comfy/utils.py", {"lanczos", "common_upscale"}),
+        ("comfy_api_nodes/util/conversions.py", {
             "_compute_downscale_dims", "downscale_image_tensor", "tensor_to_pil",
         }),
     ]:

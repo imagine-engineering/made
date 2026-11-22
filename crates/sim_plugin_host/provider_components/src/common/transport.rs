@@ -1170,7 +1170,9 @@ mod tests {
         }
         value
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| {
                 let encoded = std::str::from_utf8(pair)?;
                 Ok(u8::from_str_radix(encoded, 16)?)

@@ -14,8 +14,8 @@ import pydantic
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[5]
-SOURCE = ROOT / 'projects/sim/ComfyUI/sim_api_nodes/util/upload_helpers.py'
-ANTHROPIC = ROOT / 'projects/sim/ComfyUI/sim_api_nodes/nodes_anthropic.py'
+SOURCE = ROOT / 'projects/comfy/ComfyUI/comfy_api_nodes/util/upload_helpers.py'
+ANTHROPIC = ROOT / 'projects/comfy/ComfyUI/comfy_api_nodes/nodes_anthropic.py'
 DESTINATION = Path(__file__).with_name('source_storage_upload.json')
 
 class HeaderCapture(Exception):
@@ -31,7 +31,7 @@ async def capture():
     selected = []
     for original in ast.parse(SOURCE.read_text()).body:
         if getattr(original, 'name', None) not in {'UploadRequest', 'UploadResponse',
-                'upload_file_to_simapi', 'upload_file'}:
+                'upload_file_to_comfyapi', 'upload_file'}:
             continue
         node = copy.deepcopy(original)
         if isinstance(node, ast.AsyncFunctionDef):
@@ -60,7 +60,7 @@ async def capture():
     for content_type, data in [(mime, b'\x00\xffsource\r\n') for mime in [None, 'image/png', 'audio/mp4', 'video/mp4']] + [(None, b'')]:
         observations.clear()
         try:
-            await namespace['upload_file_to_simapi'](object, BytesIO(data), 'source.png', content_type)
+            await namespace['upload_file_to_comfyapi'](object, BytesIO(data), 'source.png', content_type)
         except HeaderCapture as captured:
             assert captured.data == data
             cases.append({'declared_content_type': content_type, 'file_name': 'source.png',
@@ -85,7 +85,7 @@ async def capture():
     async def capture_images(cls, images, **options):
         observations.append(options)
         return ['https://fixture.invalid/image']
-    anthropic_namespace['upload_images_to_simapi'] = capture_images
+    anthropic_namespace['upload_images_to_comfyapi'] = capture_images
     exec(compile(ast.fix_missing_locations(ast.Module(body=anthropic_nodes, type_ignores=[])), str(ANTHROPIC), 'exec'), anthropic_namespace)
     observations.clear()
     await anthropic_namespace['_build_image_content_blocks'](object, [object()])

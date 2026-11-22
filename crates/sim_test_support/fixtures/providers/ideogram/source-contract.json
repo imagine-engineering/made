@@ -2,13 +2,13 @@
   "schema_version": 1,
   "namespace": "zed.sim.provider.ideogram",
   "source_sha256": {
-    "sim_api_nodes/nodes_ideogram.py": "8798f8a43b27656a98d68daf30b8120524f3191d00539919efb794d04ad2ccc3",
-    "sim_api_nodes/apis/ideogram.py": "decb87d9aed1e7c9582284e57a5cd50b9ec7a2abc82d400b43db8a7b08255f56",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+    "comfy_api_nodes/nodes_ideogram.py": "8798f8a43b27656a98d68daf30b8120524f3191d00539919efb794d04ad2ccc3",
+    "comfy_api_nodes/apis/ideogram.py": "decb87d9aed1e7c9582284e57a5cd50b9ec7a2abc82d400b43db8a7b08255f56",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
   },
   "scope": "Actual source request, file ordering, defaults, hidden auth and failures. Native tensor/pixel preparation and RGB materialization are structural owner probes, never fabricated outputs.",
   "contracts": {
@@ -38,7 +38,7 @@
         "character_image": null,
         "character_mask": null
       },
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output()]"
     },
     "IdeogramV4": {
@@ -49,7 +49,7 @@
         "seed"
       ],
       "defaults": {},
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output()]"
     }
   },

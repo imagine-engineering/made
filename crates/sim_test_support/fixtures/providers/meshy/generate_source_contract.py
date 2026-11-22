@@ -8,9 +8,9 @@ from PIL import Image
 torch.set_num_threads(1)
 from pathlib import Path
 from types import SimpleNamespace
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
 DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api/latest/_util/geometry_types.py','sim_api_nodes/nodes_meshy.py','sim_api_nodes/apis/meshy.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/client.py','sim_api_nodes/util/download_helpers.py']
+FILES=['comfy_api/latest/_util/geometry_types.py','comfy_api_nodes/nodes_meshy.py','comfy_api_nodes/apis/meshy.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/download_helpers.py']
 NODES=['MeshyTextToModelNode','MeshyRefineNode','MeshyImageToModelNode','MeshyMultiImageToModelNode','MeshyRigModelNode','MeshyAnimateModelNode','MeshyTextureNode']
 def selected(path,names,namespace,classes=False):
     nodes=[]
@@ -32,16 +32,16 @@ class ImageProbe:
 async def generate():
     uploads=[];requests=[];polls=[];downloads=[]
     namespace={'__builtins__':__builtins__,'IO':SimpleNamespace(ComfyNode=object,NodeOutput=lambda *values:values),'Input':SimpleNamespace(Image=object),'time':SimpleNamespace(monotonic=lambda:0.)}
-    api=ast.parse((ROOT/'sim_api_nodes/apis/meshy.py').read_text());api.body=[node for node in api.body if not isinstance(node,ast.ImportFrom) or node.module!='sim_api.latest'];exec(compile(api,str(ROOT/'sim_api_nodes/apis/meshy.py'),'exec'),namespace)
-    selected('sim_api_nodes/util/validation_utils.py',{'validate_string'},namespace)
+    api=ast.parse((ROOT/'comfy_api_nodes/apis/meshy.py').read_text());api.body=[node for node in api.body if not isinstance(node,ast.ImportFrom) or node.module!='comfy_api.latest'];exec(compile(api,str(ROOT/'comfy_api_nodes/apis/meshy.py'),'exec'),namespace)
+    selected('comfy_api_nodes/util/validation_utils.py',{'validate_string'},namespace)
     def encode(image,**options):
         uploads.append({'role':image.role,'width':image.shape[1],'height':image.shape[0],'total_pixels':options.get('total_pixels'),'declared_content_type':options.get('mime_type'),'encoded_mime_type':'image/png'})
         return SimpleNamespace(name=image.role+'.png',role=image.role)
     async def upload(cls,stream,filename,mime,label,started):
         uploads[-1].update(file_name=filename,wait_label=label)
         return 'https://storage.fixture.invalid/'+stream.role+'.png'
-    namespace.update(tensor_to_bytesio=encode,upload_file_to_simapi=upload)
-    selected('sim_api_nodes/util/upload_helpers.py',{'upload_images_to_simapi'},namespace)
+    namespace.update(tensor_to_bytesio=encode,upload_file_to_comfyapi=upload)
+    selected('comfy_api_nodes/util/upload_helpers.py',{'upload_images_to_comfyapi'},namespace)
     async def sync(cls,endpoint,response_model,data,**options):
         requests.append({'path':endpoint.path,'method':endpoint.method,'body':data.model_dump(exclude_none=True)});return response_model.model_validate({'result':'task-42'})
     async def poll(cls,endpoint,response_model,**options):
@@ -52,7 +52,7 @@ async def generate():
     async def download(url,format,**options):
         value={'url':url,'format':format,'task_id':options.get('task_id'),'save_file_name':f"{options['task_id']}.{format}"};downloads.append(value);return value
     namespace.update(sync_op=sync,poll_op=poll,download_url_to_file_3d=download,ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method))
-    selected('sim_api_nodes/nodes_meshy.py',set(NODES),namespace,True)
+    selected('comfy_api_nodes/nodes_meshy.py',set(NODES),namespace,True)
     def image(role,batch=1):return {'role':role,'width':160,'height':160,'batch':batch}
     def base(node):
         common={'model':'latest','should_remesh':{'should_remesh':'true','topology':'triangle','target_polycount':300000},'symmetry_mode':'auto','pose_mode':'A-pose','seed':42}
@@ -82,7 +82,7 @@ async def generate():
         cases.append({'input':copy.deepcopy(value),'uploads':copy.deepcopy(uploads),'request':copy.deepcopy(requests[0]),'poll':copy.deepcopy(polls[0]),'downloads':copy.deepcopy(downloads),'output':list(output)})
     for node in NODES:await observe(base(node))
     facts={}
-    for node in ast.parse((ROOT/'sim_api_nodes/nodes_meshy.py').read_text()).body:
+    for node in ast.parse((ROOT/'comfy_api_nodes/nodes_meshy.py').read_text()).body:
         if not isinstance(node,ast.ClassDef) or node.name not in NODES:continue
         schema=next(member for member in node.body if isinstance(member,ast.FunctionDef) and member.name=='define_schema');records=[]
         for call in ast.walk(schema):
@@ -119,7 +119,7 @@ async def generate():
         value=base(NODES[2]);value['images'][0]['batch']=batch;await observe(value)
         value=base(NODES[3]);value['images']=[image('imageZ',batch),image('imageA',batch)];await observe(value)
     geometry={'__builtins__':__builtins__,'IO':BinaryIO,'Path':Path,'BytesIO':BytesIO,'shutil':shutil}
-    selected('sim_api/latest/_util/geometry_types.py',{'File3D'},geometry)
+    selected('comfy_api/latest/_util/geometry_types.py',{'File3D'},geometry)
     gltf=json.dumps({'asset':{'version':'2.0'}},separators=(',',':')).encode();gltf+=b' '*((-len(gltf))%4)
     glb=struct.pack('<III',0x46546c67,2,20+len(gltf))+struct.pack('<II',len(gltf),0x4e4f534a)+gltf
     payloads={'glb':glb,'fbx':b'; FBX 7.4.0 project file\n; source File3D opaque byte preservation probe\n\x00\xff'}
@@ -128,7 +128,7 @@ async def generate():
         file_namespace={'__builtins__':__builtins__,'Path':Path,'BytesIO':BytesIO,'Types':SimpleNamespace(File3D=geometry['File3D']),'get_output_directory':lambda:output}
         async def file_bytes(url,destination,**options):destination.write(payloads[url.rsplit('.',1)[-1]])
         file_namespace['download_url_to_bytesio']=file_bytes
-        selected('sim_api_nodes/util/download_helpers.py',{'download_url_to_file_3d'},file_namespace)
+        selected('comfy_api_nodes/util/download_helpers.py',{'download_url_to_file_3d'},file_namespace)
         for format in ['glb','fbx']:
             file=await file_namespace['download_url_to_file_3d']('https://output.fixture.invalid/model.'+format,'.'+format.upper(),task_id='task-42')
             file_probe.append({'format':file.format,'disk_backed':file.is_disk_backed,'position_after_creation':file.get_source().tell(),'file_name':'task-42.'+format,'bytes_hex':file.get_bytes().hex(),'saved_bytes_hex':(Path(output)/('task-42.'+format)).read_bytes().hex()})
@@ -143,7 +143,7 @@ async def generate():
         else:raise ValueError('missing second-download failure')
     pixels=torch.empty((1,160,160,3),dtype=torch.float32);pixels[...,0]=.5;pixels[...,1]=.25;pixels[...,2]=.125
     actual={'__builtins__':__builtins__,'torch':torch,'np':np,'Image':Image,'BytesIO':BytesIO,'math':math,'uuid':SimpleNamespace(uuid4=lambda:'00000000-0000-4000-8000-000000000000'),'mimetype_to_extension':lambda mime:mime.split('/')[-1].lower()}
-    selected('sim_api_nodes/util/conversions.py',{'tensor_to_bytesio','tensor_to_pil','pil_to_bytesio','downscale_image_tensor','_compute_downscale_dims'},actual)
+    selected('comfy_api_nodes/util/conversions.py',{'tensor_to_bytesio','tensor_to_pil','pil_to_bytesio','downscale_image_tensor','_compute_downscale_dims'},actual)
     png=actual['tensor_to_bytesio'](pixels,total_pixels=2048*2048,mime_type=None).getvalue().hex()
     return {'file_probe':file_probe,'file_failure_residue':failure,'actual_png_hex':png,'versions':{'torch':torch.__version__,'pillow':Image.__version__},'sources':{file:hashlib.sha256((ROOT/file).read_bytes()).hexdigest() for file in FILES},'cases':cases,'errors':errors,'schema_facts':facts,'scope':'actual source execute/Pydantic validation/order and actual upload helper with shape-only encoder injection; native PNG/resize/file/guest acceptance remains separate'}
 parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');args=parser.parse_args();result=asyncio.run(generate());encoded=json.dumps(result,indent=2,ensure_ascii=False)+'\n'

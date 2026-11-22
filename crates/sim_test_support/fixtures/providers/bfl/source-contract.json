@@ -2,13 +2,13 @@
   "schema_version": 1,
   "namespace": "zed.sim.provider.bfl",
   "source_sha256": {
-    "sim_api_nodes/nodes_bfl.py": "78f943d92611ef196cb9e01da6ac686be815e270650760abc168f3c7c525d643",
-    "sim_api_nodes/apis/bfl.py": "162de62b0dea954d1c4c3b405263b92bbeec2fc367f03f296d05083a5a6b89d5",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+    "comfy_api_nodes/nodes_bfl.py": "78f943d92611ef196cb9e01da6ac686be815e270650760abc168f3c7c525d643",
+    "comfy_api_nodes/apis/bfl.py": "162de62b0dea954d1c4c3b405263b92bbeec2fc367f03f296d05083a5a6b89d5",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
   },
   "scope": "Actual pinned node.execute request AST and request-model defaults; actual scalar/aspect/dimension validation helpers; canonical image encoding/mask arithmetic, transport, and image decoding are explicit unexecuted boundaries in this development oracle.",
   "cases": [

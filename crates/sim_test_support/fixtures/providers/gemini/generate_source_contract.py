@@ -4,9 +4,9 @@ from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 DESTINATION=Path(__file__).with_name('source-contract.json')
-SOURCES=['sim_api_nodes/nodes_gemini.py','sim_api_nodes/apis/gemini.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/download_helpers.py']
+SOURCES=['comfy_api_nodes/nodes_gemini.py','comfy_api_nodes/apis/gemini.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/download_helpers.py']
 class Request:
     defaults={}
     def __init__(self,**fields):self.__dict__.update(copy.deepcopy(self.defaults));self.__dict__.update(fields)
@@ -73,7 +73,7 @@ async def generate():
     async def video_output(response,cls=None):return {'native_materializer':'video'}
     def duration(video,max_duration):
         if video.duration>max_duration:raise ValueError(f'Video duration exceeds {max_duration} seconds')
-    namespace.update(sync_op=sync,upload_images_to_simapi=upload_images,upload_image_to_simapi=upload_image,upload_audio_to_simapi=upload_audio,upload_video_to_simapi=upload_video,tensor_to_base64_string=lambda payload,**options:inline('image',payload,**options),audio_to_base64_string=lambda payload,**options:inline('audio',payload,**options),video_to_base64_string=lambda payload,**options:inline('video',payload,**options),get_number_of_images=lambda value:value.shape[0]if len(value.shape)==4 else 1,validate_video_duration=duration,get_image_from_response=image_output,get_video_from_response=video_output)
+    namespace.update(sync_op=sync,upload_images_to_comfyapi=upload_images,upload_image_to_comfyapi=upload_image,upload_audio_to_comfyapi=upload_audio,upload_video_to_comfyapi=upload_video,tensor_to_base64_string=lambda payload,**options:inline('image',payload,**options),audio_to_base64_string=lambda payload,**options:inline('audio',payload,**options),video_to_base64_string=lambda payload,**options:inline('video',payload,**options),get_number_of_images=lambda value:value.shape[0]if len(value.shape)==4 else 1,validate_video_duration=duration,get_image_from_response=image_output,get_video_from_response=video_output)
     validation=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text());function=next(node for node in validation.body if isinstance(node,ast.FunctionDef)and node.name=='validate_string');exec(compile(strip(ast.Module(body=[copy.deepcopy(function)],type_ignores=[])),'<source-validation>','exec'),namespace)
     nodes=ast.parse((SOURCE_ROOT/SOURCES[0]).read_text());selected=[];contracts={}
     helpers={'create_image_parts','_mime_matches','get_parts_by_type','get_text_from_response','calculate_tokens_price','create_video_parts','create_audio_parts','_flatten_images','_flatten_audio','_media_url_part','_media_inline_part','build_gemini_media_parts'}

@@ -6,8 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace,ModuleType
 import aiohttp,numpy as np,torch
 from PIL import Image,UnidentifiedImageError
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_recraft.py','sim_api_nodes/apis/recraft.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/client.py','sim_api_nodes/util/download_helpers.py','sim/utils.py','sim_api/latest/_util/image_types.py']
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+FILES=['comfy_api_nodes/nodes_recraft.py','comfy_api_nodes/apis/recraft.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/download_helpers.py','comfy/utils.py','comfy_api/latest/_util/image_types.py']
 NODES={'RecraftColorRGB':'RecraftColorRGBNode','RecraftControls':'RecraftControlsNode','RecraftStyleV3RealisticImage':'RecraftStyleV3RealisticImageNode','RecraftStyleV3DigitalIllustration':'RecraftStyleV3DigitalIllustrationNode','RecraftStyleV3LogoRaster':'RecraftStyleV3LogoRasterNode','RecraftStyleV3InfiniteStyleLibrary':'RecraftStyleInfiniteStyleLibrary','RecraftCreateStyleNode':'RecraftCreateStyleNode','RecraftTextToImageNode':'RecraftTextToImageNode','RecraftImageToImageNode':'RecraftImageToImageNode','RecraftImageInpaintingNode':'RecraftImageInpaintingNode','RecraftTextToVectorNode':'RecraftTextToVectorNode','RecraftVectorizeImageNode':'RecraftVectorizeImageNode','RecraftReplaceBackgroundNode':'RecraftReplaceBackgroundNode','RecraftRemoveBackgroundNode':'RecraftRemoveBackgroundNode','RecraftCrispUpscaleNode':'RecraftCrispUpscaleNode','RecraftCreativeUpscaleNode':'RecraftCreativeUpscaleNode','RecraftV4TextToImageNode':'RecraftV4TextToImageNode','RecraftV4TextToVectorNode':'RecraftV4TextToVectorNode'}
 torch.set_num_threads(1)
 def selected(path,names,namespace,classes=False):

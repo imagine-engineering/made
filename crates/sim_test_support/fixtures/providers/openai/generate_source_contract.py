@@ -9,8 +9,8 @@ import aiohttp
 import torch
 import numpy as np
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_openai.py','sim_api_nodes/nodes_sora.py','sim_api_nodes/apis/openai.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/client.py','sim/utils.py','sim_api_nodes/util/download_helpers.py']
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+FILES=['comfy_api_nodes/nodes_openai.py','comfy_api_nodes/nodes_sora.py','comfy_api_nodes/apis/openai.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/client.py','comfy/utils.py','comfy_api_nodes/util/download_helpers.py']
 NODES=['OpenAIDalle2','OpenAIDalle3','OpenAIGPTImage1','OpenAIGPTImageNodeV2','OpenAIChatNode','OpenAIChatConfig','OpenAIInputFiles','OpenAIVideoSora2']
 torch.set_num_threads(1)
 def selected(path,names,namespace,classes=False,methods=None):
@@ -35,10 +35,10 @@ async def generate():
     requests=[];polls=[];downloads=[];poll_override={}
     namespace={'__builtins__':__builtins__,'torch':torch,'np':np,'Image':Image,'BytesIO':BytesIO,'math':math,'Enum':Enum,'Optional':Optional,'base64':base64,'os':os,'mimetypes':mimetypes,'IO':SimpleNamespace(ComfyNode=object,NodeOutput=lambda *values:values),'RESPONSES_ENDPOINT':'/proxy/openai/v1/responses'}
     exec(compile((ROOT/FILES[2]).read_text(),str(ROOT/FILES[2]),'exec'),namespace)
-    selected('sim/utils.py',{'common_upscale'},namespace)
-    selected('sim_api_nodes/util/conversions.py',{'downscale_image_tensor','_compute_downscale_dims','tensor_to_pil','tensor_to_base64_string','pil_to_bytesio','tensor_to_bytesio','text_filepath_to_base64_string','text_filepath_to_data_uri'},namespace)
+    selected('comfy/utils.py',{'common_upscale'},namespace)
+    selected('comfy_api_nodes/util/conversions.py',{'downscale_image_tensor','_compute_downscale_dims','tensor_to_pil','tensor_to_base64_string','pil_to_bytesio','tensor_to_bytesio','text_filepath_to_base64_string','text_filepath_to_data_uri'},namespace)
     namespace.update(uuid=SimpleNamespace(uuid4=lambda:'00000000-0000-4000-8000-000000000000'),mimetype_to_extension=lambda mime:mime.split('/')[-1].lower())
-    selected('sim_api_nodes/util/validation_utils.py',{'validate_string','get_number_of_images'},namespace)
+    selected('comfy_api_nodes/util/validation_utils.py',{'validate_string','get_number_of_images'},namespace)
     selected(FILES[0],{'SupportedOpenAIModel','calculate_tokens_price_image_1','calculate_tokens_price_image_1_5','calculate_tokens_price_image_2_0','validate_and_cast_response'},namespace)
     selected(FILES[1],{'Sora2GenerationRequest','Sora2GenerationResponse'},namespace)
     image_stream=BytesIO();Image.new('RGBA',(2,2),(128,64,32,255)).save(image_stream,format='PNG');output_bytes=image_stream.getvalue()

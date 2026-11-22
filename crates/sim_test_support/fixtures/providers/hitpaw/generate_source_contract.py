@@ -2,9 +2,9 @@
 import argparse, ast, asyncio, copy, hashlib, json, logging, math
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 DESTINATION=Path(__file__).with_name('source-contract.json')
-SOURCES=['sim_api_nodes/nodes_hitpaw.py','sim_api_nodes/apis/hitpaw.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/_helpers.py']
+SOURCES=['comfy_api_nodes/nodes_hitpaw.py','comfy_api_nodes/apis/hitpaw.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/_helpers.py']
 class Request:
     defaults={}
     def __init__(self,**fields): self.__dict__.update(copy.deepcopy(self.defaults));self.__dict__.update(fields)
@@ -52,7 +52,7 @@ async def generate():
     async def upload_image(cls,image,**options): media.append({'operation':'upload_image','slot':image.slot,**options});return 'https://storage.fixture.invalid/image'
     async def upload_video(cls,video): media.append({'operation':'upload_video','slot':video.slot,'container':'mp4','codec':'h264'});return 'https://storage.fixture.invalid/video'
     async def download(url,kind): return {'native_materializer':kind,'url':url}
-    namespace.update(sync_op=sync,poll_op=poll,downscale_image_tensor=downscale,upload_image_to_simapi=upload_image,upload_video_to_simapi=upload_video,download_url_to_image_tensor=lambda url:download(url,'image'),download_url_to_video_output=lambda url:download(url,'video'))
+    namespace.update(sync_op=sync,poll_op=poll,downscale_image_tensor=downscale,upload_image_to_comfyapi=upload_image,upload_video_to_comfyapi=upload_video,download_url_to_image_tensor=lambda url:download(url,'image'),download_url_to_video_output=lambda url:download(url,'video'))
     validation=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text());selected=[copy.deepcopy(node) for node in validation.body if isinstance(node,ast.FunctionDef) and node.name in {'get_image_dimensions','validate_video_duration'}];exec(compile(strip(ast.Module(body=selected,type_ignores=[])),'<source-validation>','exec'),namespace)
     nodes=ast.parse((SOURCE_ROOT/SOURCES[0]).read_text());selected=[];contracts={}
     for node in nodes.body:

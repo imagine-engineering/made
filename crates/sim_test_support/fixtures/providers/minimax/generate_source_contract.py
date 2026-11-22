@@ -4,8 +4,8 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_minimax.py','sim_api_nodes/apis/minimax.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/_helpers.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_minimax.py','comfy_api_nodes/apis/minimax.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/_helpers.py']
 class TensorProbe:
  def __init__(self,count=1):self.shape=(count,720,720,3)
 def serial(value):
@@ -38,7 +38,7 @@ async def generate():
   downloads.append({'url':url,'timeout':options.get('timeout'),'max_retries':options.get('max_retries',5)})
   if override.get('download_failures',{}).get(url):raise ValueError('source video construction/download failure')
   return {'canonical_video_from_file':url}
- namespace.update(sync_op=sync,poll_op=poll,upload_images_to_simapi=upload,download_url_to_video_output=download)
+ namespace.update(sync_op=sync,poll_op=poll,upload_images_to_comfyapi=upload,download_url_to_video_output=download)
  validators=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text());exec(compile(strip(ast.Module(body=[copy.deepcopy(node) for node in validators.body if isinstance(node,ast.FunctionDef) and node.name=='validate_string'],type_ignores=[])),'<actual-source-validation>','exec'),namespace)
  registered=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='MinimaxExtension');registered=next(node for node in ast.walk(registered) if isinstance(node,ast.Return));symbols=[ast.unparse(member) for member in registered.value.elts]
  selected=[]

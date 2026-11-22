@@ -6,9 +6,9 @@ from io import BytesIO
 import numpy as np
 import torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
 DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_magnific.py','sim_api_nodes/apis/magnific.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/client.py','sim_api_nodes/util/download_helpers.py']
+FILES=['comfy_api_nodes/nodes_magnific.py','comfy_api_nodes/apis/magnific.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/download_helpers.py']
 NODES=['MagnificImageRelightNode','MagnificImageSkinEnhancerNode','MagnificImageStyleTransferNode','MagnificImageUpscalerCreativeNode','MagnificImageUpscalerPreciseV2Node']
 torch.set_num_threads(1)
 def selected(path,names,namespace,classes=False):
@@ -54,7 +54,7 @@ async def generate():
         polls.append({'path':endpoint.path,'method':endpoint.method,'poll_interval':options.get('poll_interval',5.),'progress_price_usd':options['price_extractor'](None) if options.get('price_extractor') else None})
         return response_model.model_validate({'data':{'task_id':'task-42','status':'done','generated':['https://output.fixture.invalid/first.png','https://output.fixture.invalid/ignored.png']}})
     async def download(url):downloads.append({'url':url,'mode':'RGBA'});return {'url':url,'mode':'RGBA'}
-    namespace.update(upload_images_to_simapi=upload,ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method),sync_op=sync,poll_op=poll,download_url_to_image_tensor=download)
+    namespace.update(upload_images_to_comfyapi=upload,ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method),sync_op=sync,poll_op=poll,download_url_to_image_tensor=download)
     selected(FILES[0],set(NODES),namespace,True)
     def base(node):
         settings={
@@ -136,14 +136,14 @@ async def generate():
     uploads.clear();requests.clear();storage=[];puts=[]
     namespace.update(np=np,Image=Image,BytesIO=BytesIO,uuid=SimpleNamespace(uuid4=lambda:'00000000-0000-4000-8000-000000000000'),mimetype_to_extension=lambda mime:mime.split('/')[-1].lower(),time=SimpleNamespace(monotonic=lambda:0.))
     selected(FILES[3],{'tensor_to_bytesio','tensor_to_pil','pil_to_bytesio','downscale_image_tensor','_compute_downscale_dims'},namespace)
-    selected(FILES[4],{'UploadRequest','UploadResponse','upload_images_to_simapi','upload_file_to_simapi'},namespace)
+    selected(FILES[4],{'UploadRequest','UploadResponse','upload_images_to_comfyapi','upload_file_to_comfyapi'},namespace)
     async def storage_sync(cls,endpoint,response_model,data,**options):storage.append(data.model_dump(exclude_none=True));return response_model.model_validate({'upload_url':'https://signed.fixture.invalid/input','download_url':'https://storage.fixture.invalid/input.png'})
     async def put(cls,url,stream,**options):puts.append({'url':url,'file_name':stream.name,'bytes_hex':stream.getvalue().hex(),'declared_content_type':options.get('content_type')})
     namespace.update(sync_op=storage_sync,upload_file=put)
     pixel=torch.empty((1,160,160,3),dtype=torch.float32);pixel[...,0]=.5;pixel[...,1]=.25;pixel[...,2]=.125
-    output=await namespace['upload_images_to_simapi'](object,pixel,max_images=1)
+    output=await namespace['upload_images_to_comfyapi'](object,pixel,max_images=1)
     reference=pixel.repeat(1,1,2,1)
-    output+=await namespace['upload_images_to_simapi'](object,reference,max_images=1)
+    output+=await namespace['upload_images_to_comfyapi'](object,reference,max_images=1)
     client_constants={};client_defaults={}
     for node in ast.parse((ROOT/FILES[5]).read_text()).body:
         if isinstance(node,ast.Assign) and any(getattr(target,'id',None) in {'COMPLETED_STATUSES','FAILED_STATUSES','QUEUED_STATUSES'} for target in node.targets):client_constants[node.targets[0].id]=ast.literal_eval(node.value)

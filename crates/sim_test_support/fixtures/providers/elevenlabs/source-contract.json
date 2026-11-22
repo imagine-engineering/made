@@ -2,13 +2,13 @@
   "schema_version": 1,
   "namespace": "zed.sim.provider.elevenlabs",
   "source_sha256": {
-    "sim_api_nodes/nodes_elevenlabs.py": "e68033612e73bffa5c9a4353f3a2a280a8803a257debd86e32b0c35dbe9590ef",
-    "sim_api_nodes/apis/elevenlabs.py": "46a4376cadf34f8d192c9b23cd8261e61adca31961ca98ae4b2a9d5912552545",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+    "comfy_api_nodes/nodes_elevenlabs.py": "e68033612e73bffa5c9a4353f3a2a280a8803a257debd86e32b0c35dbe9590ef",
+    "comfy_api_nodes/apis/elevenlabs.py": "46a4376cadf34f8d192c9b23cd8261e61adca31961ca98ae4b2a9d5912552545",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
   },
   "scope": "Actual pinned node/request/default and multipart plain-field AST; MP4/AAC input encoding, storage upload, UUID generation and native audio/custom voice materialization are explicit canonical owner boundaries.",
   "contracts": {
@@ -20,7 +20,7 @@
         "num_speakers",
         "seed"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.String.Output(display_name='text'), IO.String.Output(display_name='language_code'), IO.String.Output(display_name='words_json')]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.0073,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
     },
@@ -42,7 +42,7 @@
         "seed",
         "output_format"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/1K chars\"}}"
     },
@@ -50,7 +50,7 @@
       "arguments": [
         "audio"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
     },
@@ -60,7 +60,7 @@
         "model",
         "output_format"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.14,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
     },
@@ -69,7 +69,7 @@
         "files",
         "remove_background_noise"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Custom(ELEVENLABS_VOICE).Output(display_name='voice')]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.15}"
     },
@@ -83,7 +83,7 @@
         "seed",
         "remove_background_noise"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/minute\"}}"
     },
@@ -97,7 +97,7 @@
         "seed",
         "output_format"
       ],
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge_expr": "{\"type\":\"usd\",\"usd\":0.24,\"format\":{\"approximate\":true,\"suffix\":\"/1K chars\"}}"
     }

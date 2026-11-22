@@ -7,7 +7,7 @@ from pathlib import Path
 from types import ModuleType,SimpleNamespace
 import numpy as np,torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
 FILES=['comfy_api_nodes/nodes_wavespeed.py','comfy_api_nodes/apis/wavespeed.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy/utils.py','comfy_api_nodes/util/client.py']
 NODES=['WavespeedFlashVSRNode','WavespeedImageUpscaleNode'];VIDEO=Path(__file__).with_name('encoded-video.mp4');IMAGE=Path(__file__).with_name('downloaded-image.png');torch.set_num_threads(1)
 def selected(file,names,namespace,classes=False):

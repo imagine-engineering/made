@@ -2,9 +2,9 @@
 import argparse, ast, asyncio, base64, copy, hashlib, json, logging, math, re
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 DESTINATION=Path(__file__).with_name('source-contract.json')
-SOURCES=['sim_api_nodes/nodes_bytedance.py','sim_api_nodes/nodes_bytedance_llm.py','sim_api_nodes/apis/bytedance.py','sim_api_nodes/apis/bytedance_llm.py','sim_api_nodes/util/client.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py']
+SOURCES=['comfy_api_nodes/nodes_bytedance.py','comfy_api_nodes/nodes_bytedance_llm.py','comfy_api_nodes/apis/bytedance.py','comfy_api_nodes/apis/bytedance_llm.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py']
 class Media:
     def __init__(self,name,kind='image',count=1,width=640,height=640,duration=2.5):
         self.name,self.kind,self.count,self.width,self.height,self.duration=name,kind,count,width,height,duration
@@ -62,7 +62,7 @@ async def generate():
     async def download(url):return url
     namespace={'__builtins__':__builtins__,'__name__':'source_oracle','classmethod':classmethod,'Field':field,'BaseModel':Request,'math':math,'re':re,'logging':logging,
       'IO':SimpleNamespace(ComfyNode=object,NodeOutput=lambda *values:values),'ApiEndpoint':lambda path,method='GET':SimpleNamespace(path=path,method=method),'sync_op':sync,'poll_op':poll,
-      'upload_images_to_simapi':upload_many,'upload_image_to_simapi':upload_one,'upload_video_to_simapi':upload_video,'download_url_to_image_tensor':download,'download_url_to_video_output':download,
+      'upload_images_to_comfyapi':upload_many,'upload_image_to_comfyapi':upload_one,'upload_video_to_comfyapi':upload_video,'download_url_to_image_tensor':download,'download_url_to_video_output':download,
       'get_number_of_images':lambda media:media.count,'validate_image_aspect_ratio':lambda *args,**kwargs:None,'validate_image_dimensions':lambda *args,**kwargs:None,'validate_video_dimensions':lambda *args,**kwargs:None,
       'image_tensor_pair_to_batch':lambda first,last:[first,last],'PromptServer':SimpleNamespace(instance=SimpleNamespace(send_progress_text=lambda *args:None)),
       'torch':SimpleNamespace(cat=lambda images:images),'base64':SimpleNamespace(b64decode=lambda value:value),'audio_bytes_to_audio_input':lambda value:'canonical audio decode boundary',

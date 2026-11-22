@@ -2,14 +2,14 @@
   "schema_version": 1,
   "namespace": "zed.sim.provider.grok",
   "source_sha256": {
-    "sim_api_nodes/nodes_grok.py": "b74dd5886965e2f98d8ae46ec207b13c820c4ee366d4b6486c545780b07c19c7",
-    "sim_api_nodes/apis/grok.py": "02855f0e14d4561abbd181dcf4665383afbf170afec44ad405d8ef5fee4fdb51",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+    "comfy_api_nodes/nodes_grok.py": "b74dd5886965e2f98d8ae46ec207b13c820c4ee366d4b6486c545780b07c19c7",
+    "comfy_api_nodes/apis/grok.py": "02855f0e14d4561abbd181dcf4665383afbf170afec44ad405d8ef5fee4fdb51",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
   },
   "scope": "Actual request/preflight/price AST and source polling defaults; native media encoding/upload/materialization are explicit structural boundaries only.",
   "contracts": {
@@ -26,7 +26,7 @@
         "resolution": "1K"
       },
       "node_identifier": "GrokImageNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output()]",
       "deprecated": false
     },
@@ -44,7 +44,7 @@
         "aspect_ratio": "auto"
       },
       "node_identifier": "GrokImageEditNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output()]",
       "deprecated": true
     },
@@ -56,7 +56,7 @@
       ],
       "defaults": {},
       "node_identifier": "GrokImageEditNodeV2",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Image.Output()]",
       "deprecated": false
     },
@@ -74,7 +74,7 @@
         "image": null
       },
       "node_identifier": "GrokVideoNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]",
       "deprecated": false
     },
@@ -87,7 +87,7 @@
       ],
       "defaults": {},
       "node_identifier": "GrokVideoEditNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]",
       "deprecated": false
     },
@@ -99,7 +99,7 @@
       ],
       "defaults": {},
       "node_identifier": "GrokVideoReferenceNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]",
       "deprecated": false
     },
@@ -112,7 +112,7 @@
       ],
       "defaults": {},
       "node_identifier": "GrokVideoExtendNode",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]",
       "deprecated": false
     }

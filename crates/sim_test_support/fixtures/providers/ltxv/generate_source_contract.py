@@ -6,8 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_ltxv.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/_helpers.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_ltxv.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/_helpers.py']
 class TensorProbe:
     def __init__(self,count=1): self.shape=(count,720,720,3);self.ndim=4
 
@@ -35,7 +35,7 @@ async def generate():
         requests.append({'path':endpoint.path,'method':endpoint.method,'body':data.model_dump(mode='json',exclude_none=True),'options':options});return raw
     async def upload(cls,image,**options):
         media.append({'image':serial(image),'operation':'upload_images','max_images':options.get('max_images',8),'mime_type':options.get('mime_type'),'wait_label':'Uploading','show_batch_index':True,'total_pixels':4194304});return ['https://storage.fixture.invalid/source-image.png']
-    namespace.update(sync_op_raw=sync,upload_images_to_simapi=upload)
+    namespace.update(sync_op_raw=sync,upload_images_to_comfyapi=upload)
     helpers=ast.parse((SOURCE_ROOT/SOURCES[2]).read_text());selection=[copy.deepcopy(node) for node in helpers.body if isinstance(node,ast.FunctionDef) and node.name in {'validate_string','get_number_of_images'}];exec(compile(strip(ast.Module(body=selection,type_ignores=[])),'<source-validation>','exec'),namespace)
     selected=[];expression=None
     for node in tree.body:

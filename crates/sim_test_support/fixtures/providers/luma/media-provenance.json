@@ -7,7 +7,7 @@
     "acceptance": "real encoded bytes into rejecting RGBA canonical callback; no native tensor allocation claim"
   },
   "downloaded-video.mp4": {
-    "source": "projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
+    "source": "projects/comfy/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4",
     "producer": "pinned frontend browser asset",
     "source_wrapper": "download_url_to_video_output -> InputImpl.VideoFromFile",
     "bytes": 6163,

@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_luma.py','sim_api_nodes/apis/luma.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/download_helpers.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_luma.py','comfy_api_nodes/apis/luma.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/download_helpers.py']
 class TensorProbe:
     def __init__(self,slot='image',count=1):self.slot=slot;self.shape=(count,720,720,3)
 class VideoProbe:
@@ -58,7 +58,7 @@ async def generate():
         media.append({'operation':'upload_video','video':serial(video),'max_duration':options.get('max_duration'),'mime_type':'video/mp4'});return 'https://storage.fixture.invalid/video.mp4'
     async def download_image(url):downloads.append({'kind':'IMAGE','url':url,'color_mode':'RGBA'});return {'canonical_image':url}
     async def download_video(url):downloads.append({'kind':'VIDEO','url':url});return {'canonical_video':url}
-    namespace.update(sync_op=sync,poll_op=poll,upload_images_to_simapi=upload_images,upload_image_to_simapi=upload_image,upload_video_to_simapi=upload_video,download_url_to_image_tensor=download_image,download_url_to_video_output=download_video)
+    namespace.update(sync_op=sync,poll_op=poll,upload_images_to_comfyapi=upload_images,upload_image_to_comfyapi=upload_image,upload_video_to_comfyapi=upload_video,download_url_to_image_tensor=download_image,download_url_to_video_output=download_video)
     helpers=ast.parse((SOURCE_ROOT/SOURCES[3]).read_text());exec(compile(strip(ast.Module(body=[copy.deepcopy(node) for node in helpers.body if isinstance(node,ast.FunctionDef) and node.name=='validate_string'],type_ignores=[])),'<actual-source-validation>','exec'),namespace)
     selected=[];prices={}
     for node in tree.body:

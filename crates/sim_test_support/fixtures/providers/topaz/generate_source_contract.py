@@ -5,10 +5,10 @@ from pathlib import Path
 from types import ModuleType,SimpleNamespace
 import aiohttp,numpy as np,torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_topaz.py','sim_api_nodes/apis/topaz.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/client.py','sim/utils.py','sim_api/latest/_input_impl/video_types.py']
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+FILES=['comfy_api_nodes/nodes_topaz.py','comfy_api_nodes/apis/topaz.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/client.py','comfy/utils.py','comfy_api/latest/_input_impl/video_types.py']
 NODES=['TopazImageEnhance','TopazVideoEnhance','TopazVideoEnhanceV2'];torch.set_num_threads(1)
-VIDEO=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4').read_bytes()
+VIDEO=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI-Frontend/browser_tests/assets/plain_video.mp4').read_bytes()
 def selected(path,names,namespace,classes=False):
  output=[]
  for original in ast.parse((ROOT/path).read_text()).body:
@@ -40,7 +40,7 @@ async def generate():
  selected(FILES[5],{'get_fs_object_size'},namespace)
  async def upload_file(cls,stream,filename,mime,wait_label='Uploading',progress_origin_ts=None):
   uploads.append({'file_name':filename,'mime_type':mime,'bytes_hex':stream.getvalue().hex(),'wait_label':wait_label});events.append({'upload':len(uploads)-1});return f'https://source.fixture.invalid/input-{len(uploads)}.bin'
- namespace['upload_file_to_simapi']=upload_file;selected(FILES[3],{'upload_images_to_simapi'},namespace)
+ namespace['upload_file_to_comfyapi']=upload_file;selected(FILES[3],{'upload_images_to_comfyapi'},namespace)
  # Execute the original source FormData branch, rather than a hand-written wire encoder.
  form_branch=next(node for node in ast.walk(ast.parse((ROOT/FILES[6]).read_text())) if isinstance(node,ast.If) and node.lineno==663)
  async def source_payload(body,method='POST',content_type='multipart/form-data'):

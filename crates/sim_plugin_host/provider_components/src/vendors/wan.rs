@@ -278,9 +278,9 @@ impl NativeOperation {
             Self::ValidateVideoDuration => "validate_video_duration",
             Self::ValidateImageDimensions => "validate_image_dimensions",
             Self::ValidateImageAspectRatio => "validate_image_aspect_ratio",
-            Self::UploadImage => "upload_image_to_simapi",
-            Self::UploadAudio => "upload_audio_to_simapi",
-            Self::UploadVideo => "upload_video_to_simapi",
+            Self::UploadImage => "upload_image_to_comfyapi",
+            Self::UploadAudio => "upload_audio_to_comfyapi",
+            Self::UploadVideo => "upload_video_to_comfyapi",
             Self::ApiConstruct => "api_construct",
         }
     }
@@ -1614,7 +1614,9 @@ fn decode_hex(value: &Value) -> Result<Vec<u8>, ConformanceError> {
         return Err(ConformanceError::InvalidRequest);
     }
     text.as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| {
             std::str::from_utf8(pair)
                 .map_err(|_| ConformanceError::InvalidRequest)
@@ -2323,8 +2325,8 @@ mod tests {
             assert!(
                 source["contracts"][node.node_identifier]["hidden"]
                     .as_str()
-                    .is_some_and(|hidden| hidden.contains("auth_token_sim_org")
-                        && hidden.contains("api_key_sim_org"))
+                    .is_some_and(|hidden| hidden.contains("auth_token_comfy_org")
+                        && hidden.contains("api_key_comfy_org"))
             );
         }
         for record in source["cases"]
@@ -2430,7 +2432,7 @@ mod tests {
         let slots: Vec<_> = owner
             .operations
             .iter()
-            .filter(|operation| operation["kind"] == "upload_video_to_simapi")
+            .filter(|operation| operation["kind"] == "upload_video_to_comfyapi")
             .map(|operation| operation["input"]["native_slot"].clone())
             .collect();
         assert_eq!(slots, vec![json!("z"), json!("a")]);

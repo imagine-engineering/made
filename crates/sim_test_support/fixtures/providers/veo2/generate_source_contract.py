@@ -6,9 +6,9 @@ from urllib.parse import urlparse
 import aiohttp
 import numpy as np
 from PIL import Image
-SOURCE=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');ROOT=Path(__file__).resolve().parent
-FRONTEND=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI-Frontend');MP4=(FRONTEND/'browser_tests/assets/plain_video.mp4').read_bytes()
-PATHS=['sim_api_nodes/nodes_veo2.py','sim_api_nodes/apis/veo.py','sim_api_nodes/util/client.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/_helpers.py','sim_api/latest/_input_impl/video_types.py']
+SOURCE=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');ROOT=Path(__file__).resolve().parent
+FRONTEND=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI-Frontend');MP4=(FRONTEND/'browser_tests/assets/plain_video.mp4').read_bytes()
+PATHS=['comfy_api_nodes/nodes_veo2.py','comfy_api_nodes/apis/veo.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/_helpers.py','comfy_api/latest/_input_impl/video_types.py']
 class Tensor:
  def __init__(self,slot='image',count=1,channels=3,array=None):self.slot=slot;self.array=np.tile(np.array([.5,.25,.125]+([.375] if channels==4 else []),dtype=np.float32),(count,2,2,1)) if array is None else array
  @property
@@ -33,13 +33,13 @@ def strip(node):
 async def generate():
  logging.disable(logging.CRITICAL);requests=[];media=[];downloads=[];delays=[];progress=[];polls=[];overrides={};contracts={}
  namespace={'__builtins__':__builtins__,'__name__':'actual_veo_source_probe','base64':base64,'BytesIO':io.BytesIO,'Image':Image,'np':np,'math':math,'json':json,'asyncio':asyncio,'contextlib':contextlib,'logging':logging,'dataclass':dataclass,'IO':SimpleNamespace(ComfyNode=type('ComfyNode',(),{}),NodeOutput=lambda *values:values),'time':SimpleNamespace(monotonic=lambda:0.0),'is_processing_interrupted':lambda:False}
- hidden=SimpleNamespace(auth_token_sim_org='capability-token',api_key_sim_org='capability-api-key',sim_usage_source=None)
+ hidden=SimpleNamespace(auth_token_comfy_org='capability-token',api_key_comfy_org='capability-api-key',comfy_usage_source=None)
  namespace['IO'].ComfyNode.hidden=hidden;namespace['get_deploy_environment']=lambda:'host'
- helpers=ast.parse((SOURCE/PATHS[5]).read_text());selected=[copy.deepcopy(node) for node in helpers.body if isinstance(node,ast.FunctionDef) and node.name in ['get_auth_header','get_usage_source','get_sim_api_headers']];exec(compile(strip(ast.Module(body=selected,type_ignores=[])),'<actual-Veo-auth-headers>','exec'),namespace)
+ helpers=ast.parse((SOURCE/PATHS[5]).read_text());selected=[copy.deepcopy(node) for node in helpers.body if isinstance(node,ast.FunctionDef) and node.name in ['get_auth_header','get_usage_source','get_comfy_api_headers']];exec(compile(strip(ast.Module(body=selected,type_ignores=[])),'<actual-Veo-auth-headers>','exec'),namespace)
  auth_header_probes=[]
  for token,api_key in [('capability-token','capability-api-key'),(None,'capability-api-key'),(None,None)]:
-  hidden.auth_token_sim_org=token;hidden.api_key_sim_org=api_key;auth_header_probes.append({'auth_token_available':bool(token),'api_key_available':bool(api_key),'headers':namespace['get_sim_api_headers'](namespace['IO'].ComfyNode)})
- hidden.auth_token_sim_org='capability-token';hidden.api_key_sim_org='capability-api-key'
+  hidden.auth_token_comfy_org=token;hidden.api_key_comfy_org=api_key;auth_header_probes.append({'auth_token_available':bool(token),'api_key_available':bool(api_key),'headers':namespace['get_comfy_api_headers'](namespace['IO'].ComfyNode)})
+ hidden.auth_token_comfy_org='capability-token';hidden.api_key_comfy_org='capability-api-key'
  exec(compile((SOURCE/PATHS[1]).read_text(),'<actual-Veo-api-models>','exec'),namespace)
  actual_request_model=namespace['VeoGenVidRequest'];construction_probes=[]
  def model_input(value):
@@ -77,7 +77,7 @@ async def generate():
  namespace.update(ProcessingInterrupted=Interrupted,LocalNetworkError=NetworkError,ApiServerError=ApiError,sleep_with_interrupt=delay,_display_time_progress=lambda *args,**kwargs:progress.append(kwargs),utils=SimpleNamespace(ProgressBar=lambda total:SimpleNamespace(update_absolute=lambda *args,**kwargs:None)),ApiEndpoint=lambda path,method='GET',**kwargs:SimpleNamespace(path=path,method=method,headers={}))
  initial={'name':'projects/source/operations/task-1'};final={'done':True,'response':{'raiMediaFilteredCount':0,'videos':[{'bytesBase64Encoded':base64.b64encode(MP4).decode(),'gcsUri':'https://fixture.invalid/video.mp4','mimeType':'video/mp4'},{'gcsUri':'https://fixture.invalid/ignored.mp4'}]}}
  async def raw_sync(cls,endpoint,data=None,**options):
-  body=data.model_dump(mode='json',exclude_none=True) if data else None;record={'header_order':list(namespace['get_sim_api_headers'](cls))+['Content-Type'],'headers':{**namespace['get_sim_api_headers'](cls),'Content-Type':'application/json'},'path':endpoint.path,'method':endpoint.method,'body':body,'json_body_hex':aiohttp.payload.JsonPayload(body)._value.hex(),'options':options};requests.append(record)
+  body=data.model_dump(mode='json',exclude_none=True) if data else None;record={'header_order':list(namespace['get_comfy_api_headers'](cls))+['Content-Type'],'headers':{**namespace['get_comfy_api_headers'](cls),'Content-Type':'application/json'},'path':endpoint.path,'method':endpoint.method,'body':body,'json_body_hex':aiohttp.payload.JsonPayload(body)._value.hex(),'options':options};requests.append(record)
   if endpoint.path.endswith('/generate'):return copy.deepcopy(overrides.get('generate',initial))
   sequence=overrides.get('polls',[final]);index=min(len(polls),len(sequence)-1);value=copy.deepcopy(sequence[index]);polls.append(value);return value
  namespace['sync_op_raw']=raw_sync

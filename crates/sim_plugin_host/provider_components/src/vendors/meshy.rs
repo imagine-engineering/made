@@ -1733,7 +1733,9 @@ mod tests {
         }
         value
             .as_bytes()
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| Ok(u8::from_str_radix(std::str::from_utf8(pair)?, 16)?))
             .collect()
     }

@@ -2446,15 +2446,15 @@ mod tests {
         Ok(cases)
     }
     fn created_source_bytes(case: &CreatedSourceCase) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut pairs = case.raw_json_utf8_hex.as_bytes().chunks_exact(2);
+        let (pairs, remainder) = case.raw_json_utf8_hex.as_bytes().as_chunks::<2>();
         let bytes = pairs
-            .by_ref()
+            .iter()
             .map(|pair| {
                 let digits = std::str::from_utf8(pair)?;
                 Ok(u8::from_str_radix(digits, 16)?)
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-        if !pairs.remainder().is_empty() {
+        if !remainder.is_empty() {
             return Err("source payload hex has an incomplete byte".into());
         }
         Ok(bytes)
@@ -2642,15 +2642,15 @@ mod tests {
         Ok(cases)
     }
     fn seed_source_bytes(case: &SeedSourceCase) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut pairs = case.raw_json_utf8_hex.as_bytes().chunks_exact(2);
+        let (pairs, remainder) = case.raw_json_utf8_hex.as_bytes().as_chunks::<2>();
         let bytes = pairs
-            .by_ref()
+            .iter()
             .map(|pair| {
                 let digits = std::str::from_utf8(pair)?;
                 Ok(u8::from_str_radix(digits, 16)?)
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-        if !pairs.remainder().is_empty() {
+        if !remainder.is_empty() {
             return Err("source seed payload hex has an incomplete byte".into());
         }
         Ok(bytes)

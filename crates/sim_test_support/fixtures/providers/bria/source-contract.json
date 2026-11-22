@@ -3,14 +3,14 @@
   "namespace": "zed.sim.provider.bria",
   "scope": "Actual pinned node.execute AST, request defaults and duration validation; image/mask conversion, storage upload, transport, RGBA/VIDEO decoding and VP9 alpha frames remain explicit unexecuted canonical media boundaries.",
   "source_sha256": {
-    "sim_api_nodes/nodes_bria.py": "267c7bf3cde3d9e57242de1782ee4fcb3394b9c845d79d0f1170379545d67c4b",
-    "sim_api_nodes/apis/bria.py": "040fa223a75afe10200b4cfb91aa755880053c36ebfc479c62d8625a07fe600a",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+    "comfy_api_nodes/nodes_bria.py": "267c7bf3cde3d9e57242de1782ee4fcb3394b9c845d79d0f1170379545d67c4b",
+    "comfy_api_nodes/apis/bria.py": "040fa223a75afe10200b4cfb91aa755880053c36ebfc479c62d8625a07fe600a",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
   },
   "cases": [
     {

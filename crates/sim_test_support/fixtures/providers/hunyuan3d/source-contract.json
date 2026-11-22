@@ -3,13 +3,13 @@
   "namespace": "zed.sim.provider.hunyuan3d",
   "scope": "Actual pinned execute/API/validation/downscale AST; upload encoding, native File3D ownership, RGB archive extraction and allocation remain injected canonical boundaries.",
   "source_sha256": {
-    "sim_api_nodes/nodes_hunyuan3d.py": "b40684e319579f7f1fb43fc513c0a94298602468d777c11a765de728256fbab0",
-    "sim_api_nodes/apis/hunyuan3d.py": "443d3d516c3e5014b450d189cac25976b1bb78ffb0511faa47e91772b15d816c",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+    "comfy_api_nodes/nodes_hunyuan3d.py": "b40684e319579f7f1fb43fc513c0a94298602468d777c11a765de728256fbab0",
+    "comfy_api_nodes/apis/hunyuan3d.py": "443d3d516c3e5014b450d189cac25976b1bb78ffb0511faa47e91772b15d816c",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
   },
   "cases": [
     {

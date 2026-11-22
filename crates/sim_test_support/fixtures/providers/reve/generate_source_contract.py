@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 FOLDER=Path(__file__).resolve().parent
-SOURCE_ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
-SOURCES=['sim_api_nodes/nodes_reve.py','sim_api_nodes/apis/reve.py','sim_api_nodes/util/client.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py']
+SOURCE_ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
+SOURCES=['comfy_api_nodes/nodes_reve.py','comfy_api_nodes/apis/reve.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py']
 class TensorProbe:
  def __init__(self,slot='image',count=1):self.slot=slot;self.shape=(count,720,720,3)
 class TensorArrayProbe:

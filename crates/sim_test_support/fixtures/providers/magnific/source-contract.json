@@ -66,13 +66,13 @@
     }
   },
   "sources": {
-    "sim_api_nodes/nodes_magnific.py": "316eddd16e8b8f9862e1f7ac95a355717c24a4f8be72eee5f2a0b2844dc731de",
-    "sim_api_nodes/apis/magnific.py": "ba86587c4590507ee80324eeffe5e3bba7b354c1c8cb72d3a141d3c8b3647dec",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
+    "comfy_api_nodes/nodes_magnific.py": "316eddd16e8b8f9862e1f7ac95a355717c24a4f8be72eee5f2a0b2844dc731de",
+    "comfy_api_nodes/apis/magnific.py": "ba86587c4590507ee80324eeffe5e3bba7b354c1c8cb72d3a141d3c8b3647dec",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3"
   },
   "versions": {
     "torch": "2.8.0+cpu",

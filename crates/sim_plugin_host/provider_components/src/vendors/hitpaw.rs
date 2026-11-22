@@ -1382,8 +1382,8 @@ mod tests {
         for contract in source["contracts"].as_object().ok_or("contracts")?.values() {
             let hidden = text(&contract["hidden"])?;
             assert!(
-                hidden.contains("auth_token_sim_org")
-                    && hidden.contains("api_key_sim_org")
+                hidden.contains("auth_token_comfy_org")
+                    && hidden.contains("api_key_comfy_org")
                     && hidden.contains("unique_id")
             );
         }

@@ -3,7 +3,7 @@
   "malformed_component": "crates/sim_test_support/fixtures/providers/anthropic/provider_v2_malformed_result_component",
   "oversized_component": "crates/sim_test_support/fixtures/providers/anthropic/provider_v2_oversized_result_component",
   "namespace": "zed.sim.provider.anthropic",
-  "provenance_source": "fixture://sim_api_nodes/nodes_anthropic.py",
+  "provenance_source": "fixture://comfy_api_nodes/nodes_anthropic.py",
   "provenance_publisher": "Zed Anthropic provider fixture",
   "bindings_sha256": "cf0228cb4b3832a98ab8984f2fd050f5615b575cdecb5fda1446aa8d25fb193b",
   "present_secrets": ["sim_org.auth_token", "sim_org.api_key"],

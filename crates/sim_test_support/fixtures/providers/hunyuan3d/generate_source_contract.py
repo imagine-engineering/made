@@ -8,9 +8,9 @@ import torch
 from PIL import Image
 
 torch.set_num_threads(1)
-ROOT = Path('/home/asvegah/repos/sim/projects/sim/ComfyUI')
+ROOT = (Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI')
 DESTINATION = Path(__file__).with_name('source-contract.json')
-SOURCES = ['sim_api_nodes/nodes_hunyuan3d.py','sim_api_nodes/apis/hunyuan3d.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/client.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/download_helpers.py']
+SOURCES = ['comfy_api_nodes/nodes_hunyuan3d.py','comfy_api_nodes/apis/hunyuan3d.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/download_helpers.py']
 NODES = ['Tencent3DPartNode','Tencent3DTextureEditNode','TencentImageToModelNode','TencentModelTo3DUVNode','TencentSmartTopologyNode','TencentTextToModelNode']
 
 def selected(path, names, namespace):
@@ -68,7 +68,7 @@ async def generate():
     async def obj(url):
         downloads.append({'url':url,'kind':'obj_archive','mode':'RGB'})
         return namespace['ObjZipResult'](FileProbe(file_format='obj'),texture='source RGB texture' if obj_mode=='zip' else None)
-    namespace.update(ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method),sync_op=sync,poll_op=poll,upload_image_to_simapi=upload_image,upload_3d_model_to_simapi=upload_model,download_url_to_file_3d=file,download_url_to_image_tensor=image,download_and_extract_obj_zip=obj)
+    namespace.update(ApiEndpoint=lambda path,method='GET':SimpleNamespace(path=path,method=method),sync_op=sync,poll_op=poll,upload_image_to_comfyapi=upload_image,upload_3d_model_to_comfyapi=upload_model,download_url_to_file_3d=file,download_url_to_image_tensor=image,download_and_extract_obj_zip=obj)
     node_classes=[]
     for node in ast.parse((ROOT/SOURCES[0]).read_text()).body:
         if isinstance(node,ast.ClassDef) and node.name in NODES:

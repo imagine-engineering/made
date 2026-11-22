@@ -190,23 +190,30 @@ fn registry_and_fixture_discovery_are_symmetric_without_shared_edits() -> Result
 {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let fixture_root = root.join("../../sim_test_support/fixtures/providers");
-    let mut fixtures = fs::read_dir(fixture_root)?
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry.file_type().is_ok_and(|kind| kind.is_dir()) && entry.file_name() != "common"
-        })
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect::<Vec<_>>();
+    let mut fixtures = Vec::new();
+    for entry in fs::read_dir(fixture_root)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() && entry.file_name() != "common" {
+            fixtures.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
     fixtures.sort();
     let names = DISCOVERED_PROVIDER_COMPONENTS
         .iter()
         .map(|provider| provider.name)
         .collect::<Vec<_>>();
     assert_eq!(names, fixtures);
+    let mut failures = Vec::new();
     for provider in DISCOVERED_PROVIDER_COMPONENTS {
-        provider.run_conformance()?;
+        if let Err(error) = provider.run_conformance() {
+            failures.push(format!("{}: {error}", provider.name));
+        }
     }
-    Ok(())
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n").into())
+    }
 }
 
 fn assert_preflight_failure(plan: InvocationPlan, expected: ConformanceError) {

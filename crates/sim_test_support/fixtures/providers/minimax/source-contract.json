@@ -3,14 +3,14 @@
   "namespace": "zed.sim.provider.minimax",
   "scope": "Pinned registered source AST/Pydantic request/poll/file/download branches; native uploads and VideoFromFile are injected structural probes, not native allocation. Source backup catches construction or download exceptions; real cancellation/worker-loss are terminal owner boundaries.",
   "source_sha256": {
-    "sim_api_nodes/nodes_minimax.py": "33cbc7389f0c5c0f79431ed677b7aa750d4204ab47b9f73549d7d168cddb8a3c",
-    "sim_api_nodes/apis/minimax.py": "30b06dee64de0444a8432248b14edeb8b15065d7574732edb4d20db5f2ebdfc9",
-    "sim_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
+    "comfy_api_nodes/nodes_minimax.py": "33cbc7389f0c5c0f79431ed677b7aa750d4204ab47b9f73549d7d168cddb8a3c",
+    "comfy_api_nodes/apis/minimax.py": "30b06dee64de0444a8432248b14edeb8b15065d7574732edb4d20db5f2ebdfc9",
+    "comfy_api_nodes/util/client.py": "939696eb63765794ecd8a1a90a076fd33118603045a9d55851fd8fb67db60ecc",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/download_helpers.py": "4e8fd026fc3aed39de9ad71c5914e8e736e6ff66aae26446697aa82e01967bc3",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b"
   },
   "registered_symbols": [
     "MinimaxTextToVideoNode",
@@ -32,8 +32,8 @@
         "model": "T2V-01",
         "seed": 0
       },
-      "schema": "IO.Schema(node_id='MinimaxTextToVideoNode', display_name='MiniMax Text to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on a prompt, and optional parameters.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['T2V-01', 'T2V-01-Director'], default='T2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='MinimaxTextToVideoNode', display_name='MiniMax Text to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on a prompt, and optional parameters.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['T2V-01', 'T2V-01-Director'], default='T2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     },
     "MinimaxImageToVideoNode": {
@@ -48,8 +48,8 @@
         "model": "I2V-01",
         "seed": 0
       },
-      "schema": "IO.Schema(node_id='MinimaxImageToVideoNode', display_name='MiniMax Image to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on an image and prompt, and optional parameters.', inputs=[IO.Image.Input('image', tooltip='Image to use as first frame of video generation'), IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['I2V-01-Director', 'I2V-01', 'I2V-01-live'], default='I2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='MinimaxImageToVideoNode', display_name='MiniMax Image to Video', category='partner/video/MiniMax', description='Generates videos synchronously based on an image and prompt, and optional parameters.', inputs=[IO.Image.Input('image', tooltip='Image to use as first frame of video generation'), IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation'), IO.Combo.Input('model', options=['I2V-01-Director', 'I2V-01', 'I2V-01-live'], default='I2V-01', tooltip='Model to use for video generation'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.43}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     },
     "MinimaxHailuoVideoNode": {
@@ -71,8 +71,8 @@
         "resolution": "768P",
         "model": "MiniMax-Hailuo-02"
       },
-      "schema": "IO.Schema(node_id='MinimaxHailuoVideoNode', display_name='MiniMax Hailuo Video', category='partner/video/MiniMax', description='Generates videos from prompt, with optional start frame using the new MiniMax Hailuo-02 model.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True), IO.Image.Input('first_frame_image', tooltip='Optional image to use as the first frame to generate a video.', optional=True), IO.Boolean.Input('prompt_optimizer', default=True, tooltip='Optimize prompt to improve generation quality when needed.', optional=True), IO.Combo.Input('duration', options=[6, 10], default=6, tooltip='The length of the output video in seconds.', optional=True), IO.Combo.Input('resolution', options=['768P', '1080P'], default='768P', tooltip='The dimensions of the video display. 1080p is 1920x1080, 768p is 1366x768.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['resolution', 'duration']), expr='\\n                (\\n                  $prices := {\\n                    \"768p\": {\"6\": 0.28, \"10\": 0.56},\\n                    \"1080p\": {\"6\": 0.49}\\n                  };\\n                  $resPrices := $lookup($prices, $lowercase(widgets.resolution));\\n                  $price := $lookup($resPrices, $string(widgets.duration));\\n                  {\"type\":\"usd\",\"usd\": $price ? $price : 0.43}\\n                )\\n                '))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='MinimaxHailuoVideoNode', display_name='MiniMax Hailuo Video', category='partner/video/MiniMax', description='Generates videos from prompt, with optional start frame using the new MiniMax Hailuo-02 model.', inputs=[IO.String.Input('prompt_text', multiline=True, default='', tooltip='Text prompt to guide the video generation.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, step=1, control_after_generate=True, tooltip='The random seed used for creating the noise.', optional=True), IO.Image.Input('first_frame_image', tooltip='Optional image to use as the first frame to generate a video.', optional=True), IO.Boolean.Input('prompt_optimizer', default=True, tooltip='Optimize prompt to improve generation quality when needed.', optional=True), IO.Combo.Input('duration', options=[6, 10], default=6, tooltip='The length of the output video in seconds.', optional=True), IO.Combo.Input('resolution', options=['768P', '1080P'], default='768P', tooltip='The dimensions of the video display. 1080p is 1920x1080, 768p is 1366x768.', optional=True)], outputs=[IO.Video.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['resolution', 'duration']), expr='\\n                (\\n                  $prices := {\\n                    \"768p\": {\"6\": 0.28, \"10\": 0.56},\\n                    \"1080p\": {\"6\": 0.49}\\n                  };\\n                  $resPrices := $lookup($prices, $lowercase(widgets.resolution));\\n                  $price := $lookup($resPrices, $string(widgets.duration));\\n                  {\"type\":\"usd\",\"usd\": $price ? $price : 0.43}\\n                )\\n                '))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Video.Output()]"
     }
   },

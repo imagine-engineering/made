@@ -2,9 +2,9 @@
 import argparse,ast,asyncio,copy,hashlib,json,uuid
 from pathlib import Path
 from types import SimpleNamespace
-SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/sim/ComfyUI'
+SOURCE_ROOT=Path(__file__).resolve().parents[5]/'projects/comfy/ComfyUI'
 DESTINATION=Path(__file__).with_name('source-contract.json')
-SOURCES=['sim_api_nodes/nodes_elevenlabs.py','sim_api_nodes/apis/elevenlabs.py','sim_api_nodes/util/client.py','sim_api_nodes/util/_helpers.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/conversions.py']
+SOURCES=['comfy_api_nodes/nodes_elevenlabs.py','comfy_api_nodes/apis/elevenlabs.py','comfy_api_nodes/util/client.py','comfy_api_nodes/util/_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/conversions.py']
 class Request:
     defaults={}
     def __init__(self,**fields):self.__dict__.update(copy.deepcopy(self.defaults));self.__dict__.update(fields)
@@ -54,7 +54,7 @@ async def generate():
         uploads.append({'slot':audio['waveform'].slot,'container':container_format,'codec':codec_name,'mime_type':mime_type,'url':'https://storage.fixture.invalid/'+audio['waveform'].slot});return uploads[-1]['url']
     def encode(waveform,sample_rate,container,codec):
         preparations.append({'slot':waveform.slot,'sample_rate':sample_rate,'container':container,'codec':codec});return EncodedProbe(waveform.slot)
-    namespace.update(sync_op=sync,sync_op_raw=sync,upload_audio_to_simapi=upload,audio_tensor_to_contiguous_ndarray=lambda waveform:waveform,audio_ndarray_to_bytesio=encode,audio_bytes_to_audio_input=lambda value:value)
+    namespace.update(sync_op=sync,sync_op_raw=sync,upload_audio_to_comfyapi=upload,audio_tensor_to_contiguous_ndarray=lambda waveform:waveform,audio_ndarray_to_bytesio=encode,audio_bytes_to_audio_input=lambda value:value)
     for node in ast.parse((SOURCE_ROOT/SOURCES[1]).read_text()).body:
         if isinstance(node,ast.ClassDef):
             defaults={}

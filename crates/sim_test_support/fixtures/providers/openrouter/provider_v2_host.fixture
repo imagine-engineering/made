@@ -3,7 +3,7 @@
   "malformed_component": "crates/sim_test_support/fixtures/providers/openrouter/provider_v2_malformed_result_component",
   "oversized_component": "crates/sim_test_support/fixtures/providers/openrouter/provider_v2_oversized_result_component",
   "namespace": "zed.sim.provider.openrouter",
-  "provenance_source": "fixture://sim_api_nodes/nodes_openrouter.py",
+  "provenance_source": "fixture://comfy_api_nodes/nodes_openrouter.py",
   "provenance_publisher": "Zed OpenRouter provider fixture",
   "bindings_sha256": "8b941f79f9560c7ec53819291d84e42d8c68ae2a7a70722143e55e6ea411f741",
   "present_secrets": [

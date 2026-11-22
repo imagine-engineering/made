@@ -4,7 +4,8 @@ use sim_runtime::{
     certify_general_video_codec_package,
 };
 use sim_tensor::{BackendWorkspaceAuthority, CancellationToken};
-use std::{fs, path::Path, process::Command, sync::Arc};
+use smol::process::Command;
+use std::{fs, path::Path, sync::Arc};
 
 const FIXTURE_SIGNER: &str = "sim.fixture.general-video";
 const FIXTURE_PUBLIC_KEY_HEX: &str =
@@ -13,13 +14,16 @@ const FIXTURE_PUBLIC_KEY_HEX: &str =
 fn signed_fixture() -> Result<tempfile::TempDir> {
     let directory = tempfile::tempdir()?;
     for mode in [None, Some("--check")] {
-        let output = Command::new(env!(
-            "CARGO_BIN_EXE_generate_video_codec_package_bootstrap_fixture"
-        ))
-        .args(mode)
-        .arg("--output")
-        .arg(directory.path())
-        .output()?;
+        let output = smol::block_on(async {
+            Command::new(env!(
+                "CARGO_BIN_EXE_generate_video_codec_package_bootstrap_fixture"
+            ))
+            .args(mode)
+            .arg("--output")
+            .arg(directory.path())
+            .output()
+            .await
+        })?;
         if !output.status.success() {
             return Err(anyhow!(
                 "package fixture generator failed: {}",

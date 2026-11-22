@@ -175,11 +175,11 @@
   "namespace": "zed.sim.provider.sonilo",
   "scope": "actual source URLencoded request and NDJSON stream with injected canonical video/audio/clock owners; native allocation pending",
   "source_sha256": {
-    "sim_api_nodes/nodes_sonilo.py": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
-    "sim_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
-    "sim_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
-    "sim_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
-    "sim_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
+    "comfy_api_nodes/nodes_sonilo.py": "0fedcb4659918bc385f511e1b04b202d1f50f578b95f7e5df93d2700836be727",
+    "comfy_api_nodes/util/_helpers.py": "e4dc3b437efb91819a43047476abf62d1661ca88b77bde41b5ac23ed7aee050b",
+    "comfy_api_nodes/util/upload_helpers.py": "aa761b97035139e84250579e58b85497fb64f6f40137ab8089757fbe2dde2c39",
+    "comfy_api_nodes/util/validation_utils.py": "77554cc809f651f54943f73e6391b8899b3a52779d949edfc08166d8fdf86c66",
+    "comfy_api_nodes/util/conversions.py": "632476df7c448efcc80acc045b45a3f1c6cf44540c7883bb380615040cc9d7a2"
   },
   "urlencoded_wire_probes": [
     {
@@ -239,8 +239,8 @@
         "prompt": "",
         "seed": 0
       },
-      "schema": "IO.Schema(node_id='SoniloVideoToMusic', display_name='Sonilo Video to Music', category='partner/audio/Sonilo', description=\"Generate music from video content using Sonilo's AI model. Analyzes the video and creates matching music.\", inputs=[IO.Video.Input('video', tooltip='Input video to generate music from. Maximum duration: 6 minutes.'), IO.String.Input('prompt', default='', multiline=True, tooltip='Optional text prompt to guide music generation. Leave empty for best quality - the model will fully analyze the video content.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, control_after_generate=True, tooltip='Seed for reproducibility. Currently ignored by the Sonilo service but kept for graph consistency.')], outputs=[IO.Audio.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.009,\"format\":{\"suffix\":\"/second\"}}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='SoniloVideoToMusic', display_name='Sonilo Video to Music', category='partner/audio/Sonilo', description=\"Generate music from video content using Sonilo's AI model. Analyzes the video and creates matching music.\", inputs=[IO.Video.Input('video', tooltip='Input video to generate music from. Maximum duration: 6 minutes.'), IO.String.Input('prompt', default='', multiline=True, tooltip='Optional text prompt to guide music generation. Leave empty for best quality - the model will fully analyze the video content.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, control_after_generate=True, tooltip='Seed for reproducibility. Currently ignored by the Sonilo service but kept for graph consistency.')], outputs=[IO.Audio.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.009,\"format\":{\"suffix\":\"/second\"}}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge": "IO.PriceBadge(expr='{\"type\":\"usd\",\"usd\":0.009,\"format\":{\"suffix\":\"/second\"}}')"
     },
@@ -254,8 +254,8 @@
         "duration": 1,
         "seed": 0
       },
-      "schema": "IO.Schema(node_id='SoniloTextToMusic', display_name='Sonilo Text to Music', category='partner/audio/Sonilo', description=\"Generate music from a text prompt using Sonilo's AI model.\", inputs=[IO.String.Input('prompt', default='', multiline=True, tooltip='Text prompt describing the music to generate.'), IO.Int.Input('duration', default=30, min=1, max=360, tooltip='Target duration in seconds. Maximum: 6 minutes.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, control_after_generate=True, tooltip='Seed for reproducibility. Currently ignored by the Sonilo service but kept for graph consistency.')], outputs=[IO.Audio.Output()], hidden=[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['duration']), expr='{\"type\":\"usd\",\"usd\": 0.0025 * widgets.duration}'))",
-      "hidden": "[IO.Hidden.auth_token_sim_org, IO.Hidden.api_key_sim_org, IO.Hidden.unique_id]",
+      "schema": "IO.Schema(node_id='SoniloTextToMusic', display_name='Sonilo Text to Music', category='partner/audio/Sonilo', description=\"Generate music from a text prompt using Sonilo's AI model.\", inputs=[IO.String.Input('prompt', default='', multiline=True, tooltip='Text prompt describing the music to generate.'), IO.Int.Input('duration', default=30, min=1, max=360, tooltip='Target duration in seconds. Maximum: 6 minutes.'), IO.Int.Input('seed', default=0, min=0, max=18446744073709551615, control_after_generate=True, tooltip='Seed for reproducibility. Currently ignored by the Sonilo service but kept for graph consistency.')], outputs=[IO.Audio.Output()], hidden=[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id], is_api_node=True, price_badge=IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['duration']), expr='{\"type\":\"usd\",\"usd\": 0.0025 * widgets.duration}'))",
+      "hidden": "[IO.Hidden.auth_token_comfy_org, IO.Hidden.api_key_comfy_org, IO.Hidden.unique_id]",
       "outputs": "[IO.Audio.Output()]",
       "price_badge": "IO.PriceBadge(depends_on=IO.PriceBadgeDepends(widgets=['duration']), expr='{\"type\":\"usd\",\"usd\": 0.0025 * widgets.duration}')"
     }
@@ -304,12 +304,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d31",
@@ -378,12 +378,12 @@
               "30"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d3330",
@@ -452,12 +452,12 @@
               "360"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d333630",
@@ -526,12 +526,12 @@
               "0"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d30",
@@ -600,12 +600,12 @@
               "-1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d2d31",
@@ -674,12 +674,12 @@
               "361"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2b736f757263652b70726f6d70742b266475726174696f6e3d333631",
@@ -748,12 +748,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d31",
@@ -822,12 +822,12 @@
               "30"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d3330",
@@ -896,12 +896,12 @@
               "360"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d333630",
@@ -970,12 +970,12 @@
               "0"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d30",
@@ -1044,12 +1044,12 @@
               "-1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d2d31",
@@ -1118,12 +1118,12 @@
               "361"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d757369632b7e2b2532422b2532362b2533442b2532462b2533462b254630253946253843253841266475726174696f6e3d333631",
@@ -1192,12 +1192,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d31",
@@ -1266,12 +1266,12 @@
               "30"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d3330",
@@ -1340,12 +1340,12 @@
               "360"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d333630",
@@ -1414,12 +1414,12 @@
               "0"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d30",
@@ -1488,12 +1488,12 @@
               "-1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d2d31",
@@ -1562,12 +1562,12 @@
               "361"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d2531432b6d757369632b253146266475726174696f6e3d333631",
@@ -1636,12 +1636,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d31",
@@ -1710,12 +1710,12 @@
               "30"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d3330",
@@ -1784,12 +1784,12 @@
               "360"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d333630",
@@ -1858,12 +1858,12 @@
               "0"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d30",
@@ -1932,12 +1932,12 @@
               "-1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d2d31",
@@ -2006,12 +2006,12 @@
               "361"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d78787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878266475726174696f6e3d333631",
@@ -2080,12 +2080,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2097,7 +2097,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 0.0,
@@ -2173,12 +2173,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2190,7 +2190,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 30.0,
@@ -2266,12 +2266,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2283,7 +2283,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 360.0,
@@ -2359,12 +2359,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2376,7 +2376,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 0.0,
@@ -2452,12 +2452,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2469,7 +2469,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 30.0,
@@ -2545,12 +2545,12 @@
               "https://fixture.invalid/uploaded.mp4"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d7034",
@@ -2562,7 +2562,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 360.0,
@@ -2642,12 +2642,12 @@
               "source video"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d736f757263652b766964656f",
@@ -2659,7 +2659,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 0.0,
@@ -2739,12 +2739,12 @@
               "source video"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d736f757263652b766964656f",
@@ -2756,7 +2756,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 30.0,
@@ -2836,12 +2836,12 @@
               "source video"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d736f757263652b766964656f",
@@ -2853,7 +2853,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 360.0,
@@ -2933,12 +2933,12 @@
               "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
@@ -2950,7 +2950,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 0.0,
@@ -3030,12 +3030,12 @@
               "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
@@ -3047,7 +3047,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 30.0,
@@ -3127,12 +3127,12 @@
               "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/v2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/v2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "766964656f5f75726c3d6874747073253341253246253246666978747572652e696e76616c696425324675706c6f616465642e6d70342670726f6d70743d787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878",
@@ -3144,7 +3144,7 @@
       ],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 360.0,
@@ -3221,12 +3221,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3295,12 +3295,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3366,12 +3366,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3433,12 +3433,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3501,12 +3501,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3567,12 +3567,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3636,12 +3636,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3825,7 +3825,7 @@
       "requests": [],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 360.0001,
@@ -3872,7 +3872,7 @@
       "requests": [],
       "operations": [
         {
-          "operation": "upload_video_to_simapi",
+          "operation": "upload_video_to_comfyapi",
           "video": {
             "native_slot": "video",
             "duration": 30,
@@ -3918,12 +3918,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -3973,12 +3973,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4028,12 +4028,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4083,12 +4083,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4138,12 +4138,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4193,12 +4193,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4248,12 +4248,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4303,12 +4303,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4358,12 +4358,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4413,12 +4413,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4472,12 +4472,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4531,12 +4531,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4594,12 +4594,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4655,12 +4655,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4716,12 +4716,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",
@@ -4775,12 +4775,12 @@
               "1"
             ]
           ],
-          "url": "https://fixture.invalid/api/proxy/sonilo/t2m/generate",
+          "url": "https://api.comfy.org/proxy/sonilo/t2m/generate",
           "method": "POST",
           "headers": {
             "Authorization": "Bearer capability-token",
             "Comfy-Env": "host",
-            "Comfy-Usage-Source": "simui-api"
+            "Comfy-Usage-Source": "comfyui-api"
           },
           "content_type": "application/x-www-form-urlencoded",
           "body_hex": "70726f6d70743d6d75736963266475726174696f6e3d31",

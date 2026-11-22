@@ -6,8 +6,8 @@ from pathlib import Path
 from types import ModuleType,SimpleNamespace
 import numpy as np,torch
 from PIL import Image
-ROOT=Path('/home/asvegah/repos/sim/projects/sim/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
-FILES=['sim_api_nodes/nodes_runway.py','sim_api_nodes/apis/runway.py','sim_api_nodes/util/conversions.py','sim_api_nodes/util/upload_helpers.py','sim_api_nodes/util/validation_utils.py','sim_api_nodes/util/download_helpers.py','sim_api_nodes/util/client.py','sim/utils.py','sim_api/latest/_input_impl/video_types.py']
+ROOT=(Path(__file__).resolve().parents[5] / 'projects/comfy/ComfyUI');DEST=Path(__file__).with_name('source-contract.json')
+FILES=['comfy_api_nodes/nodes_runway.py','comfy_api_nodes/apis/runway.py','comfy_api_nodes/util/conversions.py','comfy_api_nodes/util/upload_helpers.py','comfy_api_nodes/util/validation_utils.py','comfy_api_nodes/util/download_helpers.py','comfy_api_nodes/util/client.py','comfy/utils.py','comfy_api/latest/_input_impl/video_types.py']
 NODES=['RunwayAleph2KeyframeNode','RunwayAleph2PromptImageNode','RunwayAleph2VideoToVideoNode','RunwayFirstLastFrameNode','RunwayImageToVideoNodeGen3a','RunwayImageToVideoNodeGen4','RunwayTextToImageNode'];torch.set_num_threads(1)
 def selected(path,names,namespace,classes=False):
  output=[]
@@ -57,8 +57,8 @@ async def generate():
    stream.write(encoded_video)
  async def upload_file(cls,stream,filename,mime,wait_label='Uploading',progress_origin_ts=None):
   record={'file_name':filename,'mime_type':mime,'bytes_hex':stream.getvalue().hex(),'wait_label':wait_label};uploads.append(record);events.append({'upload':len(uploads)-1});return f'https://source.fixture.invalid/upload-{len(uploads)}.bin'
- namespace['upload_file_to_simapi']=upload_file
- selected(FILES[3],{'upload_images_to_simapi','upload_image_to_simapi','upload_video_to_simapi'},namespace)
+ namespace['upload_file_to_comfyapi']=upload_file
+ selected(FILES[3],{'upload_images_to_comfyapi','upload_image_to_comfyapi','upload_video_to_comfyapi'},namespace)
  async def sync(cls,endpoint,response_model,data=None,**kwargs):
   requests.append({'path':endpoint.path,'method':endpoint.method,'body':data.model_dump(mode='json',exclude_none=True),'options':kwargs});events.append({'request':endpoint.path})
   return response_model.model_validate({'id':None if options.get('missing_id') else 'task-42'})
