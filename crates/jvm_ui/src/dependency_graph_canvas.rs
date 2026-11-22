@@ -790,6 +790,7 @@ pub struct CanvasState {
     hovered_edge: Option<usize>,
     edge_paths: Vec<Vec<GraphPoint>>,
     pub focus: Option<String>,
+    pub(crate) surface_focus_handle: Option<gpui::FocusHandle>,
     node_focus: BTreeMap<String, gpui::FocusHandle>,
     last_rendered_focus: Option<String>,
     /// Box selection in graph coordinates, if one is being drawn.
@@ -821,6 +822,7 @@ impl CanvasState {
             hover: None,
             hovered_edge: None,
             focus: None,
+            surface_focus_handle: None,
             node_focus: BTreeMap::new(),
             last_rendered_focus: None,
             box_selection: None,
@@ -1206,6 +1208,7 @@ impl gpui::Render for CanvasState {
         let edge_color = Rgba::from(theme.border);
         let edge_inspected_color = Rgba::from(theme.border_selected);
         let edge_muted_color = Rgba::from(theme.text_muted);
+        let focus_border = theme.border_selected;
         let nodes: Vec<(
             GraphPoint,
             String,
@@ -1290,6 +1293,14 @@ impl gpui::Render for CanvasState {
             .overflow_hidden()
             .aria_label("Dependency diagram")
             .role(gpui::Role::Application)
+            .when_some(
+                self.surface_focus_handle.as_ref(),
+                |canvas, focus_handle| {
+                    canvas
+                        .track_focus(focus_handle)
+                        .focus_visible(move |style| style.border_color(focus_border))
+                },
+            )
             .on_scroll_wheel(cx.listener(
                 move |state, event: &ScrollWheelEvent, _, cx: &mut gpui::Context<Self>| {
                     let delta = event.delta.pixel_delta(px(20.0));

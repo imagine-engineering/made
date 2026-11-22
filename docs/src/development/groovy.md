@@ -325,7 +325,9 @@ dependency, or open the Structure overview. Drag blank space to pan. Use
 Command-click or Control-click to toggle nodes in the selection. Shift-drag
 from blank space to extend the selection with a rectangle. Use **Layout** in
 the blank-canvas menu to switch between left-to-right and top-to-bottom ranks.
-Use Tab and Shift-Tab to move between diagram controls and nodes. The canvas
+Use Tab and Shift-Tab to move between diagram controls, the canvas, and nodes.
+On the focused canvas, use {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu}
+for view and layout commands while keeping the current selection. The canvas
 pans to show the focused node when it is clipped. The details overlay shows
 the focused dependency's coordinates and version.
 In the Structure overview, tab to a selected dependency and press Enter or

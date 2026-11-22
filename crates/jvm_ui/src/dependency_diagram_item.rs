@@ -367,6 +367,7 @@ impl DependencyDiagramItem {
         });
         let mut canvas = CanvasState::new(derivation.canvas);
         canvas.selection = derivation.selected;
+        canvas.surface_focus_handle = Some(cx.focus_handle().tab_stop(true));
         let context_state = std::sync::Arc::new(
             crate::dependency_diagram_menu::DependencyDiagramContextState::default(),
         );
@@ -663,18 +664,24 @@ impl DependencyDiagramItem {
         cx.notify();
     }
 
-    /// Opens the context menu for the keyboard-focused node: the platform
-    /// context-menu gesture stages the same target a right-click would and
-    /// shows the menu at the node's screen position.
+    /// Opens the context menu for the focused node or diagram surface.
     fn show_context_menu_for_focus(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         if self.context_handle.is_deployed() {
             return;
         }
         let canvas = self.canvas.read(cx);
-        let focused = canvas
-            .focused_node(window)
-            .or(canvas.focus.as_deref())
-            .or_else(|| canvas.selection.iter().next().map(String::as_str));
+        let surface_focused = canvas
+            .surface_focus_handle
+            .as_ref()
+            .is_some_and(|focus| focus.is_focused(window));
+        let focused = if surface_focused {
+            None
+        } else {
+            canvas
+                .focused_node(window)
+                .or(canvas.focus.as_deref())
+                .or_else(|| canvas.selection.iter().next().map(String::as_str))
+        };
         let target = stage_dependency_diagram_target(focused, &canvas.selection);
         let origin = *canvas.canvas_origin.lock().expect("canvas origin");
         let screen = if let Some(position) = focused.and_then(|id| canvas.node_screen_position(id))
@@ -2716,24 +2723,64 @@ mod tests {
             "focus returns to the exact dependency after Escape"
         );
 
-        item.update(cx, |item, cx| {
+        let viewport = item.update(cx, |item, cx| {
             item.canvas.update(cx, |canvas, cx| {
-                canvas.focus = None;
-                canvas.selection.clear();
+                canvas.select_node("c1", false, false);
+                canvas.select_node("c2", true, false);
                 cx.notify();
-            });
+                canvas.viewport.clone()
+            })
         });
         cx.update(|window, cx| {
+            window.activate_a11y_for_test();
             window.focus(&item.read(cx).focus_handle(cx), cx);
             window.draw(cx).clear(cx);
         });
+        assert!(
+            (0..32).any(|_| {
+                cx.simulate_keystrokes("tab");
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                    let tree: serde_json::Value =
+                        serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram"))
+                            .expect("accessibility JSON");
+                    tree["gpui_focus"].as_str().is_some_and(|focus| {
+                        let aria = &tree["nodes"][focus]["aria"];
+                        aria["label"] == "Dependency diagram" && aria["role"] == "Application"
+                    })
+                })
+            }),
+            "Tab reaches the diagram canvas with nodes selected"
+        );
+        let canvas_focus = cx.update(|window, cx| window.focused(cx).expect("canvas focus"));
         cx.simulate_keystrokes("shift-f10");
         assert!(
             context_handle.is_deployed(),
             "the gesture can open the blank-canvas menu"
         );
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram menu"))
+                    .expect("accessibility JSON");
+            assert!(
+                tree["nodes"]
+                    .as_object()
+                    .expect("menu nodes")
+                    .values()
+                    .any(|node| { node["aria"]["label"] == "Layout" }),
+                "the menu offers the canvas-only Layout submenu"
+            );
+        });
         cx.simulate_keystrokes("escape");
         assert!(!context_handle.is_deployed());
+        assert!(cx.update(|window, _| canvas_focus.is_focused(window)));
+        item.read_with(cx, |item, cx| {
+            let canvas = item.canvas.read(cx);
+            assert_eq!(canvas.selection, BTreeSet::from(["c1".into(), "c2".into()]));
+            assert_eq!(canvas.viewport.offset, viewport.offset);
+            assert_eq!(canvas.viewport.scale, viewport.scale);
+        });
     }
 
     #[gpui::test]
