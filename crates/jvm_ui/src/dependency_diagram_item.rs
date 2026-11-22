@@ -189,6 +189,15 @@ impl DependencyDiagramScope {
             Self::MavenScope(label) => label.clone(),
         }
     }
+
+    fn maven_scope(&self) -> crate::dependencies_panel::MavenGraphScope {
+        match self {
+            Self::MavenScope(label) => {
+                crate::dependencies_panel::maven_graph_scope_from_label(label).unwrap_or_default()
+            }
+            Self::GradleConfiguration(_) => Default::default(),
+        }
+    }
 }
 
 /// Everything the item needs to re-derive the canvas from admitted facts
@@ -642,12 +651,7 @@ impl DependencyDiagramItem {
         let (selection_set_len, has_matching_pin, accepts_set) = panel
             .read(cx)
             .diagram_comparison_availability(&source.selection, target.node());
-        let maven_scope = match &self.scope {
-            DependencyDiagramScope::MavenScope(scope) => {
-                crate::dependencies_panel::maven_graph_scope_from_label(scope)
-            }
-            DependencyDiagramScope::GradleConfiguration(_) => Default::default(),
-        };
+        let maven_scope = self.scope.maven_scope();
         DependencyDiagramMenuSnapshot {
             selection_set_len,
             has_inspection: !canvas.inspected.is_empty(),
@@ -764,7 +768,7 @@ impl DependencyDiagramItem {
             return Ok(None);
         };
         let inspection = source.panel.update(cx, |panel, cx| {
-            panel.inspect_diagram_graph(&source.selection, node, mode, cx)
+            panel.inspect_diagram_graph(&source.selection, node, mode, self.scope.maven_scope(), cx)
         })??;
         let edges = BTreeSet::from_iter(inspection.edges);
         let visible = self.canvas.update(cx, |canvas, cx| {

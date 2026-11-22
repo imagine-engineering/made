@@ -871,6 +871,20 @@ struct GraphInspection {
     // in `selection`.
     set_members: Vec<String>,
     mode: GraphInspectionMode,
+    maven_scope: MavenGraphScope,
+}
+
+impl GraphInspection {
+    fn scope_description(&self) -> String {
+        if self.maven_scope == MavenGraphScope::All {
+            "uses full admitted graph independently of ordinary fact/scope facets".into()
+        } else {
+            format!(
+                "uses admitted Maven edges in the {} scope",
+                self.maven_scope.label()
+            )
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -968,7 +982,7 @@ fn dependency_canvas_for_selection(
                 // semantics: edges outside the chosen scope are not admitted.
                 let chosen_scope = match scope {
                     Some(DependencyDiagramScope::MavenScope(label)) => {
-                        maven_graph_scope_from_label(label)
+                        maven_graph_scope_from_label(label)?
                     }
                     Some(_) => continue,
                     None => MavenGraphScope::default(),
@@ -1223,7 +1237,7 @@ pub(crate) fn dependency_diagram_source_export(
 }
 
 /// Maps a Maven fact-filter scope label back to its enum value.
-pub(crate) fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
+pub(crate) fn maven_graph_scope_from_label(label: &str) -> Option<MavenGraphScope> {
     maven_graph_scope_labels()
         .into_iter()
         .zip([
@@ -1238,7 +1252,6 @@ pub(crate) fn maven_graph_scope_from_label(label: &str) -> MavenGraphScope {
         ])
         .find(|(option, _)| option == label)
         .map(|(_, scope)| scope)
-        .unwrap_or(MavenGraphScope::All)
 }
 
 pub(crate) fn maven_graph_scope_labels() -> Vec<String> {
@@ -1488,10 +1501,12 @@ fn graph_component_row_id(id: LanguageToolNodeId) -> LanguageToolNodeId {
     LanguageToolNodeId(format!("{}:occurrence:0", id.0))
 }
 
+type GraphRelation<'a> = (&'a str, Option<&'a str>);
+
 fn graph_inspection_edges_bounded<'a>(
     root: &'a str,
     selected: &'a str,
-    edges: &[(&'a str, Option<&'a str>)],
+    edges: &[GraphRelation<'a>],
     mode: GraphInspectionMode,
 ) -> (Vec<usize>, Option<usize>, bool) {
     if matches!(
@@ -1765,6 +1780,28 @@ fn graph_selection_set_analysis(
     (induced, reachability)
 }
 
+fn maven_inspection_relations<'a>(
+    graph: &'a project::jvm_project::MavenDependencyGraph,
+    inspection: &GraphInspection,
+) -> (Vec<usize>, Vec<GraphRelation<'a>>) {
+    graph
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(provider_index, edge)| {
+            if !inspection.maven_scope.matches(&edge.scope) {
+                return None;
+            }
+            let target = if inspection.mode == GraphInspectionMode::ConflictOrigins {
+                edge.omitted.then_some(edge.selected_node.as_str())
+            } else {
+                Some(edge.target_node.as_str())
+            };
+            Some((provider_index, (edge.from_node.as_str(), target)))
+        })
+        .unzip()
+}
+
 fn graph_selection_set_projection(
     snapshot: &JdtlsProjectSnapshot,
     view: BuildToolView,
@@ -1811,11 +1848,7 @@ fn graph_selection_set_projection(
                         )
                     })
                     .collect::<HashMap<_, _>>();
-                let edges = graph
-                    .edges
-                    .iter()
-                    .map(|edge| (edge.from_node.as_str(), Some(edge.target_node.as_str())))
-                    .collect::<Vec<_>>();
+                let (provider_indices, edges) = maven_inspection_relations(graph, inspection);
                 let member_label = |member: &str| {
                     graph
                         .nodes
@@ -1840,8 +1873,15 @@ fn graph_selection_set_projection(
                     row,
                     overlay: DiagramInspection {
                         nodes: inspection.set_members.clone(),
-                        edges: induced,
-                        status: format!("{} dependencies in the comparison set.", members.len()),
+                        edges: induced
+                            .into_iter()
+                            .filter_map(|index| provider_indices.get(index).copied())
+                            .collect(),
+                        status: format!(
+                            "{} dependencies in the comparison set. {}.",
+                            members.len(),
+                            inspection.scope_description()
+                        ),
                     },
                 });
             }
@@ -2005,8 +2045,9 @@ fn build_selection_set_row(
         graph_fact_id(module_id, "inspection-set", &[&inspection.mode.label()]),
         inspection.mode.label().into(),
         format!(
-            "{count} selected dependencies; {induced_count} induced edges; {reachable_pairs} of {pairs} ordered pairs reach each other over the induced subgraph; unresolved edges introduce no relation and absence stays unproven beyond admitted facts; uses full admitted graph independently of ordinary fact/scope facets",
+            "{count} selected dependencies; {induced_count} induced edges; {reachable_pairs} of {pairs} ordered pairs reach each other over the induced subgraph; unresolved edges introduce no relation and absence stays unproven beyond admitted facts; {scope}",
             count = members.len(),
+            scope = inspection.scope_description(),
         ),
         vec![
             graph_fact_row(
@@ -2063,6 +2104,7 @@ fn graph_inspection_projection(
     }
     for module in &snapshot.projects {
         let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
+        let mut maven_provider_indices = None;
         let (graph_id, root, relations, labels, edge_rows, coverage) = match &inspection
             .selection
             .target
@@ -2105,31 +2147,8 @@ fn graph_inspection_projection(
                         )
                     })
                     .collect::<HashMap<_, _>>();
-                let relations = if inspection.mode == GraphInspectionMode::ConflictOrigins {
-                    // Origin navigation reports the mediation facts that lost
-                    // to the selected winner occurrence; relation positions
-                    // stay aligned with the full edge order.
-                    graph
-                        .edges
-                        .iter()
-                        .map(|edge| {
-                            (
-                                edge.from_node.as_str(),
-                                if edge.omitted {
-                                    Some(edge.selected_node.as_str())
-                                } else {
-                                    None
-                                },
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    graph
-                        .edges
-                        .iter()
-                        .map(|edge| (edge.from_node.as_str(), Some(edge.target_node.as_str())))
-                        .collect::<Vec<_>>()
-                };
+                let (provider_indices, relations) = maven_inspection_relations(graph, inspection);
+                maven_provider_indices = Some(provider_indices);
                 let edge_rows = graph.edges.iter().map(|edge| {
                     if inspection.mode == GraphInspectionMode::ConflictOrigins {
                         return (
@@ -2259,6 +2278,7 @@ fn graph_inspection_projection(
             nodes.insert(root);
         }
         let mut rows = Vec::new();
+        let mut provider_edges = Vec::with_capacity(indices.len());
         for &index in &indices {
             if let Some((from, target)) = relations.get(index) {
                 nodes.insert(*from);
@@ -2266,7 +2286,15 @@ fn graph_inspection_projection(
                     nodes.insert(*target);
                 }
             }
-            if let Some((id, label, detail)) = edge_rows.get(index) {
+            let provider_index = match &maven_provider_indices {
+                Some(indices) => match indices.get(index) {
+                    Some(index) => *index,
+                    None => continue,
+                },
+                None => index,
+            };
+            provider_edges.push(provider_index);
+            if let Some((id, label, detail)) = edge_rows.get(provider_index) {
                 rows.push(graph_fact_row(
                     id.clone(),
                     label.clone(),
@@ -2325,6 +2353,7 @@ fn graph_inspection_projection(
             (GraphInspectionMode::ConflictOrigins, _) => "Conflict-origin mediation facts only; every requested version that resolved into the selected winner stays reported; source origin ranges and artifacts unavailable".to_string(),
             (GraphInspectionMode::Neighbours, _) => "Incident edges only; unresolved outgoing edges retained".to_string(),
             (GraphInspectionMode::ShortestRootPaths, Some(distance)) => format!("Shortest distance {distance}; all equal-shortest paths retained without recursive expansion"),
+            (GraphInspectionMode::ShortestRootPaths, None) if inspection.maven_scope != MavenGraphScope::All => "No root path among admitted edges in this scope.".into(),
             (GraphInspectionMode::ShortestRootPaths, None) => "No root path in admitted facts; incomplete coverage cannot prove absence; repair provider/cache settings and recollect".into(),
         };
         let path_status = if truncated {
@@ -2338,11 +2367,12 @@ fn graph_inspection_projection(
                 graph_fact_id(&module_id, "inspection", &[&inspection.node]),
                 inspection.mode.label().into(),
                 format!(
-                    "Selection {}; {count} retained edges; {path_status}; {coverage}; uses full admitted graph independently of ordinary fact/scope facets; literal search still applies",
+                    "Selection {}; {count} retained edges; {path_status}; {coverage}; {}; literal search still applies",
                     labels
                         .get(inspection.node.as_str())
                         .map(String::as_str)
-                        .unwrap_or("Unavailable selection")
+                        .unwrap_or("Unavailable selection"),
+                    inspection.scope_description(),
                 ),
                 vec![
                     graph_fact_row(
@@ -2363,8 +2393,12 @@ fn graph_inspection_projection(
             ),
             overlay: DiagramInspection {
                 nodes: vec![inspection.node.clone()],
-                edges: indices,
-                status: path_status,
+                edges: provider_edges,
+                status: if inspection.maven_scope == MavenGraphScope::All {
+                    path_status
+                } else {
+                    format!("{} scope. {path_status}", inspection.maven_scope.label())
+                },
             },
         });
     }
@@ -3225,6 +3259,7 @@ impl DependenciesPanel {
             anchor: None,
             set_members: Vec::new(),
             mode,
+            maven_scope: MavenGraphScope::All,
         })
     }
 
@@ -3266,6 +3301,7 @@ impl DependenciesPanel {
         selection: &GraphSelection,
         node: &str,
         mode: GraphInspectionMode,
+        maven_scope: MavenGraphScope,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<DiagramInspection> {
         let project = self.project.read(cx);
@@ -3278,6 +3314,7 @@ impl DependenciesPanel {
             anchor: None,
             set_members: Vec::new(),
             mode,
+            maven_scope,
         };
         if mode == GraphInspectionMode::SelectionSetRelations {
             inspection = self
@@ -3286,6 +3323,7 @@ impl DependenciesPanel {
                 .context(
                     "Add at least two dependencies from this graph to the comparison set first.",
                 )?;
+            inspection.maven_scope = maven_scope;
         }
         self.prepare_pair_inspection(&mut inspection)?;
         let projection = graph_inspection_projection(snapshot, self.view, &inspection)
@@ -3347,6 +3385,7 @@ impl DependenciesPanel {
                 .map(|member| member.node.clone())
                 .collect(),
             mode: GraphInspectionMode::SelectionSetRelations,
+            maven_scope: MavenGraphScope::All,
         })
     }
 
@@ -9238,6 +9277,7 @@ mod tests {
             anchor: None,
             set_members: Vec::new(),
             mode: GraphInspectionMode::ConflictOrigins,
+            maven_scope: MavenGraphScope::All,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
             .expect("conflict-origin inspection");
@@ -9365,6 +9405,7 @@ mod tests {
             anchor: None,
             set_members: Vec::new(),
             mode: GraphInspectionMode::AllUsages,
+            maven_scope: MavenGraphScope::All,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
             .expect("all-usages inspection");
@@ -9510,6 +9551,7 @@ mod tests {
             anchor: None,
             set_members: Vec::new(),
             mode: GraphInspectionMode::AllRootPaths,
+            maven_scope: MavenGraphScope::All,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
             .expect("all-root-paths inspection");
@@ -9693,6 +9735,7 @@ mod tests {
             anchor: Some(left_id),
             set_members: Vec::new(),
             mode: GraphInspectionMode::PathsBetween,
+            maven_scope: MavenGraphScope::All,
         };
         let (_, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
             .expect("paths-between inspection");
@@ -9799,6 +9842,7 @@ mod tests {
             anchor: None,
             set_members: vec![left_id, right_id, shared_id.clone()],
             mode: GraphInspectionMode::SelectionSetRelations,
+            maven_scope: MavenGraphScope::All,
         };
         let (id, row) = graph_inspection_row(&snapshot, BuildToolView::Gradle, &inspection)
             .expect("selection-set inspection");
@@ -9848,6 +9892,7 @@ mod tests {
             anchor: None,
             set_members: vec![shared_id, "missing".into()],
             mode: GraphInspectionMode::SelectionSetRelations,
+            maven_scope: MavenGraphScope::All,
         };
         assert!(graph_inspection_row(&snapshot, BuildToolView::Gradle, &stale).is_none());
     }
@@ -15138,6 +15183,84 @@ mod tests {
             diagram_item.read_with(cx, |item, cx| {
                 assert!(item.canvas().read(cx).inspected_edges.is_empty());
             });
+            if provider == GraphFixtureProvider::Maven {
+                let (provided_node, provided_edge) = diagram_item.read_with(cx, |item, cx| {
+                    let edge = item
+                        .canvas()
+                        .read(cx)
+                        .graph
+                        .edges
+                        .iter()
+                        .find(|edge| edge.from == root && edge.label.starts_with("provided"))
+                        .expect("provider-reported provided dependency");
+                    (edge.to.clone(), edge.provider_index)
+                });
+                diagram_item.update(cx, |item, cx| {
+                    item.apply_scope(MavenGraphScope::Provided.label().into(), cx);
+                    item.inspect_canvas_target(
+                        DependencyDiagramMenuCommand::InspectRootPaths,
+                        &DependencyDiagramContextTarget::Node(provided_node),
+                        cx,
+                    );
+                });
+                diagram_item.read_with(cx, |item, cx| {
+                    assert_eq!(
+                        item.canvas().read(cx).inspected_edges,
+                        BTreeSet::from([provided_edge])
+                    );
+                    assert!(
+                        item.notice
+                            .as_ref()
+                            .is_some_and(|notice| notice.contains("Shortest distance 1"))
+                    );
+                });
+                diagram_item.update(cx, |item, cx| {
+                    item.apply_scope("__unreported-scope__".into(), cx);
+                });
+                diagram_item.read_with(cx, |item, cx| {
+                    assert_eq!(item.scope().label(), MavenGraphScope::Provided.label());
+                    assert_eq!(
+                        item.canvas().read(cx).inspected_edges,
+                        BTreeSet::from([provided_edge])
+                    );
+                });
+                diagram_item.update(cx, |item, cx| {
+                    item.inspect_canvas_target(
+                        DependencyDiagramMenuCommand::InspectRootPaths,
+                        &target,
+                        cx,
+                    );
+                });
+                diagram_item.read_with(cx, |item, cx| {
+                    assert!(item.canvas().read(cx).inspected_edges.is_empty());
+                    assert!(item.notice.as_ref().is_some_and(|notice| {
+                        notice.contains("No root path among admitted edges in this scope")
+                    }));
+                });
+                panel.read_with(cx, |panel, _| {
+                    assert_eq!(
+                        panel
+                            .graph_inspection
+                            .as_ref()
+                            .expect("shared scoped result")
+                            .maven_scope,
+                        MavenGraphScope::Provided
+                    );
+                });
+                diagram_item.update(cx, |item, cx| {
+                    item.inspect_canvas_target(
+                        DependencyDiagramMenuCommand::ClearInspection,
+                        &DependencyDiagramContextTarget::Canvas,
+                        cx,
+                    );
+                    item.apply_scope(MavenGraphScope::All.label().into(), cx);
+                });
+                assert_eq!(
+                    commands.load(Ordering::SeqCst),
+                    3,
+                    "scoped inspection reuses admitted data"
+                );
+            }
             let root_target = DependencyDiagramContextTarget::Node(root.clone());
             diagram_item.update(cx, |item, cx| {
                 item.inspect_canvas_target(
@@ -15273,6 +15396,16 @@ mod tests {
                     diagram_item.read(cx).scope().label(),
                 )
             });
+            if provider == GraphFixtureProvider::Maven {
+                let previous_scope = linked_analyzer.read_with(cx, |item, _| item.scope().clone());
+                linked_analyzer.update(cx, |item, cx| {
+                    item.apply_scope("__unreported-scope__".into(), cx)
+                });
+                linked_analyzer.read_with(cx, |item, _| {
+                    assert_eq!(item.scope(), &previous_scope);
+                    assert_eq!(item.selected_key(), Some(node.as_str()));
+                });
+            }
             assert!(
                 !scope_options.is_empty() && scope_options.contains(&current_scope),
                 "the scope picker offers reported configurations including the current one: {scope_options:?}"

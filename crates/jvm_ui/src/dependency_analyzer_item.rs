@@ -1892,7 +1892,8 @@ pub(crate) fn dependency_analyzer_for_selection(
                 // semantics: edges outside the chosen scope are not admitted.
                 let (admitted, chosen_scope) = match scope {
                     Some(DependencyDiagramScope::MavenScope(label)) => {
-                        let chosen = crate::dependencies_panel::maven_graph_scope_from_label(label);
+                        let chosen =
+                            crate::dependencies_panel::maven_graph_scope_from_label(label)?;
                         let mut filtered = (**graph).clone();
                         filtered.edges.retain(|edge| chosen.matches(&edge.scope));
                         (Some(filtered), chosen)
