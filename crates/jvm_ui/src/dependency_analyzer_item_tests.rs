@@ -865,6 +865,132 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
 }
 
 #[gpui::test]
+async fn analyzer_keyboard_reveals_and_opens_a_usage_menu(cx: &mut TestAppContext) {
+    cx.update(init);
+    let fs = project::FakeFs::new(cx.executor());
+    fs.insert_tree(
+        "/groovy-analyzer-usages",
+        serde_json::json!({"build.gradle": ""}),
+    )
+    .await;
+    let project = project::Project::test(fs, ["/groovy-analyzer-usages".as_ref()], cx).await;
+    let (container, cx) =
+        cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
+    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+    let mut graph = gradle_graph();
+    let DependencyAnalyzerGraph::Gradle {
+        components, edges, ..
+    } = &mut graph
+    else {
+        panic!("Gradle fixture");
+    };
+    for index in 0..24 {
+        let consumer = format!("consumer-{index}");
+        components.push(gradle_component(
+            &consumer,
+            Some("org.example"),
+            Some(&consumer),
+            Some("1.0"),
+            false,
+        ));
+        edges.push(gradle_edge(
+            &consumer,
+            Some("leaf"),
+            true,
+            gradle_module_selector("org.example", "leaf", "3.0"),
+        ));
+    }
+    let derivation = DependencyAnalyzerDerivation {
+        target: DependencyDiagramTarget {
+            module_label: "app".into(),
+            provider: DependencyDiagramProvider::Gradle,
+            configuration: Some(":core".into()),
+        },
+        graph,
+        scope: DependencyDiagramScope::GradleConfiguration(":core".into()),
+        scope_options: vec![":core".into()],
+    };
+    let item = workspace.update_in(cx, |workspace, window, cx| {
+        DependencyAnalyzerItem::open(derivation, None, workspace, window, cx)
+    });
+    item.update(cx, |item, cx| {
+        item.expand_all_rows(cx);
+        item.select_node_row(analyzer_row_id_for_node("leaf"), cx);
+        assert_eq!(item.usages().len(), 25);
+    });
+    let scroll = item.read_with(cx, |item, _| item.usages_scroll().clone());
+    let focused_label = |cx: &mut gpui::VisualTestContext| {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("analyzer usages"))
+                    .expect("accessibility JSON");
+            let focus = tree["gpui_focus"].as_str()?;
+            tree["nodes"][focus]["aria"]["label"]
+                .as_str()
+                .map(str::to_owned)
+        })
+    };
+    cx.update(|window, cx| {
+        window.activate_a11y_for_test();
+        item.read(cx).focus_handle(cx).focus(window, cx);
+        window.draw(cx).clear(cx);
+    });
+    let usage_is_visible = |index: usize| {
+        let row = scroll
+            .bounds_for_item(index + 1)
+            .expect("usage after header");
+        let viewport = scroll.bounds();
+        let offset = scroll.offset().y;
+        row.top() + offset >= viewport.top() && row.bottom() + offset <= viewport.bottom()
+    };
+    assert!(
+        !usage_is_visible(24),
+        "the final usage starts below the viewport"
+    );
+    let last_label = "used by org.example:consumer-23";
+    assert!(
+        (0..48).any(|_| {
+            cx.simulate_keystrokes("tab");
+            focused_label(cx).as_deref() == Some(last_label)
+        }),
+        "Tab reaches the final usage"
+    );
+    let visible = usage_is_visible(24);
+    cx.simulate_keystrokes("shift-f10");
+    let menu = item.read_with(cx, |item, _| item.row_context_menu_is_deployed());
+    assert_eq!(
+        (visible, menu),
+        (true, true),
+        "focused usage is visible and opens its menu"
+    );
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let cancel = cx
+            .build_action("menu::Cancel", None)
+            .expect("menu cancel action");
+        window.dispatch_action(cancel, cx);
+    });
+    item.read_with(cx, |item, _| {
+        assert!(!item.row_context_menu_is_deployed());
+        assert_eq!(item.selected_key(), Some("leaf"));
+    });
+    assert_eq!(focused_label(cx).as_deref(), Some(last_label));
+    scroll.set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
+    assert_eq!(focused_label(cx).as_deref(), Some(last_label));
+    assert!(
+        !usage_is_visible(24),
+        "manual scrolling can move away from focus"
+    );
+    cx.simulate_keystrokes("shift-tab");
+    assert_eq!(
+        focused_label(cx).as_deref(),
+        Some("used by org.example:consumer-22")
+    );
+    assert!(usage_is_visible(23));
+}
+
+#[gpui::test]
 async fn analyzer_row_menu_deploys_targets_and_dismisses(cx: &mut TestAppContext) {
     cx.update(|cx| init(cx));
     let fs = project::FakeFs::new(cx.executor());

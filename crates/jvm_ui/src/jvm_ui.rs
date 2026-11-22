@@ -85,6 +85,11 @@ pub fn bind_keys(cx: &mut App) {
             dependencies_panel::ShowDependencyRowMenu,
             Some(DEPENDENCY_TREE),
         ),
+        KeyBinding::new(
+            "shift-f10",
+            dependencies_panel::ShowDependencyRowMenu,
+            Some("DependencyAnalyzerUsage && !menu && !Picker"),
+        ),
         KeyBinding::new("up", SelectPrevious, Some(DEPENDENCY_TREE)),
         KeyBinding::new("down", SelectNext, Some(DEPENDENCY_TREE)),
         KeyBinding::new("home", SelectFirst, Some(DEPENDENCY_TREE)),

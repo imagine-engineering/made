@@ -199,6 +199,9 @@ pub struct DependencyAnalyzerItem {
     selected_outside_tree: bool,
     usages: Vec<AnalyzerUsage>,
     usages_truncated: bool,
+    usages_scroll: gpui::ScrollHandle,
+    usage_focus_handles: Vec<FocusHandle>,
+    last_focused_usage: Option<usize>,
     notice: Option<String>,
     /// Staged row context menu, anchored at the invoking position until
     /// dismissed; shared by the tree rows and the Usages pane rows.
@@ -879,6 +882,9 @@ impl DependencyAnalyzerItem {
             selected_outside_tree: false,
             usages: Vec::new(),
             usages_truncated: false,
+            usages_scroll: gpui::ScrollHandle::new(),
+            usage_focus_handles: Vec::new(),
+            last_focused_usage: None,
             notice: None,
             row_context_menu: None,
             focus_handle,
@@ -995,6 +1001,11 @@ impl DependencyAnalyzerItem {
     #[cfg(test)]
     pub(crate) fn usages(&self) -> &[AnalyzerUsage] {
         &self.usages
+    }
+
+    #[cfg(test)]
+    pub(crate) fn usages_scroll(&self) -> &gpui::ScrollHandle {
+        &self.usages_scroll
     }
 
     /// Whether a row context menu is staged; tests read this to assert the
@@ -1183,6 +1194,39 @@ impl DependencyAnalyzerItem {
             window,
             cx,
         );
+    }
+
+    fn focused_usage(&self, window: &gpui::Window) -> Option<usize> {
+        self.usage_focus_handles
+            .iter()
+            .take(self.usages.len())
+            .position(|focus| focus.is_focused(window))
+    }
+
+    fn usage_child_index(&self, index: usize) -> usize {
+        1 + usize::from(self.selected_outside_tree && self.selected_key.is_some()) + index
+    }
+
+    fn show_focused_row_context_menu(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if let Some(index) = self.focused_usage(window) {
+            let Some(bounds) = self
+                .usages_scroll
+                .bounds_for_item(self.usage_child_index(index))
+            else {
+                return;
+            };
+            let viewport = self.usages_scroll.bounds();
+            let offset = self.usages_scroll.offset();
+            let position = gpui::point(
+                (bounds.left() + offset.x + gpui::px(12.)).clamp(viewport.left(), viewport.right()),
+                (bounds.center().y + offset.y).clamp(viewport.top(), viewport.bottom()),
+            );
+            self.show_usage_context_menu(index, position, window, cx);
+        } else if let Some(id) = self.host.selected().cloned()
+            && let Some(position) = crate::selected_dependency_row_menu_position(&self.host)
+        {
+            self.show_row_context_menu(id, position, window, cx);
+        }
     }
 
     fn stage_row_context_menu(
@@ -1451,10 +1495,22 @@ impl DependencyAnalyzerItem {
 impl Render for DependencyAnalyzerItem {
     fn render(
         &mut self,
-        _window: &mut gpui::Window,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::IntoElement {
         use ui::prelude::*;
+
+        self.usage_focus_handles
+            .resize_with(self.usages.len(), || cx.focus_handle().tab_stop(true));
+        let focused_usage = self.focused_usage(window);
+        // Scroll on focus entry so a later manual scroll stays in place.
+        if focused_usage != self.last_focused_usage
+            && let Some(index) = focused_usage
+        {
+            self.usages_scroll
+                .scroll_to_item(self.usage_child_index(index));
+        }
+        self.last_focused_usage = focused_usage;
 
         let theme = cx.theme().colors().clone();
         let title = analyzer_title(&self.derivation.target);
@@ -1701,11 +1757,7 @@ impl Render for DependencyAnalyzerItem {
                 }
             }))
             .on_action(cx.listener(|item, _: &ShowDependencyRowMenu, window, cx| {
-                if let Some(id) = item.host.selected().cloned()
-                    && let Some(position) = crate::selected_dependency_row_menu_position(&item.host)
-                {
-                    item.show_row_context_menu(id, position, window, cx);
-                }
+                item.show_focused_row_context_menu(window, cx);
             }))
             .on_action(cx.listener(
                 |item, event: &SelectDependencyAnalyzerScope, _, cx| {
@@ -1817,6 +1869,7 @@ impl Render for DependencyAnalyzerItem {
                     .py_1()
                     .max_h(px(240.0))
                     .overflow_y_scroll()
+                    .track_scroll(&self.usages_scroll)
                     .child(
                         div()
                             .text_size(px(12.0))
@@ -1854,17 +1907,18 @@ impl Render for DependencyAnalyzerItem {
                     .children(
                         usages_rows
                             .iter()
+                            .zip(self.usage_focus_handles.iter())
                             .enumerate()
                             .zip(usage_row_handlers)
-                            .map(|((index, usage), handler)| {
+                            .map(|((index, (usage, focus)), handler)| {
                                 let item = usage_item.clone();
                                 div()
-                                    .key_context("DependencyAnalyzerControls")
+                                    .key_context("DependencyAnalyzerControls DependencyAnalyzerUsage")
                                     .on_mouse_down(gpui::MouseButton::Right, handler)
                                     .child(
                                         Button::new(format!("dependency-usage-{index}"), usage.label.clone())
                                             .label_size(LabelSize::Small)
-                                            .tab_index(0_isize)
+                                            .track_focus(focus)
                                             .on_click(move |event, window, cx| {
                                                 if let Err(error) = item.update(cx, |item, cx| {
                                                     item.show_usage_context_menu(index, event.position(), window, cx);
