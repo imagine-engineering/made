@@ -60,7 +60,7 @@
     },
   },
   {
-    "context": "GraphiteArtboard",
+    "context": "GraphiteArtboard || GraphiteGdd",
     "use_key_equivalents": true,
     "bindings": {
       "ctrl-z": "editor::Undo",

@@ -940,6 +940,22 @@ impl InspectedGddV1 {
         self.recovery
     }
 
+    pub fn matches_saved_history(&self, saved: &Self) -> bool {
+        let current_session = self.document.session();
+        let saved_session = saved.document.session();
+        self.manifest().document_id == saved.manifest().document_id
+            && self.history_len() == saved.history_len()
+            && self.hot_log_len() == 0
+            && saved.hot_log_len() == 0
+            && current_session.head_rev() == saved_session.head_rev()
+            && current_session.redo_stack() == saved_session.redo_stack()
+            && current_session.last_broadcast_rev() == saved_session.last_broadcast_rev()
+            && current_session
+                .history()
+                .map(|delta| delta.id)
+                .eq(saved_session.history().map(|delta| delta.id))
+    }
+
     pub fn can_move_history(&self, direction: GddHistoryDirection) -> bool {
         self.hot_log_len() == 0
             && match direction {

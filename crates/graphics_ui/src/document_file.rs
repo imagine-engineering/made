@@ -117,8 +117,11 @@ impl GraphiteDocumentProjectItem {
 
     fn working_dirty(&self) -> bool {
         self.working.as_ref().is_some_and(|working| {
-            self.gdd_contents()
-                .is_some_and(|contents| !Arc::ptr_eq(contents, &working.saved))
+            self.gdd_contents().is_some_and(|contents| {
+                // Redo can restore the last saved cursor in a newly reopened container.
+                !Arc::ptr_eq(contents, &working.saved)
+                    && !contents.matches_saved_history(&working.saved)
+            })
         })
     }
 
@@ -2028,6 +2031,55 @@ impl GraphiteDocumentItem {
             }
         }));
         cx.notify();
+    }
+
+    fn move_working_history(
+        &mut self,
+        direction: GddHistoryDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let model = self.model.read(cx);
+        let Some(contents) = model
+            .gdd_contents()
+            .filter(|contents| model.working.is_some() && contents.can_move_history(direction))
+            .cloned()
+        else {
+            return;
+        };
+        let revision = model.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                contents
+                    .move_history_in_copy(direction, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn route_working_history(
+        &mut self,
+        direction: GddHistoryDirection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let editor_focused = |editor: &Entity<Editor>| editor.read(cx).is_focused(window);
+        let field_focused = self.new_node_position.as_ref().is_some_and(editor_focused)
+            || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
+                [&form.name, &form.value, &form.position].into_iter().any(editor_focused)
+                    || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
+        if field_focused || self.model.read(cx).working.is_none() {
+            cx.propagate();
+            return;
+        }
+        self.move_working_history(direction, window, cx);
+        cx.stop_propagation();
     }
 
     fn save_numeric_input_exposure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3985,6 +4037,13 @@ impl Render for GraphiteDocumentItem {
         let view = v_flex()
             .id("graphite-document-inspector")
             .track_focus(&self.focus_handle)
+            .key_context("GraphiteGdd")
+            .on_action(cx.listener(|item, _: &editor::actions::Undo, window, cx| {
+                item.route_working_history(GddHistoryDirection::Undo, window, cx);
+            }))
+            .on_action(cx.listener(|item, _: &editor::actions::Redo, window, cx| {
+                item.route_working_history(GddHistoryDirection::Redo, window, cx);
+            }))
             .size_full()
             .p_6()
             .gap_2()
@@ -4095,14 +4154,22 @@ impl Render for GraphiteDocumentItem {
                             [
                                 (
                                     GddHistoryDirection::Undo,
-                                    "Save Undo Folder",
-                                    "GRAPHITE-GDD-SAVE-UNDO",
+                                    if working { "Undo" } else { "Save Undo Folder" },
+                                    if working {
+                                        "GRAPHITE-GDD-UNDO"
+                                    } else {
+                                        "GRAPHITE-GDD-SAVE-UNDO"
+                                    },
                                     can_undo,
                                 ),
                                 (
                                     GddHistoryDirection::Redo,
-                                    "Save Redo Folder",
-                                    "GRAPHITE-GDD-SAVE-REDO",
+                                    if working { "Redo" } else { "Save Redo Folder" },
+                                    if working {
+                                        "GRAPHITE-GDD-REDO"
+                                    } else {
+                                        "GRAPHITE-GDD-SAVE-REDO"
+                                    },
                                     can_redo,
                                 ),
                             ]
@@ -4113,11 +4180,15 @@ impl Render for GraphiteDocumentItem {
                                     Button::new(selector, label)
                                         .disabled(self.copy_task.is_some())
                                         .on_click(cx.listener(move |item, _, window, cx| {
-                                            item.save_copy(
-                                                GraphiteCopy::MoveHistory(direction),
-                                                window,
-                                                cx,
-                                            );
+                                            if working {
+                                                item.move_working_history(direction, window, cx);
+                                            } else {
+                                                item.save_copy(
+                                                    GraphiteCopy::MoveHistory(direction),
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
                                         })),
                                 )
                             }),
@@ -8637,6 +8708,200 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r05_2_working_gdd_history_is_shared_across_focused_split_views(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/history-working.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let (value_field, node_id) = source.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("open node editor")
+            };
+            (
+                form.value.clone(),
+                form.selected_node().expect("selected node").storage_id(),
+            )
+        });
+        for draft in ["12", "36"] {
+            value_field.update_in(window, |editor, window, cx| {
+                editor.set_text(draft, window, cx)
+            });
+            paint(window);
+            click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+            window.run_until_parked();
+        }
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some("/project/history-baseline.gdd".into()));
+        window.run_until_parked();
+
+        let pane = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_and_clone(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            })
+            .await
+            .expect("native split");
+        let split = pane.read_with(window, |pane, _| {
+            pane.active_item()
+                .expect("split tab")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("working GDD split")
+        });
+        split.update_in(window, |item, window, cx| {
+            item.toggle_node_copy(window, cx);
+            item.select_copy_node(0, window, cx);
+        });
+        let assert_working = |current: &Entity<GraphiteDocumentItem>,
+                              value,
+                              dirty,
+                              window: &gpui::VisualTestContext| {
+            current.read_with(window, |item, cx| {
+                assert_eq!(item.is_dirty(cx), dirty);
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("open node editor")
+                };
+                let node = form.selected_node().expect("selected node");
+                assert_eq!(node.storage_id(), node_id);
+                assert_eq!(form.value.read(cx).text(cx), value);
+                let snapshot = item.model.read(cx).gdd_contents().expect("current GDD");
+                assert_eq!(snapshot.history_len(), original_history + 2);
+            });
+        };
+        assert_working(&source, "36", false, window);
+        assert_working(&split, "36", false, window);
+        let (undo, redo) = if cfg!(target_os = "macos") {
+            ("cmd-z", "cmd-shift-z")
+        } else {
+            ("ctrl-z", "ctrl-shift-z")
+        };
+        window.update(|_, cx| {
+            use settings::{KeymapFile, KeymapFileLoadResult};
+
+            for (platform, contents, expected) in [
+                (
+                    "macos",
+                    include_str!("../../../assets/keymaps/default-macos.json"),
+                    2,
+                ),
+                (
+                    "linux",
+                    include_str!("../../../assets/keymaps/default-linux.json"),
+                    5,
+                ),
+                (
+                    "windows",
+                    include_str!("../../../assets/keymaps/default-windows.json"),
+                    3,
+                ),
+            ] {
+                let bindings = match KeymapFile::load(contents, cx) {
+                    KeymapFileLoadResult::Success { key_bindings }
+                    | KeymapFileLoadResult::SomeFailedToLoad { key_bindings, .. } => key_bindings,
+                    KeymapFileLoadResult::JsonParseFailure { error } => {
+                        panic!("{platform} keymap: {error:#}")
+                    }
+                };
+                let context = "GraphiteArtboard || GraphiteGdd";
+                let bindings = bindings
+                    .into_iter()
+                    .filter(|binding| {
+                        binding
+                            .predicate()
+                            .is_some_and(|predicate| predicate.to_string() == context)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(bindings.len(), expected, "{platform} history bindings");
+                if platform == std::env::consts::OS {
+                    cx.bind_keys(bindings);
+                }
+            }
+        });
+        value_field.update_in(window, |editor, window, cx| {
+            editor.focus_handle(cx).focus(window, cx)
+        });
+        paint(window);
+        window.simulate_keystrokes(undo);
+        window.run_until_parked();
+        assert_working(&split, "36", false, window);
+
+        for (focused, key, value, dirty) in [
+            (&split, undo, "12", true),
+            (&source, undo, "-17", true),
+            (&split, redo, "12", true),
+            (&source, redo, "36", false),
+        ] {
+            focused.update_in(window, |item, window, cx| {
+                item.focus_handle.focus(window, cx)
+            });
+            paint(window);
+            window.simulate_keystrokes(key);
+            window.run_until_parked();
+            assert_working(&source, value, dirty, window);
+            assert_working(&split, value, dirty, window);
+        }
+
+        paint(window);
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        assert_working(&source, "12", true, window);
+        let reverted_path = PathBuf::from("/project/history-with-redo.gdd");
+        source.update_in(window, |item, window, cx| {
+            item.save_working_folder(window, cx)
+        });
+        window.simulate_new_path_selection(|_| Some(reverted_path.clone()));
+        window.run_until_parked();
+        assert_working(&split, "12", false, window);
+        let reopened = read_graphite_folder(filesystem.as_ref(), &reverted_path)
+            .await
+            .expect("reopen published undone history");
+        assert!(reopened.can_move_history(GddHistoryDirection::Redo));
+        let redone = reopened
+            .move_history_in_copy(GddHistoryDirection::Redo, ARCHIVE_BUDGET)
+            .await
+            .expect("redo the saved interaction");
+        let nodes = redone.graph_nodes().await.expect("redone graph");
+        let [node] = nodes.as_slice() else {
+            panic!("retained node")
+        };
+        assert_eq!(node.storage_id(), node_id);
+        assert!(matches!(
+            node.numeric_input(),
+            Some(GddNumericValue::Integer(36))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("preserved source archive"),
             original
         );
     }
