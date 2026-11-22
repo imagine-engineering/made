@@ -108,6 +108,16 @@ struct GddWorkingCopy {
     save_in_progress: Weak<()>,
 }
 
+impl GddWorkingCopy {
+    fn new(saved: Arc<InspectedGddV1>, inspection: Arc<GddGraphInspection>) -> Self {
+        Self {
+            saved,
+            inspection,
+            save_in_progress: Weak::new(),
+        }
+    }
+}
+
 impl GraphiteDocumentProjectItem {
     fn gdd_contents(&self) -> Option<&Arc<InspectedGddV1>> {
         match &self.document {
@@ -124,6 +134,32 @@ impl GraphiteDocumentProjectItem {
                     && !contents.matches_saved_history(&working.saved)
             })
         })
+    }
+
+    fn start_working_copy(
+        &mut self,
+        expected: &Arc<()>,
+        inspection: GddGraphInspection,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        ensure!(
+            Arc::ptr_eq(&self.revision, expected),
+            "The Graphite document changed while opening its working copy."
+        );
+        if self.working.is_some() {
+            return Ok(());
+        }
+        let saved = self
+            .gdd_contents()
+            .cloned()
+            .context("Open a GDD document.")?;
+        ensure!(
+            saved.hot_log_len() == 0,
+            "Recover the pending Graphite edits before opening a working copy."
+        );
+        self.working = Some(GddWorkingCopy::new(saved, Arc::new(inspection)));
+        cx.notify();
+        Ok(())
     }
 
     fn replace_working_snapshot(
@@ -145,11 +181,7 @@ impl GraphiteDocumentProjectItem {
                 .gdd_contents()
                 .cloned()
                 .context("Open a GDD document.")?;
-            self.working = Some(GddWorkingCopy {
-                saved,
-                inspection,
-                save_in_progress: Weak::new(),
-            });
+            self.working = Some(GddWorkingCopy::new(saved, inspection));
         }
         self.document = InspectedDocument::Gdd { contents };
         self.revision = Arc::new(());
@@ -1103,6 +1135,43 @@ impl GraphiteDocumentItem {
             }
             NodeCopyPanel::Ready(_) => {}
         }
+    }
+
+    fn open_working_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        if self.copy_task.is_some() || model.working.is_some() {
+            return;
+        }
+        let Some(contents) = model
+            .gdd_contents()
+            .filter(|contents| contents.hot_log_len() == 0)
+            .cloned()
+        else {
+            return;
+        };
+        let revision = model.revision.clone();
+        let load = cx.background_spawn(async move { contents.graph_inspection().await });
+        self.copy_feedback = None;
+        self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let inspection = load.await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.copy_task = None;
+                let result = inspection
+                    .map_err(anyhow::Error::from)
+                    .and_then(|inspection| {
+                        item.model.update(cx, |model, cx| {
+                            model.start_working_copy(&revision, inspection, cx)
+                        })
+                    });
+                item.copy_feedback = result
+                    .err()
+                    .map(|error| (format!("{error:#}").into(), Color::Error));
+                cx.notify();
+            }) {
+                log::debug!("Graphite working copy view closed: {error:#}");
+            }
+        }));
+        cx.notify();
     }
 
     fn toggle_node_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -4323,11 +4392,24 @@ impl Render for GraphiteDocumentItem {
                 } else {
                     format!("{label} v{format_version} · Read-only")
                 }))
+                .when(!working && recovery.hot_log_len == 0, |view| {
+                    view.child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-EDIT-WORKING-COPY".into())
+                            .child(
+                                Button::new("graphite-gdd-edit-working-copy", "Edit Working Copy")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.open_working_copy(window, cx)
+                                    })),
+                            ),
+                    )
+                })
                 .when(working, |view| {
                     view.child(Label::new(if working_dirty {
                         "Unsaved working edits"
                     } else {
-                        "Working copy saved"
+                        "No unsaved edits"
                     }))
                     .child(
                         div()
@@ -9428,6 +9510,143 @@ mod tests {
                 .expect("retained source"),
             original
         );
+    }
+
+    #[gpui::test]
+    async fn at_r04_1_workspace_opens_a_clean_working_copy_in_both_splits(cx: &mut TestAppContext) {
+        let (original, history) = numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/open-working.gdd.zip");
+        let other_path = PathBuf::from("/project/independent-archive.gdd.zip");
+        for source in [&path, &other_path] {
+            filesystem
+                .write(source, &original)
+                .await
+                .expect("write original archive");
+        }
+        window.run_until_parked();
+        let independent = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(other_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open independent archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("independent Inspector");
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("source Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let (base, revision, value_field) = source.read_with(window, |item, cx| {
+            assert!(!item.can_save(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("source properties")
+            };
+            (
+                form.snapshot.clone(),
+                form.revision.clone(),
+                form.value.clone(),
+            )
+        });
+        let pane = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_and_clone(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            })
+            .await
+            .expect("clone the source into a real split");
+        let split = pane.read_with(window, |pane, _| {
+            pane.active_item()
+                .expect("split source tab")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("split source Inspector")
+        });
+        assert_ne!(source, split);
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        window.run_until_parked();
+        paint(window);
+        for view in [&source, &split] {
+            view.read_with(window, |item, cx| {
+                assert!(item.can_save(cx));
+                assert!(!item.is_dirty(cx));
+                let model = item.model.read(cx);
+                let working = model.working.as_ref().expect("shared working model");
+                assert!(Arc::ptr_eq(&working.saved, &base));
+                assert!(Arc::ptr_eq(
+                    model.gdd_contents().expect("working snapshot"),
+                    &base
+                ));
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert_eq!(base.history_len(), history);
+            });
+        }
+        value_field.update_in(window, |editor, window, cx| {
+            editor.set_text("-21", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        window.run_until_parked();
+        for view in [&source, &split] {
+            view.read_with(window, |item, cx| {
+                assert!(item.is_dirty(cx));
+                let model = item.model.read(cx);
+                let working = model.working.as_ref().expect("shared edited projection");
+                assert!(Arc::ptr_eq(&working.saved, &base));
+                assert_eq!(
+                    model
+                        .gdd_contents()
+                        .expect("working snapshot")
+                        .history_len(),
+                    history + 1
+                );
+                let [node] = working.inspection.nodes.as_slice() else {
+                    panic!("the original node")
+                };
+                assert!(matches!(
+                    node.numeric_input(),
+                    Some(GddNumericValue::Integer(-21))
+                ));
+            });
+        }
+        assert!(workspace.read_with(window, |workspace, cx| {
+            workspace
+                .items_of_type::<GraphiteDocumentItem>(cx)
+                .any(|item| item == independent)
+        }));
+        independent.read_with(window, |item, cx| {
+            assert!(!item.can_save(cx));
+            assert!(!item.is_dirty(cx));
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("independent source")
+                    .history_len(),
+                history
+            );
+        });
+        for source in [&path, &other_path] {
+            assert_eq!(
+                filesystem
+                    .load_bytes(source)
+                    .await
+                    .expect("original archive data"),
+                original
+            );
+        }
     }
 
     #[gpui::test]
