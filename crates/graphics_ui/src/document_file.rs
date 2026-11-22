@@ -1300,6 +1300,9 @@ impl GraphiteDocumentItem {
         let contents = contents.clone();
         let revision = model.revision.clone();
         let inspection = working.inspection.clone();
+        if let NodeCatalogPanel::Ready { catalog, .. } = &self.node_catalog {
+            catalog.update(cx, NodeCatalog::start_working_copy);
+        }
         match &mut self.node_copy {
             NodeCopyPanel::Closed => {}
             NodeCopyPanel::Ready(form) if !Arc::ptr_eq(&form.revision, &revision) => {
@@ -1389,15 +1392,18 @@ impl GraphiteDocumentItem {
                     }
                     item.node_catalog = match loaded {
                         Ok(source) => {
+                            let model = item.model.read(cx);
                             let admit_insertion = matches!(
-                                &item.model.read(cx).document,
+                                &model.document,
                                 InspectedDocument::Gdd { contents } if contents.hot_log_len() == 0
                             );
-                            let catalog =
-                                cx.new(|cx| NodeCatalog::new(source, admit_insertion, window, cx));
+                            let working = model.working.is_some();
+                            let catalog = cx.new(|cx| {
+                                NodeCatalog::new(source, admit_insertion, working, window, cx)
+                            });
                             let insert_subscription =
                                 cx.subscribe_in(&catalog, window, |item, _, event, window, cx| {
-                                    item.save_catalog_node(event, window, cx);
+                                    item.insert_catalog_node(event, window, cx);
                                 });
                             NodeCatalogPanel::Ready {
                                 catalog,
@@ -1438,14 +1444,14 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn save_catalog_node(
+    fn insert_catalog_node(
         &mut self,
         event: &CatalogNodeInsert,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match parse_graph_grid_position(&event.position) {
-            Ok(position) => self.save_copy(
+            Ok(position) => self.apply_graph_edit(
                 GraphiteCopy::InsertCatalogNode {
                     identifier: event.identifier,
                     position,
@@ -2099,6 +2105,21 @@ impl GraphiteDocumentItem {
         };
         let revision = model.revision.clone();
         match request {
+            GraphiteCopy::InsertCatalogNode {
+                identifier,
+                position,
+            } => {
+                self.stage_working_snapshot(
+                    revision,
+                    async move {
+                        contents
+                            .insert_root_catalog_node_in_copy(identifier, position, ARCHIVE_BUDGET)
+                            .await
+                    },
+                    window,
+                    cx,
+                );
+            }
             GraphiteCopy::EditNode { node, change } => {
                 self.stage_working_snapshot(
                     revision,
@@ -12151,6 +12172,113 @@ mod tests {
                 original
             );
         }
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_005_2_workspace_adds_catalog_layers_to_the_open_working_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let blank = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("blank source folder");
+        let original = blank
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("blank original archive");
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/catalog-working-source.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the original archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG");
+        click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+        window.simulate_input("Artboard");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-NODE-CATALOG-POSITION");
+        window.dispatch_action(editor::actions::SelectAll);
+        window.simulate_input("12, -4");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Artboard");
+        item.read_with(window, |item, _| {
+            assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback);
+        });
+        let inspect_working = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, cx| {
+                let model = item.model.read(cx);
+                let working = model.working.as_ref().expect("active working copy");
+                let root = working
+                    .inspection
+                    .networks
+                    .iter()
+                    .find(|network| network.parent.is_none())
+                    .expect("document network");
+                let layer = working
+                    .inspection
+                    .nodes
+                    .iter()
+                    .find(|node| node.network_id() == root.id);
+                layer.map(GddGraphNode::storage_id)
+            })
+        };
+        let address = inspect_working(window).expect("inserted on the currently open document");
+        assert!(item.read_with(window, |item, cx| item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert!(inspect_working(window).is_none());
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(inspect_working(window), Some(address));
+        click(window, "GRAPHITE-NODE-CATALOG");
+        let destination = PathBuf::from("/project/catalog-working-result.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("published working graph");
+        let graph = saved.graph_inspection().await.expect("reopened Artboard");
+        let layer = graph
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == address)
+            .expect("same stored layer address");
+        assert!(layer.can_set_document_artboard());
+        let root = graph
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root network");
+        let geometry = saved.graph_geometry(root).await.expect("native layout");
+        let placed = geometry
+            .nodes
+            .iter()
+            .find(|node| node.storage_id == address)
+            .expect("placed layer");
+        let grid = f64::from(graphite_editor::consts::GRID_SIZE);
+        assert!(placed.is_layer);
+        // The pinned drawing bounds include the exposed Content slot's chain gutter.
+        assert_eq!(placed.bounds[0], [11. * grid, -4. * grid]);
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("input ZIP"),
+            original
+        );
     }
 
     #[gpui::test]

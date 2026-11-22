@@ -12,6 +12,7 @@ use ui::{Button, Label, prelude::*};
 pub(crate) struct NodeCatalog {
     search: Entity<Editor>,
     position: Option<Entity<Editor>>,
+    working: bool,
     source: GraphiteNodeCatalog,
     query: String,
     groups: Vec<GraphiteCatalogCategory>,
@@ -30,6 +31,7 @@ impl NodeCatalog {
     pub(crate) fn new(
         source: GraphiteNodeCatalog,
         admit_insertion: bool,
+        working: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -58,11 +60,19 @@ impl NodeCatalog {
         Self {
             search,
             position,
+            working,
             query: String::new(),
             groups: source.search(""),
             source,
             toggled_categories: BTreeSet::new(),
             _search_subscription: search_subscription,
+        }
+    }
+
+    pub(crate) fn start_working_copy(&mut self, cx: &mut Context<Self>) {
+        if !self.working {
+            self.working = true;
+            cx.notify();
         }
     }
 }
@@ -151,7 +161,11 @@ impl Render for NodeCatalog {
                                                         .child(
                                                             Button::new(
                                                                 SharedString::new(identifier),
-                                                                "Add in a Copy",
+                                                                if self.working {
+                                                                    "Add Node"
+                                                                } else {
+                                                                    "Add in a Copy"
+                                                                },
                                                             )
                                                             .on_click(cx.listener(
                                                                 move |catalog, _, _, cx| {
