@@ -1072,7 +1072,7 @@ enum NodeCopyChange {
     MovePinned(GddPinnedNodeMove),
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
-    Radians(bool),
+    BooleanInput(bool),
     DisconnectNumericInput,
     InsertNumericOnWire(UnaryNumericOperation),
     ConnectNumericInput {
@@ -1128,9 +1128,9 @@ impl NodeCopyChange {
                     .set_graph_numeric_input_exposed_in_copy(node, exposed, ARCHIVE_BUDGET)
                     .await
             }
-            Self::Radians(radians) => {
+            Self::BooleanInput(value) => {
                 archive
-                    .set_graph_radians_in_copy(node, radians, ARCHIVE_BUDGET)
+                    .set_graph_boolean_input_in_copy(node, value, ARCHIVE_BUDGET)
                     .await
             }
             Self::DisconnectNumericInput => {
@@ -4093,12 +4093,12 @@ impl GraphiteDocumentItem {
                                         ),
                                 )
                             })
-                            .when_some(selected.radians(), |panel, radians| {
+                            .when_some(selected.boolean_input(), |panel, property| {
                                 let node = Box::new(selected.clone());
                                 panel.child(
-                                    div().debug_selector(|| "GRAPHITE-GDD-RADIANS".into()).child(
-                                        Switch::new("graphite-gdd-radians", ToggleState::from(radians))
-                                            .label("Radians")
+                                    div().debug_selector(|| "GRAPHITE-GDD-BOOLEAN-INPUT".into()).child(
+                                        Switch::new("graphite-gdd-boolean-input", ToggleState::from(property.value))
+                                            .label(property.name)
                                             .label_position(SwitchLabelPosition::End)
                                             .tab_index(0isize)
                                             .disabled(!working || self.copy_task.is_some())
@@ -4106,7 +4106,7 @@ impl GraphiteDocumentItem {
                                                 if item.model.read(cx).working.is_some() {
                                                     item.apply_graph_edit(GraphiteCopy::EditNode {
                                                         node: node.clone(),
-                                                        change: NodeCopyChange::Radians(choice.selected()),
+                                                        change: NodeCopyChange::BooleanInput(choice.selected()),
                                                     }, window, cx);
                                                 }
                                             })),
@@ -4542,7 +4542,7 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Reordered",
                     GraphiteCopy::EditNode {
-                        change: NodeCopyChange::NumericInput(_) | NodeCopyChange::Radians(_),
+                        change: NodeCopyChange::NumericInput(_) | NodeCopyChange::BooleanInput(_),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -10850,7 +10850,7 @@ mod tests {
             item.read_with(window, |item, cx| {
                 let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready trigonometric node") };
                 let node = form.selected_node().expect("selected trigonometric node");
-                assert_eq!(node.radians(), Some(radians));
+                assert_eq!(node.boolean_input().map(|property| property.value), Some(radians));
                 assert!(matches!(form.output_preview, NodeOutputPreview::Ready(GddNumericValue::Number(value)) if value == result));
                 assert_eq!(item.is_dirty(cx), dirty);
                 node.storage_id()
@@ -10931,7 +10931,10 @@ mod tests {
             panic!("one saved node")
         };
         assert_eq!(node.storage_id(), node_id);
-        assert_eq!(node.radians(), Some(true));
+        assert_eq!(
+            node.boolean_input().map(|property| property.value),
+            Some(true)
+        );
         assert!(
             node.input_ports()
                 .get(1)
@@ -10942,6 +10945,119 @@ mod tests {
         );
         assert_eq!(
             filesystem.load_bytes(&path).await.expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_prop_002_2_workspace_edits_modulo_always_positive(cx: &mut TestAppContext) {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::math_nodes::modulo;
+
+        let mut template = resolve_proto_node_type(modulo::IDENTIFIER)
+            .expect("pinned Modulo definition")
+            .default_node_template();
+        let [numerator, modulus, _] = template.inputs.as_mut_slice() else {
+            panic!("three ordered Modulo inputs");
+        };
+        *numerator = NodeInput::value(TaggedValue::Number(-11.), true);
+        *modulus = NodeInput::value(TaggedValue::Number(5.), false);
+        let graph = NodeNetwork {
+            nodes: [(NodeId(7), template.into_parts().0)].into_iter().collect(),
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            627,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("actual saved Graphite document");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &NoMetadata, &ResourceRegistry::new(), &resources)
+            .expect("write pinned Modulo");
+        let original = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/modulo.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open Modulo")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let assert_preview = |window: &mut gpui::VisualTestContext, flag, expected| {
+            click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready Modulo node") };
+                let node = form.selected_node().expect("selected pinned Modulo");
+                assert_eq!(node.boolean_input().map(|property| (property.name, property.value)), Some(("Always Positive", flag)));
+                assert!(matches!(form.output_preview, NodeOutputPreview::Ready(GddNumericValue::Number(result)) if result == expected));
+                node.storage_id()
+            })
+        };
+        let node_id = assert_preview(window, true, 4.);
+        click(window, "NATIVE-SWITCH-CONTROL");
+        assert_eq!(assert_preview(window, false, -1.), node_id);
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(assert_preview(window, true, 4.), node_id);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(assert_preview(window, false, -1.), node_id);
+        let destination = PathBuf::from("/project/modulo-signed.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved Modulo folder");
+        let nodes = saved.graph_nodes().await.expect("reopened Modulo");
+        let [node] = nodes.as_slice() else {
+            panic!("one saved Modulo node")
+        };
+        assert_eq!(node.storage_id(), node_id);
+        assert_eq!(
+            node.boolean_input().map(|property| property.value),
+            Some(false)
+        );
+        assert!(
+            node.input_ports()
+                .get(2)
+                .is_some_and(|port| !port.exposed && port.source.is_none())
+        );
+        assert!(matches!(
+            saved.preview_graph_numeric_output(node).await,
+            Ok(GddNumericValue::Number(-1.))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original ZIP"),
             original
         );
     }

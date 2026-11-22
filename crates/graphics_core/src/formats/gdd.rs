@@ -252,8 +252,8 @@ pub enum GddArchiveError {
     GraphNumericPreviewBudget,
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
-    #[error("Choose a trigonometric node with a hidden Radians literal.")]
-    UnsupportedGraphRadiansInput,
+    #[error("Choose a supported node with a hidden Boolean literal.")]
+    UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
     #[error("Saved layers could not be read from this Graphite layer graph.")]
@@ -684,7 +684,7 @@ pub struct GddGraphNode {
     pinned: bool,
     pinned_order: Option<(usize, usize)>,
     numeric_input: Option<GddNumericInput>,
-    radians: Option<bool>,
+    boolean_input: Option<GddGraphBooleanInput>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
@@ -716,6 +716,13 @@ pub struct GddGraphInputPort {
     pub exposed: bool,
     pub stored_type: Option<Type>,
     pub source: Option<GddGraphPortSource>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GddGraphBooleanInput {
+    index: usize,
+    pub name: &'static str,
+    pub value: bool,
 }
 
 #[derive(Clone)]
@@ -958,8 +965,8 @@ impl GddGraphNode {
         self.numeric_port().map(|port| port.exposed)
     }
 
-    pub fn radians(&self) -> Option<bool> {
-        self.radians
+    pub fn boolean_input(&self) -> Option<GddGraphBooleanInput> {
+        self.boolean_input
     }
 
     pub fn has_numeric_connection(&self) -> bool {
@@ -1284,7 +1291,7 @@ impl InspectedGddV1 {
                     pinned: node.pinned,
                     pinned_order: None,
                     numeric_input: None,
-                    radians: None,
+                    boolean_input: None,
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
@@ -1479,9 +1486,9 @@ impl InspectedGddV1 {
                     .document_node(&node.local_id, path)
                     .is_some_and(|document| numeric_preview_inputs(document).is_some());
             if node.can_preview_numeric_output {
-                node.radians = interface
+                node.boolean_input = interface
                     .document_node(&node.local_id, path)
-                    .and_then(graph_radians_literal);
+                    .and_then(graph_boolean_literal);
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
@@ -3890,44 +3897,45 @@ impl InspectedGddV1 {
         .await
     }
 
-    pub async fn set_graph_radians_in_copy(
+    pub async fn set_graph_boolean_input_in_copy(
         &self,
         node: &GddGraphNode,
-        radians: bool,
+        value: bool,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
         let previous = node
-            .radians()
-            .ok_or(GddArchiveError::UnsupportedGraphRadiansInput)?;
-        if radians == previous {
+            .boolean_input()
+            .ok_or(GddArchiveError::UnsupportedGraphBooleanInput)?;
+        if value == previous.value {
             return Err(GddArchiveError::UnchangedGraphInput);
         }
         let path = &node.network_path;
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let connector = InputConnector::node_at_index(node.local_id, TRIGONOMETRIC_RADIANS_INDEX);
-        let radians_literal = |interface: &NodeNetworkInterface| {
+        let connector = InputConnector::node_at_index(node.local_id, previous.index);
+        let boolean_literal = |interface: &NodeNetworkInterface| {
             interface
                 .document_node(&node.local_id, path)
-                .and_then(graph_radians_literal)
+                .and_then(graph_boolean_literal)
         };
-        if interface.is_layer(&node.local_id, path) || radians_literal(&interface) != Some(previous)
+        if interface.is_layer(&node.local_id, path) || boolean_literal(&interface) != Some(previous)
         {
-            return Err(GddArchiveError::UnsupportedGraphRadiansInput);
+            return Err(GddArchiveError::UnsupportedGraphBooleanInput);
         }
         interface.set_input(
             &connector,
-            NodeInput::value(TaggedValue::Bool(radians), false),
+            NodeInput::value(TaggedValue::Bool(value), false),
             path,
         );
-        if radians_literal(&interface) != Some(radians) {
+        let expected = Some(GddGraphBooleanInput { value, ..previous });
+        if boolean_literal(&interface) != expected {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let copy = self
-            .finish_graph_input(node, interface, TRIGONOMETRIC_RADIANS_INDEX, None, budget)
+            .finish_graph_input(node, interface, previous.index, None, budget)
             .await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if radians_literal(&actual) != Some(radians) {
+        if boolean_literal(&actual) != expected {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -4997,11 +5005,8 @@ fn collect_numeric_preview_node(
         numeric_preview_inputs(document).ok_or(GddArchiveError::UnsupportedGraphNumericPreview)?;
     let mut resolved = Vec::with_capacity(inputs.len());
     let boolean_input = match &document.implementation {
-        DocumentNodeImplementation::ProtoNode(identifier) if is_trigonometric_proto(identifier) => {
-            Some(TRIGONOMETRIC_RADIANS_INDEX)
-        }
-        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &modulo::IDENTIFIER => {
-            Some(modulo::AlwaysPositiveInput::INDEX)
+        DocumentNodeImplementation::ProtoNode(identifier) => {
+            numeric_boolean_port(identifier).map(|(index, _)| index)
         }
         _ => None,
     };
@@ -5086,23 +5091,31 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
 
 const TRIGONOMETRIC_RADIANS_INDEX: usize = graphite_math_nodes::sine::RadiansInput::INDEX;
 
-fn graph_radians_literal(document: &DocumentNode) -> Option<bool> {
+fn graph_boolean_literal(document: &DocumentNode) -> Option<GddGraphBooleanInput> {
     let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation else {
         return None;
     };
-    if !is_trigonometric_proto(identifier) || numeric_preview_inputs(document).is_none() {
-        return None;
-    }
+    let (index, name) = numeric_boolean_port(identifier)?;
     let NodeInput::Value {
         tagged_value,
         exposed: false,
-    } = document.inputs.get(TRIGONOMETRIC_RADIANS_INDEX)?
+    } = numeric_preview_inputs(document)?.get(index)?
     else {
         return None;
     };
     match **tagged_value {
-        TaggedValue::Bool(radians) => Some(radians),
+        TaggedValue::Bool(value) => Some(GddGraphBooleanInput { index, name, value }),
         _ => None,
+    }
+}
+
+fn numeric_boolean_port(identifier: &ProtoNodeIdentifier) -> Option<(usize, &'static str)> {
+    if is_trigonometric_proto(identifier) {
+        Some((TRIGONOMETRIC_RADIANS_INDEX, "Radians"))
+    } else if identifier == &modulo::IDENTIFIER {
+        Some((modulo::AlwaysPositiveInput::INDEX, "Always Positive"))
+    } else {
+        None
     }
 }
 
@@ -9071,58 +9084,72 @@ mod tests {
     }
 
     #[test]
-    fn at_gra_prop_002_1_updates_only_a_current_hidden_radians_literal() {
+    fn at_gra_prop_002_1_updates_only_current_hidden_boolean_literals() {
         futures::executor::block_on(async {
-            let source = create_gdd_folder(841, 355, "Pinned Graphite".into(), budget())
-                .await
-                .expect("source folder")
-                .insert_root_catalog_node_in_copy(
+            for (identifier, index, name, value) in [
+                (
                     "PROTONODE:math_nodes::CosineInverseNode",
-                    [2, 4],
-                    budget(),
-                )
-                .await
-                .expect("exact pinned template");
-            let nodes = source.graph_nodes().await.expect("saved nodes");
-            let [node] = nodes.as_slice() else {
-                panic!("one source node")
-            };
-            assert_eq!(node.radians(), Some(false));
-            let graph = source.runtime_graph().await.expect("source graph");
-            let document = graph
-                .network
-                .nodes
-                .get(&node.local_id)
-                .expect("source node");
-            let mut changed = document.clone();
-            changed.inputs[TRIGONOMETRIC_RADIANS_INDEX] =
-                NodeInput::value(TaggedValue::Bool(false), true);
-            assert_eq!(graph_radians_literal(&changed), None);
-            changed.inputs[TRIGONOMETRIC_RADIANS_INDEX] = NodeInput::node(NodeId(900), 0);
-            assert_eq!(graph_radians_literal(&changed), None);
-            assert!(matches!(
-                source
-                    .set_graph_radians_in_copy(node, false, budget())
-                    .await,
-                Err(GddArchiveError::UnchangedGraphInput)
-            ));
+                    TRIGONOMETRIC_RADIANS_INDEX,
+                    "Radians",
+                    false,
+                ),
+                (
+                    "PROTONODE:math_nodes::ModuloNode",
+                    modulo::AlwaysPositiveInput::INDEX,
+                    "Always Positive",
+                    true,
+                ),
+            ] {
+                let source = create_gdd_folder(841, 355, "Pinned Graphite".into(), budget())
+                    .await
+                    .expect("source folder")
+                    .insert_root_catalog_node_in_copy(identifier, [2, 4], budget())
+                    .await
+                    .expect("exact pinned template");
+                let nodes = source.graph_nodes().await.expect("saved nodes");
+                let [node] = nodes.as_slice() else {
+                    panic!("one source node")
+                };
+                let original = Some(GddGraphBooleanInput { index, name, value });
+                assert_eq!(node.boolean_input(), original);
+                let graph = source.runtime_graph().await.expect("source graph");
+                let document = graph
+                    .network
+                    .nodes
+                    .get(&node.local_id)
+                    .expect("source node");
+                let mut changed = document.clone();
+                *changed.inputs.get_mut(index).expect("source Boolean slot") =
+                    NodeInput::value(TaggedValue::Bool(value), true);
+                assert_eq!(graph_boolean_literal(&changed), None);
+                *changed.inputs.get_mut(index).expect("source Boolean slot") =
+                    NodeInput::node(NodeId(900), 0);
+                assert_eq!(graph_boolean_literal(&changed), None);
+                assert!(matches!(
+                    source
+                        .set_graph_boolean_input_in_copy(node, value, budget())
+                        .await,
+                    Err(GddArchiveError::UnchangedGraphInput)
+                ));
 
-            let copy = source
-                .set_graph_radians_in_copy(node, true, budget())
-                .await
-                .expect("edit the hidden unit flag");
-            let edited = copy.runtime_graph().await.expect("edited graph");
-            let actual = edited.network.nodes.get(&node.local_id).expect("same node");
-            let mut expected = document.clone();
-            expected.inputs[TRIGONOMETRIC_RADIANS_INDEX] =
-                NodeInput::value(TaggedValue::Bool(true), false);
-            assert_eq!(*actual, expected);
-            assert_eq!(copy.history_len(), source.history_len() + 1);
-            assert!(matches!(
-                copy.set_graph_radians_in_copy(node, true, budget()).await,
-                Err(GddArchiveError::StaleGraphNode)
-            ));
-            assert_eq!(graph_radians_literal(document), Some(false));
+                let copy = source
+                    .set_graph_boolean_input_in_copy(node, !value, budget())
+                    .await
+                    .expect("edit the hidden Boolean slot");
+                let edited = copy.runtime_graph().await.expect("edited graph");
+                let actual = edited.network.nodes.get(&node.local_id).expect("same node");
+                let mut expected = document.clone();
+                *expected.inputs.get_mut(index).expect("source Boolean slot") =
+                    NodeInput::value(TaggedValue::Bool(!value), false);
+                assert_eq!(*actual, expected);
+                assert_eq!(copy.history_len(), source.history_len() + 1);
+                assert!(matches!(
+                    copy.set_graph_boolean_input_in_copy(node, !value, budget())
+                        .await,
+                    Err(GddArchiveError::StaleGraphNode)
+                ));
+                assert_eq!(graph_boolean_literal(document), original);
+            }
         });
     }
 
