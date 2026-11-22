@@ -1085,14 +1085,25 @@ impl GraphiteDocumentItem {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(&self.node_copy, NodeCopyPanel::Ready(form) if matches!(form.saved_graph, SavedGraphPanel::Ready(_)))
-        {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if !matches!(form.saved_graph, SavedGraphPanel::Ready(_)) {
             return;
         }
-        if let SavedGraphAction::SelectNode(index) | SavedGraphAction::DisconnectInput(index) =
-            action
-        {
-            self.select_copy_node(index, window, cx);
+        match action {
+            SavedGraphAction::SelectNode { index, extend } => {
+                if form.pending_canvas_source.is_none() {
+                    if extend {
+                        self.toggle_saved_graph_node_selection(index, window, cx);
+                        return;
+                    }
+                    form.node_selection.clear();
+                }
+                self.select_copy_node(index, window, cx);
+            }
+            SavedGraphAction::DisconnectInput(index) => self.select_copy_node(index, window, cx),
+            _ => {}
         }
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
@@ -1134,7 +1145,7 @@ impl GraphiteDocumentItem {
                     self.save_disconnected_numeric_input(window, cx);
                 }
             }
-            SavedGraphAction::SelectNode(index) => {
+            SavedGraphAction::SelectNode { index, .. } => {
                 let Some(source) = form.pending_canvas_source.take() else {
                     return;
                 };
@@ -1159,6 +1170,45 @@ impl GraphiteDocumentItem {
                     }
                 }
             }
+        }
+    }
+
+    fn toggle_saved_graph_node_selection(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let nodes = &form.nodes;
+        let Some(node) = nodes.get(index).filter(|node| node.can_copy_graph_node()) else {
+            return;
+        };
+        let scope = node.network_id();
+        let same_scope = |index: usize| {
+            nodes
+                .get(index)
+                .is_some_and(|node| node.network_id() == scope && node.can_copy_graph_node())
+        };
+        form.node_selection.retain(|&index| same_scope(index));
+        if form.node_selection.is_empty() {
+            form.node_selection
+                .extend(form.selected.filter(|&index| same_scope(index)));
+        }
+        let active = if form.node_selection.remove(&index) {
+            form.node_selection.first().copied()
+        } else {
+            form.node_selection.insert(index);
+            Some(index)
+        };
+        if let Some(active) = active {
+            self.select_copy_node(active, window, cx);
+        } else {
+            form.selected = None;
+            form.output_preview = NodeOutputPreview::Hidden;
+            cx.notify();
         }
     }
 
@@ -2142,6 +2192,7 @@ impl GraphiteDocumentItem {
                                     SavedGraphView {
                                         network,
                                         selected: form.selected,
+                                        selection: &form.node_selection,
                                         pending_source: form.pending_canvas_source,
                                         can_start_connection: self.copy_task.is_none(),
                                     },
@@ -3839,6 +3890,20 @@ mod tests {
     }
 
     fn right_click_saved_graph(window: &mut gpui::VisualTestContext, selector: &'static str) {
+        click_saved_graph(
+            window,
+            selector,
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+    }
+
+    fn click_saved_graph(
+        window: &mut gpui::VisualTestContext,
+        selector: &'static str,
+        button: gpui::MouseButton,
+        modifiers: gpui::Modifiers,
+    ) {
         let position = window
             .debug_bounds(selector)
             .expect("visible saved graph control")
@@ -3847,8 +3912,8 @@ mod tests {
             window.dispatch_event(
                 gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
                     position,
-                    button: gpui::MouseButton::Right,
-                    modifiers: gpui::Modifiers::default(),
+                    button,
+                    modifiers,
                     click_count: 1,
                     first_mouse: false,
                 }),
@@ -3857,8 +3922,8 @@ mod tests {
             window.dispatch_event(
                 gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
                     position,
-                    button: gpui::MouseButton::Right,
-                    modifiers: gpui::Modifiers::default(),
+                    button,
+                    modifiers,
                     click_count: 1,
                 }),
                 cx,
@@ -5214,19 +5279,30 @@ mod tests {
     async fn at_gra_graph_011_2_workspace_copies_and_pastes_a_connected_graph_node_group(
         cx: &mut TestAppContext,
     ) {
-        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES").await;
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", false).await;
     }
 
     #[gpui::test]
     async fn at_gra_graph_012_2_workspace_duplicates_the_selected_graph_group(
         cx: &mut TestAppContext,
     ) {
-        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-DUPLICATE-NODES").await;
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-DUPLICATE-NODES", false).await;
     }
 
-    async fn verify_workspace_graph_group_copy(cx: &mut TestAppContext, action: &'static str) {
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_copies_a_canvas_modifier_selection(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", true).await;
+    }
+
+    async fn verify_workspace_graph_group_copy(
+        cx: &mut TestAppContext,
+        action: &'static str,
+        canvas: bool,
+    ) {
         let (original, original_history) =
-            numeric_graph_archive(NumericGraphFixture::Connection).await;
+            numeric_graph_archive_with_layout(NumericGraphFixture::Connection, canvas).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -5255,14 +5331,52 @@ mod tests {
                 .map(|node| node.label().to_owned())
                 .collect::<BTreeSet<_>>()
         });
-        click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
-        paint(window);
-        click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
-        paint(window);
+        if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+            let shift = gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            };
+            let accelerator = gpui::Modifiers::secondary_key();
+            for (selector, modifiers, selection) in [
+                ("GRAPHITE-GDD-GRAPH-NODE-1", shift, &[0, 1][..]),
+                ("GRAPHITE-GDD-GRAPH-NODE-1", shift, &[0][..]),
+                ("GRAPHITE-GDD-GRAPH-NODE-0", accelerator, &[][..]),
+            ] {
+                click_saved_graph(window, selector, gpui::MouseButton::Left, modifiers);
+                source.read_with(window, |item, cx| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                        panic!("expected the saved graph selection");
+                    };
+                    assert_eq!(
+                        form.node_selection.iter().copied().collect::<Vec<_>>(),
+                        selection
+                    );
+                    assert_eq!(form.selected_graph_nodes().len(), selection.len());
+                    assert!(!item.is_dirty(cx));
+                });
+            }
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+            click_saved_graph(
+                window,
+                "GRAPHITE-GDD-GRAPH-NODE-1",
+                gpui::MouseButton::Left,
+                accelerator,
+            );
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        } else {
+            click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
+            paint(window);
+            click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+            paint(window);
+            click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+            paint(window);
+            click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
+            paint(window);
+        }
         window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
         let paste = action == "GRAPHITE-GDD-PASTE-NODES";
         if paste {

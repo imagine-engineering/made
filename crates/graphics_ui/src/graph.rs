@@ -1,14 +1,14 @@
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
-    Stateful, Subscription, Window, actions, point, rgb,
+    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Modifiers,
+    Render, Role, Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
     ImportOrExport,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ui::{ContextMenu, DropdownMenu, GraphWireStroke, TintColor, graph_wire_layer, prelude::*};
 use workspace::{
     Workspace,
@@ -109,11 +109,23 @@ pub(crate) fn render_saved_graph_ports(
 
 #[derive(Clone, Copy)]
 pub(crate) enum SavedGraphAction {
-    SelectNode(usize),
+    SelectNode { index: usize, extend: bool },
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
     CancelConnection,
+}
+
+impl SavedGraphAction {
+    fn with_selection_modifiers(self, modifiers: Modifiers) -> Self {
+        match self {
+            Self::SelectNode { index, .. } => Self::SelectNode {
+                index,
+                extend: modifiers.shift || modifiers.secondary(),
+            },
+            _ => self,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -131,6 +143,7 @@ pub(crate) enum SavedGraphMenuTarget {
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
     pub selected: Option<usize>,
+    pub selection: &'a BTreeSet<usize>,
     pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
 }
@@ -292,15 +305,20 @@ pub(crate) fn render_saved_graph(
                     .overflow_hidden()
                     .border_1()
                     .rounded_sm()
-                    .border_color(if view.selected == Some(index) {
-                        colors.text_accent
-                    } else {
-                        colors.border
-                    })
+                    .border_color(
+                        if view.selected == Some(index) || view.selection.contains(&index) {
+                            colors.text_accent
+                        } else {
+                            colors.border
+                        },
+                    )
                     .bg(colors.surface_background)
                     .child(Label::new(node.display_name().to_owned()).size(LabelSize::XSmall)),
                 node.label().to_owned(),
-                SavedGraphAction::SelectNode(index),
+                SavedGraphAction::SelectNode {
+                    index,
+                    extend: false,
+                },
                 dispatch.clone(),
             ))
         }))
@@ -424,10 +442,20 @@ fn saved_graph_button(
         .on_key_down(move |event, window, cx| {
             if matches!(event.keystroke.key.as_str(), "enter" | "space") {
                 cx.stop_propagation();
-                dispatch_key(action, window, cx);
+                dispatch_key(
+                    action.with_selection_modifiers(event.keystroke.modifiers),
+                    window,
+                    cx,
+                );
             }
         })
-        .on_click(move |_, window, cx| dispatch(action, window, cx))
+        .on_click(move |event, window, cx| {
+            dispatch(
+                action.with_selection_modifiers(event.modifiers()),
+                window,
+                cx,
+            );
+        })
 }
 
 actions!(
