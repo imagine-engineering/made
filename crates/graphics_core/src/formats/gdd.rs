@@ -381,19 +381,29 @@ impl GddGraphNetwork {
         &self,
         node: &GddGraphNode,
     ) -> impl Iterator<Item = usize> + '_ {
+        let current = node.numeric_import_source();
         let target = if self.can_extend_ports
             && self.id == node.network_id
             && Arc::ptr_eq(&self.snapshot, &node.snapshot)
         {
-            node.numeric_port()
-                .filter(|port| port.exposed)
-                .map(|port| std::mem::discriminant(&port.value))
+            match current {
+                Some(current) => self
+                    .numeric_imports
+                    .iter()
+                    .find_map(|&(index, kind)| (index == current).then_some(kind)),
+                None => node
+                    .numeric_port()
+                    .filter(|port| port.exposed)
+                    .map(|port| std::mem::discriminant(&port.value)),
+            }
         } else {
             None
         };
         self.numeric_imports
             .iter()
-            .filter_map(move |&(index, kind)| (target == Some(kind)).then_some(index))
+            .filter_map(move |&(index, kind)| {
+                (Some(index) != current && target == Some(kind)).then_some(index)
+            })
     }
 }
 
@@ -964,15 +974,7 @@ impl InspectedGddV1 {
                         .iter()
                         .enumerate()
                         .filter_map(|(index, input)| {
-                            let NodeInput::Value {
-                                tagged_value,
-                                exposed: true,
-                            } = input
-                            else {
-                                return None;
-                            };
-                            preview_numeric_value(tagged_value)
-                                .ok()
+                            exposed_numeric_literal(input)
                                 .map(|value| (index, std::mem::discriminant(&value)))
                         })
                         .collect(),
@@ -2092,6 +2094,29 @@ impl InspectedGddV1 {
         target: &GddGraphNode,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.write_numeric_import_wire(network, import_index, target, false, budget)
+            .await
+    }
+
+    pub async fn reconnect_numeric_network_import_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        import_index: usize,
+        target: &GddGraphNode,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.write_numeric_import_wire(network, import_index, target, true, budget)
+            .await
+    }
+
+    async fn write_numeric_import_wire(
+        &self,
+        network: &GddGraphNetwork,
+        import_index: usize,
+        target: &GddGraphNode,
+        reconnect: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         self.check_network_edit_target(network)?;
         self.check_node_edit_target(target)?;
         let unsupported = || GddArchiveError::UnsupportedGraphImportConnection;
@@ -2103,10 +2128,6 @@ impl InspectedGddV1 {
         }
         let path = &network.path;
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let port = graph_numeric_port(&interface, target)
-            .filter(|port| port.exposed)
-            .ok_or_else(unsupported)?;
-        let input = InputConnector::node_at_index(target.local_id, port.index);
         let metadata = interface
             .node_metadata(&target.local_id, path)
             .ok_or_else(unsupported)?
@@ -2114,17 +2135,45 @@ impl InspectedGddV1 {
             .clone();
         let imports =
             enclosing_network_inputs(interface.document_network(), path).ok_or_else(unsupported)?;
-        let Some(NodeInput::Value {
-            tagged_value,
-            exposed: true,
-        }) = imports.get(import_index)
-        else {
-            return Err(unsupported());
-        };
-        if !port.value.same_type(&preview_numeric_value(tagged_value)?) {
+        let (input_index, current_value) =
+            match (graph_numeric_input(&interface, target), reconnect) {
+                (Some(GddNumericInput::Literal(port)), false) if port.exposed => {
+                    (port.index, port.value)
+                }
+                (
+                    Some(GddNumericInput::Imported {
+                        index,
+                        import_index: previous,
+                    }),
+                    true,
+                ) if Some(previous) == target.numeric_import_source() => {
+                    let previous = imports
+                        .get(previous)
+                        .and_then(exposed_numeric_literal)
+                        .ok_or_else(unsupported)?;
+                    (index, previous)
+                }
+                _ => return Err(unsupported()),
+            };
+        let replacement = imports
+            .get(import_index)
+            .and_then(exposed_numeric_literal)
+            .ok_or_else(unsupported)?;
+        if !current_value.same_type(&replacement) {
             return Err(unsupported());
         }
         let imports = imports.to_vec();
+        let input = InputConnector::node_at_index(target.local_id, input_index);
+        let mut edits = Vec::with_capacity(1 + usize::from(reconnect));
+        if reconnect {
+            interface.disconnect_input(&input, path);
+            let fallback = interface
+                .input_from_connector(&input, path)
+                .filter(|input| matches!(input, NodeInput::Value { exposed: true, .. }))
+                .cloned()
+                .ok_or(GddArchiveError::UnsupportedGraphDisconnection)?;
+            edits.push(write_graph_connector(path, input, fallback));
+        }
         let output = OutputConnector::Import(import_index);
         interface.create_wire(&output, &input, path);
         let wire = interface.input_from_connector(&input, path)
@@ -2141,15 +2190,23 @@ impl InspectedGddV1 {
         let detached = numeric_preview_network(nested, target.local_id, &imports)?;
         typecheck_detached_numeric_network(detached)
             .map_err(GddArchiveError::GraphImportTypeMismatch)?;
-        let edit = write_graph_connector(path, input, wire);
+        edits.push(write_graph_connector(path, input, wire));
         let (owner, staged) = self.fork_working_copy(&budget).await?;
-        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
-        if !matches!(
-            batch.ops.as_slice(),
-            [RegistryDelta::ChangeNodeInput {
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let Some((final_wire, fallback)) = batch.ops.split_last() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        if !matches!(final_wire,
+            RegistryDelta::ChangeNodeInput {
                 id, index, new_input: graphite_document_graph_storage::NodeInput::Import { index: source },
-            }] if *id == target.storage_id && *index as usize == port.index && *source as usize == import_index
-        ) {
+            } if *id == target.storage_id && *index as usize == input_index && *source as usize == import_index
+        ) || fallback.len() != usize::from(reconnect)
+            || !fallback.iter().all(|edit| matches!(edit,
+                RegistryDelta::ChangeNodeInput {
+                    id, index, new_input: graphite_document_graph_storage::NodeInput::Value { exposed: true, .. },
+                } if *id == target.storage_id && *index as usize == input_index
+            ))
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
@@ -3537,6 +3594,18 @@ fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArch
             Ok(GddNumericValue::NumberList(values.as_slice().into()))
         }
         _ => Err(GddArchiveError::UnsupportedGraphNumericPreview),
+    }
+}
+
+fn exposed_numeric_literal(input: &NodeInput) -> Option<GddNumericValue> {
+    if let NodeInput::Value {
+        tagged_value,
+        exposed: true,
+    } = input
+    {
+        preview_numeric_value(tagged_value).ok()
+    } else {
+        None
     }
 }
 
@@ -4982,6 +5051,116 @@ mod tests {
                 .await
                 .expect("one undo");
             assert!(undo.document.registry().value_equal(original_registry));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_008_1_reconnects_a_numeric_import_without_replacing_its_consumer_slot() {
+        futures::executor::block_on(async {
+            let (original, owner_id) = network_import_fixture().await;
+            let graph = original.graph_inspection().await.expect("source networks");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected the source scoped network");
+            };
+            let target = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(9))
+                .expect("original numeric import consumer");
+            let other = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("another consumer of the prior import");
+            let empty = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(14))
+                .expect("an existing unconnected input");
+            assert_eq!(target.numeric_import_source(), Some(1));
+            assert_eq!(
+                nested
+                    .compatible_numeric_imports(target)
+                    .collect::<Vec<_>>(),
+                [0]
+            );
+            for (scope, index, target) in
+                [(root, 0, target), (nested, 1, target), (nested, 0, empty)]
+            {
+                assert!(matches!(
+                    original
+                        .reconnect_numeric_network_import_in_copy(scope, index, target, budget())
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphImportConnection)
+                ));
+            }
+            assert!(matches!(
+                original
+                    .connect_numeric_network_import_in_copy(nested, 0, target, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphImportConnection)
+            ));
+            let copy = original
+                .reconnect_numeric_network_import_in_copy(nested, 0, target, budget())
+                .await
+                .expect("reconnect the existing consumer to the first import");
+            assert!(matches!(
+                copy.reconnect_numeric_network_import_in_copy(nested, 0, target, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let graph = copy.graph_inspection().await.expect("reopened graph");
+            let wired = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == target.storage_id)
+                .expect("same saved consumer");
+            assert_eq!(wired.numeric_import_source(), Some(0));
+            let output = copy
+                .preview_graph_numeric_output(wired)
+                .await
+                .expect("pinned replacement output");
+            assert!(output.same_value(&GddNumericValue::Number(2.)));
+            let unchanged = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == other.storage_id)
+                .expect("same secondary consumer");
+            assert_eq!(unchanged.numeric_import_source(), Some(1));
+            let output = copy
+                .preview_graph_numeric_output(unchanged)
+                .await
+                .expect("pinned original output");
+            assert!(output.same_value(&GddNumericValue::Number(7.)));
+            let registry = copy.document.registry();
+            let source = original.document.registry();
+            assert_eq!(registry.networks, source.networks);
+            assert_eq!(
+                registry.node_instances[&owner_id],
+                source.node_instances[&owner_id]
+            );
+            assert_eq!(
+                registry.node_instances[&other.storage_id],
+                source.node_instances[&other.storage_id]
+            );
+            let [prior] = source.node_instances[&target.storage_id].inputs() else {
+                panic!("expected the original named slot");
+            };
+            let [replaced] = registry.node_instances[&target.storage_id].inputs() else {
+                panic!("expected the same named slot after reconnect");
+            };
+            assert_eq!(replaced.attributes, prior.attributes);
+            assert_eq!(copy.history_len(), original.history_len() + 2);
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(undo.document.registry().value_equal(source));
             let redo = undo
                 .move_history_in_copy(GddHistoryDirection::Redo, budget())
                 .await
