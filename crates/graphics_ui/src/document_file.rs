@@ -953,6 +953,7 @@ enum GddCopyFormat {
 enum GraphiteCopy {
     Original,
     Export(GddCopyFormat),
+    ExportArtboardSvg(Box<GddGraphNode>),
     RecoverFolder,
     MoveHistory(GddHistoryDirection),
     InsertNumericNode {
@@ -4365,6 +4366,18 @@ impl GraphiteDocumentItem {
                             .when(selected.can_preview_numeric_output() || selected.layer_preview().is_some(), |panel| {
                                 panel.child(Self::render_node_output_preview(&form.output_preview, selected.layer_preview(), cx))
                             })
+                            .when(matches!(selected.layer_preview(), Some(GddGraphLayerPreview::Artboard { .. })), |panel| {
+                                let node = Box::new(selected.clone());
+                                panel.child(
+                                    div().debug_selector(|| "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG".into()).child(
+                                        Button::new("graphite-gdd-export-artboard-svg", "Export Artboard SVG")
+                                            .disabled(self.copy_task.is_some())
+                                            .on_click(cx.listener(move |item, _, window, cx| {
+                                                item.save_copy(GraphiteCopy::ExportArtboardSvg(node.clone()), window, cx);
+                                            })),
+                                    ),
+                                )
+                            })
                             .when(selected.grid_position().is_some(), |panel| {
                                 panel.child(
                                     h_flex()
@@ -4615,6 +4628,7 @@ impl GraphiteDocumentItem {
             return;
         }
         let explicit_export = matches!(&request, GraphiteCopy::Export(_));
+        let artboard_svg = matches!(&request, GraphiteCopy::ExportArtboardSvg(_));
         let content = if explicit_export {
             self.export_content
         } else {
@@ -4628,6 +4642,7 @@ impl GraphiteDocumentItem {
             return;
         }
         let model = self.model.read(cx);
+        let artboard_revision = artboard_svg.then(|| model.revision.clone());
         let source = model.path.clone();
         let project = self.project.clone();
         let format = match &request {
@@ -4646,13 +4661,18 @@ impl GraphiteDocumentItem {
         let suggested_name = match format {
             Some(format) => {
                 let stem = gdd_copy_stem(&model.name);
-                let suffix = match format {
-                    GddCopyFormat::Archive(ArchiveFormat::Zip) => ".gdd.zip",
-                    GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
-                    GddCopyFormat::Folder => ".gdd",
+                let suffix = if artboard_svg {
+                    ".svg"
+                } else {
+                    match format {
+                        GddCopyFormat::Archive(ArchiveFormat::Zip) => ".gdd.zip",
+                        GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
+                        GddCopyFormat::Folder => ".gdd",
+                    }
                 };
                 let prefix = match &request {
                     GraphiteCopy::Original | GraphiteCopy::Export(_) => "Copy of",
+                    GraphiteCopy::ExportArtboardSvg(_) => "Artboard from",
                     GraphiteCopy::RecoverFolder => "Recovered",
                     GraphiteCopy::AppendNetworkPort {
                         kind: NetworkPortKind::Import,
@@ -4904,6 +4924,21 @@ impl GraphiteDocumentItem {
                     cx.background_spawn(async move {
                         let revision = match request {
                             GraphiteCopy::Original | GraphiteCopy::Export(_) => None,
+                            GraphiteCopy::ExportArtboardSvg(node) => {
+                                let output = futures::executor::block_on(
+                                    archive.export_document_artboard_svg(
+                                        &node,
+                                        CpuSvgEvaluationBudget {
+                                            max_viewport_pixels: 16 * 1024 * 1024,
+                                            max_output_bytes: 64 * 1024 * 1024,
+                                        },
+                                    ),
+                                )?;
+                                let RenderOutputType::Svg { svg, .. } = output.data else {
+                                    anyhow::bail!("Graphite did not return an Artboard SVG.");
+                                };
+                                return Ok(PreparedCopy::File(svg.into_bytes().into()));
+                            }
                             GraphiteCopy::RecoverFolder => {
                                 Some(archive.recover_pending_edits(ARCHIVE_BUDGET).await?)
                             }
@@ -5150,7 +5185,14 @@ impl GraphiteDocumentItem {
                         original.context("The original Graphite bytes are unavailable.")?,
                     )
                 };
-                item.read_with(cx, |_, _| ())?;
+                ensure!(
+                    item.read_with(cx, |item, cx| {
+                        artboard_revision.as_ref().is_none_or(|revision| {
+                            Arc::ptr_eq(revision, &item.model.read(cx).revision)
+                        })
+                    })?,
+                    "The Graphite Artboard changed during export. Try again."
+                );
                 ensure!(
                     project.read_with(cx, |project, cx| project
                         .absolute_path(&source, cx)
@@ -5182,10 +5224,12 @@ impl GraphiteDocumentItem {
                         if let Some(clipboard) = clipboard {
                             cx.write_to_clipboard(ClipboardItem::new_string(clipboard));
                         }
-                        Some((
-                            format!("Copy saved to {}", path.display()).into(),
-                            Color::Default,
-                        ))
+                        let message = if artboard_svg {
+                            format!("Artboard SVG saved to {}", path.display())
+                        } else {
+                            format!("Copy saved to {}", path.display())
+                        };
+                        Some((message.into(), Color::Default))
                     }
                     Ok(None) => None,
                     Err(error) => Some((format!("{error:#}").into(), Color::Error)),
@@ -11643,6 +11687,49 @@ mod tests {
         assert_eq!(preview_pixel(window), [255, 255, 255, 255]);
         click(window, "GRAPHITE-GDD-REDO");
         assert!(window.debug_bounds(attach).is_none());
+        let painted_pixel = preview_pixel(window);
+        let export_button = "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG";
+        let svg_path = PathBuf::from("/project/artboard-with-content.svg");
+        click(window, export_button);
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        assert!(filesystem.load_bytes(&svg_path).await.is_err());
+        click(window, export_button);
+        window.simulate_new_path_selection(|_| Some(svg_path.clone()));
+        window.run_until_parked();
+        paint(window);
+        let svg = filesystem
+            .load_bytes(&svg_path)
+            .await
+            .expect("native Artboard SVG");
+        let text = std::str::from_utf8(&svg).expect("UTF-8 SVG");
+        assert!(text.contains(r#"viewBox="0 0 128 64" width="128" height="64""#));
+        let renderer = window.update(|_, cx| cx.svg_renderer());
+        let exported =
+            crate::render::prepare_svg_bytes_at_target(&svg, 128, 64, 1., &renderer, 128 * 64 * 4)
+                .expect("rasterize exported source SVG");
+        let offset = (5 * 128 + 5) * 4;
+        let pixel = exported
+            .as_bytes(0)
+            .expect("exported BGRA pixels")
+            .get(offset..offset + 4)
+            .expect("sample inside the exported bounds");
+        assert_eq!(pixel, painted_pixel);
+        click(window, export_button);
+        window.simulate_new_path_selection(|_| Some(svg_path.clone()));
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            assert!(matches!(item.copy_feedback, Some((_, ui::Color::Error))));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&svg_path)
+                .await
+                .expect("retained SVG"),
+            svg
+        );
         let destination = PathBuf::from("/project/artboard-with-content.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
         window.simulate_new_path_selection(|_| Some(destination.clone()));

@@ -62,7 +62,8 @@ use graphite_graph_craft::{
 use graphite_interpreted_executor::node_registry::NODE_REGISTRY;
 use graphite_math_nodes::modulo;
 use graphite_std::{
-    application_io::RenderConfig,
+    application_io::{ExportFormat as SvgExportFormat, RenderConfig},
+    transform::Footprint,
     vector_nodes::{fill, generator_nodes::rectangle},
 };
 use zip::ZipArchive;
@@ -273,6 +274,8 @@ pub enum GddArchiveError {
     UnsupportedDocumentArtboard,
     #[error("Choose a supported Merge layer and an empty Artboard Content input.")]
     UnsupportedArtboardContent,
+    #[error("Choose the exported root Artboard to save its SVG.")]
+    UnsupportedArtboardSvgExport,
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -3339,6 +3342,38 @@ impl InspectedGddV1 {
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
+    }
+
+    pub async fn export_document_artboard_svg(
+        &self,
+        node: &GddGraphNode,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let Some(GddGraphLayerPreview::Artboard { origin, size }) = node.layer_preview() else {
+            return Err(GddArchiveError::UnsupportedArtboardSvgExport);
+        };
+        // The pinned Artboard export subtracts the document bounds and rounds the resolution.
+        let resolution = ((origin + size) - origin).round();
+        if resolution.min_element() < 1. || resolution.max_element() > f64::from(u32::MAX) {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        self.render_document_layer_svg(
+            node,
+            RenderConfig {
+                viewport: Footprint {
+                    transform: DAffine2::from_translation(-origin),
+                    resolution: resolution.as_uvec2(),
+                    ..Footprint::DEFAULT
+                },
+                scale: 1.,
+                export_format: SvgExportFormat::Svg,
+                for_export: true,
+                ..Default::default()
+            },
+            budget,
+        )
+        .await
     }
 
     pub async fn set_document_artboard_in_copy(
@@ -9298,6 +9333,101 @@ mod tests {
             assert!(checked_layer_preview_node(&board).is_none());
             *board.inputs.get_mut(index).expect("pinned input") = original;
         }
+    }
+
+    #[test]
+    fn at_gra_node_282_3_saved_artboard_svg_uses_the_source_document_bounds() {
+        use graphite_graph_craft::document::value::RenderOutputType;
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut template = artboard_node_definition()
+                .expect("pinned Artboard")
+                .default_node_template();
+            *template.inputs.get_mut(2).expect("Artboard location") =
+                NodeInput::value(TaggedValue::DVec2(DVec2::new(72., -12.)), false);
+            *template.inputs.get_mut(3).expect("Artboard dimensions") =
+                NodeInput::value(TaggedValue::DVec2(DVec2::new(-64., 32.)), false);
+            let board_id = NodeId(15);
+            let network = NodeNetwork {
+                nodes: [(board_id, template.into_parts().0)].into_iter().collect(),
+                exports: vec![NodeInput::node(board_id, 0)],
+                ..Default::default()
+            };
+            let resources = HashMapResourceStorage::new();
+            let mut owner = document();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save the pinned Artboard");
+            let original: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source archive")
+                .into();
+            let archive = open_gdd_zip(&original, budget())
+                .await
+                .expect("reopen Artboard archive");
+            let nodes = archive.graph_nodes().await.expect("saved graph");
+            let node = nodes
+                .iter()
+                .find(|node| node.layer_preview().is_some())
+                .expect("document Artboard");
+            let limits = CpuSvgEvaluationBudget {
+                max_viewport_pixels: 64 * 32,
+                max_output_bytes: 64 * 1024,
+            };
+            let output = archive
+                .export_document_artboard_svg(node, limits)
+                .await
+                .expect("export SVG");
+            let RenderOutputType::Svg { svg, image_data } = output.data else {
+                panic!("source SVG output")
+            };
+            assert!(image_data.is_empty());
+            assert!(svg.contains(r#"viewBox="0 0 64 32" width="64" height="32""#));
+            assert!(svg.contains("<clipPath"));
+            let [target] = output
+                .metadata
+                .click_targets
+                .get(&board_id)
+                .expect("Artboard hit geometry")
+                .as_slice()
+            else {
+                panic!("single source Artboard hit shape")
+            };
+            assert_eq!(
+                target.bounding_box(),
+                Some([DVec2::ZERO, DVec2::new(64., 32.)])
+            );
+            assert_eq!(
+                output.metadata.local_transforms.get(&board_id),
+                Some(&DAffine2::from_translation(DVec2::new(8., -12.)))
+            );
+            assert!(matches!(
+                archive
+                    .export_document_artboard_svg(
+                        node,
+                        CpuSvgEvaluationBudget {
+                            max_viewport_pixels: 64 * 32 - 1,
+                            ..limits
+                        }
+                    )
+                    .await,
+                Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
+            ));
+            let other = open_gdd_zip(&original, budget())
+                .await
+                .expect("independent inspection");
+            assert!(matches!(
+                other.export_document_artboard_svg(node, limits).await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+        });
     }
 
     #[test]
