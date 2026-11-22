@@ -261,12 +261,14 @@ pub enum GddArchiveError {
     GraphNumericPreviewBudget,
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
-    #[error("Graphite preview requires a saved root Merge with supported rectangle layers.")]
-    UnsupportedGraphMergePreview,
-    #[error("The saved Merge graph exceeds the preview budget.")]
-    GraphMergePreviewBudget,
-    #[error("Graphite could not render the saved Merge graph. {0}")]
-    GraphMergePreviewEvaluation(String),
+    #[error(
+        "Graphite preview requires a saved root Merge or Artboard with supported rectangle layers."
+    )]
+    UnsupportedGraphLayerPreview,
+    #[error("The saved layer graph exceeds the preview budget.")]
+    GraphLayerPreviewBudget,
+    #[error("Graphite could not render the saved layer graph. {0}")]
+    GraphLayerPreviewEvaluation(String),
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -685,6 +687,12 @@ pub enum GddNumericImportKind {
     NumberList,
 }
 
+#[derive(Clone, Copy)]
+pub enum GddGraphLayerPreview {
+    Merge,
+    Artboard { origin: DVec2, size: DVec2 },
+}
+
 #[derive(Clone)]
 pub struct GddGraphNode {
     snapshot: Arc<()>,
@@ -703,7 +711,7 @@ pub struct GddGraphNode {
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
-    can_preview_merge_output: bool,
+    layer_preview: Option<GddGraphLayerPreview>,
     can_supply_numeric_export: bool,
     can_copy_graph_node: bool,
     grid_position: Option<[i32; 2]>,
@@ -948,8 +956,8 @@ impl GddGraphNode {
         self.can_preview_numeric_output
     }
 
-    pub fn can_preview_merge_output(&self) -> bool {
-        self.can_preview_merge_output
+    pub fn layer_preview(&self) -> Option<GddGraphLayerPreview> {
+        self.layer_preview
     }
 
     pub fn can_copy_graph_node(&self) -> bool {
@@ -1315,7 +1323,7 @@ impl InspectedGddV1 {
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
-                    can_preview_merge_output: false,
+                    layer_preview: None,
                     can_supply_numeric_export: false,
                     can_copy_graph_node: false,
                     grid_position: None,
@@ -1511,12 +1519,15 @@ impl InspectedGddV1 {
                     .document_node(&node.local_id, path)
                     .and_then(graph_boolean_literal);
             }
-            node.can_preview_merge_output = path.is_empty()
+            if path.is_empty()
                 && node.nested_network.is_some()
                 && interface.document_network().exports == [NodeInput::node(node.local_id, 0)]
-                && interface
+            {
+                node.layer_preview = interface
                     .document_node(&node.local_id, path)
-                    .is_some_and(|document| checked_merge_preview_node(document).is_some());
+                    .and_then(checked_layer_preview_node)
+                    .and_then(|(_, preview)| preview);
+            }
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
                 && interface.number_of_outputs(&node.local_id, path) == 1;
@@ -3257,28 +3268,28 @@ impl InspectedGddV1 {
         })
     }
 
-    pub async fn render_document_merge_svg(
+    pub async fn render_document_layer_svg(
         &self,
         node: &GddGraphNode,
         configuration: RenderConfig,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<RenderOutput, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        if !node.network_path.is_empty() || node.nested_network.is_none() {
-            return Err(GddArchiveError::UnsupportedGraphMergePreview);
+        if node.layer_preview().is_none() {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         }
         let graph = self.runtime_graph().await?;
         let selected = node.local_id;
         if graph.network.exports != [NodeInput::node(selected, 0)] {
-            return Err(GddArchiveError::UnsupportedGraphMergePreview);
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         }
         validate_svg_configuration(configuration, budget)
-            .map_err(|error| GddArchiveError::GraphMergePreviewEvaluation(error.to_string()))?;
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
         let mut detached = NodeNetwork {
             exports: vec![NodeInput::node(selected, 0)],
             ..Default::default()
         };
-        collect_merge_preview_node(
+        collect_layer_preview_node(
             &graph.network,
             selected,
             &mut detached,
@@ -3286,7 +3297,7 @@ impl InspectedGddV1 {
         )?;
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
-            .map_err(|error| GddArchiveError::GraphMergePreviewEvaluation(error.to_string()))
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(
@@ -4991,7 +5002,7 @@ fn enclosing_network_inputs<'a>(root: &'a NodeNetwork, path: &[NodeId]) -> Optio
     }
 }
 
-fn collect_merge_preview_node(
+fn collect_layer_preview_node(
     source: &NodeNetwork,
     node_id: NodeId,
     detached: &mut NodeNetwork,
@@ -5002,24 +5013,24 @@ fn collect_merge_preview_node(
         return Ok(());
     }
     if !visiting.insert(node_id) {
-        return Err(GddArchiveError::UnsupportedGraphMergePreview);
+        return Err(GddArchiveError::UnsupportedGraphLayerPreview);
     }
     if detached.nodes.len() + visiting.len() > MAX_PREVIEW_NODES {
-        return Err(GddArchiveError::GraphMergePreviewBudget);
+        return Err(GddArchiveError::GraphLayerPreviewBudget);
     }
     let source_node = source
         .nodes
         .get(&node_id)
-        .ok_or(GddArchiveError::UnsupportedGraphMergePreview)?;
-    let node = checked_merge_preview_node(source_node)
-        .ok_or(GddArchiveError::UnsupportedGraphMergePreview)?;
+        .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+    let (node, _) = checked_layer_preview_node(source_node)
+        .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
     for input in &node.inputs {
         if let NodeInput::Node {
             node_id,
             output_index: 0,
         } = input
         {
-            collect_merge_preview_node(source, *node_id, detached, visiting)?;
+            collect_layer_preview_node(source, *node_id, detached, visiting)?;
         }
     }
     visiting.remove(&node_id);
@@ -5027,7 +5038,9 @@ fn collect_merge_preview_node(
     Ok(())
 }
 
-fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
+fn checked_layer_preview_node(
+    node: &DocumentNode,
+) -> Option<(DocumentNode, Option<GddGraphLayerPreview>)> {
     let output_wire = |input: &NodeInput| {
         matches!(
             input,
@@ -5037,16 +5050,56 @@ fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
             }
         )
     };
-    let (definition, replacements) = match &node.implementation {
+    let (definition, replacements, preview) = match &node.implementation {
         DocumentNodeImplementation::Network(_) => {
-            let [base, content] = node.inputs.as_slice() else {
-                return None;
-            };
-            let replacements = [(0, base), (1, content)]
-                .into_iter()
+            let mut replacements = node
+                .inputs
+                .iter()
+                .take(2)
+                .enumerate()
                 .filter(|(_, input)| output_wire(input))
                 .collect::<Vec<_>>();
-            (merge_node_definition()?, replacements)
+            match node.inputs.as_slice() {
+                [_, _] => (
+                    merge_node_definition()?,
+                    replacements,
+                    Some(GddGraphLayerPreview::Merge),
+                ),
+                [_, _, location, dimensions, background, clip] => {
+                    let (
+                        Some(TaggedValue::DVec2(location_value)),
+                        Some(TaggedValue::DVec2(dimensions_value)),
+                    ) = (location.as_value(), dimensions.as_value())
+                    else {
+                        return None;
+                    };
+                    let opposite_corner = *location_value + *dimensions_value;
+                    // Use the pinned CreateArtboard normalization when framing saved output.
+                    let origin = location_value.min(opposite_corner);
+                    let size = dimensions_value.abs().max(DVec2::ONE);
+                    if !location_value.is_finite()
+                        || !dimensions_value.is_finite()
+                        || !opposite_corner.is_finite()
+                        || !(origin + size).is_finite()
+                        || !matches!(background.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()) && (color.a() * 1000.).is_finite())
+                        || !matches!(clip.as_value(), Some(TaggedValue::Bool(_)))
+                    {
+                        return None;
+                    }
+                    replacements.extend([
+                        (2, location),
+                        (3, dimensions),
+                        (4, background),
+                        (5, clip),
+                    ]);
+                    (
+                        artboard_node_definition()?,
+                        replacements,
+                        Some(GddGraphLayerPreview::Artboard { origin, size }),
+                    )
+                }
+                _ => return None,
+            }
         }
         DocumentNodeImplementation::ProtoNode(identifier)
             if identifier == &rectangle::IDENTIFIER =>
@@ -5064,6 +5117,7 @@ fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
             (
                 resolve_proto_node_type(rectangle::IDENTIFIER)?,
                 replacements,
+                None,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -5079,6 +5133,7 @@ fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
             (
                 resolve_proto_node_type(fill::IDENTIFIER)?,
                 vec![(content_index, content), (paint_index, paint)],
+                None,
             )
         }
         _ => return None,
@@ -5089,7 +5144,7 @@ fn checked_merge_preview_node(node: &DocumentNode) -> Option<DocumentNode> {
     for (index, input) in replacements {
         *expected.inputs.get_mut(index)? = input.clone();
     }
-    (expected == *node).then_some(expected)
+    (expected == *node).then_some((expected, preview))
 }
 
 fn document_numeric_export_network(
@@ -9052,6 +9107,36 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn at_gra_node_282_3_validates_the_saved_artboard_preview_inputs() {
+        let mut template = artboard_node_definition()
+            .expect("pinned Artboard")
+            .default_node_template();
+        template.normalize_stored_types();
+        let (mut board, _) = template.into_parts();
+        let Some((_, Some(GddGraphLayerPreview::Artboard { origin, size }))) =
+            checked_layer_preview_node(&board)
+        else {
+            panic!("previewable pinned default Artboard")
+        };
+        assert_eq!((origin, size), (DVec2::ZERO, DVec2::new(1920., 1080.)));
+        for (index, invalid) in [
+            (1, NodeInput::node(NodeId(20), 1)),
+            (
+                2,
+                NodeInput::value(TaggedValue::DVec2(DVec2::splat(f64::NAN)), false),
+            ),
+            (3, NodeInput::value(TaggedValue::Bool(false), false)),
+            (4, NodeInput::node(NodeId(20), 0)),
+            (5, NodeInput::node(NodeId(20), 0)),
+        ] {
+            let input = board.inputs.get_mut(index).expect("pinned input");
+            let original = std::mem::replace(input, invalid);
+            assert!(checked_layer_preview_node(&board).is_none());
+            *board.inputs.get_mut(index).expect("pinned input") = original;
+        }
+    }
+
     async fn assert_catalog_layer_roundtrip(
         identifier: &str,
         definition: &DocumentNodeDefinition,
@@ -9385,7 +9470,7 @@ mod tests {
                 max_output_bytes: 64 * 1024,
             };
             let output = saved
-                .render_document_merge_svg(root, configuration, render_budget)
+                .render_document_layer_svg(root, configuration, render_budget)
                 .await
                 .expect("render the saved Merge without external resources");
             let RenderOutputType::Svg { svg, image_data } = output.data else {
@@ -9408,16 +9493,16 @@ mod tests {
                 .expect("base layer");
             assert!(matches!(
                 saved
-                    .render_document_merge_svg(wrong_root, configuration, render_budget)
+                    .render_document_layer_svg(wrong_root, configuration, render_budget)
                     .await,
-                Err(GddArchiveError::UnsupportedGraphMergePreview)
+                Err(GddArchiveError::UnsupportedGraphLayerPreview)
             ));
             let foreign = open_gdd_zip(&original, budget)
                 .await
                 .expect("independent snapshot");
             assert!(matches!(
                 foreign
-                    .render_document_merge_svg(root, configuration, render_budget)
+                    .render_document_layer_svg(root, configuration, render_budget)
                     .await,
                 Err(GddArchiveError::StaleGraphNode)
             ));
@@ -9427,9 +9512,9 @@ mod tests {
             };
             assert!(matches!(
                 saved
-                    .render_document_merge_svg(root, configuration, insufficient)
+                    .render_document_layer_svg(root, configuration, insufficient)
                     .await,
-                Err(GddArchiveError::GraphMergePreviewEvaluation(_))
+                Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
             ));
             let insufficient = CpuSvgEvaluationBudget {
                 max_viewport_pixels: 1,
@@ -9437,22 +9522,22 @@ mod tests {
             };
             assert!(matches!(
                 saved
-                    .render_document_merge_svg(root, configuration, insufficient)
+                    .render_document_layer_svg(root, configuration, insufficient)
                     .await,
-                Err(GddArchiveError::GraphMergePreviewEvaluation(_))
+                Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
             ));
 
             let mut cyclic = graph.network.clone();
             let base = cyclic.nodes.get_mut(&first_layer).expect("base Merge");
             *base.inputs.first_mut().expect("Base input") = NodeInput::node(second_layer, 0);
             assert!(matches!(
-                collect_merge_preview_node(
+                collect_layer_preview_node(
                     &cyclic,
                     second_layer,
                     &mut NodeNetwork::default(),
                     &mut BTreeSet::new()
                 ),
-                Err(GddArchiveError::UnsupportedGraphMergePreview)
+                Err(GddArchiveError::UnsupportedGraphLayerPreview)
             ));
             let mut deep = NodeNetwork::default();
             let mut template = merge_node_definition()
@@ -9468,17 +9553,17 @@ mod tests {
                 deep.nodes.insert(NodeId(index), layer);
             }
             let mut bounded = NodeNetwork::default();
-            collect_merge_preview_node(&deep, NodeId(32), &mut bounded, &mut BTreeSet::new())
+            collect_layer_preview_node(&deep, NodeId(32), &mut bounded, &mut BTreeSet::new())
                 .expect("maximum bounded preview");
             assert_eq!(bounded.nodes.len(), 32);
             assert!(matches!(
-                collect_merge_preview_node(
+                collect_layer_preview_node(
                     &deep,
                     NodeId(33),
                     &mut NodeNetwork::default(),
                     &mut BTreeSet::new()
                 ),
-                Err(GddArchiveError::GraphMergePreviewBudget)
+                Err(GddArchiveError::GraphLayerPreviewBudget)
             ));
             let mut altered = graph.network;
             let shape = altered
@@ -9490,13 +9575,13 @@ mod tests {
                 .get_mut(rectangle::WidthInput::INDEX)
                 .expect("width port") = NodeInput::scope("unresolved-scope");
             assert!(matches!(
-                collect_merge_preview_node(
+                collect_layer_preview_node(
                     &altered,
                     second_layer,
                     &mut NodeNetwork::default(),
                     &mut BTreeSet::new()
                 ),
-                Err(GddArchiveError::UnsupportedGraphMergePreview)
+                Err(GddArchiveError::UnsupportedGraphLayerPreview)
             ));
         });
     }

@@ -16,15 +16,16 @@ use graphics_core::evaluate::{CpuSvgEvaluationBudget, UnaryNumericOperation};
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
-        GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection,
-        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
-        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
-        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
+        GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
+        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
-use graphite_graph_craft::document::value::{DAffine2, RenderOutputType, UVec2};
+use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, UVec2};
 use graphite_std::{
     application_io::{ExportFormat as RenderFormat, RenderConfig},
     transform::Footprint,
@@ -84,17 +85,30 @@ const GRAPHITE_NUMERIC_OPERATIONS: [UnaryNumericOperation; 5] = [
     UnaryNumericOperation::Sign,
 ];
 
-const MERGE_PREVIEW_SIZE: u32 = 128;
+const LAYER_PREVIEW_SIZE: u32 = 128;
 
-async fn preview_merge_image(
+async fn preview_layer_image(
     contents: &InspectedGddV1,
     node: &GddGraphNode,
+    preview: GddGraphLayerPreview,
     renderer: &SvgRenderer,
 ) -> Result<Arc<RenderImage>, String> {
-    let resolution = UVec2::splat(MERGE_PREVIEW_SIZE);
+    let resolution = UVec2::splat(LAYER_PREVIEW_SIZE);
+    let center = resolution.as_dvec2() / 2.;
+    let transform = match preview {
+        GddGraphLayerPreview::Merge => DAffine2::from_translation(center),
+        GddGraphLayerPreview::Artboard { origin, size } => {
+            let scale = f64::from(LAYER_PREVIEW_SIZE) / size.max_element();
+            DAffine2::from_scale_angle_translation(
+                DVec2::splat(scale),
+                0.,
+                center - (origin * scale + size * (scale / 2.)),
+            )
+        }
+    };
     let configuration = RenderConfig {
         viewport: Footprint {
-            transform: DAffine2::from_translation(resolution.as_dvec2() / 2.),
+            transform,
             resolution,
             ..Footprint::DEFAULT
         },
@@ -104,11 +118,11 @@ async fn preview_merge_image(
         ..Default::default()
     };
     let budget = CpuSvgEvaluationBudget {
-        max_viewport_pixels: MERGE_PREVIEW_SIZE * MERGE_PREVIEW_SIZE,
+        max_viewport_pixels: LAYER_PREVIEW_SIZE * LAYER_PREVIEW_SIZE,
         max_output_bytes: 64 * 1024,
     };
     let output = contents
-        .render_document_merge_svg(node, configuration, budget)
+        .render_document_layer_svg(node, configuration, budget)
         .await
         .map_err(|error| error.to_string())?;
     let RenderOutputType::Svg { svg, .. } = output.data else {
@@ -120,7 +134,7 @@ async fn preview_merge_image(
         resolution.y,
         configuration.scale,
         renderer,
-        (MERGE_PREVIEW_SIZE * MERGE_PREVIEW_SIZE * 4) as usize,
+        (LAYER_PREVIEW_SIZE * LAYER_PREVIEW_SIZE * 4) as usize,
     )
     .map_err(|error| error.to_string())
 }
@@ -2733,7 +2747,7 @@ impl GraphiteDocumentItem {
         }
         let Some(node) = form
             .selected_node()
-            .filter(|node| node.can_preview_numeric_output() || node.can_preview_merge_output())
+            .filter(|node| node.can_preview_numeric_output() || node.layer_preview().is_some())
         else {
             return;
         };
@@ -2748,11 +2762,15 @@ impl GraphiteDocumentItem {
         let node = node.clone();
         let contents = contents.clone();
         let revision = form.revision.clone();
-        let renderer = node.can_preview_merge_output().then(|| cx.svg_renderer());
+        let layer = node
+            .layer_preview()
+            .map(|preview| (preview, cx.svg_renderer()));
         let evaluation = cx.background_spawn(async move {
-            if let Some(renderer) = renderer {
-                futures::executor::block_on(preview_merge_image(&contents, &node, &renderer))
-                    .map(NodeOutputPreview::ReadyImage)
+            if let Some((preview, renderer)) = layer {
+                futures::executor::block_on(preview_layer_image(
+                    &contents, &node, preview, &renderer,
+                ))
+                .map(NodeOutputPreview::ReadyImage)
             } else {
                 futures::executor::block_on(contents.preview_graph_numeric_output(&node))
                     .map(NodeOutputPreview::Ready)
@@ -3003,33 +3021,40 @@ impl GraphiteDocumentItem {
 
     fn render_node_output_preview(
         preview: &NodeOutputPreview,
-        merge: bool,
+        layer: Option<GddGraphLayerPreview>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let (button_id, selector, result_selector, label) = if merge {
-            (
+        let (button_id, selector, result_selector, image_selector, name) = match layer {
+            Some(GddGraphLayerPreview::Merge) => (
                 "graphite-gdd-preview-merge",
                 "GRAPHITE-GDD-PREVIEW-MERGE",
                 "GRAPHITE-GDD-MERGE-RESULT",
-                match preview {
-                    NodeOutputPreview::Pending { .. } => "Cancel Merge Preview",
-                    NodeOutputPreview::ReadyImage(_) => "Hide Merge Preview",
-                    NodeOutputPreview::Failed(_) => "Retry Merge Preview",
-                    _ => "Preview Saved Merge",
-                },
-            )
-        } else {
-            (
+                "GRAPHITE-GDD-MERGE-IMAGE",
+                "Merge",
+            ),
+            Some(GddGraphLayerPreview::Artboard { .. }) => (
+                "graphite-gdd-preview-artboard",
+                "GRAPHITE-GDD-PREVIEW-ARTBOARD",
+                "GRAPHITE-GDD-ARTBOARD-RESULT",
+                "GRAPHITE-GDD-ARTBOARD-IMAGE",
+                "Artboard",
+            ),
+            None => (
                 "graphite-gdd-preview-numeric",
                 "GRAPHITE-GDD-PREVIEW-NUMERIC",
                 "GRAPHITE-GDD-NUMERIC-RESULT",
-                match preview {
-                    NodeOutputPreview::Pending { .. } => "Cancel Numeric Preview",
-                    NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
-                    NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
-                    _ => "Preview Saved Output",
-                },
-            )
+                "GRAPHITE-GDD-NUMERIC-IMAGE",
+                "Numeric",
+            ),
+        };
+        let label = match preview {
+            NodeOutputPreview::Pending { .. } => format!("Cancel {name} Preview"),
+            NodeOutputPreview::Ready(_) | NodeOutputPreview::ReadyImage(_) => {
+                format!("Hide {name} Preview")
+            }
+            NodeOutputPreview::Failed(_) => format!("Retry {name} Preview"),
+            _ if layer.is_some() => format!("Preview Saved {name}"),
+            _ => "Preview Saved Output".to_owned(),
         };
         v_flex()
             .gap_2()
@@ -3055,8 +3080,8 @@ impl GraphiteDocumentItem {
                 |panel, image| {
                     panel.child(
                         div()
-                            .debug_selector(|| "GRAPHITE-GDD-MERGE-IMAGE".into())
-                            .size(px(MERGE_PREVIEW_SIZE as f32))
+                            .debug_selector(move || image_selector.into())
+                            .size(px(LAYER_PREVIEW_SIZE as f32))
                             .child(img(ImageSource::Render(image)).size_full()),
                     )
                 },
@@ -4237,8 +4262,8 @@ impl GraphiteDocumentItem {
                                 |panel| panel.child(self.render_numeric_wire_insertion(selected, window, cx)),
                             )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
-                            .when(selected.can_preview_numeric_output() || selected.can_preview_merge_output(), |panel| {
-                                panel.child(Self::render_node_output_preview(&form.output_preview, selected.can_preview_merge_output(), cx))
+                            .when(selected.can_preview_numeric_output() || selected.layer_preview().is_some(), |panel| {
+                                panel.child(Self::render_node_output_preview(&form.output_preview, selected.layer_preview(), cx))
                             })
                             .when(selected.grid_position().is_some(), |panel| {
                                 panel.child(
@@ -11285,38 +11310,59 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    async fn at_gra_node_281_3_workspace_previews_the_saved_merge_layers(cx: &mut TestAppContext) {
-        use graphite_core_types::{Color, NodeParameter};
-        use graphite_document_graph_storage::NoMetadata;
-        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{resolve_network_node_type, resolve_proto_node_type};
-        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
-        use graphite_resource::ResourceRegistry;
+    fn preview_rectangle(
+        rectangle_id: graphite_graph_craft::document::NodeId,
+        paint_id: graphite_graph_craft::document::NodeId,
+        width: f64,
+        height: f64,
+        color: graphite_core_types::Color,
+    ) -> [(
+        graphite_graph_craft::document::NodeId,
+        graphite_graph_craft::document::DocumentNode,
+    ); 2] {
+        use graphite_core_types::NodeParameter;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::{NodeInput, value::TaggedValue};
         use graphite_std::vector_nodes::{fill, generator_nodes::rectangle};
 
+        let mut shape = resolve_proto_node_type(rectangle::IDENTIFIER)
+            .expect("pinned Rectangle")
+            .default_node_template();
+        *shape
+            .inputs
+            .get_mut(rectangle::WidthInput::INDEX)
+            .expect("width") = NodeInput::value(TaggedValue::Number(width), false);
+        *shape
+            .inputs
+            .get_mut(rectangle::HeightInput::INDEX)
+            .expect("height") = NodeInput::value(TaggedValue::Number(height), false);
+        let mut paint = resolve_proto_node_type(fill::IDENTIFIER)
+            .expect("pinned Fill")
+            .default_node_template();
+        *paint
+            .inputs
+            .get_mut(fill::ContentInput::INDEX)
+            .expect("paint input") = NodeInput::node(rectangle_id, 0);
+        *paint
+            .inputs
+            .get_mut(fill::PaintInput::INDEX)
+            .expect("paint color") = NodeInput::value(TaggedValue::Color(color), false);
+        [
+            (rectangle_id, shape.into_parts().0),
+            (paint_id, paint.into_parts().0),
+        ]
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_281_3_workspace_previews_the_saved_merge_layers(cx: &mut TestAppContext) {
+        use graphite_core_types::Color;
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork};
+        use graphite_resource::ResourceRegistry;
+
         let layer = |rectangle_id, fill_id, layer_id, base, width, height, color| {
-            let mut shape = resolve_proto_node_type(rectangle::IDENTIFIER)
-                .expect("pinned Rectangle")
-                .default_node_template();
-            *shape
-                .inputs
-                .get_mut(rectangle::WidthInput::INDEX)
-                .expect("width") = NodeInput::value(TaggedValue::Number(width), false);
-            *shape
-                .inputs
-                .get_mut(rectangle::HeightInput::INDEX)
-                .expect("height") = NodeInput::value(TaggedValue::Number(height), false);
-            let mut paint = resolve_proto_node_type(fill::IDENTIFIER)
-                .expect("pinned Fill")
-                .default_node_template();
-            *paint
-                .inputs
-                .get_mut(fill::ContentInput::INDEX)
-                .expect("paint input") = NodeInput::node(rectangle_id, 0);
-            *paint
-                .inputs
-                .get_mut(fill::PaintInput::INDEX)
-                .expect("paint color") = NodeInput::value(TaggedValue::Color(color), false);
+            let [shape, paint] = preview_rectangle(rectangle_id, fill_id, width, height, color);
             let mut merge = resolve_network_node_type("Merge")
                 .expect("pinned Merge")
                 .default_node_template();
@@ -11327,11 +11373,7 @@ mod tests {
                 *base_port = NodeInput::node(base, 0);
             }
             *content = NodeInput::node(fill_id, 0);
-            [
-                (rectangle_id, shape.into_parts().0),
-                (fill_id, paint.into_parts().0),
-                (layer_id, merge.into_parts().0),
-            ]
+            [shape, paint, (layer_id, merge.into_parts().0)]
         };
         let bottom = NodeId(14);
         let top = NodeId(25);
@@ -11449,7 +11491,7 @@ mod tests {
         });
         let bytes = image.as_bytes(0).expect("native BGRA pixels");
         let pixel = |x, y| {
-            let offset = (y * MERGE_PREVIEW_SIZE as usize + x) * 4;
+            let offset = (y * LAYER_PREVIEW_SIZE as usize + x) * 4;
             bytes
                 .get(offset..offset + 4)
                 .expect("sample inside preview")
@@ -11465,6 +11507,123 @@ mod tests {
             filesystem.load_bytes(&path).await.expect("original ZIP"),
             original
         );
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_282_3_workspace_fits_and_clips_the_saved_artboard(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_core_types::Color;
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
+        use graphite_resource::ResourceRegistry;
+
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        for clip in [true, false] {
+            let board_id = NodeId(15);
+            let rectangle_id = NodeId(11);
+            let paint_id = NodeId(12);
+            let mut board = resolve_network_node_type("Artboard")
+                .expect("pinned Artboard")
+                .default_node_template();
+            let [_, content, location, dimensions, background, clipping] =
+                board.inputs.as_mut_slice()
+            else {
+                panic!("six pinned Artboard inputs")
+            };
+            *content = NodeInput::node(paint_id, 0);
+            *location = NodeInput::value(TaggedValue::DVec2(DVec2::new(80., -16.)), false);
+            *dimensions = NodeInput::value(TaggedValue::DVec2(DVec2::new(-64., 32.)), false);
+            *background = NodeInput::value(TaggedValue::Color(Color::WHITE), false);
+            *clipping = NodeInput::value(TaggedValue::Bool(clip), false);
+            let graph = NodeNetwork {
+                nodes: preview_rectangle(rectangle_id, paint_id, 24., 24., Color::BLUE)
+                    .into_iter()
+                    .chain([(board_id, board.into_parts().0)])
+                    .collect(),
+                exports: vec![NodeInput::node(board_id, 0)],
+                ..Default::default()
+            };
+            let mut owner = GddV1::create_in(
+                AnyContainer::Memory(MemoryBackend::new()),
+                GddV1Layout,
+                Default::default(),
+                655,
+                "Pinned Graphite".into(),
+                "Pinned library".into(),
+            )
+            .expect("saved GDD");
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&graph, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save pinned Artboard and painted content");
+            let original = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source ZIP");
+            let path = PathBuf::from(format!("/project/pinned-artboard-clip-{clip}.gdd.zip"));
+            filesystem
+                .write(&path, &original)
+                .await
+                .expect("original ZIP");
+            window.run_until_parked();
+            let item = workspace
+                .update_in(window, |workspace, window, cx| {
+                    workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+                })
+                .await
+                .expect("open saved Artboard")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("native Inspector");
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+            click(window, "GRAPHITE-GDD-PREVIEW-ARTBOARD");
+            let image = item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Artboard form")
+                };
+                let NodeOutputPreview::ReadyImage(image) = &form.output_preview else {
+                    panic!(
+                        "expected Artboard pixels, got {:?}",
+                        form.output_preview.feedback()
+                    );
+                };
+                assert!(!item.is_dirty(cx));
+                image.clone()
+            });
+            let bytes = image.as_bytes(0).expect("native BGRA pixels");
+            let pixel = |x, y| {
+                let offset = (y * LAYER_PREVIEW_SIZE as usize + x) * 4;
+                bytes
+                    .get(offset..offset + 4)
+                    .expect("sample inside preview")
+            };
+            assert_eq!(pixel(64, 30), [0, 0, 0, 0]);
+            assert_eq!(pixel(64, 34), [255, 255, 255, 255]);
+            assert_eq!(pixel(64, 94), [255, 255, 255, 255]);
+            assert_eq!(pixel(64, 98), [0, 0, 0, 0]);
+            assert_eq!(pixel(10, 40), [255, 0, 0, 255]);
+            assert_eq!(
+                pixel(10, 20),
+                if clip { [0, 0, 0, 0] } else { [255, 0, 0, 255] }
+            );
+            assert!(window.debug_bounds("GRAPHITE-GDD-ARTBOARD-IMAGE").is_some());
+            assert!(window.update(|window, _| window.has_image_atlas_entry(&image)));
+            assert_eq!(
+                filesystem.load_bytes(&path).await.expect("original ZIP"),
+                original
+            );
+        }
     }
 
     #[gpui::test]
