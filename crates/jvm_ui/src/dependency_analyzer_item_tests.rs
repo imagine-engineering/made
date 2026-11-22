@@ -728,6 +728,34 @@ async fn analyzer_row_menu_deploys_targets_and_dismisses(cx: &mut TestAppContext
         item.select_node_row(analyzer_row_id_for_node("leaf"), cx)
     });
 
+    use gpui::Focusable as _;
+    cx.update(|window, cx| {
+        item.read(cx).focus_handle(cx).focus(window, cx);
+        window.draw(cx).clear(cx);
+    });
+    cx.simulate_keystrokes("home");
+    assert_ne!(
+        item.read_with(cx, |item, _| item.selected_key().map(str::to_owned)),
+        Some("leaf".into())
+    );
+    item.update(cx, |item, cx| {
+        item.select_node_row(analyzer_row_id_for_node("leaf"), cx)
+    });
+    cx.simulate_keystrokes("shift-f10");
+    assert!(item.read_with(cx, |item, _| item.row_context_menu_is_deployed()));
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let cancel = cx
+            .build_action("menu::Cancel", None)
+            .expect("menu cancel action");
+        window.dispatch_action(cancel, cx);
+    });
+    cx.update(|window, cx| {
+        assert!(item.read(cx).focus_handle(cx).is_focused(window));
+        assert!(!item.read(cx).row_context_menu_is_deployed());
+        assert_eq!(item.read(cx).selected_key(), Some("leaf"));
+    });
+
     // Staging the row menu deploys it anchored at the given position.
     cx.update(|window, cx| {
         item.update(cx, |item, cx| {
@@ -746,7 +774,6 @@ async fn analyzer_row_menu_deploys_targets_and_dismisses(cx: &mut TestAppContext
 
     // Moving focus off the menu dismisses it: the ui::ContextMenu cancels on
     // blur and emits DismissEvent, which takes the staged menu.
-    use gpui::Focusable as _;
     cx.update(|window, cx| {
         item.update(cx, |item, cx| {
             let handle = item.focus_handle(cx);

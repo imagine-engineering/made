@@ -71,6 +71,7 @@ actions!(
         UnlinkSelectedGradleProject,
         CancelSelectedImport,
         ShowDependencyDiagram,
+        ShowDependencyRowMenu,
         CloseDependencyDiagram,
         CopyDependencyDiagramSource,
         RunSelectedOfflineOperation,
@@ -3828,11 +3829,19 @@ impl DependenciesPanel {
                 )
             })
         });
-        window.focus(&context_menu.focus_handle(cx), cx);
-        let subscription = cx.subscribe(&context_menu, |this, _, _: &gpui::DismissEvent, cx| {
-            this.graph_context_menu.take();
-            cx.notify();
-        });
+        let menu_focus = context_menu.focus_handle(cx);
+        window.focus(&menu_focus, cx);
+        let subscription = cx.subscribe_in(
+            &context_menu,
+            window,
+            move |this, _, _: &gpui::DismissEvent, window, cx| {
+                this.graph_context_menu.take();
+                if menu_focus.contains_focused(window, cx) {
+                    this.focus_handle.focus(window, cx);
+                }
+                cx.notify();
+            },
+        );
         self.graph_context_menu = Some((context_menu, position, subscription));
         cx.notify();
     }
@@ -7681,6 +7690,7 @@ impl Render for DependenciesPanel {
                     anchored()
                         .position(*position)
                         .anchor(gpui::Anchor::TopLeft)
+                        .snap_to_window()
                         .child(menu.clone()),
                 )
                 .with_priority(3)
@@ -7779,6 +7789,13 @@ impl Render for DependenciesPanel {
                 }),
             )
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagram, _, cx| panel.show_dependency_diagram(cx)))
+            .on_action(cx.listener(|panel, _: &ShowDependencyRowMenu, window, cx| {
+                if let Some(id) = panel.host.selected().cloned()
+                    && let Some(position) = crate::selected_dependency_row_menu_position(&panel.host)
+                {
+                    panel.show_graph_context_menu(id, position, window, cx);
+                }
+            }))
             .on_action(cx.listener(|panel, _: &ShowDependencyDiagramPopup, _, cx| panel.show_dependency_diagram_popup(cx)))
             .on_action(cx.listener(|panel, _: &AnalyzeDependencies, _, cx| panel.analyze_dependencies(cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
@@ -13408,6 +13425,32 @@ mod tests {
                 panel.host.select(ordered_operation_root_id());
                 panel.host.reveal_selection(ScrollStrategy::Center);
                 cx.notify();
+            });
+            cx.update(|window, cx| {
+                panel.read(cx).focus_handle(cx).focus(window, cx);
+                window.draw(cx).clear(cx);
+            });
+            cx.simulate_keystrokes("shift-f10");
+            cx.update(|window, cx| {
+                let (menu, _, _) = panel
+                    .read(cx)
+                    .graph_context_menu
+                    .as_ref()
+                    .expect("queue menu");
+                let entries = menu.read(cx).accessibility_contracts();
+                assert!(entries.iter().any(|entry| entry.label
+                    == "Run Ordered Operations Offline"
+                    && !entry.disabled));
+                assert!(!entries.iter().any(|entry| entry.label == "Add to Queue"));
+                window.draw(cx).clear(cx);
+                let cancel = cx
+                    .build_action("menu::Cancel", None)
+                    .expect("menu cancel action");
+                window.dispatch_action(cancel, cx);
+            });
+            cx.update(|window, cx| {
+                assert!(panel.read(cx).focus_handle(cx).is_focused(window));
+                assert!(panel.read(cx).graph_context_menu.is_none());
             });
             for _ in 0..2 {
                 cx.update(|window, cx| {

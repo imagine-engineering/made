@@ -9,10 +9,10 @@ pub mod dependency_graph_canvas;
 pub(crate) use dependencies_panel::{BuildToolView, GraphSelection};
 pub use dependencies_panel::{DependenciesPanel, ShowGradle, ShowMaven, ToggleDependenciesPanel};
 
-use gpui::{App, KeyBinding};
+use gpui::{App, KeyBinding, Pixels, Point, point, px};
 use language_tools::language_tool_tree::{
-    ActivateSelected, CollapseAll, ExpandAll, Refresh, SelectFirst, SelectFirstChild, SelectLast,
-    SelectNext, SelectParent, SelectPrevious, ToggleExpanded,
+    ActivateSelected, CollapseAll, ExpandAll, LanguageToolTreeHost, Refresh, SelectFirst,
+    SelectFirstChild, SelectLast, SelectNext, SelectParent, SelectPrevious, ToggleExpanded,
 };
 use workspace::Workspace;
 
@@ -45,6 +45,7 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
 }
 
 pub fn bind_keys(cx: &mut App) {
+    const DEPENDENCY_TREE: &str = "(GroovyDependenciesPanel && !GroovyDependenciesPanelControls) || (DependencyAnalyzer && !DependencyAnalyzerControls)";
     cx.bind_keys([
         KeyBinding::new(
             "escape",
@@ -62,40 +63,17 @@ pub fn bind_keys(cx: &mut App) {
             Some("DependencyDiagram"),
         ),
         KeyBinding::new(
-            "up",
-            SelectPrevious,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
+            "shift-f10",
+            dependencies_panel::ShowDependencyRowMenu,
+            Some(DEPENDENCY_TREE),
         ),
-        KeyBinding::new(
-            "down",
-            SelectNext,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
-        KeyBinding::new(
-            "home",
-            SelectFirst,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
-        KeyBinding::new(
-            "end",
-            SelectLast,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
-        KeyBinding::new(
-            "left",
-            SelectParent,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
-        KeyBinding::new(
-            "right",
-            SelectFirstChild,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
-        KeyBinding::new(
-            "space",
-            ToggleExpanded,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
-        ),
+        KeyBinding::new("up", SelectPrevious, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("down", SelectNext, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("home", SelectFirst, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("end", SelectLast, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("left", SelectParent, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("right", SelectFirstChild, Some(DEPENDENCY_TREE)),
+        KeyBinding::new("space", ToggleExpanded, Some(DEPENDENCY_TREE)),
         KeyBinding::new(
             "enter",
             ActivateSelected,
@@ -105,6 +83,19 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-shift-c", CollapseAll, Some("GroovyDependenciesPanel")),
         KeyBinding::new("cmd-r", Refresh, Some("GroovyDependenciesPanel")),
     ]);
+}
+
+fn selected_dependency_row_menu_position(tree: &LanguageToolTreeHost) -> Option<Point<Pixels>> {
+    let index = tree.selected_index()?;
+    let scroll = tree.scroll_handle().0.borrow();
+    let bounds = scroll.base_handle.bounds();
+    let row_height = scroll.last_item_size?.item.height;
+    let row_center =
+        bounds.top() + scroll.base_handle.offset().y + row_height * (index as f32 + 0.5);
+    Some(point(
+        bounds.left() + px(12.),
+        row_center.clamp(bounds.top(), bounds.bottom()),
+    ))
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@
 //! the Usages pane live on the item so they survive tab switches.
 
 use crate::dependencies_panel::{
-    BuildToolView, DependencyGraphReceipt, GraphQueryTarget, GraphSelection,
+    BuildToolView, DependencyGraphReceipt, GraphQueryTarget, GraphSelection, ShowDependencyRowMenu,
     current_dependency_graph_receipt, derive_dependency_analyzer,
 };
 use crate::dependency_diagram_item::{
@@ -18,7 +18,8 @@ use gpui::{
 };
 use language_tools::language_tool_tree::{
     LanguageToolNode, LanguageToolNodeId, LanguageToolProviderStatus, LanguageToolSnapshot,
-    LanguageToolTreeHost, language_tool_tree,
+    LanguageToolTreeHost, SelectFirst, SelectFirstChild, SelectLast, SelectNext, SelectParent,
+    SelectPrevious, ToggleExpanded, language_tool_tree,
 };
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencySelector,
@@ -1111,7 +1112,7 @@ impl DependencyAnalyzerItem {
         cx: &mut Context<Self>,
     ) {
         let node_key = analyzer_node_key(&id).map(|key| key.to_owned());
-        self.host.select(id);
+        self.select_node_row(id, cx);
         let declaration = node_key
             .as_ref()
             .and_then(|key| analyzer_declaration_target(&self.derivation.graph, key));
@@ -1170,11 +1171,23 @@ impl DependencyAnalyzerItem {
                 )
             })
         });
-        window.focus(&menu.focus_handle(cx), cx);
-        let subscription = cx.subscribe(&menu, |this, _, _: &gpui::DismissEvent, cx| {
-            this.row_context_menu.take();
-            cx.notify();
-        });
+        let menu_focus = menu.focus_handle(cx);
+        let return_focus = window
+            .focused(cx)
+            .filter(|_| self.focus_handle.contains_focused(window, cx))
+            .unwrap_or_else(|| self.focus_handle.clone());
+        window.focus(&menu_focus, cx);
+        let subscription = cx.subscribe_in(
+            &menu,
+            window,
+            move |this, _, _: &gpui::DismissEvent, window, cx| {
+                this.row_context_menu.take();
+                if menu_focus.contains_focused(window, cx) {
+                    return_focus.focus(window, cx);
+                }
+                cx.notify();
+            },
+        );
         self.row_context_menu = Some((menu, position, subscription));
         cx.notify();
     }
@@ -1316,6 +1329,12 @@ impl DependencyAnalyzerItem {
         self.refresh_selection(cx);
     }
 
+    fn navigate_rows(&mut self, select: fn(&mut LanguageToolTreeHost), cx: &mut Context<Self>) {
+        select(&mut self.host);
+        self.host.reveal_selection(ScrollStrategy::Center);
+        self.refresh_selection(cx);
+    }
+
     /// The disclosure path: the panel selects before toggling so a collapsed
     /// branch keeps its selection.
     pub fn toggle_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
@@ -1393,6 +1412,7 @@ impl Render for DependencyAnalyzerItem {
         let show_group_ids = self.show_group_ids;
         let search_item = cx.weak_entity();
         let usages_rows = self.usages.clone();
+        let usage_item = cx.weak_entity();
         // Right-click handlers are built per row up front because the render
         // children closure cannot borrow the render context.
         let usage_row_handlers: Vec<_> = (0..usages_rows.len())
@@ -1416,6 +1436,7 @@ impl Render for DependencyAnalyzerItem {
         let menu_item = cx.weak_entity();
 
         let toolbar = div()
+            .key_context("DependencyAnalyzerControls")
             .flex()
             .items_center()
             .gap_1()
@@ -1588,10 +1609,41 @@ impl Render for DependencyAnalyzerItem {
         div()
             .id("groovy-dependency-analyzer-item")
             .key_context("DependencyAnalyzer")
+            .track_focus(&self.focus_handle)
             .size_full()
             .flex()
             .flex_col()
             .text_color(theme.text)
+            .on_action(cx.listener(|item, _: &SelectNext, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_next, cx)
+            }))
+            .on_action(cx.listener(|item, _: &SelectPrevious, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_previous, cx)
+            }))
+            .on_action(cx.listener(|item, _: &SelectFirst, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_first, cx)
+            }))
+            .on_action(cx.listener(|item, _: &SelectLast, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_last, cx)
+            }))
+            .on_action(cx.listener(|item, _: &SelectParent, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_parent, cx)
+            }))
+            .on_action(cx.listener(|item, _: &SelectFirstChild, _, cx| {
+                item.navigate_rows(LanguageToolTreeHost::select_first_child, cx)
+            }))
+            .on_action(cx.listener(|item, _: &ToggleExpanded, _, cx| {
+                if let Some(id) = item.host.selected().cloned() {
+                    item.toggle_row(id, cx);
+                }
+            }))
+            .on_action(cx.listener(|item, _: &ShowDependencyRowMenu, window, cx| {
+                if let Some(id) = item.host.selected().cloned()
+                    && let Some(position) = crate::selected_dependency_row_menu_position(&item.host)
+                {
+                    item.show_row_context_menu(id, position, window, cx);
+                }
+            }))
             .on_action(cx.listener(
                 |item, event: &SelectDependencyAnalyzerScope, _, cx| {
                     item.apply_scope(event.label.clone(), cx)
@@ -1631,6 +1683,7 @@ impl Render for DependencyAnalyzerItem {
                     anchored()
                         .position(*position)
                         .anchor(gpui::Anchor::TopLeft)
+                        .snap_to_window()
                         .child(menu.clone()),
                 )
                 .with_priority(3)
@@ -1659,8 +1712,9 @@ impl Render for DependencyAnalyzerItem {
                         selected,
                         None,
                         scroll_handle,
-                        move |id, _, _window, cx| {
+                        move |id, _, window, cx| {
                             if let Err(error) = click_item.update(cx, |item, cx| {
+                                item.focus_handle.focus(window, cx);
                                 item.select_node_row(id, cx);
                             }) {
                                 log::debug!("Dependency analyzer closed during click: {error:#}");
@@ -1724,14 +1778,22 @@ impl Render for DependencyAnalyzerItem {
                             .enumerate()
                             .zip(usage_row_handlers)
                             .map(|((index, usage), handler)| {
+                                let item = usage_item.clone();
                                 div()
-                                    .text_size(px(12.0))
+                                    .key_context("DependencyAnalyzerControls")
                                     .on_mouse_down(gpui::MouseButton::Right, handler)
-                                    .child(SharedString::from(format!(
-                                        "{}. {}",
-                                        index + 1,
-                                        usage.label
-                                    )))
+                                    .child(
+                                        Button::new(format!("dependency-usage-{index}"), usage.label.clone())
+                                            .label_size(LabelSize::Small)
+                                            .tab_index(0_isize)
+                                            .on_click(move |event, window, cx| {
+                                                if let Err(error) = item.update(cx, |item, cx| {
+                                                    item.show_usage_context_menu(index, event.position(), window, cx);
+                                                }) {
+                                                    log::debug!("Dependency analyzer closed during usage menu: {error:#}");
+                                                }
+                                            }),
+                                    )
                             }),
                     )
                     .when(usages_rows.is_empty(), |this| {
