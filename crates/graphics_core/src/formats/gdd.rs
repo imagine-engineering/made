@@ -154,6 +154,8 @@ pub enum GddArchiveError {
     UnchangedGraphPortName,
     #[error("Select a literal primary import in a standalone nested Graphite network.")]
     UnsupportedGraphPrimaryImportExposure,
+    #[error("Select an eligible primary export in a standalone nested Graphite network.")]
+    UnsupportedGraphPrimaryExportExposure,
     #[error("Select an ordinary numeric output in the same Graphite network and an empty export.")]
     UnsupportedGraphExportConnection,
     #[error("Graphite could not resolve the selected export type. {0}")]
@@ -326,6 +328,7 @@ pub struct GddGraphNetwork {
     path: Vec<NodeId>,
     can_extend_ports: bool,
     primary_import_exposed: Option<bool>,
+    primary_export_exposed: Option<bool>,
     empty_exports: Vec<usize>,
 }
 
@@ -350,6 +353,10 @@ impl GddGraphNetwork {
 
     pub fn primary_import_exposed(&self) -> Option<bool> {
         self.primary_import_exposed
+    }
+
+    pub fn primary_export_exposed(&self) -> Option<bool> {
+        self.primary_export_exposed
     }
 
     pub fn empty_exports(&self) -> &[usize] {
@@ -878,6 +885,10 @@ impl InspectedGddV1 {
                         (imports, metadata.output_names.clone())
                     },
                 );
+                let exports = &interface
+                    .nested_network(path)
+                    .ok_or(GddArchiveError::MissingGraphNetwork)?
+                    .exports;
                 Ok(GddGraphNetwork {
                     id,
                     parent,
@@ -903,10 +914,12 @@ impl InspectedGddV1 {
                             Some(NodeInput::Value { exposed, .. }) => Some(*exposed),
                             _ => None,
                         }),
-                    empty_exports: interface
-                        .nested_network(path)
-                        .ok_or(GddArchiveError::MissingGraphNetwork)?
-                        .exports
+                    primary_export_exposed: match exports.first() {
+                        Some(NodeInput::Value { exposed, .. }) => Some(*exposed),
+                        Some(NodeInput::Node { .. }) => Some(true),
+                        _ => None,
+                    },
+                    empty_exports: exports
                         .iter()
                         .enumerate()
                         .filter_map(|(index, input)| empty_graph_export(input).then_some(index))
@@ -1366,49 +1379,32 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::UnchangedGraphInputExposure);
         }
         *current = exposed;
-        let affected = interface
+        let mut consumers = interface
             .outward_wires(path)
             .and_then(|wires| wires.get(&OutputConnector::Import(0)))
             .cloned()
             .ok_or_else(unsupported)?;
-        let mut consumers = Vec::with_capacity(affected.len());
-        for connector in affected {
-            let InputConnector::Node {
-                node_id,
-                input_index,
-            } = connector
-            else {
-                return Err(unsupported());
-            };
-            if interface.is_layer(&node_id, path) || interface.is_chain(&node_id, path) {
-                return Err(unsupported());
-            }
-            consumers.push((node_id, input_index, connector));
+        if consumers.iter().any(|connector| {
+            connector.node_id().is_none_or(|node_id| {
+                interface.is_layer(&node_id, path) || interface.is_chain(&node_id, path)
+            })
+        }) {
+            return Err(unsupported());
         }
-        consumers.sort_unstable_by_key(|&(node, input, _)| (node, input));
+        consumers.sort_unstable_by_key(|connector| (connector.node_id(), connector.input_index()));
         interface.set_input(&primary, input.clone(), parent_path);
         let mut edits = Vec::with_capacity(consumers.len() + 1);
-        edits.push(EditorDelta::Graph(RuntimeDelta::SetInput {
-            network_path: parent_path.to_vec(),
-            node_id: owner_id,
-            input_index: 0,
-            input: input.clone(),
-        }));
+        edits.push(write_graph_connector(parent_path, primary, input.clone()));
         let mut detached = Vec::with_capacity(consumers.len());
         // The pinned exposure command detaches old inner consumers in both directions.
-        for (node_id, input_index, connector) in consumers {
+        for connector in consumers {
             interface.disconnect_input(&connector, path);
             let fallback = interface
                 .input_from_connector(&connector, path)
                 .filter(|input| matches!(input, NodeInput::Value { exposed: true, .. }))
                 .cloned()
                 .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
-            edits.push(EditorDelta::Graph(RuntimeDelta::SetInput {
-                network_path: path.clone(),
-                node_id,
-                input_index,
-                input: fallback.clone(),
-            }));
+            edits.push(write_graph_connector(path, connector, fallback.clone()));
             detached.push((connector, fallback));
         }
         let (owner, staged) = self.fork_working_copy(&budget).await?;
@@ -1583,20 +1579,7 @@ impl InspectedGddV1 {
         edit.edit_slots(&mut exports);
         let (original_indices, new_indices) = edit.slot_order(network.export_count)?;
 
-        let layout = [(path.as_slice(), nested), (parent_path, parent)]
-            .into_iter()
-            .flat_map(|(scope, network)| network.nodes.keys().map(move |node_id| (scope, *node_id)))
-            .map(|(scope, node_id)| {
-                let metadata = interface
-                    .node_metadata(&node_id, scope)
-                    .ok_or(GddArchiveError::MissingGraphNetwork)?;
-                Ok((
-                    scope,
-                    node_id,
-                    metadata.persistent_metadata.node_type_metadata.clone(),
-                ))
-            })
-            .collect::<Result<Vec<_>, GddArchiveError>>()?;
+        let layout = graph_port_edit_layout(&interface, [path, parent_path])?;
         let connections = interface
             .outward_wires(parent_path)
             .ok_or_else(unsupported)?;
@@ -1630,13 +1613,7 @@ impl InspectedGddV1 {
         if !expected_signature(&interface) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
-        if layout.iter().any(|(scope, node_id, original)| {
-            !interface
-                .node_metadata(node_id, scope)
-                .is_some_and(|metadata| {
-                    metadata.persistent_metadata.node_type_metadata == *original
-                })
-        }) {
+        if graph_port_edit_layout(&interface, [path, parent_path])? != layout {
             return Err(unsupported());
         }
 
@@ -1679,24 +1656,7 @@ impl InspectedGddV1 {
                 return Err(GddArchiveError::IncompleteGraphNodeEdit);
             }
             if next != Some(previous) {
-                let network_path = parent_path.to_vec();
-                let delta = match connector {
-                    InputConnector::Node {
-                        node_id,
-                        input_index,
-                    } => RuntimeDelta::SetInput {
-                        network_path,
-                        node_id,
-                        input_index,
-                        input: input.clone(),
-                    },
-                    InputConnector::Export(export_index) => RuntimeDelta::SetExport {
-                        network_path,
-                        export_index,
-                        input: Some(input.clone()),
-                    },
-                };
-                edits.push(EditorDelta::Graph(delta));
+                edits.push(write_graph_connector(parent_path, connector, input.clone()));
             }
             rewired.push((connector, input.clone()));
         }
@@ -1707,6 +1667,84 @@ impl InspectedGddV1 {
         if !expected_signature(&actual)
             || rewired.iter().any(|(connector, input)| {
                 actual.input_from_connector(connector, parent_path) != Some(input)
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn set_primary_network_export_exposed_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        exposed: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        let unsupported = || GddArchiveError::UnsupportedGraphPrimaryExportExposure;
+        if !network.can_extend_ports_in_copy() {
+            return Err(unsupported());
+        }
+        let current = network.primary_export_exposed().ok_or_else(unsupported)?;
+        if current == exposed {
+            return Err(GddArchiveError::UnchangedGraphInputExposure);
+        }
+        let path = &network.path;
+        let (&owner_id, parent_path) = path.split_last().ok_or_else(unsupported)?;
+        let parent = network.parent.ok_or_else(unsupported)?;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        if !self.graph_export_slots_contiguous(network.id, network.export_count)
+            || !self.graph_export_slots_contiguous(parent, interface.number_of_exports(parent_path))
+        {
+            return Err(unsupported());
+        }
+        let layout = graph_port_edit_layout(&interface, [path, parent_path])?;
+        let mut consumers = interface
+            .outward_wires(parent_path)
+            .and_then(|wires| wires.get(&OutputConnector::primary_output(owner_id)))
+            .cloned()
+            .ok_or_else(unsupported)?;
+        consumers.sort_unstable_by_key(|connector| (connector.node_id(), connector.input_index()));
+        let primary = InputConnector::Export(0);
+        if !exposed {
+            interface.disconnect_input(&primary, path);
+        }
+        let mut input = interface
+            .input_from_connector(&primary, path)
+            .cloned()
+            .ok_or_else(unsupported)?;
+        let NodeInput::Value { exposed: state, .. } = &mut input else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        *state = exposed;
+        interface.set_input(&primary, input.clone(), path);
+        let mut edits = vec![write_graph_connector(path, primary, input.clone())];
+        let mut detached = Vec::with_capacity(consumers.len());
+        // Changing exposure detaches the enclosing node's primary output consumers in the pinned editor.
+        for connector in consumers {
+            interface.disconnect_input(&connector, parent_path);
+            let fallback = interface
+                .input_from_connector(&connector, parent_path)
+                .filter(|input| matches!(input, NodeInput::Value { exposed: true, .. }))
+                .cloned()
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            edits.push(write_graph_connector(
+                parent_path,
+                connector,
+                fallback.clone(),
+            ));
+            detached.push((connector, fallback));
+        }
+        if graph_port_edit_layout(&interface, [path, parent_path])? != layout {
+            return Err(unsupported());
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.input_from_connector(&primary, path) != Some(&input)
+            || detached.iter().any(|(connector, fallback)| {
+                actual.input_from_connector(connector, parent_path) != Some(fallback)
             })
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
@@ -3351,6 +3389,54 @@ fn graph_node_has_isolated_layout(interface: &NodeNetworkInterface, node: &GddGr
             })
 }
 
+type GraphPortEditLayout<'a> = BTreeMap<(&'a [NodeId], NodeId), NodeTypePersistentMetadata>;
+
+fn graph_port_edit_layout<'a>(
+    interface: &NodeNetworkInterface,
+    scopes: [&'a [NodeId]; 2],
+) -> Result<GraphPortEditLayout<'a>, GddArchiveError> {
+    let mut layout = BTreeMap::new();
+    for scope in scopes {
+        let network = interface
+            .nested_network(scope)
+            .ok_or(GddArchiveError::MissingGraphNetwork)?;
+        for node_id in network.nodes.keys() {
+            let metadata = interface
+                .node_metadata(node_id, scope)
+                .ok_or(GddArchiveError::MissingGraphNetwork)?;
+            layout.insert(
+                (scope, *node_id),
+                metadata.persistent_metadata.node_type_metadata.clone(),
+            );
+        }
+    }
+    Ok(layout)
+}
+
+fn write_graph_connector(
+    path: &[NodeId],
+    connector: InputConnector,
+    input: NodeInput,
+) -> EditorDelta {
+    let network_path = path.to_vec();
+    EditorDelta::Graph(match connector {
+        InputConnector::Node {
+            node_id,
+            input_index,
+        } => RuntimeDelta::SetInput {
+            network_path,
+            node_id,
+            input_index,
+            input,
+        },
+        InputConnector::Export(export_index) => RuntimeDelta::SetExport {
+            network_path,
+            export_index,
+            input: Some(input),
+        },
+    })
+}
+
 fn prepare_graph_node_edit(
     owner: &GddV1,
     interface: &NodeNetworkInterface,
@@ -4591,7 +4677,7 @@ mod tests {
         });
     }
 
-    async fn network_export_fixture() -> (PreservedGddV1, Arc<[u8]>) {
+    async fn network_export_fixture(wired_primary: bool) -> (PreservedGddV1, Arc<[u8]>) {
         use graphite_document_graph_storage::NodeMetadataSource;
         use graphite_math_nodes::absolute_value;
         use graphite_resource::ResourceRegistry;
@@ -4611,10 +4697,25 @@ mod tests {
         let owner_id = NodeId(24);
         let surviving = NodeInput::value(TaggedValue::Number(7.), true);
         let removed = NodeInput::value(TaggedValue::Number(-2.), true);
-        let nested = NodeNetwork {
-            exports: vec![removed, surviving.clone()],
+        let mut nested = NodeNetwork {
+            exports: vec![removed.clone(), surviving],
             ..Default::default()
         };
+        if wired_primary {
+            let producer = NodeId(16);
+            nested.nodes.insert(
+                producer,
+                DocumentNode {
+                    implementation: DocumentNodeImplementation::ProtoNode(
+                        absolute_value::IDENTIFIER,
+                    ),
+                    inputs: vec![removed],
+                    ..Default::default()
+                },
+            );
+            let primary = nested.exports.first_mut().expect("fixture primary export");
+            *primary = NodeInput::node(producer, 0);
+        }
         let mut root = NodeNetwork {
             exports: vec![NodeInput::node(owner_id, 0), NodeInput::node(owner_id, 1)],
             ..Default::default()
@@ -4662,7 +4763,7 @@ mod tests {
     #[test]
     fn at_gra_graph_024_1_removes_an_export_and_repairs_parent_bindings() {
         futures::executor::block_on(async {
-            let (original, bytes) = network_export_fixture().await;
+            let (original, bytes) = network_export_fixture(false).await;
             let owner_id = NodeId(24);
             let surviving = NodeInput::value(TaggedValue::Number(7.), true);
             let graph = original
@@ -4765,7 +4866,7 @@ mod tests {
     #[test]
     fn at_gra_graph_026_1_reorders_exports_with_names_and_parent_bindings() {
         futures::executor::block_on(async {
-            let (original, bytes) = network_export_fixture().await;
+            let (original, bytes) = network_export_fixture(false).await;
             let graph = original
                 .graph_inspection()
                 .await
@@ -4935,7 +5036,7 @@ mod tests {
                 .expect("one Redo restores the renamed label");
             assert!(redo.document.registry().value_equal(actual));
 
-            let (exports, bytes) = network_export_fixture().await;
+            let (exports, bytes) = network_export_fixture(false).await;
             let graph = exports
                 .graph_inspection()
                 .await
@@ -5130,6 +5231,148 @@ mod tests {
                 saved_fallback
             );
             assert_eq!(shown.history_len(), hidden.history_len() + 1);
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_030_1_changes_primary_export_visibility_with_pinned_fallbacks() {
+        futures::executor::block_on(async {
+            let (original, bytes) = network_export_fixture(true).await;
+            let graph = original.graph_inspection().await.expect("source networks");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected a nested source export");
+            };
+            let owner_id = NodeId(24);
+            let path = [owner_id];
+            let primary = InputConnector::Export(0);
+            assert_eq!(nested.primary_export_exposed(), Some(true));
+            assert!(matches!(
+                original
+                    .set_primary_network_export_exposed_in_copy(root, false, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphPrimaryExportExposure)
+            ));
+            assert!(matches!(
+                original
+                    .set_primary_network_export_exposed_in_copy(nested, true, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInputExposure)
+            ));
+            let hidden = original
+                .set_primary_network_export_exposed_in_copy(nested, false, budget())
+                .await
+                .expect("hide the wired primary output");
+            assert!(matches!(
+                hidden
+                    .set_primary_network_export_exposed_in_copy(nested, true, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let mut pinned = original
+                .runtime_graph()
+                .await
+                .expect("saved source graph")
+                .into_interface()
+                .expect("pinned editor");
+            pinned.disconnect_input(&primary, &path);
+            let mut expected = pinned
+                .input_from_connector(&primary, &path)
+                .cloned()
+                .expect("pinned disconnected primary");
+            let NodeInput::Value { exposed, .. } = &mut expected else {
+                panic!("expected the pinned literal fallback");
+            };
+            *exposed = false;
+            pinned.set_input(&primary, expected.clone(), &path);
+            let actual = hidden
+                .runtime_graph()
+                .await
+                .expect("saved copy")
+                .into_interface()
+                .expect("pinned editor");
+            assert_eq!(
+                actual.input_from_connector(&primary, &path),
+                Some(&expected)
+            );
+            for connector in [
+                InputConnector::Export(0),
+                InputConnector::primary_input(NodeId(7)),
+            ] {
+                pinned.disconnect_input(&connector, &[]);
+                assert!(matches!(
+                    actual.input_from_connector(&connector, &[]),
+                    Some(NodeInput::Value { exposed: true, .. })
+                ));
+                assert_eq!(
+                    actual.input_from_connector(&connector, &[]),
+                    pinned.input_from_connector(&connector, &[])
+                );
+            }
+            for connector in [
+                InputConnector::Export(1),
+                InputConnector::primary_input(NodeId(9)),
+            ] {
+                assert_eq!(
+                    actual.input_from_connector(&connector, &[]),
+                    Some(&NodeInput::node(owner_id, 1))
+                );
+            }
+            assert_eq!(
+                actual.input_from_connector(&InputConnector::Export(1), &path),
+                Some(&NodeInput::value(TaggedValue::Number(7.), true))
+            );
+            let graph = hidden
+                .graph_inspection()
+                .await
+                .expect("reopened hidden export");
+            let current = graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same saved scope");
+            assert_eq!(current.primary_export_exposed(), Some(false));
+            assert_eq!(current.export_count, 2);
+            assert_eq!(current.export_name(0), Some("Removed port"));
+            assert_eq!(current.export_name(1), Some("Retained port"));
+            assert_eq!(hidden.history_len(), original.history_len() + 3);
+            let undo = hidden
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(hidden.document.registry())
+            );
+            let shown = hidden
+                .set_primary_network_export_exposed_in_copy(current, true, budget())
+                .await
+                .expect("re-expose the retained fallback");
+            let NodeInput::Value { exposed, .. } = &mut expected else {
+                panic!("expected the existing saved literal");
+            };
+            *exposed = true;
+            let interface = shown
+                .runtime_graph()
+                .await
+                .expect("saved exposure")
+                .into_interface()
+                .expect("pinned editor");
+            assert_eq!(
+                interface.input_from_connector(&primary, &path),
+                Some(&expected)
+            );
+            assert_eq!(shown.history_len(), hidden.history_len() + 1);
+            assert_eq!(original.original_bytes(), bytes.as_ref());
         });
     }
 
