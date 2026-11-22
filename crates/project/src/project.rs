@@ -2951,6 +2951,62 @@ impl Project {
         self.jvm_test_provider_store.as_ref()
     }
 
+    pub fn selected_java_test_debug_task(
+        &self,
+        _worktree: WorktreeId,
+        _node_id: &str,
+        _discovery_generation: u64,
+        _maven_port: Option<u16>,
+        _cx: &mut App,
+    ) -> Result<(task::TaskTemplate, Option<u16>)> {
+        #[cfg(feature = "jvm-tools")]
+        {
+            let provider = self
+                .jvm_test_provider_store()
+                .context("The project host does not support selected Java test Debug")?;
+            let mut plan = provider.read(_cx).plan_selected_case_debug(
+                &structured_execution::StructuredNodeId(_node_id.to_owned()),
+                structured_execution::DiscoveryGeneration(_discovery_generation),
+                _cx,
+            )?;
+            anyhow::ensure!(
+                plan.worktree_id == _worktree && !self.is_remote(),
+                "The selected Java test no longer belongs to this local worktree"
+            );
+            let trusted = trusted_worktrees::TrustedWorktrees::try_get_global(_cx)
+                .context("Project trust is unavailable")?;
+            let worktrees = self.worktree_store();
+            anyhow::ensure!(
+                trusted.update(_cx, |trusted, cx| trusted
+                    .can_trust(&worktrees, _worktree, cx))
+                    && !trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
+                        &worktrees, _cx
+                    ),
+                "Trust the project before debugging the selected Java test"
+            );
+            if plan.build_tool == jvm_test_provider::JvmTestBuildTool::Gradle {
+                Ok((plan.template, Some(plan.debug_port)))
+            } else {
+                if let Some(port) = _maven_port {
+                    let option = plan
+                        .template
+                        .args
+                        .last_mut()
+                        .filter(|option| option.as_str() == "-Dmaven.surefire.debug")
+                        .context(
+                            "The selected Maven test did not have its Surefire Debug argument",
+                        )?;
+                    *option = format!(
+                        "-Dmaven.surefire.debug=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:{port}"
+                    );
+                }
+                Ok((plan.template, None))
+            }
+        }
+        #[cfg(not(feature = "jvm-tools"))]
+        anyhow::bail!("This product does not support selected Java test Debug")
+    }
+
     #[inline]
     pub fn snippets(&self) -> &Entity<SnippetProvider> {
         &self.snippets

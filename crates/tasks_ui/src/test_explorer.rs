@@ -504,17 +504,22 @@ fn dispatch_java_test_action(
 }
 
 #[cfg(feature = "jvm-test-actions")]
-fn java_test_debug_scenario(template: task::TaskTemplate, debug_port: u16) -> task::DebugScenario {
+fn java_test_debug_scenario(
+    label: &str,
+    node_id: StructuredNodeId,
+    generation: DiscoveryGeneration,
+    debug_port: u16,
+) -> task::DebugScenario {
     task::DebugScenario {
         adapter: "Java".into(),
-        label: format!("Debug {}", template.label).into(),
-        build: Some(task::BuildTaskDefinition::Template {
-            task_template: template,
-            locator_name: None,
+        label: format!("Debug {label}").into(),
+        build: Some(task::BuildTaskDefinition::SelectedJavaTest {
+            node_id: node_id.0,
+            discovery_generation: generation.0,
         }),
         config: serde_json::json!({
             "request": "attach",
-            "hostName": "localhost",
+            "hostName": "127.0.0.1",
             "port": debug_port,
         }),
         tcp_connection: None,
@@ -552,6 +557,12 @@ fn dispatch_java_test_debug_action(
     let task_contexts = workspace_entity.update(cx, |workspace, cx| {
         crate::task_contexts(workspace, window, cx)
     });
+    let scenario = java_test_debug_scenario(
+        &plan.template.label,
+        selection.node_id.clone(),
+        selection.discovery_generation,
+        plan.debug_port,
+    );
     let workspace = workspace_entity.downgrade();
     window
         .spawn(cx, async move |mut cx| {
@@ -561,7 +572,6 @@ fn dispatch_java_test_debug_action(
                     .task_context_for_worktree_id(plan.worktree_id)
                     .cloned()
                     .context("No task context exists for the selected Java test worktree")?;
-                let scenario = java_test_debug_scenario(plan.template, plan.debug_port);
                 workspace.update_in(cx, |workspace, window, cx| {
                     workspace.start_debug_session(
                         scenario,
@@ -3077,27 +3087,28 @@ mod tests {
     #[cfg(feature = "jvm-test-actions")]
     #[test]
     fn java_test_debug_scenario_uses_the_approved_adapter_attach_terms() {
-        let mut template = task::TaskTemplate::default();
-        template.label = "Test org.evidence.Case#method".to_string();
-        template.args = vec!["test".to_string(), "--debug-jvm".to_string()];
-        let scenario = java_test_debug_scenario(template.clone(), 5005);
+        let scenario = java_test_debug_scenario(
+            "Test org.evidence.Case#method",
+            StructuredNodeId("verified-case".into()),
+            DiscoveryGeneration(3),
+            5005,
+        );
         assert_eq!(scenario.adapter.as_ref(), "Java");
         assert_eq!(scenario.label, "Debug Test org.evidence.Case#method");
         assert_eq!(scenario.config["request"], "attach");
-        assert_eq!(scenario.config["hostName"], "localhost");
+        assert_eq!(scenario.config["hostName"], "127.0.0.1");
         assert_eq!(scenario.config["port"], 5005);
+        assert!(serde_json::to_value(&scenario).is_err());
         let build = scenario
             .build
             .expect("the Java test debug plan carries its pre-launch build");
-        let task::BuildTaskDefinition::Template {
-            task_template,
-            locator_name,
-        } = build
-        else {
-            panic!("the Java test debug build must be a Task template");
-        };
-        assert_eq!(task_template, template);
-        assert!(locator_name.is_none());
+        assert_eq!(
+            build,
+            task::BuildTaskDefinition::SelectedJavaTest {
+                node_id: "verified-case".into(),
+                discovery_generation: 3,
+            }
+        );
         assert!(scenario.tcp_connection.is_none());
     }
 

@@ -431,10 +431,16 @@ Task summary and no late report, while separate-host and disconnect cases
 remain open. Java run Debug also needs the host's adapter and TCP forwarding;
 its bounded loopback breakpoint evidence does not establish every topology.
 
-The installed Java extension exposes a `Java` debug adapter. Selected-test
-Debug remains unsupported in this candidate and is required by the parity
-plan. Java run debugging evidence does not qualify selected-test debugging.
-Its built-in run and test task scripts require `/bin/sh`; Windows needs a
+The installed Java extension exposes a `Java` debug adapter. In a trusted
+local project, select a verified Java case in Tests and choose
+**Debug Selected Test**. The debugger waits for the selected test JVM to
+suspend, then attaches through the Java adapter. Gradle uses its test Debug
+port 5005. Maven uses a separate loopback port for each launch. Stop the
+Debug session to cancel a waiting test.
+
+Selected-test breakpoint journeys in the installed desktop product and on
+separate hosts remain qualification gates. The extension's built-in run and
+test task scripts require `/bin/sh`; Windows needs a
 separately validated route. Structured Kotlin tests, mixed-language refactors,
 coroutine debugging, HotSwap, Spring/Jakarta/JPA depth, and database tooling
 are separate product decisions.

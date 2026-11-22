@@ -189,6 +189,12 @@ impl From<AttachRequest> for DebugRequest {
 #[serde(untagged)]
 pub enum BuildTaskDefinition {
     ByName(SharedString),
+    #[serde(skip)]
+    #[schemars(skip)]
+    SelectedJavaTest {
+        node_id: String,
+        discovery_generation: u64,
+    },
     Template {
         #[serde(flatten)]
         task_template: TaskTemplate,

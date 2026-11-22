@@ -117,6 +117,7 @@ pub struct JvmSelectedTestPlan {
 #[derive(Clone, Debug, PartialEq)]
 pub struct JvmSelectedTestDebugPlan {
     pub worktree_id: WorktreeId,
+    pub build_tool: JvmTestBuildTool,
     pub template: TaskTemplate,
     pub debug_port: u16,
 }
@@ -1166,6 +1167,7 @@ impl JvmTestProviderStore {
         let (template, debug_port) = jvm_test_debug_template(plan.template, plan.build_tool);
         Ok(JvmSelectedTestDebugPlan {
             worktree_id: plan.worktree_id,
+            build_tool: plan.build_tool,
             template,
             debug_port,
         })

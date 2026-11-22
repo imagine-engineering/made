@@ -274,7 +274,10 @@ impl DebugPanel {
                         });
                     });
                     this.debug_scenario_scheduled_last = true;
-                    if let Some(inventory) = this
+                    if !matches!(
+                        admitted_scenario.build,
+                        Some(task::BuildTaskDefinition::SelectedJavaTest { .. })
+                    ) && let Some(inventory) = this
                         .project
                         .read(cx)
                         .task_store()

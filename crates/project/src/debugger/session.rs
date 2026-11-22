@@ -854,6 +854,7 @@ pub enum SessionEvent {
     Threads,
     InvalidateInlineValue,
     CapabilitiesLoaded,
+    DebuggeeTerminated,
     RunInTerminal {
         request: RunInTerminalRequestArguments,
         sender: mpsc::Sender<Result<dap::RunInTerminalResponse>>,
@@ -1763,6 +1764,7 @@ impl Session {
                 self.clear_active_debug_line(cx);
             }
             Events::Terminated(_) => {
+                cx.emit(SessionEvent::DebuggeeTerminated);
                 self.shutdown(cx).detach();
             }
             Events::Thread(event) => {
