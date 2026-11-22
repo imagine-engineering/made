@@ -193,7 +193,7 @@ fn strict_fixture_registry_has_exact_unique_coverage_and_canonical_owners() {
                 vec![serde_json::json!({
                     "case": "delegated_fixture",
                     "expected": "crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json",
-                    "sha256": "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c",
+                    "sha256": "428ae962313cfd2444ff153efeedb4fbe6bfd3d527050ce68c4a80393aff014c",
                 })]
             );
         } else {

@@ -42,7 +42,7 @@ use std::{
 
 const BREADTH_FIXTURE: &[u8] = include_bytes!("../fixtures/autograd/breadth-v1.json");
 const BREADTH_FIXTURE_SHA256: &str =
-    "ff20a0ff6200a2b30cdc15ae9c377554b918b2059fcbe2889b51232c6e1cdf8e";
+    "38efd4520c6756f38e1e2fa0411a25b62bf4b03d01761319da8cc0709b286ac9";
 const AUTOGRAD_CATALOG_PATH: &str = "crates/sim_test_support/parity/catalogs/backend-autograd.csv";
 const AUTOGRAD_CATALOG: &[u8] =
     include_bytes!("../../../crates/sim_test_support/parity/catalogs/backend-autograd.csv");
@@ -54,7 +54,7 @@ const QUANT_LINEAR_FIXTURE: &[u8] = include_bytes!(
     "../../../crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json"
 );
 const QUANT_LINEAR_FIXTURE_SHA256: &str =
-    "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c";
+    "428ae962313cfd2444ff153efeedb4fbe6bfd3d527050ce68c4a80393aff014c";
 const QUANT_LINEAR_CATALOG_ID: &str = "COMFY-AUTOGRAD-30043B9C2264";
 const QUANT_LINEAR_SYMBOL: &str = "QuantLinearFunc";
 const QUANT_LINEAR_EXECUTION_CASE: &str = "quant_linear_model_adapter";
