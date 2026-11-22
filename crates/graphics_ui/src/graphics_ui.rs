@@ -3,7 +3,7 @@ pub mod interop;
 pub mod resources;
 pub mod storage;
 
-mod document_archive;
+mod document_file;
 mod graph;
 mod png_workflow;
 mod session;
@@ -276,7 +276,7 @@ fn add_asset_artboard_acquisition(
 
 pub fn init(cx: &mut gpui::App) {
     graph::init(cx);
-    workspace::register_project_item::<document_archive::GraphiteArchiveItem>(cx);
+    workspace::register_project_item::<document_file::GraphiteDocumentItem>(cx);
     png_workflow::init(cx);
 }
 

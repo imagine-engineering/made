@@ -5,7 +5,10 @@ use gpui::{
     App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Render,
     SharedString, Task, Window,
 };
-use graphics_core::formats::gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_archive};
+use graphics_core::formats::{
+    gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_archive},
+    legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
+};
 use project::{Project, ProjectEntryId, ProjectPath};
 use ui::{Label, LabelSize, prelude::*};
 use workspace::{Item, Pane, item::ItemBufferKind};
@@ -17,16 +20,23 @@ const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
     max_entries: 8192,
 };
 
-pub(crate) struct GraphiteArchiveProjectItem {
+enum InspectedDocument {
+    Archive {
+        archive: Box<PreservedGddV1>,
+        history_len: usize,
+        hot_log_len: usize,
+    },
+    Legacy(PreservedLegacyDocument),
+}
+
+pub(crate) struct GraphiteDocumentProjectItem {
     name: SharedString,
     path: ProjectPath,
     entry_id: Option<ProjectEntryId>,
-    archive: PreservedGddV1,
-    history_len: usize,
-    hot_log_len: usize,
+    document: InspectedDocument,
 }
 
-impl project::ProjectItem for GraphiteArchiveProjectItem {
+impl project::ProjectItem for GraphiteDocumentProjectItem {
     fn try_open(
         project: &Entity<Project>,
         path: &ProjectPath,
@@ -40,7 +50,9 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
             .file_name()
             .or_else(|| root.file_name()?.to_str())?;
         let extension = name.to_ascii_lowercase();
-        if !extension.ends_with(".gdd.zip")
+        let legacy = extension.ends_with(".graphite");
+        if !legacy
+            && !extension.ends_with(".gdd.zip")
             && !extension.ends_with(".gdd.tar.xz")
             && !extension.ends_with(".gdd")
         {
@@ -48,7 +60,7 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
         }
         if !project_model.is_local() {
             return Some(Task::ready(Err(anyhow!(
-                "Open this Graphite archive from a local workspace."
+                "Open this Graphite document from a local workspace."
             ))));
         }
         let name = SharedString::from(name.to_owned());
@@ -72,17 +84,24 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
                     )
                     .await?;
                 let bytes = Arc::<[u8]>::from(source.bytes);
+                if legacy {
+                    let document =
+                        inspect_legacy_document(&bytes, ARCHIVE_BUDGET.max_archive_bytes)?;
+                    return Ok::<_, anyhow::Error>(InspectedDocument::Legacy(document));
+                }
                 let archive =
                     futures::executor::block_on(open_gdd_archive(&bytes, ARCHIVE_BUDGET))?;
-                let history_len = archive.history_len();
-                let hot_log_len = archive.hot_log_len();
-                Ok::<_, anyhow::Error>((archive, history_len, hot_log_len))
+                Ok(InspectedDocument::Archive {
+                    history_len: archive.history_len(),
+                    hot_log_len: archive.hot_log_len(),
+                    archive: Box::new(archive),
+                })
             }
         });
         Some(cx.spawn(async move |cx| {
-            let (archive, history_len, hot_log_len) = load
+            let document = load
                 .await
-                .with_context(|| format!("Opening Graphite archive {name}"))?;
+                .with_context(|| format!("Opening Graphite document {name}"))?;
             project.read_with(cx, |project, cx| {
                 let current_worktree = project.worktree_for_id(path.worktree_id, cx);
                 ensure!(
@@ -91,7 +110,7 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
                             current == worktree && current.read(cx).abs_path() == root
                         })
                         && project.entry_for_path(&path, cx).map(|entry| entry.id) == entry_id,
-                    "The Graphite archive path changed while it was opening. Reopen the file."
+                    "The Graphite document path changed while it was opening. Reopen the file."
                 );
                 Ok(())
             })??;
@@ -99,9 +118,7 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
                 name,
                 path,
                 entry_id,
-                archive,
-                history_len,
-                hot_log_len,
+                document,
             }))
         }))
     }
@@ -119,13 +136,13 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
     }
 }
 
-pub(crate) struct GraphiteArchiveItem {
-    model: Entity<GraphiteArchiveProjectItem>,
+pub(crate) struct GraphiteDocumentItem {
+    model: Entity<GraphiteDocumentProjectItem>,
     focus_handle: FocusHandle,
 }
 
-impl workspace::ProjectItem for GraphiteArchiveItem {
-    type Item = GraphiteArchiveProjectItem;
+impl workspace::ProjectItem for GraphiteDocumentItem {
+    type Item = GraphiteDocumentProjectItem;
 
     fn for_project_item(
         _project: Entity<Project>,
@@ -141,15 +158,15 @@ impl workspace::ProjectItem for GraphiteArchiveItem {
     }
 }
 
-impl Focusable for GraphiteArchiveItem {
+impl Focusable for GraphiteDocumentItem {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl EventEmitter<()> for GraphiteArchiveItem {}
+impl EventEmitter<()> for GraphiteDocumentItem {}
 
-impl Item for GraphiteArchiveItem {
+impl Item for GraphiteDocumentItem {
     type Event = ();
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
@@ -186,31 +203,66 @@ impl Item for GraphiteArchiveItem {
     }
 }
 
-impl Render for GraphiteArchiveItem {
+impl Render for GraphiteDocumentItem {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let model = self.model.read(cx);
-        let manifest = model.archive.manifest();
-        v_flex()
-            .id("graphite-archive-inspector")
+        let view = v_flex()
+            .id("graphite-document-inspector")
             .track_focus(&self.focus_handle)
             .size_full()
             .p_6()
             .gap_2()
             .overflow_y_scroll()
-            .child(Label::new(model.name.clone()).size(LabelSize::Large))
-            .child(Label::new(format!(
-                "Graphite GDD v{} · Read-only",
-                manifest.format_version
-            )))
-            .child(Label::new(format!("Document ID {}", manifest.document_id)))
-            .child(Label::new(format!(
-                "Recorded editor version {}",
-                manifest.editor_version
-            )))
-            .child(Label::new(format!(
-                "{} history entries · {} pending operations",
-                model.history_len, model.hot_log_len
-            )))
+            .child(Label::new(model.name.clone()).size(LabelSize::Large));
+        match &model.document {
+            InspectedDocument::Archive {
+                archive,
+                history_len,
+                hot_log_len,
+            } => {
+                let manifest = archive.manifest();
+                view.child(Label::new(format!(
+                    "Graphite GDD v{} · Read-only",
+                    manifest.format_version
+                )))
+                .child(Label::new(format!("Document ID {}", manifest.document_id)))
+                .child(Label::new(format!(
+                    "Recorded editor version {}",
+                    manifest.editor_version
+                )))
+                .child(Label::new(format!(
+                    "{history_len} history entries · {hot_log_len} pending operations"
+                )))
+            }
+            InspectedDocument::Legacy(document) => {
+                let layout = match document.schema() {
+                    LegacyDocumentSchema::NetworkInterface => {
+                        "Graphite legacy document · Read-only"
+                    }
+                    LegacyDocumentSchema::OriginalNetwork => {
+                        "Graphite older network layout · Read-only"
+                    }
+                };
+                let unregistered = document.unregistered_identifiers();
+                view.child(Label::new(layout))
+                    .when_some(document.build_hint(), |view, hint| {
+                        view.child(Label::new(format!("Recorded Graphite build {hint}")))
+                    })
+                    .child(Label::new(format!("{} nodes", document.node_count())))
+                    .when(!unregistered.is_empty(), |view| {
+                        view.child(Label::new(format!(
+                            "{} node identifiers are unregistered in this Graphite build",
+                            unregistered.len()
+                        )))
+                        .children(
+                            unregistered
+                                .iter()
+                                .take(20)
+                                .map(|identifier| Label::new(identifier.clone())),
+                        )
+                    })
+            }
+        }
     }
 }
 
@@ -268,13 +320,16 @@ mod tests {
             .await
             .expect("open through Workspace File Open");
         let item = handle
-            .downcast::<GraphiteArchiveItem>()
+            .downcast::<GraphiteDocumentItem>()
             .expect("native Graphite archive view");
         item.read_with(window, |item, cx| {
             let model = item.model.read(cx);
             assert_eq!(item.tab_content_text(0, cx).as_ref(), "original.gdd.zip");
-            assert_eq!(model.archive.manifest().document_id, 171);
-            assert_eq!(model.archive.original_bytes(), original);
+            let InspectedDocument::Archive { archive, .. } = &model.document else {
+                panic!("expected the Graphite archive model");
+            };
+            assert_eq!(archive.manifest().document_id, 171);
+            assert_eq!(archive.original_bytes(), original);
             assert!(!item.is_dirty(cx));
             assert!(!item.can_save(cx));
             assert!(!item.can_save_as(cx));
@@ -309,7 +364,7 @@ mod tests {
         );
         assert_eq!(
             workspace.read_with(window, |workspace, cx| workspace
-                .active_item_as::<GraphiteArchiveItem>(cx)),
+                .active_item_as::<GraphiteDocumentItem>(cx)),
             Some(item)
         );
     }
@@ -334,11 +389,14 @@ mod tests {
             .await
             .expect("open the XZ archive through Workspace File Open");
         let item = handle
-            .downcast::<GraphiteArchiveItem>()
+            .downcast::<GraphiteDocumentItem>()
             .expect("native Graphite archive inspection");
         item.read_with(window, |item, cx| {
             assert_eq!(item.tab_content_text(0, cx), "source.gdd.tar.xz");
-            assert_eq!(item.model.read(cx).archive.original_bytes(), bytes);
+            let InspectedDocument::Archive { archive, .. } = &item.model.read(cx).document else {
+                panic!("expected the Graphite archive model");
+            };
+            assert_eq!(archive.original_bytes(), bytes);
             assert!(!item.is_dirty(cx));
         });
         assert_eq!(
@@ -347,6 +405,52 @@ mod tests {
                 .await
                 .expect("source file is intact"),
             bytes
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r06_1_workspace_inspects_standalone_original_legacy_document(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
+
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let mut owner = DocumentMessageHandler::default();
+        owner.commit_hash = "actual-authoring-build".into();
+        let raw = owner.serialize_document().into_bytes();
+        let path = PathBuf::from("/project/pinned.graphite");
+        filesystem
+            .write(&path, &raw)
+            .await
+            .expect("write original Graphite JSON");
+        window.run_until_parked();
+        let handle = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open through standard Workspace File Open");
+        let item = handle
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native read-only inspector");
+        item.read_with(window, |item, cx| {
+            let InspectedDocument::Legacy(document) = &item.model.read(cx).document else {
+                panic!("expected legacy document model");
+            };
+            assert_eq!(document.build_hint(), Some("actual-authoring-build"));
+            assert_eq!(document.original_bytes(), raw);
+            assert!(!item.is_dirty(cx));
+            assert!(!item.can_save(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("legacy source was preserved"),
+            raw
         );
     }
 }
