@@ -160,6 +160,10 @@ pub enum GddArchiveError {
     UnsupportedGraphConnectionLayout,
     #[error("The pinned Graphite definition for {0} is unavailable.")]
     MissingGraphNodeDefinition(&'static str),
+    #[error(
+        "Only an isolated Graphite node outside an active preview can be removed in a folder copy."
+    )]
+    UnsupportedGraphNodeDeletion,
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
     #[error("The Graphite copy could not save the addressed node's change.")]
@@ -261,6 +265,7 @@ pub struct GddGraphNode {
     pinned: bool,
     pinned_order: Option<(usize, usize)>,
     numeric_input: Option<GddNumericInput>,
+    can_delete_in_copy: bool,
 }
 
 #[derive(Clone)]
@@ -405,6 +410,10 @@ impl GddGraphNode {
 
     pub fn is_pinned(&self) -> bool {
         self.pinned
+    }
+
+    pub fn can_delete_in_copy(&self) -> bool {
+        self.can_delete_in_copy
     }
 
     pub fn numeric_input(&self) -> Option<&GddNumericValue> {
@@ -608,15 +617,17 @@ impl InspectedGddV1 {
                 pinned: node.pinned,
                 pinned_order: None,
                 numeric_input: None,
+                can_delete_in_copy: false,
             })
             .collect();
-        let interface = graph.into_interface()?;
+        let mut interface = graph.into_interface()?;
         nodes.sort_by(|left, right| {
             left.network_path
                 .cmp(&right.network_path)
                 .then_with(|| left.local_id.cmp(&right.local_id))
         });
         let mut pinned_indexes = BTreeMap::new();
+        let mut wired_nodes = BTreeMap::new();
         for node in &mut nodes {
             let path = &node.network_path;
             if node.pinned {
@@ -642,6 +653,12 @@ impl InspectedGddV1 {
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
             node.numeric_input = graph_numeric_input(&interface, node);
+            let wired = wired_nodes
+                .entry(path.clone())
+                .or_insert_with(|| graph_wired_output_nodes(&mut interface, path));
+            node.can_delete_in_copy = wired.as_ref().is_some_and(|wired| {
+                !wired.contains(&node.local_id) && graph_node_has_isolated_layout(&interface, node)
+            });
         }
         Ok(nodes)
     }
@@ -759,6 +776,87 @@ impl InspectedGddV1 {
         }
         let actual = graph.into_interface()?;
         if actual.create_node_template(&node_id, &path) != Some(template) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn delete_isolated_graph_node_in_copy(
+        &self,
+        node: &GddGraphNode,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::network::PINNED_ORDER;
+
+        self.check_node_edit_target(node)?;
+        if !node.can_delete_in_copy() {
+            return Err(GddArchiveError::UnsupportedGraphNodeDeletion);
+        }
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let stored = self
+            .document
+            .registry()
+            .node_instances
+            .get(&node.storage_id)
+            .ok_or(GddArchiveError::StaleGraphNode)?;
+        let old_order = interface
+            .network_metadata(path)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .persistent_metadata
+            .pinned_node_order
+            .clone();
+        interface.delete_nodes(vec![node.local_id], false, path);
+        if interface.document_node(&node.local_id, path).is_some() {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let new_order = &interface
+            .network_metadata(path)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
+            .persistent_metadata
+            .pinned_node_order;
+        let order_changed = *new_order != old_order;
+        let mut edits = vec![EditorDelta::Graph(RuntimeDelta::RemoveNode {
+            network_path: path.clone(),
+            node_id: node.local_id,
+        })];
+        if order_changed {
+            edits.push(EditorDelta::NetworkMetadata {
+                network_path: path.clone(),
+                change: NetworkMetadataChange::PinnedOrder(new_order.clone()),
+            });
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let [RegistryDelta::RemoveNode { id, snapshot }, rest @ ..] = batch.ops.as_slice() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        let resources = if order_changed {
+            match rest {
+                [
+                    RegistryDelta::ChangeNetworkAttribute { id, delta },
+                    resources @ ..,
+                ] if *id == stored.network() && delta.key == PINNED_ORDER => resources,
+                _ => return Err(GddArchiveError::IncompleteGraphNodeEdit),
+            }
+        } else {
+            rest
+        };
+        if *id != node.storage_id
+            || !snapshot.value_equal(stored)
+            || !resources
+                .iter()
+                .all(|operation| matches!(operation, RegistryDelta::RemoveResource { .. }))
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.document_node(&node.local_id, path).is_some()
+            || !actual.network_metadata(path).is_some_and(|metadata| {
+                metadata.persistent_metadata.pinned_node_order == *new_order
+            })
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -1732,6 +1830,38 @@ fn graph_numeric_input(
     }))
 }
 
+fn graph_wired_output_nodes(
+    interface: &mut NodeNetworkInterface,
+    path: &[NodeId],
+) -> Option<BTreeSet<NodeId>> {
+    Some(
+        interface
+            .outward_wires(path)?
+            .iter()
+            .filter(|(_, inputs)| !inputs.is_empty())
+            .filter_map(|(output, _)| output.node_id())
+            .collect(),
+    )
+}
+
+fn graph_node_has_isolated_layout(interface: &NodeNetworkInterface, node: &GddGraphNode) -> bool {
+    let path = &node.network_path;
+    interface.previewing(path) == Previewing::No
+        && !interface.is_layer(&node.local_id, path)
+        && !interface.is_chain(&node.local_id, path)
+        && interface
+            .document_node(&node.local_id, path)
+            .is_some_and(|document| {
+                matches!(
+                    document.implementation,
+                    DocumentNodeImplementation::ProtoNode(_)
+                ) && document
+                    .inputs
+                    .iter()
+                    .all(|input| matches!(input, NodeInput::Value { .. }))
+            })
+}
+
 fn prepare_graph_node_edit(
     owner: &GddV1,
     interface: &NodeNetworkInterface,
@@ -2540,6 +2670,88 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_013_1_removes_only_the_addressed_isolated_node_in_one_interaction() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original archive");
+            let nodes = original.graph_nodes().await.expect("original nodes");
+            let [root, parent, source, isolated, wired, sibling] = nodes.as_slice() else {
+                panic!("expected original root and nested graph identities");
+            };
+            for node in [parent, source, wired] {
+                assert!(!node.can_delete_in_copy());
+                assert!(matches!(
+                    original
+                        .delete_isolated_graph_node_in_copy(node, budget())
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphNodeDeletion)
+                ));
+            }
+            let pinned = original
+                .set_graph_node_pinned_in_copy(isolated, true, budget())
+                .await
+                .expect("pin the nested node first");
+            assert!(matches!(
+                pinned
+                    .delete_isolated_graph_node_in_copy(isolated, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let pinned_nodes = pinned.graph_nodes().await.expect("retained pinned node");
+            let selected = pinned_nodes
+                .iter()
+                .find(|node| node.storage_id == isolated.storage_id)
+                .expect("same addressed node");
+            assert_eq!(selected.pinned_position(), Some((1, 1)));
+            assert!(selected.can_delete_in_copy());
+            let removed = pinned
+                .delete_isolated_graph_node_in_copy(selected, budget())
+                .await
+                .expect("remove the isolated node");
+            let registry = removed.document.registry();
+            assert!(!registry.node_instances.contains_key(&isolated.storage_id));
+            assert_eq!(registry.node_instances.len(), nodes.len() - 1);
+            for node in [root, parent, source, wired, sibling] {
+                assert!(
+                    registry.node_instances[&node.storage_id]
+                        .value_equal(&pinned.document.registry().node_instances[&node.storage_id])
+                );
+            }
+            let actual = removed
+                .runtime_graph()
+                .await
+                .expect("reopened graph")
+                .into_interface()
+                .expect("source editor");
+            assert!(
+                actual
+                    .ordered_pinned_nodes(&isolated.network_path)
+                    .is_empty()
+            );
+            assert_eq!(
+                registry.resources.len(),
+                pinned.document.registry().resources.len()
+            );
+            let undo = removed
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores the node and pin order");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(pinned.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo removes the same node");
+            assert!(redo.document.registry().value_equal(registry));
         });
     }
 

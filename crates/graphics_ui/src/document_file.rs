@@ -484,6 +484,7 @@ enum GraphiteCopy {
 
 enum NodeCopyChange {
     Rename(String),
+    DeleteIsolated,
     Pin(bool),
     MovePinned(GddPinnedNodeMove),
     NumericInput(GddNumericValue),
@@ -924,6 +925,38 @@ impl GraphiteDocumentItem {
                                             })),
                                     ),
                             )
+                            .when(selected.can_delete_in_copy(), |panel| {
+                                panel.child(
+                                    div()
+                                        .debug_selector(|| "GRAPHITE-GDD-DELETE-NODE".into())
+                                        .child(
+                                            Button::new(
+                                                "graphite-gdd-delete-node",
+                                                "Remove Node in a Copy",
+                                            )
+                                            .disabled(self.copy_task.is_some())
+                                            .on_click(cx.listener(|item, _, window, cx| {
+                                                let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                else {
+                                                    return;
+                                                };
+                                                if let Some(node) = form
+                                                    .selected_node()
+                                                    .filter(|node| node.can_delete_in_copy())
+                                                {
+                                                    item.save_copy(
+                                                        GraphiteCopy::EditNode {
+                                                            node: node.clone(),
+                                                            change: NodeCopyChange::DeleteIsolated,
+                                                        },
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                            })),
+                                        ),
+                                )
+                            })
                             .when_some(selected.pinned_position(), |panel, (position, count)| {
                                 panel
                                     .child(Label::new(format!("Pinned order · {position} of {count}")))
@@ -1189,6 +1222,10 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Renamed",
                     GraphiteCopy::EditNode {
+                        change: NodeCopyChange::DeleteIsolated,
+                        ..
+                    } => "Removed node in",
+                    GraphiteCopy::EditNode {
                         change: NodeCopyChange::Pin(true),
                         ..
                     } => "Pinned",
@@ -1353,6 +1390,11 @@ impl GraphiteDocumentItem {
                                 NodeCopyChange::Rename(name) => {
                                     archive
                                         .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
+                                        .await?
+                                }
+                                NodeCopyChange::DeleteIsolated => {
+                                    archive
+                                        .delete_isolated_graph_node_in_copy(&node, ARCHIVE_BUDGET)
                                         .await?
                                 }
                                 NodeCopyChange::Pin(pinned) => {
@@ -2040,6 +2082,87 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_013_2_workspace_removes_the_last_isolated_node_and_undoes_in_a_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/isolated.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the isolated node")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-DELETE-NODE");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        current.read_with(window, |item, cx| {
+            assert!(item.copy_task.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        for (selector, destination, restores_node) in [
+            ("GRAPHITE-GDD-DELETE-NODE", "/project/removed.gdd", false),
+            ("GRAPHITE-GDD-SAVE-UNDO", "/project/restored.gdd", true),
+        ] {
+            paint(window);
+            click(window, selector);
+            let destination = PathBuf::from(destination);
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopened folder");
+            assert_ne!(reopened, current);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected GDD folder");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            assert_eq!(contents.history_len(), original_history + 2);
+            let nodes = contents.graph_nodes().await.expect("read saved node set");
+            if restores_node {
+                let [node] = nodes.as_slice() else {
+                    panic!("expected the original restored node");
+                };
+                assert!(matches!(
+                    node.numeric_input(),
+                    Some(GddNumericValue::Integer(-17))
+                ));
+            } else {
+                assert!(nodes.is_empty());
+            }
+            current = reopened;
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained source ZIP"),
+            original
+        );
     }
 
     #[gpui::test]
