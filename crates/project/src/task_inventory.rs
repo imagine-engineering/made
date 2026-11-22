@@ -282,6 +282,17 @@ impl MavenSettingsFile {
             None => Ok(None),
         }
     }
+
+    pub fn globally_configured_path(self, path_style: PathStyle, cx: &App) -> Result<Option<&str>> {
+        let preferences = crate::project_settings::ProjectSettings::get_global(cx)
+            .lsp
+            .get(&LanguageServerName::new_static("jdtls"))
+            .and_then(|settings| settings.settings.as_ref());
+        match preferences {
+            Some(preferences) => jdtls_task_path(preferences, self.preference_key(), path_style),
+            None => Ok(None),
+        }
+    }
 }
 
 #[cfg(feature = "jvm-tools")]

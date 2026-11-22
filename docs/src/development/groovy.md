@@ -249,6 +249,11 @@ If a configured file is missing and its parent directory exists, the menu
 offers **Create Maven user settings** or **Create Maven global settings**.
 The command creates a Maven settings template at that path and opens it in the
 editor. An existing file is preserved if it appears before creation.
+For a settings file outside the build workspace, configure its absolute path
+in your user settings under `lsp.jdtls.settings`. When the effective path
+matches that user setting, **Open or Create Maven user settings** or
+**Open or Create Maven global settings** opens the file in a separate local
+workspace.
 
 Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
