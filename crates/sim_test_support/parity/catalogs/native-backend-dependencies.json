@@ -12,7 +12,7 @@
   },
   "lockfile": {
     "path": "Cargo.lock",
-    "sha256": "3afa96c826c55355a029bc4008345fdc3c6241a63d6ef144cc2db5b214ce454a"
+    "sha256": "970dd6552e9b974d88c33d4641099e458ae771d40434a3cc2ef88da4b175cef9"
   },
   "packages": {
     "anyhow": {

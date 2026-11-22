@@ -132,7 +132,7 @@ mod tests {
             catalog.contains("\"unsafe_ffi_owner\": \"sim_backend_directml::{loader,execution}\"")
         );
         assert!(catalog.contains(
-            "\"execution_task_id\": \"sim-parity-directml-execution-resource-ownership-consolidation\""
+            "\"execution_task_id\": \"comfy-parity-directml-execution-resource-ownership-consolidation\""
         ));
         assert!(!catalog.contains("DirectMlRuntime"));
         assert!(catalog.contains("\"certificate_issuer\": \"sim_runtime::NativeFfiRegistry\""));
