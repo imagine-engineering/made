@@ -1,7 +1,8 @@
 use std::{
     collections::BTreeSet,
+    future::Future,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use anyhow::{Context as _, anyhow, ensure};
@@ -14,10 +15,10 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphGeometry, GddGraphNetwork,
-        GddGraphNode, GddHistoryDirection, GddNumericValue, GddPinnedNodeMove, GddRecoverySource,
-        GddSavedView, ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
+        GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection, GddNumericValue,
+        GddPinnedNodeMove, GddRecoverySource, GddSavedView, ImportOrExport, InspectedGddV1,
+        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -27,7 +28,9 @@ use ui::{
     Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, ToggleState, prelude::*,
 };
 use workspace::{
-    Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
+    Item, Pane, Workspace,
+    item::{ItemBufferKind, ItemEvent, SaveOptions},
+    notifications::DetachAndPromptErr as _,
 };
 
 use crate::graph::{
@@ -94,6 +97,61 @@ pub(crate) struct GraphiteDocumentProjectItem {
     _worktree: Entity<Worktree>,
     original: Option<Arc<[u8]>>,
     document: InspectedDocument,
+    revision: Arc<()>,
+    working: Option<GddWorkingCopy>,
+}
+
+struct GddWorkingCopy {
+    saved: Arc<InspectedGddV1>,
+    inspection: Arc<GddGraphInspection>,
+    save_in_progress: Weak<()>,
+}
+
+impl GraphiteDocumentProjectItem {
+    fn gdd_contents(&self) -> Option<&Arc<InspectedGddV1>> {
+        match &self.document {
+            InspectedDocument::Gdd { contents } => Some(contents),
+            InspectedDocument::Legacy(_) => None,
+        }
+    }
+
+    fn working_dirty(&self) -> bool {
+        self.working.as_ref().is_some_and(|working| {
+            self.gdd_contents()
+                .is_some_and(|contents| !Arc::ptr_eq(contents, &working.saved))
+        })
+    }
+
+    fn replace_working_snapshot(
+        &mut self,
+        expected: &Arc<()>,
+        contents: Arc<InspectedGddV1>,
+        inspection: GddGraphInspection,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        ensure!(
+            Arc::ptr_eq(&self.revision, expected),
+            "The Graphite working copy changed. Review the current value and try again."
+        );
+        let inspection = Arc::new(inspection);
+        if let Some(working) = &mut self.working {
+            working.inspection = inspection;
+        } else {
+            let saved = self
+                .gdd_contents()
+                .cloned()
+                .context("Open a GDD document.")?;
+            self.working = Some(GddWorkingCopy {
+                saved,
+                inspection,
+                save_in_progress: Weak::new(),
+            });
+        }
+        self.document = InspectedDocument::Gdd { contents };
+        self.revision = Arc::new(());
+        cx.notify();
+        Ok(())
+    }
 }
 
 impl project::ProjectItem for GraphiteDocumentProjectItem {
@@ -177,6 +235,8 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 _worktree: worktree,
                 original: Some(original),
                 document,
+                revision: Arc::new(()),
+                working: None,
             }))
         }))
     }
@@ -190,7 +250,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
     }
 
     fn is_dirty(&self) -> bool {
-        false
+        self.working_dirty()
     }
 }
 
@@ -324,6 +384,8 @@ async fn open_folder_item(
             _worktree: worktree,
             original: None,
             document: InspectedDocument::gdd(contents),
+            revision: Arc::new(()),
+            working: None,
         });
         workspace.open_project_item::<GraphiteDocumentItem>(
             workspace.active_pane().clone(),
@@ -439,6 +501,7 @@ async fn read_approved_legacy_document(
 
 pub(crate) struct GraphiteDocumentItem {
     model: Entity<GraphiteDocumentProjectItem>,
+    _model_subscription: Subscription,
     project: WeakEntity<Project>,
     focus_handle: FocusHandle,
     copy_task: Option<Task<()>>,
@@ -472,6 +535,8 @@ enum NodeCopyPanel {
 }
 
 struct NodeCopyForm {
+    snapshot: Arc<InspectedGddV1>,
+    revision: Arc<()>,
     nodes: Vec<GddGraphNode>,
     networks: Vec<GddGraphNetwork>,
     active_network: Option<usize>,
@@ -496,6 +561,68 @@ enum SavedGraphPanel {
 }
 
 impl NodeCopyForm {
+    fn new(
+        snapshot: Arc<InspectedGddV1>,
+        revision: Arc<()>,
+        inspection: &GddGraphInspection,
+        window: &mut Window,
+        cx: &mut Context<GraphiteDocumentItem>,
+    ) -> Self {
+        Self {
+            snapshot,
+            revision,
+            nodes: inspection.nodes.clone(),
+            networks: inspection.networks.clone(),
+            active_network: None,
+            selected: None,
+            name: cx.new(|cx| Editor::single_line(window, cx)),
+            value: cx.new(|cx| Editor::single_line(window, cx)),
+            position: cx.new(|cx| Editor::single_line(window, cx)),
+            output_preview: NodeOutputPreview::Hidden,
+            port_rename: None,
+            node_selection: BTreeSet::new(),
+            show_saved_ports: false,
+            saved_graph: SavedGraphPanel::Closed,
+            saved_graph_focus: cx.focus_handle(),
+            pending_canvas_source: None,
+        }
+    }
+
+    fn replace_inspection(
+        &mut self,
+        snapshot: Arc<InspectedGddV1>,
+        revision: Arc<()>,
+        inspection: &GddGraphInspection,
+    ) -> Option<usize> {
+        let network_id = self.active_network().map(|network| network.id);
+        let selected_id = self.selected_node().map(GddGraphNode::storage_id);
+        let group = self
+            .node_selection
+            .iter()
+            .filter_map(|index| self.nodes.get(*index))
+            .map(GddGraphNode::storage_id)
+            .collect::<BTreeSet<_>>();
+        self.snapshot = snapshot;
+        self.revision = revision;
+        self.nodes.clone_from(&inspection.nodes);
+        self.networks.clone_from(&inspection.networks);
+        let active_network =
+            network_id.and_then(|id| self.networks.iter().position(|network| network.id == id));
+        self.select_network(active_network);
+        self.node_selection = self
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| self.includes_node(node) && group.contains(&node.storage_id()))
+            .map(|(index, _)| index)
+            .collect();
+        selected_id.and_then(|id| {
+            self.nodes
+                .iter()
+                .position(|node| self.includes_node(node) && node.storage_id() == id)
+        })
+    }
+
     fn selected_node(&self) -> Option<&GddGraphNode> {
         self.selected.and_then(|index| self.nodes.get(index))
     }
@@ -750,7 +877,75 @@ fn parse_graph_grid_position(text: &str) -> anyhow::Result<[i32; 2]> {
     ])
 }
 
+fn gdd_copy_stem(name: &str) -> &str {
+    let lowercase = name.to_ascii_lowercase();
+    [".gdd.tar.xz", ".gdd.zip", ".gdd"]
+        .into_iter()
+        .find(|suffix| lowercase.ends_with(suffix))
+        .and_then(|suffix| name.get(..name.len() - suffix.len()))
+        .unwrap_or(name)
+}
+
 impl GraphiteDocumentItem {
+    fn new(
+        model: Entity<GraphiteDocumentProjectItem>,
+        project: WeakEntity<Project>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let subscription = cx.observe_in(&model, window, |item, _, window, cx| {
+            item.update_working_inspection(window, cx);
+            cx.emit(ItemEvent::UpdateTab);
+            cx.notify();
+        });
+        Self {
+            model,
+            _model_subscription: subscription,
+            project,
+            focus_handle: cx.focus_handle(),
+            copy_task: None,
+            copy_feedback: None,
+            export_content: GddExportContent::default(),
+            embed_linked_resources: false,
+            embed_legacy_document: false,
+            saved_view: SavedViewPanel::Closed,
+            node_catalog: NodeCatalogPanel::Closed,
+            node_copy: NodeCopyPanel::Closed,
+            new_node_position: None,
+        }
+    }
+
+    fn update_working_inspection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        let Some((contents, working)) = model.gdd_contents().zip(model.working.as_ref()) else {
+            return;
+        };
+        let contents = contents.clone();
+        let revision = model.revision.clone();
+        let inspection = working.inspection.clone();
+        match &mut self.node_copy {
+            NodeCopyPanel::Closed => {}
+            NodeCopyPanel::Ready(form) if !Arc::ptr_eq(&form.revision, &revision) => {
+                if form.saved_graph_focus.contains_focused(window, cx) {
+                    self.focus_handle.focus(window, cx);
+                }
+                if let Some(index) = form.replace_inspection(contents, revision, &inspection) {
+                    self.select_copy_node(index, window, cx);
+                }
+            }
+            NodeCopyPanel::Loading { .. } | NodeCopyPanel::Failed(_) => {
+                self.node_copy = NodeCopyPanel::Ready(Box::new(NodeCopyForm::new(
+                    contents,
+                    revision,
+                    &inspection,
+                    window,
+                    cx,
+                )));
+            }
+            NodeCopyPanel::Ready(_) => {}
+        }
+    }
+
     fn toggle_node_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             self.node_catalog,
@@ -950,39 +1145,44 @@ impl GraphiteDocumentItem {
             NodeCopyPanel::Loading { .. } => return,
             NodeCopyPanel::Ready(_) => self.node_copy = NodeCopyPanel::Closed,
             NodeCopyPanel::Closed | NodeCopyPanel::Failed(_) => {
-                let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+                let model = self.model.read(cx);
+                let Some(contents) = model.gdd_contents().cloned() else {
                     return;
                 };
-                let contents = contents.clone();
-                let load = cx.background_spawn(async move { contents.graph_inspection().await });
-                self.node_copy = NodeCopyPanel::Loading {
-                    _task: cx.spawn_in(window, async move |item, cx| {
-                        let loaded = load.await;
-                        if let Err(error) = item.update_in(cx, |item, window, cx| {
-                            item.node_copy = match loaded {
-                                Ok(graph) => NodeCopyPanel::Ready(Box::new(NodeCopyForm {
-                                    nodes: graph.nodes,
-                                    networks: graph.networks,
-                                    active_network: None,
-                                    selected: None,
-                                    name: cx.new(|cx| Editor::single_line(window, cx)),
-                                    value: cx.new(|cx| Editor::single_line(window, cx)),
-                                    position: cx.new(|cx| Editor::single_line(window, cx)),
-                                    output_preview: NodeOutputPreview::Hidden,
-                                    port_rename: None,
-                                    node_selection: BTreeSet::new(),
-                                    show_saved_ports: false,
-                                    saved_graph: SavedGraphPanel::Closed,
-                                    saved_graph_focus: cx.focus_handle(),
-                                    pending_canvas_source: None,
-                                })),
-                                Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
-                            };
-                            cx.notify();
-                        }) {
-                            log::debug!("Graphite node edit panel closed: {error:#}");
-                        }
-                    }),
+                let revision = model.revision.clone();
+                self.node_copy = if let Some(working) = &model.working {
+                    let inspection = working.inspection.clone();
+                    NodeCopyPanel::Ready(Box::new(NodeCopyForm::new(
+                        contents,
+                        revision,
+                        &inspection,
+                        window,
+                        cx,
+                    )))
+                } else {
+                    let load = cx.background_spawn({
+                        let contents = contents.clone();
+                        async move { contents.graph_inspection().await }
+                    });
+                    NodeCopyPanel::Loading {
+                        _task: cx.spawn_in(window, async move |item, cx| {
+                            let loaded = load.await;
+                            if let Err(error) = item.update_in(cx, |item, window, cx| {
+                                if !matches!(item.node_copy, NodeCopyPanel::Loading { .. }) {
+                                    return;
+                                }
+                                item.node_copy = match loaded {
+                                    Ok(graph) => NodeCopyPanel::Ready(Box::new(NodeCopyForm::new(
+                                        contents, revision, &graph, window, cx,
+                                    ))),
+                                    Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
+                                };
+                                cx.notify();
+                            }) {
+                                log::debug!("Graphite node edit panel closed: {error:#}");
+                            }
+                        }),
+                    }
                 };
             }
         }
@@ -1743,6 +1943,18 @@ impl GraphiteDocumentItem {
     }
 
     fn save_numeric_value(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.change_numeric_value(false, window, cx);
+    }
+
+    fn change_numeric_value(
+        &mut self,
+        in_working_copy: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() {
+            return;
+        }
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
@@ -1752,19 +1964,70 @@ impl GraphiteDocumentItem {
         let Some(original_value) = node.numeric_input() else {
             return;
         };
-        match original_value.parse_like(&form.value.read(cx).text(cx)) {
-            Ok(value) => {
-                let request = GraphiteCopy::EditNode {
-                    node: Box::new(node.clone()),
-                    change: NodeCopyChange::NumericInput(value),
-                };
-                self.save_copy(request, window, cx);
-            }
+        let value = match original_value.parse_like(&form.value.read(cx).text(cx)) {
+            Ok(value) => value,
             Err(error) => {
                 self.copy_feedback = Some((error.to_string().into(), Color::Error));
                 cx.notify();
+                return;
             }
+        };
+        if in_working_copy {
+            let snapshot = form.snapshot.clone();
+            let expected = form.revision.clone();
+            let node = node.clone();
+            let edit = async move {
+                snapshot
+                    .set_graph_numeric_input_in_copy(&node, value, ARCHIVE_BUDGET)
+                    .await
+            };
+            self.stage_working_snapshot(expected, edit, window, cx);
+        } else {
+            self.save_copy(
+                GraphiteCopy::EditNode {
+                    node: Box::new(node.clone()),
+                    change: NodeCopyChange::NumericInput(value),
+                },
+                window,
+                cx,
+            );
         }
+    }
+
+    fn stage_working_snapshot(
+        &mut self,
+        expected: Arc<()>,
+        edit: impl Future<Output = Result<InspectedGddV1, GddArchiveError>> + Send + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let staged = cx.background_spawn(async move {
+            let contents = edit.await?;
+            let inspection = contents.graph_inspection().await?;
+            anyhow::Ok((Arc::new(contents), inspection))
+        });
+        self.copy_feedback = None;
+        self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let staged = staged.await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.copy_task = None;
+                let result = staged.and_then(|(contents, inspection)| {
+                    item.model.update(cx, |model, cx| {
+                        model.replace_working_snapshot(&expected, contents, inspection, cx)
+                    })
+                });
+                match result {
+                    Ok(()) => cx.emit(ItemEvent::Edit),
+                    Err(error) => {
+                        item.copy_feedback = Some((format!("{error:#}").into(), Color::Error));
+                    }
+                }
+                cx.notify();
+            }) {
+                log::debug!("Graphite edit view closed: {error:#}");
+            }
+        }));
+        cx.notify();
     }
 
     fn save_numeric_input_exposure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1931,6 +2194,7 @@ impl GraphiteDocumentItem {
 
     fn render_node_copy(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = match self.node_copy {
+            NodeCopyPanel::Closed if self.model.read(cx).working.is_some() => "Open Node Editor",
             NodeCopyPanel::Closed => "Edit Node in a Copy",
             NodeCopyPanel::Loading { .. } => "Loading Graph Nodes",
             NodeCopyPanel::Ready(_) => "Close Node Edit",
@@ -2578,6 +2842,20 @@ impl GraphiteDocumentItem {
                                                 })),
                                             ),
                                     )
+                                    .child(
+                                        div()
+                                            .debug_selector(|| "GRAPHITE-GDD-APPLY-NUMERIC-INPUT".into())
+                                            .child(
+                                                Button::new(
+                                                    "graphite-gdd-apply-numeric-input",
+                                                    "Apply Value to Working Copy",
+                                                )
+                                                .disabled(self.copy_task.is_some())
+                                                .on_click(cx.listener(|item, _, window, cx| {
+                                                    item.change_numeric_value(true, window, cx);
+                                                })),
+                                            ),
+                                    )
                             })
                             .when_some(selected.numeric_input_exposed(), |panel, exposed| {
                                 let label = if exposed {
@@ -2745,6 +3023,129 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn publish_working_folder(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Task<anyhow::Result<Option<PathBuf>>>> {
+        ensure!(
+            self.copy_task.is_none(),
+            "Wait for the current Graphite operation."
+        );
+        let model = self.model.read(cx);
+        let snapshot = model
+            .gdd_contents()
+            .cloned()
+            .context("Open a GDD document.")?;
+        let working = model
+            .working
+            .as_ref()
+            .context("Apply a Graphite edit first.")?;
+        ensure!(
+            working.save_in_progress.upgrade().is_none(),
+            "A Graphite working copy save is already in progress."
+        );
+        let source = model.path.clone();
+        let revision = model.revision.clone();
+        let suggested_name = format!("Working copy of {}.gdd", gdd_copy_stem(&model.name));
+        let project = self.project.clone();
+        let (filesystem, prompt) = project.read_with(cx, |project, cx| {
+            ensure!(project.is_local(), "Save Graphite from a local workspace.");
+            let path = project
+                .absolute_path(&source, cx)
+                .context("The Graphite worktree was closed.")?;
+            let directory = path
+                .parent()
+                .context("The Graphite file has no parent directory.")?;
+            anyhow::Ok((
+                project.fs().clone(),
+                cx.prompt_for_new_path(directory, Some(&suggested_name)),
+            ))
+        })??;
+        let model = self.model.clone();
+        let reservation = Arc::new(());
+        model.update(cx, |model, _| {
+            if let Some(working) = &mut model.working {
+                working.save_in_progress = Arc::downgrade(&reservation);
+            }
+        });
+        Ok(cx.spawn_in(window, async move |item, cx| {
+            let _reservation = reservation;
+            let Some(path) = prompt.await?? else {
+                return Ok(None);
+            };
+            ensure!(
+                path.is_absolute(),
+                "Choose an absolute path for the Graphite folder."
+            );
+            let files = cx
+                .background_spawn({
+                    let snapshot = snapshot.clone();
+                    async move { snapshot.folder_files() }
+                })
+                .await?;
+            item.read_with(cx, |_, _| ())?;
+            ensure!(
+                project.read_with(cx, |project, cx| project
+                    .absolute_path(&source, cx)
+                    .is_some())?,
+                "The Graphite worktree was closed."
+            );
+            filesystem
+                .create_new_directory_atomically(path.clone(), files)
+                .await
+                .with_context(|| format!("Could not save Graphite at {}", path.display()))?;
+            model.update(cx, |model, cx| {
+                // A newer working edit must keep its dirty state after an older save completes.
+                if Arc::ptr_eq(&model.revision, &revision)
+                    && let Some(working) = &mut model.working
+                {
+                    working.saved = snapshot;
+                    cx.notify();
+                }
+            });
+            Ok(Some(path))
+        }))
+    }
+
+    fn save_working_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let save = match self.publish_working_folder(window, cx) {
+            Ok(save) => save,
+            Err(error) => {
+                self.copy_feedback = Some((format!("{error:#}").into(), Color::Error));
+                cx.notify();
+                return;
+            }
+        };
+        self.copy_feedback = None;
+        self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result = save.await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.copy_task = None;
+                item.copy_feedback = match result {
+                    Ok(Some(path)) if item.is_dirty(cx) => Some((
+                        format!(
+                            "Snapshot saved to {}. Newer edits are unsaved.",
+                            path.display()
+                        )
+                        .into(),
+                        Color::Default,
+                    )),
+                    Ok(Some(path)) => Some((
+                        format!("Working copy saved to {}", path.display()).into(),
+                        Color::Default,
+                    )),
+                    Ok(None) => None,
+                    Err(error) => Some((format!("{error:#}").into(), Color::Error)),
+                };
+                cx.notify();
+            }) {
+                log::debug!("Graphite working copy view closed: {error:#}");
+            }
+        }));
+        cx.notify();
+    }
+
     fn save_copy(&mut self, request: GraphiteCopy, window: &mut Window, cx: &mut Context<Self>) {
         if self.copy_task.is_some() {
             return;
@@ -2780,13 +3181,7 @@ impl GraphiteDocumentItem {
         let original = model.original.clone();
         let suggested_name = match format {
             Some(format) => {
-                let name = model.name.as_ref();
-                let lower_name = name.to_ascii_lowercase();
-                let stem = [".gdd.tar.xz", ".gdd.zip", ".gdd"]
-                    .into_iter()
-                    .find(|suffix| lower_name.ends_with(suffix))
-                    .and_then(|suffix| name.get(..name.len() - suffix.len()))
-                    .unwrap_or(name);
+                let stem = gdd_copy_stem(&model.name);
                 let suffix = match format {
                     GddCopyFormat::Archive(ArchiveFormat::Zip) => ".gdd.zip",
                     GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
@@ -3457,23 +3852,10 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
         project: Entity<Project>,
         _pane: Option<&Pane>,
         item: Entity<Self::Item>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self {
-            model: item,
-            project: project.downgrade(),
-            focus_handle: cx.focus_handle(),
-            copy_task: None,
-            copy_feedback: None,
-            export_content: GddExportContent::default(),
-            embed_linked_resources: false,
-            embed_legacy_document: false,
-            saved_view: SavedViewPanel::Closed,
-            node_catalog: NodeCatalogPanel::Closed,
-            node_copy: NodeCopyPanel::Closed,
-            new_node_position: None,
-        }
+        Self::new(item, project.downgrade(), window, cx)
     }
 }
 
@@ -3483,10 +3865,14 @@ impl Focusable for GraphiteDocumentItem {
     }
 }
 
-impl EventEmitter<()> for GraphiteDocumentItem {}
+impl EventEmitter<ItemEvent> for GraphiteDocumentItem {}
 
 impl Item for GraphiteDocumentItem {
-    type Event = ();
+    type Event = ItemEvent;
+
+    fn to_item_events(event: &Self::Event, emit: &mut dyn FnMut(ItemEvent)) {
+        emit(*event);
+    }
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
         self.model.read(cx).name.clone()
@@ -3504,6 +3890,73 @@ impl Item for GraphiteDocumentItem {
         visit(self.model.entity_id(), self.model.read(cx));
     }
 
+    fn is_dirty(&self, cx: &App) -> bool {
+        self.model.read(cx).working_dirty()
+    }
+
+    fn can_save(&self, cx: &App) -> bool {
+        self.model.read(cx).working.is_some()
+    }
+
+    fn supports_autosave(&self, _cx: &App) -> bool {
+        false
+    }
+
+    fn save(
+        &mut self,
+        _options: SaveOptions,
+        _project: Entity<Project>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<anyhow::Result<()>> {
+        let save = match self.publish_working_folder(window, cx) {
+            Ok(save) => save,
+            Err(error) => return Task::ready(Err(error)),
+        };
+        cx.spawn(async move |item, cx| {
+            ensure!(
+                save.await?.is_some(),
+                "Graphite working copy save cancelled."
+            );
+            ensure!(
+                item.read_with(cx, |item, cx| !item.is_dirty(cx))?,
+                "The folder was saved. Newer Graphite edits still need to be saved."
+            );
+            Ok(())
+        })
+    }
+
+    fn reload(
+        &mut self,
+        _project: Entity<Project>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<anyhow::Result<()>> {
+        let model = self.model.read(cx);
+        if !model.working_dirty() {
+            return Task::ready(Ok(()));
+        }
+        let Some(working) = &model.working else {
+            return Task::ready(Err(anyhow!("The Graphite working copy is unavailable.")));
+        };
+        if working.save_in_progress.upgrade().is_some() {
+            return Task::ready(Err(anyhow!("A Graphite working copy save is in progress.")));
+        }
+        let revision = model.revision.clone();
+        let saved = working.saved.clone();
+        let inspect = cx.background_spawn({
+            let saved = saved.clone();
+            async move { saved.graph_inspection().await }
+        });
+        let model = self.model.clone();
+        cx.spawn(async move |_, cx| {
+            let inspection = inspect.await?;
+            model.update(cx, |model, cx| {
+                model.replace_working_snapshot(&revision, saved, inspection, cx)
+            })
+        })
+    }
+
     fn can_split(&self) -> bool {
         true
     }
@@ -3511,24 +3964,17 @@ impl Item for GraphiteDocumentItem {
     fn clone_on_split(
         &self,
         _workspace_id: Option<workspace::WorkspaceId>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Option<Entity<Self>>> {
         let model = self.model.clone();
         let project = self.project.clone();
-        Task::ready(Some(cx.new(|cx| Self {
-            model,
-            project,
-            focus_handle: cx.focus_handle(),
-            copy_task: None,
-            copy_feedback: None,
-            export_content: self.export_content,
-            embed_linked_resources: self.embed_linked_resources,
-            embed_legacy_document: self.embed_legacy_document,
-            saved_view: SavedViewPanel::Closed,
-            node_catalog: NodeCatalogPanel::Closed,
-            node_copy: NodeCopyPanel::Closed,
-            new_node_position: None,
+        Task::ready(Some(cx.new(|cx| {
+            let mut item = Self::new(model, project, window, cx);
+            item.export_content = self.export_content;
+            item.embed_linked_resources = self.embed_linked_resources;
+            item.embed_legacy_document = self.embed_legacy_document;
+            item
         })))
     }
 }
@@ -3572,10 +4018,37 @@ impl Render for GraphiteDocumentItem {
                 } else {
                     "Graphite GDD"
                 };
-                view.child(Label::new(format!(
-                    "{label} v{} · Read-only",
-                    manifest.format_version
-                )))
+                let format_version = manifest.format_version;
+                let working_dirty = model.working_dirty();
+                let working = model.working.is_some();
+                view.child(Label::new(if working {
+                    format!("{label} v{format_version} · Working copy")
+                } else {
+                    format!("{label} v{format_version} · Read-only")
+                }))
+                .when(working, |view| {
+                    view.child(Label::new(if working_dirty {
+                        "Unsaved working edits"
+                    } else {
+                        "Working copy saved"
+                    }))
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-SAVE-WORKING-FOLDER".into())
+                            .child(
+                                Button::new(
+                                    "graphite-gdd-save-working-folder",
+                                    "Save Working Copy As",
+                                )
+                                .disabled(self.copy_task.is_some())
+                                .on_click(cx.listener(
+                                    |item, _, window, cx| {
+                                        item.save_working_folder(window, cx);
+                                    },
+                                )),
+                            ),
+                    )
+                })
                 .child(Label::new(format!("Document ID {}", manifest.document_id)))
                 .child(Label::new(format!(
                     "Recorded editor version {}",
@@ -7955,6 +8428,215 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("retained source"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r04_r07_numeric_working_edits_share_a_snapshot_and_save_fresh_folders(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/working-value.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source file");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("GDD item");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+
+        let set_draft =
+            |item: &Entity<GraphiteDocumentItem>, draft, window: &mut gpui::VisualTestContext| {
+                let field = item.read_with(window, |item, _| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                        panic!("open node editor")
+                    };
+                    form.value.clone()
+                });
+                field.update_in(window, |editor, window, cx| {
+                    editor.set_text(draft, window, cx)
+                });
+            };
+        let check_view = |item: &Entity<GraphiteDocumentItem>,
+                          expected,
+                          dirty,
+                          window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, cx| {
+                assert_eq!(item.is_dirty(cx), dirty);
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("open node editor")
+                };
+                assert_eq!(form.value.read(cx).text(cx), expected);
+                assert!(Arc::ptr_eq(
+                    &form.snapshot,
+                    item.model.read(cx).gdd_contents().expect("GDD snapshot")
+                ));
+                form.selected_node()
+                    .expect("same node remains selected")
+                    .storage_id()
+            })
+        };
+        let node_id = check_view(&source, "-17", false, window);
+        set_draft(&source, "3.5", window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        source.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("64-bit integer")));
+        });
+        set_draft(&source, "12", window);
+        paint(window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        window.run_until_parked();
+        assert_eq!(check_view(&source, "12", true, window), node_id);
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert_eq!(check_view(&source, "12", true, window), node_id);
+
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(source_path.clone()));
+        window.run_until_parked();
+        source.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            assert!(matches!(&item.copy_feedback, Some((_, Color::Error))));
+        });
+
+        let split_pane = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_and_clone(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            })
+            .await
+            .expect("split the native item");
+        let split = split_pane.read_with(window, |pane, _| {
+            pane.active_item()
+                .expect("active split item")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("GDD split")
+        });
+        split.update_in(window, |item, window, cx| {
+            item.toggle_node_copy(window, cx);
+            item.select_copy_node(0, window, cx);
+        });
+        assert_eq!(check_view(&split, "12", true, window), node_id);
+        let (stale_revision, stale_snapshot, stale_node) = split.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("open node editor")
+            };
+            (
+                form.revision.clone(),
+                form.snapshot.clone(),
+                form.selected_node().expect("selected node").clone(),
+            )
+        });
+
+        let older_folder = PathBuf::from("/project/older-working.gdd");
+        source.update_in(window, |item, window, cx| {
+            item.save_working_folder(window, cx)
+        });
+        set_draft(&split, "36", window);
+        split.update_in(window, |item, window, cx| {
+            item.change_numeric_value(true, window, cx)
+        });
+        window.run_until_parked();
+        assert_eq!(check_view(&source, "36", true, window), node_id);
+        window.simulate_new_path_selection(|_| Some(older_folder.clone()));
+        window.run_until_parked();
+        let older = read_graphite_folder(filesystem.as_ref(), &older_folder)
+            .await
+            .expect("published older snapshot");
+        assert_eq!(older.history_len(), original_history + 1);
+        let older_nodes = older.graph_nodes().await.expect("older graph");
+        assert!(matches!(
+            older_nodes.first().and_then(GddGraphNode::numeric_input),
+            Some(GddNumericValue::Integer(12))
+        ));
+        assert_eq!(check_view(&split, "36", true, window), node_id);
+        source.update_in(window, |item, window, cx| {
+            item.stage_working_snapshot(
+                stale_revision,
+                async move {
+                    stale_snapshot
+                        .set_graph_numeric_input_in_copy(
+                            &stale_node,
+                            GddNumericValue::Integer(99),
+                            ARCHIVE_BUDGET,
+                        )
+                        .await
+                },
+                window,
+                cx,
+            );
+        });
+        window.run_until_parked();
+        source.read_with(window, |item, _| {
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("working copy changed")));
+        });
+        assert_eq!(check_view(&source, "36", true, window), node_id);
+
+        let destination = PathBuf::from("/project/saved-working.gdd");
+        let project = workspace.read_with(window, |workspace, _| workspace.project().clone());
+        let save = split.update_in(window, |item, window, cx| {
+            item.save(SaveOptions::default(), project, window, cx)
+        });
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        save.await
+            .expect("workspace save waits for folder publication");
+        window.run_until_parked();
+        assert_eq!(check_view(&source, "36", false, window), node_id);
+        assert_eq!(check_view(&split, "36", false, window), node_id);
+
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace.read_with(window, |workspace, cx| {
+            workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)
+                .expect("opened working folder")
+        });
+        assert_ne!(reopened, split);
+        let saved = reopened.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            item.model
+                .read(cx)
+                .gdd_contents()
+                .expect("saved GDD")
+                .clone()
+        });
+        assert_eq!(saved.history_len(), original_history + 2);
+        let nodes = saved.graph_nodes().await.expect("saved working graph");
+        let [node] = nodes.as_slice() else {
+            panic!("expected the saved node")
+        };
+        assert_eq!(node.storage_id(), node_id);
+        assert!(matches!(
+            node.numeric_input(),
+            Some(GddNumericValue::Integer(36))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original ZIP"),
             original
         );
     }

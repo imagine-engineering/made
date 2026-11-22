@@ -300,6 +300,9 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     fn can_save(&self, _cx: &App) -> bool {
         false
     }
+    fn supports_autosave(&self, _cx: &App) -> bool {
+        true
+    }
     fn can_save_as(&self, _: &App) -> bool {
         false
     }
@@ -591,10 +594,7 @@ pub trait ItemHandle: 'static + Send {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<(SharedString, Box<dyn Action>)>;
-    fn can_autosave(&self, cx: &App) -> bool {
-        let is_deleted = self.project_entry_ids(cx).is_empty();
-        self.is_dirty(cx) && !self.has_conflict(cx) && self.can_save(cx) && !is_deleted
-    }
+    fn can_autosave(&self, cx: &App) -> bool;
 }
 
 pub trait WeakItemHandle: Send + Sync {
@@ -1075,6 +1075,14 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     fn can_save(&self, cx: &App) -> bool {
         self.read(cx).can_save(cx)
+    }
+
+    fn can_autosave(&self, cx: &App) -> bool {
+        self.read(cx).supports_autosave(cx)
+            && self.is_dirty(cx)
+            && !self.has_conflict(cx)
+            && self.can_save(cx)
+            && !self.project_entry_ids(cx).is_empty()
     }
 
     fn can_save_as(&self, cx: &App) -> bool {
