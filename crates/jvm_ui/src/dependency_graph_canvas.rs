@@ -547,6 +547,7 @@ pub struct CanvasState {
     pub inspected_edges: BTreeSet<usize>,
     pub hover: Option<String>,
     pub focus: Option<String>,
+    node_focus: BTreeMap<String, gpui::FocusHandle>,
     /// Box selection in graph coordinates, if one is being drawn.
     pub box_selection: Option<(GraphPoint, GraphPoint)>,
     drag_anchor: Option<GraphPoint>,
@@ -574,6 +575,7 @@ impl CanvasState {
             inspected_edges: BTreeSet::new(),
             hover: None,
             focus: None,
+            node_focus: BTreeMap::new(),
             box_selection: None,
             drag_anchor: None,
             drag_origin: GraphPoint::ZERO,
@@ -591,6 +593,7 @@ impl CanvasState {
         let contains = |id: &str| graph.positions.contains_key(id);
         self.selection.retain(|id| contains(id));
         self.focus.take_if(|id| !contains(id));
+        self.node_focus.retain(|id, _| contains(id));
         self.hover = None;
         self.inspected.clear();
         self.inspected_edges.clear();
@@ -747,6 +750,17 @@ impl CanvasState {
         self.drag_anchor = None;
     }
 
+    pub(crate) fn focused_node(&self, window: &gpui::Window) -> Option<&str> {
+        self.node_focus
+            .iter()
+            .find_map(|(node, handle)| handle.is_focused(window).then_some(node.as_str()))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn focus_handle_for_node(&self, node: &str) -> Option<gpui::FocusHandle> {
+        self.node_focus.get(node).cloned()
+    }
+
     pub fn node_screen_position(&self, id: &str) -> Option<GraphPoint> {
         let position = self.graph.positions.get(id).copied()?;
         Some(self.viewport.graph_to_screen(position))
@@ -759,7 +773,7 @@ const MAX_VIEWPORT_SCALE: f32 = 8.0;
 impl gpui::Render for CanvasState {
     fn render(
         &mut self,
-        _window: &mut gpui::Window,
+        window: &mut gpui::Window,
         cx: &mut gpui::Context<Self>,
     ) -> impl gpui::IntoElement {
         use gpui::{
@@ -769,10 +783,17 @@ impl gpui::Render for CanvasState {
         use ui::prelude::*;
 
         let theme = cx.theme().colors().clone();
+        for node in &self.graph.nodes {
+            self.node_focus
+                .entry(node.id.clone())
+                .or_insert_with(|| cx.focus_handle());
+        }
+        let focused = self.focused_node(window).map(str::to_owned);
+
         let viewport = self.viewport.clone();
         let node_size = self.graph.node_size();
         let scale = viewport.scale;
-        let hover = self.hover.clone();
+        let overlay_node = focused.as_ref().or(self.hover.as_ref());
         let selection = self.selection.clone();
         let inspected: HashSet<String> = self.inspected.iter().cloned().collect();
         let box_selection = self.box_selection;
@@ -808,6 +829,7 @@ impl gpui::Render for CanvasState {
             CanvasNodeKind,
             bool,
             bool,
+            Option<gpui::FocusHandle>,
         )> = self
             .graph
             .nodes
@@ -827,6 +849,7 @@ impl gpui::Render for CanvasState {
                     node.kind,
                     selection.contains(&node.id),
                     inspected.contains(&node.id),
+                    self.node_focus.get(&node.id).cloned(),
                 )
             })
             .collect();
@@ -837,7 +860,7 @@ impl gpui::Render for CanvasState {
             )
         });
 
-        let hover_label = hover.and_then(|id| self.graph.node(&id)).map(|node| {
+        let hover_label = overlay_node.and_then(|id| self.graph.node(id)).map(|node| {
             let mut label = node.label.clone();
             if let Some(version) = &node.version {
                 label.push_str(&format!(" {version}"));
@@ -1092,7 +1115,7 @@ impl gpui::Render for CanvasState {
                 .size_full(),
             )
             .children(nodes.into_iter().map(
-                |(screen, id, label, version, kind, selected, inspected)| {
+                |(screen, id, label, version, kind, selected, inspected, focus_handle)| {
                     let width = node_size.width * scale;
                     let height = node_size.height * scale;
                     let background = if selected {
@@ -1109,7 +1132,7 @@ impl gpui::Render for CanvasState {
                     } else {
                         theme.text
                     };
-                    let border = if selected || inspected {
+                    let border = if selected || inspected || focused.as_ref() == Some(&id) {
                         theme.border_selected
                     } else {
                         theme.border
@@ -1150,6 +1173,16 @@ impl gpui::Render for CanvasState {
                         .overflow_hidden()
                         .role(gpui::Role::Button)
                         .aria_label(accessible)
+                        .when_some(focus_handle, |node, focus| {
+                            node.track_focus(&focus).tab_index(0_isize)
+                        })
+                        .on_click(cx.listener(move |state, event: &gpui::ClickEvent, _, cx| {
+                            if matches!(event, gpui::ClickEvent::Keyboard(_))
+                                && state.select_node(&id, false, false)
+                            {
+                                cx.notify();
+                            }
+                        }))
                         .child(
                             div()
                                 .text_size(px(11.0 * scale.max(0.75)))
@@ -1162,6 +1195,7 @@ impl gpui::Render for CanvasState {
             .when_some(hover_label, |canvas, label| {
                 canvas.child(
                     div()
+                        .id("groovy-dependency-details")
                         .absolute()
                         .bottom_2()
                         .left_2()
@@ -1173,6 +1207,9 @@ impl gpui::Render for CanvasState {
                         .border_color(theme.border)
                         .text_size(px(12.0))
                         .text_color(theme.text)
+                        .role(gpui::Role::Status)
+                        .aria_label("Dependency details")
+                        .aria_value(label.clone())
                         .child(label),
                 )
             })

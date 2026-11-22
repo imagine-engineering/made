@@ -257,6 +257,8 @@ pub struct DependencyDiagramItem {
     source: Option<DependencyDiagramSource>,
     receipt: Option<DependencyGraphReceipt>,
     _panel_subscription: Option<gpui::Subscription>,
+    _canvas_subscription: gpui::Subscription,
+    toolbar_target: DependencyDiagramContextTarget,
     search_handle: ui::PopoverMenuHandle<Picker<DependencySearch>>,
     scope: DependencyDiagramScope,
     scope_options: Vec<String>,
@@ -298,12 +300,22 @@ impl DependencyDiagramItem {
         let context_handle = ui::RightClickMenuHandle::default();
         canvas.context_state = Some(context_state.clone());
         canvas.context_handle = Some(context_handle.clone());
+        let canvas = cx.new(|_| canvas);
+        let canvas_subscription = cx.observe(&canvas, |item, _, cx| {
+            let selected = item.selected_context_target(cx);
+            if selected != item.toolbar_target {
+                item.toolbar_target = selected;
+                cx.notify();
+            }
+        });
         Self {
-            canvas: cx.new(|_| canvas),
+            canvas,
             target: derivation.target,
             source,
             receipt,
             _panel_subscription: panel_subscription,
+            _canvas_subscription: canvas_subscription,
+            toolbar_target: DependencyDiagramContextTarget::Canvas,
             search_handle: ui::PopoverMenuHandle::default(),
             scope: derivation.scope,
             scope_options: derivation.scope_options,
@@ -552,30 +564,24 @@ impl DependencyDiagramItem {
     /// context-menu gesture stages the same target a right-click would and
     /// shows the menu at the node's screen position.
     fn show_context_menu_for_focus(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        let staged = {
-            let canvas = self.canvas.read(cx);
-            let focused = canvas
-                .focus
-                .clone()
-                .or_else(|| canvas.selection.iter().next().cloned());
-            let Some(focused) = focused else {
-                return;
-            };
-            let Some(node_position) = canvas.graph.positions.get(&focused).copied() else {
-                return;
-            };
-            let target = stage_dependency_diagram_target(Some(&focused), &canvas.selection);
-            let origin = *canvas.canvas_origin.lock().expect("canvas origin");
-            Some((target, node_position, canvas.viewport.clone(), origin))
+        let canvas = self.canvas.read(cx);
+        let focused = canvas
+            .focused_node(window)
+            .or(canvas.focus.as_deref())
+            .or_else(|| canvas.selection.iter().next().map(String::as_str));
+        let target = stage_dependency_diagram_target(focused, &canvas.selection);
+        let origin = *canvas.canvas_origin.lock().expect("canvas origin");
+        let screen = if let Some(position) = focused.and_then(|id| canvas.node_screen_position(id))
+        {
+            position
+        } else {
+            let size = *canvas.canvas_size.lock().expect("canvas size");
+            sim_runtime::graph::GraphPoint {
+                x: size.width / 2.0,
+                y: size.height / 2.0,
+            }
         };
-        let Some((target, node_position, viewport, origin)) = staged else {
-            return;
-        };
-        let screen = viewport.graph_to_screen(node_position);
-        let position = gpui::Point::<gpui::Pixels>::new(
-            gpui::Pixels::from(origin.x + screen.x),
-            gpui::Pixels::from(origin.y + screen.y),
-        );
+        let position = gpui::point(gpui::px(origin.x + screen.x), gpui::px(origin.y + screen.y));
         self.context_state.stage(
             crate::dependency_diagram_menu::DependencyDiagramContextInvocation {
                 target,
@@ -594,9 +600,11 @@ impl DependencyDiagramItem {
     /// Dismisses the staged context menu and restores focus to the diagram
     /// item: the Escape path for the keyboard context-menu gesture.
     fn dismiss_context_menu(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
-        if self.context_handle.is_deployed() {
-            self.context_handle.hide(cx);
+        if !self.context_handle.is_deployed() {
+            cx.propagate();
+            return;
         }
+        self.context_handle.hide(cx);
         window.focus(&self.focus_handle, cx);
         // Re-assert the restoration on the next frame so a deferred focus
         // claim from the dismissed overlay cannot outlast the gesture.
@@ -757,17 +765,28 @@ impl DependencyDiagramItem {
         )))
     }
 
+    fn selected_context_target(&self, cx: &App) -> DependencyDiagramContextTarget {
+        let canvas = self.canvas.read(cx);
+        let selected = canvas
+            .focus
+            .as_ref()
+            .filter(|id| canvas.selection.contains(*id))
+            .or_else(|| canvas.selection.iter().next());
+        stage_dependency_diagram_target(selected.map(String::as_str), &canvas.selection)
+    }
+
     fn inspect_canvas_focus(
         &mut self,
         command: DependencyDiagramMenuCommand,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         let canvas = self.canvas.read(cx);
         let focus = canvas
-            .focus
-            .as_ref()
-            .or_else(|| canvas.selection.iter().next());
-        let target = stage_dependency_diagram_target(focus.map(String::as_str), &canvas.selection);
+            .focused_node(window)
+            .or(canvas.focus.as_deref())
+            .or_else(|| canvas.selection.iter().next().map(String::as_str));
+        let target = stage_dependency_diagram_target(focus, &canvas.selection);
         self.inspect_canvas_target(command, &target, cx);
     }
 
@@ -863,9 +882,12 @@ impl Render for DependencyDiagramItem {
         let admitted = self.receipt_is_current(cx);
         let structure_visible = self.structure_visible;
         let notice = self.notice.clone();
+        let selection = self.selected_context_target(cx);
+        let inspection_available = self.context_menu_snapshot(&selection, cx).has_admitted_node;
 
         let toolbar = div()
             .flex()
+            .flex_wrap()
             .items_center()
             .gap_1()
             .px_2()
@@ -876,6 +898,8 @@ impl Render for DependencyDiagramItem {
             .child(
                 div()
                     .flex_1()
+                    .min_w_0()
+                    .truncate()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::MEDIUM)
                     .child(title),
@@ -959,6 +983,35 @@ impl Render for DependencyDiagramItem {
                             .popover(window, cx),
                         )
                     }),
+            )
+            .children(
+                [
+                    (
+                        "dependency-diagram-neighbours",
+                        ui::IconName::GitGraph,
+                        "Inspect dependency neighbours",
+                        DependencyDiagramMenuCommand::InspectNeighbours,
+                    ),
+                    (
+                        "dependency-diagram-shortest-paths",
+                        ui::IconName::GitBranch,
+                        "Inspect shortest root paths",
+                        DependencyDiagramMenuCommand::InspectRootPaths,
+                    ),
+                ]
+                .into_iter()
+                .map(|(id, icon, label, command)| {
+                    IconButton::new(id, icon)
+                        .shape(ui::IconButtonShape::Square)
+                        .tab_index(0_isize)
+                        .aria_label(label)
+                        .tooltip(ui::Tooltip::text(label))
+                        .disabled(!inspection_available)
+                        .on_click(cx.listener(move |item, _, _, cx| {
+                            let selected = item.selected_context_target(cx);
+                            item.inspect_canvas_target(command, &selected, cx);
+                        }))
+                }),
             )
             .child(
                 IconButton::new(
@@ -1056,35 +1109,75 @@ impl Render for DependencyDiagramItem {
                     item.apply_scope(event.label.clone(), cx)
                 }),
             )
-            .on_action(cx.listener(|item, _: &InspectGraphNeighbours, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectNeighbours, cx);
+            .on_action(cx.listener(|item, _: &InspectGraphNeighbours, window, cx| {
+                item.inspect_canvas_focus(
+                    DependencyDiagramMenuCommand::InspectNeighbours,
+                    window,
+                    cx,
+                );
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphRootPaths, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectRootPaths, cx);
+            .on_action(cx.listener(|item, _: &InspectGraphRootPaths, window, cx| {
+                item.inspect_canvas_focus(
+                    DependencyDiagramMenuCommand::InspectRootPaths,
+                    window,
+                    cx,
+                );
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphAllRootPaths, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectAllRootPaths, cx);
+            .on_action(
+                cx.listener(|item, _: &InspectGraphAllRootPaths, window, cx| {
+                    item.inspect_canvas_focus(
+                        DependencyDiagramMenuCommand::InspectAllRootPaths,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(
+                cx.listener(|item, _: &InspectGraphConflictOrigins, window, cx| {
+                    item.inspect_canvas_focus(
+                        DependencyDiagramMenuCommand::InspectConflictOrigins,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(cx.listener(|item, _: &InspectGraphAllUsages, window, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::AllUsages, window, cx);
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphConflictOrigins, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectConflictOrigins, cx);
+            .on_action(
+                cx.listener(|item, _: &InspectGraphPathsBetween, window, cx| {
+                    item.inspect_canvas_focus(
+                        DependencyDiagramMenuCommand::PathsBetween,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(cx.listener(|item, _: &PinGraphSelection, window, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::PinSelection, window, cx);
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphAllUsages, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::AllUsages, cx);
+            .on_action(cx.listener(|item, _: &AddGraphSelectionToSet, window, cx| {
+                item.inspect_canvas_focus(
+                    DependencyDiagramMenuCommand::AddToSelectionSet,
+                    window,
+                    cx,
+                );
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphPathsBetween, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::PathsBetween, cx);
-            }))
-            .on_action(cx.listener(|item, _: &PinGraphSelection, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::PinSelection, cx);
-            }))
-            .on_action(cx.listener(|item, _: &AddGraphSelectionToSet, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::AddToSelectionSet, cx);
-            }))
-            .on_action(cx.listener(|item, _: &InspectGraphSelectionSet, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectSelectionSet, cx);
-            }))
-            .on_action(cx.listener(|item, _: &ClearGraphSelectionSet, _, cx| {
-                item.inspect_canvas_focus(DependencyDiagramMenuCommand::ClearSelectionSet, cx);
+            .on_action(
+                cx.listener(|item, _: &InspectGraphSelectionSet, window, cx| {
+                    item.inspect_canvas_focus(
+                        DependencyDiagramMenuCommand::InspectSelectionSet,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(cx.listener(|item, _: &ClearGraphSelectionSet, window, cx| {
+                item.inspect_canvas_focus(
+                    DependencyDiagramMenuCommand::ClearSelectionSet,
+                    window,
+                    cx,
+                );
             }))
             .on_action(cx.listener(|item, _: &ClearGraphInspection, _, cx| {
                 item.inspect_canvas_target(
@@ -1109,6 +1202,9 @@ impl Render for DependencyDiagramItem {
                 root.child(
                     div()
                         .id("dependency-diagram-notice")
+                        .role(gpui::Role::Status)
+                        .aria_live(gpui::accesskit::Live::Polite)
+                        .aria_value(notice_text.clone())
                         .px_2()
                         .py_1()
                         .border_1()
@@ -1559,8 +1655,45 @@ mod tests {
             assert!(
                 labels
                     .iter()
+                    .any(|label| label == "Inspect dependency neighbours")
+            );
+            assert!(
+                labels
+                    .iter()
+                    .any(|label| label == "Inspect shortest root paths")
+            );
+            assert!(
+                labels
+                    .iter()
                     .any(|label| label.contains("org.example:left") && label.contains("1.0")),
                 "nodes expose group, artifact and version: {labels:?}"
+            );
+        });
+
+        cx.update(|window, cx| {
+            let focus = item
+                .read(cx)
+                .canvas
+                .read(cx)
+                .focus_handle_for_node("c2")
+                .expect("keyboard node focus");
+            window.focus(&focus, cx);
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value = serde_json::from_str(
+                &window
+                    .debug_a11y_tree_json()
+                    .expect("focused dependency details"),
+            )
+            .expect("a11y json");
+            assert!(
+                tree["nodes"]
+                    .as_object()
+                    .expect("nodes")
+                    .values()
+                    .any(|node| {
+                        node["aria"]["label"] == "Dependency details"
+                            && node["aria"]["value"] == "org.example:right 2.0"
+                    })
             );
         });
 
@@ -2054,6 +2187,22 @@ mod tests {
             !context_handle.is_deployed(),
             "Escape dismisses the navigated menu"
         );
+        item.update(cx, |item, cx| {
+            item.canvas.update(cx, |canvas, cx| {
+                canvas.focus = None;
+                canvas.selection.clear();
+                cx.notify();
+            });
+        });
+        cx.update(|window, cx| {
+            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
+        });
+        assert!(
+            context_handle.is_deployed(),
+            "the gesture can open the blank-canvas menu"
+        );
+        cx.simulate_keystrokes("escape");
+        assert!(!context_handle.is_deployed());
     }
 
     #[gpui::test]

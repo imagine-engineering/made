@@ -14,8 +14,8 @@ use crate::dependencies_panel::{
     InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
 };
 use crate::dependency_diagram_item::{
-    ExportDependencyDiagramImage, FitDependencyDiagram, ShowDependencyDiagramPopup,
-    ToggleDependencyDiagramStructure, ZoomDependencyDiagramIn, ZoomDependencyDiagramOut,
+    ExportDependencyDiagramImage, FitDependencyDiagram, ToggleDependencyDiagramStructure,
+    ZoomDependencyDiagramIn, ZoomDependencyDiagramOut,
 };
 use sim_runtime::graph::GraphPoint;
 
@@ -65,7 +65,6 @@ pub enum DependencyDiagramMenuCommand {
     InspectSelectionSet,
     ClearSelectionSet,
     ClearInspection,
-    ShowPopup,
     CopyDiagramSource,
     ExportImage,
     Fit,
@@ -144,7 +143,6 @@ pub fn dependency_diagram_menu_available(
             node_or_selection && snapshot.selection_set_len >= 1
         }
         DependencyDiagramMenuCommand::ClearInspection => snapshot.has_inspection,
-        DependencyDiagramMenuCommand::ShowPopup => true,
         DependencyDiagramMenuCommand::CopyDiagramSource => snapshot.has_source,
         DependencyDiagramMenuCommand::ExportImage => true,
         DependencyDiagramMenuCommand::Fit
@@ -168,7 +166,6 @@ pub fn dependency_diagram_menu_label(command: DependencyDiagramMenuCommand) -> &
         DependencyDiagramMenuCommand::InspectSelectionSet => "Inspect selection set",
         DependencyDiagramMenuCommand::ClearSelectionSet => "Clear selection set",
         DependencyDiagramMenuCommand::ClearInspection => "Clear inspection",
-        DependencyDiagramMenuCommand::ShowPopup => "Show Dependency Diagram Popup",
         DependencyDiagramMenuCommand::CopyDiagramSource => "Copy Diagram Source",
         DependencyDiagramMenuCommand::ExportImage => "Export Image",
         DependencyDiagramMenuCommand::Fit => "Fit Diagram",
@@ -198,7 +195,6 @@ pub fn dependency_diagram_menu_groups(
         DependencyDiagramMenuCommand::ClearInspection,
     ];
     let surfaces = [
-        DependencyDiagramMenuCommand::ShowPopup,
         DependencyDiagramMenuCommand::CopyDiagramSource,
         DependencyDiagramMenuCommand::ExportImage,
     ];
@@ -241,7 +237,6 @@ pub fn dependency_diagram_menu_action(
         DependencyDiagramMenuCommand::InspectSelectionSet => Box::new(InspectGraphSelectionSet),
         DependencyDiagramMenuCommand::ClearSelectionSet => Box::new(ClearGraphSelectionSet),
         DependencyDiagramMenuCommand::ClearInspection => Box::new(ClearGraphInspection),
-        DependencyDiagramMenuCommand::ShowPopup => Box::new(ShowDependencyDiagramPopup),
         DependencyDiagramMenuCommand::CopyDiagramSource => Box::new(CopyDependencyDiagramSource),
         DependencyDiagramMenuCommand::ExportImage => Box::new(ExportDependencyDiagramImage),
         DependencyDiagramMenuCommand::Fit => Box::new(FitDependencyDiagram),
@@ -295,36 +290,70 @@ pub(crate) fn build_dependency_diagram_context_menu(
             if group_index > 0 {
                 menu = menu.separator();
             }
-            for command in group {
-                let command = *command;
-                let label = dependency_diagram_menu_label(command);
-                let action = dependency_diagram_menu_action(command);
-                if command.inspection_mode().is_some()
-                    || matches!(
-                        command,
-                        DependencyDiagramMenuCommand::ClearInspection
-                            | DependencyDiagramMenuCommand::AllUsages
-                            | DependencyDiagramMenuCommand::PinSelection
-                            | DependencyDiagramMenuCommand::AddToSelectionSet
-                            | DependencyDiagramMenuCommand::ClearSelectionSet
-                    )
-                {
+            use DependencyDiagramMenuCommand::*;
+
+            let mut more = Vec::new();
+            let mut comparison = Vec::new();
+            let mut clear_inspection = false;
+            for &command in group {
+                match command {
+                    InspectAllRootPaths | InspectConflictOrigins => more.push(command),
+                    PinSelection | PathsBetween | AddToSelectionSet | InspectSelectionSet
+                    | ClearSelectionSet => comparison.push(command),
+                    ClearInspection => clear_inspection = true,
+                    _ => {
+                        menu = add_menu_command(menu, command, &invocation.target, &item);
+                    }
+                }
+            }
+            for (label, commands) in [("More inspections", more), ("Compare", comparison)] {
+                if !commands.is_empty() {
                     let target = invocation.target.clone();
                     let item = item.clone();
-                    menu = menu.entry(label, Some(action), move |_, cx| {
-                        if let Some(item) = item.upgrade() {
-                            item.update(cx, |item, cx| {
-                                item.inspect_canvas_target(command, &target, cx);
-                            });
-                        }
+                    menu = menu.submenu(label, move |menu, _, _| {
+                        commands.iter().copied().fold(menu, |menu, command| {
+                            add_menu_command(menu, command, &target, &item)
+                        })
                     });
-                } else {
-                    menu = menu.action(label, action);
                 }
+            }
+            if clear_inspection {
+                menu =
+                    add_menu_command(menu.separator(), ClearInspection, &invocation.target, &item);
             }
         }
         menu
     }))
+}
+
+fn add_menu_command(
+    menu: ui::ContextMenu,
+    command: DependencyDiagramMenuCommand,
+    target: &DependencyDiagramContextTarget,
+    item: &gpui::WeakEntity<crate::dependency_diagram_item::DependencyDiagramItem>,
+) -> ui::ContextMenu {
+    use DependencyDiagramMenuCommand::*;
+
+    let label = dependency_diagram_menu_label(command);
+    let action = dependency_diagram_menu_action(command);
+    if command.inspection_mode().is_some()
+        || matches!(
+            command,
+            ClearInspection | AllUsages | PinSelection | AddToSelectionSet | ClearSelectionSet
+        )
+    {
+        let target = target.clone();
+        let item = item.clone();
+        menu.entry(label, Some(action), move |_, cx| {
+            if let Some(item) = item.upgrade() {
+                item.update(cx, |item, cx| {
+                    item.inspect_canvas_target(command, &target, cx)
+                });
+            }
+        })
+    } else {
+        menu.action(label, action)
+    }
 }
 
 #[cfg(test)]
