@@ -1,8 +1,12 @@
-use std::fmt;
+use std::{collections::BTreeMap, fmt, sync::OnceLock};
 
 use graphite_core_types::{
     NodeIOTypes, ProtoNodeIdentifier,
     registry::{NODE_METADATA, NODE_REGISTRY, NodeMetadata},
+};
+use graphite_editor::messages::portfolio::document::node_graph::{
+    document_node_definitions::collect_node_types,
+    utility_types::{FrontendNodeType, InputTypeConstraint},
 };
 
 #[derive(Clone, Debug)]
@@ -16,6 +20,7 @@ pub enum RegistryError {
     MetadataTablePoisoned,
     ConstructorTablePoisoned,
     MissingSourceNode,
+    SourceCatalogUnavailable,
 }
 
 impl fmt::Display for RegistryError {
@@ -29,6 +34,9 @@ impl fmt::Display for RegistryError {
             }
             Self::MissingSourceNode => {
                 formatter.write_str("The node is missing from the source registry")
+            }
+            Self::SourceCatalogUnavailable => {
+                formatter.write_str("The pinned Graphite node catalog could not be loaded")
             }
         }
     }
@@ -61,6 +69,76 @@ pub fn registered_node(identifier: &str) -> Result<RegisteredNode, RegistryError
     })
 }
 
+pub struct GraphiteCatalogCategory {
+    pub name: &'static str,
+    pub nodes: Vec<&'static FrontendNodeType>,
+}
+
+pub struct GraphiteNodeCatalog {
+    entries: &'static [FrontendNodeType],
+}
+
+impl GraphiteNodeCatalog {
+    pub fn load() -> Result<Self, RegistryError> {
+        static SOURCE: OnceLock<Vec<FrontendNodeType>> = OnceLock::new();
+        let entries = std::panic::catch_unwind(|| SOURCE.get_or_init(collect_node_types))
+            .map_err(|_| RegistryError::SourceCatalogUnavailable)?;
+        Ok(Self { entries })
+    }
+
+    pub fn search(&self, query: &str) -> Vec<GraphiteCatalogCategory> {
+        let lower = query.to_lowercase();
+        let mut type_term = None;
+        let mut terms = vec![lower.as_str()];
+        if let Some(type_search) = lower.strip_prefix("type:") {
+            let mut words = type_search.split_whitespace();
+            type_term = words.next();
+            terms = words.collect();
+        }
+        let mut categories = BTreeMap::<&str, Vec<&FrontendNodeType>>::new();
+        for node in self.entries {
+            if type_term.is_some_and(|term| {
+                !node.input_types.iter().any(|constraint| match constraint {
+                    InputTypeConstraint::All => true,
+                    InputTypeConstraint::Limited(types) => types
+                        .iter()
+                        .any(|input_type| input_type.to_lowercase().contains(term)),
+                })
+            }) {
+                continue;
+            }
+            let name = node.name.to_lowercase();
+            let category = node.category.to_lowercase();
+            if !terms.iter().all(|term| {
+                name.contains(term)
+                    || category.contains(term)
+                    || (node.name == "Merge" && "layer".contains(term))
+            }) {
+                continue;
+            }
+            categories.entry(&node.category).or_default().push(node);
+        }
+        let mut groups = categories
+            .into_iter()
+            .map(|(name, nodes)| GraphiteCatalogCategory { name, nodes })
+            .collect::<Vec<_>>();
+        groups
+            .sort_by_cached_key(|group| (catalog_priority(group.name), group.name.to_lowercase()));
+        groups
+    }
+}
+
+fn catalog_priority(category: &str) -> usize {
+    const FIRST_CATEGORIES: [&str; 5] = ["UNCATEGORIZED", "General", "Value", "Math", "Style"];
+    if category.starts_with("Debug") {
+        return FIRST_CATEGORIES.len() + 1;
+    }
+    FIRST_CATEGORIES
+        .iter()
+        .position(|prefix| category.starts_with(prefix))
+        .unwrap_or(FIRST_CATEGORIES.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,6 +156,78 @@ mod tests {
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
+
+    #[test]
+    fn at_gra_graph_001_1_catalog_keeps_all_source_visible_entries_and_categories() {
+        let catalog = GraphiteNodeCatalog::load().expect("pinned node catalog");
+        let actual = catalog.search("");
+        let original = collect_node_types();
+        assert!(!actual.is_empty());
+        assert!(actual.iter().all(|category| !category.name.is_empty()));
+        assert!(actual.windows(2).all(|pair| {
+            let [first, second] = pair else {
+                return false;
+            };
+            (catalog_priority(first.name), first.name)
+                <= (catalog_priority(second.name), second.name)
+        }));
+        assert_eq!(
+            actual
+                .iter()
+                .map(|category| category.nodes.len())
+                .sum::<usize>(),
+            original.len()
+        );
+        for group in actual {
+            assert_eq!(
+                group.nodes,
+                original
+                    .iter()
+                    .filter(|node| node.category == group.name)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn at_gra_graph_002_003_004_1_catalog_search_combines_source_text_types_and_layer_alias() {
+        let catalog = GraphiteNodeCatalog::load().expect("pinned node catalog");
+        let arithmetic = catalog.search("mAtH: ArItHmEtIc");
+        assert!(arithmetic.iter().any(|group| {
+            group.name == "Math: Arithmetic" && group.nodes.iter().any(|node| node.name == "Add")
+        }));
+        let limited = catalog.search("TYPE: Number math subtract");
+        assert!(limited.iter().flat_map(|group| &group.nodes).any(|node| {
+            node.name == "Subtract" && node.input_types.iter().any(|constraint| {
+                            matches!(constraint, InputTypeConstraint::Limited(types) if types.contains("Number"))
+            })
+        }));
+        let unconstrained = catalog.search("type: application-defined-unknown-type");
+        assert!(!unconstrained.is_empty());
+        assert!(
+            unconstrained
+                .iter()
+                .flat_map(|group| &group.nodes)
+                .all(|node| { node.input_types.contains(&InputTypeConstraint::All) })
+        );
+        let merge = catalog
+            .entries
+            .iter()
+            .find(|node| node.name == "Merge")
+            .expect("source Merge");
+        let alias = catalog.search("lAyEr");
+        assert!(
+            alias
+                .iter()
+                .flat_map(|group| &group.nodes)
+                .any(|node| node.identifier == merge.identifier)
+        );
+        assert!(
+            catalog
+                .search("zqx nowhere in the source catalog")
+                .is_empty()
+        );
+    }
 
     fn item_signature<T: 'static>() -> NodeIOTypes {
         NodeIOTypes::new(

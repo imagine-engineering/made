@@ -18,6 +18,7 @@ use graphics_core::formats::{
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
+use graphics_core::registry::GraphiteNodeCatalog;
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{
     Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, ToggleState, prelude::*,
@@ -25,6 +26,8 @@ use ui::{
 use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
+
+use crate::node_catalog::NodeCatalog;
 
 actions!(
     graphite,
@@ -430,8 +433,16 @@ pub(crate) struct GraphiteDocumentItem {
     embed_linked_resources: bool,
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
+    node_catalog: NodeCatalogPanel,
     node_copy: NodeCopyPanel,
     new_node_position: Option<Entity<Editor>>,
+}
+
+enum NodeCatalogPanel {
+    Closed,
+    Loading { _task: Task<()> },
+    Ready(Entity<NodeCatalog>),
+    Failed(SharedString),
 }
 
 enum NodeCopyPanel {
@@ -522,6 +533,62 @@ fn parse_graph_grid_position(text: &str) -> anyhow::Result<[i32; 2]> {
 }
 
 impl GraphiteDocumentItem {
+    fn toggle_node_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            self.node_catalog,
+            NodeCatalogPanel::Loading { .. } | NodeCatalogPanel::Ready(_)
+        ) {
+            self.node_catalog = NodeCatalogPanel::Closed;
+            self.focus_handle.focus(window, cx);
+            cx.notify();
+            return;
+        }
+        let load = cx.background_spawn(async { GraphiteNodeCatalog::load() });
+        self.node_catalog = NodeCatalogPanel::Loading {
+            _task: cx.spawn_in(window, async move |item, cx| {
+                let loaded = load.await;
+                if let Err(error) = item.update_in(cx, |item, window, cx| {
+                    if !matches!(item.node_catalog, NodeCatalogPanel::Loading { .. }) {
+                        return;
+                    }
+                    item.node_catalog = match loaded {
+                        Ok(source) => NodeCatalogPanel::Ready(
+                            cx.new(|cx| NodeCatalog::new(source, window, cx)),
+                        ),
+                        Err(error) => NodeCatalogPanel::Failed(error.to_string().into()),
+                    };
+                    cx.notify();
+                }) {
+                    log::debug!("Graphite catalog closed: {error:#}");
+                }
+            }),
+        };
+        cx.notify();
+    }
+
+    fn render_node_catalog(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = match &self.node_catalog {
+            NodeCatalogPanel::Closed => "Browse Nodes",
+            NodeCatalogPanel::Loading { .. } => "Cancel Catalog Load",
+            NodeCatalogPanel::Ready(_) => "Close Node Catalog",
+            NodeCatalogPanel::Failed(_) => "Retry Node Catalog",
+        };
+        let panel = v_flex().gap_2().child(
+            div()
+                .debug_selector(|| "GRAPHITE-NODE-CATALOG".into())
+                .child(Button::new("graphite-node-catalog", label).on_click(
+                    cx.listener(|item, _, window, cx| item.toggle_node_catalog(window, cx)),
+                )),
+        );
+        match &self.node_catalog {
+            NodeCatalogPanel::Ready(catalog) => panel.child(catalog.clone()),
+            NodeCatalogPanel::Failed(error) => {
+                panel.child(Label::new(error.clone()).color(Color::Error))
+            }
+            NodeCatalogPanel::Closed | NodeCatalogPanel::Loading { .. } => panel,
+        }
+    }
+
     fn toggle_insert_node(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.new_node_position.take().is_none() {
             self.new_node_position = Some(cx.new(|cx| {
@@ -1790,6 +1857,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             embed_linked_resources: false,
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
+            node_catalog: NodeCatalogPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
             new_node_position: None,
         }
@@ -1845,6 +1913,7 @@ impl Item for GraphiteDocumentItem {
             embed_linked_resources: self.embed_linked_resources,
             embed_legacy_document: self.embed_legacy_document,
             saved_view: SavedViewPanel::Closed,
+            node_catalog: NodeCatalogPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
             new_node_position: None,
         })))
@@ -1921,6 +1990,7 @@ impl Render for GraphiteDocumentItem {
                 .when(recovery.hot_log_len == 0, |view| {
                     view.child(self.render_insert_node(window, cx))
                 })
+                .child(self.render_node_catalog(cx))
                 .when(recovery.hot_log_len > 0, |view| {
                     view.child(
                         div()
@@ -2299,6 +2369,93 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_001_002_003_004_2_workspace_browses_and_searches_pinned_node_categories(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) =
+            numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/catalog.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG");
+        window.run_until_parked();
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-NODE-CATALOG-NODE-Add")
+                .is_none()
+        );
+        click(window, "GRAPHITE-NODE-CATALOG-CATEGORY-Math: Arithmetic");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-NODE-CATALOG-NODE-Add")
+                .is_some()
+        );
+
+        click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+        for (query, expected) in [
+            (
+                "aBsOlUtE VaLuE",
+                "GRAPHITE-NODE-CATALOG-NODE-Absolute Value",
+            ),
+            (
+                "TYPE: number math subtract",
+                "GRAPHITE-NODE-CATALOG-NODE-Subtract",
+            ),
+            ("lAyEr", "GRAPHITE-NODE-CATALOG-NODE-Merge"),
+            (
+                "zqx nowhere in the source catalog",
+                "GRAPHITE-NODE-CATALOG-EMPTY",
+            ),
+        ] {
+            window.simulate_keystrokes("ctrl-a");
+            window.simulate_input(query);
+            window.run_until_parked();
+            paint(window);
+            assert!(window.debug_bounds(expected).is_some(), "query {query}");
+        }
+        click(window, "GRAPHITE-NODE-CATALOG");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-NODE-CATALOG-SEARCH")
+                .is_none()
+        );
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(item.copy_task.is_none());
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the unchanged GDD document");
+            };
+            assert_eq!(contents.history_len(), original_history);
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained original archive"),
+            original
+        );
     }
 
     #[gpui::test]
