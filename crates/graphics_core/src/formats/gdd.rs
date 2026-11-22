@@ -108,8 +108,10 @@ pub enum GddArchiveError {
     NoPendingEdits,
     #[error("The recovered Graphite folder did not retain the replayed edits.")]
     IncompleteRecovery,
-    #[error("Recover the pending Graphite edits before editing a node.")]
+    #[error("Recover the pending Graphite edits before changing the graph or its saved history.")]
     PendingGraphEdits,
+    #[error("The Graphite copy did not restore the saved history position.")]
+    IncompleteHistoryStep,
     #[error("The selected node belongs to an earlier Graphite snapshot. Select the node again.")]
     StaleGraphNode,
     #[error("Enter a different Graphite node name.")]
@@ -168,6 +170,12 @@ pub enum GddRecoverySource {
     RegistryAndHistory,
     RegistryOnly,
     HistoryOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GddHistoryDirection {
+    Undo,
+    Redo,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -282,6 +290,51 @@ impl InspectedGddV1 {
         self.recovery
     }
 
+    pub fn can_move_history(&self, direction: GddHistoryDirection) -> bool {
+        self.hot_log_len() == 0
+            && match direction {
+                GddHistoryDirection::Undo => self.document.can_undo(),
+                GddHistoryDirection::Redo => self.document.can_redo(),
+            }
+    }
+
+    pub async fn move_history_in_copy(
+        &self,
+        direction: GddHistoryDirection,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::CrdtError;
+
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        if !self.can_move_history(direction) {
+            let error = match direction {
+                GddHistoryDirection::Undo => CrdtError::NothingToUndo,
+                GddHistoryDirection::Redo => CrdtError::NothingToRedo,
+            };
+            return Err(graphite_document_format::Error::from(error).into());
+        }
+        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
+        match direction {
+            GddHistoryDirection::Undo => owner.undo()?,
+            GddHistoryDirection::Redo => owner.redo()?,
+        };
+        let copy = staged.reopen_after_edit(&budget).await?;
+        let actual = copy.document.session();
+        let expected = owner.session();
+        if actual.head_rev() != expected.head_rev()
+            || actual.redo_stack() != expected.redo_stack()
+            || actual.last_broadcast_rev() != expected.last_broadcast_rev()
+            || copy.history_len() != self.history_len()
+            || copy.hot_log_len() != 0
+            || !copy.document.registry().value_equal(owner.registry())
+        {
+            return Err(GddArchiveError::IncompleteHistoryStep);
+        }
+        Ok(copy)
+    }
+
     pub async fn graph_nodes(&self) -> Result<Vec<GddGraphNode>, GddArchiveError> {
         let graph = self.runtime_graph().await?;
         let mut nodes: Vec<_> = graph
@@ -336,7 +389,7 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::BudgetExceeded);
         }
         let interface = self.runtime_graph().await?.into_interface()?;
-        let (owner, working) = self.fork_working_copy(&budget).await?;
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
         let edit = EditorDelta::NodeMetadata {
             network_path: node.network_path.clone(),
             node_id: node.local_id,
@@ -350,7 +403,7 @@ impl InspectedGddV1 {
         ) {
             return Err(GddArchiveError::StaleGraphNode);
         }
-        let copy = finish_graph_node_edit(owner, &working, batch, &budget).await?;
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let updated_name = copy
             .document
             .registry()
@@ -405,7 +458,7 @@ impl InspectedGddV1 {
                 change: NetworkMetadataChange::PinnedOrder(new_order.clone()),
             });
         }
-        let (owner, working) = self.fork_working_copy(&budget).await?;
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
         let network = owner
             .registry()
             .node_instances
@@ -428,7 +481,7 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let expected_order = interface.ordered_pinned_nodes(path);
-        let copy = finish_graph_node_edit(owner, &working, batch, &budget).await?;
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
         if actual.ordered_pinned_nodes(path) != expected_order
             || copy
@@ -480,14 +533,9 @@ impl InspectedGddV1 {
         if self.hot_log_len() == 0 {
             return Err(GddArchiveError::NoPendingEdits);
         }
-        let (mut owner, working) = self.fork_working_copy(&budget).await?;
+        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
         owner.retire_pending_interaction()?;
-        let recovered = inspect_working_copy(&working, &budget).await?;
-        recovered
-            .document
-            .session()
-            .verify_history()
-            .map_err(graphite_document_format::Error::from)?;
+        let recovered = staged.reopen_after_edit(&budget).await?;
         if recovered.hot_log_len() != 0
             || !recovered
                 .document
@@ -502,7 +550,7 @@ impl InspectedGddV1 {
     async fn fork_working_copy(
         &self,
         budget: &GddArchiveBudget,
-    ) -> Result<(GddV1, MemoryBackend), GddArchiveError> {
+    ) -> Result<(GddV1, StagedArchive), GddArchiveError> {
         let synthesized_history =
             self.recovery.source == GddRecoverySource::RegistryOnly && self.history_len() > 0;
         let entries = if synthesized_history {
@@ -528,8 +576,8 @@ impl InspectedGddV1 {
         } else {
             self.copy_entries(budget)?.finish()?
         };
-        let working = entries.working;
-        let mut owner = GddV1::open_in(AnyContainer::Memory(working.clone()), GddV1Layout).await?;
+        let mut owner =
+            GddV1::open_in(AnyContainer::Memory(entries.working.clone()), GddV1Layout).await?;
         owner
             .session()
             .verify_history()
@@ -540,7 +588,7 @@ impl InspectedGddV1 {
             // The synthetic base has no interaction marker for a later edit to undo to.
             owner.annotate_delta(base, attr::delta::INTERACTION_END, Value::Bool(true))?;
         }
-        Ok((owner, working))
+        Ok((owner, entries))
     }
 
     fn copy_entries<'budget>(
@@ -850,7 +898,7 @@ fn prepare_graph_node_edit(
 
 async fn finish_graph_node_edit(
     mut owner: GddV1,
-    working: &MemoryBackend,
+    staged: StagedArchive,
     batch: ConstructedOps,
     budget: &GddArchiveBudget,
 ) -> Result<InspectedGddV1, GddArchiveError> {
@@ -863,12 +911,7 @@ async fn finish_graph_node_edit(
     if owner.retire_pending_interaction()?.len() != expected {
         return Err(GddArchiveError::IncompleteGraphNodeEdit);
     }
-    let copy = inspect_working_copy(working, budget).await?;
-    copy.document
-        .session()
-        .verify_history()
-        .map_err(graphite_document_format::Error::from)?;
-    Ok(copy)
+    staged.reopen_after_edit(budget).await
 }
 
 fn approved_resource_storage(
@@ -980,18 +1023,25 @@ pub async fn create_gdd_folder(
         editor_version,
         crate::resources::GRAPHITE_IMAGE_SOURCE_REVISION.into(),
     )?;
-    inspect_working_copy(&working, &budget).await
+    inspect_working_copy(&working, BTreeSet::new(), &budget).await
 }
 
 async fn inspect_working_copy(
     working: &MemoryBackend,
+    mut names: BTreeSet<String>,
     budget: &GddArchiveBudget,
 ) -> Result<InspectedGddV1, GddArchiveError> {
     let mut entries = StagedEntries::new(budget);
-    for name in working.list("")? {
+    names.extend(working.list("")?);
+    for name in names {
         entries.install(&name, working.read(&name)?.as_slice())?;
     }
-    open_staged_gdd(entries.finish()?).await
+    let copy = open_staged_gdd(entries.finish()?).await?;
+    copy.document
+        .session()
+        .verify_history()
+        .map_err(graphite_document_format::Error::from)?;
+    Ok(copy)
 }
 
 async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddArchiveError> {
@@ -1120,6 +1170,15 @@ struct StagedArchive {
 }
 
 impl StagedArchive {
+    async fn reopen_after_edit(
+        self,
+        budget: &GddArchiveBudget,
+    ) -> Result<InspectedGddV1, GddArchiveError> {
+        // The source writer updates root payloads. Its nonrecursive listing misses retained
+        // resources and opaque files in nested paths.
+        inspect_working_copy(&self.working, self.names, budget).await
+    }
+
     fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
         self.names
             .iter()
@@ -1665,6 +1724,155 @@ mod tests {
             }
         }
         (owner, pending_network)
+    }
+
+    #[test]
+    fn at_gra_hist_003_004_moves_saved_gdd_history_with_stable_nodes_and_resources() {
+        use graphite_document_graph_storage::{HotOp, Network, TimeStamp};
+
+        futures::executor::block_on(async {
+            let (mut owner, _) = document_with_pending_network();
+            let initial = export(&owner, None).await;
+            let pending = open_gdd_zip(&initial, budget())
+                .await
+                .expect("open pending snapshot");
+            assert!(matches!(
+                pending
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await,
+                Err(GddArchiveError::PendingGraphEdits)
+            ));
+            owner
+                .retire_pending_interaction()
+                .expect("finish the prior interaction");
+            let prior = owner.registry().clone();
+            let resource_id = ResourceId::from(23_u64);
+            let payload = b"retained source data through history";
+            let hash = ResourceHash::from(payload.as_slice());
+            owner
+                .add_resource(resource_id, payload)
+                .expect("add a real resource");
+            let network_id = NetworkId(51);
+            owner
+                .apply_hot_op(HotOp {
+                    op: RegistryDelta::AddNetwork {
+                        id: network_id,
+                        network: Network::default(),
+                    },
+                    timestamp: TimeStamp {
+                        counter: 100,
+                        peer: owner.session().peer(),
+                    },
+                })
+                .expect("add a graph network");
+            owner
+                .retire_pending_interaction()
+                .expect("retire resource and graph together");
+            let bytes = export(&owner, Some(b"original opaque legacy data")).await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("open saved source");
+            assert!(original.can_move_history(GddHistoryDirection::Undo));
+            assert!(!original.can_move_history(GddHistoryDirection::Redo));
+            let layout = GddV1Layout;
+            let history = path_for(layout.history_basename(), owner.manifest().codecs.history);
+            let resource = layout.resource_path(&hash);
+
+            let undone = original
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo the saved interaction in a fresh folder");
+            assert!(undone.document.registry().value_equal(&prior));
+            assert!(
+                !undone
+                    .document
+                    .registry()
+                    .networks
+                    .contains_key(&network_id)
+            );
+            assert!(
+                !undone
+                    .document
+                    .registry()
+                    .resources
+                    .contains_key(&resource_id)
+            );
+            assert!(undone.can_move_history(GddHistoryDirection::Redo));
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("redo the saved interaction in a fresh folder");
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            assert_eq!(
+                redone.document.session().head_rev(),
+                original.document.session().head_rev()
+            );
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .networks
+                    .contains_key(&network_id)
+            );
+            assert_eq!(
+                redone
+                    .document
+                    .registry()
+                    .resources
+                    .get(&resource_id)
+                    .and_then(|entry| entry.hash),
+                Some(hash)
+            );
+            for copy in [&undone, &redone] {
+                assert_eq!(
+                    copy.read_entry(&history)
+                        .expect("retained history")
+                        .as_slice(),
+                    original
+                        .read_entry(&history)
+                        .expect("original history")
+                        .as_slice()
+                );
+                assert_eq!(
+                    copy.read_entry(&resource)
+                        .expect("retained resource bytes")
+                        .as_slice(),
+                    payload
+                );
+                assert_eq!(
+                    copy.read_entry(layout.legacy_path())
+                        .expect("retained legacy")
+                        .as_slice(),
+                    b"original opaque legacy data"
+                );
+            }
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+
+            let head = owner.session().head_rev().expect("last authored revision");
+            owner
+                .publish_up_to(head)
+                .expect("mark a source published frontier");
+            let bytes = export(&owner, None).await;
+            let published = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("published source");
+            assert!(!published.can_move_history(GddHistoryDirection::Undo));
+            assert!(matches!(
+                published
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await,
+                Err(GddArchiveError::Storage(
+                    graphite_document_format::Error::Crdt(
+                        graphite_document_graph_storage::CrdtError::NothingToUndo
+                    )
+                ))
+            ));
+        });
     }
 
     #[test]

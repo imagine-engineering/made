@@ -11,9 +11,9 @@ use gpui::{
 };
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddRecoverySource,
-        GddSavedView, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddHistoryDirection,
+        GddRecoverySource, GddSavedView, InspectedGddV1, create_gdd_folder,
+        inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -468,6 +468,7 @@ enum GraphiteCopy {
     Original,
     Export(GddCopyFormat),
     RecoverFolder,
+    MoveHistory(GddHistoryDirection),
     EditNode {
         node: GddGraphNode,
         change: NodeCopyChange,
@@ -759,22 +760,15 @@ impl GraphiteDocumentItem {
         if self.copy_task.is_some() {
             return;
         }
-        let (format, recover_pending, node_edit) = match request {
-            GraphiteCopy::Original => (None, false, None),
-            GraphiteCopy::Export(format) => (Some(format), false, None),
-            GraphiteCopy::RecoverFolder => (None, true, None),
-            GraphiteCopy::EditNode { node, change } => (None, false, Some((node, change))),
-        };
-        let content = if format.is_some() {
+        let explicit_export = matches!(&request, GraphiteCopy::Export(_));
+        let content = if explicit_export {
             self.export_content
         } else {
             GddExportContent::default()
         };
-        let embed_linked_resources = format.is_some() && self.embed_linked_resources;
-        let embed_legacy_document = format.is_some() && self.embed_legacy_document;
-        if format.is_some()
-            && let Err(error) = content.validate()
-        {
+        let embed_linked_resources = explicit_export && self.embed_linked_resources;
+        let embed_legacy_document = explicit_export && self.embed_legacy_document;
+        if explicit_export && let Err(error) = content.validate() {
             self.copy_feedback = Some((error.to_string().into(), Color::Error));
             cx.notify();
             return;
@@ -782,10 +776,11 @@ impl GraphiteDocumentItem {
         let model = self.model.read(cx);
         let source = model.path.clone();
         let project = self.project.clone();
-        let format = format.or_else(|| {
-            (recover_pending || node_edit.is_some() || model.original.is_none())
-                .then_some(GddCopyFormat::Folder)
-        });
+        let format = match &request {
+            GraphiteCopy::Export(format) => Some(*format),
+            GraphiteCopy::Original if model.original.is_some() => None,
+            _ => Some(GddCopyFormat::Folder),
+        };
         let export = match (&model.document, format) {
             (InspectedDocument::Gdd { contents, .. }, Some(format)) => {
                 Some((contents.clone(), format))
@@ -808,18 +803,25 @@ impl GraphiteDocumentItem {
                     GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
                     GddCopyFormat::Folder => ".gdd",
                 };
-                if recover_pending {
-                    format!("Recovered {stem}{suffix}")
-                } else if let Some((_, change)) = &node_edit {
-                    let prefix = match change {
-                        NodeCopyChange::Rename(_) => "Renamed",
-                        NodeCopyChange::Pin(true) => "Pinned",
-                        NodeCopyChange::Pin(false) => "Unpinned",
-                    };
-                    format!("{prefix} {stem}{suffix}")
-                } else {
-                    format!("Copy of {stem}{suffix}")
-                }
+                let prefix = match &request {
+                    GraphiteCopy::Original | GraphiteCopy::Export(_) => "Copy of",
+                    GraphiteCopy::RecoverFolder => "Recovered",
+                    GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
+                    GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::Rename(_),
+                        ..
+                    } => "Renamed",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::Pin(true),
+                        ..
+                    } => "Pinned",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::Pin(false),
+                        ..
+                    } => "Unpinned",
+                };
+                format!("{prefix} {stem}{suffix}")
             }
             None => format!("Copy of {}", model.name),
         };
@@ -918,12 +920,17 @@ impl GraphiteDocumentItem {
                         Vec::new()
                     };
                     cx.background_spawn(async move {
-                        if recover_pending {
-                            let recovered = archive.recover_pending_edits(ARCHIVE_BUDGET).await?;
-                            return Ok(PreparedCopy::Folder(recovered.folder_files()?));
-                        }
-                        if let Some((node, change)) = node_edit {
-                            let copy = match change {
+                        let revision = match request {
+                            GraphiteCopy::Original | GraphiteCopy::Export(_) => None,
+                            GraphiteCopy::RecoverFolder => {
+                                Some(archive.recover_pending_edits(ARCHIVE_BUDGET).await?)
+                            }
+                            GraphiteCopy::MoveHistory(direction) => Some(
+                                archive
+                                    .move_history_in_copy(direction, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
+                            GraphiteCopy::EditNode { node, change } => Some(match change {
                                 NodeCopyChange::Rename(name) => {
                                     archive
                                         .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
@@ -938,7 +945,9 @@ impl GraphiteDocumentItem {
                                         )
                                         .await?
                                 }
-                            };
+                            }),
+                        };
+                        if let Some(copy) = revision {
                             return Ok(PreparedCopy::Folder(copy.folder_files()?));
                         }
                         let enriched = if embed_linked_resources || legacy_document.is_some() {
@@ -1129,6 +1138,8 @@ impl Render for GraphiteDocumentItem {
             InspectedDocument::Gdd { contents } => {
                 let manifest = contents.manifest();
                 let recovery = contents.recovery();
+                let can_undo = contents.can_move_history(GddHistoryDirection::Undo);
+                let can_redo = contents.can_move_history(GddHistoryDirection::Redo);
                 let recovery_source = match recovery.source {
                     GddRecoverySource::RegistryAndHistory => "Opened saved registry and history",
                     GddRecoverySource::RegistryOnly => "Opened saved registry",
@@ -1160,6 +1171,61 @@ impl Render for GraphiteDocumentItem {
                             recovery.hot_log_len,
                         ))),
                 )
+                .when(contents.has_saved_view(), |view| {
+                    view.child(self.render_saved_view(cx))
+                })
+                .when(
+                    recovery.node_count > 0 && recovery.hot_log_len == 0,
+                    |view| view.child(self.render_node_copy(window, cx)),
+                )
+                .when(recovery.hot_log_len > 0, |view| {
+                    view.child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-SAVE-RECOVERED".into())
+                            .child(
+                                Button::new("graphite-gdd-save-recovered", "Save Recovered Folder")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.save_copy(GraphiteCopy::RecoverFolder, window, cx)
+                                    })),
+                            ),
+                    )
+                })
+                .when(can_undo || can_redo, |view| {
+                    view.child(
+                        h_flex().gap_2().children(
+                            [
+                                (
+                                    GddHistoryDirection::Undo,
+                                    "Save Undo Folder",
+                                    "GRAPHITE-GDD-SAVE-UNDO",
+                                    can_undo,
+                                ),
+                                (
+                                    GddHistoryDirection::Redo,
+                                    "Save Redo Folder",
+                                    "GRAPHITE-GDD-SAVE-REDO",
+                                    can_redo,
+                                ),
+                            ]
+                            .into_iter()
+                            .filter(|(_, _, _, available)| *available)
+                            .map(|(direction, label, selector, _)| {
+                                div().debug_selector(move || selector.into()).child(
+                                    Button::new(selector, label)
+                                        .disabled(self.copy_task.is_some())
+                                        .on_click(cx.listener(move |item, _, window, cx| {
+                                            item.save_copy(
+                                                GraphiteCopy::MoveHistory(direction),
+                                                window,
+                                                cx,
+                                            );
+                                        })),
+                                )
+                            }),
+                        ),
+                    )
+                })
                 .child(
                     h_flex()
                         .flex_wrap()
@@ -1184,35 +1250,6 @@ impl Render for GraphiteDocumentItem {
                                     )),
                                 ),
                         )
-                        .when(contents.has_saved_view(), |view| {
-                            view.child(self.render_saved_view(cx))
-                        })
-                        .when(
-                            recovery.node_count > 0 && recovery.hot_log_len == 0,
-                            |view| view.child(self.render_node_copy(window, cx)),
-                        )
-                        .when(recovery.hot_log_len > 0, |view| {
-                            view.child(
-                                div()
-                                    .debug_selector(|| "GRAPHITE-GDD-SAVE-RECOVERED".into())
-                                    .child(
-                                        Button::new(
-                                            "graphite-gdd-save-recovered",
-                                            "Save Recovered Folder",
-                                        )
-                                        .disabled(self.copy_task.is_some())
-                                        .on_click(
-                                            cx.listener(|item, _, window, cx| {
-                                                item.save_copy(
-                                                    GraphiteCopy::RecoverFolder,
-                                                    window,
-                                                    cx,
-                                                )
-                                            }),
-                                        ),
-                                    ),
-                            )
-                        })
                         .child(
                             div()
                                 .debug_selector(|| "GRAPHITE-EXPORT-INCLUDE-HISTORY".into())
@@ -1509,6 +1546,136 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original bytes"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_hist_003_004_workspace_moves_saved_gdd_history_in_new_folders(
+        cx: &mut TestAppContext,
+    ) {
+        let (fixture, retired) = nested_graph_archive().await;
+        let fixture = open_gdd_archive(&fixture.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source nested graph");
+        let opaque_path = "opaque/notes/provenance.txt";
+        let opaque_bytes = b"keep this original nested record";
+        let mut entries = fixture
+            .folder_files()
+            .expect("source entries")
+            .into_iter()
+            .map(|(path, bytes)| (path.to_str().expect("source path").to_owned(), bytes))
+            .collect::<Vec<_>>();
+        entries.push((opaque_path.into(), opaque_bytes.to_vec()));
+        let fixture = inspect_gdd_folder_files(entries, ARCHIVE_BUDGET)
+            .await
+            .expect("nested graph with opaque source data");
+        let graph_nodes = fixture.graph_nodes().await.expect("stable source nodes");
+        let nested = graph_nodes
+            .get(2)
+            .expect("nested node with a repeated local ID");
+        let edited = fixture
+            .rename_graph_node_in_copy(nested, "Latest nested label".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("original saved interaction");
+        let original = edited
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("archive with saved edit");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/edited.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("original archive");
+        window.run_until_parked();
+        let first = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open native GDD")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        let undone_path = PathBuf::from("/project/undo.gdd");
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-UNDO");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(
+            filesystem
+                .metadata(&undone_path)
+                .await
+                .expect("cancelled save")
+                .is_none()
+        );
+
+        let mut previous = first;
+        for (selector, destination, name, opposite) in [
+            (
+                "GRAPHITE-GDD-SAVE-UNDO",
+                undone_path,
+                "",
+                GddHistoryDirection::Redo,
+            ),
+            (
+                "GRAPHITE-GDD-SAVE-REDO",
+                PathBuf::from("/project/redo.gdd"),
+                "Latest nested label",
+                GddHistoryDirection::Undo,
+            ),
+        ] {
+            paint(window);
+            click(window, selector);
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            assert!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("published history")
+                    .is_some()
+            );
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("open the saved history copy");
+            assert_ne!(reopened, previous);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected the native GDD folder");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let nodes = contents
+                .graph_nodes()
+                .await
+                .expect("retained node identities");
+            assert_eq!(nodes.first().expect("same root local ID").name(), "");
+            assert_eq!(nodes.get(2).expect("same nested local ID").name(), name);
+            assert_eq!(contents.history_len(), retired + 1);
+            assert_eq!(
+                contents
+                    .read_entry(opaque_path)
+                    .expect("original nested opaque record")
+                    .as_slice(),
+                opaque_bytes,
+            );
+            assert!(contents.can_move_history(opposite));
+            previous = reopened;
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source archive"),
             original
         );
     }
