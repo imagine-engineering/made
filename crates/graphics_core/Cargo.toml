@@ -35,6 +35,8 @@ sha2.workspace = true
 png.workspace = true
 image.workspace = true
 sim_media.workspace = true
+lzma-rust2 = { version = "=0.16.2", default-features = false, features = ["std", "xz"] }
+tar = { version = "=0.4.44", default-features = false }
 thiserror.workspace = true
 zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 

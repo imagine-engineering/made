@@ -5,8 +5,8 @@ use std::{
 };
 
 use graphite_document_container::{
-    AnyContainer, ByteHolder, Container, ContainerError, backends::memory::MemoryBackend,
-    validate_path,
+    AnyContainer, ByteHolder, Container, ContainerError, archive::ArchiveFormat,
+    backends::memory::MemoryBackend, validate_path,
 };
 use graphite_document_format::{
     GddV1, GddV1Layout, Layout, MANIFEST_CODEC, Manifest,
@@ -18,6 +18,8 @@ use zip::ZipArchive;
 
 use super::OriginalJson;
 
+mod xz;
+
 pub struct GddArchiveBudget {
     pub max_archive_bytes: usize,
     pub max_entry_bytes: u64,
@@ -27,7 +29,7 @@ pub struct GddArchiveBudget {
 
 #[derive(Debug, thiserror::Error)]
 pub enum GddArchiveError {
-    #[error("This Graphite archive is not a supported ZIP envelope.")]
+    #[error("This Graphite archive has an unsupported envelope.")]
     UnsupportedEnvelope,
     #[error("The Graphite archive exceeds its input or extracted-data budget.")]
     BudgetExceeded,
@@ -91,8 +93,29 @@ pub async fn open_gdd_zip(
     bytes: &Arc<[u8]>,
     budget: GddArchiveBudget,
 ) -> Result<PreservedGddV1, GddArchiveError> {
+    let working = stage_zip(bytes, &budget)?;
+    open_staged_gdd(bytes, working).await
+}
+
+pub async fn open_gdd_archive(
+    bytes: &Arc<[u8]>,
+    budget: GddArchiveBudget,
+) -> Result<PreservedGddV1, GddArchiveError> {
+    match ArchiveFormat::detect(bytes) {
+        Some(ArchiveFormat::Zip) => open_gdd_zip(bytes, budget).await,
+        Some(ArchiveFormat::Xz) => {
+            let working = xz::stage_xz(bytes, &budget)?;
+            open_staged_gdd(bytes, working).await
+        }
+        None => Err(GddArchiveError::UnsupportedEnvelope),
+    }
+}
+
+async fn open_staged_gdd(
+    bytes: &Arc<[u8]>,
+    working: MemoryBackend,
+) -> Result<PreservedGddV1, GddArchiveError> {
     let layout = GddV1Layout;
-    let working = stage_zip(bytes, &budget, layout.resources_dir())?;
     let path = path_for(layout.manifest_basename(), MANIFEST_CODEC);
     let OriginalJson(value) = serde_json::from_slice(working.read(&path)?.as_slice())?;
     let header = serde::Deserialize::deserialize(&value)?;
@@ -134,11 +157,7 @@ pub async fn open_gdd_zip(
     })
 }
 
-fn stage_zip(
-    bytes: &[u8],
-    budget: &GddArchiveBudget,
-    resources_dir: &str,
-) -> Result<MemoryBackend, GddArchiveError> {
+fn stage_zip(bytes: &[u8], budget: &GddArchiveBudget) -> Result<MemoryBackend, GddArchiveError> {
     if bytes.len() > budget.max_archive_bytes {
         return Err(GddArchiveError::BudgetExceeded);
     }
@@ -150,13 +169,11 @@ fn stage_zip(
         return Err(GddArchiveError::InconsistentEntries);
     }
 
-    let working = MemoryBackend::new();
-    let mut names = BTreeSet::new();
-    let mut total_bytes = 0_u64;
+    let mut entries = StagedEntries::new(budget);
     let mut next_header = 0_u64;
     for index in 0..entry_count {
-        let mut entry = archive.by_index(index)?;
-        if !entry.is_file() || entry.name().contains('\0') || entry.header_start() != next_header {
+        let entry = archive.by_index(index)?;
+        if !entry.is_file() || entry.header_start() != next_header {
             return Err(GddArchiveError::InconsistentEntries);
         }
         next_header = entry
@@ -165,42 +182,71 @@ fn stage_zip(
             .filter(|end| *end <= directory_start)
             .ok_or(GddArchiveError::InconsistentEntries)?;
         let name = entry.name().to_owned();
-        validate_path(&name)?;
-        if !names.insert(name.clone()) {
-            return Err(GddArchiveError::InconsistentEntries);
-        }
-
         let size = entry.size();
-        total_bytes = total_bytes.saturating_add(size);
-        if size > budget.max_entry_bytes || total_bytes > budget.max_total_entry_bytes {
+        entries.stage(name, size, entry)?;
+    }
+    if next_header != directory_start {
+        return Err(GddArchiveError::InconsistentEntries);
+    }
+    entries.finish()
+}
+
+struct StagedEntries<'a> {
+    budget: &'a GddArchiveBudget,
+    working: MemoryBackend,
+    names: BTreeSet<String>,
+    total_bytes: u64,
+}
+
+impl<'a> StagedEntries<'a> {
+    fn new(budget: &'a GddArchiveBudget) -> Self {
+        Self {
+            budget,
+            working: MemoryBackend::new(),
+            names: BTreeSet::new(),
+            total_bytes: 0,
+        }
+    }
+
+    fn stage(&mut self, name: String, size: u64, input: impl Read) -> Result<(), GddArchiveError> {
+        self.total_bytes = self.total_bytes.saturating_add(size);
+        if self.names.len() >= self.budget.max_entries
+            || size > self.budget.max_entry_bytes
+            || self.total_bytes > self.budget.max_total_entry_bytes
+        {
             return Err(GddArchiveError::BudgetExceeded);
         }
+        validate_path(&name)?;
+        if name.contains('\0') || !self.names.insert(name.clone()) {
+            return Err(GddArchiveError::InconsistentEntries);
+        }
         let mut materialized = Vec::new();
-        entry
-            .by_ref()
+        input
             .take(size.saturating_add(1))
             .read_to_end(&mut materialized)?;
         if u64::try_from(materialized.len()) != Ok(size) {
             return Err(GddArchiveError::InconsistentEntries);
         }
         if let Some((directory, filename)) = name.split_once('/')
-            && directory == resources_dir
+            && directory == GddV1Layout.resources_dir()
             && let Ok(hash) = filename.parse::<ResourceHash>()
             && ResourceHash::from(materialized.as_slice()) != hash
         {
             return Err(GddArchiveError::InvalidResource(hash));
         }
-        working.write(&name, &materialized)?;
+        self.working.write(&name, &materialized)?;
+        Ok(())
     }
-    if next_header != directory_start
-        || names.iter().any(|name| {
+
+    fn finish(self) -> Result<MemoryBackend, GddArchiveError> {
+        if self.names.iter().any(|name| {
             name.match_indices('/')
-                .any(|(index, _)| names.contains(&name[..index]))
-        })
-    {
-        return Err(GddArchiveError::InconsistentEntries);
+                .any(|(index, _)| self.names.contains(&name[..index]))
+        }) {
+            return Err(GddArchiveError::InconsistentEntries);
+        }
+        Ok(self.working)
     }
-    Ok(working)
 }
 
 fn zip_directory(bytes: &[u8], max_entries: usize) -> Result<(usize, u64), GddArchiveError> {
@@ -239,7 +285,7 @@ fn zip_directory(bytes: &[u8], max_entries: usize) -> Result<(usize, u64), GddAr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use graphite_document_container::archive::{Archive, ArchiveWriter, Zip};
+    use graphite_document_container::archive::{Archive, ArchiveWriter, Xz, Zip};
     use graphite_document_format::{Codec, ExportFormat, ExportOptions};
     use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
     use graphite_graph_craft::application_io::resource::{HashMapResourceStorage, ResourceId};
@@ -276,6 +322,93 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_005_1_opens_the_pinned_xz_archive_with_resources_and_history() {
+        futures::executor::block_on(async {
+            let mut source = document();
+            let resource_id = ResourceId::from(19_u64);
+            let resource = b"resource in the original compressed form";
+            let hash = ResourceHash::from(resource.as_slice());
+            source
+                .add_resource(resource_id, resource)
+                .expect("actual Graphite resource history");
+            let legacy = DocumentMessageHandler::default().serialize_document();
+            let bytes = Arc::<[u8]>::from(
+                source
+                    .export_to_bytes(
+                        ExportFormat::Xz,
+                        ExportOptions::default(),
+                        &HashMapResourceStorage::new(),
+                        Some(legacy.as_bytes()),
+                    )
+                    .await
+                    .expect("original Graphite XZ export"),
+            );
+            let opened = open_gdd_archive(&bytes, budget())
+                .await
+                .expect("open source-authored XZ");
+            assert_eq!(opened.original_bytes(), bytes.as_ref());
+            assert_eq!(opened.manifest().document_id, 0x459);
+            assert_eq!(opened.history_len(), source.session().history().count());
+            assert_eq!(
+                opened
+                    .read_entry(&GddV1Layout.resource_path(&hash))
+                    .expect("literal resource contents")
+                    .as_slice(),
+                resource
+            );
+            assert_eq!(
+                opened
+                    .read_entry(GddV1Layout.legacy_path())
+                    .expect("original legacy contents")
+                    .as_slice(),
+                legacy.as_bytes()
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_gdd_005_1_preserves_xz_failures_without_installing_entries() {
+        futures::executor::block_on(async {
+            let mut writer = Xz::writer(Cursor::new(Vec::new())).expect("pinned XZ writer");
+            writer
+                .write_entry("notes.txt", b"first")
+                .expect("first record");
+            writer
+                .write_entry("notes.txt", b"second")
+                .expect("duplicate record");
+            let raw = writer
+                .finish_into()
+                .expect("complete XZ stream")
+                .into_inner();
+            let bytes = Arc::<[u8]>::from(raw.as_slice());
+            assert!(matches!(
+                open_gdd_archive(&bytes, budget()).await,
+                Err(GddArchiveError::InconsistentEntries)
+            ));
+            assert_eq!(bytes.as_ref(), raw);
+
+            let shortened = Arc::<[u8]>::from(&raw[..raw.len() - 1]);
+            assert!(matches!(
+                open_gdd_archive(&shortened, budget()).await,
+                Err(GddArchiveError::InconsistentEntries)
+            ));
+
+            let mut tight = budget();
+            tight.max_archive_bytes = 1;
+            assert!(matches!(
+                open_gdd_archive(&bytes, tight).await,
+                Err(GddArchiveError::BudgetExceeded)
+            ));
+            let mut tight = budget();
+            tight.max_entry_bytes = 4;
+            assert!(matches!(
+                open_gdd_archive(&bytes, tight).await,
+                Err(GddArchiveError::BudgetExceeded)
+            ));
+        });
     }
 
     #[test]

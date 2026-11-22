@@ -5,7 +5,7 @@ use gpui::{
     App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Render,
     SharedString, Task, Window,
 };
-use graphics_core::formats::gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_zip};
+use graphics_core::formats::gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_archive};
 use project::{Project, ProjectEntryId, ProjectPath};
 use ui::{Label, LabelSize, prelude::*};
 use workspace::{Item, Pane, item::ItemBufferKind};
@@ -40,7 +40,10 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
             .file_name()
             .or_else(|| root.file_name()?.to_str())?;
         let extension = name.to_ascii_lowercase();
-        if !extension.ends_with(".gdd.zip") && !extension.ends_with(".gdd") {
+        if !extension.ends_with(".gdd.zip")
+            && !extension.ends_with(".gdd.tar.xz")
+            && !extension.ends_with(".gdd")
+        {
             return None;
         }
         if !project_model.is_local() {
@@ -69,7 +72,8 @@ impl project::ProjectItem for GraphiteArchiveProjectItem {
                     )
                     .await?;
                 let bytes = Arc::<[u8]>::from(source.bytes);
-                let archive = futures::executor::block_on(open_gdd_zip(&bytes, ARCHIVE_BUDGET))?;
+                let archive =
+                    futures::executor::block_on(open_gdd_archive(&bytes, ARCHIVE_BUDGET))?;
                 let history_len = archive.history_len();
                 let hot_log_len = archive.hot_log_len();
                 Ok::<_, anyhow::Error>((archive, history_len, hot_log_len))
@@ -220,7 +224,7 @@ mod tests {
     use graphite_graph_craft::application_io::resource::HashMapResourceStorage;
     use std::path::PathBuf;
 
-    async fn archive_bytes(version: u32) -> Vec<u8> {
+    async fn archive_bytes(version: u32, format: ExportFormat) -> Vec<u8> {
         let mut owner = GddV1::create_in(
             AnyContainer::Memory(MemoryBackend::new()),
             GddV1Layout,
@@ -235,7 +239,7 @@ mod tests {
             .expect("use the original manifest writer");
         owner
             .export_to_bytes(
-                ExportFormat::Zip,
+                format,
                 ExportOptions::default(),
                 &HashMapResourceStorage::new(),
                 None,
@@ -251,7 +255,7 @@ mod tests {
             workspace.project().read(cx).fs().clone()
         });
         let original_path = PathBuf::from("/project/original.gdd.zip");
-        let original = archive_bytes(1).await;
+        let original = archive_bytes(1, ExportFormat::Zip).await;
         filesystem
             .write(&original_path, &original)
             .await
@@ -277,7 +281,7 @@ mod tests {
         });
 
         let future_path = PathBuf::from("/project/future.gdd.zip");
-        let future = archive_bytes(2).await;
+        let future = archive_bytes(2, ExportFormat::Zip).await;
         filesystem
             .write(&future_path, &future)
             .await
@@ -307,6 +311,42 @@ mod tests {
             workspace.read_with(window, |workspace, cx| workspace
                 .active_item_as::<GraphiteArchiveItem>(cx)),
             Some(item)
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_005_2_workspace_opens_source_xz_archive(cx: &mut TestAppContext) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/source.gdd.tar.xz");
+        let bytes = archive_bytes(1, ExportFormat::Xz).await;
+        filesystem
+            .write(&path, &bytes)
+            .await
+            .expect("write actual source XZ export");
+        window.run_until_parked();
+        let handle = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the XZ archive through Workspace File Open");
+        let item = handle
+            .downcast::<GraphiteArchiveItem>()
+            .expect("native Graphite archive inspection");
+        item.read_with(window, |item, cx| {
+            assert_eq!(item.tab_content_text(0, cx), "source.gdd.tar.xz");
+            assert_eq!(item.model.read(cx).archive.original_bytes(), bytes);
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("source file is intact"),
+            bytes
         );
     }
 }
