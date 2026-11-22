@@ -397,6 +397,9 @@ impl DependencyDiagramItem {
             (Some(receipt), Some(derivation)) => {
                 source.selection = receipt.selection.clone();
                 self.receipt = Some(receipt);
+                self.canvas.update(cx, |canvas, _| {
+                    canvas.clear_unresolved_selection();
+                });
                 self.replace_derivation(derivation, cx);
             }
             _ => {
@@ -563,16 +566,7 @@ impl DependencyDiagramItem {
                 .as_ref()
                 .and_then(DependencyGraphReceipt::canvas_nodes)
         {
-            return nodes
-                .iter()
-                .chain(
-                    graph
-                        .nodes
-                        .iter()
-                        .filter(|node| node.kind == CanvasNodeKind::Unresolved),
-                )
-                .map(entry)
-                .collect();
+            return nodes.iter().map(entry).collect();
         }
         graph.nodes.iter().map(entry).collect()
     }
@@ -581,7 +575,10 @@ impl DependencyDiagramItem {
         if !self.receipt_is_current(cx) {
             return;
         }
-        let revealed = self.include_node(id, cx)
+        let graph = &self.canvas.read(cx).graph;
+        let needs_projection =
+            self.source.is_some() && (graph.truncated || graph.node(id).is_none());
+        let revealed = (!needs_projection || self.project_node_neighbourhood(id, cx))
             && self.canvas.update(cx, |canvas, cx| {
                 let revealed = canvas.reveal_node(id);
                 if revealed {
@@ -595,10 +592,7 @@ impl DependencyDiagramItem {
         cx.notify();
     }
 
-    fn include_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        if self.canvas.read(cx).graph.node(id).is_some() {
-            return true;
-        }
+    fn project_node_neighbourhood(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let Some(source) = &mut self.source else {
             return false;
         };
@@ -608,11 +602,16 @@ impl DependencyDiagramItem {
             id,
             Some(&self.scope),
             cx,
-        )
-        .filter(|derivation| derivation.canvas.node(id).is_some()) else {
+        ) else {
             return false;
         };
-        source.node = id.to_owned();
+        let Some(node) = derivation.canvas.node(id) else {
+            return false;
+        };
+        // An unresolved placeholder's ordinal is local to this graph revision.
+        if node.kind != CanvasNodeKind::Unresolved {
+            source.node = id.to_owned();
+        }
         self.replace_derivation(derivation, cx);
         true
     }
@@ -898,7 +897,10 @@ impl DependencyDiagramItem {
     }
 
     pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        if !self.receipt_is_current(cx) || !self.include_node(id, cx) {
+        if !self.receipt_is_current(cx)
+            || (self.canvas.read(cx).graph.node(id).is_none()
+                && !self.project_node_neighbourhood(id, cx))
+        {
             return false;
         }
         self.canvas.update(cx, |canvas, cx| {

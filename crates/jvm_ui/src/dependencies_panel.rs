@@ -14317,6 +14317,15 @@ mod tests {
                                                     graph["components"].as_array_mut().expect("components").push(component);
                                                     graph["edges"].as_array_mut().expect("edges").push(edge);
                                                 }
+                                                let edges = graph["edges"].as_array_mut().expect("edges");
+                                                let mut unresolved = edges
+                                                    .iter()
+                                                    .find(|edge| edge["resolved"] == false)
+                                                    .expect("unresolved edge template")
+                                                    .clone();
+                                                unresolved["from"] = parent;
+                                                unresolved["requested"]["module"] = serde_json::json!("growth-unresolved");
+                                                edges.push(unresolved);
                                             }
                                             response["projects"][0]["graphJson"] = serde_json::json!(graph.to_string());
                                         }
@@ -14760,6 +14769,7 @@ mod tests {
 
                 let target = r#"["module","evidence","growth-dependency-279","1.0"]"#;
                 let parent = r#"["module","evidence","growth-dependency-278","1.0"]"#;
+                let unresolved = "unresolved:1";
                 panel.update(cx, |panel, cx| panel.show_dependency_diagram(cx));
                 let diagram = workspace
                     .read_with(cx, |workspace, cx| {
@@ -14770,52 +14780,70 @@ mod tests {
                     let graph = &item.canvas().read(cx).graph;
                     assert!(graph.truncated);
                     assert!(graph.node(target).is_none());
+                    assert!(graph.node(unresolved).is_none());
                 });
-                assert!(
-                    (0..32).any(|_| cx.update(|window, cx| {
-                        window.focus_next(cx);
-                        window.draw(cx).clear(cx);
-                        let tree: serde_json::Value = serde_json::from_str(
-                            &window.debug_a11y_tree_json().expect("diagram toolbar"),
-                        )
-                        .expect("accessibility JSON");
-                        tree["gpui_focus"].as_str().is_some_and(|focus| {
-                            tree["nodes"][focus]["aria"]["label"]
-                                == "Search dependency diagram nodes"
-                        })
-                    })),
-                    "keyboard focus reaches diagram search"
-                );
-                press_button(cx, "enter");
-                for _ in 0..2 {
+                let search_and_confirm = |cx: &mut gpui::VisualTestContext, query, label| {
+                    assert!(
+                        (0..32).any(|_| cx.update(|window, cx| {
+                            window.focus_next(cx);
+                            window.draw(cx).clear(cx);
+                            let tree: serde_json::Value = serde_json::from_str(
+                                &window.debug_a11y_tree_json().expect("diagram toolbar"),
+                            )
+                            .expect("accessibility JSON");
+                            tree["gpui_focus"].as_str().is_some_and(|focus| {
+                                tree["nodes"][focus]["aria"]["label"]
+                                    == "Search dependency diagram nodes"
+                            })
+                        })),
+                        "keyboard focus reaches diagram search"
+                    );
+                    press_button(cx, "enter");
+                    for _ in 0..2 {
+                        cx.update(|window, cx| {
+                            window.draw(cx).clear(cx);
+                            window.simulate_next_frame(cx);
+                        });
+                    }
+                    cx.simulate_input(query);
                     cx.update(|window, cx| {
                         window.draw(cx).clear(cx);
-                        window.simulate_next_frame(cx);
+                        let tree: serde_json::Value = serde_json::from_str(
+                            &window.debug_a11y_tree_json().expect("dependency search"),
+                        )
+                        .expect("accessibility JSON");
+                        assert_eq!(
+                            tree["nodes"]
+                                .as_object()
+                                .expect("a11y nodes")
+                                .values()
+                                .filter(|node| node["aria"]["label"] == label)
+                                .count(),
+                            1,
+                            "search renders one matching occurrence"
+                        );
+                        let confirm = cx
+                            .build_action("menu::Confirm", None)
+                            .expect("picker confirm action");
+                        window.dispatch_action(confirm, cx);
                     });
-                }
-                cx.simulate_input("279");
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value = serde_json::from_str(
-                        &window.debug_a11y_tree_json().expect("dependency search"),
-                    )
-                    .expect("accessibility JSON");
-                    assert!(
-                        tree["nodes"]
-                            .as_object()
-                            .expect("a11y nodes")
-                            .values()
-                            .any(|node| {
-                                node["aria"]["label"] == "evidence:growth-dependency-279:1.0"
-                            }),
-                        "search result is rendered"
-                    );
-                    let confirm = cx
-                        .build_action("menu::Confirm", None)
-                        .expect("picker confirm action");
-                    window.dispatch_action(confirm, cx);
+                    cx.run_until_parked();
+                };
+                search_and_confirm(cx, "growth-unresolved", "evidence:growth-unresolved:1.0");
+                diagram.read_with(cx, |item, cx| {
+                    let canvas = item.canvas().read(cx);
+                    assert_eq!(canvas.selection, BTreeSet::from([unresolved.to_owned()]));
+                    assert_eq!(canvas.focus.as_deref(), Some(unresolved));
+                    assert!(canvas.graph.edges.iter().any(|edge| {
+                        edge.from == target
+                            && edge.to == unresolved
+                            && edge.variant == CanvasEdgeVariant::Unresolved
+                    }));
+                    assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
+                    assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
                 });
-                cx.run_until_parked();
+                assert_eq!(commands.load(Ordering::SeqCst), 3);
+                search_and_confirm(cx, "279", "evidence:growth-dependency-279:1.0");
                 diagram.read_with(cx, |item, cx| {
                     let canvas = item.canvas().read(cx);
                     assert_eq!(canvas.selection, BTreeSet::from([target.to_owned()]));

@@ -8,7 +8,9 @@
 //! including positions, so the viewport stays stable across re-derivation.
 
 use gpui::px;
-use project::jvm_project::{GradleResolutionGraph, MavenDependencyGraph};
+use project::jvm_project::{
+    GradleDependencyEdge, GradleDependencySelector, GradleResolutionGraph, MavenDependencyGraph,
+};
 use sim_runtime::graph::{GraphPoint, GraphRect, GraphSize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -131,7 +133,7 @@ fn component_label(group: Option<&str>, name: &str) -> String {
     }
 }
 
-pub(crate) fn gradle_canvas_nodes(graph: &GradleResolutionGraph) -> Vec<CanvasNode> {
+fn gradle_component_nodes(graph: &GradleResolutionGraph) -> Vec<CanvasNode> {
     let mut nodes = Vec::new();
     for component in &graph.components {
         let (label, kind) = match (&component.group, &component.module, component.kind) {
@@ -166,39 +168,79 @@ pub(crate) fn gradle_canvas_nodes(graph: &GradleResolutionGraph) -> Vec<CanvasNo
     nodes
 }
 
+enum GradleCanvasTarget<'a> {
+    Component(&'a str),
+    Unresolved(usize),
+}
+
+fn gradle_canvas_targets(
+    graph: &GradleResolutionGraph,
+) -> impl Iterator<Item = (&GradleDependencyEdge, GradleCanvasTarget<'_>)> {
+    let mut unresolved_count = 0usize;
+    graph.edges.iter().map(move |edge| {
+        let target = match (edge.resolved, edge.selected.as_deref()) {
+            (true, Some(selected)) => GradleCanvasTarget::Component(selected),
+            _ => {
+                let index = unresolved_count;
+                unresolved_count += 1;
+                GradleCanvasTarget::Unresolved(index)
+            }
+        };
+        (edge, target)
+    })
+}
+
+fn gradle_requested_coordinate(selector: &GradleDependencySelector) -> (String, Option<&str>) {
+    match selector {
+        GradleDependencySelector::Module {
+            group,
+            module,
+            version,
+            ..
+        } => (
+            component_label(Some(group), module),
+            (!version.is_empty()).then_some(version.as_str()),
+        ),
+        GradleDependencySelector::Project { project_path, .. } => (project_path.clone(), None),
+    }
+}
+
+fn gradle_unresolved_node(index: usize, label: String, version: Option<&str>) -> CanvasNode {
+    CanvasNode {
+        id: format!("unresolved:{index}"),
+        component_id: String::new(),
+        label,
+        version: version.map(str::to_owned),
+        kind: CanvasNodeKind::Unresolved,
+    }
+}
+
+pub(crate) fn gradle_canvas_nodes(graph: &GradleResolutionGraph) -> Vec<CanvasNode> {
+    let mut nodes = gradle_component_nodes(graph);
+    nodes.extend(gradle_canvas_targets(graph).filter_map(|(edge, target)| {
+        let GradleCanvasTarget::Unresolved(index) = target else {
+            return None;
+        };
+        let (label, version) = gradle_requested_coordinate(&edge.requested);
+        Some(gradle_unresolved_node(index, label, version))
+    }));
+    nodes
+}
+
 /// Adapts an admitted Gradle resolution graph. Unresolved edges receive one
 /// numbered synthetic node each, matching the panel's per-edge placeholders.
 pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph, focus: Option<&str>) -> CanvasGraph {
-    let mut nodes = gradle_canvas_nodes(graph);
+    let mut nodes = gradle_component_nodes(graph);
     let mut edges = Vec::new();
-    let mut unresolved_count = 0usize;
-    for (provider_index, edge) in graph.edges.iter().enumerate() {
-        let (requested_label, requested_version) = match &edge.requested {
-            project::jvm_project::GradleDependencySelector::Module {
-                group,
-                module,
-                version,
-                ..
-            } => (
-                component_label(Some(group), module),
-                (!version.is_empty()).then(|| version.clone()),
-            ),
-            project::jvm_project::GradleDependencySelector::Project { project_path, .. } => {
-                (project_path.clone(), None)
-            }
-        };
-        let target = match (&edge.resolved, &edge.selected) {
-            (true, Some(selected)) => selected.clone(),
-            _ => {
-                let target = format!("unresolved:{unresolved_count}");
-                unresolved_count += 1;
-                nodes.push(CanvasNode {
-                    id: target.clone(),
-                    component_id: String::new(),
-                    label: requested_label.clone(),
-                    version: requested_version.clone(),
-                    kind: CanvasNodeKind::Unresolved,
-                });
+    for (provider_index, (edge, target)) in gradle_canvas_targets(graph).enumerate() {
+        let (requested_label, requested_version) = gradle_requested_coordinate(&edge.requested);
+        let target = match target {
+            GradleCanvasTarget::Component(selected) => selected.to_owned(),
+            GradleCanvasTarget::Unresolved(index) => {
+                let node =
+                    gradle_unresolved_node(index, requested_label.clone(), requested_version);
+                let target = node.id.clone();
+                nodes.push(node);
                 target
             }
         };
@@ -783,6 +825,17 @@ impl CanvasState {
         self.end_pan();
         self.edge_paths = edge_paths(&graph);
         self.graph = graph;
+    }
+
+    pub(crate) fn clear_unresolved_selection(&mut self) {
+        let is_unresolved = |id: &str| {
+            self.graph
+                .node(id)
+                .is_some_and(|node| node.kind == CanvasNodeKind::Unresolved)
+        };
+        self.selection.retain(|id| !is_unresolved(id));
+        self.focus.take_if(|id| is_unresolved(id));
+        self.node_focus.retain(|id, _| !is_unresolved(id));
     }
 
     pub(crate) fn set_layout(&mut self, layout: CanvasLayout) -> bool {

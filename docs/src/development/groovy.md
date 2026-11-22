@@ -264,8 +264,9 @@ dependency, or open the Structure overview. Drag blank space to pan. Use
 Command-click or Control-click to toggle nodes in the selection. Shift-drag
 from blank space to extend the selection with a rectangle. Use **Layout** in
 the blank-canvas menu to switch between left-to-right and top-to-bottom ranks.
-Search includes dependencies beyond the initial canvas view. Choosing one
-brings it and its immediate connections into the bounded view of the graph.
+Search includes dependencies beyond the initial canvas view, including
+Gradle requests that failed to resolve. Choosing one brings the occurrence
+and its immediate connections into the bounded view of the graph.
 On a larger graph, **Copy Diagram Source** copies the current bounded canvas
 as Mermaid source and identifies the limited coverage in the copied text.
 
