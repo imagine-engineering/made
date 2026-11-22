@@ -1201,7 +1201,7 @@ impl RunningState {
                     } => (task_template, locator_name),
                     BuildTaskDefinition::SelectedJavaTest { node_id, discovery_generation } => {
                         let worktree_id = worktree_id.context("Select a local Java test worktree")?;
-                        let (mut template, fixed_port) = project.update(cx, |project, cx| {
+                        let mut plan = project.update(cx, |project, cx| {
                             project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, None, cx)
                         })?;
                         anyhow::ensure!(
@@ -1210,20 +1210,24 @@ impl RunningState {
                                 && config["hostName"] == "127.0.0.1",
                             "The selected Java test Debug endpoint changed; reselect it in Tests"
                         );
-                        let port = match fixed_port {
+                        let port = match plan.fixed_port {
                             Some(port) => port,
                             None => {
                                 let port = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
                                     .context("Could not allocate a local Maven Debug port")?
                                     .local_addr()?.port();
-                                template = project.update(cx, |project, cx| {
+                                plan = project.update(cx, |project, cx| {
                                     project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, Some(port), cx)
-                                })?.0;
+                                })?;
                                 port
                             }
                         };
                         config["port"] = port.into();
-                        selected_java_test = Some((worktree_id, node_id, discovery_generation, port, fixed_port));
+                        config["sourcePaths"] = serde_json::json!([
+                            plan.source_root.to_str().context("The Java test source path is not Unicode")?
+                        ]);
+                        let template = plan.template.clone();
+                        selected_java_test = Some((worktree_id, node_id, discovery_generation, port, plan));
                         (template, None)
                     }
                     BuildTaskDefinition::ByName(ref label) => {
@@ -1307,12 +1311,12 @@ impl RunningState {
 
                 Workspace::save_for_task(&weak_workspace, task_with_shell.save, cx).await;
                 this.read_with(cx, |this, cx| this.ensure_experimental_access(cx))??;
-                if let Some((worktree_id, node_id, generation, port, fixed_port)) = &selected_java_test {
-                    let (current, current_port) = project.update(cx, |project, cx| {
+                if let Some((worktree_id, node_id, generation, port, plan)) = &selected_java_test {
+                    let current = project.update(cx, |project, cx| {
                         project.selected_java_test_debug_task(*worktree_id, node_id, *generation, Some(*port), cx)
                     })?;
                     anyhow::ensure!(
-                        current == task_template && current_port == *fixed_port,
+                        current == *plan,
                         "The selected Java test changed before Debug could start; refresh Tests"
                     );
                     std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, *port))
@@ -1349,14 +1353,14 @@ impl RunningState {
                     });
                 })?;
 
-                if let Some((worktree_id, node_id, generation, port, fixed_port)) = selected_java_test {
+                if let Some((worktree_id, node_id, generation, port, plan)) = selected_java_test {
                     // The selected JVM is suspended until DAP attaches. Waiting for Task exit would deadlock.
-                    wait_for_java_test_debugger(&terminal, port, fixed_port.is_some(), cx).await?;
-                    let (current, current_port) = project.update(cx, |project, cx| {
+                    wait_for_java_test_debugger(&terminal, port, plan.fixed_port.is_some(), cx).await?;
+                    let current = project.update(cx, |project, cx| {
                         project.selected_java_test_debug_task(worktree_id, &node_id, generation, Some(port), cx)
                     })?;
                     anyhow::ensure!(
-                        current == task_template && current_port == fixed_port,
+                        current == plan,
                         "The selected Java test changed while waiting for Debug; refresh Tests"
                     );
                 } else {

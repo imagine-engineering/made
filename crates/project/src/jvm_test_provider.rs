@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::Read as _,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -120,6 +121,7 @@ pub struct JvmSelectedTestDebugPlan {
     pub build_tool: JvmTestBuildTool,
     pub template: TaskTemplate,
     pub debug_port: u16,
+    pub source_root: Arc<RelPath>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1165,11 +1167,19 @@ impl JvmTestProviderStore {
     ) -> Result<JvmSelectedTestDebugPlan> {
         let plan = self.plan_selected_case(node_id, discovery_generation, cx)?;
         let (template, debug_port) = jvm_test_debug_template(plan.template, plan.build_tool);
+        let source_root = plan
+            .selector
+            .scope_path
+            .path
+            .parent()
+            .unwrap_or(RelPath::empty())
+            .join(RelPath::from_unix_str("src/test/java")?);
         Ok(JvmSelectedTestDebugPlan {
             worktree_id: plan.worktree_id,
             build_tool: plan.build_tool,
             template,
             debug_port,
+            source_root: source_root.into(),
         })
     }
 

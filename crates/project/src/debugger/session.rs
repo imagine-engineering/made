@@ -609,15 +609,9 @@ impl RunningMode {
         <R::DapRequest as dap::requests::Request>::Response: 'static,
         <R::DapRequest as dap::requests::Request>::Arguments: 'static + Send,
     {
-        let request = Arc::new(request);
-
-        let request_clone = request.clone();
         let connection = self.client.clone();
-        self.executor.spawn(async move {
-            let args = request_clone.to_dap();
-            let response = connection.request::<R::DapRequest>(args).await?;
-            request.response_from_dap(response)
-        })
+        self.executor
+            .spawn(async move { request.send(&connection).await })
     }
 }
 
@@ -1695,6 +1689,7 @@ impl Session {
                     thread_id,
                     start_frame: None,
                     levels: None,
+                    recover_java_frames: self.recovers_java_stack_frames(),
                 }
                 .into(),
             );
@@ -2725,6 +2720,7 @@ impl Session {
                     thread_id: thread_id.0,
                     start_frame: None,
                     levels: None,
+                    recover_java_frames: self.recovers_java_stack_frames(),
                 },
                 move |this, stack_frames, cx| {
                     let entry =
@@ -3110,6 +3106,10 @@ impl Session {
             return false;
         };
         local_mode.binary.request_args.request == StartDebuggingRequestArgumentsRequest::Attach
+    }
+
+    fn recovers_java_stack_frames(&self) -> bool {
+        cfg!(feature = "jvm-tools") && self.adapter.0.as_ref() == "Java" && self.is_attached()
     }
 
     pub fn disconnect_client(&mut self, cx: &mut Context<Self>) {

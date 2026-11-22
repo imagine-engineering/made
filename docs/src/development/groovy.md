@@ -446,6 +446,11 @@ port 5005. Maven uses a separate loopback port for each launch. Stopping the
 Debug session or restricting project trust cancels its selected test Task,
 including during terminal preparation.
 
+The debugger supplies the selected module's Java test source directory to the
+adapter. When the pinned adapter fails a whole stack request on a frame
+without source, the debugger retries in bounded pages and logs the number of
+frames it recovered.
+
 Selected-test breakpoint journeys in the installed desktop product and on
 separate hosts remain qualification gates. The extension's built-in run and
 test task scripts require `/bin/sh`; Windows needs a

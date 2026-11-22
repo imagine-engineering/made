@@ -7,7 +7,7 @@ use dap::{
     InitializeRequestArgumentsPathFormat, NextArguments, SetVariableResponse, SourceBreakpoint,
     StepInArguments, StepOutArguments, SteppingGranularity, ValueFormat, Variable,
     VariablesArgumentsFilter,
-    client::SessionId,
+    client::{DebugAdapterClient, SessionId},
     proto_conversions::ProtoConversion,
     requests::{Continue, Next},
 };
@@ -32,6 +32,16 @@ pub trait LocalDapCommand: 'static + Send + Sync + std::fmt::Debug {
         &self,
         message: <Self::DapRequest as dap::requests::Request>::Response,
     ) -> Result<Self::Response>;
+
+    fn send(
+        &self,
+        client: &DebugAdapterClient,
+    ) -> impl Future<Output = Result<Self::Response>> + Send
+    where
+        <Self::DapRequest as dap::requests::Request>::Arguments: Send,
+    {
+        async move { self.response_from_dap(client.request::<Self::DapRequest>(self.to_dap()).await?) }
+    }
 }
 
 pub trait DapCommand: LocalDapCommand {
@@ -74,6 +84,16 @@ impl<T: LocalDapCommand> LocalDapCommand for Arc<T> {
         message: <Self::DapRequest as dap::requests::Request>::Response,
     ) -> Result<Self::Response> {
         T::response_from_dap(self, message)
+    }
+
+    fn send(
+        &self,
+        client: &DebugAdapterClient,
+    ) -> impl Future<Output = Result<Self::Response>> + Send
+    where
+        <Self::DapRequest as dap::requests::Request>::Arguments: Send,
+    {
+        T::send(self, client)
     }
 }
 
@@ -1185,6 +1205,7 @@ pub(crate) struct StackTraceCommand {
     pub thread_id: i64,
     pub start_frame: Option<u64>,
     pub levels: Option<u64>,
+    pub recover_java_frames: bool,
 }
 
 impl LocalDapCommand for StackTraceCommand {
@@ -1207,6 +1228,133 @@ impl LocalDapCommand for StackTraceCommand {
     ) -> Result<Self::Response> {
         Ok(message.stack_frames)
     }
+
+    async fn send(&self, client: &DebugAdapterClient) -> Result<Self::Response> {
+        self.send_stack_trace(|args| client.request::<Self::DapRequest>(args))
+            .await
+    }
+}
+
+const JAVA_STACK_SOURCE_ERROR: &str =
+    "Request failed: Cannot read field \"path\" because \"lspFrame.source\" is null";
+
+impl StackTraceCommand {
+    async fn send_stack_trace<ResponseFuture>(
+        &self,
+        send: impl Fn(dap::StackTraceArguments) -> ResponseFuture,
+    ) -> Result<Vec<dap::StackFrame>>
+    where
+        ResponseFuture: Future<Output = Result<dap::StackTraceResponse>>,
+    {
+        use std::result::Result::Ok;
+
+        let error = match send(self.to_dap()).await {
+            Ok(response) => return self.response_from_dap(response),
+            Err(error) => error,
+        };
+        if !self.recover_java_frames
+            || self.start_frame.is_some()
+            || self.levels.is_some()
+            || error.to_string() != JAVA_STACK_SOURCE_ERROR
+        {
+            return Err(error);
+        }
+
+        // The pinned Java adapter rejects a whole page when one native frame has no source.
+        let request_page = |start, count| {
+            send(dap::StackTraceArguments {
+                thread_id: self.thread_id,
+                start_frame: Some(start),
+                levels: Some(count),
+                format: None,
+            })
+        };
+        let first = request_page(0, 1).await?;
+        if first.stack_frames.is_empty() {
+            return Err(error);
+        }
+        let mut frames = first.stack_frames;
+        let total = first.total_frames.unwrap_or(1);
+        let mut pages = vec![(1, total.min(256).saturating_sub(1))];
+        for _ in 0..64 {
+            let Some((start, count)) = pages.pop() else {
+                break;
+            };
+            if count == 0 {
+                continue;
+            }
+            match request_page(start, count).await {
+                Ok(response) => frames.extend(response.stack_frames),
+                Err(error) if error.to_string() == JAVA_STACK_SOURCE_ERROR => {
+                    if count > 1 {
+                        let first_half = count / 2;
+                        pages.push((start + first_half, count - first_half));
+                        pages.push((start, first_half));
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        log::warn!(
+            "Java Debug recovered {} of {} reported stack frames after an adapter source error",
+            frames.len(),
+            total,
+        );
+        Ok(frames)
+    }
+}
+
+#[cfg(test)]
+#[gpui::test]
+async fn java_stack_trace_preserves_other_frames_when_one_source_is_missing(
+    _cx: &mut gpui::TestAppContext,
+) {
+    let mut command = StackTraceCommand {
+        thread_id: 42,
+        start_frame: None,
+        levels: None,
+        recover_java_frames: true,
+    };
+    let requests = std::cell::RefCell::new(Vec::new());
+    let send = |args: dap::StackTraceArguments| {
+        assert_eq!(args.thread_id, 42);
+        requests.borrow_mut().push((args.start_frame, args.levels));
+        let start = args.start_frame.unwrap_or(0);
+        let count = args.levels.unwrap_or(8);
+        let frames = start..start + count;
+        if frames.contains(&1) {
+            return std::future::ready(Err(anyhow::anyhow!(JAVA_STACK_SOURCE_ERROR)));
+        }
+        std::future::ready(Ok(dap::StackTraceResponse {
+            stack_frames: frames
+                .map(|id| {
+                    serde_json::from_value(serde_json::json!({
+                        "id": id, "line": 9, "column": 1, "name": "test"
+                    }))
+                    .expect("DAP frame")
+                })
+                .collect(),
+            total_frames: Some(8),
+        }))
+    };
+    let frames = command
+        .send_stack_trace(send)
+        .await
+        .expect("Recovered stack");
+    assert_eq!(
+        frames.into_iter().map(|frame| frame.id).collect::<Vec<_>>(),
+        [0, 2, 3, 4, 5, 6, 7]
+    );
+    assert_eq!(requests.borrow().first(), Some(&(None, None)));
+    assert!(requests.borrow().contains(&(Some(1), Some(1))));
+    requests.borrow_mut().clear();
+    command.recover_java_frames = false;
+    let error = command
+        .send_stack_trace(send)
+        .await
+        .expect_err("Ordinary stack errors remain visible");
+    assert_eq!(error.to_string(), JAVA_STACK_SOURCE_ERROR);
+    assert_eq!(*requests.borrow(), [(None, None)]);
 }
 
 impl DapCommand for StackTraceCommand {
@@ -1228,6 +1376,7 @@ impl DapCommand for StackTraceCommand {
             thread_id: request.thread_id,
             start_frame: request.start_frame,
             levels: request.stack_trace_levels,
+            recover_java_frames: false,
         }
     }
 

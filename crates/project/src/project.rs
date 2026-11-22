@@ -568,6 +568,13 @@ pub struct ProjectPath {
     pub path: Arc<RelPath>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct LocalJavaTestDebugTask {
+    pub template: task::TaskTemplate,
+    pub fixed_port: Option<u16>,
+    pub source_root: PathBuf,
+}
+
 impl ProjectPath {
     pub fn from_file(value: &dyn language::File, cx: &App) -> Self {
         ProjectPath {
@@ -2958,7 +2965,7 @@ impl Project {
         _discovery_generation: u64,
         _maven_port: Option<u16>,
         _cx: &mut App,
-    ) -> Result<(task::TaskTemplate, Option<u16>)> {
+    ) -> Result<LocalJavaTestDebugTask> {
         #[cfg(feature = "jvm-tools")]
         {
             let provider = self
@@ -2984,8 +2991,23 @@ impl Project {
                     ),
                 "Trust the project before debugging the selected Java test"
             );
-            if plan.build_tool == jvm_test_provider::JvmTestBuildTool::Gradle {
-                Ok((plan.template, Some(plan.debug_port)))
+            let worktree = self
+                .worktree_for_id(_worktree, _cx)
+                .context("The selected Java test worktree closed")?;
+            let local = worktree
+                .read(_cx)
+                .as_local()
+                .context("The selected Java test requires a local worktree")?;
+            anyhow::ensure!(
+                local
+                    .snapshot()
+                    .entry_for_path(&plan.source_root)
+                    .is_some_and(|entry| entry.is_dir() && !entry.is_external && !entry.is_private),
+                "The selected Java test source directory is unavailable; refresh Tests"
+            );
+            let source_root = local.absolutize(&plan.source_root);
+            let fixed_port = if plan.build_tool == jvm_test_provider::JvmTestBuildTool::Gradle {
+                Some(plan.debug_port)
             } else {
                 if let Some(port) = _maven_port {
                     let option = plan
@@ -3000,8 +3022,13 @@ impl Project {
                         "-Dmaven.surefire.debug=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:{port}"
                     );
                 }
-                Ok((plan.template, None))
-            }
+                None
+            };
+            Ok(LocalJavaTestDebugTask {
+                template: plan.template,
+                fixed_port,
+                source_root,
+            })
         }
         #[cfg(not(feature = "jvm-tools"))]
         anyhow::bail!("This product does not support selected Java test Debug")
