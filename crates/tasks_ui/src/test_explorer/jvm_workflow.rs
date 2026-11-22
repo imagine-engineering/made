@@ -965,6 +965,15 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
     });
     for (filter, expected) in [
         (
+            DependencyAnalyzerFilter::All,
+            graph
+                .edges
+                .iter()
+                .filter(|edge| edge.scope == "compile")
+                .map(|edge| &edge.target_node)
+                .collect(),
+        ),
+        (
             DependencyAnalyzerFilter::Conflicts,
             vec![&winner.target_node, &loser.target_node],
         ),

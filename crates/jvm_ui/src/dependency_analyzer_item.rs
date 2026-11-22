@@ -5,8 +5,8 @@
 //! the Usages pane live on the item so they survive tab switches.
 
 use crate::dependencies_panel::{
-    DependencyGraphReceipt, GraphQueryTarget, GraphSelection, ShowDependencyRowMenu,
-    current_dependency_graph_receipt, derive_dependency_analyzer,
+    DependencyGraphReceipt, GraphQueryTarget, GraphSelection, MavenGraphScope,
+    ShowDependencyRowMenu, current_dependency_graph_receipt, derive_dependency_analyzer,
 };
 use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget, DependencySearch,
@@ -23,8 +23,8 @@ use language_tools::language_tool_tree::{
 };
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencySelector,
-    JdtlsProjectSnapshot, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyGraph,
-    MavenDependencyNode, MavenUnavailableDescriptor,
+    JdtlsProjectSnapshot, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyNode,
+    MavenUnavailableDescriptor,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use ui::prelude::FluentBuilder as _;
@@ -133,6 +133,7 @@ pub enum DependencyAnalyzerGraph {
         edges: Vec<GradleDependencyEdge>,
     },
     Maven {
+        scope: MavenGraphScope,
         nodes: Vec<MavenDependencyNode>,
         components: Vec<MavenDependencyComponent>,
         edges: Vec<MavenDependencyEdge>,
@@ -154,6 +155,7 @@ impl DependencyAnalyzerGraph {
                 components,
                 edges,
                 unavailable_descriptors,
+                ..
             } => {
                 *nodes = Vec::new();
                 *components = Vec::new();
@@ -331,6 +333,7 @@ fn maven_occurrences<'a>(
     components: &'a [MavenDependencyComponent],
     edges: &'a [MavenDependencyEdge],
     unavailable_descriptors: &[MavenUnavailableDescriptor],
+    graph_scope: MavenGraphScope,
     filter: DependencyAnalyzerFilter,
 ) -> Vec<MavenOccurrence<'a>> {
     let mut components_by_id = HashMap::new();
@@ -352,10 +355,14 @@ fn maven_occurrences<'a>(
         .filter_map(|node| {
             let component = components_by_id.get(node.component.as_str()).copied()?;
             let key = node.id.as_str();
+            let scope = scopes_by_node.get(key).copied();
+            if graph_scope != MavenGraphScope::All && scope.is_none() {
+                return None;
+            }
             let occurrence = MavenOccurrence {
                 key,
                 component,
-                scope: scopes_by_node.get(key).copied(),
+                scope,
                 conflict: conflicts.contains(key),
                 unresolved: unavailable.contains(node.component.as_str()),
             };
@@ -809,6 +816,7 @@ pub(crate) fn analyzer_rows(
             components, edges, ..
         } => gradle_analyzer_rows(components, edges, filter, presentation, show_group_ids),
         DependencyAnalyzerGraph::Maven {
+            scope,
             nodes,
             components,
             edges,
@@ -820,6 +828,7 @@ pub(crate) fn analyzer_rows(
                 components,
                 edges,
                 unavailable_descriptors,
+                *scope,
                 filter,
             ),
             presentation,
@@ -1012,6 +1021,7 @@ impl DependencyAnalyzerItem {
             return Vec::new();
         }
         if let DependencyAnalyzerGraph::Maven {
+            scope,
             nodes,
             components,
             edges,
@@ -1024,6 +1034,7 @@ impl DependencyAnalyzerItem {
                 components,
                 edges,
                 unavailable_descriptors,
+                *scope,
                 self.filter,
             )
             .iter()
@@ -1941,26 +1952,26 @@ pub(crate) fn dependency_analyzer_for_selection(
                 let Some(graph) = &maven.dependency_graph else {
                     continue;
                 };
-                // Maven scope filtering keeps the existing fact-filter
-                // semantics: edges outside the chosen scope are not admitted.
-                let (admitted, chosen_scope) = match scope {
+                let chosen_scope = match scope {
                     Some(DependencyDiagramScope::MavenScope(label)) => {
-                        let chosen =
-                            crate::dependencies_panel::maven_graph_scope_from_label(label)?;
-                        let mut filtered = (**graph).clone();
-                        filtered.edges.retain(|edge| chosen.matches(&edge.scope));
-                        (Some(filtered), chosen)
+                        crate::dependencies_panel::maven_graph_scope_from_label(label)?
                     }
                     Some(_) => continue,
-                    None => (None, crate::dependencies_panel::MavenGraphScope::default()),
+                    None => MavenGraphScope::default(),
                 };
-                let admitted_graph: &MavenDependencyGraph = admitted.as_ref().unwrap_or(graph);
                 return Some(DependencyAnalyzerDerivation {
                     graph: DependencyAnalyzerGraph::Maven {
-                        nodes: admitted_graph.nodes.clone(),
-                        components: admitted_graph.components.clone(),
-                        edges: admitted_graph.edges.clone(),
-                        unavailable_descriptors: admitted_graph.unavailable_descriptors.clone(),
+                        scope: chosen_scope,
+                        // Usages can refer to sources whose incoming edges are in another scope.
+                        nodes: graph.nodes.clone(),
+                        components: graph.components.clone(),
+                        edges: graph
+                            .edges
+                            .iter()
+                            .filter(|edge| chosen_scope.matches(&edge.scope))
+                            .cloned()
+                            .collect(),
+                        unavailable_descriptors: graph.unavailable_descriptors.clone(),
                     },
                     target: DependencyDiagramTarget {
                         module_label: crate::dependencies_panel::dependency_module_label(

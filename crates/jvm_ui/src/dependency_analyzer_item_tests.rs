@@ -3,6 +3,7 @@
 //! occurrence identities, Usages pane updates on selection and state
 //! retention across tab switches.
 
+use crate::dependencies_panel::MavenGraphScope;
 use crate::dependency_analyzer_item::{
     DependencyAnalyzerDerivation, DependencyAnalyzerFilter, DependencyAnalyzerGraph,
     DependencyAnalyzerItem, DependencyAnalyzerPresentation, analyzer_row_id_for_node,
@@ -11,7 +12,7 @@ use crate::dependency_analyzer_item::{
 use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
 };
-use gpui::{InputEvent as _, TestAppContext};
+use gpui::{AppContext as _, InputEvent as _, TestAppContext};
 use language_tools::language_tool_tree::{LanguageToolNode, LanguageToolNodeId};
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencyKind,
@@ -206,6 +207,7 @@ fn maven_graph() -> DependencyAnalyzerGraph {
         problem: "Descriptor unavailable".into(),
     }];
     DependencyAnalyzerGraph::Maven {
+        scope: MavenGraphScope::All,
         nodes,
         components,
         edges,
@@ -444,6 +446,7 @@ fn analyzer_usages_report_admitted_reverse_edges() {
         edges.push(MavenDependencyEdge { from: user, ..edge });
     }
     let graph = DependencyAnalyzerGraph::Maven {
+        scope: MavenGraphScope::All,
         nodes,
         components,
         edges,
@@ -545,6 +548,52 @@ fn init(cx: &mut gpui::App) {
     theme_settings::init(LoadThemes::JustBase, cx);
     editor::init(cx);
     crate::init(cx);
+}
+
+#[gpui::test]
+fn maven_scope_limits_rows_and_search_without_losing_usage_labels(cx: &mut TestAppContext) {
+    let mut graph = maven_graph();
+    let DependencyAnalyzerGraph::Maven { scope, edges, .. } = &mut graph else {
+        panic!("Maven fixture");
+    };
+    *scope = MavenGraphScope::Test;
+    edges.retain(|edge| scope.matches(&edge.scope));
+    for presentation in [
+        DependencyAnalyzerPresentation::Tree,
+        DependencyAnalyzerPresentation::Flat,
+    ] {
+        let rows = analyzer_rows(&graph, DependencyAnalyzerFilter::All, presentation, true);
+        assert_eq!(node_keys(&rows), ["n-leaf"]);
+    }
+    cx.update(|cx| {
+        init(cx);
+        let item = cx.new(|cx| {
+            DependencyAnalyzerItem::new(
+                DependencyAnalyzerDerivation {
+                    target: DependencyDiagramTarget {
+                        module_label: "app".into(),
+                        provider: DependencyDiagramProvider::Maven,
+                        configuration: None,
+                    },
+                    graph,
+                    scope: DependencyDiagramScope::MavenScope("test".into()),
+                    scope_options: vec!["test".into()],
+                },
+                None,
+                cx,
+            )
+        });
+        item.update(cx, |item, cx| {
+            let entries = item.search_entries(cx);
+            assert_eq!(entries.len(), 1);
+            let entry = entries.first().expect("test occurrence");
+            assert_eq!(entry.id, analyzer_row_id_for_node("n-leaf").0);
+            item.preselect_node("n-leaf", cx);
+            let usage = item.usages().first().expect("admitted usage");
+            assert_eq!(usage.user_node, "n-a");
+            assert_eq!(usage.label, "used by org.example:a; scope test");
+        });
+    });
 }
 
 #[gpui::test]
@@ -674,6 +723,7 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
         components,
         edges,
         unavailable_descriptors,
+        ..
     } = &mut large_maven
     else {
         panic!("Maven fixture");
