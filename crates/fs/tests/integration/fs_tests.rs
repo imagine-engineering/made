@@ -864,6 +864,63 @@ async fn test_realfs_create_new_file_atomically_preserves_existing_binary(cx: &m
 }
 
 #[gpui::test]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+async fn test_realfs_create_new_directory_atomically_preserves_existing_entries(
+    cx: &mut TestAppContext,
+) {
+    cx.executor().allow_parking();
+    let fs = RealFs::new(None, cx.executor());
+    let parent = TempDir::new().expect("test directory");
+    let target = parent.path().join("export.gdd");
+    fs.create_new_directory_atomically(
+        target.clone(),
+        vec![
+            ("registry.bin".into(), vec![0, 127, 255]),
+            ("opaque/nested/data.bin".into(), vec![251, 0]),
+        ],
+    )
+    .await
+    .expect("publish a complete directory");
+    let collision = fs
+        .create_new_directory_atomically(target.clone(), vec![("registry.bin".into(), vec![1, 2])])
+        .await
+        .expect_err("an existing directory survives");
+    assert_eq!(
+        collision
+            .downcast_ref::<std::io::Error>()
+            .map(std::io::Error::kind),
+        Some(std::io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(
+        std::fs::read(target.join("registry.bin")).expect("original binary"),
+        [0, 127, 255]
+    );
+    assert_eq!(
+        std::fs::read(target.join("opaque/nested/data.bin")).expect("nested binary"),
+        [251, 0]
+    );
+
+    let invalid_target = parent.path().join("invalid.gdd");
+    fs.create_new_directory_atomically(
+        invalid_target.clone(),
+        vec![
+            ("registry.bin".into(), vec![3]),
+            ("../unauthorized.bin".into(), vec![4]),
+        ],
+    )
+    .await
+    .expect_err("reject a non-relative archive entry before publishing the directory");
+    assert!(!invalid_target.exists());
+    assert!(!parent.path().join("unauthorized.bin").exists());
+    assert_eq!(
+        std::fs::read_dir(parent.path())
+            .expect("staging parent")
+            .count(),
+        1
+    );
+}
+
+#[gpui::test]
 #[cfg(target_os = "windows")]
 async fn test_realfs_canonicalize(executor: BackgroundExecutor) {
     use util::paths::SanitizedPath;

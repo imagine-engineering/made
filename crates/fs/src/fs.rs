@@ -115,6 +115,11 @@ pub trait Fs: Send + Sync {
         content: Pin<&mut (dyn AsyncRead + Send)>,
     ) -> Result<()>;
     async fn create_new_file_atomically(&self, path: PathBuf, content: Arc<[u8]>) -> Result<()>;
+    async fn create_new_directory_atomically(
+        &self,
+        path: PathBuf,
+        files: Vec<(PathBuf, Vec<u8>)>,
+    ) -> Result<()>;
     async fn extract_tar_file(
         &self,
         path: &Path,
@@ -1653,6 +1658,36 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     .map_err(|_| io::Error::last_os_error())
 }
 
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+fn rename_without_replace(_source: &Path, _target: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Atomic directory publication is unavailable on this platform",
+    ))
+}
+
+fn validate_new_directory_entry(path: &Path) -> Result<()> {
+    anyhow::ensure!(
+        !path.as_os_str().is_empty()
+            && path
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_))),
+        "Directory entry must be a relative file path: {}",
+        path.display()
+    );
+    #[cfg(windows)]
+    for name in path.iter() {
+        let name = name.to_string_lossy();
+        anyhow::ensure!(
+            !name.contains([':', '\\', '<', '>', '"', '|', '?', '*'])
+                && !name.ends_with([' ', '.']),
+            "Directory entry name is not representable: {}",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 fn path_to_c_string(path: &Path) -> io::Result<CString> {
     CString::new(path.as_os_str().as_bytes()).map_err(|_| {
@@ -1788,6 +1823,57 @@ impl Fs for RealFs {
                 .map_err(|error| error.error)?;
             #[cfg(unix)]
             std::fs::File::open(directory)?.sync_all()?;
+            anyhow::Ok(())
+        })
+        .await
+    }
+
+    async fn create_new_directory_atomically(
+        &self,
+        path: PathBuf,
+        files: Vec<(PathBuf, Vec<u8>)>,
+    ) -> Result<()> {
+        smol::unblock(move || {
+            anyhow::ensure!(
+                path.is_absolute(),
+                "Choose an absolute directory destination"
+            );
+            let parent = path
+                .parent()
+                .context("Destination directory has no parent")?;
+            let staging = tempfile::tempdir_in(parent)?;
+            let directory = staging.path().join("directory");
+            std::fs::create_dir(&directory)?;
+            #[cfg(unix)]
+            let mut directories = std::collections::BTreeSet::from([directory.clone()]);
+            for (relative, bytes) in files {
+                validate_new_directory_entry(&relative)?;
+                let file_path = directory.join(relative);
+                let file_parent = file_path.parent().context("Staged file has no parent")?;
+                std::fs::create_dir_all(file_parent)?;
+                #[cfg(unix)]
+                directories.extend(
+                    file_parent
+                        .ancestors()
+                        .take_while(|candidate| *candidate != directory)
+                        .map(Path::to_path_buf),
+                );
+                let mut file = std::fs::File::create_new(file_path)?;
+                file.write_all(&bytes)?;
+                file.sync_all()?;
+            }
+            #[cfg(unix)]
+            for directory in directories.iter().rev() {
+                std::fs::File::open(directory)?.sync_all()?;
+            }
+            rename_without_replace(&directory, &path)?;
+            staging
+                .close()
+                .context("The directory was published but staging cleanup failed")?;
+            #[cfg(unix)]
+            std::fs::File::open(parent)
+                .and_then(|parent| parent.sync_all())
+                .context("The directory was published but its parent could not be synced")?;
             anyhow::Ok(())
         })
         .await
@@ -4487,6 +4573,62 @@ impl Fs for FakeFs {
             Ok(())
         })?;
         *state.path_write_counts.entry(path.clone()).or_insert(0) += 1;
+        state.emit_event([(path, Some(PathEventKind::Created))]);
+        Ok(())
+    }
+
+    async fn create_new_directory_atomically(
+        &self,
+        path: PathBuf,
+        files: Vec<(PathBuf, Vec<u8>)>,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            path.is_absolute(),
+            "Choose an absolute directory destination"
+        );
+        self.simulate_random_delay().await;
+        let mut state = self.state.lock();
+        let new_directory = |state: &mut FakeFsState| FakeFsEntry::Dir {
+            inode: state.get_and_increment_inode(),
+            mtime: state.get_and_increment_mtime(),
+            len: 0,
+            entries: Default::default(),
+            git_repo_state: None,
+        };
+        let mut tree = new_directory(&mut state);
+        for (relative, content) in files {
+            validate_new_directory_entry(&relative)?;
+            let mut components = relative.iter().peekable();
+            let mut current = &mut tree;
+            while let Some(name) = components.next() {
+                let name = name
+                    .to_str()
+                    .context("Directory entry name must be UTF-8")?;
+                let entry = current.dir_entries(&relative)?.entry(name.to_owned());
+                if components.peek().is_some() {
+                    current = entry.or_insert_with(|| new_directory(&mut state));
+                } else {
+                    let btree_map::Entry::Vacant(entry) = entry else {
+                        return Err(io::Error::from(io::ErrorKind::AlreadyExists).into());
+                    };
+                    entry.insert(FakeFsEntry::File {
+                        inode: state.get_and_increment_inode(),
+                        mtime: state.get_and_increment_mtime(),
+                        len: content.len() as u64,
+                        content,
+                        git_dir_path: None,
+                    });
+                    break;
+                }
+            }
+        }
+        state.write_path(&path, |entry| {
+            let btree_map::Entry::Vacant(entry) = entry else {
+                return Err(io::Error::from(io::ErrorKind::AlreadyExists).into());
+            };
+            entry.insert(tree);
+            Ok(())
+        })?;
         state.emit_event([(path, Some(PathEventKind::Created))]);
         Ok(())
     }

@@ -2,6 +2,7 @@ use std::{
     collections::BTreeSet,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
     ops::Bound,
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -92,6 +93,21 @@ impl PreservedGddV1 {
 
     pub fn hot_log_len(&self) -> usize {
         self.document.session().hot_log().len()
+    }
+
+    pub fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
+        self.entries
+            .names
+            .iter()
+            .map(|path| {
+                let bytes = match self.read_entry(path)? {
+                    ByteHolder::Owned(bytes) => bytes,
+                    #[cfg(not(target_family = "wasm"))]
+                    other => other.as_slice().to_vec(),
+                };
+                Ok((PathBuf::from(path), bytes))
+            })
+            .collect()
     }
 
     pub fn export_archive(

@@ -149,10 +149,21 @@ pub(crate) struct GraphiteDocumentItem {
     copy_feedback: Option<(SharedString, Color)>,
 }
 
+#[derive(Clone, Copy)]
+enum GddCopyFormat {
+    Archive(ArchiveFormat),
+    Folder,
+}
+
+enum PreparedCopy {
+    File(Arc<[u8]>),
+    Folder(Vec<(PathBuf, Vec<u8>)>),
+}
+
 impl GraphiteDocumentItem {
     fn save_copy(
         &mut self,
-        format: Option<ArchiveFormat>,
+        format: Option<GddCopyFormat>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -180,8 +191,9 @@ impl GraphiteDocumentItem {
                     .and_then(|suffix| name.get(..name.len() - suffix.len()))
                     .unwrap_or(name);
                 let suffix = match format {
-                    ArchiveFormat::Zip => ".gdd.zip",
-                    ArchiveFormat::Xz => ".gdd.tar.xz",
+                    GddCopyFormat::Archive(ArchiveFormat::Zip) => ".gdd.zip",
+                    GddCopyFormat::Archive(ArchiveFormat::Xz) => ".gdd.tar.xz",
+                    GddCopyFormat::Folder => ".gdd",
                 };
                 format!("Copy of {stem}{suffix}")
             }
@@ -224,15 +236,20 @@ impl GraphiteDocumentItem {
                     path.is_absolute(),
                     "Choose an absolute path for the Graphite copy."
                 );
-                let bytes = if let Some((archive, format)) = export {
+                let copy = if let Some((archive, format)) = export {
                     cx.background_spawn(async move {
-                        archive
-                            .export_archive(format, ARCHIVE_BUDGET.max_archive_bytes)
-                            .map(Arc::<[u8]>::from)
+                        Ok::<_, anyhow::Error>(match format {
+                            GddCopyFormat::Archive(format) => PreparedCopy::File(
+                                archive
+                                    .export_archive(format, ARCHIVE_BUDGET.max_archive_bytes)?
+                                    .into(),
+                            ),
+                            GddCopyFormat::Folder => PreparedCopy::Folder(archive.folder_files()?),
+                        })
                     })
                     .await?
                 } else {
-                    original
+                    PreparedCopy::File(original)
                 };
                 item.read_with(cx, |_, _| ())?;
                 ensure!(
@@ -241,10 +258,19 @@ impl GraphiteDocumentItem {
                         .is_some())?,
                     "The Graphite worktree was closed."
                 );
-                filesystem
-                    .create_new_file_atomically(path.clone(), bytes)
-                    .await
-                    .with_context(|| format!("Could not save a copy at {}", path.display()))?;
+                match copy {
+                    PreparedCopy::File(bytes) => {
+                        filesystem
+                            .create_new_file_atomically(path.clone(), bytes)
+                            .await
+                    }
+                    PreparedCopy::Folder(files) => {
+                        filesystem
+                            .create_new_directory_atomically(path.clone(), files)
+                            .await
+                    }
+                }
+                .with_context(|| format!("Could not save a copy at {}", path.display()))?;
                 Ok(Some(path))
             }
             .await;
@@ -381,8 +407,21 @@ impl Render for GraphiteDocumentItem {
                 .child(
                     h_flex().gap_2().children(
                         [
-                            ("GRAPHITE-EXPORT-GDD-ZIP", "Export ZIP", ArchiveFormat::Zip),
-                            ("GRAPHITE-EXPORT-GDD-XZ", "Export XZ", ArchiveFormat::Xz),
+                            (
+                                "GRAPHITE-EXPORT-GDD-ZIP",
+                                "Export ZIP",
+                                GddCopyFormat::Archive(ArchiveFormat::Zip),
+                            ),
+                            (
+                                "GRAPHITE-EXPORT-GDD-XZ",
+                                "Export XZ",
+                                GddCopyFormat::Archive(ArchiveFormat::Xz),
+                            ),
+                            (
+                                "GRAPHITE-EXPORT-GDD-FOLDER",
+                                "Export Folder",
+                                GddCopyFormat::Folder,
+                            ),
                         ]
                         .map(|(selector, label, format)| {
                             div().debug_selector(move || selector.into()).child(
@@ -567,6 +606,99 @@ mod tests {
                 .await
                 .expect("source file is intact"),
             bytes
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_006_2_workspace_exports_a_folder_with_exact_graphite_payloads(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/source.gdd.zip");
+        let destination = PathBuf::from("/project/copy.gdd");
+        let existing = PathBuf::from("/project/existing.gdd");
+        let original = Arc::<[u8]>::from(archive_bytes(1, ExportFormat::Zip).await);
+        let expected = open_gdd_archive(&original, ARCHIVE_BUDGET)
+            .await
+            .expect("source contents")
+            .folder_files()
+            .expect("snapshot files");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source fixture");
+        filesystem
+            .create_dir(&existing)
+            .await
+            .expect("existing directory");
+        filesystem
+            .write(&existing.join("keep.txt"), b"leave intact")
+            .await
+            .expect("existing bytes");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the original ZIP via Workspace")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        paint(window);
+        click(window, "GRAPHITE-EXPORT-GDD-FOLDER");
+        window.simulate_new_path_selection(|_| Some(existing.clone()));
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            assert!(matches!(item.copy_feedback, Some((_, Color::Error))))
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&existing.join("keep.txt"))
+                .await
+                .expect("retained existing directory"),
+            b"leave intact"
+        );
+        assert!(
+            filesystem
+                .metadata(&existing.join("manifest.json"))
+                .await
+                .expect("inspect preserved folder")
+                .is_none()
+        );
+        click(window, "GRAPHITE-EXPORT-GDD-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        item.read_with(window, |item, cx| {
+            assert!(matches!(item.copy_feedback, Some((_, Color::Default))));
+            assert!(!item.is_dirty(cx));
+        });
+        let on_disk = tempfile::tempdir().expect("temporary pinned folder reader fixture");
+        for (path, bytes) in expected {
+            let exported = filesystem
+                .load_bytes(&destination.join(&path))
+                .await
+                .expect("exported folder entry");
+            assert_eq!(exported, bytes, "{}", path.display());
+            let target = on_disk.path().join(path);
+            std::fs::create_dir_all(target.parent().expect("exported fixture parent"))
+                .expect("create pinned fixture directory");
+            std::fs::write(target, exported)
+                .expect("inspect exact exported bytes with the pinned reader");
+        }
+        let original_reader = GddV1::open(on_disk.path())
+            .await
+            .expect("original Graphite folder reader opens the export");
+        assert_eq!(original_reader.manifest().document_id, 171);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source file remains exact"),
+            original.as_ref()
         );
     }
 
