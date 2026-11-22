@@ -11,6 +11,7 @@ path = "src/graphics_core.rs"
 [dependencies]
 graphite-document-container.workspace = true
 graphite-document-format.workspace = true
+graphite-document-graph-storage.workspace = true
 graphite-editor.workspace = true
 graphite-resource.workspace = true
 serde.workspace = true
@@ -42,7 +43,6 @@ zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate
 
 [dev-dependencies]
 base64.workspace = true
-graphite-document-graph-storage.workspace = true
 
 [package.metadata.graphite]
 source-revision = "28ed22824fae8828756f6f4163db62f3585f21e0"

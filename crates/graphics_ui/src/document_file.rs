@@ -985,6 +985,93 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_gdd_014_2_workspace_rejects_missing_historical_resource(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_graph_craft::document::NodeNetwork;
+        use graphite_resource::{ResourceHash, ResourceId, ResourceRegistry};
+
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            176,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("original Graphite working copy");
+        let store = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(
+                &NodeNetwork::default(),
+                &NoMetadata,
+                &ResourceRegistry::new(),
+                &store,
+            )
+            .expect("mount interaction");
+        let bytes = b"resource retained for redo";
+        let hash = ResourceHash::from(bytes.as_slice());
+        owner
+            .add_resource(ResourceId::from(14_u64), bytes)
+            .expect("pinned resource history");
+        owner.undo().expect("leave resource only in history");
+        let complete = owner
+            .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &store, None)
+            .await
+            .expect("complete original history archive");
+        owner
+            .remove_resource(&hash)
+            .expect("construct a missing-resource fixture");
+        let incomplete = owner
+            .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &store, None)
+            .await
+            .expect("source emits a history archive with the fixture bytes removed");
+
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let complete_path = PathBuf::from("/project/complete.gdd.zip");
+        let incomplete_path = PathBuf::from("/project/incomplete.gdd.zip");
+        filesystem
+            .write(&complete_path, &complete)
+            .await
+            .expect("valid source fixture");
+        filesystem
+            .write(&incomplete_path, &incomplete)
+            .await
+            .expect("incomplete source fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(complete_path, Default::default(), window, cx)
+            })
+            .await
+            .expect("open complete history archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        let rejected = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(incomplete_path.clone(), Default::default(), window, cx)
+            })
+            .await;
+        assert!(matches!(rejected, Err(error) if format!("{error:#}").contains(&hash.to_string())));
+        assert_eq!(
+            workspace.read_with(window, |workspace, cx| workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)),
+            Some(item)
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&incomplete_path)
+                .await
+                .expect("incomplete original is intact"),
+            incomplete
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_gdd_004_2_workspace_opens_read_only_graphite_archive(cx: &mut TestAppContext) {
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {

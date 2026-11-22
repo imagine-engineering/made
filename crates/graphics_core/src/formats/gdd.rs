@@ -18,6 +18,7 @@ use graphite_document_format::{
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
+use graphite_document_graph_storage::RegistryDelta;
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
@@ -469,15 +470,38 @@ async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddAr
         return Err(GddArchiveError::MissingDocument);
     }
     let document = GddV1::open_in(AnyContainer::Memory(working.clone()), layout).await?;
+    validate_embedded_resources(&document).await?;
+    Ok(InspectedGddV1 { entries, document })
+}
+
+async fn validate_embedded_resources(document: &GddV1) -> Result<(), GddArchiveError> {
+    let mut required = BTreeSet::new();
     for resource in document.registry().resources.values() {
         if resource.has_embedded_source() {
-            let hash = resource.hash.ok_or(GddArchiveError::UnresolvedResource)?;
-            if !document.has_resource(&hash).await {
-                return Err(GddArchiveError::InvalidResource(hash));
-            }
+            required.insert(resource.hash.ok_or(GddArchiveError::UnresolvedResource)?);
         }
     }
-    Ok(InspectedGddV1 { entries, document })
+    let session = document.session();
+    let history = session
+        .history()
+        .flat_map(|delta| [&delta.kind, &delta.reverse]);
+    let hot_log = session.hot_log().iter().map(|operation| &operation.op);
+    for operation in history.chain(hot_log) {
+        let entry = match operation {
+            RegistryDelta::AddResource { entry, .. } => entry,
+            RegistryDelta::RemoveResource { snapshot, .. } => snapshot,
+            _ => continue,
+        };
+        if entry.has_embedded_source() {
+            required.extend(entry.hash);
+        }
+    }
+    for hash in required {
+        if !document.has_resource(&hash).await {
+            return Err(GddArchiveError::InvalidResource(hash));
+        }
+    }
+    Ok(())
 }
 
 fn stage_zip(bytes: &[u8], budget: &GddArchiveBudget) -> Result<StagedArchive, GddArchiveError> {
@@ -1291,6 +1315,75 @@ mod tests {
                 open_gdd_zip(&preserved(&duplicate), budget()).await,
                 Err(GddArchiveError::Manifest(error)) if error.to_string().contains("duplicate object key")
             ));
+        });
+    }
+
+    #[test]
+    fn at_gra_gdd_014_1_requires_embedded_resources_for_saved_redo() {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_graph_craft::document::NodeNetwork;
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut source = document();
+            source
+                .commit_from_runtime(
+                    &NodeNetwork::default(),
+                    &NoMetadata,
+                    &ResourceRegistry::new(),
+                    &HashMapResourceStorage::new(),
+                )
+                .expect("commit the original mount interaction");
+            let id = ResourceId::from(35_u64);
+            let resource = b"bytes needed to restore the undone interaction";
+            let hash = ResourceHash::from(resource.as_slice());
+            source
+                .add_resource(id, resource)
+                .expect("record embedded source bytes");
+            source
+                .undo()
+                .expect("move the pinned cursor before the resource interaction");
+            assert!(!source.registry().resources.contains_key(&id));
+            let complete = export(&source, None).await;
+            let captured = open_gdd_archive(&complete, budget())
+                .await
+                .expect("history resources are intact");
+            assert!(!captured.document.registry().resources.contains_key(&id));
+            assert_eq!(
+                captured
+                    .read_entry(&GddV1Layout.resource_path(&hash))
+                    .expect("preserved historical bytes")
+                    .as_slice(),
+                resource
+            );
+            let mut original_reader = GddV1::open_from_archive(
+                &complete,
+                AnyContainer::Memory(MemoryBackend::new()),
+                GddV1Layout,
+            )
+            .await
+            .expect("reopen with original Graphite storage");
+            original_reader
+                .redo()
+                .expect("redo using the retained history");
+            assert_eq!(
+                original_reader
+                    .registry()
+                    .resources
+                    .get(&id)
+                    .and_then(|entry| entry.hash),
+                Some(hash)
+            );
+            assert!(original_reader.has_resource(&hash).await);
+
+            source
+                .remove_resource(&hash)
+                .expect("construct a missing historical resource fixture");
+            let missing = export(&source, None).await;
+            assert!(
+                matches!(open_gdd_archive(&missing, budget()).await, Err(GddArchiveError::InvalidResource(actual)) if actual == hash)
+            );
+            assert_eq!(complete, captured.original_bytes);
         });
     }
 
