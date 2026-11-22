@@ -143,3 +143,30 @@ With a fresh copy of the same fixture, run
 using the same test binary and flags. The queue test sets a profile override
 through **Task options**, removes and re-adds the last goal, then checks the
 ordered Maven process and the overridden effective model.
+
+## Mounted Maven source archive check
+
+Prepare two disposable Maven homes with the same warm Maven Dependency Plugin
+3.10.0 cache, pinned wrapper distribution, and Commons Lang 3.17.0 binary
+and sources. Omit only `commons-lang3-3.17.0-sources.jar` from the second
+copy. In each fixture root, run the same preparation script with
+`--source-archives`. Set `GROOVY_MAVEN_SOURCE_ROOT` to
+`$fixture/source-archive-project` and `GROOVY_MAVEN_SOURCE_SETTINGS` to
+`$fixture/settings with spaces.xml`. Set `MAVEN_USER_HOME` to the matching
+`$fixture/maven-home` and use the same pinned JDKs, JDTLS and loopback-only
+sandbox as above.
+
+Run the following tests separately with the populated and source-omitted
+fixtures, respectively.
+
+```sh
+<tasks_ui-test-binary> --ignored --exact --nocapture \
+  test_explorer::jvm_workflow::cached_maven_sources_are_reported_in_task_terminal
+<tasks_ui-test-binary> --ignored --exact --nocapture \
+  test_explorer::jvm_workflow::missing_maven_sources_are_reported_in_successful_task
+```
+
+Both tests select the provider-reported `resolve-sources` goal and verify
+the exact offline Task command. Maven can exit successfully in both cases.
+The populated fixture must list the `sources` classifier under resolved
+artifacts. The omitted fixture must report no resolved artifacts.

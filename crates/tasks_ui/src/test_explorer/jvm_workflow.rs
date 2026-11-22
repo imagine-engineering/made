@@ -1049,39 +1049,73 @@ async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestApp
 #[gpui::test]
 #[ignore = "requires a cached Maven Help goal, pinned Maven wrapper and pinned JDTLS"]
 async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAppContext) {
-    run_cached_maven_help_goals(MavenHelpRun::Selected, cx).await;
+    run_cached_maven_goals(MavenGoalRun::EffectivePom, cx).await;
 }
 
 #[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires cached Maven Help goals, pinned Maven wrapper and pinned JDTLS"]
 async fn cached_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut TestAppContext) {
-    run_cached_maven_help_goals(MavenHelpRun::Ordered, cx).await;
+    run_cached_maven_goals(MavenGoalRun::OrderedHelp, cx).await;
 }
 
 #[cfg(all(test, unix))]
-enum MavenHelpRun {
-    Selected,
-    Ordered,
+#[gpui::test]
+#[ignore = "requires a cached Maven Dependency goal, pinned Maven wrapper and pinned JDTLS"]
+async fn cached_maven_sources_are_reported_in_task_terminal(cx: &mut TestAppContext) {
+    run_cached_maven_goals(MavenGoalRun::ResolveSources { cached: true }, cx).await;
 }
 
 #[cfg(all(test, unix))]
-async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext) {
+#[gpui::test]
+#[ignore = "requires an offline Maven fixture with its source archive omitted"]
+async fn missing_maven_sources_are_reported_in_successful_task(cx: &mut TestAppContext) {
+    run_cached_maven_goals(MavenGoalRun::ResolveSources { cached: false }, cx).await;
+}
+
+#[cfg(all(test, unix))]
+enum MavenGoalRun {
+    EffectivePom,
+    OrderedHelp,
+    ResolveSources { cached: bool },
+}
+
+#[cfg(all(test, unix))]
+async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
     use futures::future::{Either, select};
     use jvm_ui::DependenciesPanel;
     use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
     use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 
+    let (plugin, version, root_key, settings_key, source, profile) = match run {
+        MavenGoalRun::ResolveSources { .. } => (
+            "maven-dependency-plugin",
+            "3.10.0",
+            "GROOVY_MAVEN_SOURCE_ROOT",
+            "GROOVY_MAVEN_SOURCE_SETTINGS",
+            "src/main/java/evidence/ArtifactProbe.java",
+            None,
+        ),
+        _ => (
+            "maven-help-plugin",
+            "3.5.2",
+            "GROOVY_EFFECTIVE_POM_ROOT",
+            "GROOVY_EFFECTIVE_POM_SETTINGS",
+            "src/main/java/evidence/EffectivePomProbe.java",
+            Some("evidence-selected"),
+        ),
+    };
     let goals: &[&str] = match run {
-        MavenHelpRun::Selected => &["effective-pom"],
-        MavenHelpRun::Ordered => &["active-profiles", "effective-pom"],
+        MavenGoalRun::EffectivePom => &["effective-pom"],
+        MavenGoalRun::OrderedHelp => &["active-profiles", "effective-pom"],
+        MavenGoalRun::ResolveSources { .. } => &["resolve-sources"],
     };
     let coordinates: Vec<_> = goals
         .iter()
-        .map(|goal| format!("org.apache.maven.plugins:maven-help-plugin:3.5.2:{goal}"))
+        .map(|goal| format!("org.apache.maven.plugins:{plugin}:{version}:{goal}"))
         .collect();
-    let root = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_ROOT");
-    let settings = cached_jvm_fixture_path("GROOVY_EFFECTIVE_POM_SETTINGS");
+    let root = cached_jvm_fixture_path(root_key);
+    let settings = cached_jvm_fixture_path(settings_key);
     let options = serde_json::json!({
         "autobuild": {"enabled": false},
         "configuration": {"maven": {"userSettings": settings}},
@@ -1100,10 +1134,7 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
     let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
     let (_source, _open_source) = project
         .update(cx, |project, cx| {
-            project.open_local_buffer_with_lsp(
-                root.join("src/main/java/evidence/EffectivePomProbe.java"),
-                cx,
-            )
+            project.open_local_buffer_with_lsp(root.join(source), cx)
         })
         .await
         .expect("Maven module source");
@@ -1112,16 +1143,16 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
         worktree_id,
         "pom.xml",
         |maven| {
-            maven.profiles.get("evidence-selected") == Some(&true)
-                && maven.plugins.iter().any(|plugin| {
-                    plugin.group_id == "org.apache.maven.plugins"
-                        && plugin.artifact_id == "maven-help-plugin"
-                        && plugin.version.as_deref() == Some("3.5.2")
-                        && !plugin.managed_only
-                        && plugin.goals_known
+            profile.is_none_or(|profile| maven.profiles.get(profile) == Some(&true))
+                && maven.plugins.iter().any(|candidate| {
+                    candidate.group_id == "org.apache.maven.plugins"
+                        && candidate.artifact_id == plugin
+                        && candidate.version.as_deref() == Some(version)
+                        && !candidate.managed_only
+                        && candidate.goals_known
                         && goals
                             .iter()
-                            .all(|name| plugin.goals.iter().any(|goal| goal.name == *name))
+                            .all(|name| candidate.goals.iter().any(|goal| goal.name == *name))
                 })
         },
         cx,
@@ -1152,12 +1183,22 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
                 .unwrap_or_else(|| panic!("the {goal} goal is selectable: {status:?}"));
             assert!(
                 row.secondary_label.as_deref().is_some_and(|label| {
-                    label.contains("run offline through Tasks")
+                    label.contains("offline through Tasks")
                         && !label.contains("execution unavailable")
                 }),
                 "the visible Maven goal description matches execution availability"
             );
             assert!(row.accessibility_label.contains("or Task options"));
+            if goal == "resolve-sources" {
+                let guidance =
+                    "Check resolved sources in the Task terminal even if Maven succeeds.";
+                assert!(row.accessibility_label.contains(guidance));
+                assert!(
+                    row.secondary_label
+                        .as_deref()
+                        .is_some_and(|label| label.contains(guidance))
+                );
+            }
             index
         });
         cx.dispatch_action(SelectFirst);
@@ -1167,16 +1208,14 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
         cx.update(|window, cx| window.draw(cx).clear(cx));
     };
     let output = root.join("target/groovy-effective.xml");
-    assert!(
-        !output.exists(),
-        "the fixture starts without an effective model"
-    );
+    if !matches!(run, MavenGoalRun::ResolveSources { .. }) {
+        assert!(
+            !output.exists(),
+            "the fixture starts without an effective model"
+        );
+    }
     match run {
-        MavenHelpRun::Selected => {
-            select_goal(cx, "effective-pom");
-            dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
-        }
-        MavenHelpRun::Ordered => {
+        MavenGoalRun::OrderedHelp => {
             select_goal(cx, "active-profiles");
             focus_control(
                 cx,
@@ -1238,6 +1277,13 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
             assert!(!output.exists(), "editing the queue does not start a Task");
             dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
         }
+        _ => {
+            let [goal] = goals else {
+                panic!("the fixture has exactly one goal");
+            };
+            select_goal(cx, goal);
+            dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+        }
     }
     let deadline = Instant::now() + Duration::from_secs(30);
     let terminal = loop {
@@ -1274,7 +1320,7 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
         .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-        if matches!(run, MavenHelpRun::Ordered) {
+        if matches!(run, MavenGoalRun::OrderedHelp) {
             arguments.extend(["--activate-profiles", "!evidence-selected"].map(str::to_owned));
         }
         arguments.extend(coordinates);
@@ -1301,40 +1347,65 @@ async fn run_cached_maven_help_goals(run: MavenHelpRun, cx: &mut TestAppContext)
     .await
     {
         Either::Left((result, _)) => result.expect("Maven exit status"),
-        Either::Right(_) => panic!("the Maven Effective POM Task did not finish"),
+        Either::Right(_) => panic!("the Maven Task did not finish"),
     };
     assert!(
         result.success(),
         "the Maven Task failed: {}",
         terminal.read_with(cx, |terminal, _| terminal.get_content())
     );
-    let effective = std::fs::read_to_string(output).expect("generated effective POM");
-    let (_, properties) = effective
-        .split_once("<properties>")
-        .expect("effective properties");
-    let (properties, _) = properties
-        .split_once("</properties>")
-        .expect("end effective properties");
     match run {
-        MavenHelpRun::Selected => {
-            assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));
+        MavenGoalRun::ResolveSources { cached } => {
+            let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+            let (_, artifacts) = transcript
+                .split_once("The following files have been resolved:")
+                .expect("Maven's resolved artifact report");
+            let (resolved, unresolved) = artifacts
+                .split_once("The following files have NOT been resolved:")
+                .expect("Maven's unresolved artifact report");
+            assert!(transcript.contains("BUILD SUCCESS"));
+            let source = "org.apache.commons:commons-lang3:jar:sources:3.17.0";
+            if cached {
+                assert!(resolved.contains(source), "{transcript}");
+            } else {
+                assert!(resolved.contains("none"), "{transcript}");
+                assert!(!transcript.contains(source), "{transcript}");
+                assert!(
+                    unresolved.contains("org.apache.commons:commons-lang3:jar:3.17.0:compile"),
+                    "{transcript}"
+                );
+            }
             eprintln!(
-                "Mounted Maven ran the pinned Effective POM goal through the offline Task terminal with the selected settings profile"
+                "Mounted Maven reported cached sources: {cached}, with a successful offline Task"
             );
         }
-        MavenHelpRun::Ordered => {
-            let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
-            let profile_report = transcript
-                .find("Active profile report written to:")
-                .expect("active profiles ran in Maven");
-            let effective_pom = transcript
-                .find("Effective-POM written to:")
-                .expect("effective POM ran in Maven");
-            assert!(profile_report < effective_pom);
-            assert!(properties.contains("<effective.fixture>base</effective.fixture>"));
-            eprintln!(
-                "Mounted Maven ran active-profiles before effective-pom in one offline Task and applied the profile override"
-            );
+        _ => {
+            let effective = std::fs::read_to_string(output).expect("generated effective POM");
+            let (_, properties) = effective
+                .split_once("<properties>")
+                .expect("effective properties");
+            let (properties, _) = properties
+                .split_once("</properties>")
+                .expect("end effective properties");
+            if matches!(run, MavenGoalRun::OrderedHelp) {
+                assert!(properties.contains("<effective.fixture>base</effective.fixture>"));
+                let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+                let profile_report = transcript
+                    .find("Active profile report written to:")
+                    .expect("active profiles ran in Maven");
+                let effective_pom = transcript
+                    .find("Effective-POM written to:")
+                    .expect("effective POM ran in Maven");
+                assert!(profile_report < effective_pom);
+                eprintln!(
+                    "Mounted Maven ran active-profiles before effective-pom in one offline Task and applied the profile override"
+                );
+            } else {
+                assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));
+                eprintln!(
+                    "Mounted Maven ran the pinned Effective POM goal through the offline Task terminal with the selected settings profile"
+                );
+            }
         }
     }
 }

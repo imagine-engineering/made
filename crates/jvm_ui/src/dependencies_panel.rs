@@ -7818,12 +7818,24 @@ fn annotate_operation_rows(
         }
     };
     for row in rows {
-        if selections.contains_key(&row.id) {
+        if let Some(receipt) = selections.get(&row.id) {
             describe_run(
                 &mut row.accessibility_label,
                 "select this row and use Run selected offline operation or Task options",
             );
-            if let Some(detail) = &mut row.secondary_label {
+            if matches!(
+                receipt.operations.as_slice(),
+                [JvmBuildOperation::MavenGoal { group, artifact, goal, .. }]
+                    if group == "org.apache.maven.plugins"
+                        && artifact == "maven-dependency-plugin"
+                        && goal == "resolve-sources"
+            ) {
+                let source_results =
+                    "Check resolved sources in the Task terminal even if Maven succeeds.";
+                row.accessibility_label.push_str(". ");
+                row.accessibility_label.push_str(source_results);
+                row.secondary_label = Some(format!("Run offline through Tasks. {source_results}"));
+            } else if let Some(detail) = &mut row.secondary_label {
                 describe_run(detail, "run offline through Tasks");
             }
         }
