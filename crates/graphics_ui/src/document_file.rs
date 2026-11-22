@@ -13,9 +13,9 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddHistoryDirection,
-        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddSavedView, InspectedGddV1,
-        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNetwork, GddGraphNode,
+        GddHistoryDirection, GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddSavedView,
+        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -454,12 +454,14 @@ enum NodeCatalogPanel {
 enum NodeCopyPanel {
     Closed,
     Loading { _task: Task<()> },
-    Ready(NodeCopyForm),
+    Ready(Box<NodeCopyForm>),
     Failed(SharedString),
 }
 
 struct NodeCopyForm {
     nodes: Vec<GddGraphNode>,
+    networks: Vec<GddGraphNetwork>,
+    active_network: Option<usize>,
     selected: Option<usize>,
     name: Entity<Editor>,
     value: Entity<Editor>,
@@ -470,6 +472,22 @@ struct NodeCopyForm {
 impl NodeCopyForm {
     fn selected_node(&self) -> Option<&GddGraphNode> {
         self.selected.and_then(|index| self.nodes.get(index))
+    }
+
+    fn active_network(&self) -> Option<&GddGraphNetwork> {
+        self.active_network
+            .and_then(|index| self.networks.get(index))
+    }
+
+    fn includes_node(&self, node: &GddGraphNode) -> bool {
+        self.active_network()
+            .is_none_or(|network| network.id == node.network_id())
+    }
+
+    fn select_network(&mut self, index: Option<usize>) {
+        self.active_network = index;
+        self.selected = None;
+        self.output_preview = NodeOutputPreview::Hidden;
     }
 }
 
@@ -507,7 +525,7 @@ enum GraphiteCopy {
         position: [i32; 2],
     },
     EditNode {
-        node: GddGraphNode,
+        node: Box<GddGraphNode>,
         change: NodeCopyChange,
     },
 }
@@ -752,23 +770,25 @@ impl GraphiteDocumentItem {
                     return;
                 };
                 let contents = contents.clone();
-                let load = cx.background_spawn(async move { contents.graph_nodes().await });
+                let load = cx.background_spawn(async move { contents.graph_inspection().await });
                 self.node_copy = NodeCopyPanel::Loading {
                     _task: cx.spawn_in(window, async move |item, cx| {
                         let loaded = load.await;
                         if let Err(error) = item.update_in(cx, |item, window, cx| {
                             item.node_copy = match loaded {
-                                Ok(nodes) if nodes.is_empty() => {
+                                Ok(graph) if graph.nodes.is_empty() => {
                                     NodeCopyPanel::Failed("This graph has no nodes.".into())
                                 }
-                                Ok(nodes) => NodeCopyPanel::Ready(NodeCopyForm {
-                                    nodes,
+                                Ok(graph) => NodeCopyPanel::Ready(Box::new(NodeCopyForm {
+                                    nodes: graph.nodes,
+                                    networks: graph.networks,
+                                    active_network: None,
                                     selected: None,
                                     name: cx.new(|cx| Editor::single_line(window, cx)),
                                     value: cx.new(|cx| Editor::single_line(window, cx)),
                                     position: cx.new(|cx| Editor::single_line(window, cx)),
                                     output_preview: NodeOutputPreview::Hidden,
-                                }),
+                                })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
                             cx.notify();
@@ -786,7 +806,11 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
-        if let Some(node) = form.nodes.get(index) {
+        if let Some(node) = form
+            .nodes
+            .get(index)
+            .filter(|node| form.includes_node(node))
+        {
             if form.selected != Some(index) {
                 form.output_preview = NodeOutputPreview::Hidden;
             }
@@ -803,6 +827,47 @@ impl GraphiteDocumentItem {
                     editor.set_text(format!("{x}, {y}"), window, cx)
                 });
             }
+            cx.notify();
+        }
+    }
+
+    fn enter_copy_network(&mut self, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let Some(nested) = form.selected_node().and_then(GddGraphNode::nested_network) else {
+            return;
+        };
+        if let Some(index) = form
+            .networks
+            .iter()
+            .position(|network| network.id == nested)
+        {
+            form.select_network(Some(index));
+            cx.notify();
+        }
+    }
+
+    fn exit_copy_network(&mut self, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let Some(parent) = form.active_network().and_then(|network| network.parent) else {
+            return;
+        };
+        if let Some(index) = form
+            .networks
+            .iter()
+            .position(|network| network.id == parent)
+        {
+            form.select_network(Some(index));
+            cx.notify();
+        }
+    }
+
+    fn show_all_graph_nodes(&mut self, cx: &mut Context<Self>) {
+        if let NodeCopyPanel::Ready(form) = &mut self.node_copy {
+            form.select_network(None);
             cx.notify();
         }
     }
@@ -906,7 +971,7 @@ impl GraphiteDocumentItem {
             parse_graph_grid_position(&form.position.read(cx).text(cx)).and_then(|position| {
                 node.validate_grid_move(position)?;
                 Ok(GraphiteCopy::EditNode {
-                    node: node.clone(),
+                    node: Box::new(node.clone()),
                     change: NodeCopyChange::GridPosition(position),
                 })
             });
@@ -932,7 +997,7 @@ impl GraphiteDocumentItem {
         match original_value.parse_like(&form.value.read(cx).text(cx)) {
             Ok(value) => {
                 let request = GraphiteCopy::EditNode {
-                    node: node.clone(),
+                    node: Box::new(node.clone()),
                     change: NodeCopyChange::NumericInput(value),
                 };
                 self.save_copy(request, window, cx);
@@ -953,7 +1018,7 @@ impl GraphiteDocumentItem {
         };
         if let Some(exposed) = node.numeric_input_exposed() {
             let request = GraphiteCopy::EditNode {
-                node: node.clone(),
+                node: Box::new(node.clone()),
                 change: NodeCopyChange::NumericInputExposure(!exposed),
             };
             self.save_copy(request, window, cx);
@@ -969,7 +1034,7 @@ impl GraphiteDocumentItem {
             .filter(|node| node.has_numeric_connection())
         {
             let request = GraphiteCopy::EditNode {
-                node: node.clone(),
+                node: Box::new(node.clone()),
                 change: NodeCopyChange::DisconnectNumericInput,
             };
             self.save_copy(request, window, cx);
@@ -1017,7 +1082,7 @@ impl GraphiteDocumentItem {
                             item.update(cx, |item, cx| {
                                 item.save_copy(
                                     GraphiteCopy::EditNode {
-                                        node: target.clone(),
+                                        node: Box::new(target.clone()),
                                         change: NodeCopyChange::ConnectNumericInput {
                                             source: Box::new(source.clone()),
                                             previous: previous.clone().map(Box::new),
@@ -1070,7 +1135,12 @@ impl GraphiteDocumentItem {
             NodeCopyPanel::Ready(form) => {
                 let item = cx.entity().downgrade();
                 let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
-                    for (index, node) in form.nodes.iter().enumerate() {
+                    for (index, node) in form
+                        .nodes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, node)| form.includes_node(node))
+                    {
                         let item = item.clone();
                         let label = SharedString::from(node.label().to_owned());
                         menu = menu.custom_entry(
@@ -1095,8 +1165,36 @@ impl GraphiteDocumentItem {
                     menu
                 });
                 let selected = form.selected_node();
+                let has_nodes = form.nodes.iter().any(|node| form.includes_node(node));
                 panel
-                    .child(
+                    .when_some(form.active_network(), |panel, network| {
+                        panel
+                            .child(Label::new(format!(
+                                "{} · Imports {} · Exports {}",
+                                network.name, network.import_count, network.export_count
+                            )))
+                            .child(
+                                h_flex()
+                                    .gap_2()
+                                    .when(network.parent.is_some(), |bar| {
+                                        bar.child(
+                                            div()
+                                                .debug_selector(|| "GRAPHITE-GDD-PARENT-NETWORK".into())
+                                                .child(Button::new("graphite-gdd-parent-network", "Parent Network").on_click(
+                                                    cx.listener(|item, _, _, cx| item.exit_copy_network(cx)),
+                                                )),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .debug_selector(|| "GRAPHITE-GDD-ALL-GRAPH-NODES".into())
+                                            .child(Button::new("graphite-gdd-all-graph-nodes", "Show All Nodes").on_click(
+                                                cx.listener(|item, _, _, cx| item.show_all_graph_nodes(cx)),
+                                            )),
+                                    ),
+                            )
+                    })
+                    .when(has_nodes, |panel| panel.child(
                         div()
                             .debug_selector(|| "GRAPHITE-GDD-NODE-COPY-CHOOSE".into())
                             .child(DropdownMenu::new(
@@ -1107,7 +1205,17 @@ impl GraphiteDocumentItem {
                                 ),
                                 menu,
                             )),
-                    )
+                    ))
+                    .when(!has_nodes, |panel| panel.child(Label::new("This network has no nodes.")))
+                    .when(selected.is_some_and(|node| node.nested_network().is_some()), |panel| {
+                        panel.child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-GDD-ENTER-NETWORK".into())
+                                .child(Button::new("graphite-gdd-enter-network", "Enter Network").on_click(
+                                    cx.listener(|item, _, _, cx| item.enter_copy_network(cx)),
+                                )),
+                        )
+                    })
                     .when_some(selected, |panel, selected| {
                         let pin_label = if selected.is_pinned() {
                             "Save Unpinned Folder"
@@ -1139,7 +1247,7 @@ impl GraphiteDocumentItem {
                                                 };
                                                 if let Some(node) = form.selected_node() {
                                                     let request = GraphiteCopy::EditNode {
-                                                        node: node.clone(),
+                                                        node: Box::new(node.clone()),
                                                         change: NodeCopyChange::Rename(
                                                             form.name.read(cx).text(cx),
                                                         ),
@@ -1163,7 +1271,7 @@ impl GraphiteDocumentItem {
                                                 };
                                                 if let Some(node) = form.selected_node() {
                                                     let request = GraphiteCopy::EditNode {
-                                                        node: node.clone(),
+                                                        node: Box::new(node.clone()),
                                                         change: NodeCopyChange::Pin(
                                                             !node.is_pinned(),
                                                         ),
@@ -1194,7 +1302,7 @@ impl GraphiteDocumentItem {
                                                 {
                                                     item.save_copy(
                                                         GraphiteCopy::EditNode {
-                                                            node: node.clone(),
+                                                            node: Box::new(node.clone()),
                                                             change: NodeCopyChange::DuplicateNumeric,
                                                         },
                                                         window,
@@ -1226,7 +1334,7 @@ impl GraphiteDocumentItem {
                                                 {
                                                     item.save_copy(
                                                         GraphiteCopy::EditNode {
-                                                            node: node.clone(),
+                                                            node: Box::new(node.clone()),
                                                             change: NodeCopyChange::DeleteIsolated,
                                                         },
                                                         window,
@@ -1275,7 +1383,7 @@ impl GraphiteDocumentItem {
                                                                     .filter(|node| node.can_move_pinned(movement))
                                                                 {
                                                                     let request = GraphiteCopy::EditNode {
-                                                                        node: node.clone(),
+                                                                        node: Box::new(node.clone()),
                                                                         change: NodeCopyChange::MovePinned(movement),
                                                                     };
                                                                     item.save_copy(request, window, cx);
@@ -2427,6 +2535,246 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    async fn graph_navigation_archive() -> (Vec<u8>, usize) {
+        use graphite_document_graph_storage::NodeMetadataSource;
+        use graphite_graph_craft::{
+            ProtoNodeIdentifier, concrete,
+            document::{
+                DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+                value::TaggedValue,
+            },
+        };
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::{math_nodes::absolute_value, ops::passthrough};
+
+        struct Names;
+
+        impl NodeMetadataSource for Names {
+            fn display_name(&self, _: &[NodeId], local_id: NodeId) -> Option<&str> {
+                (local_id == NodeId(7)).then_some("Repeated value")
+            }
+        }
+
+        let proto = |identifier, inputs| DocumentNode {
+            implementation: DocumentNodeImplementation::ProtoNode(identifier),
+            inputs,
+            ..Default::default()
+        };
+        let nested = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    proto(
+                        absolute_value::IDENTIFIER,
+                        vec![NodeInput::import(concrete!(f64), 0)],
+                    ),
+                ),
+                (
+                    NodeId(9),
+                    proto(
+                        absolute_value::IDENTIFIER,
+                        vec![NodeInput::import(concrete!(f64), 1)],
+                    ),
+                ),
+                (
+                    NodeId(10),
+                    proto(
+                        passthrough::IDENTIFIER,
+                        vec![NodeInput::value(
+                            TaggedValue::String("literal".into()),
+                            false,
+                        )],
+                    ),
+                ),
+                (
+                    NodeId(11),
+                    proto(
+                        absolute_value::IDENTIFIER,
+                        vec![NodeInput::node(NodeId(10), 0)],
+                    ),
+                ),
+                (
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(7), 0), NodeInput::node(NodeId(9), 0)],
+            ..Default::default()
+        };
+        let root = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    proto(
+                        ProtoNodeIdentifier::with_owned_string(
+                            "graphite_fixture::Unregistered".into(),
+                        ),
+                        Vec::new(),
+                    ),
+                ),
+                (
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(nested),
+                        inputs: vec![
+                            NodeInput::value(TaggedValue::Number(-17.), true),
+                            NodeInput::value(TaggedValue::Number(23.), true),
+                        ],
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(24), 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            622,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("source GDD");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&root, &Names, &ResourceRegistry::new(), &resources)
+            .expect("nested fixture with an incompatible link and unknown proto node");
+        let source = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        (source, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_016_017_2_workspace_enters_exact_nested_network_and_returns_to_parent(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/networks.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open nested source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the graph picker");
+            };
+            let network = form.active_network().expect("addressed nested network");
+            assert_eq!((network.import_count, network.export_count), (2, 2));
+            assert!(form.selected_node().is_none());
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| form.includes_node(node))
+                    .count(),
+                5
+            );
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| node.name() == "Repeated value" && form.includes_node(node))
+                    .count(),
+                1
+            );
+        });
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-0")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
+        paint(window);
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-CHOOSE")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-PARENT-NETWORK");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-CHOOSE")
+                .is_some()
+        );
+        click(window, "GRAPHITE-GDD-PARENT-NETWORK");
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the root graph picker");
+            };
+            let root = form.active_network().expect("root scope");
+            assert_eq!(root.parent, None);
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| form.includes_node(node))
+                    .count(),
+                2
+            );
+            assert!(!item.is_dirty(cx));
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected unchanged source document");
+            };
+            assert_eq!(contents.history_len(), original_history);
+        });
+        assert!(window.debug_bounds("GRAPHITE-GDD-PARENT-NETWORK").is_none());
+        click(window, "GRAPHITE-GDD-ALL-GRAPH-NODES");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-0")
+                .is_some()
+        );
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-NODE-COPY-ITEM-6")
+                .is_some()
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
     }
 
     #[gpui::test]

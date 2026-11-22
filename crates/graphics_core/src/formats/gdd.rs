@@ -127,6 +127,8 @@ pub enum GddArchiveError {
     IncompleteHistoryStep,
     #[error("The selected node belongs to an earlier Graphite snapshot. Select the node again.")]
     StaleGraphNode,
+    #[error("The Graphite graph is missing a saved network identity.")]
+    MissingGraphNetwork,
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
     #[error("The Graphite node already has the requested pin state.")]
@@ -277,12 +279,27 @@ pub struct GddNetworkView {
     pub previewing: Previewing,
 }
 
+pub struct GddGraphInspection {
+    pub nodes: Vec<GddGraphNode>,
+    pub networks: Vec<GddGraphNetwork>,
+}
+
+pub struct GddGraphNetwork {
+    pub id: NetworkId,
+    pub parent: Option<NetworkId>,
+    pub name: String,
+    pub import_count: usize,
+    pub export_count: usize,
+}
+
 #[derive(Clone)]
 pub struct GddGraphNode {
     snapshot: Arc<()>,
     storage_id: StorageNodeId,
     local_id: NodeId,
     network_path: Vec<NodeId>,
+    network_id: NetworkId,
+    nested_network: Option<NetworkId>,
     label: String,
     name: String,
     pinned: bool,
@@ -426,6 +443,14 @@ pub enum GddPinnedNodeMove {
 }
 
 impl GddGraphNode {
+    pub fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    pub fn nested_network(&self) -> Option<NetworkId> {
+        self.nested_network
+    }
+
     pub fn label(&self) -> &str {
         &self.label
     }
@@ -660,27 +685,65 @@ impl InspectedGddV1 {
     }
 
     pub async fn graph_nodes(&self) -> Result<Vec<GddGraphNode>, GddArchiveError> {
+        Ok(self.graph_inspection().await?.nodes)
+    }
+
+    pub async fn graph_inspection(&self) -> Result<GddGraphInspection, GddArchiveError> {
         let graph = self.runtime_graph().await?;
+        let network_ids = network_ids_from_entries(&graph.networks);
         let mut nodes: Vec<_> = graph
             .nodes
             .iter()
-            .map(|node| GddGraphNode {
-                snapshot: self.snapshot.clone(),
-                storage_id: node.storage_id,
-                local_id: node.local_id,
-                network_path: node.network_path.clone(),
-                label: String::new(),
-                name: node.display_name.clone().unwrap_or_default(),
-                pinned: node.pinned,
-                pinned_order: None,
-                numeric_input: None,
-                can_delete_in_copy: false,
-                can_duplicate_in_copy: false,
-                can_preview_numeric_output: false,
-                grid_position: None,
+            .map(|node| {
+                let mut owned_path = node.network_path.clone();
+                owned_path.push(node.local_id);
+                Ok(GddGraphNode {
+                    snapshot: self.snapshot.clone(),
+                    storage_id: node.storage_id,
+                    local_id: node.local_id,
+                    network_path: node.network_path.clone(),
+                    network_id: *network_ids
+                        .get(&node.network_path)
+                        .ok_or(GddArchiveError::MissingGraphNetwork)?,
+                    nested_network: network_ids.get(&owned_path).copied(),
+                    label: String::new(),
+                    name: node.display_name.clone().unwrap_or_default(),
+                    pinned: node.pinned,
+                    pinned_order: None,
+                    numeric_input: None,
+                    can_delete_in_copy: false,
+                    can_duplicate_in_copy: false,
+                    can_preview_numeric_output: false,
+                    grid_position: None,
+                })
             })
-            .collect();
+            .collect::<Result<_, GddArchiveError>>()?;
         let mut interface = graph.into_interface()?;
+        let mut network_paths = network_ids.iter().collect::<Vec<_>>();
+        network_paths.sort_unstable_by_key(|(path, _)| *path);
+        let networks = network_paths
+            .into_iter()
+            .map(|(path, &id)| {
+                let (name, parent) = match path.split_last() {
+                    Some((node, parent_path)) => (
+                        interface.display_name(node, parent_path),
+                        Some(
+                            *network_ids
+                                .get(parent_path)
+                                .ok_or(GddArchiveError::MissingGraphNetwork)?,
+                        ),
+                    ),
+                    None => ("Root graph".to_owned(), None),
+                };
+                Ok(GddGraphNetwork {
+                    id,
+                    parent,
+                    name,
+                    import_count: interface.number_of_imports(path),
+                    export_count: interface.number_of_exports(path),
+                })
+            })
+            .collect::<Result<_, GddArchiveError>>()?;
         nodes.sort_by(|left, right| {
             left.network_path
                 .cmp(&right.network_path)
@@ -736,7 +799,7 @@ impl InspectedGddV1 {
                     .map(|position| position.to_array());
             }
         }
-        Ok(nodes)
+        Ok(GddGraphInspection { nodes, networks })
     }
 
     pub async fn insert_root_numeric_node_in_copy(
@@ -3015,6 +3078,34 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_016_017_1_graph_inspection_retains_stable_network_ownership() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let inspection = original.graph_inspection().await.expect("inspection");
+            let [root, nested] = inspection.networks.as_slice() else {
+                panic!("expected the root and one nested network");
+            };
+            assert_eq!(root.id, ROOT_NETWORK);
+            assert_eq!(root.parent, None);
+            assert_eq!(root.import_count, 0);
+            assert_eq!(root.export_count, 1);
+            assert_eq!(nested.parent, Some(root.id));
+            assert_ne!(nested.id, root.id);
+            let [root_value, owner, nested_value, ..] = inspection.nodes.as_slice() else {
+                panic!("expected the network owner and repeated local IDs");
+            };
+            assert_eq!(root_value.local_id, nested_value.local_id);
+            assert_eq!(owner.network_id(), root.id);
+            assert_eq!(owner.nested_network(), Some(nested.id));
+            assert_eq!(root_value.network_id(), root.id);
+            assert_eq!(nested_value.network_id(), nested.id);
+            assert_eq!(nested_value.nested_network(), None);
+            assert_eq!(original.original_bytes(), bytes.as_ref());
         });
     }
 
