@@ -567,8 +567,15 @@ impl NetworkPortKind {
 
 #[derive(Clone, Copy)]
 enum NetworkPortChange {
-    Remove { kind: NetworkPortKind, index: usize },
-    MoveImport { from: usize, to: usize },
+    Remove {
+        kind: NetworkPortKind,
+        index: usize,
+    },
+    Move {
+        kind: NetworkPortKind,
+        from: usize,
+        to: usize,
+    },
 }
 
 enum NodeCopyChange {
@@ -1347,14 +1354,14 @@ impl GraphiteDocumentItem {
                             .when(network.can_extend_ports_in_copy() && self.copy_task.is_none(), |panel| {
                                 panel.child(h_flex().gap_2().flex_wrap().children(
                                     [
-                                        (NetworkPortKind::Import, "Import", "GRAPHITE-GDD-REMOVE-IMPORT"),
-                                        (NetworkPortKind::Export, "Export", "GRAPHITE-GDD-REMOVE-EXPORT"),
-                                    ].into_iter().filter_map(|(kind, noun, selector)| {
+                                        (NetworkPortKind::Import, "Import", "GRAPHITE-GDD-REMOVE-IMPORT", "GRAPHITE-GDD-MOVE-IMPORT"),
+                                        (NetworkPortKind::Export, "Export", "GRAPHITE-GDD-REMOVE-EXPORT", "GRAPHITE-GDD-MOVE-EXPORT"),
+                                    ].into_iter().filter_map(|(kind, noun, selector, move_selector)| {
                                         let count = kind.count(network);
                                         if count == 0 {
                                             return None;
                                         }
-                                        let can_move = matches!(kind, NetworkPortKind::Import) && count > 1;
+                                        let can_move = count > 1;
                                         let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
                                             let network = Arc::new(network.clone());
                                             for index in 0..count {
@@ -1371,11 +1378,11 @@ impl GraphiteDocumentItem {
                                                     (index.checked_sub(1), "Up", "UP"),
                                                     ((index + 1 < count).then_some(index + 1), "Down", "DOWN"),
                                                 ].into_iter().filter_map(|(target, direction, selector_suffix)| {
-                                                    let target = target.filter(|_| can_move)?;
+                                                    let target = target?;
                                                     Some((
-                                                        NetworkPortChange::MoveImport { from: index, to: target },
+                                                        NetworkPortChange::Move { kind, from: index, to: target },
                                                         format!("Move {port} {direction}"),
-                                                        format!("GRAPHITE-GDD-MOVE-IMPORT-{index}-{selector_suffix}"),
+                                                        format!("{move_selector}-{index}-{selector_suffix}"),
                                                     ))
                                                 });
                                                 for (change, label, selector) in remove.chain(move_targets) {
@@ -1900,9 +1907,21 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Removed export in",
                     GraphiteCopy::EditNetworkPort {
-                        change: NetworkPortChange::MoveImport { .. },
+                        change:
+                            NetworkPortChange::Move {
+                                kind: NetworkPortKind::Import,
+                                ..
+                            },
                         ..
                     } => "Reordered imports in",
+                    GraphiteCopy::EditNetworkPort {
+                        change:
+                            NetworkPortChange::Move {
+                                kind: NetworkPortKind::Export,
+                                ..
+                            },
+                        ..
+                    } => "Reordered exports in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -2130,9 +2149,27 @@ impl GraphiteDocumentItem {
                                             )
                                             .await?
                                     }
-                                    NetworkPortChange::MoveImport { from, to } => {
+                                    NetworkPortChange::Move {
+                                        kind: NetworkPortKind::Import,
+                                        from,
+                                        to,
+                                    } => {
                                         archive
                                             .move_nested_network_import_in_copy(
+                                                &network,
+                                                from,
+                                                to,
+                                                ARCHIVE_BUDGET,
+                                            )
+                                            .await?
+                                    }
+                                    NetworkPortChange::Move {
+                                        kind: NetworkPortKind::Export,
+                                        from,
+                                        to,
+                                    } => {
+                                        archive
+                                            .move_nested_network_export_in_copy(
                                                 &network,
                                                 from,
                                                 to,
@@ -2905,6 +2942,17 @@ mod tests {
                     None
                 }
             }
+
+            fn output_names(&self, path: &[NodeId], local_id: NodeId) -> Vec<String> {
+                if path.is_empty() && local_id == NodeId(24) {
+                    vec![
+                        "First numeric output".into(),
+                        "Second numeric output".into(),
+                    ]
+                } else {
+                    Vec::new()
+                }
+            }
         }
 
         let proto = |identifier, inputs| DocumentNode {
@@ -3199,12 +3247,41 @@ mod tests {
     async fn at_gra_graph_025_2_workspace_reorders_named_imports_in_a_folder_copy(
         cx: &mut TestAppContext,
     ) {
+        verify_network_port_reorder(cx, NetworkPortKind::Import).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_026_2_workspace_reorders_named_exports_in_a_folder_copy(
+        cx: &mut TestAppContext,
+    ) {
+        verify_network_port_reorder(cx, NetworkPortKind::Export).await;
+    }
+
+    async fn verify_network_port_reorder(cx: &mut TestAppContext, kind: NetworkPortKind) {
+        let (menu, move_up, move_down, first, second, added_history) = match kind {
+            NetworkPortKind::Import => (
+                "GRAPHITE-GDD-REMOVE-IMPORT",
+                "GRAPHITE-GDD-MOVE-IMPORT-1-UP",
+                "GRAPHITE-GDD-MOVE-IMPORT-0-DOWN",
+                "First numeric input",
+                "Second numeric input",
+                3,
+            ),
+            NetworkPortKind::Export => (
+                "GRAPHITE-GDD-REMOVE-EXPORT",
+                "GRAPHITE-GDD-MOVE-EXPORT-1-UP",
+                "GRAPHITE-GDD-MOVE-EXPORT-0-DOWN",
+                "First numeric output",
+                "Second numeric output",
+                4,
+            ),
+        };
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
         });
-        let source_path = PathBuf::from("/project/reorder-imports.gdd.zip");
+        let source_path = PathBuf::from("/project/reorder-ports.gdd.zip");
         filesystem
             .write(&source_path, &original)
             .await
@@ -3226,21 +3303,21 @@ mod tests {
                 panic!("expected scoped graph");
             };
             let network = form.active_network().expect("original nested network");
-            assert_eq!(network.import_name(0), Some("First numeric input"));
-            assert_eq!(network.import_name(1), Some("Second numeric input"));
+            assert_eq!(kind.name(network, 0), Some(first));
+            assert_eq!(kind.name(network, 1), Some(second));
             network.id
         });
-        click(window, "GRAPHITE-GDD-REMOVE-IMPORT");
+        click(window, menu);
         paint(window);
-        click(window, "GRAPHITE-GDD-MOVE-IMPORT-1-UP");
+        click(window, move_up);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
-        click(window, "GRAPHITE-GDD-REMOVE-IMPORT");
+        click(window, menu);
         paint(window);
-        click(window, "GRAPHITE-GDD-MOVE-IMPORT-0-DOWN");
-        let destination = PathBuf::from("/project/moved-import.gdd");
+        click(window, move_down);
+        let destination = PathBuf::from("/project/moved-port.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
         window.dispatch_action(OpenGraphiteFolder);
@@ -3268,11 +3345,11 @@ mod tests {
             .iter()
             .find(|network| network.id == network_id)
             .expect("same nested network identity");
-        assert_eq!(network.import_name(0), Some("Second numeric input"));
-        assert_eq!(network.import_name(1), Some("First numeric input"));
+        assert_eq!(kind.name(network, 0), Some(second));
+        assert_eq!(kind.name(network, 1), Some(first));
         assert_eq!(network.import_count, 2);
         assert_eq!(network.export_count, 2);
-        assert_eq!(contents.history_len(), original_history + 3);
+        assert_eq!(contents.history_len(), original_history + added_history);
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
