@@ -25,6 +25,7 @@ use graphite_document_graph_storage::{
     NodeMetadataEntry, PeerId, ROOT_NETWORK, Registry, RegistryDelta, from_runtime,
     to_runtime::ConversionError,
 };
+use graphite_editor::messages::clipboard::utility_types::ClipboardItem;
 pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
@@ -32,7 +33,7 @@ use graphite_editor::messages::portfolio::document::{
     utility_types::{
         misc::PTZ,
         network_interface::{
-            InputConnector, NavigationMetadata, NodeNetworkInterface, NodeTemplate,
+            InputConnector, NavigationMetadata, NodeNetworkInterface, NodePosition, NodeTemplate,
             NodeTemplateImplementation, NodeTypePersistentMetadata, OutputConnector, Previewing,
             editor_delta::{
                 ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
@@ -170,6 +171,14 @@ pub enum GddArchiveError {
     UnsupportedGraphWireInsertion,
     #[error("Graphite could not type-check the inserted node on this wire. {0}")]
     GraphWireInsertionTypeMismatch(String),
+    #[error("Select supported numeric nodes in one Graphite network.")]
+    UnsupportedGraphClipboardSelection,
+    #[error("The clipboard does not contain an eligible Graphite numeric node group.")]
+    UnsupportedGraphClipboard,
+    #[error("Could not encode or decode the Graphite clipboard. {0}")]
+    GraphClipboardFormat(serde_json::Error),
+    #[error("Graphite could not type-check the pasted node group. {0}")]
+    GraphClipboardTypeMismatch(String),
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
     #[error("The Graphite node already has the requested pin state.")]
@@ -482,6 +491,7 @@ pub struct GddGraphNode {
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
     can_supply_numeric_export: bool,
+    can_copy_graph_node: bool,
     grid_position: Option<[i32; 2]>,
 }
 
@@ -667,6 +677,10 @@ impl GddGraphNode {
 
     pub fn can_preview_numeric_output(&self) -> bool {
         self.can_preview_numeric_output
+    }
+
+    pub fn can_copy_graph_node(&self) -> bool {
+        self.can_copy_graph_node
     }
 
     pub fn validate_grid_move(&self, destination: [i32; 2]) -> Result<(), GddArchiveError> {
@@ -912,6 +926,7 @@ impl InspectedGddV1 {
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
                     can_supply_numeric_export: false,
+                    can_copy_graph_node: false,
                     grid_position: None,
                 })
             })
@@ -1034,6 +1049,12 @@ impl InspectedGddV1 {
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
                 && interface.number_of_outputs(&node.local_id, path) == 1;
+            node.can_copy_graph_node = node.can_supply_numeric_export
+                && interface
+                    .position(&node.local_id, path)
+                    .is_some_and(|position| {
+                        position.x.checked_add(2).is_some() && position.y.checked_add(2).is_some()
+                    });
             node.can_duplicate_in_copy = matches!(
                 node.numeric_input,
                 Some(GddNumericInput::Literal(_) | GddNumericInput::Connected { .. })
@@ -2217,6 +2238,171 @@ impl InspectedGddV1 {
                 .is_some_and(|node| node.persistent_metadata == metadata)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn copy_graph_nodes_to_clipboard(
+        &self,
+        targets: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<String, GddArchiveError> {
+        let unsupported = || GddArchiveError::UnsupportedGraphClipboardSelection;
+        let first = targets.first().ok_or_else(unsupported)?;
+        if targets.len() > budget.max_entries {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let mut ids = BTreeSet::new();
+        for target in targets {
+            self.check_node_edit_target(target)?;
+            if !first.same_network_as(target)
+                || !target.can_copy_graph_node()
+                || !ids.insert(target.local_id)
+            {
+                return Err(unsupported());
+            }
+        }
+        let path = &first.network_path;
+        let interface = self.runtime_graph().await?.into_interface()?;
+        let temporary = ids
+            .into_iter()
+            .enumerate()
+            .map(|(index, node)| (node, NodeId(index as u64)))
+            .collect::<HashMap<_, _>>();
+        let mut nodes: Vec<_> = interface.copy_nodes(&temporary, path).collect();
+        nodes.sort_unstable_by_key(|(id, _)| *id);
+        if nodes.len() != targets.len() || !valid_graph_clipboard_nodes(&nodes) {
+            return Err(unsupported());
+        }
+        let encoded = serde_json::to_string(&[ClipboardItem::Nodes(nodes)])
+            .map_err(GddArchiveError::GraphClipboardFormat)?;
+        let text = format!("graphite: {encoded}");
+        if text.len() as u64 > budget.max_entry_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        Ok(text)
+    }
+
+    pub async fn paste_graph_nodes_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        clipboard: &str,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        if network.parent.is_some() && !network.can_extend_ports_in_copy() {
+            return Err(GddArchiveError::UnsupportedGraphClipboard);
+        }
+        if clipboard.len() as u64 > budget.max_entry_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let encoded = clipboard
+            .strip_prefix("graphite: ")
+            .ok_or(GddArchiveError::UnsupportedGraphClipboard)?;
+        let items: [ClipboardItem; 1] =
+            serde_json::from_str(encoded).map_err(GddArchiveError::GraphClipboardFormat)?;
+        let [ClipboardItem::Nodes(mut nodes)] = items else {
+            return Err(GddArchiveError::UnsupportedGraphClipboard);
+        };
+        if nodes.len() > budget.max_entries {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        if !valid_graph_clipboard_nodes(&nodes) {
+            return Err(GddArchiveError::UnsupportedGraphClipboard);
+        }
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let path = network.path.as_slice();
+        let mut used = BTreeSet::new();
+        let mut identifiers = HashMap::new();
+        for (id, template) in &mut nodes {
+            template.normalize_stored_types();
+            let inserted = NodeId::new();
+            if !used.insert(inserted) || interface.document_node(&inserted, path).is_some() {
+                return Err(GddArchiveError::GraphNodeIdentityCollision);
+            }
+            identifiers.insert(*id, inserted);
+        }
+        interface.insert_node_group(nodes, identifiers, path);
+        let nested = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let mut expected = BTreeMap::new();
+        let mut edits = Vec::with_capacity(used.len() * 2);
+        for node_id in used {
+            let detached = numeric_preview_network(nested, node_id, &[])?;
+            typecheck_detached_numeric_network(detached)
+                .map_err(GddArchiveError::GraphClipboardTypeMismatch)?;
+            let node = interface
+                .document_node(&node_id, path)
+                .cloned()
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let metadata = interface
+                .node_metadata(&node_id, path)
+                .map(|node| node.persistent_metadata.clone())
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let template = interface
+                .create_node_template(&node_id, path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            expected.insert(node_id, template);
+            edits.push(EditorDelta::Graph(RuntimeDelta::AddNode {
+                network_path: path.to_vec(),
+                node_id,
+                node: Box::new(node),
+            }));
+            edits.push(EditorDelta::NodeMetadataSnapshot {
+                network_path: path.to_vec(),
+                node_id,
+                metadata: Box::new(metadata),
+            });
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let added = batch
+            .ops
+            .iter()
+            .filter_map(|operation| match operation {
+                RegistryDelta::AddNode { id, node } if node.network() == network.id => Some(*id),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        if added.len() != expected.len()
+            || !batch.ops.iter().all(|operation| match operation {
+                RegistryDelta::AddNode { id, .. } => {
+                    added.contains(id) && !owner.registry().node_instances.contains_key(id)
+                }
+                RegistryDelta::ChangeNodeAttribute { id, .. }
+                | RegistryDelta::ChangeNodeInputAttribute { id, .. } => added.contains(id),
+                RegistryDelta::AddResource { entry, .. } => {
+                    entry.has_embedded_source()
+                        && entry
+                            .hash
+                            .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
+                }
+                _ => false,
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let graph = copy.runtime_graph().await?;
+        if graph
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.network_path.as_slice() == path
+                    && added.contains(&node.storage_id)
+                    && expected.contains_key(&node.local_id)
+            })
+            .count()
+            != expected.len()
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let actual = graph.into_interface()?;
+        for (node_id, template) in expected {
+            if actual.create_node_template(&node_id, path) != Some(template) {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
         }
         Ok(copy)
     }
@@ -3572,6 +3758,29 @@ fn numeric_node_template(
         ));
     }
     Ok(template)
+}
+
+fn valid_graph_clipboard_nodes(nodes: &[(NodeId, NodeTemplate)]) -> bool {
+    let identifiers = nodes.iter().map(|(id, _)| *id).collect::<BTreeSet<_>>();
+    !identifiers.is_empty()
+        && identifiers.len() == nodes.len()
+        && nodes.iter().all(|(_, node)| {
+            matches!(
+                node.implementation,
+                NodeTemplateImplementation::ProtoNode(_)
+            ) && matches!(&node.node_type_metadata, NodeTypePersistentMetadata::Node(metadata)
+                    if matches!(metadata.position(), NodePosition::Absolute(_)))
+                && node.inputs.iter().all(|input| match input {
+                    NodeInput::Value { tagged_value, .. } => {
+                        preview_numeric_value(tagged_value).is_ok()
+                    }
+                    NodeInput::Node {
+                        node_id,
+                        output_index: 0,
+                    } => identifiers.contains(node_id),
+                    _ => false,
+                })
+        })
 }
 
 fn empty_graph_export(input: &NodeInput) -> bool {
@@ -5175,6 +5384,163 @@ mod tests {
                 .await
                 .expect("one redo");
             assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_011_1_copies_and_pastes_a_named_numeric_group_with_fresh_wires() {
+        use graphite_document_graph_storage::attr::node::input::ui::NAME;
+
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let graph = original.graph_inspection().await.expect("original graph");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected one nested graph");
+            };
+            let consumer = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("original named consumer");
+            let producer = consumer
+                .numeric_connection_source(&graph.nodes)
+                .expect("original producer");
+            let root_node = graph
+                .nodes
+                .iter()
+                .find(|node| node.network_id() == root.id && node.can_copy_graph_node())
+                .expect("root numeric node");
+            assert!(matches!(
+                original
+                    .copy_graph_nodes_to_clipboard(&[root_node.clone(), consumer.clone()], budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphClipboardSelection)
+            ));
+            let clipboard = original
+                .copy_graph_nodes_to_clipboard(&[consumer.clone(), producer.clone()], budget())
+                .await
+                .expect("copy the explicitly selected group");
+            let encoded = clipboard
+                .strip_prefix("graphite: ")
+                .expect("pinned clipboard prefix");
+            let [ClipboardItem::Nodes(nodes)] = serde_json::from_str::<[ClipboardItem; 1]>(encoded)
+                .expect("deserialize with the pinned source type")
+            else {
+                panic!("expected the pinned node group");
+            };
+            let [(_, first), (_, second)] = nodes.as_slice() else {
+                panic!("exactly two copied nodes");
+            };
+            assert!(matches!(first.inputs.as_slice(), [NodeInput::Value { .. }]));
+            assert_eq!(second.inputs, [NodeInput::node(NodeId(0), 0)]);
+            assert!(matches!(
+                original
+                    .paste_graph_nodes_in_copy(nested, "unrelated text", budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphClipboard)
+            ));
+            let copy = original
+                .paste_graph_nodes_in_copy(nested, &clipboard, budget())
+                .await
+                .expect("paste both nodes in one history interaction");
+            assert!(matches!(
+                copy.paste_graph_nodes_in_copy(nested, &clipboard, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let pasted = copy.graph_nodes().await.expect("saved pasted nodes");
+            let mut added = pasted
+                .iter()
+                .filter(|node| {
+                    !graph
+                        .nodes
+                        .iter()
+                        .any(|original| original.storage_id == node.storage_id)
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(added.len(), 2);
+            assert!(added.iter().all(|node| node.network_id() == nested.id));
+            let index = added
+                .iter()
+                .position(|node| node.has_numeric_connection())
+                .expect("exactly one pasted consumer");
+            let pasted_consumer = added.remove(index);
+            let [pasted_producer] = added.as_slice() else {
+                panic!("expected one pasted producer");
+            };
+            assert_eq!(
+                pasted_consumer
+                    .numeric_connection_source(&pasted)
+                    .expect("fresh internal wire")
+                    .storage_id,
+                pasted_producer.storage_id
+            );
+            let stored = &copy.document.registry().node_instances[&pasted_consumer.storage_id];
+            let [input] = stored.inputs() else {
+                panic!("expected the retained named input");
+            };
+            assert_eq!(
+                input.attributes.get_typed::<String>(NAME).as_deref(),
+                Some("Original wired input")
+            );
+            let interface = copy
+                .runtime_graph()
+                .await
+                .expect("saved positions")
+                .into_interface()
+                .expect("pinned editor");
+            for node in [pasted_consumer, *pasted_producer] {
+                assert_eq!(
+                    interface.position(&node.local_id, &node.network_path),
+                    Some(IVec2::new(2, 2))
+                );
+            }
+            let output = copy
+                .preview_graph_numeric_output(pasted_consumer)
+                .await
+                .expect("pinned copied graph output");
+            assert!(output.same_value(&GddNumericValue::Number(-1.)));
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo removes the whole node group");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the group");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(copy.document.registry())
+            );
+
+            let (destination, _) = network_export_fixture(false).await;
+            let graph = destination
+                .graph_inspection()
+                .await
+                .expect("different Graphite document");
+            let [root, _] = graph.networks.as_slice() else {
+                panic!("expected root destination");
+            };
+            let pasted = destination
+                .paste_graph_nodes_in_copy(root, &clipboard, budget())
+                .await
+                .expect("paste with fresh source declarations into a second document");
+            assert_eq!(
+                pasted
+                    .graph_nodes()
+                    .await
+                    .expect("second saved graph")
+                    .len(),
+                graph.nodes.len() + 2
+            );
+            assert_eq!(original.original_bytes(), bytes.as_ref());
         });
     }
 
