@@ -1060,7 +1060,8 @@ impl Render for DependencyDiagramItem {
                     .disabled(!admitted)
                     .tooltip(ui::Tooltip::text("Export Image"))
                     .on_click(cx.listener(|item, _, _, cx| item.export_diagram_image(cx))),
-            );
+            )
+            .child(crate::DependenciesPanel::ordered_operations_button());
 
         let context_state = self.context_state.clone();
         let context_item = cx.weak_entity();

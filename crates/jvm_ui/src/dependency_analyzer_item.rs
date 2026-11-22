@@ -1438,6 +1438,7 @@ impl Render for DependencyAnalyzerItem {
         let toolbar = div()
             .key_context("DependencyAnalyzerControls")
             .flex()
+            .flex_wrap()
             .items_center()
             .gap_1()
             .px_2()
@@ -1604,7 +1605,8 @@ impl Render for DependencyAnalyzerItem {
                 .aria_label("Collapse all dependency analyzer rows")
                 .tooltip(ui::Tooltip::text("Collapse all"))
                 .on_click(cx.listener(|item, _, _, cx| item.collapse_all_rows(cx))),
-            );
+            )
+            .child(crate::DependenciesPanel::ordered_operations_button());
 
         div()
             .id("groovy-dependency-analyzer-item")

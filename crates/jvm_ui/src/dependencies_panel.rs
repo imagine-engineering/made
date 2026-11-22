@@ -76,6 +76,7 @@ actions!(
         CopyDependencyDiagramSource,
         RunSelectedOfflineOperation,
         AddSelectedOrderedOperation,
+        ShowOrderedOperations,
         RemoveLastOrderedOperation,
         ClearOrderedOperations,
         RunOrderedOfflineOperations,
@@ -2984,6 +2985,34 @@ impl DependenciesPanel {
                 panel.set_view(BuildToolView::Maven, window, cx)
             });
         }
+    }
+
+    pub(crate) fn show_ordered_operations(
+        workspace: &mut Workspace,
+        _: &ShowOrderedOperations,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        if let Some(panel) = workspace.focus_panel::<Self>(window, cx) {
+            panel.update(cx, |panel, cx| {
+                panel.set_ordered_operations_expanded(true, cx);
+                if !panel.ordered_operations.is_empty() {
+                    panel.host.select(ordered_operation_root_id());
+                    panel.host.reveal_selection(ScrollStrategy::Center);
+                }
+            });
+        }
+    }
+
+    pub(crate) fn ordered_operations_button() -> IconButton {
+        IconButton::new("open-ordered-operations", IconName::ListTodo)
+            .shape(ui::IconButtonShape::Square)
+            .tab_index(0_isize)
+            .aria_label("Open ordered operations queue")
+            .tooltip(Tooltip::text("Ordered operations"))
+            .on_click(|_, window, cx| {
+                window.dispatch_action(Box::new(ShowOrderedOperations), cx);
+            })
     }
 
     fn set_view(&mut self, view: BuildToolView, window: &mut Window, cx: &mut Context<Self>) {
@@ -8263,7 +8292,7 @@ impl Render for DependenciesPanel {
                             .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx))
                             .tab_index(0_isize)
                             .child(self.operation_option_editor.clone())))
-                    .when(self.view != BuildToolView::Dependencies, |header| header.child(
+                    .child(
                         v_flex().gap_1().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
                             .child(Button::new("groovy-ordered-operations-disclosure", format!("Ordered operations ({})", self.ordered_operations.len()))
                                 .aria_label("Ordered operations")
@@ -8289,7 +8318,8 @@ impl Render for DependenciesPanel {
                                 .aria_label("Run ordered offline operations for the current local module through Tasks")
                                 .aria_value(format!("{} selected", self.ordered_operations.len()))
                                 .disabled(!can_run_ordered).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx))))))))
+                                .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx)))))),
+                    )
                     .when(can_present_graph, |header| header.child(
                         Button::new("groovy-show-dependency-diagram", "Show diagram")
                             .aria_label("Show a bounded diagram of current admitted dependency graph facts")
@@ -14963,6 +14993,22 @@ mod tests {
                 active_is_diagram,
                 "the canvas tab is focused after Show diagram"
             );
+            let open_queue_from_active_tab = |cx: &mut gpui::VisualTestContext| {
+                let queries = commands.load(Ordering::SeqCst);
+                focus_diagram_control("Open ordered operations queue", cx);
+                press_button(cx, "enter");
+                cx.update(|window, cx| {
+                    let panel = panel.read(cx);
+                    assert!(panel.preferences.ordered_operations_expanded);
+                    assert_eq!(panel.view, view);
+                    assert!(panel.focus_handle(cx).contains_focused(window, cx));
+                });
+                assert_eq!(commands.load(Ordering::SeqCst), queries);
+                panel.update(cx, |panel, cx| {
+                    panel.set_ordered_operations_expanded(false, cx)
+                });
+            };
+            open_queue_from_active_tab(cx);
             panel.update(cx, |panel, cx| {
                 panel.show_dependency_diagram(cx);
             });
@@ -15727,6 +15773,7 @@ mod tests {
                 panel.analyze_dependencies(cx);
             });
             cx.run_until_parked();
+            open_queue_from_active_tab(cx);
             panel.update(cx, |panel, cx| {
                 panel.show_dependency_diagram_popup(cx);
             });

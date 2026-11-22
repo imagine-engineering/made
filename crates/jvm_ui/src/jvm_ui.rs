@@ -28,6 +28,7 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
         workspace.register_action(DependenciesPanel::toggle_focus);
         workspace.register_action(DependenciesPanel::show_gradle);
         workspace.register_action(DependenciesPanel::show_maven);
+        workspace.register_action(DependenciesPanel::show_ordered_operations);
         if default_jvm {
             let project = workspace.project().clone();
             if !project.read(cx).is_via_collab() {
