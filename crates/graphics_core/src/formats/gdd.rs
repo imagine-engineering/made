@@ -125,8 +125,10 @@ pub enum GddArchiveError {
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
     InvalidPinnedNodeMove,
-    #[error("The selected Graphite node has no supported unexposed numeric value.")]
+    #[error("The selected Graphite node has no supported numeric input.")]
     UnsupportedGraphNumericInput,
+    #[error("Hide the Graphite Value port before editing its literal.")]
+    ExposedGraphNumericInput,
     #[error("Enter a finite number for the Graphite Value input.")]
     InvalidGraphNumber,
     #[error("Enter a whole number in the 64-bit integer range for the Graphite Value input.")]
@@ -135,6 +137,8 @@ pub enum GddArchiveError {
     GraphInputTypeChanged,
     #[error("Enter a different value for the Graphite Value input.")]
     UnchangedGraphInput,
+    #[error("The Graphite Value input already has the requested exposure.")]
+    UnchangedGraphInputExposure,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -233,7 +237,22 @@ pub struct GddGraphNode {
     name: String,
     pinned: bool,
     pinned_order: Option<(usize, usize)>,
-    numeric_input: Option<GddNumericValue>,
+    numeric_port: Option<GddNumericPort>,
+}
+
+#[derive(Clone, Copy)]
+struct GddNumericPort {
+    index: usize,
+    value: GddNumericValue,
+    exposed: bool,
+}
+
+impl GddNumericPort {
+    fn same_input(self, other: Self) -> bool {
+        self.index == other.index
+            && self.exposed == other.exposed
+            && self.value.same_value(other.value)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -297,7 +316,13 @@ impl GddGraphNode {
     }
 
     pub fn numeric_input(&self) -> Option<GddNumericValue> {
-        self.numeric_input
+        self.numeric_port
+            .filter(|port| !port.exposed)
+            .map(|port| port.value)
+    }
+
+    pub fn numeric_input_exposed(&self) -> Option<bool> {
+        self.numeric_port.map(|port| port.exposed)
     }
 
     pub fn pinned_position(&self) -> Option<(usize, usize)> {
@@ -438,7 +463,7 @@ impl InspectedGddV1 {
                 name: node.display_name.clone().unwrap_or_default(),
                 pinned: node.pinned,
                 pinned_order: None,
-                numeric_input: None,
+                numeric_port: None,
             })
             .collect();
         let interface = graph.into_interface()?;
@@ -472,7 +497,7 @@ impl InspectedGddV1 {
             };
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
-            node.numeric_input = graph_numeric_input(&interface, node).map(|(_, value)| value);
+            node.numeric_port = graph_numeric_port(&interface, node);
         }
         Ok(nodes)
     }
@@ -661,11 +686,13 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        let path = &node.network_path;
-        let mut interface = self.runtime_graph().await?.into_interface()?;
-        let (input_index, previous) = graph_numeric_input(&interface, node)
+        let interface = self.runtime_graph().await?.into_interface()?;
+        let port = graph_numeric_port(&interface, node)
             .ok_or(GddArchiveError::UnsupportedGraphNumericInput)?;
-        let tagged_value = match (previous, value) {
+        if port.exposed {
+            return Err(GddArchiveError::ExposedGraphNumericInput);
+        }
+        let tagged_value = match (port.value, value) {
             (GddNumericValue::Number(_), GddNumericValue::Number(number)) if number.is_finite() => {
                 TaggedValue::Number(number)
             }
@@ -677,15 +704,65 @@ impl InspectedGddV1 {
             }
             _ => return Err(GddArchiveError::GraphInputTypeChanged),
         };
-        let connector = InputConnector::node_at_index(node.local_id, input_index);
         let input = NodeInput::value(tagged_value, false);
+        self.write_graph_numeric_port(
+            node,
+            interface,
+            GddNumericPort { value, ..port },
+            input,
+            budget,
+        )
+        .await
+    }
+
+    pub async fn set_graph_numeric_input_exposed_in_copy(
+        &self,
+        node: &GddGraphNode,
+        exposed: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let interface = self.runtime_graph().await?.into_interface()?;
+        let port = graph_numeric_port(&interface, node)
+            .ok_or(GddArchiveError::UnsupportedGraphNumericInput)?;
+        if exposed == port.exposed {
+            return Err(GddArchiveError::UnchangedGraphInputExposure);
+        }
+        let connector = InputConnector::node_at_index(node.local_id, port.index);
+        let mut input = interface
+            .input_from_connector(&connector, &node.network_path)
+            .cloned()
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let NodeInput::Value { exposed: state, .. } = &mut input else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        *state = exposed;
+        self.write_graph_numeric_port(
+            node,
+            interface,
+            GddNumericPort { exposed, ..port },
+            input,
+            budget,
+        )
+        .await
+    }
+
+    async fn write_graph_numeric_port(
+        &self,
+        node: &GddGraphNode,
+        mut interface: NodeNetworkInterface,
+        expected: GddNumericPort,
+        input: NodeInput,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        let path = &node.network_path;
+        let input_index = expected.index;
+        let connector = InputConnector::node_at_index(node.local_id, input_index);
         if interface.input_from_connector(&connector, path) == Some(&input) {
             return Err(GddArchiveError::UnchangedGraphInput);
         }
         interface.set_input(&connector, input, path);
-        if !graph_numeric_input(&interface, node)
-            .is_some_and(|(_, accepted)| accepted.same_value(value))
-        {
+        if !graph_numeric_port(&interface, node).is_some_and(|actual| actual.same_input(expected)) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let input = interface
@@ -709,9 +786,7 @@ impl InspectedGddV1 {
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if !graph_numeric_input(&actual, node)
-            .is_some_and(|(index, actual)| index == input_index && actual.same_value(value))
-        {
+        if !graph_numeric_port(&actual, node).is_some_and(|actual| actual.same_input(expected)) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -1092,10 +1167,10 @@ impl InspectedGddV1 {
     }
 }
 
-fn graph_numeric_input(
+fn graph_numeric_port(
     interface: &NodeNetworkInterface,
     node: &GddGraphNode,
-) -> Option<(usize, GddNumericValue)> {
+) -> Option<GddNumericPort> {
     use graphite_math_nodes::{absolute_value, ceiling, floor, round, sign};
 
     let path = &node.network_path;
@@ -1117,13 +1192,15 @@ fn graph_numeric_input(
     ]
     .into_iter()
     .find(|(admitted, _, _)| admitted == identifier)?;
-    if interface.number_of_inputs(&node.local_id, path) != 1 {
+    if interface.number_of_inputs(&node.local_id, path) != 1
+        || interface.is_layer(&node.local_id, path)
+    {
         return None;
     }
     let connector = InputConnector::node_at_index(node.local_id, input_index);
     let NodeInput::Value {
         tagged_value,
-        exposed: false,
+        exposed,
     } = interface.input_from_connector(&connector, path)?
     else {
         return None;
@@ -1133,7 +1210,11 @@ fn graph_numeric_input(
         TaggedValue::Integer(number) if integer_supported => GddNumericValue::Integer(*number),
         _ => return None,
     };
-    Some((input_index, value))
+    Some(GddNumericPort {
+        index: input_index,
+        value,
+        exposed: *exposed,
+    })
 }
 
 fn prepare_graph_node_edit(
@@ -1643,79 +1724,180 @@ mod tests {
         owner
     }
 
-    #[test]
-    fn at_gra_graph_031_1_preserves_typed_literals_and_targets_the_exact_nested_slot() {
+    async fn numeric_graph_fixture() -> Arc<[u8]> {
         use graphite_document_graph_storage::NoMetadata;
         use graphite_math_nodes::{absolute_value, sign};
         use graphite_resource::ResourceRegistry;
 
+        let node = |identifier, input| graphite_graph_craft::document::DocumentNode {
+            implementation: DocumentNodeImplementation::ProtoNode(identifier),
+            inputs: vec![input],
+            ..Default::default()
+        };
+        let nested = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    node(
+                        sign::IDENTIFIER,
+                        NodeInput::value(TaggedValue::Number(-2.5), false),
+                    ),
+                ),
+                (
+                    NodeId(9),
+                    node(
+                        sign::IDENTIFIER,
+                        NodeInput::value(TaggedValue::Number(2.), true),
+                    ),
+                ),
+                (
+                    NodeId(11),
+                    node(sign::IDENTIFIER, NodeInput::node(NodeId(7), 0)),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        let network = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    node(
+                        absolute_value::IDENTIFIER,
+                        NodeInput::value(TaggedValue::Integer(-17), false),
+                    ),
+                ),
+                (
+                    NodeId(24),
+                    graphite_graph_craft::document::DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(nested),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        let mut owner = document();
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+            .expect("save an actual numeric source graph");
+        let bytes: Arc<[u8]> = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("export the source graph and its node definitions")
+            .into();
+        bytes
+    }
+
+    #[test]
+    fn at_gra_graph_028_1_round_trips_source_port_exposure_and_its_literal() {
         futures::executor::block_on(async {
-            let node = |identifier, input| graphite_graph_craft::document::DocumentNode {
-                implementation: DocumentNodeImplementation::ProtoNode(identifier),
-                inputs: vec![input],
-                ..Default::default()
-            };
-            let nested = NodeNetwork {
-                nodes: [
-                    (
-                        NodeId(7),
-                        node(
-                            sign::IDENTIFIER,
-                            NodeInput::value(TaggedValue::Number(-2.5), false),
-                        ),
-                    ),
-                    (
-                        NodeId(9),
-                        node(
-                            sign::IDENTIFIER,
-                            NodeInput::value(TaggedValue::Number(2.), true),
-                        ),
-                    ),
-                    (
-                        NodeId(11),
-                        node(sign::IDENTIFIER, NodeInput::node(NodeId(7), 0)),
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                ..Default::default()
-            };
-            let network = NodeNetwork {
-                nodes: [
-                    (
-                        NodeId(7),
-                        node(
-                            absolute_value::IDENTIFIER,
-                            NodeInput::value(TaggedValue::Integer(-17), false),
-                        ),
-                    ),
-                    (
-                        NodeId(24),
-                        graphite_graph_craft::document::DocumentNode {
-                            implementation: DocumentNodeImplementation::Network(nested),
-                            ..Default::default()
-                        },
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                ..Default::default()
-            };
-            let mut owner = document();
-            let resources = HashMapResourceStorage::new();
-            owner
-                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
-                .expect("save an actual numeric source graph");
-            let bytes: Arc<[u8]> = owner
-                .export_to_bytes(
-                    ExportFormat::Zip,
-                    ExportOptions::default(),
-                    &resources,
-                    None,
-                )
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget())
                 .await
-                .expect("export the source graph and its node definitions")
-                .into();
+                .expect("original archive");
+            let nodes = original.graph_nodes().await.expect("original nodes");
+            let [root, _, nested, _, wired] = nodes.as_slice() else {
+                panic!("expected the five original nodes");
+            };
+            assert_eq!(nested.numeric_input_exposed(), Some(false));
+            assert!(matches!(
+                original
+                    .set_graph_numeric_input_exposed_in_copy(nested, false, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInputExposure)
+            ));
+            assert!(matches!(
+                original
+                    .set_graph_numeric_input_exposed_in_copy(wired, true, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphNumericInput)
+            ));
+
+            let exposed = original
+                .set_graph_numeric_input_exposed_in_copy(nested, true, budget())
+                .await
+                .expect("expose the nested literal");
+            assert_eq!(exposed.history_len(), original.history_len() + 1);
+            let nodes = exposed.graph_nodes().await.expect("exposed graph");
+            let selected = nodes
+                .iter()
+                .find(|node| node.storage_id == nested.storage_id)
+                .expect("same nested slot");
+            assert_eq!(selected.numeric_input_exposed(), Some(true));
+            assert!(selected.numeric_input().is_none());
+            assert!(
+                selected
+                    .numeric_port
+                    .is_some_and(|port| port.value.same_value(GddNumericValue::Number(-2.5)))
+            );
+            for unchanged in [root, wired] {
+                assert_eq!(
+                    exposed
+                        .document
+                        .registry()
+                        .node_instances
+                        .get(&unchanged.storage_id),
+                    original
+                        .document
+                        .registry()
+                        .node_instances
+                        .get(&unchanged.storage_id)
+                );
+            }
+            assert!(matches!(
+                exposed
+                    .set_graph_numeric_input_exposed_in_copy(nested, false, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+
+            let undo = exposed
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo exposure");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("redo exposure");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(exposed.document.registry())
+            );
+            let hidden = exposed
+                .set_graph_numeric_input_exposed_in_copy(selected, false, budget())
+                .await
+                .expect("restore the literal property");
+            assert!(
+                hidden
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            assert_eq!(hidden.history_len(), original.history_len() + 2);
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_031_1_preserves_typed_literals_and_targets_the_exact_nested_slot() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
             let original = open_gdd_zip(&bytes, budget())
                 .await
                 .expect("original document");
@@ -1732,18 +1914,23 @@ mod tests {
                 nested.numeric_input(),
                 Some(GddNumericValue::Number(-2.5))
             ));
-            for unavailable in [exposed, wired] {
+            for (unavailable, expected) in [
+                (exposed, GddArchiveError::ExposedGraphNumericInput),
+                (wired, GddArchiveError::UnsupportedGraphNumericInput),
+            ] {
                 assert!(unavailable.numeric_input().is_none());
-                assert!(matches!(
-                    original
-                        .set_graph_numeric_input_in_copy(
-                            unavailable,
-                            GddNumericValue::Number(1.),
-                            budget()
-                        )
-                        .await,
-                    Err(GddArchiveError::UnsupportedGraphNumericInput)
-                ));
+                let result = original
+                    .set_graph_numeric_input_in_copy(
+                        unavailable,
+                        GddNumericValue::Number(1.),
+                        budget(),
+                    )
+                    .await;
+                let error = result.err().expect("source port cannot edit its value");
+                assert_eq!(
+                    std::mem::discriminant(&error),
+                    std::mem::discriminant(&expected)
+                );
             }
             for (value, expected) in [
                 (

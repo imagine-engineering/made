@@ -481,6 +481,7 @@ enum NodeCopyChange {
     Pin(bool),
     MovePinned(GddPinnedNodeMove),
     NumericInput(GddNumericValue),
+    NumericInputExposure(bool),
 }
 
 enum PreparedCopy {
@@ -565,6 +566,22 @@ impl GraphiteDocumentItem {
                 self.copy_feedback = Some((error.to_string().into(), Color::Error));
                 cx.notify();
             }
+        }
+    }
+
+    fn save_numeric_input_exposure(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form.selected_node() else {
+            return;
+        };
+        if let Some(exposed) = node.numeric_input_exposed() {
+            let request = GraphiteCopy::EditNode {
+                node: node.clone(),
+                change: NodeCopyChange::NumericInputExposure(!exposed),
+            };
+            self.save_copy(request, window, cx);
         }
     }
 
@@ -769,6 +786,24 @@ impl GraphiteDocumentItem {
                                             ),
                                     )
                             })
+                            .when_some(selected.numeric_input_exposed(), |panel, exposed| {
+                                let label = if exposed {
+                                    "Hide Value Port in a Copy"
+                                } else {
+                                    "Expose Value Port in a Copy"
+                                };
+                                panel.child(
+                                    div()
+                                        .debug_selector(|| "GRAPHITE-GDD-SAVE-VALUE-EXPOSURE".into())
+                                        .child(
+                                            Button::new("graphite-gdd-save-value-exposure", label)
+                                                .disabled(self.copy_task.is_some())
+                                                .on_click(cx.listener(|item, _, window, cx| {
+                                                    item.save_numeric_input_exposure(window, cx);
+                                                })),
+                                        ),
+                                )
+                            })
                     })
             }
             NodeCopyPanel::Failed(error) => {
@@ -935,6 +970,14 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::NumericInput(_),
                         ..
                     } => "Edited",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::NumericInputExposure(true),
+                        ..
+                    } => "Exposed port in",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::NumericInputExposure(false),
+                        ..
+                    } => "Hidden port in",
                 };
                 format!("{prefix} {stem}{suffix}")
             }
@@ -1074,6 +1117,15 @@ impl GraphiteDocumentItem {
                                         .set_graph_numeric_input_in_copy(
                                             &node,
                                             value,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::NumericInputExposure(exposed) => {
+                                    archive
+                                        .set_graph_numeric_input_exposed_in_copy(
+                                            &node,
+                                            exposed,
                                             ARCHIVE_BUDGET,
                                         )
                                         .await?
@@ -1608,10 +1660,7 @@ mod tests {
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
     }
 
-    #[gpui::test]
-    async fn at_gra_graph_031_2_workspace_saves_and_reopens_a_typed_numeric_value(
-        cx: &mut TestAppContext,
-    ) {
+    async fn numeric_graph_archive() -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::NoMetadata;
         use graphite_graph_craft::document::{
             DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
@@ -1651,6 +1700,112 @@ mod tests {
             )
             .await
             .expect("source ZIP");
+        (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_028_2_workspace_round_trips_the_exposed_value_port(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = numeric_graph_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/ports.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        for (path, was_exposed, added_history) in [
+            ("/project/exposed.gdd", false, 1),
+            ("/project/hidden.gdd", true, 2),
+        ] {
+            let destination = PathBuf::from(path);
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+            current.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected the Value port form");
+                };
+                let selected = form.selected_node().expect("selected Value port");
+                assert_eq!(selected.numeric_input_exposed(), Some(was_exposed));
+                if !was_exposed {
+                    assert_eq!(form.value.read(cx).text(cx), "-17");
+                }
+            });
+            assert_eq!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-SAVE-NUMERIC-INPUT")
+                    .is_some(),
+                !was_exposed,
+            );
+            click(window, "GRAPHITE-GDD-SAVE-VALUE-EXPOSURE");
+            window.simulate_new_path_selection(|_| None);
+            window.run_until_parked();
+            assert!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("cancelled save")
+                    .is_none()
+            );
+            paint(window);
+            click(window, "GRAPHITE-GDD-SAVE-VALUE-EXPOSURE");
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("open new Value port state");
+            assert_ne!(reopened, current);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected GDD document");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let nodes = contents.graph_nodes().await.expect("reopened Value port");
+            let [node] = nodes.as_slice() else {
+                panic!("expected the original node");
+            };
+            assert_eq!(node.numeric_input_exposed(), Some(!was_exposed));
+            if was_exposed {
+                assert!(matches!(
+                    node.numeric_input(),
+                    Some(GddNumericValue::Integer(-17))
+                ));
+            }
+            assert_eq!(contents.history_len(), original_history + added_history);
+            current = reopened;
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_031_2_workspace_saves_and_reopens_a_typed_numeric_value(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = numeric_graph_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -1724,10 +1879,7 @@ mod tests {
             let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
                 panic!("expected GDD document");
             };
-            assert_eq!(
-                contents.history_len(),
-                owner.session().history().count() + 1
-            );
+            assert_eq!(contents.history_len(), original_history + 1);
         });
         assert_eq!(
             filesystem
