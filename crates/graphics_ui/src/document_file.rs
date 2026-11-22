@@ -10,8 +10,8 @@ use gpui::{
 };
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddRecoverySource, InspectedGddV1,
-        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddRecoverySource, GddSavedView,
+        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -424,6 +424,14 @@ pub(crate) struct GraphiteDocumentItem {
     export_content: GddExportContent,
     embed_linked_resources: bool,
     embed_legacy_document: bool,
+    saved_view: SavedViewPanel,
+}
+
+enum SavedViewPanel {
+    Closed,
+    Loading { _task: Task<()> },
+    Ready(GddSavedView),
+    Failed(SharedString),
 }
 
 #[derive(Clone, Copy)]
@@ -438,6 +446,91 @@ enum PreparedCopy {
 }
 
 impl GraphiteDocumentItem {
+    fn toggle_saved_view(&mut self, cx: &mut Context<Self>) {
+        match &self.saved_view {
+            SavedViewPanel::Loading { .. } => return,
+            SavedViewPanel::Ready(_) => self.saved_view = SavedViewPanel::Closed,
+            SavedViewPanel::Closed | SavedViewPanel::Failed(_) => {
+                let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+                    return;
+                };
+                let contents = contents.clone();
+                let preparation = cx.background_spawn(async move { contents.saved_view().await });
+                self.saved_view = SavedViewPanel::Loading {
+                    _task: cx.spawn(async move |item, cx| {
+                        let prepared = preparation.await;
+                        if let Err(error) = item.update(cx, |item, cx| {
+                            item.saved_view = match prepared {
+                                Ok(view) => SavedViewPanel::Ready(view),
+                                Err(error) => SavedViewPanel::Failed(error.to_string().into()),
+                            };
+                            cx.notify();
+                        }) {
+                            log::debug!("Graphite saved view closed: {error:#}");
+                        }
+                    }),
+                };
+            }
+        }
+        cx.notify();
+    }
+
+    fn render_saved_view(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = match self.saved_view {
+            SavedViewPanel::Closed => "Show Saved View",
+            SavedViewPanel::Loading { .. } => "Loading Saved View",
+            SavedViewPanel::Ready(_) => "Hide Saved View",
+            SavedViewPanel::Failed(_) => "Retry Saved View",
+        };
+        let panel = v_flex().gap_1().child(
+            div()
+                .debug_selector(|| "GRAPHITE-GDD-SAVED-VIEW".into())
+                .child(
+                    Button::new("graphite-gdd-saved-view", label)
+                        .disabled(matches!(self.saved_view, SavedViewPanel::Loading { .. }))
+                        .on_click(cx.listener(|item, _, _, cx| item.toggle_saved_view(cx))),
+                ),
+        );
+        match &self.saved_view {
+            SavedViewPanel::Ready(view) => panel
+                .when_some(view.document.as_ref(), |panel, view| {
+                    let rulers = if view.rulers_visible { "shown" } else { "hidden" };
+                    panel.child(Label::new(format!(
+                        "Artwork zoom {}% · rulers {rulers}",
+                        view.camera.zoom() * 100.
+                    )))
+                })
+                .children(view.networks.iter().map(|network| {
+                    use graphite_editor::messages::portfolio::document::utility_types::network_interface::Previewing;
+
+                    let preview = if matches!(network.previewing, Previewing::Yes { .. }) {
+                        " · preview active"
+                    } else {
+                        ""
+                    };
+                    let camera = network.navigation.node_graph_ptz;
+                    Label::new(format!(
+                        "{} · zoom {}% · pan ({}, {}){preview}",
+                        network.name,
+                        camera.zoom() * 100.,
+                        camera.pan.x,
+                        camera.pan.y,
+                    ))
+                }))
+                .when(view.unresolved_networks > 0, |panel| {
+                    panel.child(
+                        Label::new(format!(
+                            "Saved view settings could not be matched to {} graphs.",
+                            view.unresolved_networks,
+                        ))
+                        .color(Color::Warning),
+                    )
+                }),
+            SavedViewPanel::Failed(error) => panel.child(Label::new(error.clone()).color(Color::Error)),
+            SavedViewPanel::Closed | SavedViewPanel::Loading { .. } => panel,
+        }
+    }
+
     fn save_copy(
         &mut self,
         format: Option<GddCopyFormat>,
@@ -687,6 +780,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             export_content: GddExportContent::default(),
             embed_linked_resources: false,
             embed_legacy_document: false,
+            saved_view: SavedViewPanel::Closed,
         }
     }
 }
@@ -739,6 +833,7 @@ impl Item for GraphiteDocumentItem {
             export_content: self.export_content,
             embed_linked_resources: self.embed_linked_resources,
             embed_legacy_document: self.embed_legacy_document,
+            saved_view: SavedViewPanel::Closed,
         })))
     }
 }
@@ -825,6 +920,9 @@ impl Render for GraphiteDocumentItem {
                                     )),
                                 ),
                         )
+                        .when(contents.has_saved_view(), |view| {
+                            view.child(self.render_saved_view(cx))
+                        })
                         .child(
                             div()
                                 .debug_selector(|| "GRAPHITE-EXPORT-INCLUDE-HISTORY".into())
@@ -978,6 +1076,132 @@ mod tests {
             )
             .await
             .expect("export actual Graphite storage")
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_017_018_workspace_shows_the_saved_view_without_dirtying_the_document(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_graph_storage::{
+            HotOp, Network, PeerId, ROOT_NETWORK, RegistryDelta, TimeStamp, attr::session, to_value,
+        };
+        use graphite_editor::messages::portfolio::document::utility_types::{
+            misc::PTZ, network_interface::Previewing,
+        };
+        use std::collections::BTreeMap;
+
+        let peer = PeerId(9);
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            peer,
+            173,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("create source storage");
+        owner
+            .apply_hot_op(HotOp {
+                op: RegistryDelta::AddNetwork {
+                    id: ROOT_NETWORK,
+                    network: Network::default(),
+                },
+                timestamp: TimeStamp { counter: 1, peer },
+            })
+            .expect("create the original root graph");
+        owner
+            .retire_pending_interaction()
+            .expect("retire the graph");
+        let mut artwork_camera = PTZ::default();
+        artwork_camera.set_zoom(1.75);
+        owner
+            .set_view_settings(BTreeMap::from([
+                (
+                    session::doc::PTZ.into(),
+                    to_value(&artwork_camera).expect("artwork PTZ"),
+                ),
+                (
+                    session::doc::RULERS_VISIBLE.into(),
+                    to_value(&false).expect("rulers"),
+                ),
+            ]))
+            .expect("save per-peer preferences");
+        let mut graph_camera = PTZ::default();
+        graph_camera.pan.x = -56.;
+        graph_camera.set_zoom(0.75);
+        let previewing = Previewing::Yes {
+            root_node_to_restore: None,
+        };
+        owner
+            .set_network_view_settings(BTreeMap::from([(
+                ROOT_NETWORK,
+                BTreeMap::from([
+                    (
+                        session::network::NAV_PTZ.into(),
+                        to_value(&graph_camera).expect("root PTZ"),
+                    ),
+                    (
+                        session::network::PREVIEWING.into(),
+                        to_value(&previewing).expect("preview"),
+                    ),
+                ]),
+            )]))
+            .expect("save per-network navigation");
+        let original = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &HashMapResourceStorage::new(),
+                None,
+            )
+            .await
+            .expect("source archive");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-view.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("original settings fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the saved GDD")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVED-VIEW");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let SavedViewPanel::Ready(view) = &item.saved_view else {
+                panic!("the native view should be ready");
+            };
+            let artwork = view.document.as_ref().expect("saved artwork view");
+            assert_eq!(artwork.camera, artwork_camera);
+            assert!(!artwork.rulers_visible);
+            let [root] = view.networks.as_slice() else {
+                panic!("the saved root graph view");
+            };
+            assert_eq!(root.id, ROOT_NETWORK);
+            assert_eq!(root.navigation.node_graph_ptz, graph_camera);
+            assert_eq!(root.previewing, previewing);
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-SAVED-VIEW");
+        item.read_with(window, |item, cx| {
+            assert!(matches!(item.saved_view, SavedViewPanel::Closed));
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source GDD"),
+            original
+        );
     }
 
     #[gpui::test]

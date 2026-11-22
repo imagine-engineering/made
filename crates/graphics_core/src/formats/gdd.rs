@@ -18,10 +18,26 @@ use graphite_document_format::{
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
-use graphite_document_graph_storage::{PeerId, RegistryDelta};
+use graphite_document_graph_storage::{
+    NetworkId, PeerId, RegistryDelta, to_runtime::ConversionError,
+};
+use graphite_editor::messages::portfolio::document::{
+    DocumentMessageHandler,
+    utility_types::{
+        misc::PTZ,
+        network_interface::{
+            NavigationMetadata, Previewing,
+            storage_metadata::{
+                InterfaceRebuildError, apply_network_view_settings, build_interface_from_storage,
+                network_ids_from_entries,
+            },
+        },
+    },
+};
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
+use graphite_graph_craft::document::NodeId;
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
@@ -107,6 +123,10 @@ pub enum GddArchiveError {
     Container(#[from] ContainerError),
     #[error("The pinned Graphite document storage operation failed: {0}")]
     Storage(#[from] graphite_document_format::Error),
+    #[error("The saved Graphite view could not resolve its graph: {0}")]
+    ViewRegistry(#[source] ConversionError),
+    #[error("The saved Graphite view could not restore its network metadata: {0}")]
+    ViewInterface(#[source] InterfaceRebuildError),
     #[error("The pinned Graphite writer could not export the archive: {0}")]
     Export(#[source] ContainerError),
 }
@@ -136,6 +156,25 @@ pub struct GddRecoverySummary {
     pub node_count: usize,
     pub history_len: usize,
     pub hot_log_len: usize,
+}
+
+pub struct GddSavedView {
+    pub document: Option<GddDocumentView>,
+    pub networks: Vec<GddNetworkView>,
+    pub unresolved_networks: usize,
+}
+
+pub struct GddDocumentView {
+    pub camera: PTZ,
+    pub rulers_visible: bool,
+}
+
+pub struct GddNetworkView {
+    pub id: NetworkId,
+    pub path: Vec<NodeId>,
+    pub name: String,
+    pub navigation: NavigationMetadata,
+    pub previewing: Previewing,
 }
 
 pub struct InspectedGddV1 {
@@ -181,6 +220,62 @@ impl InspectedGddV1 {
 
     pub fn recovery(&self) -> GddRecoverySummary {
         self.recovery
+    }
+
+    pub fn has_saved_view(&self) -> bool {
+        !self.document.view_settings().is_empty()
+            || !self.document.network_view_settings().is_empty()
+    }
+
+    pub async fn saved_view(&self) -> Result<GddSavedView, GddArchiveError> {
+        let settings = self.document.view_settings();
+        let document = (!settings.is_empty()).then(|| {
+            let mut owner = DocumentMessageHandler::default();
+            owner.apply_stored_document_settings(settings);
+            GddDocumentView {
+                camera: owner.document_ptz,
+                rulers_visible: owner.rulers_visible,
+            }
+        });
+        let network_settings = self.document.network_view_settings();
+        let mut unresolved = network_settings.keys().copied().collect::<BTreeSet<_>>();
+        let mut networks = Vec::new();
+        if !network_settings.is_empty() {
+            let declarations = self.document.declarations(&self.document).await;
+            let (network, nodes, metadata) = self
+                .document
+                .registry()
+                .to_runtime_with_full_metadata(&declarations)
+                .map_err(GddArchiveError::ViewRegistry)?;
+            let ids = network_ids_from_entries(&metadata);
+            let mut interface = build_interface_from_storage(network, nodes, metadata)
+                .map_err(GddArchiveError::ViewInterface)?;
+            apply_network_view_settings(&mut interface, &ids, network_settings);
+            for (path, id) in ids {
+                if network_settings.contains_key(&id)
+                    && let Some(metadata) = interface.network_metadata(&path)
+                {
+                    unresolved.remove(&id);
+                    let name = match path.split_last() {
+                        Some((node, parent)) => interface.display_name(node, parent),
+                        None => "Root graph".into(),
+                    };
+                    networks.push(GddNetworkView {
+                        id,
+                        path,
+                        name,
+                        navigation: metadata.persistent_metadata.navigation_metadata.clone(),
+                        previewing: metadata.persistent_metadata.previewing,
+                    });
+                }
+            }
+            networks.sort_by_key(|network| (!network.path.is_empty(), network.id.0));
+        }
+        Ok(GddSavedView {
+            document,
+            networks,
+            unresolved_networks: unresolved.len(),
+        })
     }
 
     pub fn missing_linked_resources(&self) -> Result<BTreeSet<ResourceHash>, GddArchiveError> {
@@ -812,6 +907,125 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_017_018_restores_peer_and_nested_network_view_settings() {
+        use graphite_document_graph_storage::{NoMetadata, ROOT_NETWORK, attr::session, to_value};
+        use graphite_glam::DVec2;
+        use graphite_graph_craft::document::{
+            DocumentNode, DocumentNodeImplementation, NodeNetwork,
+        };
+        use graphite_resource::ResourceRegistry;
+        use std::collections::BTreeMap;
+
+        futures::executor::block_on(async {
+            let mut owner = document();
+            let nested_node = NodeId(17);
+            let root_network = NodeNetwork {
+                nodes: [(
+                    nested_node,
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            owner
+                .commit_from_runtime(
+                    &root_network,
+                    &NoMetadata,
+                    &ResourceRegistry::new(),
+                    &HashMapResourceStorage::new(),
+                )
+                .expect("commit the nested pinned network");
+            let ids = owner
+                .network_ids(&root_network, &NoMetadata)
+                .expect("stable storage IDs");
+            let nested_id = *ids.get(&vec![nested_node]).expect("nested storage ID");
+            let mut artwork_camera = PTZ::default();
+            artwork_camera.pan = DVec2::new(12., -24.);
+            artwork_camera.set_zoom(1.5);
+            owner
+                .set_view_settings(BTreeMap::from([
+                    (
+                        session::doc::PTZ.into(),
+                        to_value(&artwork_camera).expect("PTZ"),
+                    ),
+                    (
+                        session::doc::RULERS_VISIBLE.into(),
+                        to_value(&false).expect("rulers"),
+                    ),
+                ]))
+                .expect("persist peer view settings");
+            let mut nested_camera = PTZ::default();
+            nested_camera.pan = DVec2::new(-310., 640.);
+            nested_camera.set_zoom(0.75);
+            let previewing = Previewing::Yes {
+                root_node_to_restore: None,
+            };
+            owner
+                .set_network_view_settings(BTreeMap::from([
+                    (
+                        ROOT_NETWORK,
+                        BTreeMap::from([(
+                            session::network::NAV_WIDTH.into(),
+                            to_value(&700.).expect("root width"),
+                        )]),
+                    ),
+                    (
+                        nested_id,
+                        BTreeMap::from([
+                            (
+                                session::network::NAV_PTZ.into(),
+                                to_value(&nested_camera).expect("nested PTZ"),
+                            ),
+                            (
+                                session::network::PREVIEWING.into(),
+                                to_value(&previewing).expect("preview state"),
+                            ),
+                        ]),
+                    ),
+                    (
+                        NetworkId(u64::MAX),
+                        BTreeMap::from([(
+                            session::network::NAV_WIDTH.into(),
+                            to_value(&300.).expect("stale width"),
+                        )]),
+                    ),
+                ]))
+                .expect("persist root and nested view settings");
+            let source_bytes = export(&owner, None).await;
+            let source = open_gdd_zip(&source_bytes, budget())
+                .await
+                .expect("reopen pinned export");
+            let summary = source.recovery();
+            let view = source
+                .saved_view()
+                .await
+                .expect("restore pinned view state");
+            let artwork = view.document.expect("per-peer artwork settings");
+            assert_eq!(artwork.camera, artwork_camera);
+            assert!(!artwork.rulers_visible);
+            let [root, nested] = view.networks.as_slice() else {
+                panic!("expected only the two attached graph views");
+            };
+            assert_eq!(root.id, ROOT_NETWORK);
+            assert!(root.path.is_empty());
+            assert_eq!(root.navigation.node_graph_width, 700.);
+            assert_eq!(root.previewing, Previewing::No);
+            assert_eq!(nested.id, nested_id);
+            assert_eq!(nested.path, [nested_node]);
+            assert_eq!(nested.navigation.node_graph_ptz, nested_camera);
+            assert_eq!(nested.previewing, previewing);
+            assert_eq!(view.unresolved_networks, 1);
+            assert_eq!(source.recovery(), summary);
+            assert!(source.document.registry().value_equal(owner.registry()));
+            assert_eq!(source.original_bytes(), source_bytes.as_ref());
+        });
     }
 
     #[test]
