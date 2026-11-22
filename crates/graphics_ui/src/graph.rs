@@ -134,6 +134,7 @@ pub(crate) enum SavedGraphAction {
     },
     SelectAllLayers,
     DeselectLayers,
+    SelectParentLayers,
     ToggleLayerExpansion {
         index: usize,
         recursive: bool,
@@ -772,10 +773,20 @@ pub(crate) fn render_saved_graph(
             let mut collapsed_depth = None;
             let layers_focus = view.layer_focus.clone();
             let can_select = view.pending_source.is_none();
+            let can_select_parent = can_select
+                && layers.iter().any(|layer| {
+                    nodes_by_id
+                        .get(&layer.storage_id)
+                        .is_some_and(|&(index, _)| {
+                            view.selected == Some(index) || view.selection.contains(&index)
+                        })
+                });
             let select_all = dispatch.clone();
             let deselect = dispatch.clone();
+            let select_parent = dispatch.clone();
             let keyboard_select = dispatch.clone();
             let keyboard_deselect = dispatch.clone();
+            let keyboard_parent = dispatch.clone();
             Some(
                 v_flex()
                     .gap_1()
@@ -799,6 +810,13 @@ pub(crate) fn render_saved_graph(
                             cx.propagate();
                         }
                     })
+                    .on_action(move |_: &SelectParentSavedLayers, window, cx| {
+                        if can_select {
+                            keyboard_parent(SavedGraphAction::SelectParentLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
                     .child(
                         h_flex()
                             .gap_2()
@@ -817,6 +835,21 @@ pub(crate) fn render_saved_graph(
                                     .on_click(move |_, window, cx| {
                                         deselect(SavedGraphAction::DeselectLayers, window, cx)
                                     }),
+                            )
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-SELECT-LAYER-PARENT".into())
+                                    .child(
+                                        Button::new("graphite-saved-layer-parent", "Select Parent")
+                                            .disabled(!can_select_parent)
+                                            .on_click(move |_, window, cx| {
+                                                select_parent(
+                                                    SavedGraphAction::SelectParentLayers,
+                                                    window,
+                                                    cx,
+                                                )
+                                            }),
+                                    ),
                             ),
                     )
                     .children(layers.iter().enumerate().filter_map(|(position, layer)| {
@@ -1981,6 +2014,8 @@ actions!(
         SelectAllSavedLayers,
         /// Clears selection in the focused Graphite Layers view.
         DeselectSavedLayers,
+        /// Selects the parent layers of the current Layers selection.
+        SelectParentSavedLayers,
         /// Shows the original imported image in the focused Graphite item.
         ShowOriginalImage,
         /// Inverts the focused imported image with the original Graphite node.

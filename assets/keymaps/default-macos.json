@@ -67,6 +67,13 @@
     }
   },
   {
+    "context": "GraphiteSavedLayers",
+    "use_key_equivalents": true,
+    "bindings": {
+      "shift-escape": "graphite::SelectParentSavedLayers",
+    },
+  },
+  {
     "context": "Editor",
     "use_key_equivalents": true,
     "bindings": {

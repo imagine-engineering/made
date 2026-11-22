@@ -70,6 +70,12 @@
     }
   },
   {
+    "context": "GraphiteSavedLayers",
+    "bindings": {
+      "shift-escape": "graphite::SelectParentSavedLayers",
+    },
+  },
+  {
     "context": "Editor",
     "bindings": {
       "escape": "editor::Cancel",

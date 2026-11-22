@@ -1758,6 +1758,7 @@ impl GraphiteDocumentItem {
             }
             SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
             SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
+            SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
                 self.toggle_saved_layer_expansion(index, recursive, cx);
             }
@@ -2076,16 +2077,7 @@ impl GraphiteDocumentItem {
                 .filter(|index| form.node_selection.contains(index))
                 .or_else(|| form.node_selection.first().copied())
         };
-        if form.node_selection.len() == 1 {
-            form.node_selection.clear();
-        }
-        if let Some(active) = active {
-            self.select_copy_node(active, window, cx);
-        } else {
-            form.selected = None;
-            form.output_preview = NodeOutputPreview::Hidden;
-            cx.notify();
-        }
+        self.set_active_saved_layer(active, window, cx);
     }
 
     fn set_saved_layer_selection(
@@ -2117,6 +2109,60 @@ impl GraphiteDocumentItem {
             .selected
             .filter(|index| form.node_selection.contains(index))
             .or_else(|| form.node_selection.first().copied());
+        self.set_active_saved_layer(active, window, cx);
+    }
+
+    fn select_saved_layer_parents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if form.pending_canvas_source.is_some() {
+            return;
+        }
+        let Some(rows) = form.saved_layer_rows() else {
+            return;
+        };
+        let nodes_by_id = rows
+            .iter()
+            .map(|&(index, layer)| (layer.storage_id, index))
+            .collect::<BTreeMap<_, _>>();
+        let mut parents = BTreeSet::new();
+        let mut active_parent = None;
+        for (index, layer) in rows {
+            if form.selected != Some(index) && !form.node_selection.contains(&index) {
+                continue;
+            }
+            let parent = match layer.parent {
+                Some(id) => {
+                    let Some(&parent) = nodes_by_id.get(&id) else {
+                        continue;
+                    };
+                    parent
+                }
+                None => index,
+            };
+            if form.selected == Some(index) {
+                active_parent = Some(parent);
+            }
+            parents.insert(parent);
+        }
+        if parents.is_empty() {
+            return;
+        }
+        let active = active_parent.or_else(|| parents.first().copied());
+        form.node_selection = parents;
+        self.set_active_saved_layer(active, window, cx);
+    }
+
+    fn set_active_saved_layer(
+        &mut self,
+        active: Option<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
         if form.node_selection.len() == 1 {
             form.node_selection.clear();
         }
@@ -8821,6 +8867,147 @@ mod tests {
         choose(window, sibling, shift, &[0, 2], 2);
         choose(window, child, accelerator, &[0], 2);
         choose(window, sibling, accelerator, &[], 0);
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_005_2_workspace_selects_saved_layer_parents(cx: &mut TestAppContext) {
+        let (original, history) = graph_layer_archive_with_grandchild(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.update(|_, cx| {
+            use settings::{KeymapFile, KeymapFileLoadResult};
+
+            for (platform, contents) in [
+                (
+                    "macos",
+                    include_str!("../../../assets/keymaps/default-macos.json"),
+                ),
+                (
+                    "linux",
+                    include_str!("../../../assets/keymaps/default-linux.json"),
+                ),
+                (
+                    "windows",
+                    include_str!("../../../assets/keymaps/default-windows.json"),
+                ),
+            ] {
+                let bindings = match KeymapFile::load(contents, cx) {
+                    KeymapFileLoadResult::Success { key_bindings }
+                    | KeymapFileLoadResult::SomeFailedToLoad { key_bindings, .. } => key_bindings,
+                    KeymapFileLoadResult::JsonParseFailure { error } => {
+                        panic!("{platform} keymap: {error:#}")
+                    }
+                };
+                assert_eq!(
+                    bindings
+                        .iter()
+                        .filter(|binding| {
+                            binding.action().name() == "graphite::SelectParentSavedLayers"
+                                && binding.predicate().is_some_and(|predicate| {
+                                    predicate.to_string() == "GraphiteSavedLayers"
+                                })
+                        })
+                        .count(),
+                    1,
+                    "{platform} Select Parent binding"
+                );
+            }
+        });
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-layer-parents.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the layer graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let revision = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready layer Inspector")
+            };
+            let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                panic!("ready graph canvas")
+            };
+            let [parent, child, grandchild, sibling] = graph
+                .root_layers
+                .as_ref()
+                .expect("saved hierarchy")
+                .as_slice()
+            else {
+                panic!("parent, child, grandchild and top-level sibling")
+            };
+            assert_eq!(parent.parent, None);
+            assert_eq!(child.parent, Some(parent.storage_id));
+            assert_eq!(grandchild.parent, Some(child.storage_id));
+            assert_eq!(sibling.parent, None);
+            item.model.read(cx).revision.clone()
+        });
+        let check = |window: &gpui::VisualTestContext, expected: &[usize], active| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready layer Inspector")
+                };
+                let mut selection = form.node_selection.clone();
+                selection.extend(form.selected);
+                assert_eq!(selection.into_iter().collect::<Vec<_>>(), expected);
+                assert_eq!(form.selected, Some(active));
+                assert_eq!(form.layer_selection_anchor, Some(3));
+                assert!(!item.is_dirty(cx));
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+                assert_eq!(
+                    item.model
+                        .read(cx)
+                        .gdd_contents()
+                        .expect("GDD")
+                        .history_len(),
+                    history
+                );
+            });
+        };
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-3");
+        paint(window);
+        check(window, &[3], 3);
+        for parent in [2, 1, 1] {
+            window.simulate_keystrokes("shift-escape");
+            window.run_until_parked();
+            paint(window);
+            check(window, &[parent], parent);
+        }
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-0");
+        paint(window);
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-3",
+            gpui::MouseButton::Left,
+            gpui::Modifiers {
+                platform: cfg!(target_os = "macos"),
+                control: !cfg!(target_os = "macos"),
+                ..Default::default()
+            },
+        );
+        check(window, &[0, 3], 3);
+        click(window, "GRAPHITE-GDD-SELECT-LAYER-PARENT");
+        paint(window);
+        check(window, &[0, 2], 2);
         assert_eq!(
             filesystem
                 .load_bytes(&path)

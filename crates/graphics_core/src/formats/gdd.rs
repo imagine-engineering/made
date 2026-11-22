@@ -390,6 +390,7 @@ pub struct GddGraphNodeGeometry {
 
 pub struct GddRootLayer {
     pub storage_id: StorageNodeId,
+    pub parent: Option<StorageNodeId>,
     pub depth: usize,
     pub visible: bool,
     pub locked: bool,
@@ -4476,10 +4477,14 @@ fn project_root_layers(
     let selection = interface.selected_nodes();
     let mut pending = Vec::new();
     if let Some(layer) = LayerNodeIdentifier::ROOT_PARENT.last_child(metadata) {
-        pending.extend(layer.downstream_siblings(metadata).map(|layer| (layer, 0)));
+        pending.extend(
+            layer
+                .downstream_siblings(metadata)
+                .map(|layer| (layer, 0, None)),
+        );
     }
     let mut layers = Vec::new();
-    while let Some((layer, depth)) = pending.pop() {
+    while let Some((layer, depth, parent)) = pending.pop() {
         let id = layer.to_node();
         let storage_id = ids
             .binary_search_by_key(&id, |(node, _)| *node)
@@ -4489,6 +4494,7 @@ fn project_root_layers(
             .ok_or(GddArchiveError::InvalidRootLayerGraph)?;
         layers.push(GddRootLayer {
             storage_id,
+            parent,
             depth,
             visible: interface.is_visible(&id, &[]),
             locked: interface.is_locked(&id, &[]),
@@ -4500,7 +4506,7 @@ fn project_root_layers(
             pending.extend(
                 child
                     .downstream_siblings(metadata)
-                    .map(|child| (child, depth + 1)),
+                    .map(|child| (child, depth + 1, Some(storage_id))),
             );
         }
     }
