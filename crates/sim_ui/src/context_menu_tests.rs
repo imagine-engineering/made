@@ -2173,6 +2173,20 @@ async fn context_input_uses_workspace_modal_with_exact_transactions(cx: &mut Tes
     }
 
     item.update_in(cx, |item, window, cx| {
+        window.focus(&item.focus_handle(cx), cx);
+    });
+    cx.dispatch_action(crate::ConvertToSubgraph);
+    pump_context_menu_frames(cx);
+    assert!(context_input_modal_is_open(&workspace, cx));
+    item.read_with(cx, |item, _| {
+        assert!(item.model.last_error.is_none());
+        assert_eq!(workflow_bytes(item), original_bytes);
+    });
+    cx.dispatch_action(menu::Cancel);
+    cx.run_until_parked();
+    assert!(!context_input_modal_is_open(&workspace, cx));
+
+    item.update_in(cx, |item, window, cx| {
         let outcome = item.dispatch_context_action(
             binding("COMFY-MENU-122"),
             GraphContextDispatchInput::None,
@@ -2640,7 +2654,7 @@ async fn subgraph_publication_is_cancellable_transactional_and_observable(cx: &m
     }));
 
     observer_item.update_in(cx, |item, window, cx| {
-        item.begin_shell_publish_subgraph(window, cx);
+        item.dispatch_selection_context_action("COMFY-GRAPH-136", window, cx);
     });
     pump_context_menu_frames(cx);
     let overwrite_editor = observer_item.read_with(cx, |item, _| {
@@ -2664,7 +2678,7 @@ async fn subgraph_publication_is_cancellable_transactional_and_observable(cx: &m
         .expect("catalog entry before explicit replacement");
 
     observer_item.update_in(cx, |item, window, cx| {
-        item.begin_shell_publish_subgraph(window, cx);
+        item.dispatch_selection_context_action("COMFY-GRAPH-136", window, cx);
     });
     pump_context_menu_frames(cx);
     let overwrite_editor = observer_item.read_with(cx, |item, _| {

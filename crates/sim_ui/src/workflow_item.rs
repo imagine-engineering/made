@@ -2580,11 +2580,26 @@ impl GraphWorkspaceItem {
         crate::ToggleLogsPanel,
         "Workspace.ToggleBottomPanelTab.logs-terminal"
     );
-    shell_action_handler!(
-        shell_convert_to_subgraph,
-        crate::ConvertToSubgraph,
-        "Sim.Graph.ConvertToSubgraph"
-    );
+    pub(crate) fn shell_convert_to_subgraph(
+        &mut self,
+        _: &crate::ConvertToSubgraph,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let command_id = "Sim.Graph.ConvertToSubgraph";
+        if !command_registration(command_id).is_some_and(|registration| {
+            matches!(
+                registration.status,
+                CommandNativeStatus::RequiresInput { .. }
+            )
+        }) {
+            self.dispatch_shell_command(command_id, cx);
+            return;
+        }
+        #[cfg(feature = "test-support")]
+        self.shell_dispatch_trace.push(command_id.to_owned());
+        self.dispatch_selection_context_action("COMFY-GRAPH-135", window, cx);
+    }
     shell_action_handler!(
         shell_toggle_minimap,
         crate::ToggleMinimap,
@@ -2667,7 +2682,7 @@ impl GraphWorkspaceItem {
             self.dispatch_shell_command("Sim.PublishSubgraph", cx),
             CommandDispatchOutcome::RequiresInput { .. }
         ) {
-            self.begin_shell_publish_subgraph(window, cx);
+            self.dispatch_selection_context_action("COMFY-GRAPH-136", window, cx);
         }
     }
 }

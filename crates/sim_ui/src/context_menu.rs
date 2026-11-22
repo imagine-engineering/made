@@ -2994,8 +2994,9 @@ impl GraphWorkspaceItem {
         }
     }
 
-    pub(crate) fn begin_shell_publish_subgraph(
+    pub(crate) fn dispatch_selection_context_action(
         &mut self,
+        feature_id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3006,7 +3007,7 @@ impl GraphWorkspaceItem {
                 return;
             }
         };
-        let binding = match graph_context_action_binding("COMFY-GRAPH-136") {
+        let binding = match graph_context_action_binding(feature_id) {
             Ok(binding) => binding,
             Err(error) => {
                 self.reject_context_action(error, cx);
@@ -3031,7 +3032,7 @@ impl GraphWorkspaceItem {
         let content_revision = document
             .to_workflow_bytes()
             .map(|bytes| ContentRevision::from_bytes(&bytes))
-            .map_err(|error| format!("workflow cannot be published: {error}"))?;
+            .map_err(|error| format!("workflow cannot be serialized: {error}"))?;
         Ok(GraphContextInvocation {
             document_identity: document.document_identity,
             content_revision,
