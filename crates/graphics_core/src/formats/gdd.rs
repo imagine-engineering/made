@@ -682,7 +682,7 @@ impl GddGraphNode {
     pub fn has_numeric_connection(&self) -> bool {
         matches!(
             self.numeric_input.as_ref(),
-            Some(GddNumericInput::Connected { .. })
+            Some(GddNumericInput::Connected { .. } | GddNumericInput::Imported { .. })
         )
     }
 
@@ -2746,27 +2746,41 @@ impl InspectedGddV1 {
         self.check_node_edit_target(node)?;
         let path = &node.network_path;
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let Some(GddNumericInput::Connected { index, upstream }) =
-            graph_numeric_input(&interface, node)
-        else {
-            return Err(GddArchiveError::UnsupportedGraphConnection);
+        let (index, upstream) = match graph_numeric_input(&interface, node) {
+            Some(GddNumericInput::Connected { index, upstream }) => (index, Some(upstream)),
+            Some(GddNumericInput::Imported {
+                index,
+                import_index,
+            }) if enclosing_network_inputs(interface.document_network(), path)
+                .and_then(|inputs| inputs.get(import_index))
+                .is_some() =>
+            {
+                (index, None)
+            }
+            _ => return Err(GddArchiveError::UnsupportedGraphConnection),
         };
         let connector = InputConnector::node_at_index(node.local_id, index);
-        if !is_only_graph_wire(&mut interface, path, upstream, connector) {
-            return Err(GddArchiveError::UnsupportedGraphDisconnection);
-        }
-        let upstream_metadata = interface
-            .node_metadata(&upstream, path)
-            .ok_or(GddArchiveError::UnsupportedGraphConnection)?
-            .persistent_metadata
-            .clone();
+        let upstream_metadata = if let Some(upstream) = upstream {
+            if !is_only_graph_wire(&mut interface, path, upstream, connector) {
+                return Err(GddArchiveError::UnsupportedGraphDisconnection);
+            }
+            let metadata = interface
+                .node_metadata(&upstream, path)
+                .ok_or(GddArchiveError::UnsupportedGraphConnection)?
+                .persistent_metadata
+                .clone();
+            Some((upstream, metadata))
+        } else {
+            None
+        };
         interface.disconnect_input(&connector, path);
         let expected = graph_numeric_port(&interface, node)
             .filter(|port| port.index == index && port.exposed)
             .ok_or(GddArchiveError::UnsupportedGraphDisconnection)?;
-        if interface
-            .node_metadata(&upstream, path)
-            .is_none_or(|metadata| metadata.persistent_metadata != upstream_metadata)
+        if let Some((upstream, original)) = upstream_metadata
+            && interface
+                .node_metadata(&upstream, path)
+                .is_none_or(|metadata| metadata.persistent_metadata != original)
         {
             return Err(GddArchiveError::UnsupportedGraphDisconnection);
         }
@@ -4747,7 +4761,9 @@ mod tests {
     }
 
     async fn network_import_fixture() -> (InspectedGddV1, StorageNodeId) {
-        use graphite_document_graph_storage::{AttributeDelta, NoMetadata, Value};
+        use graphite_document_graph_storage::{
+            AttributeDelta, NoMetadata, Value, attr::node::input::ui::NAME,
+        };
         use graphite_graph_craft::concrete;
         use graphite_math_nodes::{absolute_value, add};
         use graphite_resource::ResourceRegistry;
@@ -4839,6 +4855,12 @@ mod tests {
             .find(|node| node.nested_network() == Some(nested.id))
             .expect("encapsulating node")
             .storage_id;
+        let consumer = graph
+            .nodes
+            .iter()
+            .find(|node| node.local_id == NodeId(9))
+            .expect("the first secondary consumer")
+            .storage_id;
         let (mut owner, staged) = source
             .fork_working_copy(&budget())
             .await
@@ -4846,14 +4868,24 @@ mod tests {
         commit_graph_node_edit(
             &mut owner,
             ConstructedOps {
-                ops: vec![RegistryDelta::ChangeNodeInputAttribute {
-                    id: owner_id,
-                    index: 1,
-                    delta: AttributeDelta {
-                        key: "fixture::opaque-import".into(),
-                        value: Some(Value::Str("surviving input".into())),
+                ops: vec![
+                    RegistryDelta::ChangeNodeInputAttribute {
+                        id: owner_id,
+                        index: 1,
+                        delta: AttributeDelta {
+                            key: "fixture::opaque-import".into(),
+                            value: Some(Value::Str("surviving input".into())),
+                        },
                     },
-                }],
+                    RegistryDelta::ChangeNodeInputAttribute {
+                        id: consumer,
+                        index: 0,
+                        delta: AttributeDelta {
+                            key: NAME.into(),
+                            value: Some(Value::Str("Saved operand".into())),
+                        },
+                    },
+                ],
                 declarations: Default::default(),
             },
         )
@@ -4950,6 +4982,96 @@ mod tests {
                 .await
                 .expect("one undo");
             assert!(undo.document.registry().value_equal(original_registry));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_009_1_disconnects_the_addressed_import_and_keeps_its_other_consumers() {
+        futures::executor::block_on(async {
+            let (original, owner_id) = network_import_fixture().await;
+            let graph = original.graph_inspection().await.expect("original graph");
+            let target = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(9))
+                .expect("named secondary import consumer");
+            let other = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("a second consumer of the same import");
+            assert_eq!(target.numeric_import_source(), Some(1));
+            assert!(target.has_numeric_connection());
+            let plain = graph
+                .nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(14))
+                .expect("literal");
+            assert!(matches!(
+                original
+                    .disconnect_graph_numeric_input_in_copy(plain, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphConnection)
+            ));
+            let input = InputConnector::primary_input(target.local_id);
+            let path = &target.network_path;
+            let mut pinned = original
+                .runtime_graph()
+                .await
+                .expect("original runtime")
+                .into_interface()
+                .expect("pinned editor");
+            pinned.disconnect_input(&input, path);
+            let expected = pinned
+                .input_from_connector(&input, path)
+                .expect("source fallback");
+            assert!(matches!(expected, NodeInput::Value { exposed: true, .. }));
+
+            let copy = original
+                .disconnect_graph_numeric_input_in_copy(target, budget())
+                .await
+                .expect("disconnect a single addressed import wire");
+            assert!(matches!(
+                copy.disconnect_graph_numeric_input_in_copy(target, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let actual = copy
+                .runtime_graph()
+                .await
+                .expect("saved runtime")
+                .into_interface()
+                .expect("pinned source editor");
+            assert_eq!(actual.input_from_connector(&input, path), Some(expected));
+            let registry = copy.document.registry();
+            let source = original.document.registry();
+            assert_eq!(registry.networks, source.networks);
+            assert_eq!(
+                registry.node_instances[&owner_id],
+                source.node_instances[&owner_id]
+            );
+            assert_eq!(
+                registry.node_instances[&other.storage_id],
+                source.node_instances[&other.storage_id]
+            );
+            let [prior] = source.node_instances[&target.storage_id].inputs() else {
+                panic!("expected the original named input");
+            };
+            let [saved] = registry.node_instances[&target.storage_id].inputs() else {
+                panic!("expected the same slot after disconnect");
+            };
+            assert_eq!(saved.attributes, prior.attributes);
+            assert_eq!(copy.history_len(), original.history_len() + 1);
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(undo.document.registry().value_equal(source));
             let redo = undo
                 .move_history_in_copy(GddHistoryDirection::Redo, budget())
                 .await

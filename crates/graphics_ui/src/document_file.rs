@@ -3156,6 +3156,16 @@ mod tests {
         paint(window);
     }
 
+    fn choose_scoped_copy_node(window: &mut gpui::VisualTestContext, selector: &'static str) {
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        click(window, selector);
+        paint(window);
+    }
+
     fn choose_nested_copy_node(window: &mut gpui::VisualTestContext) {
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
     }
@@ -3517,13 +3527,7 @@ mod tests {
             .expect("open source network")
             .downcast::<GraphiteDocumentItem>()
             .expect("native Graphite Inspector");
-        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
-        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
-        paint(window);
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
         click(window, "GRAPHITE-GDD-CONNECT-IMPORT-1");
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
@@ -3542,13 +3546,7 @@ mod tests {
             })
             .expect("reopen the typed-wire folder");
         assert_ne!(reopened, source);
-        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
-        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
-        paint(window);
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
         click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
         window.run_until_parked();
         reopened.read_with(window, |item, cx| {
@@ -3564,6 +3562,81 @@ mod tests {
                 form.output_preview,
                 NodeOutputPreview::Ready(GddNumericValue::Number(23.))
             ));
+            assert_eq!(contents.history_len(), original_history + 1);
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_009_2_workspace_disconnects_a_scoped_import_and_previews_its_fallback(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/disconnect-import.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        let selector = "GRAPHITE-GDD-NODE-COPY-ITEM-3";
+        choose_scoped_copy_node(window, selector);
+        click(window, "GRAPHITE-GDD-DISCONNECT-VALUE");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
+        paint(window);
+        click(window, "GRAPHITE-GDD-DISCONNECT-VALUE");
+        let destination = PathBuf::from("/project/disconnected-import.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopen the disconnected folder");
+        assert_ne!(reopened, source);
+        choose_scoped_copy_node(window, selector);
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the numeric preview");
+            };
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the original Graphite format");
+            };
+            let node = form.selected_node().expect("same target node");
+            assert!(!node.has_numeric_connection());
+            assert_eq!(node.numeric_input_exposed(), Some(true));
+            assert!(matches!(
+                form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::Number(0.))
+            ));
+            let network = form.active_network().expect("same scope");
+            assert_eq!(network.import_name(1), Some("Second numeric input"));
+            assert_eq!(network.import_count, 2);
             assert_eq!(contents.history_len(), original_history + 1);
             assert!(!item.is_dirty(cx));
         });
