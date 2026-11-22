@@ -14,11 +14,11 @@ use graphite_document_container::{
     validate_path,
 };
 use graphite_document_format::{
-    GddV1, GddV1Layout, Layout, MANIFEST_CODEC, Manifest,
+    ExportFormat, ExportOptions, GddV1, GddV1Layout, Layout, MANIFEST_CODEC, Manifest,
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
-use graphite_graph_craft::application_io::resource::ResourceHash;
+use graphite_graph_craft::application_io::resource::{HashMapResourceStorage, ResourceHash};
 use zip::ZipArchive;
 
 use super::OriginalJson;
@@ -30,6 +30,39 @@ pub struct GddArchiveBudget {
     pub max_entry_bytes: u64,
     pub max_total_entry_bytes: u64,
     pub max_entries: usize,
+}
+
+#[derive(Clone, Copy)]
+pub struct GddExportContent {
+    pub include_registry: bool,
+    pub include_history: bool,
+}
+
+impl Default for GddExportContent {
+    fn default() -> Self {
+        let options = ExportOptions::default();
+        Self {
+            include_registry: options.include_registry,
+            include_history: options.include_history,
+        }
+    }
+}
+
+impl GddExportContent {
+    pub fn validate(self) -> Result<(), GddArchiveError> {
+        self.options()
+            .validate()
+            .map_err(GddArchiveError::InvalidExportOptions)?;
+        Ok(())
+    }
+
+    fn options(self) -> ExportOptions {
+        ExportOptions {
+            include_registry: self.include_registry,
+            include_history: self.include_history,
+            ..ExportOptions::default()
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -44,6 +77,10 @@ pub enum GddArchiveError {
     UnsupportedManifest { format: String, version: u32 },
     #[error("The Graphite archive is missing its recorded registry and history.")]
     MissingDocument,
+    #[error("The Graphite document has no history to export.")]
+    NoExportableHistory,
+    #[error("{0}")]
+    InvalidExportOptions(&'static str),
     #[error("An embedded Graphite resource has no recorded content hash.")]
     UnresolvedResource,
     #[error("The embedded Graphite resource {0} is missing or does not match its content hash.")]
@@ -56,7 +93,7 @@ pub enum GddArchiveError {
     Manifest(#[from] serde_json::Error),
     #[error("The Graphite container could not be staged: {0}")]
     Container(#[from] ContainerError),
-    #[error("The pinned Graphite storage reader could not open the document: {0}")]
+    #[error("The pinned Graphite document storage operation failed: {0}")]
     Storage(#[from] graphite_document_format::Error),
     #[error("The pinned Graphite writer could not export the archive: {0}")]
     Export(#[source] ContainerError),
@@ -96,18 +133,21 @@ impl PreservedGddV1 {
     }
 
     pub fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
-        self.entries
-            .names
-            .iter()
-            .map(|path| {
-                let bytes = match self.read_entry(path)? {
-                    ByteHolder::Owned(bytes) => bytes,
-                    #[cfg(not(target_family = "wasm"))]
-                    other => other.as_slice().to_vec(),
-                };
-                Ok((PathBuf::from(path), bytes))
-            })
-            .collect()
+        self.entries.folder_files()
+    }
+
+    pub async fn export_folder_files_with_content(
+        &self,
+        content: GddExportContent,
+        budget: GddArchiveBudget,
+    ) -> Result<Vec<(PathBuf, Vec<u8>)>, GddArchiveError> {
+        if content.include_registry && content.include_history {
+            return Ok(self.folder_files()?);
+        }
+        let bytes = self
+            .export_filtered_archive(ArchiveFormat::Zip, content, &budget)
+            .await?;
+        Ok(stage_zip(&bytes, &budget)?.folder_files()?)
     }
 
     pub fn export_archive(
@@ -120,6 +160,47 @@ impl PreservedGddV1 {
             ArchiveFormat::Xz => self.write_archive::<Xz>(max_archive_bytes),
         }
         .map_err(GddArchiveError::Export)
+    }
+
+    pub async fn export_archive_with_content(
+        &self,
+        format: ArchiveFormat,
+        content: GddExportContent,
+        budget: GddArchiveBudget,
+    ) -> Result<Vec<u8>, GddArchiveError> {
+        if content.include_registry && content.include_history {
+            return self.export_archive(format, budget.max_archive_bytes);
+        }
+        self.export_filtered_archive(format, content, &budget).await
+    }
+
+    async fn export_filtered_archive(
+        &self,
+        format: ArchiveFormat,
+        content: GddExportContent,
+        budget: &GddArchiveBudget,
+    ) -> Result<Vec<u8>, GddArchiveError> {
+        content.validate()?;
+        if content.include_history && self.history_len() == 0 {
+            return Err(GddArchiveError::NoExportableHistory);
+        }
+        let format = match format {
+            ArchiveFormat::Zip => ExportFormat::Zip,
+            ArchiveFormat::Xz => ExportFormat::Xz,
+        };
+        let bytes = self
+            .document
+            .export_to_bytes(
+                format,
+                content.options(),
+                &HashMapResourceStorage::new(),
+                None,
+            )
+            .await?;
+        if bytes.len() > budget.max_archive_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        Ok(bytes)
     }
 
     fn write_archive<Format: Archive>(
@@ -282,6 +363,22 @@ struct StagedArchive {
     names: BTreeSet<String>,
 }
 
+impl StagedArchive {
+    fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
+        self.names
+            .iter()
+            .map(|path| {
+                let bytes = match self.working.read(path)? {
+                    ByteHolder::Owned(bytes) => bytes,
+                    #[cfg(not(target_family = "wasm"))]
+                    other => other.as_slice().to_vec(),
+                };
+                Ok((PathBuf::from(path), bytes))
+            })
+            .collect()
+    }
+}
+
 impl<'a> StagedEntries<'a> {
     fn new(budget: &'a GddArchiveBudget) -> Self {
         Self {
@@ -375,9 +472,10 @@ fn zip_directory(bytes: &[u8], max_entries: usize) -> Result<(usize, u64), GddAr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use graphite_document_format::{Codec, ExportFormat, ExportOptions};
+    use graphite_document_format::Codec;
     use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
-    use graphite_graph_craft::application_io::resource::{HashMapResourceStorage, ResourceId};
+    use graphite_graph_craft::application_io::resource::ResourceId;
+    use std::path::Path;
 
     fn budget() -> GddArchiveBudget {
         GddArchiveBudget {
@@ -411,6 +509,131 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_009_010_011_exports_registry_history_and_complete_outputs() {
+        futures::executor::block_on(async {
+            for codec in [Codec::Postcard, Codec::Json] {
+                let mut owner = document();
+                if codec == Codec::Json {
+                    owner
+                        .update_manifest(|manifest| {
+                            manifest.codecs.registry = Codec::Json;
+                            manifest.codecs.history = Codec::JsonLines;
+                        })
+                        .expect("original codec selection");
+                }
+                let resource_id = ResourceId::from(32_u64);
+                let resource = b"resource in source history";
+                let hash = ResourceHash::from(resource.as_slice());
+                owner
+                    .add_resource(resource_id, resource)
+                    .expect("authentic history before export");
+                let original = export(&owner, Some(b"source legacy contents")).await;
+                let source = open_gdd_archive(&original, budget())
+                    .await
+                    .expect("actual source GDD");
+                let codecs = source.manifest().codecs;
+                let registry = path_for(GddV1Layout.registry_basename(), codecs.registry);
+                let history = path_for(GddV1Layout.history_basename(), codecs.history);
+                for (include_registry, include_history) in
+                    [(true, false), (false, true), (true, true)]
+                {
+                    let content = GddExportContent {
+                        include_registry,
+                        include_history,
+                    };
+                    for format in [ArchiveFormat::Zip, ArchiveFormat::Xz] {
+                        let bytes = Arc::<[u8]>::from(
+                            source
+                                .export_archive_with_content(format, content, budget())
+                                .await
+                                .expect("source-qualified content export"),
+                        );
+                        let exported = open_gdd_archive(&bytes, budget())
+                            .await
+                            .expect("reopen selected archive contents");
+                        assert_eq!(exported.manifest().codecs.registry, codec);
+                        assert_eq!(exported.read_entry(&registry).is_ok(), include_registry);
+                        assert_eq!(exported.read_entry(&history).is_ok(), include_history);
+                        assert_eq!(
+                            exported.read_entry(GddV1Layout.legacy_path()).is_ok(),
+                            include_registry && include_history
+                        );
+                        assert_eq!(
+                            exported
+                                .document
+                                .registry()
+                                .resources
+                                .get(&resource_id)
+                                .and_then(|entry| entry.hash),
+                            Some(hash)
+                        );
+                        assert_eq!(
+                            exported
+                                .read_entry(&GddV1Layout.resource_path(&hash))
+                                .expect("retained embedded resource")
+                                .as_slice(),
+                            resource
+                        );
+                    }
+                    let folder = source
+                        .export_folder_files_with_content(content, budget())
+                        .await
+                        .expect("export folder contents");
+                    assert_eq!(
+                        folder.iter().any(|(path, _)| path == Path::new(&registry)),
+                        include_registry
+                    );
+                    assert_eq!(
+                        folder.iter().any(|(path, _)| path == Path::new(&history)),
+                        include_history
+                    );
+                }
+                assert_eq!(source.original_bytes(), original.as_ref());
+                assert!(
+                    source.read_entry(&registry).is_ok() && source.read_entry(&history).is_ok()
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn at_gra_gdd_012_rejects_no_contents_and_an_empty_history_export() {
+        futures::executor::block_on(async {
+            let original = export(&document(), None).await;
+            let source = open_gdd_archive(&original, budget())
+                .await
+                .expect("valid new document");
+            let none = GddExportContent {
+                include_registry: false,
+                include_history: false,
+            };
+            let empty_history = GddExportContent {
+                include_registry: false,
+                include_history: true,
+            };
+            assert!(matches!(
+                source
+                    .export_archive_with_content(ArchiveFormat::Zip, none, budget())
+                    .await,
+                Err(GddArchiveError::InvalidExportOptions(_))
+            ));
+            assert!(matches!(
+                source
+                    .export_folder_files_with_content(none, budget())
+                    .await,
+                Err(GddArchiveError::InvalidExportOptions(_))
+            ));
+            assert!(matches!(
+                source
+                    .export_archive_with_content(ArchiveFormat::Zip, empty_history, budget())
+                    .await,
+                Err(GddArchiveError::NoExportableHistory)
+            ));
+            assert_eq!(source.original_bytes(), original.as_ref());
+        });
     }
 
     #[test]

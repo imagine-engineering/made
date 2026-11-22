@@ -6,11 +6,11 @@ use gpui::{
     SharedString, Task, WeakEntity, Window,
 };
 use graphics_core::formats::{
-    gdd::{ArchiveFormat, GddArchiveBudget, PreservedGddV1, open_gdd_archive},
+    gdd::{ArchiveFormat, GddArchiveBudget, GddExportContent, PreservedGddV1, open_gdd_archive},
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use project::{Project, ProjectEntryId, ProjectPath};
-use ui::{Button, Color, Label, LabelSize, prelude::*};
+use ui::{Button, Checkbox, Color, Label, LabelSize, ToggleState, prelude::*};
 use workspace::{Item, Pane, item::ItemBufferKind};
 
 const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
@@ -147,6 +147,7 @@ pub(crate) struct GraphiteDocumentItem {
     focus_handle: FocusHandle,
     copy_task: Option<Task<()>>,
     copy_feedback: Option<(SharedString, Color)>,
+    export_content: GddExportContent,
 }
 
 #[derive(Clone, Copy)]
@@ -168,6 +169,14 @@ impl GraphiteDocumentItem {
         cx: &mut Context<Self>,
     ) {
         if self.copy_task.is_some() {
+            return;
+        }
+        let content = self.export_content;
+        if format.is_some()
+            && let Err(error) = content.validate()
+        {
+            self.copy_feedback = Some((error.to_string().into(), Color::Error));
+            cx.notify();
             return;
         }
         let model = self.model.read(cx);
@@ -241,10 +250,15 @@ impl GraphiteDocumentItem {
                         Ok::<_, anyhow::Error>(match format {
                             GddCopyFormat::Archive(format) => PreparedCopy::File(
                                 archive
-                                    .export_archive(format, ARCHIVE_BUDGET.max_archive_bytes)?
+                                    .export_archive_with_content(format, content, ARCHIVE_BUDGET)
+                                    .await?
                                     .into(),
                             ),
-                            GddCopyFormat::Folder => PreparedCopy::Folder(archive.folder_files()?),
+                            GddCopyFormat::Folder => PreparedCopy::Folder(
+                                archive
+                                    .export_folder_files_with_content(content, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
                         })
                     })
                     .await?
@@ -309,6 +323,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             focus_handle: cx.focus_handle(),
             copy_task: None,
             copy_feedback: None,
+            export_content: GddExportContent::default(),
         }
     }
 }
@@ -358,6 +373,7 @@ impl Item for GraphiteDocumentItem {
             focus_handle: cx.focus_handle(),
             copy_task: None,
             copy_feedback: None,
+            export_content: self.export_content,
         })))
     }
 }
@@ -404,6 +420,49 @@ impl Render for GraphiteDocumentItem {
                 .child(Label::new(format!(
                     "{history_len} history entries · {hot_log_len} pending operations"
                 )))
+                .child(
+                    h_flex()
+                        .gap_3()
+                        .child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-EXPORT-INCLUDE-REGISTRY".into())
+                                .child(
+                                    Checkbox::new(
+                                        "graphite-export-include-registry",
+                                        ToggleState::from(self.export_content.include_registry),
+                                    )
+                                    .label("Include registry")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(
+                                        |item, choice: &ToggleState, _, cx| {
+                                            item.export_content.include_registry =
+                                                choice.selected();
+                                            item.copy_feedback = None;
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-EXPORT-INCLUDE-HISTORY".into())
+                                .child(
+                                    Checkbox::new(
+                                        "graphite-export-include-history",
+                                        ToggleState::from(self.export_content.include_history),
+                                    )
+                                    .label("Include history")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(
+                                        |item, choice: &ToggleState, _, cx| {
+                                            item.export_content.include_history = choice.selected();
+                                            item.copy_feedback = None;
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        ),
+                )
                 .child(
                     h_flex().gap_2().children(
                         [
@@ -606,6 +665,118 @@ mod tests {
                 .await
                 .expect("source file is intact"),
             bytes
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_009_010_012_workspace_selects_archive_contents_without_editing_source(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_format::{Layout, io::path_for};
+        use graphite_graph_craft::application_io::resource::ResourceId;
+
+        let mut source = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            172,
+            "pinned Graphite".into(),
+            "pinned library".into(),
+        )
+        .expect("original Graphite working copy");
+        source
+            .add_resource(ResourceId::from(12_u64), b"fixture resource")
+            .expect("original Graphite history");
+        let codecs = source.manifest().codecs;
+        let registry_entry = path_for(GddV1Layout.registry_basename(), codecs.registry);
+        let history_entry = path_for(GddV1Layout.history_basename(), codecs.history);
+        let original = source
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &HashMapResourceStorage::new(),
+                None,
+            )
+            .await
+            .expect("source ZIP with history");
+
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/source.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open via native Workspace")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        paint(window);
+
+        let registry_path = PathBuf::from("/project/registry-only.gdd.zip");
+        click(window, "GRAPHITE-EXPORT-INCLUDE-HISTORY");
+        click(window, "GRAPHITE-EXPORT-GDD-ZIP");
+        window.simulate_new_path_selection(|_| Some(registry_path.clone()));
+        window.run_until_parked();
+        paint(window);
+        let registry_bytes = Arc::<[u8]>::from(
+            filesystem
+                .load_bytes(&registry_path)
+                .await
+                .expect("registry ZIP saved"),
+        );
+        let registry_copy = open_gdd_archive(&registry_bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("registry export reopens");
+        assert!(registry_copy.read_entry(&registry_entry).is_ok());
+        assert!(registry_copy.read_entry(&history_entry).is_err());
+
+        click(window, "GRAPHITE-EXPORT-INCLUDE-REGISTRY");
+        click(window, "GRAPHITE-EXPORT-GDD-XZ");
+        assert!(!window.did_prompt_for_new_path());
+        item.read_with(window, |item, cx| {
+            let (message, color) = item
+                .copy_feedback
+                .as_ref()
+                .expect("invalid selection warning");
+            assert_eq!(*color, Color::Error);
+            assert!(message.contains("at least one"));
+            assert!(!item.is_dirty(cx));
+        });
+
+        let history_path = PathBuf::from("/project/history-only.gdd.tar.xz");
+        click(window, "GRAPHITE-EXPORT-INCLUDE-HISTORY");
+        click(window, "GRAPHITE-EXPORT-GDD-XZ");
+        window.simulate_new_path_selection(|_| Some(history_path.clone()));
+        window.run_until_parked();
+        let history_bytes = Arc::<[u8]>::from(
+            filesystem
+                .load_bytes(&history_path)
+                .await
+                .expect("history XZ saved"),
+        );
+        let history_copy = open_gdd_archive(&history_bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("history export replays");
+        assert!(history_copy.read_entry(&registry_entry).is_err());
+        assert!(history_copy.read_entry(&history_entry).is_ok());
+        assert_eq!(
+            history_copy.history_len(),
+            source.session().history().count()
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original retained"),
+            original
         );
     }
 
