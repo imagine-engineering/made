@@ -16,7 +16,7 @@ use graphite_graph_craft::{
         value::{RenderOutput, RenderOutputType, TaggedValue},
     },
     graphene_compiler::{Compiler, Executor},
-    proto::{ProtoNetwork, TypingContext},
+    proto::{GraphErrors, ProtoNetwork, TypingContext},
 };
 use graphite_interpreted_executor::{
     dynamic_executor::DynamicExecutor, node_registry::NODE_REGISTRY,
@@ -377,22 +377,39 @@ impl UnaryNumericOperation {
 
 pub(crate) struct NumericGraphEvaluator(DynamicExecutor);
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum NumericGraphPreparationError {
+    #[error("{0}")]
+    Compiler(String),
+    #[error("{0:?}")]
+    Nodes(GraphErrors),
+}
+
+pub(crate) const NUMERIC_NETWORK_WRAPPER: NodeId = NodeId(0);
+
 impl NumericGraphEvaluator {
-    pub(crate) async fn prepare(network: NodeNetwork) -> Result<Self, String> {
+    pub(crate) async fn prepare(
+        network: NodeNetwork,
+    ) -> Result<Self, NumericGraphPreparationError> {
         AssertUnwindSafe(async {
-            let proto = compile_detached_numeric_network(network)?;
+            let proto = compile_detached_numeric_network(network)
+                .map_err(NumericGraphPreparationError::Compiler)?;
             let executor = DynamicExecutor::new(proto)
                 .await
-                .map_err(|errors| format!("{errors:?}"))?;
+                .map_err(NumericGraphPreparationError::Nodes)?;
             if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>)) {
-                return Err("Unexpected Graphite evaluation context.".into());
+                return Err(NumericGraphPreparationError::Compiler(
+                    "Unexpected Graphite evaluation context.".into(),
+                ));
             }
             Ok(Self(executor))
         })
         .catch_unwind()
         .await
         .unwrap_or_else(|_| {
-            Err("The pinned Graphite evaluator stopped while preparing the numeric graph.".into())
+            Err(NumericGraphPreparationError::Compiler(
+                "The pinned Graphite evaluator stopped while preparing the numeric graph.".into(),
+            ))
         })
     }
 
@@ -435,7 +452,7 @@ pub(crate) fn typecheck_detached_numeric_network(network: NodeNetwork) -> Result
 }
 
 fn compile_detached_numeric_network(network: NodeNetwork) -> Result<ProtoNetwork, String> {
-    let branch_id = NodeId(0);
+    let branch_id = NUMERIC_NETWORK_WRAPPER;
     let mut network = NodeNetwork {
         nodes: [(
             branch_id,

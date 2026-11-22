@@ -64,7 +64,8 @@ use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
-    NumericGraphEvaluator, UnaryNumericOperation, typecheck_detached_numeric_network,
+    NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator, NumericGraphPreparationError,
+    UnaryNumericOperation, typecheck_detached_numeric_network,
 };
 
 mod xz;
@@ -354,7 +355,7 @@ impl GddNumericGraphEvaluator {
         NumericGraphEvaluator::prepare(detached)
             .await
             .map(Self)
-            .map_err(GddArchiveError::GraphNumericPreviewEvaluation)
+            .map_err(|error| GddArchiveError::GraphNumericPreviewEvaluation(error.to_string()))
     }
 
     pub async fn evaluate(&self) -> Result<GddNumericValue, GddArchiveError> {
@@ -3035,8 +3036,12 @@ impl InspectedGddV1 {
         if node.nested_network.is_none() && !node.can_preview_numeric_output() {
             return Err(GddArchiveError::UnsupportedGraphNumericPreview);
         }
-        let detached = document_numeric_export_network(&graph.network, *node_id, output_index)?;
-        GddNumericGraphEvaluator::prepare(detached).await
+        let (detached, path) =
+            document_numeric_export_network(&graph.network, *node_id, output_index)?;
+        NumericGraphEvaluator::prepare(detached)
+            .await
+            .map(GddNumericGraphEvaluator)
+            .map_err(|error| document_numeric_compilation_error(error, &path, &graph.nodes))
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(
@@ -4654,9 +4659,10 @@ fn document_numeric_export_network(
     mut network: &NodeNetwork,
     mut node_id: NodeId,
     mut output_index: usize,
-) -> Result<NodeNetwork, GddArchiveError> {
+) -> Result<(NodeNetwork, Vec<NodeId>), GddArchiveError> {
     const MAX_EXPORT_DEPTH: usize = 32;
     let mut imports = &[][..];
+    let mut path = Vec::new();
     for _ in 0..MAX_EXPORT_DEPTH {
         let document = network
             .nodes
@@ -4666,7 +4672,7 @@ fn document_numeric_export_network(
             if output_index != 0 {
                 return Err(GddArchiveError::UnsupportedGraphNumericPreview);
             }
-            return numeric_preview_network(network, node_id, imports);
+            return Ok((numeric_preview_network(network, node_id, imports)?, path));
         };
         // The pinned compiler replaces a hidden wrapper with a passthrough.
         if !document.visible || document.context_features != Default::default() {
@@ -4681,10 +4687,50 @@ fn document_numeric_export_network(
         };
         network = nested;
         imports = &document.inputs;
+        path.push(node_id);
         node_id = *source_id;
         output_index = *source_output;
     }
     Err(GddArchiveError::GraphNumericPreviewBudget)
+}
+
+fn document_numeric_compilation_error(
+    error: NumericGraphPreparationError,
+    network_path: &[NodeId],
+    nodes: &[NodeMetadataEntry],
+) -> GddArchiveError {
+    let NumericGraphPreparationError::Nodes(errors) = error else {
+        return GddArchiveError::GraphNumericPreviewEvaluation(error.to_string());
+    };
+    let scope = if network_path.is_empty() {
+        "Root graph".to_owned()
+    } else {
+        let path = network_path
+            .iter()
+            .map(|node| node.0.to_string())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        format!("Network {path}")
+    };
+    let details = errors
+        .iter()
+        .map(|error| {
+            // Any path segments after the saved node belong to pinned compiler adapters.
+            let [NUMERIC_NETWORK_WRAPPER, local_id, ..] = error.node_path.as_slice() else {
+                return format!("{error:?}");
+            };
+            let Some(node) = nodes
+                .iter()
+                .find(|node| node.local_id == *local_id && node.network_path == network_path)
+            else {
+                return format!("{error:?}");
+            };
+            let name = node.display_name.as_deref().unwrap_or(&error.identifier);
+            format!("{scope} · {name} [{}]\n{:?}", local_id.0, error.error)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    GddArchiveError::GraphNumericPreviewEvaluation(details)
 }
 
 fn numeric_preview_network(
@@ -5509,7 +5555,8 @@ mod tests {
         network: NodeNetwork,
     ) -> Result<TaggedValue, String> {
         NumericGraphEvaluator::prepare(network)
-            .await?
+            .await
+            .map_err(|error| error.to_string())?
             .evaluate()
             .await
     }

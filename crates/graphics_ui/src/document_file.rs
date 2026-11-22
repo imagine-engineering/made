@@ -9783,6 +9783,168 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_graph_037_2_workspace_reports_the_failed_nested_node(cx: &mut TestAppContext) {
+        use graphite_document_graph_storage::NodeMetadataSource;
+        use graphite_glam::DVec2;
+        use graphite_graph_craft::document::{
+            DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+            value::TaggedValue,
+        };
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::math_nodes::{absolute_value, add};
+
+        struct ArithmeticNames;
+
+        impl NodeMetadataSource for ArithmeticNames {
+            fn display_name(&self, _: &[NodeId], node: NodeId) -> Option<&str> {
+                (node == NodeId(7)).then_some("Arithmetic")
+            }
+        }
+
+        let literal = |value| NodeInput::value(value, false);
+        let operation = |identifier, inputs| DocumentNode {
+            implementation: DocumentNodeImplementation::ProtoNode(identifier),
+            inputs,
+            ..Default::default()
+        };
+        let nested = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    operation(
+                        add::IDENTIFIER,
+                        vec![
+                            literal(TaggedValue::Integer(3)),
+                            literal(TaggedValue::DVec2(DVec2::new(1., 2.))),
+                        ],
+                    ),
+                ),
+                (
+                    NodeId(8),
+                    operation(
+                        absolute_value::IDENTIFIER,
+                        vec![NodeInput::node(NodeId(7), 0)],
+                    ),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(8), 0)],
+            ..Default::default()
+        };
+        let root = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(7),
+                    operation(
+                        absolute_value::IDENTIFIER,
+                        vec![literal(TaggedValue::Number(-17.))],
+                    ),
+                ),
+                (
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(nested),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(24), 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            690,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("source GDD");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(
+                &root,
+                &ArithmeticNames,
+                &ResourceRegistry::new(),
+                &resources,
+            )
+            .expect("saved typed inputs with an incompatible combination");
+        let history = owner.session().history().count();
+        let original = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/nested-graph-node-diagnostic.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        for selector in ["GRAPHITE-GDD-TOGGLE-SAVED-GRAPH", "GRAPHITE-GDD-RUN-GRAPH"] {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+        }
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-GRAPH-RUN-RESULT")
+                .is_some()
+        );
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            let NodeOutputPreview::Failed(error) = &form.document_run else {
+                panic!("expected a pinned typing failure")
+            };
+            assert!(error.contains("Network 24 · Arithmetic [7]"), "{error}");
+            assert!(error.contains("incompatible"), "{error}");
+            assert!(!error.contains("Root graph · Arithmetic [7]"), "{error}");
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+            assert!(!item.is_dirty(cx));
+            assert!(form.document_run_evaluator.is_none());
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("GDD")
+                    .history_len(),
+                history
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("unchanged source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_r17_1_workspace_projects_scoped_ports_and_saved_wires(cx: &mut TestAppContext) {
         use graphics_core::formats::gdd::GddGraphPortSource;
 
