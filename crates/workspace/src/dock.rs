@@ -9,11 +9,11 @@ use collections::HashMap;
 use db::kvp::KeyValueStore;
 
 use gpui::{
-    Action, Anchor, AnyView, AnyWindowHandle, App, Axis, Context, Entity, EntityId, EventEmitter,
-    FocusHandle, Focusable, IntoElement, KeyContext, MouseButton, MouseDownEvent, MouseUpEvent,
-    ParentElement, Render, SharedString, StyleRefinement, Styled, Subscription, TitlebarOptions,
-    WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, deferred, div, px,
-    size,
+    Action, Anchor, AnyView, AnyWindowHandle, App, Axis, Bounds, Context, Entity, EntityId,
+    EventEmitter, FocusHandle, Focusable, IntoElement, KeyContext, MouseButton, MouseDownEvent,
+    MouseUpEvent, ParentElement, Render, SharedString, Size, StyleRefinement, Styled, Subscription,
+    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    deferred, div, px, size,
 };
 use serde::{Deserialize, Serialize};
 use settings::{Settings, SettingsStore, TerminalDockPosition};
@@ -25,6 +25,14 @@ use ui::{
 use util::ResultExt as _;
 
 pub(crate) const RESIZE_HANDLE_SIZE: Pixels = px(6.);
+const DETACHED_PANEL_SIZE: Size<Pixels> = size(px(640.), px(560.));
+
+fn floating_panel_bounds(visible_bounds: Bounds<Pixels>) -> WindowBounds {
+    WindowBounds::Windowed(Bounds::centered_at(
+        visible_bounds.center(),
+        DETACHED_PANEL_SIZE.min(&visible_bounds.size),
+    ))
+}
 
 pub enum PanelEvent {
     ZoomIn,
@@ -686,10 +694,16 @@ impl Dock {
         let title = panel
             .icon_tooltip(window, cx)
             .unwrap_or_else(|| panel.persistent_name());
-        let bounds = WindowBounds::centered(size(px(640.), px(560.)), cx);
         let kind = mode
             .detached_window_kind(window.window_handle())
             .context("Dock mode does not open a separate window")?;
+        let owner_display = (mode == DockMode::Floating)
+            .then(|| window.display(cx))
+            .flatten();
+        let bounds = owner_display
+            .as_ref()
+            .map(|display| floating_panel_bounds(display.visible_bounds()))
+            .unwrap_or_else(|| WindowBounds::centered(DETACHED_PANEL_SIZE, cx));
         let handle = cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -697,6 +711,7 @@ impl Dock {
                     ..Default::default()
                 }),
                 window_bounds: Some(bounds),
+                display_id: owner_display.map(|display| display.id()),
                 focus,
                 kind,
                 is_minimizable: mode == DockMode::Window,
@@ -1823,6 +1838,22 @@ impl StatusItemView for PanelButtons {
 pub mod test {
     use super::*;
     use gpui::{App, Context, Window, actions, div};
+
+    #[test]
+    fn floating_panel_fits_the_owning_display() {
+        let visible_bounds =
+            Bounds::new(gpui::point(px(1440.), px(40.)), size(px(1024.), px(700.)));
+        assert_eq!(
+            floating_panel_bounds(visible_bounds).get_bounds(),
+            Bounds::new(gpui::point(px(1632.), px(110.)), DETACHED_PANEL_SIZE),
+        );
+
+        let narrow_display = Bounds::new(gpui::point(px(-480.), px(30.)), size(px(480.), px(400.)));
+        assert_eq!(
+            floating_panel_bounds(narrow_display).get_bounds(),
+            narrow_display
+        );
+    }
 
     #[cfg(test)]
     #[gpui::test]

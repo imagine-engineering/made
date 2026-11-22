@@ -180,10 +180,11 @@ and size. The editor keeps its layout while the overlay is open. It hides
 when focus moves to another work area. **Dock** returns it to unpinned docked
 mode, and **Pin Groovy panel** keeps it docked and visible.
 
-Choose **Float** to keep Groovy above its project window, or **Open in
-Window** to use it in an independent window. The normal Groovy view action
-reopens the panel in its saved mode. Choose **Return to Dock** to pin the
-panel at its saved edge.
+Choose **Float** to keep Groovy above its project window. Float uses the
+project window’s display to choose its initial bounds. Choose **Open in
+Window** to use Groovy in an independent window. The normal Groovy view
+action reopens the panel in its saved mode. Choose **Return to Dock** to pin
+the panel at its saved edge.
 
 The `jvm-tools` development build has a Dependencies panel for trusted
 Maven and Gradle projects. Open it from **View → Dependencies**. It shows
