@@ -709,6 +709,13 @@ struct DependencyNavigation {
 struct MavenSettingsNavigation {
     build: GraphSelection,
     file: ProjectPath,
+    operation: MavenSettingsOperation,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MavenSettingsOperation {
+    Open,
+    Create { root_inode: u64, parent_inode: u64 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3901,13 +3908,6 @@ impl DependenciesPanel {
         self.open_or_focus_analyzer_tab(derivation, source, Some(node), cx)
     }
 
-    /// Builds the tree context menu for the selected row. Menu contents come
-    /// from the object under the pointer: operation rows offer Add to Queue,
-    /// the ordered-operations strip offers the queue family (Remove Last,
-    /// Clear Queue, a run-configuration selector, Run Ordered Operations
-    /// Offline), and graph fact rows offer the diagram entry points grouped
-    /// above the shared tree commands — availability-filtered through the
-    /// same eligibility logic as the panel controls.
     fn selected_maven_settings_file(
         &self,
         kind: MavenSettingsFile,
@@ -3967,7 +3967,35 @@ impl DependenciesPanel {
         {
             return None;
         }
-        visible_build_file(file_worktree, &file)?;
+        let operation = if visible_build_file(file_worktree, &file).is_some() {
+            MavenSettingsOperation::Open
+        } else {
+            let local = file_worktree.as_local()?;
+            if !file_worktree.is_visible()
+                || file_worktree.entry_for_path(&file.path).is_some()
+                || local.is_path_private(&file.path)
+                || local.settings().is_path_excluded(&file.path)
+            {
+                return None;
+            }
+            let parent = file.path.parent()?;
+            if parent.ancestors().any(|ancestor| {
+                local.is_path_private(ancestor)
+                    || file_worktree
+                        .entry_for_path(ancestor)
+                        .is_some_and(|entry| entry.is_private || entry.is_external || entry.is_fifo)
+            }) {
+                return None;
+            }
+            let directory = file_worktree.entry_for_path(parent)?;
+            if !directory.is_dir() {
+                return None;
+            }
+            MavenSettingsOperation::Create {
+                root_inode: file_worktree.root_entry()?.inode,
+                parent_inode: directory.inode,
+            }
+        };
         Some(MavenSettingsNavigation {
             build: GraphSelection {
                 server_id: snapshot.server_id,
@@ -3975,6 +4003,7 @@ impl DependenciesPanel {
                 target: GraphQueryTarget::Maven(pom),
             },
             file,
+            operation,
         })
     }
 
@@ -3985,7 +4014,9 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.selected_maven_settings_file(kind, cx).as_ref() != Some(target) {
+        if target.operation != MavenSettingsOperation::Open
+            || self.selected_maven_settings_file(kind, cx).as_ref() != Some(target)
+        {
             return;
         }
         if let Some(workspace) = self.workspace.upgrade() {
@@ -3995,6 +4026,71 @@ impl DependenciesPanel {
                 })
                 .detach_and_prompt_err("Could not open Maven settings", window, cx, |_, _, _| None);
         }
+    }
+
+    fn activate_maven_settings_file(
+        &self,
+        kind: MavenSettingsFile,
+        target: MavenSettingsNavigation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let MavenSettingsOperation::Create {
+            root_inode,
+            parent_inode,
+        } = target.operation
+        else {
+            self.open_maven_settings_file(kind, &target, window, cx);
+            return;
+        };
+        if self.selected_maven_settings_file(kind, cx).as_ref() != Some(&target) {
+            return;
+        }
+        let project = self.project.read(cx);
+        let Some(worktree) = project.worktree_for_id(target.file.worktree_id, cx) else {
+            return;
+        };
+        let Some(local) = worktree.read(cx).as_local() else {
+            return;
+        };
+        let root = local.abs_path().to_path_buf();
+        let destination = local.absolutize(&target.file.path);
+        let filesystem = local.fs().clone();
+        cx.spawn_in(window, async move |panel, cx| {
+            let parent = destination.parent().context("Maven settings path has no parent")?;
+            let relative_parent = parent.strip_prefix(&root)?;
+            let canonical_root = filesystem.canonicalize(&root).await?;
+            let root_metadata = filesystem.metadata(&root).await?
+                .context("The Maven settings worktree is unavailable")?;
+            let metadata = filesystem.metadata(parent).await?
+                .context("The Maven settings directory is unavailable")?;
+            anyhow::ensure!(
+                root_metadata.is_dir && root_metadata.inode == root_inode
+                    && metadata.is_dir && !metadata.is_symlink && metadata.inode == parent_inode
+                    && filesystem.canonicalize(parent).await? == canonical_root.join(relative_parent),
+                "The Maven settings directory changed or points outside the worktree"
+            );
+            anyhow::ensure!(
+                panel.read_with(cx, |panel, cx| {
+                    panel.selected_maven_settings_file(kind, cx).as_ref() == Some(&target)
+                })?,
+                "The configured Maven settings destination changed"
+            );
+            filesystem.create_new_file_atomically(
+                destination,
+                Arc::from(b"<settings xmlns=\"http://maven.apache.org/SETTINGS/1.2.0\">\n</settings>\n".as_slice()),
+            ).await?;
+
+            worktree.update(cx, |worktree, cx| {
+                let local = worktree.as_local().context("Maven settings worktree is no longer local")?;
+                Ok::<_, anyhow::Error>(local.refresh_entry(target.file.path.clone(), None, cx))
+            })?.await?.context("Maven settings were created but could not be indexed by the worktree")?;
+            panel.update_in(cx, |panel, window, cx| {
+                let created = MavenSettingsNavigation { operation: MavenSettingsOperation::Open, ..target };
+                panel.open_maven_settings_file(kind, &created, window, cx);
+            })?;
+            Ok::<_, anyhow::Error>(())
+        }).detach_and_prompt_err("Could not create Maven settings", window, cx, |_, _, _| None);
     }
 
     fn show_graph_context_menu(
@@ -4015,15 +4111,27 @@ impl DependenciesPanel {
         let can_collect_graph = self.selected_graph().is_some()
             && self.graph_query_token.is_none()
             && !self.project.read(cx).is_remote();
-        let maven_settings_files: Vec<_> = [
-            (MavenSettingsFile::User, "Open Maven user settings"),
-            (MavenSettingsFile::Global, "Open Maven global settings"),
-        ]
-        .into_iter()
-        .filter_map(|(kind, label)| {
-            Some((kind, label, self.selected_maven_settings_file(kind, cx)?))
-        })
-        .collect();
+        let maven_settings_files: Vec<_> = [MavenSettingsFile::User, MavenSettingsFile::Global]
+            .into_iter()
+            .filter_map(|kind| {
+                let target = self.selected_maven_settings_file(kind, cx)?;
+                let label = match (kind, target.operation) {
+                    (MavenSettingsFile::User, MavenSettingsOperation::Open) => {
+                        "Open Maven user settings"
+                    }
+                    (MavenSettingsFile::Global, MavenSettingsOperation::Open) => {
+                        "Open Maven global settings"
+                    }
+                    (MavenSettingsFile::User, MavenSettingsOperation::Create { .. }) => {
+                        "Create Maven user settings"
+                    }
+                    (MavenSettingsFile::Global, MavenSettingsOperation::Create { .. }) => {
+                        "Create Maven global settings"
+                    }
+                };
+                Some((kind, label, target))
+            })
+            .collect();
         let can_cancel_import = self.build_phase_is_pending(cx)
             && self
                 .host
@@ -4141,7 +4249,12 @@ impl DependenciesPanel {
                         menu = menu.entry(*label, None, move |window, cx| {
                             if let Some(panel) = panel.upgrade() {
                                 panel.update(cx, |panel, cx| {
-                                    panel.open_maven_settings_file(kind, &target, window, cx);
+                                    panel.activate_maven_settings_file(
+                                        kind,
+                                        target.clone(),
+                                        window,
+                                        cx,
+                                    );
                                 });
                             }
                         });
@@ -25014,10 +25127,7 @@ mod tests {
                     project_queries.load(Ordering::SeqCst),
                     reads_before_navigation
                 );
-                for (label, expected) in [
-                    ("Open Maven global settings", "maven/global.xml"),
-                    ("Open Maven user settings", "maven/active-user.xml"),
-                ] {
+                let invoke_settings_command = |cx: &mut gpui::VisualTestContext, label: &str| {
                     workspace.update_in(cx, |workspace, window, cx| {
                         workspace.focus_panel::<DependenciesPanel>(window, cx);
                     });
@@ -25051,6 +25161,12 @@ mod tests {
                         }
                     });
                     cx.run_until_parked();
+                };
+                for (label, expected) in [
+                    ("Open Maven global settings", "maven/global.xml"),
+                    ("Open Maven user settings", "maven/active-user.xml"),
+                ] {
+                    invoke_settings_command(cx, label);
                     workspace.read_with(cx, |workspace, cx| {
                         let path = workspace
                             .active_item(cx)
@@ -25074,11 +25190,12 @@ mod tests {
                 .expect("remove the synthetic settings file");
                 cx.run_until_parked();
                 panel.update_in(cx, |panel, window, cx| {
-                    assert!(
+                    assert!(matches!(
                         panel
                             .selected_maven_settings_file(MavenSettingsFile::Global, cx)
-                            .is_none()
-                    );
+                            .map(|target| target.operation),
+                        Some(MavenSettingsOperation::Create { .. })
+                    ));
                     panel.open_maven_settings_file(MavenSettingsFile::Global, &global, window, cx);
                 });
                 cx.run_until_parked();
@@ -25089,6 +25206,67 @@ mod tests {
                         .expect("previous editor remains open");
                     assert_eq!(path.path.as_unix_str(), "maven/active-user.xml");
                 });
+                let absent = panel.read_with(cx, |panel, cx| {
+                    panel
+                        .selected_maven_settings_file(MavenSettingsFile::Global, cx)
+                        .expect("captured creation target")
+                });
+                let created_path = std::path::Path::new("/groovy-panel/maven/global.xml");
+                let occupied_contents = b"<settings><!-- created by another writer --></settings>";
+                fs.pause_events();
+                fs.insert_file(created_path, occupied_contents.to_vec())
+                    .await;
+                invoke_settings_command(cx, "Create Maven global settings");
+                assert!(
+                    cx.pending_prompt()
+                        .is_some_and(|(title, _)| title == "Could not create Maven settings")
+                );
+                assert_eq!(
+                    project::Fs::load_bytes(fs.as_ref(), created_path)
+                        .await
+                        .expect("settings created by another writer"),
+                    occupied_contents
+                );
+                cx.simulate_prompt_answer("OK");
+                project::Fs::remove_file(fs.as_ref(), created_path, Default::default())
+                    .await
+                    .expect("restore missing settings fixture");
+                fs.unpause_events_and_flush();
+                cx.run_until_parked();
+                invoke_settings_command(cx, "Create Maven global settings");
+                assert_eq!(
+                    project::Fs::load_bytes(fs.as_ref(), created_path)
+                        .await
+                        .expect("created Maven settings"),
+                    b"<settings xmlns=\"http://maven.apache.org/SETTINGS/1.2.0\">\n</settings>\n"
+                );
+                workspace.read_with(cx, |workspace, cx| {
+                    let path = workspace
+                        .active_item(cx)
+                        .and_then(|item| item.project_path(cx))
+                        .expect("created settings open in the editor");
+                    assert_eq!(path.worktree_id, worktree_id);
+                    assert_eq!(path.path.as_unix_str(), "maven/global.xml");
+                });
+                let preserved_contents = b"<settings><!-- saved user content --></settings>";
+                fs.insert_file(created_path, preserved_contents.to_vec())
+                    .await;
+                cx.run_until_parked();
+                panel.update_in(cx, |panel, window, cx| {
+                    panel.activate_maven_settings_file(
+                        MavenSettingsFile::Global,
+                        absent,
+                        window,
+                        cx,
+                    );
+                });
+                cx.run_until_parked();
+                assert_eq!(
+                    project::Fs::load_bytes(fs.as_ref(), created_path)
+                        .await
+                        .expect("existing Maven settings"),
+                    preserved_contents
+                );
                 assert_eq!(
                     project_queries.load(Ordering::SeqCst),
                     reads_before_navigation

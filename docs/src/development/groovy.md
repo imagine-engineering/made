@@ -245,6 +245,10 @@ The Maven project row menu also offers **Open Maven user settings** and
 **Open Maven global settings** for configured files in a visible, trusted
 worktree of the local workspace. The commands use the same JDTLS settings paths
 as Maven Tasks.
+If a configured file is missing and its parent directory exists, the menu
+offers **Create Maven user settings** or **Create Maven global settings**.
+The command creates a Maven settings template at that path and opens it in the
+editor. An existing file is preserved if it appears before creation.
 
 Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
