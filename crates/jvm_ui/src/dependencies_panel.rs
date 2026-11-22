@@ -42,8 +42,8 @@ use crate::dependency_diagram_item::{
     DependencyDiagramSource, DependencyDiagramTarget, ShowDependencyDiagramPopup,
 };
 use crate::dependency_graph_canvas::{
-    CanvasNode, canvas_graph_from_gradle, canvas_graph_from_maven, gradle_canvas_nodes,
-    maven_canvas_nodes,
+    CanvasEdgeVariant, CanvasGraph, CanvasLayout, CanvasNode, MAX_CANVAS_EDGES, MAX_CANVAS_NODES,
+    canvas_graph_from_gradle, canvas_graph_from_maven, gradle_canvas_nodes, maven_canvas_nodes,
 };
 
 actions!(
@@ -912,13 +912,29 @@ fn dependency_diagram_markdown(
     edges: &[(String, String, String, bool)],
     coverage: &str,
 ) -> anyhow::Result<String> {
+    let description = format!(
+        "{coverage}\n\nRead-only full admitted graph. Dotted edges are constraints or mediated Maven occurrences. Unresolved Gradle targets are placeholders. Tree facts retain keyboard selection and source navigation. Fact/scope/search filters apply to the tree only. Full diagram parity remains unverified."
+    );
+    dependency_diagram_mermaid(nodes, edges, &description, CanvasLayout::LeftToRight)
+}
+
+fn dependency_diagram_mermaid(
+    nodes: &[(String, String)],
+    edges: &[(String, String, String, bool)],
+    description: &str,
+    layout: CanvasLayout,
+) -> anyhow::Result<String> {
     use std::fmt::Write as _;
     anyhow::ensure!(
-        !nodes.is_empty() && nodes.len() <= 64 && edges.len() <= 128,
+        !nodes.is_empty() && nodes.len() <= MAX_CANVAS_NODES && edges.len() <= MAX_CANVAS_EDGES,
         "Dependency diagram exceeds presentation limits; use current tree facts"
     );
     let mut identities = HashMap::new();
-    let mut source = String::from("flowchart LR\n");
+    let direction = match layout {
+        CanvasLayout::LeftToRight => "LR",
+        CanvasLayout::TopToBottom => "TB",
+    };
+    let mut source = format!("flowchart {direction}\n");
     let label = |text: &str| -> anyhow::Result<String> {
         anyhow::ensure!(
             text.chars().count() <= 256
@@ -954,14 +970,44 @@ fn dependency_diagram_markdown(
             label(text)?
         )?;
     }
-    let source = format!(
-        "{coverage}\n\nRead-only full admitted graph. Dotted edges are constraints or mediated Maven occurrences. Unresolved Gradle targets are placeholders. Tree facts retain keyboard selection and source navigation. Fact/scope/search filters apply to the tree only. Full diagram parity remains unverified.\n\n```mermaid\n{source}```\n"
-    );
+    let source = format!("{description}\n\n```mermaid\n{source}```\n");
     anyhow::ensure!(
         source.len() <= 128 * 1024,
         "Dependency diagram exceeds source budget; use current tree facts"
     );
     Ok(source)
+}
+
+pub(crate) fn bounded_dependency_diagram_source(graph: &CanvasGraph) -> anyhow::Result<String> {
+    let nodes = graph
+        .nodes
+        .iter()
+        .map(|node| {
+            let label = match &node.version {
+                Some(version) => format!("{}:{version}", node.label),
+                None => node.label.clone(),
+            };
+            (node.id.clone(), label)
+        })
+        .collect::<Vec<_>>();
+    let edges = graph
+        .edges
+        .iter()
+        .map(|edge| {
+            (
+                edge.from.clone(),
+                edge.to.clone(),
+                edge.label.clone(),
+                edge.variant != CanvasEdgeVariant::Dependency,
+            )
+        })
+        .collect::<Vec<_>>();
+    dependency_diagram_mermaid(
+        &nodes,
+        &edges,
+        "Bounded diagram of the current canvas. The admitted provider graph contains additional facts. Dotted edges mark constraints, unresolved dependencies, or omitted occurrences.",
+        graph.layout,
+    )
 }
 
 /// Derives a short module display name from the module root path.
@@ -14706,8 +14752,6 @@ mod tests {
                 panel.resolve_selected_canvas_graph(cx).is_some()
             }));
             if outcome == MavenGraphOutcome::LargeGraphSearch {
-                use crate::dependency_graph_canvas::{MAX_CANVAS_EDGES, MAX_CANVAS_NODES};
-
                 let target = r#"["module","evidence","growth-dependency-79","1.0"]"#;
                 let parent = r#"["module","evidence","growth-dependency-78","1.0"]"#;
                 panel.update(cx, |panel, cx| panel.show_dependency_diagram(cx));
@@ -14780,6 +14824,49 @@ mod tests {
                     );
                     assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
                     assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
+                });
+                diagram.update(cx, |item, cx| {
+                    item.canvas().update(cx, |canvas, cx| {
+                        assert!(canvas.set_layout(CanvasLayout::TopToBottom));
+                        cx.notify();
+                    });
+                    item.copy_diagram_source(cx);
+                });
+                let copied = cx
+                    .cx
+                    .update(|cx| {
+                        cx.read_from_clipboard().and_then(|item| {
+                            item.entries().iter().find_map(|entry| match entry {
+                                gpui::ClipboardEntry::String(text) => Some(text.text().to_string()),
+                                _ => None,
+                            })
+                        })
+                    })
+                    .expect("bounded Mermaid source");
+                assert!(copied.contains("Bounded diagram of the current canvas"));
+                assert!(copied.contains("flowchart TB"));
+                rendered_diagram(&copied);
+                let selected_label: String = "evidence:growth-dependency-79:1.0"
+                    .chars()
+                    .map(|character| format!("#{};", u32::from(character)))
+                    .collect();
+                assert!(copied.contains(&selected_label));
+                diagram.read_with(cx, |item, cx| {
+                    let graph = &item.canvas().read(cx).graph;
+                    assert_eq!(
+                        copied
+                            .lines()
+                            .filter(|line| line.starts_with('n') && line.contains("[\""))
+                            .count(),
+                        graph.nodes.len()
+                    );
+                    assert_eq!(
+                        copied
+                            .lines()
+                            .filter(|line| line.starts_with('n') && line.contains("->|\""))
+                            .count(),
+                        graph.edges.len()
+                    );
                 });
                 assert_eq!(commands.load(Ordering::SeqCst), 3);
                 return;

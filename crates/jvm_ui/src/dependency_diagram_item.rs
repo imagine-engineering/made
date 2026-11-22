@@ -476,31 +476,42 @@ impl DependencyDiagramItem {
     /// Copies the exact Mermaid export payload derived from the same admitted
     /// facts, matching the panel's Copy Diagram Source behaviour.
     pub fn copy_diagram_source(&mut self, cx: &mut Context<Self>) {
-        let Some(source) = &self.source else {
+        let Some(source) = self.source.as_ref().filter(|_| self.receipt_is_current(cx)) else {
             self.notice = Some(
-                "No provider source is attached to this diagram; Copy diagram source requires a current selection"
+                "Copy Diagram Source requires current provider facts. Refresh the diagram and retry."
                     .into(),
             );
             cx.notify();
             return;
         };
-        let project = source.project.read(cx);
-        match crate::dependencies_panel::dependency_diagram_source_export(
-            project,
-            &source.selection,
-            cx,
-        ) {
-            Some(source_text) => {
-                let characters = source_text.chars().count();
+        let graph = &self.canvas.read(cx).graph;
+        let (payload, description) = if graph.truncated {
+            (
+                crate::dependencies_panel::bounded_dependency_diagram_source(graph),
+                "Copied Mermaid source for the current canvas. The provider graph contains additional facts.",
+            )
+        } else {
+            (
+                crate::dependencies_panel::dependency_diagram_source_export(
+                    source.project.read(cx),
+                    &source.selection,
+                    cx,
+                )
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "The current provider graph is unavailable for Copy Diagram Source."
+                    )
+                }),
+                "Copied Mermaid source for the admitted dependency graph.",
+            )
+        };
+        match payload {
+            Ok(source_text) => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(source_text));
-                self.notice = Some(format!(
-                    "Diagram source copied to the clipboard; {characters} characters; the copied source is the exact input the displayed diagram renders"
-                ));
+                self.notice = Some(description.into());
             }
-            None => {
-                self.notice = Some(
-                    "No admitted graph facts are available for Copy diagram source; show a current diagram, then retry".into(),
-                );
+            Err(error) => {
+                self.notice = Some(error.to_string());
             }
         }
         cx.notify();
@@ -2236,7 +2247,7 @@ mod tests {
         assert!(
             copy_notice
                 .as_ref()
-                .is_some_and(|notice| notice.contains("No provider source is attached")),
+                .is_some_and(|notice| notice.contains("requires current provider facts")),
             "Copy Diagram Source without a source reports guidance: {copy_notice:?}"
         );
         assert!(

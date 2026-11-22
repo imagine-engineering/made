@@ -103,8 +103,7 @@ impl CanvasLayout {
 pub struct CanvasGraph {
     pub nodes: Vec<CanvasNode>,
     pub edges: Vec<CanvasEdge>,
-    /// True when admitted facts exceeded the visible budgets and only the
-    /// first nodes/edges in provider order are presented.
+    /// True when admitted facts exceeded the canvas budgets.
     pub truncated: bool,
     /// Deterministic post-layout positions, in graph coordinates.
     pub positions: BTreeMap<String, GraphPoint>,
