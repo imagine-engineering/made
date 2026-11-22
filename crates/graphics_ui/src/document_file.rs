@@ -3868,6 +3868,42 @@ mod tests {
         paint(window);
     }
 
+    fn open_saved_boundary_menu(
+        window: &mut gpui::VisualTestContext,
+        kind: NetworkPortKind,
+        index: usize,
+        canvas: bool,
+    ) {
+        if canvas {
+            if window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH").is_none() {
+                click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+                window.run_until_parked();
+                paint(window);
+            }
+            let sockets = match kind {
+                NetworkPortKind::Import => {
+                    ["GRAPHITE-GDD-GRAPH-Import-1", "GRAPHITE-GDD-GRAPH-Import-2"]
+                }
+                NetworkPortKind::Export => {
+                    ["GRAPHITE-GDD-GRAPH-Export-1", "GRAPHITE-GDD-GRAPH-Export-2"]
+                }
+            };
+            right_click_saved_graph(
+                window,
+                sockets
+                    .get(index)
+                    .copied()
+                    .expect("fixture boundary socket"),
+            );
+        } else {
+            let selector = match kind {
+                NetworkPortKind::Import => "GRAPHITE-GDD-REMOVE-IMPORT",
+                NetworkPortKind::Export => "GRAPHITE-GDD-REMOVE-EXPORT",
+            };
+            click(window, selector);
+        }
+    }
+
     enum NumericGraphFixture {
         SingleNode,
         ExposedInput,
@@ -5446,6 +5482,17 @@ mod tests {
     async fn at_gra_graph_023_2_workspace_removes_the_addressed_nested_import(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_removes_nested_import(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_023_2_workspace_removes_a_nested_import_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_removes_nested_import(cx, true).await;
+    }
+
+    async fn verify_workspace_removes_nested_import(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -5477,16 +5524,14 @@ mod tests {
             assert_eq!(network.export_count, 2);
             network.id
         });
-        click(window, "GRAPHITE-GDD-REMOVE-IMPORT");
-        paint(window);
+        open_saved_boundary_menu(window, NetworkPortKind::Import, 1, canvas);
         click(window, "GRAPHITE-GDD-REMOVE-IMPORT-1");
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
 
-        click(window, "GRAPHITE-GDD-REMOVE-IMPORT");
-        paint(window);
+        open_saved_boundary_menu(window, NetworkPortKind::Import, 0, canvas);
         click(window, "GRAPHITE-GDD-REMOVE-IMPORT-0");
         let path = PathBuf::from("/project/removed-primary-import.gdd");
         window.simulate_new_path_selection(|_| Some(path.clone()));
@@ -5518,6 +5563,7 @@ mod tests {
             .expect("same saved network");
         assert_eq!(network.import_count, 1);
         assert_eq!(network.export_count, 2);
+        assert_eq!(network.import_name(0), Some("Second numeric input"));
         assert_eq!(contents.history_len(), original_history + 3);
         assert_eq!(
             filesystem
@@ -5532,20 +5578,37 @@ mod tests {
     async fn at_gra_graph_025_2_workspace_reorders_named_imports_in_a_folder_copy(
         cx: &mut TestAppContext,
     ) {
-        verify_network_port_reorder(cx, NetworkPortKind::Import).await;
+        verify_network_port_reorder(cx, NetworkPortKind::Import, false).await;
     }
 
     #[gpui::test]
     async fn at_gra_graph_026_2_workspace_reorders_named_exports_in_a_folder_copy(
         cx: &mut TestAppContext,
     ) {
-        verify_network_port_reorder(cx, NetworkPortKind::Export).await;
+        verify_network_port_reorder(cx, NetworkPortKind::Export, false).await;
     }
 
-    async fn verify_network_port_reorder(cx: &mut TestAppContext, kind: NetworkPortKind) {
-        let (menu, move_up, move_down, first, second, added_history) = match kind {
+    #[gpui::test]
+    async fn at_gra_graph_025_2_workspace_reorders_imports_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_network_port_reorder(cx, NetworkPortKind::Import, true).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_026_2_workspace_reorders_exports_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_network_port_reorder(cx, NetworkPortKind::Export, true).await;
+    }
+
+    async fn verify_network_port_reorder(
+        cx: &mut TestAppContext,
+        kind: NetworkPortKind,
+        canvas: bool,
+    ) {
+        let (move_up, move_down, first, second, added_history) = match kind {
             NetworkPortKind::Import => (
-                "GRAPHITE-GDD-REMOVE-IMPORT",
                 "GRAPHITE-GDD-MOVE-IMPORT-1-UP",
                 "GRAPHITE-GDD-MOVE-IMPORT-0-DOWN",
                 "First numeric input",
@@ -5553,7 +5616,6 @@ mod tests {
                 3,
             ),
             NetworkPortKind::Export => (
-                "GRAPHITE-GDD-REMOVE-EXPORT",
                 "GRAPHITE-GDD-MOVE-EXPORT-1-UP",
                 "GRAPHITE-GDD-MOVE-EXPORT-0-DOWN",
                 "First numeric output",
@@ -5583,24 +5645,33 @@ mod tests {
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
         click(window, "GRAPHITE-GDD-ENTER-NETWORK");
         paint(window);
-        let network_id = source.read_with(window, |item, _| {
+        let (network_id, imports, exports) = source.read_with(window, |item, _| {
             let NodeCopyPanel::Ready(form) = &item.node_copy else {
                 panic!("expected scoped graph");
             };
             let network = form.active_network().expect("original nested network");
             assert_eq!(kind.name(network, 0), Some(first));
             assert_eq!(kind.name(network, 1), Some(second));
-            network.id
+            let imports = form
+                .nodes
+                .iter()
+                .filter(|node| node.network_id() == network.id)
+                .filter_map(|node| Some((node.storage_id(), node.numeric_import_source()?)))
+                .collect::<Vec<_>>();
+            let exports = network
+                .exports()
+                .iter()
+                .map(|port| port.source.clone())
+                .collect::<Vec<_>>();
+            (network.id, imports, exports)
         });
-        click(window, menu);
-        paint(window);
+        open_saved_boundary_menu(window, kind, 1, canvas);
         click(window, move_up);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
-        click(window, menu);
-        paint(window);
+        open_saved_boundary_menu(window, kind, 0, canvas);
         click(window, move_down);
         let destination = PathBuf::from("/project/moved-port.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
@@ -5634,6 +5705,32 @@ mod tests {
         assert_eq!(kind.name(network, 1), Some(first));
         assert_eq!(network.import_count, 2);
         assert_eq!(network.export_count, 2);
+        for (stored_id, previous) in imports {
+            let node = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == stored_id)
+                .expect("preserved importing node");
+            let expected = match kind {
+                NetworkPortKind::Import => 1usize
+                    .checked_sub(previous)
+                    .expect("one of two fixture imports"),
+                NetworkPortKind::Export => previous,
+            };
+            assert_eq!(node.numeric_import_source(), Some(expected));
+        }
+        let expected_exports = match kind {
+            NetworkPortKind::Import => exports,
+            NetworkPortKind::Export => exports.into_iter().rev().collect(),
+        };
+        assert_eq!(
+            network
+                .exports()
+                .iter()
+                .map(|port| port.source.clone())
+                .collect::<Vec<_>>(),
+            expected_exports
+        );
         assert_eq!(contents.history_len(), original_history + added_history);
         assert_eq!(
             filesystem
@@ -5905,6 +6002,17 @@ mod tests {
     async fn at_gra_graph_024_2_workspace_removes_and_restores_a_nested_export(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_removes_nested_export(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_024_2_workspace_removes_and_restores_an_export_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_removes_nested_export(cx, true).await;
+    }
+
+    async fn verify_workspace_removes_nested_export(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -5935,8 +6043,7 @@ mod tests {
             assert_eq!(network.export_count, 2);
             network.id
         });
-        click(window, "GRAPHITE-GDD-REMOVE-EXPORT");
-        paint(window);
+        open_saved_boundary_menu(window, NetworkPortKind::Export, 1, canvas);
         click(window, "GRAPHITE-GDD-REMOVE-EXPORT-1");
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
@@ -5954,8 +6061,7 @@ mod tests {
         ] {
             paint(window);
             if selector == "GRAPHITE-GDD-REMOVE-EXPORT-0" {
-                click(window, "GRAPHITE-GDD-REMOVE-EXPORT");
-                paint(window);
+                open_saved_boundary_menu(window, NetworkPortKind::Export, 0, canvas);
             }
             click(window, selector);
             let destination = PathBuf::from(path);
@@ -5988,6 +6094,12 @@ mod tests {
                 .expect("same nested network identity");
             assert_eq!(network.import_count, 2);
             assert_eq!(network.export_count, expected_exports);
+            if expected_exports == 2 {
+                assert_eq!(network.export_name(0), Some("First numeric output"));
+                assert_eq!(network.export_name(1), Some("Second numeric output"));
+            } else {
+                assert_eq!(network.export_name(0), Some("Second numeric output"));
+            }
             assert_eq!(contents.history_len(), original_history + 4);
             previous = reopened;
         }
