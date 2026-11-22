@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use graphite_core_types::NodeParameter;
+use graphite_core_types::{NodeParameter, ProtoNodeIdentifier};
 pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
     AnyContainer, ByteHolder, Container, ContainerError,
@@ -21,15 +21,18 @@ use graphite_document_format::{
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
 use graphite_document_graph_storage::{
-    AttributesRead, NetworkId, NetworkMetadataEntry, NodeId as StorageNodeId, NodeMetadataEntry,
-    PeerId, RegistryDelta, from_runtime, to_runtime::ConversionError,
+    AttributesRead, NetworkId, NetworkMetadataEntry, NoMetadata, NodeId as StorageNodeId,
+    NodeMetadataEntry, PeerId, ROOT_NETWORK, Registry, RegistryDelta, from_runtime,
+    to_runtime::ConversionError,
 };
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
+    node_graph::document_node_definitions::resolve_proto_node_type,
     utility_types::{
         misc::PTZ,
         network_interface::{
-            InputConnector, NavigationMetadata, NodeNetworkInterface, OutputConnector, Previewing,
+            InputConnector, NavigationMetadata, NodeNetworkInterface, NodeTemplateImplementation,
+            NodeTypePersistentMetadata, OutputConnector, Previewing,
             editor_delta::{
                 ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
                 construct_batch,
@@ -41,7 +44,7 @@ use graphite_editor::messages::portfolio::document::{
         },
     },
 };
-use graphite_glam::DVec2;
+use graphite_glam::{DVec2, IVec2};
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
@@ -52,6 +55,7 @@ use graphite_graph_craft::{
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
+use crate::evaluate::UnaryNumericOperation;
 
 mod xz;
 
@@ -152,6 +156,10 @@ pub enum GddArchiveError {
     InvalidGraphConnection,
     #[error("The Graphite wire requires a layout change that this copy operation cannot save.")]
     UnsupportedGraphConnectionLayout,
+    #[error("The pinned Graphite definition for {0} is unavailable.")]
+    MissingGraphNodeDefinition(&'static str),
+    #[error("Graphite could not allocate an unused node ID.")]
+    GraphNodeIdentityCollision,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -610,6 +618,124 @@ impl InspectedGddV1 {
             node.numeric_input = graph_numeric_input(&interface, node);
         }
         Ok(nodes)
+    }
+
+    pub async fn insert_root_numeric_node_in_copy(
+        &self,
+        operation: UnaryNumericOperation,
+        position: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        let identifier = numeric_node_identifier(operation);
+        let definition = resolve_proto_node_type(identifier.clone()).ok_or(
+            GddArchiveError::MissingGraphNodeDefinition(operation.name()),
+        )?;
+        let mut template = definition.default_node_template();
+        if !matches!(
+            &template.implementation,
+            NodeTemplateImplementation::ProtoNode(actual) if actual == &identifier
+        ) || !matches!(template.inputs.as_slice(), [NodeInput::Value { .. }])
+        {
+            return Err(GddArchiveError::MissingGraphNodeDefinition(
+                operation.name(),
+            ));
+        }
+        let position = IVec2::from_array(position);
+        template.node_type_metadata = NodeTypePersistentMetadata::node(position);
+
+        let path = Vec::new();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let node_id = NodeId::new();
+        if interface.document_node(&node_id, &path).is_some() {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        if interface
+            .insert_node(node_id, template.clone(), &path)
+            .is_some()
+        {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        let node = interface
+            .document_node(&node_id, &path)
+            .cloned()
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let metadata = interface
+            .node_metadata(&node_id, &path)
+            .map(|metadata| metadata.persistent_metadata.clone())
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let edits = [
+            EditorDelta::Graph(RuntimeDelta::AddNode {
+                network_path: path.clone(),
+                node_id,
+                node: Box::new(node),
+            }),
+            EditorDelta::NodeMetadataSnapshot {
+                network_path: path.clone(),
+                node_id,
+                metadata: Box::new(metadata),
+            },
+        ];
+        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
+        if self.graph_root_needs_initialization() {
+            let mut empty = Registry::from_runtime_with_metadata(
+                &NodeNetwork::default(),
+                &NoMetadata,
+                &graphite_resource::ResourceRegistry::new(),
+                owner.session().peer(),
+            )
+            .map_err(GddArchiveError::GraphNodePreparation)?;
+            let network = empty
+                .networks
+                .remove(&ROOT_NETWORK)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            // The pinned cursor never undoes the first interaction, so the empty graph
+            // needs a saved base before the first inserted node can be undone.
+            commit_graph_node_edit(
+                &mut owner,
+                ConstructedOps {
+                    ops: vec![RegistryDelta::AddNetwork {
+                        id: ROOT_NETWORK,
+                        network,
+                    }],
+                    declarations: Default::default(),
+                },
+            )?;
+        }
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let [RegistryDelta::AddNode { id, node }, ..] = batch.ops.as_slice() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        let id = *id;
+        if node.network() != ROOT_NETWORK
+            || !batch.ops.iter().skip(1).all(|operation| match operation {
+                RegistryDelta::AddResource { entry, .. } => {
+                    entry.has_embedded_source()
+                        && entry
+                            .hash
+                            .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
+                }
+                RegistryDelta::ChangeNodeAttribute { id: target, .. }
+                | RegistryDelta::ChangeNodeInputAttribute { id: target, .. } => *target == id,
+                _ => false,
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let graph = copy.runtime_graph().await?;
+        if !graph.nodes.iter().any(|node| {
+            node.storage_id == id && node.local_id == node_id && node.network_path.is_empty()
+        }) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let actual = graph.into_interface()?;
+        if actual.create_node_template(&node_id, &path) != Some(template) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
     }
 
     pub async fn rename_graph_node_in_copy(
@@ -1097,6 +1223,13 @@ impl InspectedGddV1 {
     }
 
     async fn runtime_graph(&self) -> Result<GddRuntimeGraph, GddArchiveError> {
+        if self.graph_root_needs_initialization() {
+            return Ok(GddRuntimeGraph {
+                network: NodeNetwork::default(),
+                nodes: Vec::new(),
+                networks: Vec::new(),
+            });
+        }
         let declarations = self.document.declarations(&self.document).await;
         let (network, nodes, networks) = self
             .document
@@ -1108,6 +1241,11 @@ impl InspectedGddV1 {
             nodes,
             networks,
         })
+    }
+
+    fn graph_root_needs_initialization(&self) -> bool {
+        let registry = self.document.registry();
+        registry.networks.is_empty() && registry.node_instances.is_empty()
     }
 
     pub async fn recover_pending_edits(
@@ -1461,6 +1599,18 @@ impl InspectedGddV1 {
     }
 }
 
+fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentifier {
+    use graphite_math_nodes::{absolute_value, ceiling, floor, round, sign};
+
+    match operation {
+        UnaryNumericOperation::AbsoluteValue => absolute_value::IDENTIFIER,
+        UnaryNumericOperation::Ceiling => ceiling::IDENTIFIER,
+        UnaryNumericOperation::Floor => floor::IDENTIFIER,
+        UnaryNumericOperation::Round => round::IDENTIFIER,
+        UnaryNumericOperation::Sign => sign::IDENTIFIER,
+    }
+}
+
 fn is_only_graph_wire(
     interface: &mut NodeNetworkInterface,
     path: &[NodeId],
@@ -1568,20 +1718,41 @@ fn prepare_graph_node_edit(
 
 async fn finish_graph_node_edit(
     mut owner: GddV1,
-    staged: StagedArchive,
+    mut staged: StagedArchive,
     batch: ConstructedOps,
     budget: &GddArchiveBudget,
 ) -> Result<InspectedGddV1, GddArchiveError> {
-    let expected = batch.ops.len();
+    staged.store_declarations(&batch.declarations.bytes, budget)?;
+    commit_graph_node_edit(&mut owner, batch)?;
+    staged.reopen_after_edit(budget).await
+}
+
+fn commit_graph_node_edit(owner: &mut GddV1, batch: ConstructedOps) -> Result<(), GddArchiveError> {
+    let peer = owner.session().peer();
+    let registers_peer = !batch.ops.is_empty() && !owner.registry().peer_users.contains_key(&peer);
+    let expected = batch.ops.len() + usize::from(registers_peer);
     owner.stage_constructed_ops(
         batch.ops,
         &batch.declarations.bytes,
         &HashMapResourceStorage::new(),
     )?;
-    if owner.retire_pending_interaction()?.len() != expected {
+    let retired = owner.retire_pending_interaction()?;
+    if retired.len() != expected
+        || registers_peer
+            && !retired
+                .first()
+                .and_then(|revision| owner.session().delta(*revision))
+                .is_some_and(|delta| {
+                    matches!(
+                        delta.kind,
+                        RegistryDelta::RegisterPeer { peer: registered, user }
+                            if registered == peer && user.0 == peer.0
+                    )
+                })
+    {
         return Err(GddArchiveError::IncompleteGraphNodeEdit);
     }
-    staged.reopen_after_edit(budget).await
+    Ok(())
 }
 
 fn approved_resource_storage(
@@ -1840,12 +2011,43 @@ struct StagedArchive {
 }
 
 impl StagedArchive {
+    fn store_declarations(
+        &mut self,
+        declarations: &from_runtime::DeclarationBytes,
+        budget: &GddArchiveBudget,
+    ) -> Result<(), GddArchiveError> {
+        for (hash, bytes) in declarations {
+            if ResourceHash::from(bytes.as_slice()) != *hash {
+                return Err(GddArchiveError::InvalidResource(*hash));
+            }
+            let path = GddV1Layout.resource_path(hash);
+            if self.names.contains(&path) {
+                if self.working.read(&path)?.as_slice() != bytes {
+                    return Err(GddArchiveError::InvalidResource(*hash));
+                }
+                continue;
+            }
+            let size = bytes.len() as u64;
+            let total = self.total_bytes.saturating_add(size);
+            if size > budget.max_entry_bytes
+                || total > budget.max_total_entry_bytes
+                || self.names.len() >= budget.max_entries
+            {
+                return Err(GddArchiveError::BudgetExceeded);
+            }
+            self.working.write(&path, bytes)?;
+            self.names.insert(path);
+            self.total_bytes = total;
+        }
+        Ok(())
+    }
+
     async fn reopen_after_edit(
         self,
         budget: &GddArchiveBudget,
     ) -> Result<InspectedGddV1, GddArchiveError> {
-        // The source writer updates root payloads. Its nonrecursive listing misses retained
-        // resources and opaque files in nested paths.
+        // The source writer updates root payloads. Its nonrecursive listing misses the
+        // admitted resources, new declarations and opaque files in nested paths.
         inspect_working_copy(&self.working, self.names, budget).await
     }
 
@@ -2152,6 +2354,158 @@ mod tests {
             .expect("export the source graph and its node definitions")
             .into();
         bytes
+    }
+
+    #[test]
+    fn at_gra_graph_005_1_inserts_pinned_defaults_and_embeds_the_source_declaration() {
+        futures::executor::block_on(async {
+            let blank = create_gdd_folder(781, 419, "Pinned Graphite".into(), budget())
+                .await
+                .expect("new source working folder");
+            assert!(blank.graph_nodes().await.expect("blank graph").is_empty());
+            let opaque_path = "opaque/notes/provenance.txt";
+            let opaque_bytes = b"retain this entry when adding the first node";
+            let mut original_files = blank
+                .folder_files()
+                .expect("blank folder files")
+                .into_iter()
+                .map(|(path, bytes)| (path.to_str().expect("fixture path").to_owned(), bytes))
+                .collect::<Vec<_>>();
+            original_files.push((opaque_path.into(), opaque_bytes.to_vec()));
+            let original = inspect_gdd_folder_files(original_files, budget())
+                .await
+                .expect("admit a blank graph with an opaque entry");
+            let strict_budget = GddArchiveBudget {
+                max_entries: original.entries.names.len(),
+                ..budget()
+            };
+            assert!(matches!(
+                original
+                    .insert_root_numeric_node_in_copy(
+                        UnaryNumericOperation::AbsoluteValue,
+                        [0, 0],
+                        strict_budget
+                    )
+                    .await,
+                Err(GddArchiveError::BudgetExceeded)
+            ));
+            let operation = UnaryNumericOperation::AbsoluteValue;
+            let grid_position = [-11, 6];
+            let inserted = original
+                .insert_root_numeric_node_in_copy(operation, grid_position, budget())
+                .await
+                .expect("insert the exact pinned node template");
+            assert_eq!(inserted.recovery().network_count, 1);
+            let graph = inserted.runtime_graph().await.expect("reopened graph");
+            let [node] = graph.nodes.as_slice() else {
+                panic!("expected the single inserted node");
+            };
+            assert!(node.network_path.is_empty());
+            let node_id = node.local_id;
+            let interface = graph.into_interface().expect("pinned source editor");
+            let definition = resolve_proto_node_type(numeric_node_identifier(operation))
+                .expect("pinned Absolute Value definition");
+            let mut template = definition.default_node_template();
+            let position = IVec2::from_array(grid_position);
+            template.node_type_metadata = NodeTypePersistentMetadata::node(position);
+            assert_eq!(
+                interface.create_node_template(&node_id, &[]),
+                Some(template)
+            );
+            assert_eq!(interface.position(&node_id, &[]), Some(position));
+            let resource_hashes = inserted
+                .document
+                .resource_hashes()
+                .await
+                .expect("embedded node definition");
+            assert_eq!(resource_hashes.len(), 1);
+            assert_eq!(
+                inserted
+                    .read_entry(opaque_path)
+                    .expect("retained provenance")
+                    .as_slice(),
+                opaque_bytes
+            );
+
+            let undo = inserted
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores an empty document");
+            assert!(
+                undo.graph_nodes()
+                    .await
+                    .expect("no remaining nodes")
+                    .is_empty()
+            );
+            let empty_root = Registry::from_runtime_with_metadata(
+                &NodeNetwork::default(),
+                &NoMetadata,
+                &graphite_resource::ResourceRegistry::new(),
+                original.document.session().peer(),
+            )
+            .expect("pinned empty graph storage");
+            assert!(undo.document.registry().value_equal(&empty_root));
+            assert_eq!(
+                undo.document
+                    .resource_hashes()
+                    .await
+                    .expect("preserved redo declaration"),
+                resource_hashes
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the exact node");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(inserted.document.registry())
+            );
+            assert!(
+                original
+                    .graph_nodes()
+                    .await
+                    .expect("unchanged original")
+                    .is_empty()
+            );
+
+            let duplicate = inserted
+                .insert_root_numeric_node_in_copy(operation, [3, 4], budget())
+                .await
+                .expect("insert another instance");
+            let nodes = duplicate
+                .graph_nodes()
+                .await
+                .expect("reopened distinct instances");
+            let [first, second] = nodes.as_slice() else {
+                panic!("expected two node instances");
+            };
+            assert_ne!(first.storage_id, second.storage_id);
+            assert_eq!(
+                duplicate
+                    .document
+                    .resource_hashes()
+                    .await
+                    .expect("one reused declaration"),
+                resource_hashes
+            );
+            for operation in [
+                UnaryNumericOperation::Ceiling,
+                UnaryNumericOperation::Floor,
+                UnaryNumericOperation::Round,
+                UnaryNumericOperation::Sign,
+            ] {
+                let copy = original
+                    .insert_root_numeric_node_in_copy(operation, [2, -3], budget())
+                    .await
+                    .expect("insert another admitted definition");
+                let nodes = copy.graph_nodes().await.expect("reopened definition");
+                let [node] = nodes.as_slice() else {
+                    panic!("expected one inserted definition");
+                };
+                assert!(node.label().contains(operation.name()));
+            }
+        });
     }
 
     #[test]

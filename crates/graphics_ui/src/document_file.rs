@@ -9,6 +9,7 @@ use gpui::{
     App, AppContext as _, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, PathPromptOptions, Render, SharedString, Task, WeakEntity, Window, actions,
 };
+use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddHistoryDirection,
@@ -430,6 +431,7 @@ pub(crate) struct GraphiteDocumentItem {
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
     node_copy: NodeCopyPanel,
+    new_node_position: Option<Entity<Editor>>,
 }
 
 enum NodeCopyPanel {
@@ -470,6 +472,10 @@ enum GraphiteCopy {
     Export(GddCopyFormat),
     RecoverFolder,
     MoveHistory(GddHistoryDirection),
+    InsertNumericNode {
+        operation: UnaryNumericOperation,
+        position: [i32; 2],
+    },
     EditNode {
         node: GddGraphNode,
         change: NodeCopyChange,
@@ -495,6 +501,121 @@ enum PreparedCopy {
 }
 
 impl GraphiteDocumentItem {
+    fn toggle_insert_node(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.new_node_position.take().is_none() {
+            self.new_node_position = Some(cx.new(|cx| {
+                let mut editor = Editor::single_line(window, cx);
+                editor.set_text("0, 0", window, cx);
+                editor
+            }));
+        }
+        cx.notify();
+    }
+
+    fn save_inserted_node(
+        &mut self,
+        operation: UnaryNumericOperation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = &self.new_node_position else {
+            return;
+        };
+        let text = editor.read(cx).text(cx);
+        let position = text.split_once(',').and_then(|(x, y)| {
+            Some([x.trim().parse::<i32>().ok()?, y.trim().parse::<i32>().ok()?])
+        });
+        if let Some(position) = position {
+            self.save_copy(
+                GraphiteCopy::InsertNumericNode {
+                    operation,
+                    position,
+                },
+                window,
+                cx,
+            );
+        } else {
+            self.copy_feedback = Some((
+                "Enter two whole grid coordinates separated by a comma.".into(),
+                Color::Error,
+            ));
+            cx.notify();
+        }
+    }
+
+    fn render_insert_node(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = if self.new_node_position.is_some() {
+            "Close Add Node"
+        } else {
+            "Add Node in a Copy"
+        };
+        v_flex()
+            .gap_2()
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-ADD-NODE".into())
+                    .child(
+                        Button::new("graphite-gdd-add-node", label)
+                            .disabled(self.copy_task.is_some())
+                            .on_click(cx.listener(|item, _, window, cx| {
+                                item.toggle_insert_node(window, cx);
+                            })),
+                    ),
+            )
+            .when_some(self.new_node_position.clone(), |panel, position| {
+                let item = cx.entity().downgrade();
+                let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+                    for operation in [
+                        UnaryNumericOperation::AbsoluteValue,
+                        UnaryNumericOperation::Ceiling,
+                        UnaryNumericOperation::Floor,
+                        UnaryNumericOperation::Round,
+                        UnaryNumericOperation::Sign,
+                    ] {
+                        let item = item.clone();
+                        menu = menu.custom_entry(
+                            move |_, _| {
+                                div()
+                                    .debug_selector(move || {
+                                        format!("GRAPHITE-GDD-ADD-{}", operation.name())
+                                    })
+                                    .p_2()
+                                    .child(Label::new(operation.name()))
+                                    .into_any_element()
+                            },
+                            move |window, cx| {
+                                if let Some(item) = item.upgrade() {
+                                    item.update(cx, |item, cx| {
+                                        item.save_inserted_node(operation, window, cx);
+                                    });
+                                }
+                            },
+                        );
+                    }
+                    menu
+                });
+                panel
+                    .child(Label::new("Grid position (x, y)"))
+                    .child(
+                        div()
+                            .id("graphite-gdd-new-node-position")
+                            .aria_label("Grid position (x, y)")
+                            .child(position),
+                    )
+                    .when(self.copy_task.is_none(), |panel| {
+                        panel.child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-GDD-CHOOSE-NEW-NODE".into())
+                                .child(DropdownMenu::new(
+                                    "graphite-gdd-choose-new-node",
+                                    "Choose Numeric Node",
+                                    menu,
+                                )),
+                        )
+                    })
+            })
+    }
+
     fn toggle_node_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match &self.node_copy {
             NodeCopyPanel::Loading { .. } => return,
@@ -1062,6 +1183,7 @@ impl GraphiteDocumentItem {
                     GraphiteCopy::RecoverFolder => "Recovered",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
+                    GraphiteCopy::InsertNumericNode { .. } => "Added node in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::Rename(_),
                         ..
@@ -1213,6 +1335,18 @@ impl GraphiteDocumentItem {
                             GraphiteCopy::MoveHistory(direction) => Some(
                                 archive
                                     .move_history_in_copy(direction, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
+                            GraphiteCopy::InsertNumericNode {
+                                operation,
+                                position,
+                            } => Some(
+                                archive
+                                    .insert_root_numeric_node_in_copy(
+                                        operation,
+                                        position,
+                                        ARCHIVE_BUDGET,
+                                    )
                                     .await?,
                             ),
                             GraphiteCopy::EditNode { node, change } => Some(match change {
@@ -1398,6 +1532,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
+            new_node_position: None,
         }
     }
 }
@@ -1452,6 +1587,7 @@ impl Item for GraphiteDocumentItem {
             embed_legacy_document: self.embed_legacy_document,
             saved_view: SavedViewPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
+            new_node_position: None,
         })))
     }
 }
@@ -1523,6 +1659,9 @@ impl Render for GraphiteDocumentItem {
                     recovery.node_count > 0 && recovery.hot_log_len == 0,
                     |view| view.child(self.render_node_copy(window, cx)),
                 )
+                .when(recovery.hot_log_len == 0, |view| {
+                    view.child(self.render_insert_node(window, cx))
+                })
                 .when(recovery.hot_log_len > 0, |view| {
                     view.child(
                         div()
@@ -3510,6 +3649,106 @@ mod tests {
             workspace.read_with(window, |workspace, cx| workspace
                 .active_item_as::<GraphiteDocumentItem>(cx)),
             Some(item)
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_005_2_workspace_adds_a_pinned_node_to_a_new_folder_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/blank.gdd");
+        let destination = PathBuf::from("/project/with-node.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| Some(source.clone()));
+        window.run_until_parked();
+        let source_item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("new Graphite folder");
+        let original = read_graphite_folder(filesystem.as_ref(), &source)
+            .await
+            .expect("original blank folder")
+            .folder_files()
+            .expect("original bytes");
+
+        paint(window);
+        click(window, "GRAPHITE-GDD-ADD-NODE");
+        let position = source_item.read_with(window, |item, cx| {
+            let position = item
+                .new_node_position
+                .as_ref()
+                .expect("grid position editor");
+            assert_eq!(position.read(cx).text(cx), "0, 0");
+            position.clone()
+        });
+        position.update_in(window, |editor, window, cx| {
+            editor.set_text("-11,", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-CHOOSE-NEW-NODE");
+        click(window, "GRAPHITE-GDD-ADD-Absolute Value");
+        source_item.read_with(window, |item, _| {
+            assert!(item.copy_task.is_none());
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("two whole grid coordinates")));
+        });
+
+        position.update_in(window, |editor, window, cx| {
+            editor.set_text("-11, 6", window, cx)
+        });
+        paint(window);
+        for publish in [false, true] {
+            click(window, "GRAPHITE-GDD-CHOOSE-NEW-NODE");
+            click(window, "GRAPHITE-GDD-ADD-Absolute Value");
+            window.simulate_new_path_selection(|_| publish.then(|| destination.clone()));
+            window.run_until_parked();
+            assert_eq!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("separate folder publication")
+                    .is_some(),
+                publish
+            );
+            paint(window);
+        }
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("open the newly populated Graphite folder");
+        assert_ne!(reopened, source_item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected GDD document");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents
+            .graph_nodes()
+            .await
+            .expect("load the embedded source declaration");
+        let [node] = nodes.as_slice() else {
+            panic!("expected exactly the inserted node");
+        };
+        assert!(node.label().contains("Absolute Value"));
+        assert!(contents.can_move_history(GddHistoryDirection::Undo));
+        assert_eq!(
+            read_graphite_folder(filesystem.as_ref(), &source)
+                .await
+                .expect("original folder")
+                .folder_files()
+                .expect("original bytes"),
+            original,
         );
     }
 
