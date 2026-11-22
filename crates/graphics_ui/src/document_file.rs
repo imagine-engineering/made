@@ -12175,6 +12175,238 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_node_282_3_workspace_builds_and_exports_the_default_artboard(
+        cx: &mut TestAppContext,
+    ) {
+        use graphics_core::formats::gdd::GddGraphPortSource;
+
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/default-artboard-source.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| Some(source.clone()));
+        window.run_until_parked();
+        let item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("new native working document");
+        let original = read_graphite_folder(filesystem.as_ref(), &source)
+            .await
+            .expect("new folder")
+            .folder_files()
+            .expect("original folder entries");
+
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        assert!(item.read_with(window, |item, cx| item.model.read(cx).working.is_some()));
+        click(window, "GRAPHITE-NODE-CATALOG");
+        let mut addresses = BTreeMap::new();
+        for (name, position, add) in [
+            ("Artboard", "2, 0", "GRAPHITE-NODE-CATALOG-ADD-Artboard"),
+            ("Merge", "-6, 0", "GRAPHITE-NODE-CATALOG-ADD-Merge"),
+            ("Fill", "-12, 0", "GRAPHITE-NODE-CATALOG-ADD-Fill"),
+            ("Rectangle", "-18, 0", "GRAPHITE-NODE-CATALOG-ADD-Rectangle"),
+        ] {
+            click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(name);
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-NODE-CATALOG-POSITION");
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(position);
+            window.run_until_parked();
+            paint(window);
+            click(window, add);
+            let address = item.read_with(window, |item, cx| {
+                assert!(
+                    item.copy_feedback.is_none(),
+                    "{name}: {:?}",
+                    item.copy_feedback
+                );
+                let working = item.model.read(cx).working.as_ref().expect("working copy");
+                let root = working
+                    .inspection
+                    .networks
+                    .iter()
+                    .find(|network| network.parent.is_none())
+                    .expect("native root");
+                let mut new_nodes = working.inspection.nodes.iter().filter(|node| {
+                    node.network_id() == root.id
+                        && !addresses.values().any(|&id| id == node.storage_id())
+                });
+                let added = new_nodes.next().expect("one added root node").storage_id();
+                assert!(new_nodes.next().is_none());
+                added
+            });
+            addresses.insert(name, address);
+        }
+        click(window, "GRAPHITE-NODE-CATALOG");
+        click(window, "GRAPHITE-GDD-NODE-COPY");
+        let root_index = |window: &gpui::VisualTestContext, name: &str| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("open working graph");
+                };
+                let root = form
+                    .networks
+                    .iter()
+                    .find(|network| network.parent.is_none())
+                    .expect("native root");
+                form.nodes
+                    .iter()
+                    .position(|node| {
+                        node.network_id() == root.id
+                            && Some(&node.storage_id()) == addresses.get(name)
+                    })
+                    .expect("inserted root definition")
+            })
+        };
+        let root_buttons = [
+            "GRAPHITE-GDD-NODE-COPY-ITEM-0",
+            "GRAPHITE-GDD-NODE-COPY-ITEM-1",
+            "GRAPHITE-GDD-NODE-COPY-ITEM-2",
+            "GRAPHITE-GDD-NODE-COPY-ITEM-3",
+        ];
+        let source_buttons = [
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-0",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-1",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-2",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-3",
+        ];
+        let select = |window: &mut gpui::VisualTestContext, name| {
+            let index = root_index(window, name);
+            click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+            click(window, root_buttons.get(index).expect("root node selector"));
+        };
+        select(window, "Artboard");
+        click(window, "GRAPHITE-GDD-SET-DOCUMENT-ARTBOARD");
+        for (target, source) in [
+            ("Fill", "Rectangle"),
+            ("Merge", "Fill"),
+            ("Artboard", "Merge"),
+        ] {
+            select(window, target);
+            let index = root_index(window, source);
+            click(window, "GRAPHITE-GDD-CONNECT-GRAPHIC-CONTENT");
+            click(
+                window,
+                source_buttons
+                    .get(index)
+                    .expect("source connector selector"),
+            );
+            item.read_with(window, |item, _| {
+                assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback)
+            });
+        }
+        let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
+        click(window, preview);
+        let (painting, background) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("saved Artboard selection");
+            };
+            let NodeOutputPreview::ReadyImage(image) = &form.output_preview else {
+                panic!(
+                    "source Artboard preview: {:?}",
+                    form.output_preview.feedback()
+                );
+            };
+            let pixels = image.as_bytes(0).expect("preview pixels");
+            let sample = |x, y| {
+                let offset = (y * LAYER_PREVIEW_SIZE as usize + x) * 4;
+                pixels
+                    .get(offset..offset + 4)
+                    .expect("pixel within Artboard preview")
+                    .to_vec()
+            };
+            assert_eq!(sample(8, 8), [0, 0, 0, 0]);
+            (sample(1, 29), sample(64, 64))
+        });
+        assert_eq!(painting, [0, 0, 0, 255]);
+        assert_eq!(background, [255, 255, 255, 255]);
+        click(window, preview);
+        let svg_path = PathBuf::from("/project/default-artboard.svg");
+        click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
+        window.simulate_new_path_selection(|_| Some(svg_path.clone()));
+        window.run_until_parked();
+        paint(window);
+        let svg = filesystem
+            .load_bytes(&svg_path)
+            .await
+            .expect("exported native SVG");
+        let text = std::str::from_utf8(&svg).expect("SVG text");
+        assert!(text.contains(r#"viewBox="0 0 1920 1080" width="1920" height="1080""#));
+        assert!(text.contains("<clipPath"));
+        let renderer = window.update(|_, cx| cx.svg_renderer());
+        let exported = crate::render::prepare_svg_bytes_at_target(
+            &svg,
+            1920,
+            1080,
+            1.,
+            &renderer,
+            1920 * 1080 * 4,
+        )
+        .expect("rasterize source export");
+        let pixels = exported.as_bytes(0).expect("export pixels");
+        for (x, y, expected) in [(20, 20, painting), (960, 540, background)] {
+            let offset = (y * 1920 + x) * 4;
+            assert_eq!(pixels.get(offset..offset + 4), Some(expected.as_slice()));
+        }
+        let published = PathBuf::from("/project/default-artboard-result.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(published.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &published)
+            .await
+            .expect("reopen native GDD");
+        let graph = saved.graph_inspection().await.expect("persisted graph");
+        let root = graph
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root");
+        let find = |name| {
+            graph
+                .nodes
+                .iter()
+                .find(|node| {
+                    node.network_id() == root.id && Some(&node.storage_id()) == addresses.get(name)
+                })
+                .expect("original catalog node")
+        };
+        let artboard = find("Artboard");
+        assert!(matches!(
+            artboard.layer_preview(),
+            Some(GddGraphLayerPreview::Artboard { origin, size })
+                if origin == DVec2::ZERO && size == DVec2::new(1920.,1080.)
+        ));
+        for (target, index, source) in [
+            ("Artboard", 1, "Merge"),
+            ("Merge", 1, "Fill"),
+            ("Fill", 0, "Rectangle"),
+        ] {
+            assert!(matches!(
+                find(target).input_ports().get(index).and_then(|port| port.source.as_ref()),
+                Some(GddGraphPortSource::Node { storage_id, output_index: 0 }) if *storage_id == find(source).storage_id()
+            ));
+        }
+        assert_eq!(
+            read_graphite_folder(filesystem.as_ref(), &source)
+                .await
+                .expect("retained input folder")
+                .folder_files()
+                .expect("original entries"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_graph_005_2_workspace_adds_catalog_layers_to_the_open_working_copy(
         cx: &mut TestAppContext,
     ) {
