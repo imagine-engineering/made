@@ -349,6 +349,7 @@ pub struct GddGraphGeometry {
 pub struct GddGraphNodeGeometry {
     pub storage_id: StorageNodeId,
     pub bounds: [[f64; 2]; 2],
+    pub primary_output: Option<[f64; 2]>,
 }
 
 #[derive(Clone)]
@@ -814,6 +815,10 @@ impl GddGraphNode {
                 })
     }
 
+    pub fn can_start_numeric_output(&self) -> bool {
+        self.can_supply_numeric_export && self.numeric_port().is_some()
+    }
+
     pub fn numeric_connection_source<'nodes>(&self, nodes: &'nodes [Self]) -> Option<&'nodes Self> {
         let Some(GddNumericInput::Connected { upstream, .. }) = self.numeric_input.as_ref() else {
             return None;
@@ -1013,6 +1018,10 @@ impl InspectedGddV1 {
                     .then(|| GddGraphNodeGeometry {
                         storage_id: *storage_id,
                         bounds: bounds.map(|point| point.to_array()),
+                        primary_output: finite_graph_point(
+                            interface
+                                .output_position(&OutputConnector::primary_output(*local_id), path),
+                        ),
                     })
             })
             .collect();

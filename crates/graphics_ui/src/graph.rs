@@ -110,15 +110,21 @@ pub(crate) fn render_saved_graph_ports(
 #[derive(Clone, Copy)]
 pub(crate) enum SavedGraphAction {
     SelectNode(usize),
-    ToggleImport(usize),
+    ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     CancelConnection,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SavedGraphConnectionSource {
+    Import(usize),
+    NodeOutput(usize),
 }
 
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
     pub selected: Option<usize>,
-    pub pending_import: Option<usize>,
+    pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
 }
 
@@ -161,7 +167,7 @@ pub(crate) fn render_saved_graph(
         .map(|(index, node)| (node.storage_id(), (index, node)))
         .collect::<BTreeMap<_, _>>();
     let can_connect_export = view.can_start_connection
-        && view.pending_import.is_none()
+        && view.pending_source.is_none()
         && view
             .selected
             .and_then(|index| nodes.get(index))
@@ -196,8 +202,8 @@ pub(crate) fn render_saved_graph(
             };
             let number = index.saturating_add(1);
             let text = format!("{label} {number}");
-            let active =
-                matches!(port, ImportOrExport::Import(_)) && view.pending_import == Some(*index);
+            let active = matches!(port, ImportOrExport::Import(_))
+                && view.pending_source == Some(SavedGraphConnectionSource::Import(*index));
             let socket = div()
                 .id((element_id, *index))
                 .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-{label}-{number}"))
@@ -222,7 +228,7 @@ pub(crate) fn render_saved_graph(
                     saved_graph_button(
                         socket,
                         accessible,
-                        SavedGraphAction::ToggleImport(*index),
+                        SavedGraphAction::ToggleSource(SavedGraphConnectionSource::Import(*index)),
                         dispatch.clone(),
                     )
                 }
@@ -269,6 +275,34 @@ pub(crate) fn render_saved_graph(
                 SavedGraphAction::SelectNode(index),
                 dispatch.clone(),
             ))
+        }))
+        .children(geometry.nodes.iter().filter_map(|geometry| {
+            let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
+            let position = project(geometry.primary_output?);
+            if !view.can_start_connection || !node.can_start_numeric_output() {
+                return None;
+            }
+            let source = SavedGraphConnectionSource::NodeOutput(index);
+            Some(saved_graph_button(
+                div()
+                    .id(("graphite-saved-graph-node-output", index))
+                    .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-NODE-OUTPUT-{index}"))
+                    .absolute()
+                    .left(position.x - px(6.))
+                    .top(position.y - px(6.))
+                    .size(px(12.))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(colors.border)
+                    .bg(if view.pending_source == Some(source) {
+                        colors.text_accent
+                    } else {
+                        colors.text_muted
+                    }),
+                format!("Connect output from {}", node.label()),
+                SavedGraphAction::ToggleSource(source),
+                dispatch.clone(),
+            ))
         }));
     v_flex()
         .gap_1()
@@ -279,7 +313,7 @@ pub(crate) fn render_saved_graph(
                 .overflow_x_scroll()
                 .child(graph),
         )
-        .when(view.pending_import.is_some(), |panel| {
+        .when(view.pending_source.is_some(), |panel| {
             panel.child(
                 h_flex()
                     .gap_2()

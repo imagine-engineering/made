@@ -30,7 +30,7 @@ use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
 
-use crate::graph::{SavedGraphAction, SavedGraphView};
+use crate::graph::{SavedGraphAction, SavedGraphConnectionSource, SavedGraphView};
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
 actions!(
@@ -482,7 +482,7 @@ struct NodeCopyForm {
     node_selection: BTreeSet<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
-    pending_canvas_import: Option<usize>,
+    pending_canvas_source: Option<SavedGraphConnectionSource>,
 }
 
 enum SavedGraphPanel {
@@ -538,7 +538,7 @@ impl NodeCopyForm {
         self.port_rename = None;
         self.node_selection.clear();
         self.saved_graph = SavedGraphPanel::Closed;
-        self.pending_canvas_import = None;
+        self.pending_canvas_source = None;
     }
 
     fn connect_network_import(&self, import_index: usize) -> Option<GraphiteCopy> {
@@ -552,6 +552,23 @@ impl NodeCopyForm {
                 import_index,
                 reconnect: target.numeric_import_source().is_some(),
             })
+    }
+
+    fn connect_numeric_output(&self, source_index: usize) -> Option<GraphiteCopy> {
+        let target = self.selected_node()?;
+        let source = self.nodes.get(source_index)?;
+        let previous = target.numeric_connection_source(&self.nodes);
+        let compatible = match previous {
+            Some(previous) => target.can_reconnect_numeric_input_from(previous, source),
+            None => target.can_connect_numeric_input_from(source),
+        };
+        compatible.then(|| GraphiteCopy::EditNode {
+            node: Box::new(target.clone()),
+            change: NodeCopyChange::ConnectNumericInput {
+                source: Box::new(source.clone()),
+                previous: previous.cloned().map(Box::new),
+            },
+        })
     }
 }
 
@@ -953,7 +970,7 @@ impl GraphiteDocumentItem {
                                     node_selection: BTreeSet::new(),
                                     show_saved_ports: false,
                                     saved_graph: SavedGraphPanel::Closed,
-                                    pending_canvas_import: None,
+                                    pending_canvas_source: None,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -1006,7 +1023,7 @@ impl GraphiteDocumentItem {
             SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
         ) {
             form.saved_graph = SavedGraphPanel::Closed;
-            form.pending_canvas_import = None;
+            form.pending_canvas_source = None;
             cx.notify();
             return;
         }
@@ -1077,41 +1094,55 @@ impl GraphiteDocumentItem {
             return;
         };
         match action {
-            SavedGraphAction::ToggleImport(index) => {
-                if self.copy_task.is_none()
-                    && form
+            SavedGraphAction::ToggleSource(source) => {
+                let eligible = match source {
+                    SavedGraphConnectionSource::Import(index) => form
                         .active_network()
-                        .is_some_and(|network| network.can_start_numeric_import(index))
-                {
-                    form.pending_canvas_import =
-                        (form.pending_canvas_import != Some(index)).then_some(index);
+                        .is_some_and(|network| network.can_start_numeric_import(index)),
+                    SavedGraphConnectionSource::NodeOutput(index) => form
+                        .clipboard_scope()
+                        .zip(form.nodes.get(index))
+                        .is_some_and(|(network, node)| {
+                            network.id == node.network_id() && node.can_start_numeric_output()
+                        }),
+                };
+                if self.copy_task.is_none() && eligible {
+                    form.pending_canvas_source =
+                        (form.pending_canvas_source != Some(source)).then_some(source);
                     self.copy_feedback = None;
                     cx.notify();
                 }
             }
             SavedGraphAction::CancelConnection => {
-                form.pending_canvas_import = None;
+                form.pending_canvas_source = None;
                 cx.notify();
             }
             SavedGraphAction::ConnectExport(index) => {
-                if form.pending_canvas_import.is_none() && self.copy_task.is_none() {
+                if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
                 }
             }
             SavedGraphAction::SelectNode(index) => {
-                let Some(import) = form.pending_canvas_import.take() else {
+                let Some(source) = form.pending_canvas_source.take() else {
                     return;
                 };
                 if self.copy_task.is_none() {
+                    let (command, message) = match source {
+                        SavedGraphConnectionSource::Import(index) => (
+                            form.connect_network_import(index),
+                            "Choose an exposed numeric input that accepts this import.",
+                        ),
+                        SavedGraphConnectionSource::NodeOutput(index) => (
+                            form.connect_numeric_output(index),
+                            "Choose an exposed numeric input that accepts this output.",
+                        ),
+                    };
                     if form.selected == Some(index)
-                        && let Some(command) = form.connect_network_import(import)
+                        && let Some(command) = command
                     {
                         self.save_copy(command, window, cx);
                     } else {
-                        self.copy_feedback = Some((
-                            "Choose an exposed numeric input that accepts this import.".into(),
-                            Color::Error,
-                        ));
+                        self.copy_feedback = Some((message.into(), Color::Error));
                         cx.notify();
                     }
                 }
@@ -2067,7 +2098,7 @@ impl GraphiteDocumentItem {
                                     SavedGraphView {
                                         network,
                                         selected: form.selected,
-                                        pending_import: form.pending_canvas_import,
+                                        pending_source: form.pending_canvas_source,
                                         can_start_connection: self.copy_task.is_none(),
                                     },
                                     window, cx,
@@ -3736,13 +3767,37 @@ mod tests {
     }
 
     async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
-        use graphite_document_graph_storage::NoMetadata;
+        numeric_graph_archive_with_layout(fixture, false).await
+    }
+
+    async fn numeric_graph_archive_with_layout(
+        fixture: NumericGraphFixture,
+        positioned: bool,
+    ) -> (Vec<u8>, usize) {
+        use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_graph_craft::document::{
             DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
             value::TaggedValue,
         };
         use graphite_resource::ResourceRegistry;
         use graphite_std::math_nodes::absolute_value;
+
+        struct NumericPositions(bool);
+
+        impl NodeMetadataSource for NumericPositions {
+            fn position(&self, _: &[NodeId], node: NodeId) -> Option<Position> {
+                if !self.0 {
+                    return None;
+                }
+                let grid = match node {
+                    NodeId(7) => [0, 0],
+                    NodeId(8) => [8, 2],
+                    NodeId(9) => [0, 4],
+                    _ => return None,
+                };
+                Some(Position::Absolute(grid))
+            }
+        }
 
         let node = DocumentNode {
             implementation: DocumentNodeImplementation::ProtoNode(absolute_value::IDENTIFIER),
@@ -3812,7 +3867,12 @@ mod tests {
         .expect("pinned GDD storage");
         let resources = HashMapResourceStorage::new();
         owner
-            .commit_from_runtime(&graph, &NoMetadata, &ResourceRegistry::new(), &resources)
+            .commit_from_runtime(
+                &graph,
+                &NumericPositions(positioned),
+                &ResourceRegistry::new(),
+                &resources,
+            )
             .expect("save pinned integer fixture");
         let original = owner
             .export_to_bytes(
@@ -6693,8 +6753,19 @@ mod tests {
     async fn at_gra_graph_007_2_workspace_connects_an_exposed_value_in_a_new_folder(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_connects_numeric_nodes(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_007_2_workspace_connects_numeric_nodes_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_connects_numeric_nodes(cx, true).await;
+    }
+
+    async fn verify_workspace_connects_numeric_nodes(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) =
-            numeric_graph_archive(NumericGraphFixture::ExposedInput).await;
+            numeric_graph_archive_with_layout(NumericGraphFixture::ExposedInput, canvas).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -6715,14 +6786,34 @@ mod tests {
             .downcast::<GraphiteDocumentItem>()
             .expect("native Inspector");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-OUTPUT-0");
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+            original_item.read_with(window, |item, cx| {
+                assert!(item.copy_task.is_none());
+                assert!(!item.is_dirty(cx));
+                assert!(matches!(&item.copy_feedback, Some((message, Color::Error))
+                    if message.as_ref() == "Choose an exposed numeric input that accepts this output."));
+            });
+        }
         for publish in [false, true] {
-            click(window, "GRAPHITE-GDD-CONNECT-VALUE");
-            assert!(
-                window
-                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
-                    .is_none()
-            );
-            click(window, "GRAPHITE-GDD-CONNECT-SOURCE-0");
+            if canvas {
+                click(window, "GRAPHITE-GDD-GRAPH-NODE-OUTPUT-0");
+                paint(window);
+                click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+            } else {
+                click(window, "GRAPHITE-GDD-CONNECT-VALUE");
+                assert!(
+                    window
+                        .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
+                        .is_none()
+                );
+                click(window, "GRAPHITE-GDD-CONNECT-SOURCE-0");
+            }
             window.simulate_new_path_selection(|_| publish.then(|| destination.clone()));
             window.run_until_parked();
             assert_eq!(
@@ -6766,7 +6857,16 @@ mod tests {
             source.numeric_input(),
             Some(GddNumericValue::Integer(-17))
         ));
-        assert!(connected.has_numeric_connection());
+        assert_eq!(
+            connected
+                .numeric_connection_source(&nodes)
+                .map(GddGraphNode::storage_id),
+            Some(source.storage_id())
+        );
+        assert!(matches!(
+            contents.preview_graph_numeric_output(connected).await,
+            Ok(GddNumericValue::Integer(17))
+        ));
         assert_eq!(contents.history_len(), original_history + 1);
         assert_eq!(
             filesystem
@@ -6781,8 +6881,19 @@ mod tests {
     async fn at_gra_graph_008_2_workspace_reconnects_a_value_in_a_new_folder(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_reconnects_numeric_nodes(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_008_2_workspace_reconnects_numeric_nodes_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_reconnects_numeric_nodes(cx, true).await;
+    }
+
+    async fn verify_workspace_reconnects_numeric_nodes(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) =
-            numeric_graph_archive(NumericGraphFixture::Reconnection).await;
+            numeric_graph_archive_with_layout(NumericGraphFixture::Reconnection, canvas).await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -6803,19 +6914,37 @@ mod tests {
             .downcast::<GraphiteDocumentItem>()
             .expect("native Inspector");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-OUTPUT-0");
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+            original_item.read_with(window, |item, cx| {
+                assert!(item.copy_task.is_none());
+                assert!(!item.is_dirty(cx));
+            });
+        }
         for publish in [false, true] {
-            click(window, "GRAPHITE-GDD-RECONNECT-VALUE");
-            assert!(
-                window
-                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-0")
-                    .is_none()
-            );
-            assert!(
-                window
-                    .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
-                    .is_none()
-            );
-            click(window, "GRAPHITE-GDD-CONNECT-SOURCE-2");
+            if canvas {
+                click(window, "GRAPHITE-GDD-GRAPH-NODE-OUTPUT-2");
+                paint(window);
+                click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+            } else {
+                click(window, "GRAPHITE-GDD-RECONNECT-VALUE");
+                assert!(
+                    window
+                        .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-0")
+                        .is_none()
+                );
+                assert!(
+                    window
+                        .debug_bounds("GRAPHITE-GDD-CONNECT-SOURCE-1")
+                        .is_none()
+                );
+                click(window, "GRAPHITE-GDD-CONNECT-SOURCE-2");
+            }
             window.simulate_new_path_selection(|_| publish.then(|| destination.clone()));
             window.run_until_parked();
             assert_eq!(
@@ -6859,7 +6988,11 @@ mod tests {
         let current_source = target
             .numeric_connection_source(&nodes)
             .expect("replacement wire");
-        assert_eq!(current_source.label(), replacement.label());
+        assert_eq!(current_source.storage_id(), replacement.storage_id());
+        assert!(matches!(
+            contents.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Integer(31))
+        ));
         assert_eq!(contents.history_len(), original_history + 2);
         assert_eq!(
             filesystem
