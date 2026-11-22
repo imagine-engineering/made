@@ -4,19 +4,23 @@ use std::{
 };
 
 use anyhow::{Context as _, anyhow, ensure};
+use editor::Editor;
 use gpui::{
     App, AppContext as _, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, PathPromptOptions, Render, SharedString, Task, WeakEntity, Window, actions,
 };
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, GddRecoverySource, GddSavedView,
-        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddRecoverySource,
+        GddSavedView, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
-use ui::{Button, Checkbox, Color, Label, LabelSize, ToggleState, prelude::*};
+use ui::{
+    Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, ToggleState, prelude::*,
+};
 use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
@@ -425,6 +429,20 @@ pub(crate) struct GraphiteDocumentItem {
     embed_linked_resources: bool,
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
+    rename: RenamePanel,
+}
+
+enum RenamePanel {
+    Closed,
+    Loading { _task: Task<()> },
+    Ready(RenameForm),
+    Failed(SharedString),
+}
+
+struct RenameForm {
+    nodes: Vec<GddGraphNode>,
+    selected: Option<usize>,
+    name: Entity<Editor>,
 }
 
 enum SavedViewPanel {
@@ -444,6 +462,7 @@ enum GraphiteCopy {
     Original,
     Export(GddCopyFormat),
     RecoverFolder,
+    RenameNode { node: GddGraphNode, name: String },
 }
 
 enum PreparedCopy {
@@ -452,6 +471,161 @@ enum PreparedCopy {
 }
 
 impl GraphiteDocumentItem {
+    fn toggle_rename_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match &self.rename {
+            RenamePanel::Loading { .. } => return,
+            RenamePanel::Ready(_) => self.rename = RenamePanel::Closed,
+            RenamePanel::Closed | RenamePanel::Failed(_) => {
+                let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
+                    return;
+                };
+                let contents = contents.clone();
+                let load = cx.background_spawn(async move { contents.graph_nodes().await });
+                self.rename = RenamePanel::Loading {
+                    _task: cx.spawn_in(window, async move |item, cx| {
+                        let loaded = load.await;
+                        if let Err(error) = item.update_in(cx, |item, window, cx| {
+                            item.rename = match loaded {
+                                Ok(nodes) if nodes.is_empty() => {
+                                    RenamePanel::Failed("This graph has no nodes.".into())
+                                }
+                                Ok(nodes) => RenamePanel::Ready(RenameForm {
+                                    nodes,
+                                    selected: None,
+                                    name: cx.new(|cx| Editor::single_line(window, cx)),
+                                }),
+                                Err(error) => RenamePanel::Failed(error.to_string().into()),
+                            };
+                            cx.notify();
+                        }) {
+                            log::debug!("Graphite rename panel closed: {error:#}");
+                        }
+                    }),
+                };
+            }
+        }
+        cx.notify();
+    }
+
+    fn select_rename_node(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let RenamePanel::Ready(form) = &mut self.rename else {
+            return;
+        };
+        if let Some(node) = form.nodes.get(index) {
+            form.selected = Some(index);
+            form.name
+                .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
+            cx.notify();
+        }
+    }
+
+    fn render_rename_panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = match self.rename {
+            RenamePanel::Closed => "Rename Node in a Copy",
+            RenamePanel::Loading { .. } => "Loading Graph Nodes",
+            RenamePanel::Ready(_) => "Close Rename",
+            RenamePanel::Failed(_) => "Retry Graph Load",
+        };
+        let panel = v_flex().gap_2().child(
+            div().debug_selector(|| "GRAPHITE-GDD-RENAME".into()).child(
+                Button::new("graphite-gdd-rename", label)
+                    .disabled(
+                        self.copy_task.is_some()
+                            || matches!(self.rename, RenamePanel::Loading { .. }),
+                    )
+                    .on_click(
+                        cx.listener(|item, _, window, cx| item.toggle_rename_panel(window, cx)),
+                    ),
+            ),
+        );
+        match &self.rename {
+            RenamePanel::Ready(form) => {
+                let item = cx.entity().downgrade();
+                let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+                    for (index, node) in form.nodes.iter().enumerate() {
+                        let item = item.clone();
+                        let label = SharedString::from(node.label().to_owned());
+                        menu = menu.custom_entry(
+                            move |_, _| {
+                                div()
+                                    .debug_selector(move || {
+                                        format!("GRAPHITE-GDD-RENAME-NODE-{index}")
+                                    })
+                                    .p_2()
+                                    .child(Label::new(label.clone()))
+                                    .into_any_element()
+                            },
+                            move |window, cx| {
+                                if let Some(item) = item.upgrade() {
+                                    item.update(cx, |item, cx| {
+                                        item.select_rename_node(index, window, cx)
+                                    });
+                                }
+                            },
+                        );
+                    }
+                    menu
+                });
+                let selected = form.selected.and_then(|index| form.nodes.get(index));
+                panel
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-RENAME-CHOOSE".into())
+                            .child(DropdownMenu::new(
+                                "graphite-gdd-rename-choose",
+                                selected.map_or_else(
+                                    || "Choose a graph node".to_owned(),
+                                    |node| node.label().to_owned(),
+                                ),
+                                menu,
+                            )),
+                    )
+                    .when_some(selected, |panel, _| {
+                        panel
+                            .child(Label::new("Node name"))
+                            .child(
+                                div()
+                                    .id("graphite-gdd-rename-name")
+                                    .aria_label("Node name")
+                                    .child(form.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-SAVE-RENAMED".into())
+                                    .child(
+                                        Button::new(
+                                            "graphite-gdd-save-renamed",
+                                            "Save Renamed Folder",
+                                        )
+                                        .disabled(self.copy_task.is_some())
+                                        .on_click(
+                                            cx.listener(|item, _, window, cx| {
+                                                let RenamePanel::Ready(form) = &item.rename else {
+                                                    return;
+                                                };
+                                                if let Some(node) = form
+                                                    .selected
+                                                    .and_then(|index| form.nodes.get(index))
+                                                {
+                                                    let request = GraphiteCopy::RenameNode {
+                                                        node: node.clone(),
+                                                        name: form.name.read(cx).text(cx),
+                                                    };
+                                                    item.save_copy(request, window, cx);
+                                                }
+                                            }),
+                                        ),
+                                    ),
+                            )
+                    })
+            }
+            RenamePanel::Failed(error) => {
+                panel.child(Label::new(error.clone()).color(Color::Error))
+            }
+            RenamePanel::Closed | RenamePanel::Loading { .. } => panel,
+        }
+    }
+
     fn toggle_saved_view(&mut self, cx: &mut Context<Self>) {
         match &self.saved_view {
             SavedViewPanel::Loading { .. } => return,
@@ -541,10 +715,11 @@ impl GraphiteDocumentItem {
         if self.copy_task.is_some() {
             return;
         }
-        let (format, recover_pending) = match request {
-            GraphiteCopy::Original => (None, false),
-            GraphiteCopy::Export(format) => (Some(format), false),
-            GraphiteCopy::RecoverFolder => (None, true),
+        let (format, recover_pending, rename) = match request {
+            GraphiteCopy::Original => (None, false, None),
+            GraphiteCopy::Export(format) => (Some(format), false, None),
+            GraphiteCopy::RecoverFolder => (None, true, None),
+            GraphiteCopy::RenameNode { node, name } => (None, false, Some((node, name))),
         };
         let content = if format.is_some() {
             self.export_content
@@ -564,7 +739,8 @@ impl GraphiteDocumentItem {
         let source = model.path.clone();
         let project = self.project.clone();
         let format = format.or_else(|| {
-            (recover_pending || model.original.is_none()).then_some(GddCopyFormat::Folder)
+            (recover_pending || rename.is_some() || model.original.is_none())
+                .then_some(GddCopyFormat::Folder)
         });
         let export = match (&model.document, format) {
             (InspectedDocument::Gdd { contents, .. }, Some(format)) => {
@@ -590,6 +766,8 @@ impl GraphiteDocumentItem {
                 };
                 if recover_pending {
                     format!("Recovered {stem}{suffix}")
+                } else if rename.is_some() {
+                    format!("Renamed {stem}{suffix}")
                 } else {
                     format!("Copy of {stem}{suffix}")
                 }
@@ -695,6 +873,12 @@ impl GraphiteDocumentItem {
                             let recovered = archive.recover_pending_edits(ARCHIVE_BUDGET).await?;
                             return Ok(PreparedCopy::Folder(recovered.folder_files()?));
                         }
+                        if let Some((node, name)) = rename {
+                            let renamed = archive
+                                .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
+                                .await?;
+                            return Ok(PreparedCopy::Folder(renamed.folder_files()?));
+                        }
                         let enriched = if embed_linked_resources || legacy_document.is_some() {
                             Some(
                                 archive
@@ -797,6 +981,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             embed_linked_resources: false,
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
+            rename: RenamePanel::Closed,
         }
     }
 }
@@ -850,12 +1035,13 @@ impl Item for GraphiteDocumentItem {
             embed_linked_resources: self.embed_linked_resources,
             embed_legacy_document: self.embed_legacy_document,
             saved_view: SavedViewPanel::Closed,
+            rename: RenamePanel::Closed,
         })))
     }
 }
 
 impl Render for GraphiteDocumentItem {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let model = self.model.read(cx);
         let view = v_flex()
             .id("graphite-document-inspector")
@@ -939,6 +1125,10 @@ impl Render for GraphiteDocumentItem {
                         .when(contents.has_saved_view(), |view| {
                             view.child(self.render_saved_view(cx))
                         })
+                        .when(
+                            recovery.node_count > 0 && recovery.hot_log_len == 0,
+                            |view| view.child(self.render_rename_panel(window, cx)),
+                        )
                         .when(recovery.hot_log_len > 0, |view| {
                             view.child(
                                 div()
@@ -1114,6 +1304,145 @@ mod tests {
             )
             .await
             .expect("export actual Graphite storage")
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_032_2_workspace_renames_a_selected_nested_node_in_a_folder_copy(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_graph_craft::document::{
+            DocumentNode, DocumentNodeImplementation, NodeId, NodeNetwork,
+        };
+        use graphite_resource::ResourceRegistry;
+
+        let leaf = || DocumentNode {
+            implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
+            ..Default::default()
+        };
+        let network = NodeNetwork {
+            nodes: [
+                (NodeId(7), leaf()),
+                (
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(NodeNetwork {
+                            nodes: [(NodeId(7), leaf())].into_iter().collect(),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            184,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("pinned GDD storage");
+        let storage = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &storage)
+            .expect("source fixture with repeated local IDs");
+        let original = owner
+            .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &storage, None)
+            .await
+            .expect("original ZIP payload");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/nested.gdd.zip");
+        let destination = PathBuf::from("/project/renamed.gdd");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("write source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-RENAME");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-RENAME-CHOOSE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-RENAME-NODE-2");
+        paint(window);
+        let editor = item.read_with(window, |item, _| {
+            let RenamePanel::Ready(form) = &item.rename else {
+                panic!("expected the rename form");
+            };
+            assert_eq!(form.selected, Some(2));
+            form.name.clone()
+        });
+        editor.update_in(window, |editor, window, cx| {
+            editor.set_text("Nested label", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-RENAMED");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(
+            filesystem
+                .metadata(&destination)
+                .await
+                .expect("check cancellation")
+                .is_none()
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-RENAMED");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopen the renamed folder");
+        assert_ne!(reopened, item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the renamed GDD");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents
+            .graph_nodes()
+            .await
+            .expect("rebuild source graph IDs");
+        let [root, _, nested] = nodes.as_slice() else {
+            panic!("expected the original three nodes");
+        };
+        assert_eq!(root.name(), "");
+        assert_eq!(nested.name(), "Nested label");
+        assert_eq!(
+            contents.history_len(),
+            owner.session().history().count() + 1
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original bytes"),
+            original
+        );
     }
 
     #[gpui::test]

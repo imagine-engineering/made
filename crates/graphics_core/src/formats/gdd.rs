@@ -19,17 +19,19 @@ use graphite_document_format::{
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
 use graphite_document_graph_storage::{
-    NetworkId, PeerId, RegistryDelta, to_runtime::ConversionError,
+    AttributesRead, NetworkId, NetworkMetadataEntry, NodeId as StorageNodeId, NodeMetadataEntry,
+    PeerId, RegistryDelta, from_runtime, to_runtime::ConversionError,
 };
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     utility_types::{
         misc::PTZ,
         network_interface::{
-            NavigationMetadata, Previewing,
+            NavigationMetadata, NodeNetworkInterface, Previewing,
+            editor_delta::{EditorDelta, NodeMetadataChange, construct_batch},
             storage_metadata::{
-                InterfaceRebuildError, apply_network_view_settings, build_interface_from_storage,
-                network_ids_from_entries,
+                InterfaceRebuildError, StorageMetadataView, apply_network_view_settings,
+                build_interface_from_storage, network_ids_from_entries,
             },
         },
     },
@@ -37,7 +39,7 @@ use graphite_editor::messages::portfolio::document::{
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
-use graphite_graph_craft::document::NodeId;
+use graphite_graph_craft::document::{NodeId, NodeNetwork};
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
@@ -103,6 +105,14 @@ pub enum GddArchiveError {
     NoPendingEdits,
     #[error("The recovered Graphite folder did not retain the replayed edits.")]
     IncompleteRecovery,
+    #[error("Recover the pending Graphite edits before renaming a node.")]
+    PendingGraphEdits,
+    #[error("The selected node belongs to an earlier Graphite snapshot. Select the node again.")]
+    StaleGraphNode,
+    #[error("Enter a different Graphite node name.")]
+    UnchangedGraphNodeName,
+    #[error("The Graphite copy could not save the addressed node's new name.")]
+    IncompleteGraphNodeRename,
     #[error("This Graphite document already contains a different legacy document.")]
     ConflictingLegacyDocument,
     #[error("{0}")]
@@ -127,10 +137,12 @@ pub enum GddArchiveError {
     Container(#[from] ContainerError),
     #[error("The pinned Graphite document storage operation failed: {0}")]
     Storage(#[from] graphite_document_format::Error),
-    #[error("The saved Graphite view could not resolve its graph: {0}")]
-    ViewRegistry(#[source] ConversionError),
-    #[error("The saved Graphite view could not restore its network metadata: {0}")]
-    ViewInterface(#[source] InterfaceRebuildError),
+    #[error("The saved Graphite graph could not be resolved: {0}")]
+    RuntimeRegistry(#[source] ConversionError),
+    #[error("The saved Graphite graph could not restore its network metadata: {0}")]
+    RuntimeInterface(#[source] InterfaceRebuildError),
+    #[error("The pinned Graphite editor could not prepare the node rename: {0}")]
+    RenamePreparation(#[source] from_runtime::ConversionError),
     #[error("The pinned Graphite writer could not export the archive: {0}")]
     Export(#[source] ContainerError),
 }
@@ -181,10 +193,44 @@ pub struct GddNetworkView {
     pub previewing: Previewing,
 }
 
+#[derive(Clone)]
+pub struct GddGraphNode {
+    snapshot: Arc<()>,
+    storage_id: StorageNodeId,
+    local_id: NodeId,
+    network_path: Vec<NodeId>,
+    label: String,
+    name: String,
+}
+
+impl GddGraphNode {
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+struct GddRuntimeGraph {
+    network: NodeNetwork,
+    nodes: Vec<NodeMetadataEntry>,
+    networks: Vec<NetworkMetadataEntry>,
+}
+
+impl GddRuntimeGraph {
+    fn into_interface(self) -> Result<NodeNetworkInterface, GddArchiveError> {
+        build_interface_from_storage(self.network, self.nodes, self.networks)
+            .map_err(GddArchiveError::RuntimeInterface)
+    }
+}
+
 pub struct InspectedGddV1 {
     entries: StagedArchive,
     document: GddV1,
     recovery: GddRecoverySummary,
+    snapshot: Arc<()>,
 }
 
 impl PreservedGddV1 {
@@ -226,6 +272,132 @@ impl InspectedGddV1 {
         self.recovery
     }
 
+    pub async fn graph_nodes(&self) -> Result<Vec<GddGraphNode>, GddArchiveError> {
+        let graph = self.runtime_graph().await?;
+        let mut nodes: Vec<_> = graph
+            .nodes
+            .iter()
+            .map(|node| GddGraphNode {
+                snapshot: self.snapshot.clone(),
+                storage_id: node.storage_id,
+                local_id: node.local_id,
+                network_path: node.network_path.clone(),
+                label: String::new(),
+                name: node.display_name.clone().unwrap_or_default(),
+            })
+            .collect();
+        let interface = graph.into_interface()?;
+        nodes.sort_by(|left, right| {
+            left.network_path
+                .cmp(&right.network_path)
+                .then_with(|| left.local_id.cmp(&right.local_id))
+        });
+        for node in &mut nodes {
+            let path = &node.network_path;
+            let parent = if path.is_empty() {
+                "Root graph".into()
+            } else {
+                path.iter()
+                    .enumerate()
+                    .map(|(depth, node)| interface.display_name(node, &path[..depth]))
+                    .collect::<Vec<_>>()
+                    .join(" / ")
+            };
+            let label = interface.display_name(&node.local_id, path);
+            node.label = format!("{parent} · {label} [{}]", node.local_id.0);
+        }
+        Ok(nodes)
+    }
+
+    pub async fn rename_graph_node_in_copy(
+        &self,
+        node: &GddGraphNode,
+        name: String,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::ui::DISPLAY_NAME;
+
+        if !Arc::ptr_eq(&self.snapshot, &node.snapshot) {
+            return Err(GddArchiveError::StaleGraphNode);
+        }
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        if node.name == name {
+            return Err(GddArchiveError::UnchangedGraphNodeName);
+        }
+        if name.len() as u64 > budget.max_entry_bytes {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let interface = self.runtime_graph().await?.into_interface()?;
+        let (mut owner, working) = self.fork_working_copy(&budget).await?;
+        let resources = owner
+            .registry()
+            .to_resource_registry()
+            .map_err(GddArchiveError::RuntimeRegistry)?;
+        let edit = EditorDelta::NodeMetadata {
+            network_path: node.network_path.clone(),
+            node_id: node.local_id,
+            change: NodeMetadataChange::DisplayName(name.clone()),
+        };
+        let batch = construct_batch(
+            &[edit],
+            owner.registry(),
+            &resources,
+            &StorageMetadataView::new(&interface),
+            owner.session().peer(),
+        )
+        .map_err(GddArchiveError::RenamePreparation)?;
+        if !matches!(
+            batch.ops.as_slice(),
+            [RegistryDelta::ChangeNodeAttribute { id, delta }]
+                if *id == node.storage_id && delta.key == DISPLAY_NAME
+        ) {
+            return Err(GddArchiveError::StaleGraphNode);
+        }
+        owner.stage_constructed_ops(
+            batch.ops,
+            &batch.declarations.bytes,
+            &HashMapResourceStorage::new(),
+        )?;
+        if owner.retire_pending_interaction()?.len() != 1 {
+            return Err(GddArchiveError::IncompleteGraphNodeRename);
+        }
+        let copy = inspect_working_copy(&working, &budget).await?;
+        copy.document
+            .session()
+            .verify_history()
+            .map_err(graphite_document_format::Error::from)?;
+        let updated_name = copy
+            .document
+            .registry()
+            .node_instances
+            .get(&node.storage_id)
+            .map(|node| {
+                node.attributes()
+                    .get_typed::<String>(DISPLAY_NAME)
+                    .unwrap_or_default()
+            });
+        if updated_name.as_deref() != Some(name.as_str()) {
+            return Err(GddArchiveError::IncompleteGraphNodeRename);
+        }
+        Ok(copy)
+    }
+
+    async fn runtime_graph(&self) -> Result<GddRuntimeGraph, GddArchiveError> {
+        let declarations = self.document.declarations(&self.document).await;
+        let (network, nodes, networks) = self
+            .document
+            .registry()
+            .to_runtime_with_full_metadata(&declarations)
+            .map_err(GddArchiveError::RuntimeRegistry)?;
+        Ok(GddRuntimeGraph {
+            network,
+            nodes,
+            networks,
+        })
+    }
+
     pub async fn recover_pending_edits(
         &self,
         budget: GddArchiveBudget,
@@ -233,6 +405,29 @@ impl InspectedGddV1 {
         if self.hot_log_len() == 0 {
             return Err(GddArchiveError::NoPendingEdits);
         }
+        let (mut owner, working) = self.fork_working_copy(&budget).await?;
+        owner.retire_pending_interaction()?;
+        let recovered = inspect_working_copy(&working, &budget).await?;
+        recovered
+            .document
+            .session()
+            .verify_history()
+            .map_err(graphite_document_format::Error::from)?;
+        if recovered.hot_log_len() != 0
+            || !recovered
+                .document
+                .registry()
+                .value_equal(self.document.registry())
+        {
+            return Err(GddArchiveError::IncompleteRecovery);
+        }
+        Ok(recovered)
+    }
+
+    async fn fork_working_copy(
+        &self,
+        budget: &GddArchiveBudget,
+    ) -> Result<(GddV1, MemoryBackend), GddArchiveError> {
         let synthesized_history =
             self.recovery.source == GddRecoverySource::RegistryOnly && self.history_len() > 0;
         let entries = if synthesized_history {
@@ -251,12 +446,12 @@ impl InspectedGddV1 {
                 &bytes,
                 &GddArchiveBudget {
                     max_archive_bytes: bytes.len(),
-                    ..budget
+                    ..*budget
                 },
             )?;
-            self.restore_export_entries(entries, &budget, true)?
+            self.restore_export_entries(entries, budget, true)?
         } else {
-            self.copy_entries(&budget)?.finish()?
+            self.copy_entries(budget)?.finish()?
         };
         let working = entries.working;
         let mut owner = GddV1::open_in(AnyContainer::Memory(working.clone()), GddV1Layout).await?;
@@ -267,25 +462,10 @@ impl InspectedGddV1 {
         if synthesized_history && let Some(base) = owner.session().head_rev() {
             use graphite_document_graph_storage::{Value, attr};
 
-            // The synthetic base has no interaction marker for the recovered edit to undo to.
+            // The synthetic base has no interaction marker for a later edit to undo to.
             owner.annotate_delta(base, attr::delta::INTERACTION_END, Value::Bool(true))?;
         }
-        owner.retire_pending_interaction()?;
-        let recovered = inspect_working_copy(&working, &budget).await?;
-        recovered
-            .document
-            .session()
-            .verify_history()
-            .map_err(graphite_document_format::Error::from)?;
-        if recovered.hot_log_len() != 0
-            || !recovered
-                .document
-                .registry()
-                .value_equal(self.document.registry())
-        {
-            return Err(GddArchiveError::IncompleteRecovery);
-        }
-        Ok(recovered)
+        Ok((owner, working))
     }
 
     fn copy_entries<'budget>(
@@ -318,15 +498,9 @@ impl InspectedGddV1 {
         let mut unresolved = network_settings.keys().copied().collect::<BTreeSet<_>>();
         let mut networks = Vec::new();
         if !network_settings.is_empty() {
-            let declarations = self.document.declarations(&self.document).await;
-            let (network, nodes, metadata) = self
-                .document
-                .registry()
-                .to_runtime_with_full_metadata(&declarations)
-                .map_err(GddArchiveError::ViewRegistry)?;
-            let ids = network_ids_from_entries(&metadata);
-            let mut interface = build_interface_from_storage(network, nodes, metadata)
-                .map_err(GddArchiveError::ViewInterface)?;
+            let graph = self.runtime_graph().await?;
+            let ids = network_ids_from_entries(&graph.networks);
+            let mut interface = graph.into_interface()?;
             apply_network_view_settings(&mut interface, &ids, network_settings);
             for (path, id) in ids {
                 if network_settings.contains_key(&id)
@@ -747,6 +921,7 @@ async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddAr
         entries,
         document,
         recovery,
+        snapshot: Arc::new(()),
     })
 }
 
@@ -988,6 +1163,139 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_graph_032_1_renames_only_the_explicit_nested_node_in_a_reopened_copy() {
+        use graphite_document_graph_storage::{NoMetadata, attr::node::ui::DISPLAY_NAME};
+        use graphite_graph_craft::document::{DocumentNode, DocumentNodeImplementation};
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let repeated = NodeId(7);
+            let owner_node = NodeId(24);
+            let leaf = || DocumentNode {
+                implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
+                ..Default::default()
+            };
+            let network = NodeNetwork {
+                nodes: [
+                    (repeated, leaf()),
+                    (
+                        owner_node,
+                        DocumentNode {
+                            implementation: DocumentNodeImplementation::Network(NodeNetwork {
+                                nodes: [(repeated, leaf())].into_iter().collect(),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            let mut owner = document();
+            owner
+                .commit_from_runtime(
+                    &network,
+                    &NoMetadata,
+                    &ResourceRegistry::new(),
+                    &HashMapResourceStorage::new(),
+                )
+                .expect("save an actual nested source graph");
+            let bytes = export(&owner, Some(b"retain exact legacy entry")).await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original snapshot");
+            let nodes = original
+                .graph_nodes()
+                .await
+                .expect("stable native node addresses");
+            let root = nodes
+                .iter()
+                .find(|node| node.local_id == repeated && node.network_path.is_empty())
+                .expect("same local ID on root");
+            let target = nodes
+                .iter()
+                .find(|node| node.local_id == repeated && node.network_path == [owner_node])
+                .expect("exact nested target");
+            assert_ne!(target.storage_id, root.storage_id);
+            assert!(matches!(
+                original
+                    .rename_graph_node_in_copy(target, target.name.clone(), budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphNodeName)
+            ));
+            let reselected = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("different snapshot of the same source");
+            assert!(matches!(
+                reselected
+                    .rename_graph_node_in_copy(target, "stale".into(), budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+
+            let renamed = original
+                .rename_graph_node_in_copy(target, "Nested only".into(), budget())
+                .await
+                .expect("source editor prepares exactly the addressed rename");
+            assert_eq!(renamed.history_len(), original.history_len() + 1);
+            assert_eq!(renamed.hot_log_len(), 0);
+            let history = renamed
+                .document
+                .session()
+                .history()
+                .last()
+                .expect("new interaction");
+            assert!(
+                matches!(&history.kind, RegistryDelta::ChangeNodeAttribute { id, delta } if *id == target.storage_id && delta.key == DISPLAY_NAME)
+            );
+            assert_eq!(
+                renamed
+                    .read_entry(GddV1Layout.legacy_path())
+                    .expect("legacy data")
+                    .as_slice(),
+                b"retain exact legacy entry",
+            );
+            let working = renamed
+                .copy_entries(&budget())
+                .expect("working entries")
+                .finish()
+                .expect("valid layout")
+                .working;
+            let mut reopened = GddV1::open_in(AnyContainer::Memory(working), GddV1Layout)
+                .await
+                .expect("pinned source reopens the renamed copy");
+            assert_eq!(
+                reopened.registry().node_instances.get(&root.storage_id),
+                original
+                    .document
+                    .registry()
+                    .node_instances
+                    .get(&root.storage_id)
+            );
+            assert_eq!(
+                reopened
+                    .registry()
+                    .node_instances
+                    .get(&target.storage_id)
+                    .and_then(|node| node.attributes().get_typed::<String>(DISPLAY_NAME))
+                    .as_deref(),
+                Some("Nested only")
+            );
+            reopened.undo().expect("undo one rename");
+            assert!(
+                reopened
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            reopened.redo().expect("redo one rename");
+            assert!(reopened.registry().value_equal(renamed.document.registry()));
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
     }
 
     #[test]
