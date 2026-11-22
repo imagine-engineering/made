@@ -34,6 +34,8 @@ workspace.workspace = true
 theme.workspace = true
 
 [dev-dependencies]
+graphite-document-container.workspace = true
+graphite-document-format.workspace = true
 png.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }

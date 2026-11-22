@@ -9381,6 +9381,8 @@ dependencies = [
  "chrono",
  "core-types",
  "db",
+ "document-container",
+ "document-format",
  "editor",
  "futures 0.3.32",
  "glam 0.33.12",
