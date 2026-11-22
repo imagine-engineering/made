@@ -11063,6 +11063,96 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_node_281_2_workspace_adds_the_pinned_merge_from_the_catalog(
+        cx: &mut TestAppContext,
+    ) {
+        let blank = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source folder");
+        let original = blank
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/merge-catalog.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("original graph");
+        window.run_until_parked();
+        workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open native source");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG");
+        click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+        window.simulate_input("Merge");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Merge");
+        let destination = PathBuf::from("/project/merge-layer.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened native Merge");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let child = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("reopened Merge graph")
+            };
+            let owner = form.selected_node().expect("root Merge layer");
+            assert_eq!(
+                owner
+                    .input_ports()
+                    .iter()
+                    .map(|port| port.name.as_deref())
+                    .collect::<Vec<_>>(),
+                [Some("Base"), Some("Content")]
+            );
+            assert!(
+                owner
+                    .input_ports()
+                    .iter()
+                    .all(|port| port.exposed && port.source.is_none())
+            );
+            assert!(!item.is_dirty(cx));
+            owner.nested_network().expect("exact Merge child network")
+        });
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("entered Merge graph")
+            };
+            let network = form.active_network().expect("active Merge child");
+            assert_eq!(network.id, child);
+            assert_eq!((network.import_count, network.export_count), (2, 1));
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| node.network_id() == child)
+                    .count(),
+                6
+            );
+            assert!(!network.can_extend_ports_in_copy());
+        });
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_graph_005_2_workspace_inserts_the_selected_catalog_template(
         cx: &mut TestAppContext,
     ) {

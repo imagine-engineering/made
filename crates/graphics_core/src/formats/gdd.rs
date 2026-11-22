@@ -69,7 +69,10 @@ use crate::evaluate::{
     UnaryNumericOperation, typecheck_detached_numeric_network,
 };
 
-use crate::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, custom_node_definition};
+use crate::registry::{
+    CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, MERGE_NODE_IDENTIFIER, custom_node_definition,
+    merge_node_definition,
+};
 
 mod xz;
 
@@ -2879,8 +2882,10 @@ impl InspectedGddV1 {
                     child_path.push(node_id);
                     expected_networks.insert(child_path);
                     expected_nodes += inner.nodes.len();
-                    for &child in inner.nodes.keys() {
-                        check_clipboard_numeric_branch(inner, child, &node.inputs)?;
+                    if !path.is_empty() || !is_pinned_merge_template(&template) {
+                        for &child in inner.nodes.keys() {
+                            check_clipboard_numeric_branch(inner, child, &node.inputs)?;
+                        }
                     }
                 }
                 _ => check_clipboard_numeric_branch(nested, node_id, &[])?,
@@ -2988,15 +2993,30 @@ impl InspectedGddV1 {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
-        if identifier == CUSTOM_NODE_IDENTIFIER {
+        if matches!(identifier, CUSTOM_NODE_IDENTIFIER | MERGE_NODE_IDENTIFIER) {
             let inspection = self.graph_inspection().await?;
             let network = inspection
                 .networks
                 .iter()
                 .find(|network| network.parent.is_none())
                 .ok_or(GddArchiveError::MissingGraphNetwork)?;
+            if identifier == CUSTOM_NODE_IDENTIFIER {
+                return self
+                    .insert_custom_node_in_network_copy(network, position, budget)
+                    .await;
+            }
+            let mut template = merge_node_definition()
+                .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?
+                .default_node_template();
+            template.node_type_metadata =
+                NodeTypePersistentMetadata::layer(IVec2::from_array(position));
             return self
-                .insert_custom_node_in_network_copy(network, position, budget)
+                .insert_graph_node_templates_in_copy(
+                    network,
+                    self.runtime_graph().await?.into_interface()?,
+                    vec![(NodeId(0), template)],
+                    budget,
+                )
                 .await;
         }
         let definition = catalog_copy_node_definition(identifier)
@@ -4625,6 +4645,9 @@ fn catalog_copy_node_definition(identifier: &str) -> Option<&'static DocumentNod
     if identifier == CUSTOM_NODE_IDENTIFIER {
         return custom_node_definition();
     }
+    if identifier == MERGE_NODE_IDENTIFIER {
+        return merge_node_definition();
+    }
     let identifier = identifier.strip_prefix("PROTONODE:")?;
     let identifier = ProtoNodeIdentifier::with_owned_string(identifier.to_owned());
     let definition = resolve_proto_node_type(identifier.clone())?;
@@ -4634,6 +4657,21 @@ fn catalog_copy_node_definition(identifier: &str) -> Option<&'static DocumentNod
         && matches!(template.node_type_metadata, NodeTypePersistentMetadata::Node(_))
         && template.inputs.iter().all(|input| matches!(input, NodeInput::Value { .. })))
     .then_some(definition)
+}
+
+fn is_pinned_merge_template(template: &NodeTemplate) -> bool {
+    if !matches!(
+        template.node_type_metadata,
+        NodeTypePersistentMetadata::Layer(_)
+    ) {
+        return false;
+    }
+    merge_node_definition().is_some_and(|definition| {
+        let mut expected = definition.default_node_template();
+        expected.normalize_stored_types();
+        expected.node_type_metadata = template.node_type_metadata.clone();
+        expected == *template
+    })
 }
 
 fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentifier {
@@ -8826,6 +8864,112 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_281_2_saves_the_exact_merge_layer_and_its_owned_network() {
+        futures::executor::block_on(async {
+            let source = create_gdd_folder(621, 992, "Pinned Merge".into(), budget())
+                .await
+                .expect("source folder");
+            let original = source
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("original archive");
+            let position = [5, -8];
+            let copy = source
+                .insert_root_catalog_node_in_copy(MERGE_NODE_IDENTIFIER, position, budget())
+                .await
+                .expect("place the pinned Merge layer");
+            let graph = copy.graph_inspection().await.expect("saved Merge graph");
+            let [root, child] = graph.networks.as_slice() else {
+                panic!("original root and one owned Merge network");
+            };
+            let node = graph
+                .nodes
+                .iter()
+                .find(|node| node.nested_network() == Some(child.id))
+                .expect("root Merge owner");
+            assert_eq!(node.network_id(), root.id);
+            assert_eq!((child.import_count, child.export_count), (2, 1));
+            assert_eq!(
+                graph
+                    .nodes
+                    .iter()
+                    .filter(|node| node.network_id() == child.id)
+                    .count(),
+                6
+            );
+            assert!(!child.can_extend_ports_in_copy());
+            assert!(matches!(
+                copy.append_nested_network_import_in_copy(child, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphImportAppend)
+            ));
+            assert!(matches!(
+                copy.copy_graph_nodes_to_clipboard(std::slice::from_ref(node), budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphClipboardSelection)
+            ));
+            let mut expected = merge_node_definition()
+                .expect("pinned Merge")
+                .default_node_template();
+            expected.normalize_stored_types();
+            expected.node_type_metadata =
+                NodeTypePersistentMetadata::layer(IVec2::from_array(position));
+            let interface = copy
+                .runtime_graph()
+                .await
+                .expect("saved runtime graph")
+                .into_interface()
+                .expect("saved Merge metadata");
+            assert_eq!(
+                interface.create_node_template(&node.local_id, &[]),
+                Some(expected)
+            );
+
+            let bytes: Arc<[u8]> = copy
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("export saved Merge")
+                .into();
+            let reopened = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("reopen saved Merge");
+            let reopened_graph = reopened.graph_inspection().await.expect("reopened graph");
+            let addresses = |graph: &GddGraphInspection| {
+                graph
+                    .nodes
+                    .iter()
+                    .map(|node| (node.storage_id(), node.network_id()))
+                    .collect::<BTreeSet<_>>()
+            };
+            assert_eq!(addresses(&reopened_graph), addresses(&graph));
+            let undone = reopened
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("remove owner and child in one undo");
+            assert!(
+                undone
+                    .graph_nodes()
+                    .await
+                    .expect("undo insertion")
+                    .is_empty()
+            );
+            let restored = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("restore exact Merge group");
+            assert_eq!(
+                addresses(&restored.graph_inspection().await.expect("restored graph")),
+                addresses(&graph)
+            );
+            assert!(source.graph_nodes().await.expect("source graph").is_empty());
+            assert_eq!(
+                source
+                    .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                    .expect("untouched archive"),
+                original
+            );
+        });
+    }
+
+    #[test]
     fn at_gra_graph_005_1_round_trips_eligible_catalog_proto_defaults() {
         use crate::registry::GraphiteNodeCatalog;
 
@@ -8850,7 +8994,7 @@ mod tests {
             }
             assert!(count > 5);
             assert!(failures.is_empty(), "{}", failures.join("\n"));
-            for invalid in ["NETWORK:Merge", "PROTONODE:unknown-node", "Add"] {
+            for invalid in ["NETWORK:Artboard", "PROTONODE:unknown-node", "Add", "Merge"] {
                 assert!(matches!(
                     blank
                         .insert_root_catalog_node_in_copy(invalid, position, budget())

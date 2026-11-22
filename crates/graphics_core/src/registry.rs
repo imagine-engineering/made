@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt, sync::OnceLock};
 
 use graphite_core_types::{
-    NodeIOTypes, ProtoNodeIdentifier,
+    NodeIOTypes, ProtoNodeIdentifier, list,
     registry::{NODE_METADATA, NODE_REGISTRY, NodeMetadata},
 };
 use graphite_editor::messages::portfolio::document::{
@@ -11,8 +11,12 @@ use graphite_editor::messages::portfolio::document::{
         },
         utility_types::{FrontendNodeType, InputTypeConstraint},
     },
-    utility_types::network_interface::{NodeNetworkTemplate, NodeTemplateImplementation},
+    utility_types::network_interface::{
+        NodeNetworkTemplate, NodeTemplateImplementation, NodeTypePersistentMetadata,
+    },
 };
+use graphite_graph_craft::document::{NodeId, NodeInput};
+use graphite_std::Graphic;
 
 #[derive(Clone, Debug)]
 pub struct RegisteredNode {
@@ -76,6 +80,8 @@ pub fn registered_node(identifier: &str) -> Result<RegisteredNode, RegistryError
 
 pub const CUSTOM_NODE_NAME: &str = "Custom Node";
 pub const CUSTOM_NODE_IDENTIFIER: &str = "NETWORK:Custom Node";
+pub(crate) const MERGE_NODE_NAME: &str = "Merge";
+pub(crate) const MERGE_NODE_IDENTIFIER: &str = "NETWORK:Merge";
 
 pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition> {
     let definition = resolve_network_node_type(CUSTOM_NODE_NAME)?;
@@ -88,6 +94,25 @@ pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition
         ..Default::default()
     };
     (template.inputs.is_empty() && *network == expected).then_some(definition)
+}
+
+pub(crate) fn merge_node_definition() -> Option<&'static DocumentNodeDefinition> {
+    let definition = resolve_network_node_type(MERGE_NODE_NAME)?;
+    let template = &definition.node_template;
+    let NodeTemplateImplementation::Network(network) = &template.implementation else {
+        return None;
+    };
+    let input = NodeInput::type_default(list!(Graphic), true);
+    (matches!(
+        template.node_type_metadata,
+        NodeTypePersistentMetadata::Layer(_)
+    ) && template.inputs.as_slice() == [input.clone(), input]
+        && template.output_names.as_slice() == ["Out"]
+        && network.reference.as_deref() == Some(MERGE_NODE_NAME)
+        && network.scope_injections.is_empty()
+        && network.nodes.len() == 6
+        && network.exports.as_slice() == [NodeInput::node(NodeId(5), 0)])
+    .then_some(definition)
 }
 
 pub struct GraphiteCatalogCategory {
@@ -133,7 +158,7 @@ impl GraphiteNodeCatalog {
             if !terms.iter().all(|term| {
                 name.contains(term)
                     || category.contains(term)
-                    || (node.name == "Merge" && "layer".contains(term))
+                    || (node.name == MERGE_NODE_NAME && "layer".contains(term))
             }) {
                 continue;
             }
@@ -200,6 +225,97 @@ mod tests {
         assert!(network.nodes.is_empty());
         assert!(network.exports.is_empty());
         assert_eq!(network.reference.as_deref(), Some("Custom Node"));
+    }
+
+    #[test]
+    fn at_gra_node_281_1_resolves_the_pinned_merge_template_and_ports() {
+        use graphite_graph_craft::document::{DocumentNodeMetadata, value::TaggedValue};
+        use graphite_std::{ATTR_EDITOR_LAYER_PATH, graphic, memo};
+
+        let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
+        let groups = catalog.search("layer");
+        let entry = groups
+            .iter()
+            .flat_map(|group| &group.nodes)
+            .find(|node| node.identifier == MERGE_NODE_IDENTIFIER)
+            .expect("canonical Merge entry");
+        assert_eq!(entry.category, "General");
+        assert_eq!(entry.input_types.len(), 2);
+        assert_eq!(entry.name, MERGE_NODE_NAME);
+        let definition = merge_node_definition().expect("pinned Merge definition");
+        let template = definition.default_node_template();
+        assert_eq!(
+            template.inputs,
+            vec![NodeInput::type_default(list!(Graphic), true); 2]
+        );
+        assert_eq!(template.output_names, ["Out"]);
+        assert_eq!(
+            template
+                .input_metadata
+                .iter()
+                .map(|port| port.persistent_metadata.input_name.as_str())
+                .collect::<Vec<_>>(),
+            ["Base", "Content"]
+        );
+        assert_eq!(
+            template.node_type_metadata,
+            NodeTypePersistentMetadata::layer(graphite_glam::IVec2::ZERO)
+        );
+        let NodeTemplateImplementation::Network(network) = template.implementation else {
+            panic!("exact Merge network")
+        };
+        assert_eq!(network.reference.as_deref(), Some(MERGE_NODE_NAME));
+        assert_eq!(network.exports, [NodeInput::node(NodeId(5), 0)]);
+        assert_eq!(network.nodes.len(), 6);
+        for (index, identifier, inputs) in [
+            (
+                0,
+                graphic::as_graphic::IDENTIFIER,
+                vec![NodeInput::import(graphite_graph_craft::generic!(T), 0)],
+            ),
+            (
+                1,
+                graphic::into_group::IDENTIFIER,
+                vec![NodeInput::import(graphite_graph_craft::generic!(T), 1)],
+            ),
+            (
+                2,
+                graphic::path_of_subgraph::IDENTIFIER,
+                vec![NodeInput::Reflection(
+                    DocumentNodeMetadata::DocumentNodePath,
+                )],
+            ),
+            (
+                3,
+                graphic::write_attribute::IDENTIFIER,
+                vec![
+                    NodeInput::node(NodeId(1), 0),
+                    NodeInput::value(TaggedValue::String(ATTR_EDITOR_LAYER_PATH.into()), false),
+                    NodeInput::node(NodeId(2), 0),
+                ],
+            ),
+            (
+                4,
+                memo::monitor::IDENTIFIER,
+                vec![NodeInput::node(NodeId(3), 0)],
+            ),
+            (
+                5,
+                graphic::extend::IDENTIFIER,
+                vec![NodeInput::node(NodeId(0), 0), NodeInput::node(NodeId(4), 0)],
+            ),
+        ] {
+            let child = network
+                .nodes
+                .get(&NodeId(index))
+                .expect("original internal node");
+            assert_eq!(
+                child.implementation,
+                NodeTemplateImplementation::ProtoNode(identifier)
+            );
+            assert_eq!(child.inputs, inputs);
+            assert_eq!(child.skip_deduplication, index == 4);
+        }
     }
 
     #[test]
