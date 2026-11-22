@@ -694,17 +694,27 @@ impl DependencyDiagramItem {
                 y: size.height / 2.0,
             }
         };
-        let position = gpui::point(gpui::px(origin.x + screen.x), gpui::px(origin.y + screen.y));
+        self.show_context_menu_at(target, origin.translated(screen), window, cx);
+    }
+
+    fn show_context_menu_at(
+        &self,
+        target: DependencyDiagramContextTarget,
+        position: GraphPoint,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.context_handle.is_deployed() {
+            return;
+        }
         self.context_state.stage(
             crate::dependency_diagram_menu::DependencyDiagramContextInvocation {
                 target,
-                screen_position: sim_runtime::graph::GraphPoint {
-                    x: position.x.into(),
-                    y: position.y.into(),
-                },
+                screen_position: position,
             },
         );
         let handle = self.context_handle.clone();
+        let position = gpui::point(gpui::px(position.x), gpui::px(position.y));
         window.defer(cx, move |window, cx| {
             handle.show_at(position, window, cx);
         });
@@ -1439,6 +1449,9 @@ impl DependencyDiagramItem {
         let graph = &self.canvas.read(cx).graph;
         let bounds = graph.bounds;
         let scale = self.overview_scale(cx);
+        let node_size = graph.node_size();
+        let width = 3.0_f32.max(node_size.width * scale);
+        let height = 2.0_f32.max(node_size.height * scale);
         let overview_origin = self.overview_origin.clone();
         let mut overview = div()
             .absolute()
@@ -1499,14 +1512,23 @@ impl DependencyDiagramItem {
                     continue;
                 };
                 let selected = self.canvas.read(cx).selection.contains(&node.id);
+                let position = GraphPoint {
+                    x: (origin.x - bounds.origin.x) * scale,
+                    y: (origin.y - bounds.origin.y) * scale,
+                };
                 let rect = div()
                     .absolute()
-                    .left(px((origin.x - bounds.origin.x) * scale))
-                    .top(px((origin.y - bounds.origin.y) * scale))
-                    .w(px(3.0_f32.max(graph.node_size().width * scale)))
-                    .h(px(2.0_f32.max(graph.node_size().height * scale)));
+                    .left(px(position.x))
+                    .top(px(position.y))
+                    .w(px(width))
+                    .h(px(height));
                 if selected {
                     let node_id = node.id.clone();
+                    let menu_node = node_id.clone();
+                    let menu_anchor = position.translated(GraphPoint {
+                        x: width / 2.0,
+                        y: height / 2.0,
+                    });
                     let focus_color = theme.text;
                     overview = overview.child(
                         rect.id(format!("structure-overview-{}", node.id))
@@ -1518,6 +1540,11 @@ impl DependencyDiagramItem {
                                 "Structure overview selected node {}; activate to centre the viewport",
                                 node.label
                             ))
+                            .on_action(cx.listener(
+                                move |item, _: &ShowDependencyDiagramContextMenu, window, cx| {
+                                    item.show_overview_context_menu(&menu_node, menu_anchor, window, cx);
+                                },
+                            ))
                             .on_click(cx.listener(move |item, _, _, cx| {
                                 item.center_overview_node(&node_id, cx);
                             })),
@@ -1528,6 +1555,28 @@ impl DependencyDiagramItem {
             }
         }
         overview
+    }
+
+    fn show_overview_context_menu(
+        &self,
+        id: &str,
+        anchor: GraphPoint,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let canvas = self.canvas.read(cx);
+        if !canvas.selection.contains(id) || !self.receipt_is_current(cx) {
+            return;
+        }
+        let target = stage_dependency_diagram_target(Some(id), &canvas.selection);
+        let position = match self.overview_origin.lock() {
+            Ok(origin) => origin.translated(anchor),
+            Err(error) => {
+                log::error!("Could not read the dependency diagram overview position: {error}");
+                return;
+            }
+        };
+        self.show_context_menu_at(target, position, window, cx);
     }
 
     fn finish_overview_drag(
@@ -2533,6 +2582,39 @@ mod tests {
             "Structure overview selected node org.example:right; activate to centre the viewport"
         ));
         cx.simulate_keystrokes("shift-tab");
+        assert!(overview_block_has_focus(cx, label));
+        cx.update(|window, cx| {
+            let keystroke = gpui::Keystroke::parse("shift-f10").expect("context-menu key");
+            window.dispatch_event(
+                gpui::KeyDownEvent {
+                    keystroke,
+                    is_held: false,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+            let item = item.read(cx);
+            assert_eq!(item.canvas.read(cx).focus.as_deref(), Some("c2"));
+            let staged = item.context_state.invocation.lock().expect("staged menu");
+            let invocation = staged.as_ref().expect("keyboard menu invocation");
+            assert_eq!(
+                invocation.target,
+                DependencyDiagramContextTarget::Selection("c1".into())
+            );
+            let position = invocation.screen_position;
+            assert!(
+                (overview_origin.x..overview_origin.x + STRUCTURE_OVERVIEW_SIZE.width)
+                    .contains(&position.x)
+            );
+            assert!(
+                (overview_origin.y..overview_origin.y + STRUCTURE_OVERVIEW_SIZE.height)
+                    .contains(&position.y)
+            );
+        });
+        assert!(item.read_with(cx, |item, _| item.context_handle.is_deployed()));
+        cx.simulate_keystrokes("escape");
+        assert!(!item.read_with(cx, |item, _| item.context_handle.is_deployed()));
         assert!(overview_block_has_focus(cx, label));
         for activation_key in ["enter", "space"] {
             item.update(cx, |item, cx| item.move_viewport_to_overview(pointer, cx));
