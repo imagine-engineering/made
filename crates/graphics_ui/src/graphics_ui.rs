@@ -5,6 +5,7 @@ pub mod storage;
 
 mod document_file;
 mod graph;
+mod layers;
 mod node_catalog;
 mod png_workflow;
 mod session;

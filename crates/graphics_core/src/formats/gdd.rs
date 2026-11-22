@@ -32,6 +32,7 @@ use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     node_graph::document_node_definitions::{DocumentNodeDefinition, resolve_proto_node_type},
     utility_types::{
+        document_metadata::LayerNodeIdentifier,
         misc::PTZ,
         network_interface::{
             InputConnector, NavigationMetadata, NodeNetworkInterface, NodePosition, NodeTemplate,
@@ -247,6 +248,8 @@ pub enum GddArchiveError {
     GraphNumericPreviewEvaluation(String),
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
+    #[error("Saved layers could not be read from this Graphite layer graph.")]
+    InvalidRootLayerGraph,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -344,6 +347,7 @@ pub struct GddGraphGeometry {
     pub nodes: Vec<GddGraphNodeGeometry>,
     pub boundary_ports: Vec<(ImportOrExport, [f64; 2])>,
     pub wires: Vec<[[f64; 2]; 2]>,
+    pub root_layers: Result<Vec<GddRootLayer>, GddArchiveError>,
 }
 
 impl GddGraphGeometry {
@@ -378,6 +382,13 @@ pub struct GddGraphNodeGeometry {
     pub primary_output: Option<[f64; 2]>,
     click_target: Option<graphite_std::vector::click_target::ClickTarget>,
     pub is_layer: bool,
+}
+
+pub struct GddRootLayer {
+    pub storage_id: StorageNodeId,
+    pub depth: usize,
+    pub visible: bool,
+    pub locked: bool,
 }
 
 #[derive(Clone)]
@@ -1049,6 +1060,11 @@ impl InspectedGddV1 {
             .collect::<Vec<_>>();
         ids.sort_unstable();
         let mut interface = graph.into_interface()?;
+        let root_layers = if path.is_empty() {
+            project_root_layers(&mut interface, &ids)
+        } else {
+            Ok(Vec::new())
+        };
         let nodes = ids
             .iter()
             .filter_map(|(local_id, storage_id)| {
@@ -1111,6 +1127,7 @@ impl InspectedGddV1 {
             nodes,
             boundary_ports,
             wires,
+            root_layers,
         })
     }
 
@@ -4363,6 +4380,53 @@ fn finite_graph_point(point: Option<DVec2>) -> Option<[f64; 2]> {
         .map(|point| point.to_array())
 }
 
+fn project_root_layers(
+    interface: &mut NodeNetworkInterface,
+    ids: &[(NodeId, StorageNodeId)],
+) -> Result<Vec<GddRootLayer>, GddArchiveError> {
+    if !ids.iter().any(|(node, _)| interface.is_layer(node, &[])) {
+        return Ok(Vec::new());
+    }
+    // The pinned traversal assumes acyclic inputs and reserves both ends of the layer ID range.
+    if [NodeId(0), NodeId(u64::MAX)]
+        .iter()
+        .any(|node| interface.document_node(node, &[]).is_some() && interface.is_layer(node, &[]))
+        || !interface.document_network().is_acyclic()
+    {
+        return Err(GddArchiveError::InvalidRootLayerGraph);
+    }
+    interface.load_structure();
+    let metadata = interface.document_metadata();
+    let mut pending = Vec::new();
+    if let Some(layer) = LayerNodeIdentifier::ROOT_PARENT.last_child(metadata) {
+        pending.extend(layer.downstream_siblings(metadata).map(|layer| (layer, 0)));
+    }
+    let mut layers = Vec::new();
+    while let Some((layer, depth)) = pending.pop() {
+        let id = layer.to_node();
+        let storage_id = ids
+            .binary_search_by_key(&id, |(node, _)| *node)
+            .ok()
+            .and_then(|index| ids.get(index))
+            .map(|(_, storage_id)| *storage_id)
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?;
+        layers.push(GddRootLayer {
+            storage_id,
+            depth,
+            visible: interface.is_visible(&id, &[]),
+            locked: interface.is_locked(&id, &[]),
+        });
+        if let Some(child) = layer.last_child(metadata) {
+            pending.extend(
+                child
+                    .downstream_siblings(metadata)
+                    .map(|child| (child, depth + 1)),
+            );
+        }
+    }
+    Ok(layers)
+}
+
 fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {
     matches!(&node.node_type_metadata, NodeTypePersistentMetadata::Node(metadata)
         if matches!(metadata.position(), NodePosition::Absolute(_)))
@@ -5252,6 +5316,50 @@ mod tests {
             max_entry_bytes: 256 * 1024,
             max_total_entry_bytes: 1024 * 1024,
             max_entries: 32,
+        }
+    }
+
+    #[test]
+    fn at_gra_layer_001_1_rejects_invalid_root_layer_topology() {
+        use graphite_document_graph_storage::Position;
+
+        for (local_id, inputs) in [
+            (NodeId(0), Vec::new()),
+            (NodeId(u64::MAX), Vec::new()),
+            (NodeId(42), vec![NodeInput::node(NodeId(42), 0)]),
+        ] {
+            let storage_id = StorageNodeId(1);
+            let metadata = NodeMetadataEntry {
+                network_path: Vec::new(),
+                local_id,
+                storage_id,
+                position: Some(Position::Absolute([0, 0])),
+                is_layer: true,
+                display_name: None,
+                locked: false,
+                pinned: false,
+                input_metadata: vec![Default::default(); inputs.len()],
+                output_names: Vec::new(),
+            };
+            let network = NodeNetwork {
+                nodes: [(
+                    local_id,
+                    DocumentNode {
+                        inputs,
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                exports: vec![NodeInput::node(local_id, 0)],
+                ..Default::default()
+            };
+            let mut interface = build_interface_from_storage(network, vec![metadata], Vec::new())
+                .expect("read the saved layer metadata");
+            assert!(matches!(
+                project_root_layers(&mut interface, &[(local_id, storage_id)]),
+                Err(GddArchiveError::InvalidRootLayerGraph)
+            ));
         }
     }
 

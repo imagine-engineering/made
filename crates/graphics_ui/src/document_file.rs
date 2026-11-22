@@ -5261,6 +5261,97 @@ mod tests {
         graph_navigation_archive_with_number_target(false).await
     }
 
+    async fn graph_layer_archive() -> (Vec<u8>, usize) {
+        use graphite_document_graph_storage::{NodeMetadataSource, Position};
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork};
+        use graphite_resource::ResourceRegistry;
+
+        struct LayerMetadata;
+
+        impl NodeMetadataSource for LayerMetadata {
+            fn is_layer(&self, path: &[NodeId], _: NodeId) -> bool {
+                path.is_empty()
+            }
+
+            fn display_name(&self, path: &[NodeId], node: NodeId) -> Option<&str> {
+                if !path.is_empty() {
+                    return None;
+                }
+                match node {
+                    NodeId(10) => Some("Background"),
+                    NodeId(20) => Some("Artwork"),
+                    NodeId(30) => Some("Child"),
+                    NodeId(40) => Some("Unconnected"),
+                    _ => None,
+                }
+            }
+
+            fn position(&self, path: &[NodeId], node: NodeId) -> Option<Position> {
+                if !path.is_empty() {
+                    return None;
+                }
+                let position = match node {
+                    NodeId(10) => [8, 4],
+                    NodeId(20) => [8, 0],
+                    NodeId(30) => [0, 0],
+                    NodeId(40) => [16, 4],
+                    _ => return None,
+                };
+                Some(Position::Absolute(position))
+            }
+
+            fn locked(&self, path: &[NodeId], node: NodeId) -> bool {
+                path.is_empty() && node == NodeId(30)
+            }
+        }
+
+        let merge = resolve_network_node_type("Merge").expect("pinned Merge template");
+        let mut artwork = merge.node_template.clone();
+        let [sibling, child] = artwork.inputs.as_mut_slice() else {
+            panic!("two pinned Merge inputs")
+        };
+        *sibling = NodeInput::node(NodeId(10), 0);
+        *child = NodeInput::node(NodeId(30), 0);
+        let mut hidden = merge.node_template.clone();
+        hidden.visible = false;
+        let graph = NodeNetwork {
+            nodes: [
+                (NodeId(10), merge.node_template.clone().into_parts().0),
+                (NodeId(20), artwork.into_parts().0),
+                (NodeId(30), hidden.into_parts().0),
+                (NodeId(40), merge.node_template.clone().into_parts().0),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(20), 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            623,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("source GDD");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &LayerMetadata, &ResourceRegistry::new(), &resources)
+            .expect("source layer hierarchy");
+        let source = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        (source, owner.session().history().count())
+    }
+
     async fn graph_navigation_archive_with_number_target(number_target: bool) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_graph_craft::{
@@ -8262,6 +8353,98 @@ mod tests {
         click(window, "GRAPHITE-GDD-PARENT-NETWORK");
         paint(window);
         assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH").is_none());
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_001_2_workspace_selects_saved_layers_and_graph_nodes_together(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) = graph_layer_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-layers.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the layer document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let revision = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready Inspector")
+            };
+            let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                panic!("ready saved graph")
+            };
+            let layers = graph.root_layers.as_ref().expect("pinned layer structure");
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| {
+                        let node = form
+                            .nodes
+                            .iter()
+                            .find(|node| node.storage_id() == layer.storage_id)
+                            .expect("same layer and graph identity");
+                        (node.name(), layer.depth, layer.visible, layer.locked)
+                    })
+                    .collect::<Vec<_>>(),
+                [
+                    ("Artwork", 0, true, false),
+                    ("Child", 1, false, true),
+                    ("Background", 0, true, false)
+                ]
+            );
+            item.model.read(cx).revision.clone()
+        });
+        let parent = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-LAYER-1")
+            .expect("parent layer");
+        let child = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-LAYER-2")
+            .expect("child layer");
+        let sibling = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-LAYER-0")
+            .expect("sibling layer");
+        assert!(parent.origin.y < child.origin.y && child.origin.y < sibling.origin.y);
+        assert!(child.origin.x > parent.origin.x);
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-3").is_none());
+        for (selector, label) in [
+            ("GRAPHITE-GDD-SAVED-LAYER-2", "Child"),
+            ("GRAPHITE-GDD-GRAPH-NODE-1", "Artwork"),
+            ("GRAPHITE-GDD-SAVED-LAYER-0", "Background"),
+        ] {
+            click(window, selector);
+            paint(window);
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                assert_eq!(form.selected_node().map(GddGraphNode::name), Some(label));
+                assert_eq!(form.name.read(cx).text(cx), label);
+                assert!(!item.is_dirty(cx));
+                let model = item.model.read(cx);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert_eq!(model.gdd_contents().expect("GDD").history_len(), history);
+            });
+        }
         assert_eq!(
             filesystem.load_bytes(&path).await.expect("source archive"),
             original

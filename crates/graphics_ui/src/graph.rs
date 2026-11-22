@@ -728,6 +728,41 @@ pub(crate) fn render_saved_graph(
                     .bg(colors.text_accent.opacity(0.15)),
             )
         });
+    let root_layers = match &geometry.root_layers {
+        Ok(layers) if layers.is_empty() => None,
+        Ok(layers) => Some(
+            v_flex()
+                .gap_1()
+                .child(Label::new("Layers"))
+                .children(layers.iter().filter_map(|layer| {
+                    let &(index, node) = nodes_by_id.get(&layer.storage_id)?;
+                    let dispatch = dispatch.clone();
+                    Some(crate::layers::render_saved_layer(
+                        layer,
+                        index,
+                        node.display_name().to_owned(),
+                        view.selected == Some(index) || view.selection.contains(&index),
+                        view.pending_source.is_none(),
+                        move |window, cx| {
+                            dispatch(
+                                SavedGraphAction::SelectNode {
+                                    index,
+                                    extend: false,
+                                },
+                                window,
+                                cx,
+                            );
+                        },
+                    ))
+                }))
+                .into_any_element(),
+        ),
+        Err(error) => Some(
+            Label::new(error.to_string())
+                .color(Color::Error)
+                .into_any_element(),
+        ),
+    };
     v_flex()
         .gap_1()
         .child(
@@ -737,6 +772,7 @@ pub(crate) fn render_saved_graph(
                 .overflow_x_scroll()
                 .child(graph),
         )
+        .children(root_layers)
         .when(view.pending_source.is_some(), |panel| {
             panel.child(
                 h_flex()
