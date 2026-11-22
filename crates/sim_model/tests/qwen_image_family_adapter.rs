@@ -288,8 +288,9 @@ fn val_model_family_row_001_pinned_source_facts_remain_bound()
         .parent()
         .and_then(Path::parent)
         .ok_or("sim_model crate is not inside the repository")?;
-    let detection =
-        fs::read_to_string(repository_root.join("projects/comfy/ComfyUI/sim/model_detection.py"))?;
+    let detection = fs::read_to_string(
+        repository_root.join("projects/comfy/ComfyUI/comfy/model_detection.py"),
+    )?;
     for fact in [
         "txt_norm.weight",
         "__index_timestep_zero__",
@@ -299,8 +300,9 @@ fn val_model_family_row_001_pinned_source_facts_remain_bound()
     ] {
         assert!(detection.contains(fact), "pinned detector lost {fact}");
     }
-    let supported =
-        fs::read_to_string(repository_root.join("projects/comfy/ComfyUI/sim/supported_models.py"))?;
+    let supported = fs::read_to_string(
+        repository_root.join("projects/comfy/ComfyUI/comfy/supported_models.py"),
+    )?;
     for fact in [
         "class QwenImage",
         "memory_usage_factor = 1.8",

@@ -245,8 +245,8 @@ fn val_latent_001_val_ownership_001_conditioning_program_and_owners_are_canonica
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/pixart_family.rs"))?;
     for required in [
         "ModelStateTransformOperation::Assemble",
-        "generated_sd15_comfy_model_0045::LATENT_FORMAT",
-        "generated_sdxl_comfy_model_0047::LATENT_FORMAT",
+        "generated_sd15_sim_model_0045::LATENT_FORMAT",
+        "generated_sdxl_sim_model_0047::LATENT_FORMAT",
     ] {
         assert!(adapter.contains(required));
     }

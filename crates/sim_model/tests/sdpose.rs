@@ -24,7 +24,7 @@ const SD2_WORKSPACE_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Deserialize)]
 struct ProductionManifest {
-    simui_tree_sha256: String,
+    comfyui_tree_sha256: String,
     tensor_count: usize,
     scalar_count: u64,
     capture: ProductionCapture,
@@ -306,7 +306,7 @@ fn lotus_conditioning_is_exact_broadcast_and_attempt_local() -> Result<(), Box<d
     let manifest: serde_json::Value =
         serde_json::from_slice(&fs::read(head_projection_fixture("manifest.json"))?)?;
     assert_eq!(
-        manifest["simui"]["tree_sha256"],
+        manifest["comfyui"]["tree_sha256"],
         "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
     );
     assert_eq!(
@@ -454,7 +454,7 @@ fn sdpose_sd2_manifest_is_complete_and_source_sized() -> Result<(), Box<dyn Erro
     let tracked: ProductionManifest =
         serde_json::from_slice(&fs::read(fixture("production_manifest/manifest.json"))?)?;
     assert_eq!(
-        tracked.simui_tree_sha256,
+        tracked.comfyui_tree_sha256,
         "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
     );
     assert_eq!(tracked.tensor_count, 690);

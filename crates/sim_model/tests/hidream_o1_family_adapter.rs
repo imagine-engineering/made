@@ -265,7 +265,7 @@ fn val_ownership_001_hidream_o1_has_one_adapter_and_one_latent_owner()
         1
     );
     assert_eq!(adapter.matches("pub enum HiDreamO1Layout").count(), 1);
-    assert!(adapter.contains("crate::generated_hidreamo1pixel_comfy_model_0031::LATENT_FORMAT"));
+    assert!(adapter.contains("crate::generated_hidreamo1pixel_sim_model_0031::LATENT_FORMAT"));
     assert!(!adapter.contains("struct ModelStateTransaction"));
     assert!(!adapter.contains("pub const LATENT_FORMAT: LatentFormatDefinition"));
 

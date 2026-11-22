@@ -1,11 +1,11 @@
 {
   "format": "zed.sim.audio-encoder-reduced-oracle.v1",
-  "generator_sha256": "47f772bc44a1f3aeb927fe911556775b5b157bcba3977b4200d6c440a8190dad",
+  "generator_sha256": "1cc0139f326045551cc98b528b8c16ebd42417f612180b68ff3583606c4d16d5",
   "pinned_sources": {
-    "projects/sim/ComfyUI/sim/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
-    "projects/sim/ComfyUI/sim/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
-    "projects/sim/ComfyUI/sim/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
-    "projects/sim/ComfyUI/sim_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a"
+    "projects/comfy/ComfyUI/comfy/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+    "projects/comfy/ComfyUI/comfy/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
+    "projects/comfy/ComfyUI/comfy/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a"
   },
   "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
   "python": "3.14.5",

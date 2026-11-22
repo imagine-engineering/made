@@ -25,12 +25,12 @@ const ORACLE_FIXTURE: &[u8] = include_bytes!(
     "../../../crates/sim_test_support/parity/fixtures/quant-linear-source-oracle.json"
 );
 const ORACLE_FIXTURE_SHA256: &str =
-    "74acf934871befe3a87a91de6aea430a7ea9a16a821441bd716768dfb1919d0c";
+    "428ae962313cfd2444ff153efeedb4fbe6bfd3d527050ce68c4a80393aff014c";
 const ORACLE_GENERATOR: &[u8] = include_bytes!(
     "../../../crates/sim_test_support/parity/oracles/generate_quant_linear_oracle.py"
 );
 const ORACLE_GENERATOR_SHA256: &str =
-    "beac9521a7dc3e1676e049504c665a4c372868e8c4cf3fe52cc24b9dae44c662";
+    "ef6d041fac852fef6de6052a816e5317e129d19d42737af9efb0aae05e19b387";
 const ORACLE_MANIFEST: &[u8] = include_bytes!(
     "../../../crates/sim_test_support/parity/oracles/quant_linear_oracle_manifest.json"
 );
@@ -369,10 +369,10 @@ fn source_oracle_fixture_is_pinned_and_declares_the_exact_callable_contract()
         fixture["owner_task_id"],
         "comfy-parity-quantized-autograd-adapter"
     );
-    assert_eq!(fixture["oracle"]["simui_version"], "0.27.1");
-    assert_eq!(fixture["oracle"]["simui_file_count"], 949);
+    assert_eq!(fixture["oracle"]["comfyui_version"], "0.27.1");
+    assert_eq!(fixture["oracle"]["comfyui_file_count"], 949);
     assert_eq!(
-        fixture["oracle"]["simui_tree_sha256"],
+        fixture["oracle"]["comfyui_tree_sha256"],
         "21de8fece20d8d5bfa94daaa52d6ccfe2db6726ca0803ca3b383ad164cbd1d5f"
     );
     assert_eq!(fixture["oracle"]["python_major_minor"], "3.12");
@@ -440,43 +440,43 @@ fn source_oracle_fixture_is_pinned_and_declares_the_exact_callable_contract()
         serde_json::json!(["cp312-none-macosx_11_0_arm64"])
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["version"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["version"],
         "0.2.16"
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["python_source_file_count"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["python_source_file_count"],
         27
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["python_source_sha256"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["python_source_sha256"],
         "a19c43ef5e77a99e4a964c46cf9b19dc7ec809a97f9089aebce1550870603d66"
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["record_sha256"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["record_sha256"],
         "139d248ca695d590822196738916ac1fd29e1c254bec81e9404a07d8ffa5a58e"
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["record_entry_count"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["record_entry_count"],
         66
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["record_hashed_entry_count"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["record_hashed_entry_count"],
         38
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["supplemental_bytecode_file_count"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["supplemental_bytecode_file_count"],
         27
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["supplemental_bytecode_sha256"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["supplemental_bytecode_sha256"],
         "2838d41338422e326773affb00e2e29dbf3d6896834d36e34e0cdf4cf999425c"
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["wheel_sha256"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["wheel_sha256"],
         "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9"
     );
     assert_eq!(
-        fixture["oracle"]["dependencies"]["sim-kitchen"]["wheel_tags"],
+        fixture["oracle"]["dependencies"]["comfy-kitchen"]["wheel_tags"],
         serde_json::json!(["py3-none-any"])
     );
     assert_eq!(

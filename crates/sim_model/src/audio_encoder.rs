@@ -37,17 +37,17 @@ use std::{
 use thiserror::Error;
 
 pub const AUDIO_ENCODERS_SOURCE_PATH: &str =
-    "projects/comfy/ComfyUI/sim/audio_encoders/audio_encoders.py";
+    "projects/comfy/ComfyUI/comfy/audio_encoders/audio_encoders.py";
 pub const AUDIO_ENCODERS_SOURCE_SHA256: &str =
     "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8";
 pub const NODES_AUDIO_ENCODER_SOURCE_PATH: &str =
     "projects/comfy/ComfyUI/comfy_extras/nodes_audio_encoder.py";
 pub const NODES_AUDIO_ENCODER_SOURCE_SHA256: &str =
     "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a";
-pub const WAV2VEC2_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/audio_encoders/wav2vec2.py";
+pub const WAV2VEC2_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/audio_encoders/wav2vec2.py";
 pub const WAV2VEC2_SOURCE_SHA256: &str =
     "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7";
-pub const WHISPER_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/audio_encoders/whisper.py";
+pub const WHISPER_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/audio_encoders/whisper.py";
 pub const WHISPER_SOURCE_SHA256: &str =
     "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22";
 

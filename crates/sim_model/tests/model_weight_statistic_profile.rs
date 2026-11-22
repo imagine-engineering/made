@@ -86,10 +86,7 @@ fn real_sd2_weight_bytes_produce_exact_unspoofable_population_standard_deviation
     assert_eq!(context.scratch.in_use_bytes(), 0);
 
     let source = fs::read_to_string(
-        workspace_root()?
-            .join("projects")
-            .join("sim")
-            .join("ComfyUI/sim/supported_models.py"),
+        workspace_root()?.join("projects/comfy/ComfyUI/comfy/supported_models.py"),
     )?;
     assert!(source.contains("torch.std(out, unbiased=False) > 0.09"));
     Ok(())

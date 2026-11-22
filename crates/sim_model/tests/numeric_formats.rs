@@ -23,7 +23,7 @@ use std::{
 
 const FIXTURE_PATH: &str =
     "crates/sim_test_support/fixtures/numeric_formats/sim_numeric_formats_v1.json";
-const FIXTURE_SHA256: &str = "38969f0a48ff3986dad10d0121e44a03545190ad48b08cb3c3e28593df7322e4";
+const FIXTURE_SHA256: &str = "66195839817756f31bb9dc91210e19d3e7502e358c227b915944a86463fa6229";
 
 fn run_attention(
     request: AttentionRequest,

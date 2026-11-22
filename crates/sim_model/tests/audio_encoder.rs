@@ -20,7 +20,7 @@ const ORACLE: &str = include_str!(
 const GENERATOR: &[u8] = include_bytes!(
     "../../sim_test_support/fixtures/models/audio-encoder-resource-foundation/generate_oracle.py"
 );
-const ORACLE_SHA256: &str = "873985e347289929433a8a66918ab17db19f9309e9ae13521ef7ef7d8943a218";
+const ORACLE_SHA256: &str = "0de3239ec997d308eb620ec9422d29ad0aeeb1989f7b48d13b9438da3b7eb4f3";
 
 fn backend() -> Result<(Arc<CpuBackend>, CpuWorkspaceAuthority), Box<dyn Error>> {
     let (backend, authority) = CpuWorkspaceAuthority::create_backend(MEMORY_LIMIT)?;

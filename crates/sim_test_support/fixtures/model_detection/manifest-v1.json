@@ -3,7 +3,7 @@
   "fixture_id": "model-detection-foundation-v1",
   "oracle": {
     "executed_in_release_tests": false,
-    "source": "projects/sim/ComfyUI/sim/model_detection.py",
+    "source": "projects/comfy/ComfyUI/comfy/model_detection.py",
     "source_sha256": "f13b11988fccf9fa4d878ef5f63313c23c5f1400ec8cde04a502584e157c5072"
   },
   "cases": [

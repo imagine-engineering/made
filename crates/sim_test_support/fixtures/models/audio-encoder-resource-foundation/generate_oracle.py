@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 
 PINNED_SOURCES = {
-    "projects/sim/ComfyUI/sim_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
-    "projects/sim/ComfyUI/sim/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
-    "projects/sim/ComfyUI/sim/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
-    "projects/sim/ComfyUI/sim/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_audio_encoder.py": "fbc6f4d8ca0e099dc2f35f9420dce9aced3763325b9804b031a1641db2bb4a8a",
+    "projects/comfy/ComfyUI/comfy/audio_encoders/audio_encoders.py": "c8d3260799ea0222b6bf9e1bde8d16f105a46aaf1944213bf66fdaa05433dec8",
+    "projects/comfy/ComfyUI/comfy/audio_encoders/wav2vec2.py": "32494297021e54e42845276255a026ce8ab62be5d54f6d40cecfb042c8b238e7",
+    "projects/comfy/ComfyUI/comfy/audio_encoders/whisper.py": "f0e214e79fdfa9926fbc863038fe3e0455caa61f486a1b37a3039ca7253dea22",
 }
 
 
