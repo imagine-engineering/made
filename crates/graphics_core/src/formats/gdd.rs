@@ -272,8 +272,8 @@ pub enum GddArchiveError {
     GraphLayerPreviewEvaluation(String),
     #[error("Choose a supported root Artboard and an empty document output.")]
     UnsupportedDocumentArtboard,
-    #[error("Choose a supported Merge layer and an empty Artboard Content input.")]
-    UnsupportedArtboardContent,
+    #[error("Choose compatible Graphite nodes and an empty Content input.")]
+    UnsupportedGraphContentConnection,
     #[error("Choose the exported root Artboard to save its SVG.")]
     UnsupportedArtboardSvgExport,
     #[error("Choose a supported node with a hidden Boolean literal.")]
@@ -700,6 +700,13 @@ pub enum GddGraphLayerPreview {
     Artboard { origin: DVec2, size: DVec2 },
 }
 
+#[derive(Clone, Copy)]
+enum SavedGraphicProfile {
+    Rectangle,
+    Fill,
+    Layer(GddGraphLayerPreview),
+}
+
 const ARTBOARD_CONTENT_INPUT: usize = 1;
 
 #[derive(Clone)]
@@ -720,7 +727,7 @@ pub struct GddGraphNode {
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
-    layer_preview: Option<GddGraphLayerPreview>,
+    graphic_profile: Option<SavedGraphicProfile>,
     is_document_output: bool,
     can_set_document_artboard: bool,
     can_supply_numeric_export: bool,
@@ -968,24 +975,34 @@ impl GddGraphNode {
     }
 
     pub fn layer_preview(&self) -> Option<GddGraphLayerPreview> {
-        self.layer_preview.filter(|_| self.is_document_output)
+        match self.graphic_profile {
+            Some(SavedGraphicProfile::Layer(preview)) if self.is_document_output => Some(preview),
+            _ => None,
+        }
     }
 
     pub fn can_set_document_artboard(&self) -> bool {
         self.can_set_document_artboard
     }
 
-    pub fn can_attach_artboard_content_from(&self, source: &Self) -> bool {
-        self.same_network_as(source)
-            && matches!(
-                self.layer_preview(),
-                Some(GddGraphLayerPreview::Artboard { .. })
-            )
-            && matches!(source.layer_preview, Some(GddGraphLayerPreview::Merge))
-            && self
-                .input_ports
-                .get(ARTBOARD_CONTENT_INPUT)
-                .is_some_and(|port| port.exposed && port.source.is_none())
+    pub fn graphic_content_input_from(&self, source: &Self) -> Option<usize> {
+        if !self.same_network_as(source) {
+            return None;
+        }
+        let index = match (self.graphic_profile?, source.graphic_profile?) {
+            (SavedGraphicProfile::Fill, SavedGraphicProfile::Rectangle) => {
+                fill::ContentInput::INDEX
+            }
+            (
+                SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
+                SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
+            ) if self.is_document_output => ARTBOARD_CONTENT_INPUT,
+            _ => return None,
+        };
+        self.input_ports
+            .get(index)
+            .filter(|port| port.exposed && port.source.is_none())
+            .map(|_| index)
     }
 
     pub fn can_copy_graph_node(&self) -> bool {
@@ -1351,7 +1368,7 @@ impl InspectedGddV1 {
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
-                    layer_preview: None,
+                    graphic_profile: None,
                     is_document_output: false,
                     can_set_document_artboard: false,
                     can_supply_numeric_export: false,
@@ -1561,15 +1578,17 @@ impl InspectedGddV1 {
                     .and_then(graph_boolean_literal);
             }
             if path.is_empty()
-                && node.nested_network.is_some()
-                && let Some((_, Some(preview))) = interface
+                && let Some((_, profile)) = interface
                     .document_node(&node.local_id, path)
-                    .and_then(checked_layer_preview_node)
+                    .and_then(checked_saved_graphic_node)
             {
-                node.layer_preview = Some(preview);
+                node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
                 node.can_set_document_artboard = empty_document_output
-                    && matches!(preview, GddGraphLayerPreview::Artboard { .. })
+                    && matches!(
+                        profile,
+                        SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
+                    )
                     && interface.is_layer(&node.local_id, path);
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
@@ -3393,8 +3412,11 @@ impl InspectedGddV1 {
             || !matches!(
                 root.nodes
                     .get(&node.local_id)
-                    .and_then(checked_layer_preview_node),
-                Some((_, Some(GddGraphLayerPreview::Artboard { .. })))
+                    .and_then(checked_saved_graphic_node),
+                Some((
+                    _,
+                    SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
+                ))
             )
         {
             return Err(GddArchiveError::UnsupportedDocumentArtboard);
@@ -3436,7 +3458,7 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
-    pub async fn attach_artboard_content_in_copy(
+    pub async fn connect_graphic_content_in_copy(
         &self,
         node: &GddGraphNode,
         source: &GddGraphNode,
@@ -3444,20 +3466,18 @@ impl InspectedGddV1 {
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
         self.check_node_edit_target(source)?;
-        if !node.can_attach_artboard_content_from(source) {
-            return Err(GddArchiveError::UnsupportedArtboardContent);
-        }
+        let input_index = node
+            .graphic_content_input_from(source)
+            .ok_or(GddArchiveError::UnsupportedGraphContentConnection)?;
         let path = node.network_path.as_slice();
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let export = NodeInput::node(node.local_id, 0);
-        let connector = InputConnector::node_at_index(node.local_id, ARTBOARD_CONTENT_INPUT);
-        if interface.document_network().exports != [export.clone()]
-            || !matches!(
-                interface.input_from_connector(&connector, path),
-                Some(NodeInput::Value { exposed: true, .. })
-            )
-        {
-            return Err(GddArchiveError::UnsupportedArtboardContent);
+        let exports = interface.document_network().exports.clone();
+        let connector = InputConnector::node_at_index(node.local_id, input_index);
+        if !matches!(
+            interface.input_from_connector(&connector, path),
+            Some(NodeInput::Value { exposed: true, .. })
+        ) {
+            return Err(GddArchiveError::UnsupportedGraphContentConnection);
         }
         let layout = graph_port_edit_layout(&interface, [path])?;
         let wire = NodeInput::node(source.local_id, 0);
@@ -3469,7 +3489,7 @@ impl InspectedGddV1 {
         if interface.input_from_connector(&connector, path) != Some(&wire)
             || graph_port_edit_layout(&interface, [path])? != layout
         {
-            return Err(GddArchiveError::UnsupportedArtboardContent);
+            return Err(GddArchiveError::UnsupportedGraphContentConnection);
         }
         collect_layer_preview_node(
             interface.document_network(),
@@ -3478,10 +3498,10 @@ impl InspectedGddV1 {
             &mut BTreeSet::new(),
         )?;
         let copy = self
-            .finish_graph_input(node, interface, ARTBOARD_CONTENT_INPUT, None, budget)
+            .finish_graph_input(node, interface, input_index, None, budget)
             .await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if actual.document_network().exports != [export]
+        if actual.document_network().exports != exports
             || actual.input_from_connector(&connector, path) != Some(&wire)
             || graph_port_edit_layout(&actual, [path])? != layout
         {
@@ -5220,7 +5240,7 @@ fn collect_layer_preview_node(
         .nodes
         .get(&node_id)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
-    let (node, _) = checked_layer_preview_node(source_node)
+    let (node, _) = checked_saved_graphic_node(source_node)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
     for input in &node.inputs {
         if let NodeInput::Node {
@@ -5236,9 +5256,7 @@ fn collect_layer_preview_node(
     Ok(())
 }
 
-fn checked_layer_preview_node(
-    node: &DocumentNode,
-) -> Option<(DocumentNode, Option<GddGraphLayerPreview>)> {
+fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, SavedGraphicProfile)> {
     let output_wire = |input: &NodeInput| {
         matches!(
             input,
@@ -5248,7 +5266,7 @@ fn checked_layer_preview_node(
             }
         )
     };
-    let (definition, replacements, preview) = match &node.implementation {
+    let (definition, replacements, profile) = match &node.implementation {
         DocumentNodeImplementation::Network(_) => {
             let mut replacements = node
                 .inputs
@@ -5261,7 +5279,7 @@ fn checked_layer_preview_node(
                 [_, _] => (
                     merge_node_definition()?,
                     replacements,
-                    Some(GddGraphLayerPreview::Merge),
+                    SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
                 ),
                 [_, _, location, dimensions, background, clip] => {
                     let (
@@ -5293,7 +5311,7 @@ fn checked_layer_preview_node(
                     (
                         artboard_node_definition()?,
                         replacements,
-                        Some(GddGraphLayerPreview::Artboard { origin, size }),
+                        SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { origin, size }),
                     )
                 }
                 _ => return None,
@@ -5315,7 +5333,7 @@ fn checked_layer_preview_node(
             (
                 resolve_proto_node_type(rectangle::IDENTIFIER)?,
                 replacements,
-                None,
+                SavedGraphicProfile::Rectangle,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -5323,15 +5341,18 @@ fn checked_layer_preview_node(
             let paint_index = fill::PaintInput::INDEX;
             let content = node.inputs.get(content_index)?;
             let paint = node.inputs.get(paint_index)?;
-            if !output_wire(content)
-                || !matches!(paint.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()))
+            if !matches!(paint.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()))
             {
                 return None;
             }
+            let mut replacements = vec![(paint_index, paint)];
+            if output_wire(content) {
+                replacements.push((content_index, content));
+            }
             (
                 resolve_proto_node_type(fill::IDENTIFIER)?,
-                vec![(content_index, content), (paint_index, paint)],
-                None,
+                replacements,
+                SavedGraphicProfile::Fill,
             )
         }
         _ => return None,
@@ -5342,7 +5363,7 @@ fn checked_layer_preview_node(
     for (index, input) in replacements {
         *expected.inputs.get_mut(index)? = input.clone();
     }
-    (expected == *node).then_some((expected, preview))
+    (expected == *node).then_some((expected, profile))
 }
 
 fn document_numeric_export_network(
@@ -9312,8 +9333,8 @@ mod tests {
             .default_node_template();
         template.normalize_stored_types();
         let (mut board, _) = template.into_parts();
-        let Some((_, Some(GddGraphLayerPreview::Artboard { origin, size }))) =
-            checked_layer_preview_node(&board)
+        let Some((_, SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { origin, size }))) =
+            checked_saved_graphic_node(&board)
         else {
             panic!("previewable pinned default Artboard")
         };
@@ -9330,7 +9351,7 @@ mod tests {
         ] {
             let input = board.inputs.get_mut(index).expect("pinned input");
             let original = std::mem::replace(input, invalid);
-            assert!(checked_layer_preview_node(&board).is_none());
+            assert!(checked_saved_graphic_node(&board).is_none());
             *board.inputs.get_mut(index).expect("pinned input") = original;
         }
     }
@@ -9545,17 +9566,25 @@ mod tests {
                 .expect("current Artboard");
             let merge = nodes
                 .iter()
-                .find(|node| matches!(node.layer_preview, Some(GddGraphLayerPreview::Merge)))
+                .find(|node| {
+                    matches!(
+                        node.graphic_profile,
+                        Some(SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge))
+                    )
+                })
                 .expect("current Merge");
             assert!(matches!(
                 working
-                    .attach_artboard_content_in_copy(board, board, budget())
+                    .connect_graphic_content_in_copy(board, board, budget())
                     .await,
-                Err(GddArchiveError::UnsupportedArtboardContent)
+                Err(GddArchiveError::UnsupportedGraphContentConnection)
             ));
-            assert!(board.can_attach_artboard_content_from(merge));
+            assert_eq!(
+                board.graphic_content_input_from(merge),
+                Some(ARTBOARD_CONTENT_INPUT)
+            );
             let attached = working
-                .attach_artboard_content_in_copy(board, merge, budget())
+                .connect_graphic_content_in_copy(board, merge, budget())
                 .await
                 .expect("attach Merge Content");
             assert_eq!(attached.history_len(), working.history_len() + 1);
@@ -9576,9 +9605,9 @@ mod tests {
             ));
             assert!(matches!(
                 attached
-                    .attach_artboard_content_in_copy(target, source, budget())
+                    .connect_graphic_content_in_copy(target, source, budget())
                     .await,
-                Err(GddArchiveError::UnsupportedArtboardContent)
+                Err(GddArchiveError::UnsupportedGraphContentConnection)
             ));
             let root = graph
                 .networks
@@ -9599,6 +9628,126 @@ mod tests {
                     (board.storage_id, None),
                     (merge.storage_id, Some(board.storage_id)),
                 ]
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_266_272_2_connects_the_pinned_rectangle_to_fill_content() {
+        use graphite_glam::UVec2;
+        use graphite_graph_craft::document::value::RenderOutputType;
+
+        futures::executor::block_on(async {
+            let blank = create_gdd_folder(621, 992, "Painted rectangle".into(), budget())
+                .await
+                .expect("blank saved graph");
+            let graph = blank
+                .insert_root_catalog_node_in_copy(
+                    "PROTONODE:vector_nodes::generator_nodes::RectangleNode",
+                    [0, 0],
+                    budget(),
+                )
+                .await
+                .expect("pinned Rectangle catalog template");
+            let graph = graph
+                .insert_root_catalog_node_in_copy(
+                    "PROTONODE:graphene_core::vector::FillNode",
+                    [12, 0],
+                    budget(),
+                )
+                .await
+                .expect("pinned Fill catalog template");
+            let nodes = graph.graph_nodes().await.expect("current graph");
+            let fill = nodes
+                .iter()
+                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Fill)))
+                .expect("pinned loose Fill");
+            let rectangle = nodes
+                .iter()
+                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Rectangle)))
+                .expect("pinned Rectangle");
+            assert!(matches!(
+                graph
+                    .connect_graphic_content_in_copy(fill, fill, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphContentConnection)
+            ));
+            assert_eq!(
+                fill.graphic_content_input_from(rectangle),
+                Some(fill::ContentInput::INDEX)
+            );
+            let copy = graph
+                .connect_graphic_content_in_copy(fill, rectangle, budget())
+                .await
+                .expect("connect original Vector output");
+            assert_eq!(copy.history_len(), graph.history_len() + 1);
+            let bytes: Arc<[u8]> = copy
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("export connected GDD")
+                .into();
+            let saved = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("reopen the exact connector");
+            let nodes = saved.graph_nodes().await.expect("saved graph addresses");
+            let current_fill = nodes
+                .iter()
+                .find(|node| node.storage_id == fill.storage_id)
+                .expect("same Fill");
+            let current_rectangle = nodes
+                .iter()
+                .find(|node| node.storage_id == rectangle.storage_id)
+                .expect("same Rectangle");
+            assert!(
+                current_fill
+                    .graphic_content_input_from(current_rectangle)
+                    .is_none()
+            );
+            let saved_runtime = saved.runtime_graph().await.expect("reopened runtime");
+            assert!(saved_runtime.network.exports.is_empty());
+            let mut detached = NodeNetwork {
+                exports: vec![NodeInput::node(current_fill.local_id, 0)],
+                ..Default::default()
+            };
+            collect_layer_preview_node(
+                &saved_runtime.network,
+                current_fill.local_id,
+                &mut detached,
+                &mut BTreeSet::new(),
+            )
+            .expect("rebuild the admitted source branch");
+            let output = evaluate_cpu_svg(
+                &detached,
+                RenderConfig {
+                    viewport: Footprint {
+                        transform: DAffine2::from_translation(DVec2::splat(64.)),
+                        resolution: UVec2::splat(128),
+                        ..Footprint::DEFAULT
+                    },
+                    scale: 1.,
+                    export_format: SvgExportFormat::Svg,
+                    for_export: true,
+                    ..Default::default()
+                },
+                CpuSvgEvaluationBudget {
+                    max_viewport_pixels: 128 * 128,
+                    max_output_bytes: 64 * 1024,
+                },
+                None,
+            )
+            .await
+            .expect("evaluate the original source Fill operator");
+            let RenderOutputType::Svg { svg, .. } = output.data else {
+                panic!("source rendered SVG");
+            };
+            assert!(svg.contains("fill=\"#000000\""), "{svg}");
+            let undo = saved
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo one wire");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(graph.document.registry())
             );
         });
     }

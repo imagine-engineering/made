@@ -1136,7 +1136,7 @@ enum NodeCopyChange {
     NumericInputExposure(bool),
     BooleanInput(bool),
     SetDocumentArtboard,
-    AttachArtboardContent(Box<GddGraphNode>),
+    ConnectGraphicContent(Box<GddGraphNode>),
     DisconnectNumericInput,
     InsertNumericOnWire(UnaryNumericOperation),
     ConnectNumericInput {
@@ -1202,9 +1202,9 @@ impl NodeCopyChange {
                     .set_document_artboard_in_copy(node, ARCHIVE_BUDGET)
                     .await
             }
-            Self::AttachArtboardContent(source) => {
+            Self::ConnectGraphicContent(source) => {
                 archive
-                    .attach_artboard_content_in_copy(node, &source, ARCHIVE_BUDGET)
+                    .connect_graphic_content_in_copy(node, &source, ARCHIVE_BUDGET)
                     .await
             }
             Self::DisconnectNumericInput => {
@@ -3492,7 +3492,7 @@ impl GraphiteDocumentItem {
         )
     }
 
-    fn render_artboard_content_menu(
+    fn render_graphic_content_menu(
         &self,
         form: &NodeCopyForm,
         target: &GddGraphNode,
@@ -3503,7 +3503,7 @@ impl GraphiteDocumentItem {
             .nodes
             .iter()
             .enumerate()
-            .filter(|(_, source)| target.can_attach_artboard_content_from(source))
+            .filter(|(_, source)| target.graphic_content_input_from(source).is_some())
             .collect::<Vec<_>>();
         if sources.is_empty() || self.copy_task.is_some() {
             return None;
@@ -3519,7 +3519,7 @@ impl GraphiteDocumentItem {
                     move |_, _| {
                         div()
                             .debug_selector(move || {
-                                format!("GRAPHITE-GDD-ARTBOARD-CONTENT-SOURCE-{index}")
+                                format!("GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-{index}")
                             })
                             .p_2()
                             .child(Label::new(label.clone()))
@@ -3531,7 +3531,7 @@ impl GraphiteDocumentItem {
                                 item.apply_graph_edit(
                                     GraphiteCopy::EditNode {
                                         node: Box::new(target.clone()),
-                                        change: NodeCopyChange::AttachArtboardContent(Box::new(
+                                        change: NodeCopyChange::ConnectGraphicContent(Box::new(
                                             source.clone(),
                                         )),
                                     },
@@ -3552,9 +3552,9 @@ impl GraphiteDocumentItem {
         };
         Some(
             div()
-                .debug_selector(|| "GRAPHITE-GDD-ATTACH-ARTBOARD-CONTENT".into())
+                .debug_selector(|| "GRAPHITE-GDD-CONNECT-GRAPHIC-CONTENT".into())
                 .child(DropdownMenu::new(
-                    "graphite-gdd-attach-artboard-content",
+                    "graphite-gdd-connect-graphic-content",
                     label,
                     menu,
                 )),
@@ -4344,7 +4344,7 @@ impl GraphiteDocumentItem {
                                 |panel| panel.child(self.render_numeric_wire_insertion(selected, window, cx)),
                             )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
-                            .children(self.render_artboard_content_menu(form, selected, window, cx))
+                            .children(self.render_graphic_content_menu(form, selected, window, cx))
                             .when(selected.can_set_document_artboard(), |panel| {
                                 let node = Box::new(selected.clone());
                                 panel.child(
@@ -4792,9 +4792,9 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Set Artboard in",
                     GraphiteCopy::EditNode {
-                        change: NodeCopyChange::AttachArtboardContent(_),
+                        change: NodeCopyChange::ConnectGraphicContent(_),
                         ..
-                    } => "Attached Artboard content in",
+                    } => "Connected graphic content in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::NumericInputExposure(true),
                         ..
@@ -11553,11 +11553,12 @@ mod tests {
     #[gpui::test]
     async fn at_gra_node_282_2_workspace_attaches_saved_merge_content(cx: &mut TestAppContext) {
         use graphics_core::formats::gdd::GddGraphPortSource;
-        use graphite_core_types::Color;
+        use graphite_core_types::{Color, NodeParameter};
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
-        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{resolve_network_node_type, resolve_proto_node_type};
         use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
         use graphite_resource::ResourceRegistry;
+        use graphite_std::vector_nodes::fill;
 
         struct SavedLayerLayout;
         impl NodeMetadataSource for SavedLayerLayout {
@@ -11586,8 +11587,21 @@ mod tests {
             .expect("pinned Merge")
             .default_node_template();
         *merge.inputs.get_mut(1).expect("Merge Content") = NodeInput::node(NodeId(12), 0);
+        let [shape, (paint_id, mut fill_node)] =
+            preview_rectangle(NodeId(11), NodeId(12), 24., 24., Color::BLUE);
+        let default_fill = resolve_proto_node_type(fill::IDENTIFIER)
+            .expect("pinned Fill")
+            .default_node_template();
+        *fill_node
+            .inputs
+            .get_mut(fill::ContentInput::INDEX)
+            .expect("Fill Content") = default_fill
+            .inputs
+            .get(fill::ContentInput::INDEX)
+            .expect("exact disconnected Content")
+            .clone();
         let graph = NodeNetwork {
-            nodes: preview_rectangle(NodeId(11), NodeId(12), 24., 24., Color::BLUE)
+            nodes: [shape, (paint_id, fill_node)]
                 .into_iter()
                 .chain([
                     (NodeId(14), merge.into_parts().0),
@@ -11614,7 +11628,7 @@ mod tests {
                 &ResourceRegistry::new(),
                 &resources,
             )
-            .expect("save the Artboard and loose painted Merge");
+            .expect("save the Artboard and unfinished painted branch");
         let original = owner
             .export_to_bytes(
                 ExportFormat::Zip,
@@ -11646,8 +11660,31 @@ mod tests {
             .expect("native Inspector");
         paint(window);
         click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
-        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-3");
-        let attach = "GRAPHITE-GDD-ATTACH-ARTBOARD-CONTENT";
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        let attach = "GRAPHITE-GDD-CONNECT-GRAPHIC-CONTENT";
+        let (fill_address, rectangle_address) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("saved Fill projection");
+            };
+            (
+                form.selected_node().expect("Fill").storage_id(),
+                form.nodes.first().expect("Rectangle").storage_id(),
+            )
+        });
+        click(window, attach);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-2")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-0");
+        assert!(window.debug_bounds(attach).is_none());
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert!(window.debug_bounds(attach).is_some());
+        click(window, "GRAPHITE-GDD-REDO");
+        assert!(window.debug_bounds(attach).is_none());
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-3");
         let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
         let preview_pixel = |window: &mut gpui::VisualTestContext| {
             click(window, preview);
@@ -11676,10 +11713,10 @@ mod tests {
         click(window, attach);
         assert!(
             window
-                .debug_bounds("GRAPHITE-GDD-ARTBOARD-CONTENT-SOURCE-1")
+                .debug_bounds("GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-1")
                 .is_none()
         );
-        click(window, "GRAPHITE-GDD-ARTBOARD-CONTENT-SOURCE-2");
+        click(window, "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-2");
         assert!(window.debug_bounds(attach).is_none());
         assert_eq!(preview_pixel(window), [255, 0, 0, 255]);
         click(window, "GRAPHITE-GDD-UNDO");
@@ -11738,6 +11775,15 @@ mod tests {
             .await
             .expect("published Artboard");
         let nodes = saved.graph_nodes().await.expect("reopened graph");
+        let painted = nodes
+            .iter()
+            .find(|node| node.storage_id() == fill_address)
+            .expect("same Fill address after reopening");
+        assert!(matches!(
+            painted.input_ports().get(fill::ContentInput::INDEX).and_then(|port| port.source.as_ref()),
+            Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
+                if *storage_id == rectangle_address
+        ));
         let board = nodes
             .iter()
             .find(|node| {
