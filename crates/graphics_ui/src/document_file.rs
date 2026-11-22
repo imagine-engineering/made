@@ -2862,11 +2862,8 @@ impl GraphiteDocumentItem {
         );
         match &self.node_copy {
             NodeCopyPanel::Ready(form) => {
-                let edit_suffix = if self.model.read(cx).working.is_some() {
-                    ""
-                } else {
-                    " in a Copy"
-                };
+                let working = self.model.read(cx).working.is_some();
+                let edit_suffix = if working { "" } else { " in a Copy" };
                 let item = cx.entity().downgrade();
                 let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
                     for (index, node) in form
@@ -3277,10 +3274,11 @@ impl GraphiteDocumentItem {
                         )
                     })
                     .when_some(selected, |panel, selected| {
-                        let pin_label = if selected.is_pinned() {
-                            "Save Unpinned Folder"
-                        } else {
-                            "Save Pinned Folder"
+                        let pin_label = match (working, selected.is_pinned()) {
+                            (true, false) => "Pin Node",
+                            (true, true) => "Unpin Node",
+                            (false, false) => "Save Pinned Folder",
+                            (false, true) => "Save Unpinned Folder",
                         };
                         panel
                             .when(selected.can_copy_graph_node(), |panel| {
@@ -3310,7 +3308,7 @@ impl GraphiteDocumentItem {
                                     .child(
                                         Button::new(
                                             "graphite-gdd-save-renamed",
-                                            "Save Renamed Folder",
+                                            if working { "Rename Node" } else { "Save Renamed Folder" },
                                         )
                                         .disabled(self.copy_task.is_some())
                                         .on_click(
@@ -3326,7 +3324,7 @@ impl GraphiteDocumentItem {
                                                             form.name.read(cx).text(cx),
                                                         ),
                                                     };
-                                                    item.save_copy(request, window, cx);
+                                                    item.apply_graph_edit(request, window, cx);
                                                 }
                                             }),
                                         ),
@@ -3350,7 +3348,7 @@ impl GraphiteDocumentItem {
                                                             !node.is_pinned(),
                                                         ),
                                                     };
-                                                    item.save_copy(request, window, cx);
+                                                    item.apply_graph_edit(request, window, cx);
                                                 }
                                             })),
                                     ),
@@ -3449,12 +3447,12 @@ impl GraphiteDocumentItem {
                                             (
                                                 GddPinnedNodeMove::Up,
                                                 "GRAPHITE-GDD-MOVE-PIN-UP",
-                                                "Move Up in a Copy",
+                                                "Move Up",
                                             ),
                                             (
                                                 GddPinnedNodeMove::Down,
                                                 "GRAPHITE-GDD-MOVE-PIN-DOWN",
-                                                "Move Down in a Copy",
+                                                "Move Down",
                                             ),
                                         ]
                                         .into_iter()
@@ -3462,7 +3460,7 @@ impl GraphiteDocumentItem {
                                             div()
                                                 .debug_selector(move || selector.into())
                                                 .child(
-                                                    Button::new(selector, label)
+                                                    Button::new(selector, format!("{label}{edit_suffix}"))
                                                         .disabled(
                                                             self.copy_task.is_some()
                                                                 || !selected.can_move_pinned(movement),
@@ -3482,7 +3480,7 @@ impl GraphiteDocumentItem {
                                                                         node: Box::new(node.clone()),
                                                                         change: NodeCopyChange::MovePinned(movement),
                                                                     };
-                                                                    item.save_copy(request, window, cx);
+                                                                    item.apply_graph_edit(request, window, cx);
                                                                 }
                                                             },
                                                         )),
@@ -10734,6 +10732,145 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("preserved source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_032_2_workspace_edits_working_nested_name_and_pin_order(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/working-node-metadata.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open scoped graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        let invoke = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        invoke(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        let (root_id, first_id, second_id, scope, field, revision) =
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                let [root, _, first, second, ..] = form.nodes.as_slice() else {
+                    panic!("scoped graph")
+                };
+                assert_eq!(root.name(), first.name());
+                assert_ne!(root.network_id(), first.network_id());
+                assert_eq!(
+                    form.selected_node().map(GddGraphNode::storage_id),
+                    Some(first.storage_id())
+                );
+                (
+                    root.storage_id(),
+                    first.storage_id(),
+                    second.storage_id(),
+                    first.network_id(),
+                    form.name.clone(),
+                    item.model.read(cx).revision.clone(),
+                )
+            });
+        invoke(window, "GRAPHITE-GDD-SAVE-RENAMED");
+        item.read_with(window, |item, cx| {
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+            assert!(!item.is_dirty(cx));
+            assert!(matches!(&item.copy_feedback, Some((_, Color::Error))));
+        });
+
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("Working nested value", window, cx);
+        });
+        invoke(window, "GRAPHITE-GDD-SAVE-RENAMED");
+        invoke(window, "GRAPHITE-GDD-SAVE-PIN");
+        invoke(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        invoke(window, "GRAPHITE-GDD-NODE-COPY-ITEM-3");
+        invoke(window, "GRAPHITE-GDD-SAVE-PIN");
+        let check = |nodes: &[GddGraphNode], first_order, second_order| {
+            let root = nodes
+                .iter()
+                .find(|node| node.storage_id() == root_id)
+                .expect("root with repeated name");
+            let first = nodes
+                .iter()
+                .find(|node| node.storage_id() == first_id)
+                .expect("renamed nested node");
+            let second = nodes
+                .iter()
+                .find(|node| node.storage_id() == second_id)
+                .expect("other nested node");
+            assert_eq!(root.name(), "Repeated value");
+            assert!(!root.is_pinned());
+            assert!(root.unavailable_proto().is_some());
+            assert_eq!(first.network_id(), scope);
+            assert_eq!(second.network_id(), scope);
+            assert_eq!(first.name(), "Working nested value");
+            assert_eq!(first.pinned_position(), Some((first_order, 2)));
+            assert_eq!(second.pinned_position(), Some((second_order, 2)));
+            assert_eq!(first.numeric_import_source(), Some(0));
+            assert_eq!(second.numeric_import_source(), Some(1));
+        };
+        let check_view = |window: &gpui::VisualTestContext, first_order, second_order| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("working Inspector")
+                };
+                assert_eq!(form.active_network().map(|network| network.id), Some(scope));
+                assert_eq!(
+                    form.selected_node().map(GddGraphNode::storage_id),
+                    Some(second_id)
+                );
+                assert!(item.is_dirty(cx));
+                check(&form.nodes, first_order, second_order);
+            });
+        };
+        check_view(window, 1, 2);
+        for (selector, first_order, second_order) in [
+            ("GRAPHITE-GDD-MOVE-PIN-UP", 2, 1),
+            ("GRAPHITE-GDD-UNDO", 1, 2),
+            ("GRAPHITE-GDD-REDO", 2, 1),
+        ] {
+            invoke(window, selector);
+            check_view(window, first_order, second_order);
+        }
+
+        let destination = PathBuf::from("/project/saved-working-node-metadata.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopen working metadata");
+        check(
+            &saved.graph_nodes().await.expect("scoped saved nodes"),
+            2,
+            1,
+        );
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }
