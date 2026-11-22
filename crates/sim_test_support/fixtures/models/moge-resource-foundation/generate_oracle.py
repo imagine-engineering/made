@@ -10,17 +10,17 @@ from source_graph import build_oracle
 DIRECTORY = Path(__file__).resolve().parent
 ROOT = DIRECTORY.parents[4]
 SOURCES = {
-    "projects/sim/ComfyUI/sim_extras/nodes_moge.py": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
-    "projects/sim/ComfyUI/sim/ldm/moge/model.py": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
-    "projects/sim/ComfyUI/sim/ldm/moge/modules.py": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6",
-    "projects/sim/ComfyUI/sim/ldm/moge/geometry.py": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
-    "projects/sim/ComfyUI/sim/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
-    "projects/sim/ComfyUI/sim/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
-    "projects/sim/ComfyUI/sim/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
-    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
-    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
-    "projects/sim/ComfyUI/sim/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
-    "projects/sim/ComfyUI/sim/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_moge.py": "160f48e4b6bb1e34617f9de78380758ef5d04caa7c8ea7768ce31b98fccee265",
+    "projects/comfy/ComfyUI/comfy/ldm/moge/model.py": "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c",
+    "projects/comfy/ComfyUI/comfy/ldm/moge/modules.py": "3655abdce2de058624bd4ea2f02757ab42bd811d9afab0fef824fe480afdb2a6",
+    "projects/comfy/ComfyUI/comfy/ldm/moge/geometry.py": "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c",
+    "projects/comfy/ComfyUI/comfy/image_encoders/dino2.py": "1dec8c1d6104c268e593cea20302d925f637266edce2a6e4dfa142af8a00d579",
+    "projects/comfy/ComfyUI/comfy/text_encoders/bert.py": "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c",
+    "projects/comfy/ComfyUI/comfy/ldm/modules/attention.py": "436e1d91f8d5d84c5667e051cdf3ab2f91d8db25b66d88a084c89a202de0579e",
+    "projects/comfy/ComfyUI/comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/comfy/ComfyUI/comfy/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/comfy/ComfyUI/comfy/model_patcher.py": "96d21eeaf16d4723355374a5e2b93b35d512ad8f6dc8a1a3a4253cdd71dfd5b0",
+    "projects/comfy/ComfyUI/comfy/utils.py": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb",
 }
 
 

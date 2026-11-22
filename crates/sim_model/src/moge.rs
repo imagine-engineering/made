@@ -1204,9 +1204,10 @@ fn raw_from_nchw(
     }
     let point_values = tensor_to_f32_with_context_exact_native(backend, points, context)?;
     let mask_values = tensor_to_f32_with_context_exact_native(backend, mask, context)?;
+    // A one-ULP remap error can exceed the final depth bound when the fitted shift nearly cancels z.
     let point_exponentials = tensor_to_f32_with_context_exact_native(
         backend,
-        &exp_with_context_exact_native(backend, points, context)?,
+        &backend.exp_f32_with_f64_intermediate(points, context)?,
         context,
     )?;
     let mask_exponentials = if sigmoid_mask {

@@ -1,7 +1,7 @@
 {
-  "dino_oracle_sha256": "a15373f41d84dd407399f4a943ef66b59045621305fea00231ee9d2cbf528519",
+  "dino_oracle_sha256": "8657b53e3804bf60e8294c7e89edf341fefe560d63b8b60b0df3d2aaa5631a1e",
   "format": "moge-resource-foundation-manifest-v1",
-  "generator_sha256": "ade866b84cc16c7b5ad8564fa295086ad5be102cbd7c76f4002abe5dbbcea58c",
+  "generator_sha256": "56448f9a50c03414af40c534955ec5481d8570aac0cfbd5736c3f6bd92c3220a",
   "mutations": [
     "v1_mask",
     "v1_points",
@@ -14,10 +14,10 @@
     "v2_scale"
   ],
   "oracle_domain": "moge-resource-foundation-v2",
-  "oracle_sha256": "de86dcd7c37fc1d2aa742a272c5ad91ce1945e2d3492ac053e4adcae0e37e9a6",
+  "oracle_sha256": "df006e87a5294949016eaea2343dcdcc28d5067b59a2a09f9dbf17477fea7585",
   "profiles": [
     "v1",
     "v2"
   ],
-  "source_graph_sha256": "aee25a9fac0fe231fbeaa8228747c133adb2c6bb38677373029e078aa4c629f2"
+  "source_graph_sha256": "49142723a86f6006a0e18965630b3a50bc31a2384c590d39b997f1da6f9e0a35"
 }

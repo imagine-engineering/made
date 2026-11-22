@@ -638,6 +638,88 @@ impl CpuBackend {
             .map(|(tensor, _)| tensor)
     }
 
+    pub fn exp_f32_with_f64_intermediate(
+        &self,
+        input: &Tensor,
+        context: &ExecutionContext<'_>,
+    ) -> Result<Tensor, TensorError> {
+        let output = TensorDescriptor::contiguous(
+            input.descriptor().shape().to_vec(),
+            DType::F32,
+            input.descriptor().device(),
+            input.descriptor().stream(),
+        )?;
+        self.unary_with_scalar_kernel(
+            UnaryOperation::Exponential,
+            input,
+            output,
+            context,
+            |value| f64::from(value).exp() as f32,
+        )
+        .map(|(tensor, _)| tensor)
+    }
+
+    fn unary_with_scalar_kernel(
+        &self,
+        operation: UnaryOperation,
+        input: &Tensor,
+        output: TensorDescriptor,
+        context: &ExecutionContext<'_>,
+        scalar_kernel: impl Fn(f32) -> f32,
+    ) -> Result<(Tensor, EventFence), TensorError> {
+        let operation_label = unary_operation_label(operation);
+        validate_inputs(
+            self,
+            operation_label,
+            PrimitiveOperation::Unary(operation),
+            std::slice::from_ref(input),
+            context,
+        )?;
+        self.require_descriptor(
+            operation_label,
+            PrimitiveOperation::Unary(operation),
+            TensorRole::Output,
+            &output,
+            context,
+        )?;
+        let input_dtype = input.descriptor().dtype();
+        let supports_low_precision = operation == UnaryOperation::HyperbolicTangent
+            && matches!(input_dtype, DType::F16 | DType::Bf16);
+        if input_dtype != DType::F32 && !supports_low_precision {
+            return Err(self.unsupported(
+                operation_label,
+                "the reference unary kernel accepts f32 input, plus f16/bf16 for tanh",
+            ));
+        }
+        require_same_shape(input.descriptor().shape(), output.shape())?;
+        let expected_dtype = if operation == UnaryOperation::IsFinite {
+            DType::Bool
+        } else {
+            input_dtype
+        };
+        require_dtype(expected_dtype, output.dtype())?;
+        let shape = output.shape().to_vec();
+        let output_dtype = output.dtype();
+        let mut tensor = self.allocate_tensor(operation_label, output, context)?;
+        let mut write = tensor.write()?;
+        for_each_index(&shape, context.cancellation, |indices| {
+            let value = read_real_f32(input, indices)?;
+            if operation == UnaryOperation::IsFinite {
+                write_element(&mut write, indices, &[u8::from(value.is_finite())])
+            } else {
+                let result = scalar_kernel(value);
+                let encoded = output_dtype.encode_scalar(
+                    Scalar::Float(f64::from(result)),
+                    operation_label,
+                    DeviceId::CPU,
+                )?;
+                write_element(&mut write, indices, &encoded)
+            }
+        })?;
+        drop(write);
+        self.finish(tensor, context)
+    }
+
     fn require_descriptor(
         &self,
         operation: &str,
@@ -894,57 +976,9 @@ impl TensorBackend for CpuBackend {
         output: TensorDescriptor,
         context: &ExecutionContext<'_>,
     ) -> Result<(Tensor, EventFence), TensorError> {
-        let operation_label = unary_operation_label(operation);
-        validate_inputs(
-            self,
-            operation_label,
-            PrimitiveOperation::Unary(operation),
-            std::slice::from_ref(input),
-            context,
-        )?;
-        self.require_descriptor(
-            operation_label,
-            PrimitiveOperation::Unary(operation),
-            TensorRole::Output,
-            &output,
-            context,
-        )?;
-        let input_dtype = input.descriptor().dtype();
-        let supports_low_precision = operation == UnaryOperation::HyperbolicTangent
-            && matches!(input_dtype, DType::F16 | DType::Bf16);
-        if input_dtype != DType::F32 && !supports_low_precision {
-            return Err(self.unsupported(
-                operation_label,
-                "the reference unary kernel accepts f32 input, plus f16/bf16 for tanh",
-            ));
-        }
-        require_same_shape(input.descriptor().shape(), output.shape())?;
-        let expected_dtype = if operation == UnaryOperation::IsFinite {
-            DType::Bool
-        } else {
-            input_dtype
-        };
-        require_dtype(expected_dtype, output.dtype())?;
-        let shape = output.shape().to_vec();
-        let output_dtype = output.dtype();
-        let mut tensor = self.allocate_tensor(operation_label, output, context)?;
-        let mut write = tensor.write()?;
-        for_each_index(&shape, context.cancellation, |indices| {
-            let value = read_real_f32(input, indices)?;
-            if operation == UnaryOperation::IsFinite {
-                write_element(&mut write, indices, &[u8::from(value.is_finite())])
-            } else {
-                let result = apply_unary_scalar(operation, value);
-                let encoded = output_dtype.encode_scalar(
-                    Scalar::Float(f64::from(result)),
-                    operation_label,
-                    DeviceId::CPU,
-                )?;
-                write_element(&mut write, indices, &encoded)
-            }
-        })?;
-        drop(write);
-        self.finish(tensor, context)
+        self.unary_with_scalar_kernel(operation, input, output, context, |value| {
+            apply_unary_scalar(operation, value)
+        })
     }
 
     fn binary(
@@ -3515,6 +3549,33 @@ mod tests {
     fn typed_descriptor(shape: Vec<u64>, dtype: DType) -> TensorDescriptor {
         TensorDescriptor::contiguous(shape, dtype, DeviceId::CPU, StreamId::DEFAULT)
             .expect("typed test descriptor")
+    }
+
+    #[test]
+    fn exponential_can_round_an_f64_intermediate_to_f32() -> Result<(), TensorError> {
+        let (backend, authority) = CpuWorkspaceAuthority::create_backend(1024)?;
+        let cancellation = CancellationToken::default();
+        let context = backend.execution_context(
+            StreamId::DEFAULT,
+            authority.authorize_workspace(1024)?,
+            &cancellation,
+        );
+        let value = f32::from_bits(0x3a8c8aaf);
+        let (input, _) = backend.upload_f32(descriptor(vec![1]), &[value], &context)?;
+        let precise = backend.exp_f32_with_f64_intermediate(&input, &context)?;
+        assert_eq!(read_real_f32(&precise, &[0])?.to_bits(), 0x3f802327);
+
+        let (default, _) = backend.unary(
+            UnaryOperation::Exponential,
+            &input,
+            descriptor(vec![1]),
+            &context,
+        )?;
+        assert_eq!(
+            read_real_f32(&default, &[0])?.to_bits(),
+            value.exp().to_bits()
+        );
+        Ok(())
     }
 
     struct UnsupportedTensorBackend {

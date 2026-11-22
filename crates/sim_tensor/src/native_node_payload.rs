@@ -2180,7 +2180,7 @@ mod tests {
             TensorDescriptor::contiguous(vec![2], DType::F32, DeviceId::CPU, StreamId::DEFAULT)?;
         assert_eq!(
             native_tensor_digest(NativeTensorRole::Latent, &descriptor, &[0; 8])?,
-            "21469c6bc170dac513a10652e55babec9b58f4f834ce468ecafafe791efccdea"
+            "bb2d276fa86c62db18585ebd1e64955cdb3d29b4a19ac54386caefb91bcad0e7"
         );
         assert!(matches!(
             native_tensor_digest(NativeTensorRole::Latent, &descriptor, &[0; 4]),

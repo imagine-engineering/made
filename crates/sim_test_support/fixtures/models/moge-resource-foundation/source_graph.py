@@ -40,7 +40,7 @@ def source_focal_from_fov(degrees, width, height):
     import hashlib
     import torch
 
-    source = ROOT / "projects/sim/ComfyUI/sim/ldm/moge/model.py"
+    source = ROOT / "projects/comfy/ComfyUI/comfy/ldm/moge/model.py"
     expected = "68ee3db2ff7eb96c8a90234b182559129c5c094374128e5ba99baed7caf0cb3c"
     if hashlib.sha256(source.read_bytes()).hexdigest() != expected:
         raise RuntimeError("MoGe focal helper source changed")
@@ -69,7 +69,7 @@ def source_geometry_recovery(points, confidence, width, height, forced_focal=Non
 
     if np.__version__ != "1.26.4" or scipy.__version__ != "1.16.2" or torch.__version__ != "2.8.0+cpu":
         raise RuntimeError("MoGe camera golds require pinned CPU Torch/NumPy/SciPy")
-    source_path = ROOT / "projects/sim/ComfyUI/sim/ldm/moge/geometry.py"
+    source_path = ROOT / "projects/comfy/ComfyUI/comfy/ldm/moge/geometry.py"
     source = source_path.read_bytes()
     if hashlib.sha256(source).hexdigest() != "db8e2da75f13028a98067c517d6495fd9818b2878b44599beaa281ff7fde397c":
         raise RuntimeError("original MoGe geometry source changed")
