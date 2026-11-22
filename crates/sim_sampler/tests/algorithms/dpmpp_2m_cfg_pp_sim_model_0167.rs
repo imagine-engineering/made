@@ -326,7 +326,7 @@ fn val_sampler_001_dpmpp_2m_cfg_pp_definition_and_source_provenance_are_exact()
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_2m_cfg_pp_comfy_model_0167"
+        "algorithms/dpmpp_2m_cfg_pp_sim_model_0167"
     );
     let registry = SamplerRegistry::foundational()?;
     assert_eq!(

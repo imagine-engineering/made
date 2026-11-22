@@ -84,7 +84,7 @@ fn val_scheduler_001_simple_definition_and_source_are_exact() -> Result<(), Box<
     assert_eq!(DEFINITION.identity, fixture.identity);
     assert_eq!(DEFINITION.feature_id, fixture.feature_id);
     assert_eq!(DEFINITION.source_ordinal, fixture.source_ordinal);
-    assert_eq!(DEFINITION.implementation_module, "schedulers/simple_comfy_model_0211");
+    assert_eq!(DEFINITION.implementation_module, "schedulers/simple_sim_model_0211");
     assert_eq!(fixture.source.equation_lines, [644, 651]);
     assert_eq!(fixture.source.registry_line, 1347);
     assert_eq!(fixture.source.catalog_line, 212);

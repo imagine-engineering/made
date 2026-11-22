@@ -22,7 +22,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: EXP_HEUN_2_X0_FEATURE_ID,
     source_ordinal: EXP_HEUN_2_X0_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/exp_heun_2_x0_comfy_model_0183",
+    implementation_module: "algorithms/exp_heun_2_x0_sim_model_0183",
     stochastic: false,
 };
 

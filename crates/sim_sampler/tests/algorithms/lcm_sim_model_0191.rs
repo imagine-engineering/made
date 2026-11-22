@@ -182,7 +182,7 @@ fn generated_lcm_sim_model_0191_definition_provenance_and_ownership_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/lcm_comfy_model_0191"
+        "algorithms/lcm_sim_model_0191"
     );
     assert_eq!(
         SamplerRegistry::foundational()?.resolve(&SamplerIdentity::new(LCM_SAMPLER_ID)?)?,

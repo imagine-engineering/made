@@ -1,3 +1,5 @@
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use sim_sampler::{
     DiscreteSamplingProfile, NORMAL_FOUNDATION_DEFINITION, NORMAL_SCHEDULER_FEATURE_ID,
     NORMAL_SCHEDULER_ID, PenultimateSigmaPolicy, PredictionInterpretation, SamplingProfileIdentity,
@@ -9,8 +11,6 @@ use sim_sampler::{
 use sim_tensor::{
     CancellationToken, CpuBackend, CpuWorkspaceAuthority, ExecutionContext, StreamId, TensorError,
 };
-use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::{error::Error, fs, path::Path, sync::Arc};
 
 const FIXTURE_JSON: &str = include_str!(concat!(
@@ -121,10 +121,7 @@ fn val_scheduler_001_normal_definition_provenance_and_ownership_are_exact()
     assert_eq!(DEFINITION.feature_id, fixture.feature_id);
     assert_eq!(DEFINITION.source_ordinal, fixture.source_ordinal);
     assert!(DEFINITION.aliases.is_empty());
-    assert_eq!(
-        DEFINITION.implementation_module,
-        "schedulers/native_diffusion"
-    );
+    assert_eq!(DEFINITION.implementation_module, "scheduler");
     assert_eq!(fixture.source.equation_lines, [670, 692]);
     assert_eq!(fixture.source.registry_line, 1353);
     assert_eq!(fixture.source.catalog_line, 210);

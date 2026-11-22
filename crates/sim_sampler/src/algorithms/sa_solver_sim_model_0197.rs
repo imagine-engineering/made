@@ -22,7 +22,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: SA_SOLVER_FEATURE_ID,
     source_ordinal: SA_SOLVER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/sa_solver_comfy_model_0197",
+    implementation_module: "algorithms/sa_solver_sim_model_0197",
     stochastic: true,
 };
 

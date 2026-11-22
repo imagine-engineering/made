@@ -14,7 +14,7 @@ use sim_tensor::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -145,8 +145,8 @@ fn native_compute_breadth_is_exact_and_byte_stable() -> Result<(), Box<dyn std::
         fs::write(&path, &serialized)?;
     }
     let checked_in = fs::read(&path)?;
-    assert_eq!(
-        checked_in, serialized,
+    assert!(
+        checked_in == serialized,
         "native compute closure is stale; rerun with {UPDATE_ENV}=1",
     );
     let decoded: NativeComputeClosure = serde_json::from_slice(&checked_in)?;
@@ -235,6 +235,7 @@ fn build_closure() -> Result<NativeComputeClosure, Box<dyn std::error::Error>> {
         "crates/sim_test_support/parity/catalogs/native-model-family-closure.json",
         "crates/sim_model/src/latent_formats",
         "crates/sim_sampler/src/algorithms",
+        "crates/sim_sampler/src/scheduler.rs",
         "crates/sim_sampler/src/schedulers",
         "crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv",
         "crates/sim_test_support/parity/catalogs/native-spec-mapping.json",
@@ -313,14 +314,14 @@ fn external_release_gates(
 
 fn device_rows(root: &Path) -> Result<Vec<DeviceRow>, Box<dyn std::error::Error>> {
     let identities = [
-        "amd_rocm_comfy_model_0014",
-        "apple_metal_mps_comfy_model_0015",
-        "cambricon_mlu_comfy_model_0017",
-        "cpu_comfy_model_0016",
-        "directml_comfy_model_0018",
-        "huawei_ascend_npu_comfy_model_0019",
-        "intel_xpu_comfy_model_0021",
-        "nvidia_cuda_comfy_model_0022",
+        "amd_rocm_sim_model_0014",
+        "apple_metal_mps_sim_model_0015",
+        "cambricon_mlu_sim_model_0017",
+        "cpu_sim_model_0016",
+        "directml_sim_model_0018",
+        "huawei_ascend_npu_sim_model_0019",
+        "intel_xpu_sim_model_0021",
+        "nvidia_cuda_sim_model_0022",
     ];
     identities
         .into_iter()
@@ -381,6 +382,11 @@ fn compute_rows<'a>(
         assert!(identities.insert(identity));
         assert!(features.insert(feature_id));
         assert!(ordinals.insert(source_ordinal));
+        assert!(
+            root.join(format!("crates/sim_sampler/src/{implementation_module}.rs"))
+                .is_file(),
+            "{identity} refers to a missing implementation module {implementation_module}"
+        );
         let feature_suffix = feature_id
             .strip_prefix("COMFY-MODEL-")
             .ok_or("generated compute feature has an invalid identifier")?;
@@ -403,12 +409,16 @@ fn compute_rows<'a>(
         let (_, module_name) = row_module
             .split_once('/')
             .ok_or("generated compute row module is not namespaced")?;
+        let name = module_name
+            .strip_suffix(&expected_suffix)
+            .ok_or("generated compute module is missing its model number")?;
+        let fixture_name = format!("{name}_comfy_model_{feature_suffix}");
         let source = root.join(format!("crates/sim_sampler/src/{row_module}.rs"));
         let test = root.join(format!("crates/sim_sampler/tests/{row_module}.rs"));
         let fixture_directory = root.join(format!(
-            "crates/sim_test_support/fixtures/{fixture_kind}/{module_name}"
+            "crates/sim_test_support/fixtures/{fixture_kind}/{fixture_name}"
         ));
-        let fixture = if fixture_kind == "samplers" && module_name == "lms_comfy_model_0192" {
+        let fixture = if fixture_kind == "samplers" && name == "lms" && feature_suffix == "0192" {
             checked_lms_fixture(&fixture_directory)?
         } else {
             let fixture_files = regular_files(&fixture_directory)?;
@@ -496,7 +506,10 @@ fn validate_compute_row_directory_closure(
             .file_name()
             .into_string()
             .map_err(|_| "generated compute fixture name is not UTF-8")?;
-        fixtures.insert(format!("{namespace}/{name}"));
+        let (name, feature_suffix) = name
+            .rsplit_once("_comfy_model_")
+            .ok_or("generated compute fixture directory is missing its source model number")?;
+        fixtures.insert(format!("{namespace}/{name}_sim_model_{feature_suffix}"));
     }
     assert_eq!(
         expected,
@@ -591,7 +604,7 @@ fn validate_closure(value: &NativeComputeClosure) -> Result<(), &'static str> {
                 .map(|value| (*value).to_owned())
                 .collect::<Vec<_>>()
         || value.generator != "crates/sim_sampler/tests/breadth_closure.rs"
-        || value.inputs.len() != 19
+        || value.inputs.len() != 20
         || value.inputs.values().any(|digest| !valid_sha256(digest))
         || value.counts.tensor_contracts != 600
         || value.counts.tensor_resolutions != 511
@@ -882,8 +895,10 @@ fn stable_json(value: &NativeComputeClosure) -> Result<Vec<u8>, serde_json::Erro
     Ok(bytes)
 }
 
-fn digest_file(path: &Path) -> Result<String, std::io::Error> {
-    Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
+fn digest_file(path: &Path) -> Result<String, io::Error> {
+    let bytes = fs::read(path)
+        .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 
 fn valid_sha256(value: &str) -> bool {

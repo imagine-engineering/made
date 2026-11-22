@@ -153,7 +153,7 @@ fn definition_and_source_provenance_are_exact_and_unaliased() -> Result<(), Box<
     assert_eq!(DEFINITION.aliases, &[] as &[&str]);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/ddim_comfy_model_0159"
+        "algorithms/ddim_sim_model_0159"
     );
     assert!(DEFINITION.stochastic);
 

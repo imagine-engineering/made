@@ -24,7 +24,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: HEUNPP2_FEATURE_ID,
     source_ordinal: HEUNPP2_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/heunpp2_comfy_model_0188",
+    implementation_module: "algorithms/heunpp2_sim_model_0188",
     stochastic: true,
 };
 

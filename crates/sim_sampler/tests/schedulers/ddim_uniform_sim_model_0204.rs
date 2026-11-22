@@ -182,7 +182,7 @@ fn definition_and_source_provenance_are_exact() -> Result<(), Box<dyn Error>> {
     assert_eq!(DEFINITION.aliases, &[] as &[&str]);
     assert_eq!(
         DEFINITION.implementation_module,
-        "schedulers/ddim_uniform_comfy_model_0204"
+        "schedulers/ddim_uniform_sim_model_0204"
     );
 
     let root = workspace()?;

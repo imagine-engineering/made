@@ -115,7 +115,7 @@ fn val_scheduler_001_karras_definition_and_provenance_are_exact() -> Result<(), 
     assert_eq!(DEFINITION.identity, fixture.identity);
     assert_eq!(DEFINITION.feature_id, fixture.feature_id);
     assert_eq!(DEFINITION.source_ordinal, fixture.source_ordinal);
-    assert_eq!(DEFINITION.implementation_module, "schedulers/karras_comfy_model_0206");
+    assert_eq!(DEFINITION.implementation_module, "schedulers/karras_sim_model_0206");
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(fixture.source.equation_lines, [23, 30]);
     assert_eq!(fixture.source.registry_line, 1349);

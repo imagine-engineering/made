@@ -192,7 +192,7 @@ fn val_sampler_001_dpmpp_2m_sde_heun_provenance_registry_and_ownership_are_exact
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_2m_sde_heun_comfy_model_0170"
+        "algorithms/dpmpp_2m_sde_heun_sim_model_0170"
     );
     assert_eq!(fixture.rng.contract, DPMPP_2M_SDE_BROWNIAN_CONTRACT_ID);
     assert_eq!(fixture.rng.retry_policy, "replay");

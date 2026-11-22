@@ -195,7 +195,7 @@ fn val_sampler_001_exp_heun_2_x0_definition_source_ordinal_and_ownership_are_exa
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/exp_heun_2_x0_comfy_model_0183"
+        "algorithms/exp_heun_2_x0_sim_model_0183"
     );
     assert_eq!(
         SamplerRegistry::foundational()?

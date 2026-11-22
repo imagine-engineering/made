@@ -144,7 +144,7 @@ fn ddpm_definition_and_oracle_provenance_are_source_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/ddpm_comfy_model_0160"
+        "algorithms/ddpm_sim_model_0160"
     );
     assert_eq!(fixture.source.step_lines, [984, 991]);
     assert_eq!(fixture.source.loop_lines, [993, 1012]);

@@ -220,7 +220,7 @@ fn val_sampler_001_dpm_2_ancestral_definition_and_source_are_exact() -> Result<(
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpm_2_ancestral_comfy_model_0163"
+        "algorithms/dpm_2_ancestral_sim_model_0163"
     );
     assert!(DEFINITION.stochastic);
     let registry = SamplerRegistry::foundational()?;

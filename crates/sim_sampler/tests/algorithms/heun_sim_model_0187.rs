@@ -200,7 +200,7 @@ fn definition_registry_source_and_rng_provenance_are_exact() -> Result<(), Box<d
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/heun_comfy_model_0187"
+        "algorithms/heun_sim_model_0187"
     );
 
     let registry = SamplerRegistry::foundational()?;

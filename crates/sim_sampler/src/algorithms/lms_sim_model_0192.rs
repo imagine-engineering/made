@@ -20,7 +20,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: LMS_FEATURE_ID,
     source_ordinal: LMS_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/lms_comfy_model_0192",
+    implementation_module: "algorithms/lms_sim_model_0192",
     stochastic: false,
 };
 

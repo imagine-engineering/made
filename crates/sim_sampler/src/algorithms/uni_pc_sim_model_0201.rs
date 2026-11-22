@@ -21,7 +21,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: UNI_PC_FEATURE_ID,
     source_ordinal: UNI_PC_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/uni_pc_comfy_model_0201",
+    implementation_module: "algorithms/uni_pc_sim_model_0201",
     stochastic: false,
 };
 

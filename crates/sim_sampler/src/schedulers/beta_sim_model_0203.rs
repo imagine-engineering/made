@@ -13,7 +13,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: BETA_SCHEDULER_FEATURE_ID,
     source_ordinal: BETA_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/beta_comfy_model_0203",
+    implementation_module: "schedulers/beta_sim_model_0203",
 };
 
 const BETA_SHAPE: f64 = 0.6;

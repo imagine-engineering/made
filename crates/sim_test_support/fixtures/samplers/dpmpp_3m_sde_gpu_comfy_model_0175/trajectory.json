@@ -6,7 +6,7 @@
   "rng_contract_id": "COMFY-RNG-DED616CC3432",
   "placement": "native-input-device",
   "canonical_fixture_path": "crates/sim_test_support/fixtures/samplers/dpmpp_3m_sde_comfy_model_0174/trajectory.json",
-  "canonical_fixture_sha256": "13aa36029ab616956ebabda0a4cdec2bb22d19d04c9324e720213ca31cb2e285",
+  "canonical_fixture_sha256": "a790be40682119c432378f291ddef73e2593b4d6cb1570aafdc1068a5905f19d",
   "source": {
     "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
     "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",

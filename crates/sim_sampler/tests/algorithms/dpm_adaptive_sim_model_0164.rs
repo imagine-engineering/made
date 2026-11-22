@@ -250,7 +250,7 @@ fn val_sampler_001_dpm_adaptive_definition_and_provenance_are_exact() -> Result<
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpm_adaptive_comfy_model_0164"
+        "algorithms/dpm_adaptive_sim_model_0164"
     );
     assert_eq!(
         SamplerRegistry::foundational()?.resolve(&SamplerIdentity::new("dpm_adaptive")?)?,

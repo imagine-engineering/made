@@ -233,7 +233,7 @@ fn val_sampler_001_dpmpp_sde_definition_source_ordinal_and_ownership_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_sde_comfy_model_0176"
+        "algorithms/dpmpp_sde_sim_model_0176"
     );
     assert_eq!(
         SamplerRegistry::foundational()?.resolve(&SamplerIdentity::new(DPMPP_SDE_SAMPLER_ID)?)?,

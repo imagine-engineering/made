@@ -22,7 +22,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DPMPP_SDE_FEATURE_ID,
     source_ordinal: DPMPP_SDE_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/dpmpp_sde_comfy_model_0176",
+    implementation_module: "algorithms/dpmpp_sde_sim_model_0176",
     stochastic: true,
 };
 

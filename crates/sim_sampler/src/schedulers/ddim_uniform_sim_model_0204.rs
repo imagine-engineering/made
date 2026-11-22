@@ -12,7 +12,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: DDIM_UNIFORM_SCHEDULER_FEATURE_ID,
     source_ordinal: 4,
     aliases: &[],
-    implementation_module: "schedulers/ddim_uniform_comfy_model_0204",
+    implementation_module: "schedulers/ddim_uniform_sim_model_0204",
 };
 
 pub fn ddim_uniform_schedule<P: SamplingProfile>(

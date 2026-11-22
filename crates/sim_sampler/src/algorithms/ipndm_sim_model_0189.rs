@@ -20,7 +20,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: IPNDM_FEATURE_ID,
     source_ordinal: IPNDM_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/ipndm_comfy_model_0189",
+    implementation_module: "algorithms/ipndm_sim_model_0189",
     stochastic: false,
 };
 

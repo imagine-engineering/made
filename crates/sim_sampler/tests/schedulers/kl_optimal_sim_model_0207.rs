@@ -136,7 +136,7 @@ fn val_scheduler_001_kl_optimal_definition_and_provenance_are_exact()
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(
         DEFINITION.implementation_module,
-        "schedulers/kl_optimal_comfy_model_0207"
+        "schedulers/kl_optimal_sim_model_0207"
     );
 
     let source = fs::read_to_string(workspace_root()?.join(&fixture.source.source_path))?;

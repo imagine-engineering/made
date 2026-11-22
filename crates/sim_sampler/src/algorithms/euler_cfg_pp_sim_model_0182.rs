@@ -17,7 +17,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: EULER_CFG_PP_FEATURE_ID,
     source_ordinal: EULER_CFG_PP_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/euler_cfg_pp_comfy_model_0182",
+    implementation_module: "algorithms/euler_cfg_pp_sim_model_0182",
     stochastic: false,
 };
 

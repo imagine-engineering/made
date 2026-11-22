@@ -142,7 +142,7 @@ fn val_sampler_001_definition_source_provenance_and_ownership_are_exact()
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/ipndm_v_comfy_model_0190"
+        "algorithms/ipndm_v_sim_model_0190"
     );
     assert_eq!(
         SamplerRegistry::foundational()?.resolve(&SamplerIdentity::new(IPNDM_V_SAMPLER_ID)?)?,

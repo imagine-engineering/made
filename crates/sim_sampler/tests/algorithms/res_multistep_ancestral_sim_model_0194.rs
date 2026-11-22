@@ -257,7 +257,7 @@ fn definition_provenance_and_family_ownership_are_exact() -> Result<(), Box<dyn 
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/res_multistep_ancestral_comfy_model_0194"
+        "algorithms/res_multistep_ancestral_sim_model_0194"
     );
     assert_eq!(
         SamplerRegistry::foundational()?

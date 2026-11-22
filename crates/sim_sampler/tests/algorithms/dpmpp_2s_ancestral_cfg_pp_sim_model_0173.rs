@@ -214,7 +214,7 @@ fn val_sampler_001_dpmpp_2s_ancestral_cfg_pp_definition_provenance_and_ownership
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_2s_ancestral_cfg_pp_comfy_model_0173"
+        "algorithms/dpmpp_2s_ancestral_cfg_pp_sim_model_0173"
     );
     assert_eq!(
         fixture.rng.contract,

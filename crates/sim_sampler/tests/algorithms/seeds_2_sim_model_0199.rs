@@ -258,7 +258,7 @@ fn val_sampler_001_seeds_2_definition_provenance_and_ownership_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/seeds_2_comfy_model_0199"
+        "algorithms/seeds_2_sim_model_0199"
     );
     assert_eq!(fixture.rng.contract, SEEDS_2_NOISE_CONTRACT_ID);
     assert_eq!(fixture.rng.retry_policy, "replay");

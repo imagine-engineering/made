@@ -18,7 +18,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: SA_SOLVER_PECE_FEATURE_ID,
     source_ordinal: SA_SOLVER_PECE_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/sa_solver_pece_comfy_model_0198",
+    implementation_module: "algorithms/sa_solver_pece_sim_model_0198",
     stochastic: true,
 };
 

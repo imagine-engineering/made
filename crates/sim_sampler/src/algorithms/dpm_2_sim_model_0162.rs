@@ -20,7 +20,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DPM_2_FEATURE_ID,
     source_ordinal: DPM_2_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/dpm_2_comfy_model_0162",
+    implementation_module: "algorithms/dpm_2_sim_model_0162",
     stochastic: true,
 };
 

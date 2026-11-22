@@ -61,7 +61,7 @@ pub const NORMAL_FOUNDATION_DEFINITION: SchedulerDefinition = SchedulerDefinitio
     feature_id: NORMAL_SCHEDULER_FEATURE_ID,
     source_ordinal: 6,
     aliases: &[],
-    implementation_module: "schedulers/native_diffusion",
+    implementation_module: "scheduler",
 };
 
 #[derive(Clone, Debug)]

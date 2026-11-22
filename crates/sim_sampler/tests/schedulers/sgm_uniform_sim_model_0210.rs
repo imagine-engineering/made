@@ -96,7 +96,7 @@ fn val_scheduler_001_sgm_uniform_definition_and_source_are_exact() -> Result<(),
     assert_eq!(DEFINITION.identity, fixture.identity);
     assert_eq!(DEFINITION.feature_id, fixture.feature_id);
     assert_eq!(DEFINITION.source_ordinal, fixture.source_ordinal);
-    assert_eq!(DEFINITION.implementation_module, "schedulers/sgm_uniform_comfy_model_0210");
+    assert_eq!(DEFINITION.implementation_module, "schedulers/sgm_uniform_sim_model_0210");
     assert_eq!(fixture.source.equation_lines, [670, 690]);
     assert_eq!(fixture.source.registry_line, 1348);
     assert_eq!(fixture.source.catalog_line, 211);

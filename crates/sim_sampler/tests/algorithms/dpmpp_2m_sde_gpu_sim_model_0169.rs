@@ -192,7 +192,7 @@ fn val_sampler_001_dpmpp_2m_sde_gpu_definition_provenance_and_ownership_are_exac
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_2m_sde_gpu_comfy_model_0169"
+        "algorithms/dpmpp_2m_sde_gpu_sim_model_0169"
     );
     assert_eq!(fixture.rng.contract, DPMPP_2M_SDE_GPU_BROWNIAN_CONTRACT_ID);
     assert_eq!(fixture.rng.retry_policy, "replay");

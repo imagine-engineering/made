@@ -13,7 +13,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: SGM_UNIFORM_SCHEDULER_FEATURE_ID,
     source_ordinal: SGM_UNIFORM_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/sgm_uniform_comfy_model_0210",
+    implementation_module: "schedulers/sgm_uniform_sim_model_0210",
 };
 
 pub fn sgm_uniform_schedule<P: SamplingProfile>(

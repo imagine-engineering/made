@@ -13,7 +13,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: KL_OPTIMAL_SCHEDULER_FEATURE_ID,
     source_ordinal: KL_OPTIMAL_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/kl_optimal_comfy_model_0207",
+    implementation_module: "schedulers/kl_optimal_sim_model_0207",
 };
 
 pub fn kl_optimal_schedule<P: SamplingProfile>(

@@ -164,7 +164,7 @@ fn val_sampler_001_gradient_estimation_definition_source_and_ownership_are_exact
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/gradient_estimation_comfy_model_0185"
+        "algorithms/gradient_estimation_sim_model_0185"
     );
     assert_eq!(
         GradientEstimationOptions::source_defaults().gamma,

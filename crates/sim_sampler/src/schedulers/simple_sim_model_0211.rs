@@ -11,7 +11,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: crate::SIMPLE_SCHEDULER_FEATURE_ID,
     source_ordinal: SIMPLE_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/simple_comfy_model_0211",
+    implementation_module: "schedulers/simple_sim_model_0211",
 };
 
 pub fn simple_schedule<P: SamplingProfile>(

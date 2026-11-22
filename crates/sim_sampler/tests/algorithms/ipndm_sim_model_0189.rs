@@ -150,7 +150,7 @@ fn definition_registry_and_pinned_source_are_exact() -> Result<(), Box<dyn Error
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/ipndm_comfy_model_0189"
+        "algorithms/ipndm_sim_model_0189"
     );
     let registry = SamplerRegistry::foundational()?;
     assert_eq!(

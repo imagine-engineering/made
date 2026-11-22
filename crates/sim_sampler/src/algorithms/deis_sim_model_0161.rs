@@ -18,7 +18,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DEIS_SAMPLER_FEATURE_ID,
     source_ordinal: 29,
     aliases: &[],
-    implementation_module: "algorithms/deis_comfy_model_0161",
+    implementation_module: "algorithms/deis_sim_model_0161",
     stochastic: false,
 };
 

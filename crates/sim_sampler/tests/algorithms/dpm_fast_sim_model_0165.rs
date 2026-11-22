@@ -237,7 +237,7 @@ fn val_sampler_001_dpm_fast_definition_source_and_rng_provenance_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpm_fast_comfy_model_0165"
+        "algorithms/dpm_fast_sim_model_0165"
     );
     let registry = SamplerRegistry::foundational()?;
     assert_eq!(

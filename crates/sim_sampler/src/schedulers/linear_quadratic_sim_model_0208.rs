@@ -13,7 +13,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: LINEAR_QUADRATIC_SCHEDULER_FEATURE_ID,
     source_ordinal: LINEAR_QUADRATIC_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/linear_quadratic_comfy_model_0208",
+    implementation_module: "schedulers/linear_quadratic_sim_model_0208",
 };
 
 const THRESHOLD_NOISE: f64 = 0.025;

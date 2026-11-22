@@ -269,7 +269,7 @@ fn val_sampler_001_definition_source_provenance_and_ownership_are_exact()
     assert!(!DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/lms_comfy_model_0192"
+        "algorithms/lms_sim_model_0192"
     );
     let registry = SamplerRegistry::foundational()?;
     assert_eq!(

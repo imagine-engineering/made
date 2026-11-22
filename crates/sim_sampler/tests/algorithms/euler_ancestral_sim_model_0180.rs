@@ -299,7 +299,7 @@ fn definition_ordinal_provenance_and_euler_ownership_are_exact() -> Result<(), B
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/euler_ancestral_comfy_model_0180"
+        "algorithms/euler_ancestral_sim_model_0180"
     );
     assert_eq!(
         SamplerRegistry::foundational()?

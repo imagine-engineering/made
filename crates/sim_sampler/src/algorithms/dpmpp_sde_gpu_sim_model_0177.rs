@@ -22,7 +22,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DPMPP_SDE_GPU_FEATURE_ID,
     source_ordinal: DPMPP_SDE_GPU_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/dpmpp_sde_gpu_comfy_model_0177",
+    implementation_module: "algorithms/dpmpp_sde_gpu_sim_model_0177",
     stochastic: true,
 };
 

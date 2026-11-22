@@ -229,7 +229,7 @@ fn val_sampler_001_dpmpp_2s_ancestral_definition_source_and_owner_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_2s_ancestral_comfy_model_0172"
+        "algorithms/dpmpp_2s_ancestral_sim_model_0172"
     );
     let registry = SamplerRegistry::foundational()?;
     assert_eq!(

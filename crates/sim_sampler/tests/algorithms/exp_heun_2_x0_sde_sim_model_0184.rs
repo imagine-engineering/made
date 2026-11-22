@@ -289,7 +289,7 @@ fn val_sampler_001_exp_heun_2_x0_sde_definition_provenance_and_family_ownership_
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/exp_heun_2_x0_sde_comfy_model_0184"
+        "algorithms/exp_heun_2_x0_sde_sim_model_0184"
     );
     assert_eq!(fixture.rng.contract, EXP_HEUN_2_X0_SDE_NOISE_CONTRACT_ID);
     assert_eq!(fixture.rng.retry_policy, "replay");

@@ -21,7 +21,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: LCM_FEATURE_ID,
     source_ordinal: LCM_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/lcm_comfy_model_0191",
+    implementation_module: "algorithms/lcm_sim_model_0191",
     stochastic: true,
 };
 

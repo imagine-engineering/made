@@ -23,7 +23,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: SEEDS_2_FEATURE_ID,
     source_ordinal: SEEDS_2_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/seeds_2_comfy_model_0199",
+    implementation_module: "algorithms/seeds_2_sim_model_0199",
     stochastic: true,
 };
 

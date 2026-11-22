@@ -17,7 +17,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: GRADIENT_ESTIMATION_CFG_PP_FEATURE_ID,
     source_ordinal: GRADIENT_ESTIMATION_CFG_PP_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/gradient_estimation_cfg_pp_comfy_model_0186",
+    implementation_module: "algorithms/gradient_estimation_cfg_pp_sim_model_0186",
     stochastic: false,
 };
 

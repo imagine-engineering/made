@@ -22,7 +22,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DPMPP_2S_ANCESTRAL_CFG_PP_FEATURE_ID,
     source_ordinal: DPMPP_2S_ANCESTRAL_CFG_PP_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/dpmpp_2s_ancestral_cfg_pp_comfy_model_0173",
+    implementation_module: "algorithms/dpmpp_2s_ancestral_cfg_pp_sim_model_0173",
     stochastic: true,
 };
 

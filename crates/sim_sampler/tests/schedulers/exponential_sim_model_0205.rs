@@ -136,7 +136,7 @@ fn val_scheduler_001_exponential_definition_and_provenance_are_exact() -> Result
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(
         DEFINITION.implementation_module,
-        "schedulers/exponential_comfy_model_0205"
+        "schedulers/exponential_sim_model_0205"
     );
 
     let registry_source =

@@ -47,7 +47,7 @@ fn execution_context<'a>(
 }
 
 fn pinned_sampler_names() -> Result<Vec<String>, Box<dyn Error>> {
-    let source = fs::read_to_string(workspace()?.join("projects/comfy/ComfyUI/sim/samplers.py"))?;
+    let source = fs::read_to_string(workspace()?.join("projects/comfy/ComfyUI/comfy/samplers.py"))?;
     let (_, after_marker) = source
         .split_once("KSAMPLER_NAMES = [")
         .ok_or("KSAMPLER_NAMES literal is unavailable")?;
@@ -1007,9 +1007,9 @@ fn val_sampling_foundation_001() -> Result<(), Box<dyn Error>> {
     assert!(!fixture_adapter.contains("value * sigmas[0]"));
 
     let fixture_files = [
-        "projects/comfy/ComfyUI/sim/samplers.py",
-        "projects/comfy/ComfyUI/sim/model_sampling.py",
-        "projects/comfy/ComfyUI/sim/k_diffusion/sampling.py",
+        "projects/comfy/ComfyUI/comfy/samplers.py",
+        "projects/comfy/ComfyUI/comfy/model_sampling.py",
+        "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
     ];
     let mut fixture_digests = BTreeMap::new();
     for relative in fixture_files {

@@ -268,7 +268,7 @@ fn val_sampler_001_er_sde_definition_provenance_ordinal_and_ownership_are_exact(
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/er_sde_comfy_model_0178"
+        "algorithms/er_sde_sim_model_0178"
     );
     assert_eq!(fixture.rng.contract, ER_SDE_NOISE_CONTRACT_ID);
     assert_eq!(fixture.rng.retry_policy, "replay");
@@ -309,7 +309,7 @@ fn val_sampler_001_er_sde_definition_provenance_ordinal_and_ownership_are_exact(
     let profile_source = source_range(&sampling, fixture.source.profile_lines);
     for fragment in [
         "def sigma_to_half_log_snr",
-        "isinstance(model_sampling, sim.model_sampling.CONST)",
+        "isinstance(model_sampling, comfy.model_sampling.CONST)",
         "def offset_first_sigma_for_snr",
         "model_sampling.percent_to_sigma(percent_offset)",
     ] {

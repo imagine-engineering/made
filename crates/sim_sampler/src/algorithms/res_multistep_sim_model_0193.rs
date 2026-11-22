@@ -23,7 +23,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: RES_MULTISTEP_FEATURE_ID,
     source_ordinal: RES_MULTISTEP_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/res_multistep_comfy_model_0193",
+    implementation_module: "algorithms/res_multistep_sim_model_0193",
     stochastic: true,
 };
 

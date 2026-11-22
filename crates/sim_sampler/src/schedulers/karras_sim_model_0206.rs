@@ -14,7 +14,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: KARRAS_SCHEDULER_FEATURE_ID,
     source_ordinal: KARRAS_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/karras_comfy_model_0206",
+    implementation_module: "schedulers/karras_sim_model_0206",
 };
 
 const RHO: f64 = 7.0;

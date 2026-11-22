@@ -7,7 +7,7 @@
   "eta": 0.0,
   "noise_scale": 0.0,
   "canonical_fixture_path": "crates/sim_test_support/fixtures/samplers/euler_ancestral_cfg_pp_comfy_model_0181/trajectory.json",
-  "canonical_fixture_sha256": "a17d93477121a507e83dbeec6e36706f9e82c9d9d2da4307dfcb116bd00f4a52",
+  "canonical_fixture_sha256": "9bbc1e0d0d9b0cd0d5b1d5d48fc2c8ed61e7a9b154906e1fe842010f2814e912",
   "source": {
     "sampling_path": "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py",
     "sampling_sha256": "cc5f944efd85c566484c3999beb74e8c19c894f2a50ca574d090c3a46ac6bd06",

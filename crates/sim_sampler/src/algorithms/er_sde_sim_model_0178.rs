@@ -24,7 +24,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: ER_SDE_FEATURE_ID,
     source_ordinal: ER_SDE_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/er_sde_comfy_model_0178",
+    implementation_module: "algorithms/er_sde_sim_model_0178",
     stochastic: true,
 };
 

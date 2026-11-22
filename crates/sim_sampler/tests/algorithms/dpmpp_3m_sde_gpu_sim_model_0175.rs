@@ -385,7 +385,7 @@ fn val_sampler_001_dpmpp_3m_sde_gpu_definition_ordinal_provenance_and_ownership_
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_3m_sde_gpu_comfy_model_0175"
+        "algorithms/dpmpp_3m_sde_gpu_sim_model_0175"
     );
     assert_eq!(
         SamplerRegistry::foundational()?

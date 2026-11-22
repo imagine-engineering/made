@@ -21,7 +21,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DPM_2_ANCESTRAL_FEATURE_ID,
     source_ordinal: DPM_2_ANCESTRAL_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/dpm_2_ancestral_comfy_model_0163",
+    implementation_module: "algorithms/dpm_2_ancestral_sim_model_0163",
     stochastic: true,
 };
 

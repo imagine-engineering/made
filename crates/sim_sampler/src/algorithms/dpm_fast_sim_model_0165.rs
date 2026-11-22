@@ -23,7 +23,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: "COMFY-MODEL-0165",
     source_ordinal: 11,
     aliases: &[],
-    implementation_module: "algorithms/dpm_fast_comfy_model_0165",
+    implementation_module: "algorithms/dpm_fast_sim_model_0165",
     stochastic: true,
 };
 

@@ -132,7 +132,7 @@ fn val_sampler_001_deis_definition_is_exact_and_not_an_alias() -> Result<(), Box
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/deis_comfy_model_0161"
+        "algorithms/deis_sim_model_0161"
     );
     assert!(!DEFINITION.stochastic);
     let registry = SamplerRegistry::foundational()?;
@@ -145,7 +145,7 @@ fn val_sampler_001_deis_definition_is_exact_and_not_an_alias() -> Result<(), Box
     );
     assert_eq!(
         fixture.source.coefficient_path,
-        "projects/comfy/ComfyUI/sim/k_diffusion/deis.py"
+        "projects/comfy/ComfyUI/comfy/k_diffusion/deis.py"
     );
     assert_eq!(
         fixture.source.coefficient_sha256,
@@ -153,7 +153,7 @@ fn val_sampler_001_deis_definition_is_exact_and_not_an_alias() -> Result<(), Box
     );
     assert_eq!(
         fixture.source.sampler_path,
-        "projects/comfy/ComfyUI/sim/k_diffusion/sampling.py"
+        "projects/comfy/ComfyUI/comfy/k_diffusion/sampling.py"
     );
     assert_eq!(
         fixture.source.sampler_sha256,

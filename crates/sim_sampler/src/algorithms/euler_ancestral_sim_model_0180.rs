@@ -27,7 +27,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: EULER_ANCESTRAL_FEATURE_ID,
     source_ordinal: EULER_ANCESTRAL_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/euler_ancestral_comfy_model_0180",
+    implementation_module: "algorithms/euler_ancestral_sim_model_0180",
     stochastic: true,
 };
 

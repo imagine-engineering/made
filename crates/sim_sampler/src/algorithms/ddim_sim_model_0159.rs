@@ -23,7 +23,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: DDIM_FEATURE_ID,
     source_ordinal: DDIM_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/ddim_comfy_model_0159",
+    implementation_module: "algorithms/ddim_sim_model_0159",
     stochastic: true,
 };
 

@@ -19,7 +19,7 @@ pub const DEFINITION: SamplerDefinition = SamplerDefinition {
     feature_id: RES_MULTISTEP_ANCESTRAL_CFG_PP_FEATURE_ID,
     source_ordinal: RES_MULTISTEP_ANCESTRAL_CFG_PP_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "algorithms/res_multistep_ancestral_cfg_pp_comfy_model_0195",
+    implementation_module: "algorithms/res_multistep_ancestral_cfg_pp_sim_model_0195",
     stochastic: true,
 };
 

@@ -213,7 +213,7 @@ fn val_sampler_001_dpmpp_3m_sde_definition_provenance_and_ownership_are_exact()
     assert!(DEFINITION.stochastic);
     assert_eq!(
         DEFINITION.implementation_module,
-        "algorithms/dpmpp_3m_sde_comfy_model_0174"
+        "algorithms/dpmpp_3m_sde_sim_model_0174"
     );
     assert_eq!(fixture.rng.retry_policy, "replay");
     assert_eq!(fixture.rng.placement, "cpu-seeded-transfer");

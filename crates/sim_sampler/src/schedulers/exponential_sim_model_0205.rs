@@ -14,7 +14,7 @@ pub const DEFINITION: SchedulerDefinition = SchedulerDefinition {
     feature_id: EXPONENTIAL_SCHEDULER_FEATURE_ID,
     source_ordinal: EXPONENTIAL_SCHEDULER_SOURCE_ORDINAL,
     aliases: &[],
-    implementation_module: "schedulers/exponential_comfy_model_0205",
+    implementation_module: "schedulers/exponential_sim_model_0205",
 };
 
 pub fn exponential_schedule<P: SamplingProfile>(

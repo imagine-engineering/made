@@ -127,7 +127,7 @@ fn val_scheduler_001_linear_quadratic_definition_and_pinned_source_are_exact()
     assert!(DEFINITION.aliases.is_empty());
     assert_eq!(
         DEFINITION.implementation_module,
-        "schedulers/linear_quadratic_comfy_model_0208"
+        "schedulers/linear_quadratic_sim_model_0208"
     );
 
     let root = workspace_root()?;
