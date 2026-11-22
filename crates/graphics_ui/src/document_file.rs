@@ -2356,7 +2356,7 @@ impl GraphiteDocumentItem {
             return;
         };
         if let Some(network) = form.active_network().filter(|network| {
-            network.can_extend_ports_in_copy() && (!with_hidden_primary || kind.count(network) == 0)
+            network.can_append_ports_in_copy() && (!with_hidden_primary || kind.count(network) == 0)
         }) {
             self.save_copy(
                 GraphiteCopy::AppendNetworkPort {
@@ -3382,7 +3382,7 @@ impl GraphiteDocumentItem {
                                                 cx.listener(|item, _, _, cx| item.show_all_graph_nodes(cx)),
                                             )),
                                     )
-                                    .when(network.can_extend_ports_in_copy(), |bar| {
+                                    .when(network.can_append_ports_in_copy(), |bar| {
                                         bar.children([
                                             (
                                                 NetworkPortKind::Import,
@@ -10549,6 +10549,42 @@ mod tests {
             );
             assert!(!item.is_dirty(cx));
         });
+        for (selector, destination, counts) in [
+            (
+                "GRAPHITE-GDD-ADD-NETWORK-IMPORT",
+                "/project/custom-import.gdd",
+                (1, 0),
+            ),
+            (
+                "GRAPHITE-GDD-ADD-NETWORK-EXPORT",
+                "/project/custom-export.gdd",
+                (1, 1),
+            ),
+        ] {
+            click(window, selector);
+            window.simulate_new_path_selection(|_| Some(PathBuf::from(destination)));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![PathBuf::from(destination)]));
+            window.run_until_parked();
+            let edited = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopened custom boundary edit");
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+            click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+            edited.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready custom graph")
+                };
+                let network = form.active_network().expect("entered custom network");
+                assert_eq!(network.id, nested.id);
+                assert_eq!((network.import_count, network.export_count), counts);
+                assert!(network.can_extend_ports_in_copy());
+                assert!(!item.is_dirty(cx));
+            });
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

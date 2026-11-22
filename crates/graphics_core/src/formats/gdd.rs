@@ -68,7 +68,7 @@ use crate::evaluate::{
     UnaryNumericOperation, typecheck_detached_numeric_network,
 };
 
-use crate::registry::{CUSTOM_NODE_IDENTIFIER, custom_node_definition};
+use crate::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, custom_node_definition};
 
 mod xz;
 
@@ -453,6 +453,7 @@ pub struct GddGraphNetwork {
     snapshot: Arc<()>,
     path: Vec<NodeId>,
     can_extend_ports: bool,
+    untouched_custom_node: bool,
     primary_import_exposed: Option<bool>,
     primary_export_exposed: Option<bool>,
     numeric_imports: Vec<(usize, std::mem::Discriminant<GddNumericValue>)>,
@@ -508,6 +509,39 @@ impl GddGraphNetwork {
 
     pub fn can_extend_ports_in_copy(&self) -> bool {
         self.can_extend_ports
+    }
+
+    pub fn can_append_ports_in_copy(&self) -> bool {
+        self.can_extend_ports || self.untouched_custom_node
+    }
+
+    fn append_port_deltas(&self, edits: &mut Vec<EditorDelta>) {
+        if self.untouched_custom_node {
+            edits.push(EditorDelta::NetworkMetadata {
+                network_path: self.path.clone(),
+                change: NetworkMetadataChange::Reference(None),
+            });
+        }
+    }
+
+    fn port_operations<'operation>(
+        &self,
+        operations: &'operation mut [RegistryDelta],
+    ) -> Result<&'operation mut [RegistryDelta], GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::ui::REFERENCE;
+
+        if !self.untouched_custom_node {
+            return Ok(operations);
+        }
+        let Some((RegistryDelta::ChangeNetworkAttribute { id, delta }, ports)) =
+            operations.split_last_mut()
+        else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        if *id != self.id || delta.key != REFERENCE || delta.value.is_some() {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(ports)
     }
 
     pub fn primary_import_exposed(&self) -> Option<bool> {
@@ -1278,12 +1312,18 @@ impl InspectedGddV1 {
                         (imports, metadata.output_names.clone())
                     },
                 );
-                let exports = &interface
+                let nested = interface
                     .nested_network(path)
-                    .ok_or(GddArchiveError::MissingGraphNetwork)?
-                    .exports;
+                    .ok_or(GddArchiveError::MissingGraphNetwork)?;
+                let exports = &nested.exports;
                 let imports = enclosing_network_inputs(interface.document_network(), path)
                     .ok_or(GddArchiveError::MissingGraphNetwork)?;
+                let editable_network = path.split_last().is_some_and(|(node_id, parent_path)| {
+                    !interface.is_layer(node_id, parent_path)
+                });
+                let network_metadata = interface.network_metadata(path);
+                let reference = network_metadata
+                    .and_then(|metadata| metadata.persistent_metadata.reference.as_deref());
                 let import_scope = parent.unwrap_or(id);
                 let import_ports = imports
                     .iter()
@@ -1321,12 +1361,15 @@ impl InspectedGddV1 {
                     export_names,
                     snapshot: self.snapshot.clone(),
                     path: path.clone(),
-                    can_extend_ports: path.split_last().is_some_and(|(node_id, parent_path)| {
-                        !interface.is_layer(node_id, parent_path)
-                            && interface.network_metadata(path).is_some_and(|metadata| {
-                                metadata.persistent_metadata.reference.is_none()
-                            })
-                    }),
+                    can_extend_ports: editable_network
+                        && network_metadata.is_some()
+                        && reference.is_none(),
+                    untouched_custom_node: editable_network
+                        && reference == Some(CUSTOM_NODE_NAME)
+                        && imports.is_empty()
+                        && exports.is_empty()
+                        && nested.nodes.is_empty()
+                        && nested.scope_injections.is_empty(),
                     primary_import_exposed: match imports.first() {
                         Some(NodeInput::Value { exposed, .. }) => Some(*exposed),
                         _ => None,
@@ -1500,7 +1543,7 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_network_edit_target(network)?;
-        if !network.can_extend_ports_in_copy() {
+        if !network.can_append_ports_in_copy() {
             return Err(GddArchiveError::UnsupportedGraphImportAppend);
         }
         let path = &network.path;
@@ -1564,7 +1607,7 @@ impl InspectedGddV1 {
         if !input_metadata.starts_with(&previous_metadata) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
-        let edits = [
+        let mut edits = vec![
             EditorDelta::Graph(RuntimeDelta::SetInputs {
                 network_path: parent_path.to_vec(),
                 node_id: owner_id,
@@ -1576,6 +1619,7 @@ impl InspectedGddV1 {
                 input_metadata: input_metadata.clone(),
             },
         ];
+        network.append_port_deltas(&mut edits);
         let (owner, staged) = self.fork_working_copy(&budget).await?;
         let original_slots = self
             .document
@@ -1585,7 +1629,8 @@ impl InspectedGddV1 {
             .ok_or(GddArchiveError::MissingGraphNetwork)?
             .inputs();
         let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
-        let [RegistryDelta::SetNodeInputs { id, inputs }, rest @ ..] = batch.ops.as_mut_slice()
+        let [RegistryDelta::SetNodeInputs { id, inputs }, rest @ ..] =
+            network.port_operations(&mut batch.ops)?
         else {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         };
@@ -1621,8 +1666,11 @@ impl InspectedGddV1 {
             .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
             .inputs();
         if !actual
-            .document_node(&owner_id, parent_path)
-            .is_some_and(|node| node.inputs == expected_inputs)
+            .network_metadata(path)
+            .is_some_and(|metadata| metadata.persistent_metadata.reference.is_none())
+            || !actual
+                .document_node(&owner_id, parent_path)
+                .is_some_and(|node| node.inputs == expected_inputs)
             || !actual
                 .node_metadata(&owner_id, parent_path)
                 .is_some_and(|metadata| {
@@ -1946,7 +1994,7 @@ impl InspectedGddV1 {
         use graphite_document_graph_storage::attr::node::ui::OUTPUT_NAMES;
 
         self.check_network_edit_target(network)?;
-        if !network.can_extend_ports_in_copy() {
+        if !network.can_append_ports_in_copy() {
             return Err(GddArchiveError::UnsupportedGraphExportAppend);
         }
         let path = &network.path;
@@ -2010,9 +2058,10 @@ impl InspectedGddV1 {
             node_id: owner_id,
             change: NodeMetadataChange::OutputNames(output_names.clone()),
         });
+        network.append_port_deltas(&mut edits);
         let (owner, staged) = self.fork_working_copy(&budget).await?;
-        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
-        let Some((name_edit, ports)) = batch.ops.split_last() else {
+        let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let Some((name_edit, ports)) = network.port_operations(&mut batch.ops)?.split_last() else {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         };
         if !matches!(name_edit,
@@ -2032,8 +2081,11 @@ impl InspectedGddV1 {
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
         if !actual
-            .nested_network(path)
-            .is_some_and(|nested| nested.exports == expected_exports)
+            .network_metadata(path)
+            .is_some_and(|metadata| metadata.persistent_metadata.reference.is_none())
+            || !actual
+                .nested_network(path)
+                .is_some_and(|nested| nested.exports == expected_exports)
             || !actual
                 .node_metadata(&owner_id, parent_path)
                 .is_some_and(|metadata| metadata.persistent_metadata.output_names == output_names)
@@ -8411,6 +8463,75 @@ mod tests {
                     .expect("original graph")
                     .is_empty()
             );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_280_2_custom_node_first_boundary_edit_retires_its_reference() {
+        futures::executor::block_on(async {
+            let blank = create_gdd_folder(823, 407, "Custom ports".into(), budget())
+                .await
+                .expect("empty saved graph");
+            let original = blank
+                .insert_root_catalog_node_in_copy(CUSTOM_NODE_IDENTIFIER, [0, 0], budget())
+                .await
+                .expect("pinned Custom Node");
+            let inspection = original.graph_inspection().await.expect("saved graph");
+            let [_, custom] = inspection.networks.as_slice() else {
+                panic!("owned custom network")
+            };
+            assert!(custom.can_append_ports_in_copy());
+            assert!(!custom.can_extend_ports_in_copy());
+            for add_import in [true, false] {
+                let edited = if add_import {
+                    original
+                        .append_nested_network_import_in_copy(custom, budget())
+                        .await
+                } else {
+                    original
+                        .append_nested_network_export_in_copy(custom, budget())
+                        .await
+                }
+                .expect("first boundary edit");
+                let metadata = edited.runtime_graph().await.expect("stored graph metadata");
+                let network = metadata
+                    .networks
+                    .iter()
+                    .find(|network| network.network_id == custom.id)
+                    .expect("same saved custom network");
+                assert!(network.reference.is_none());
+                let inspection = edited.graph_inspection().await.expect("edited graph");
+                let retained = inspection
+                    .networks
+                    .iter()
+                    .find(|network| network.id == custom.id)
+                    .expect("same editable custom network");
+                assert!(retained.can_extend_ports_in_copy());
+                assert_eq!(
+                    (retained.import_count, retained.export_count),
+                    (usize::from(add_import), usize::from(!add_import))
+                );
+                let undone = edited
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await
+                    .expect("restore initial reference and ports together");
+                assert!(
+                    undone
+                        .document
+                        .registry()
+                        .value_equal(original.document.registry())
+                );
+                let redone = undone
+                    .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                    .await
+                    .expect("restore first boundary edit");
+                assert!(
+                    redone
+                        .document
+                        .registry()
+                        .value_equal(edited.document.registry())
+                );
+            }
         });
     }
 
