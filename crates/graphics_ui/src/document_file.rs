@@ -30,7 +30,9 @@ use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
 
-use crate::graph::{SavedGraphAction, SavedGraphConnectionSource, SavedGraphView};
+use crate::graph::{
+    SavedGraphAction, SavedGraphConnectionSource, SavedGraphMenuTarget, SavedGraphView,
+};
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
 actions!(
@@ -1303,6 +1305,88 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn network_port_menu(
+        item: WeakEntity<Self>,
+        network: &GddGraphNetwork,
+        kind: NetworkPortKind,
+        indices: impl IntoIterator<Item = usize>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<ContextMenu> {
+        let (noun, upper) = match kind {
+            NetworkPortKind::Import => ("Import", "IMPORT"),
+            NetworkPortKind::Export => ("Export", "EXPORT"),
+        };
+        let count = kind.count(network);
+        let network = Arc::new(network.clone());
+        ContextMenu::build(window, cx, |mut menu, _, _| {
+            for index in indices {
+                let port = match kind.name(&network, index) {
+                    Some(name) => format!("{noun} {} ({name})", index + 1),
+                    None => format!("{noun} {}", index + 1),
+                };
+                let commands = [
+                    (
+                        NetworkPortMenuAction::Copy(NetworkPortChange::Remove { kind, index }),
+                        format!("Remove {port}"),
+                        format!("GRAPHITE-GDD-REMOVE-{upper}-{index}"),
+                    ),
+                    (
+                        NetworkPortMenuAction::Rename,
+                        format!("Rename {port}"),
+                        format!("GRAPHITE-GDD-RENAME-{upper}-{index}"),
+                    ),
+                ];
+                let moves = [
+                    (index.checked_sub(1), "Up", "UP"),
+                    ((index + 1 < count).then_some(index + 1), "Down", "DOWN"),
+                ]
+                .into_iter()
+                .filter_map(|(target, direction, suffix)| {
+                    Some((
+                        NetworkPortMenuAction::Copy(NetworkPortChange::Move {
+                            kind,
+                            from: index,
+                            to: target?,
+                        }),
+                        format!("Move {port} {direction}"),
+                        format!("GRAPHITE-GDD-MOVE-{upper}-{index}-{suffix}"),
+                    ))
+                });
+                for (action, label, selector) in commands.into_iter().chain(moves) {
+                    let item = item.clone();
+                    let network = network.clone();
+                    menu = menu.custom_entry(
+                        move |_, _| {
+                            div()
+                                .debug_selector({
+                                    let selector = selector.clone();
+                                    move || selector.clone()
+                                })
+                                .p_2()
+                                .child(Label::new(label.clone()))
+                                .into_any_element()
+                        },
+                        move |window, cx| {
+                            if let Some(item) = item.upgrade() {
+                                item.update(cx, |item, cx| match action {
+                                    NetworkPortMenuAction::Copy(change) => {
+                                        item.edit_network_port(&network, change, window, cx)
+                                    }
+                                    NetworkPortMenuAction::Rename => item
+                                        .begin_network_port_rename(
+                                            &network, kind, index, window, cx,
+                                        ),
+                                });
+                            }
+                        },
+                    );
+                }
+            }
+            menu
+        })
+    }
+
     fn begin_network_port_rename(
         &mut self,
         network: &GddGraphNetwork,
@@ -1929,74 +2013,16 @@ impl GraphiteDocumentItem {
                             .when(network.can_extend_ports_in_copy() && self.copy_task.is_none(), |panel| {
                                 panel.child(h_flex().gap_2().flex_wrap().children(
                                     [
-                                        (NetworkPortKind::Import, "Import", "GRAPHITE-GDD-REMOVE-IMPORT", "GRAPHITE-GDD-MOVE-IMPORT"),
-                                        (NetworkPortKind::Export, "Export", "GRAPHITE-GDD-REMOVE-EXPORT", "GRAPHITE-GDD-MOVE-EXPORT"),
-                                    ].into_iter().filter_map(|(kind, noun, selector, move_selector)| {
+                                        (NetworkPortKind::Import, "Import", "GRAPHITE-GDD-REMOVE-IMPORT"),
+                                        (NetworkPortKind::Export, "Export", "GRAPHITE-GDD-REMOVE-EXPORT"),
+                                    ].into_iter().filter_map(|(kind, noun, selector)| {
                                         let count = kind.count(network);
                                         if count == 0 {
                                             return None;
                                         }
-                                        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
-                                            let network = Arc::new(network.clone());
-                                            for index in 0..count {
-                                                let port = match kind.name(&network, index) {
-                                                    Some(name) => format!("{noun} {} ({name})", index + 1),
-                                                    None => format!("{noun} {}", index + 1),
-                                                };
-                                                let commands = [
-                                                    (
-                                                        NetworkPortMenuAction::Copy(NetworkPortChange::Remove { kind, index }),
-                                                        format!("Remove {port}"),
-                                                        format!("{selector}-{index}"),
-                                                    ),
-                                                    (
-                                                        NetworkPortMenuAction::Rename,
-                                                        format!("Rename {port}"),
-                                                        format!("GRAPHITE-GDD-RENAME-{}-{index}", noun.to_ascii_uppercase()),
-                                                    ),
-                                                ];
-                                                let move_targets = [
-                                                    (index.checked_sub(1), "Up", "UP"),
-                                                    ((index + 1 < count).then_some(index + 1), "Down", "DOWN"),
-                                                ].into_iter().filter_map(|(target, direction, selector_suffix)| {
-                                                    let target = target?;
-                                                    Some((
-                                                        NetworkPortMenuAction::Copy(NetworkPortChange::Move { kind, from: index, to: target }),
-                                                        format!("Move {port} {direction}"),
-                                                        format!("{move_selector}-{index}-{selector_suffix}"),
-                                                    ))
-                                                });
-                                                for (action, label, selector) in commands.into_iter().chain(move_targets) {
-                                                    let item = item.clone();
-                                                    let network = network.clone();
-                                                    menu = menu.custom_entry(
-                                                        move |_, _| {
-                                                            div()
-                                                                .debug_selector({
-                                                                    let selector = selector.clone();
-                                                                    move || selector.clone()
-                                                                })
-                                                                .p_2()
-                                                                .child(Label::new(label.clone()))
-                                                                .into_any_element()
-                                                        },
-                                                        move |window, cx| {
-                                                            if let Some(item) = item.upgrade() {
-                                                                item.update(cx, |item, cx| match action {
-                                                                    NetworkPortMenuAction::Copy(change) => {
-                                                                        item.edit_network_port(&network, change, window, cx)
-                                                                    }
-                                                                    NetworkPortMenuAction::Rename => {
-                                                                        item.begin_network_port_rename(&network, kind, index, window, cx)
-                                                                    }
-                                                                });
-                                                            }
-                                                        },
-                                                    );
-                                                }
-                                            }
-                                            menu
-                                        });
+                                        let menu = Self::network_port_menu(
+                                            cx.entity().downgrade(), network, kind, 0..count, window, cx,
+                                        );
                                         Some(div()
                                             .debug_selector(move || selector.into())
                                             .child(DropdownMenu::new(
@@ -2109,7 +2135,7 @@ impl GraphiteDocumentItem {
                         match &form.saved_graph {
                             SavedGraphPanel::Ready(geometry) => {
                                 let item = cx.entity().downgrade();
-                                let wire_item = item.clone();
+                                let menu_item = item.clone();
                                 let scope = network.id;
                                 panel.child(crate::graph::render_saved_graph(
                                     geometry, &form.nodes,
@@ -2131,25 +2157,41 @@ impl GraphiteDocumentItem {
                                             log::debug!("Graphite saved graph selection closed: {error:#}");
                                         }
                                     },
-                                    move |index, window, cx| {
-                                        let item = wire_item.upgrade()?;
+                                    move |target, window, cx| {
+                                        let item = menu_item.upgrade()?;
                                         let item_state = item.read(cx);
                                         let NodeCopyPanel::Ready(form) = &item_state.node_copy else {
                                             return None;
                                         };
-                                        let target = form.nodes.get(index)?;
                                         if item_state.copy_task.is_some()
                                             || form.pending_canvas_source.is_some()
                                             || !matches!(form.saved_graph, SavedGraphPanel::Ready(_))
                                             || !form.clipboard_scope().is_some_and(|network| network.id == scope)
-                                            || target.network_id() != scope
-                                            || !target.has_numeric_connection()
-                                            || !target.can_preview_numeric_output()
                                         {
                                             return None;
                                         }
-                                        let target = target.clone();
-                                        Some(Self::numeric_wire_insertion_menu(wire_item.clone(), &target, window, cx))
+                                        match target {
+                                            SavedGraphMenuTarget::NodeInput(index) => {
+                                                let target = form.nodes.get(index).filter(|node| {
+                                                    node.network_id() == scope
+                                                        && node.has_numeric_connection()
+                                                        && node.can_preview_numeric_output()
+                                                })?.clone();
+                                                Some(Self::numeric_wire_insertion_menu(menu_item.clone(), &target, window, cx))
+                                            }
+                                            SavedGraphMenuTarget::Boundary(port) => {
+                                                let (kind, index) = match port {
+                                                    ImportOrExport::Import(index) => (NetworkPortKind::Import, index),
+                                                    ImportOrExport::Export(index) => (NetworkPortKind::Export, index),
+                                                };
+                                                let network = form.active_network().filter(|network| {
+                                                    network.id == scope
+                                                        && network.can_extend_ports_in_copy()
+                                                        && index < kind.count(network)
+                                                })?.clone();
+                                                Some(Self::network_port_menu(menu_item.clone(), &network, kind, [index], window, cx))
+                                            }
+                                        }
                                     },
                                 ))
                             }
@@ -3796,6 +3838,36 @@ mod tests {
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
     }
 
+    fn right_click_saved_graph(window: &mut gpui::VisualTestContext, selector: &'static str) {
+        let position = window
+            .debug_bounds(selector)
+            .expect("visible saved graph control")
+            .center();
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    position,
+                    button: gpui::MouseButton::Right,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    position,
+                    button: gpui::MouseButton::Right,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        });
+        window.run_until_parked();
+        paint(window);
+    }
+
     enum NumericGraphFixture {
         SingleNode,
         ExposedInput,
@@ -4610,32 +4682,7 @@ mod tests {
         }
         let insert = |window: &mut gpui::VisualTestContext| {
             if canvas {
-                let position = window
-                    .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-INPUT-3")
-                    .expect("visible connected input")
-                    .center();
-                window.update(|window, cx| {
-                    window.dispatch_event(
-                        gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
-                            position,
-                            button: gpui::MouseButton::Right,
-                            modifiers: gpui::Modifiers::default(),
-                            click_count: 1,
-                            first_mouse: false,
-                        }),
-                        cx,
-                    );
-                    window.dispatch_event(
-                        gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
-                            position,
-                            button: gpui::MouseButton::Right,
-                            modifiers: gpui::Modifiers::default(),
-                            click_count: 1,
-                        }),
-                        cx,
-                    );
-                });
-                window.run_until_parked();
+                right_click_saved_graph(window, "GRAPHITE-GDD-GRAPH-NODE-INPUT-3");
             } else {
                 click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
             }
@@ -5708,6 +5755,17 @@ mod tests {
     async fn at_gra_graph_027_2_workspace_renames_addressed_import_and_export_names(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_renames_saved_ports(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_027_2_workspace_renames_nested_ports_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_renames_saved_ports(cx, true).await;
+    }
+
+    async fn verify_workspace_renames_saved_ports(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -5756,10 +5814,31 @@ mod tests {
                 };
                 form.active_network().expect("same nested network").id
             });
-            click(window, menu);
-            paint(window);
-            click(window, selector);
-            paint(window);
+            if canvas {
+                click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+                window.run_until_parked();
+                paint(window);
+            }
+            let rename = |window: &mut gpui::VisualTestContext| {
+                if canvas {
+                    let (socket, sibling) = match kind {
+                        NetworkPortKind::Import => (
+                            "GRAPHITE-GDD-GRAPH-Import-2",
+                            "GRAPHITE-GDD-RENAME-IMPORT-0",
+                        ),
+                        NetworkPortKind::Export => (
+                            "GRAPHITE-GDD-GRAPH-Export-2",
+                            "GRAPHITE-GDD-RENAME-EXPORT-0",
+                        ),
+                    };
+                    right_click_saved_graph(window, socket);
+                    assert!(window.debug_bounds(sibling).is_none());
+                } else {
+                    click(window, menu);
+                }
+                click(window, selector);
+            };
+            rename(window);
             current.read_with(window, |item, cx| {
                 let NodeCopyPanel::Ready(form) = &item.node_copy else {
                     panic!("expected the name form");
@@ -5771,10 +5850,7 @@ mod tests {
             paint(window);
             assert!(!current.read_with(window, |item, cx| item.is_dirty(cx)));
 
-            click(window, menu);
-            paint(window);
-            click(window, selector);
-            paint(window);
+            rename(window);
             click(window, "GRAPHITE-GDD-PORT-NAME");
             window.simulate_keystrokes("ctrl-a");
             window.simulate_input(name);

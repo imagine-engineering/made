@@ -122,6 +122,12 @@ pub(crate) enum SavedGraphConnectionSource {
     NodeOutput(usize),
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum SavedGraphMenuTarget {
+    NodeInput(usize),
+    Boundary(ImportOrExport),
+}
+
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
     pub selected: Option<usize>,
@@ -136,7 +142,9 @@ pub(crate) fn render_saved_graph(
     window: &Window,
     cx: &App,
     dispatch: impl Fn(SavedGraphAction, &mut Window, &mut App) + Clone + 'static,
-    wire_menu: impl Fn(usize, &mut Window, &mut App) -> Option<Entity<ContextMenu>> + Clone + 'static,
+    context_menu: impl Fn(SavedGraphMenuTarget, &mut Window, &mut App) -> Option<Entity<ContextMenu>>
+    + Clone
+    + 'static,
 ) -> impl IntoElement {
     let padding = 24.;
     let height = 256.;
@@ -209,16 +217,13 @@ pub(crate) fn render_saved_graph(
             let socket = div()
                 .id((element_id, *index))
                 .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-{label}-{number}"))
-                .absolute()
-                .left(position.x - px(3.))
-                .top(position.y - px(3.))
                 .child(div().size(px(6.)).rounded_full().bg(if active {
                     colors.text_accent
                 } else {
                     colors.text_muted
                 }))
                 .child(Label::new(text.clone()).size(LabelSize::XSmall));
-            match port {
+            let socket = match port {
                 ImportOrExport::Import(index)
                     if view.can_start_connection
                         && view.network.can_start_numeric_import(*index) =>
@@ -249,6 +254,27 @@ pub(crate) fn render_saved_graph(
                     )
                 }
                 _ => socket,
+            };
+            let position = div()
+                .absolute()
+                .left(position.x - px(3.))
+                .top(position.y - px(3.));
+            if view.can_start_connection
+                && view.pending_source.is_none()
+                && view.network.can_extend_ports_in_copy()
+            {
+                let target = SavedGraphMenuTarget::Boundary(*port);
+                let menu = context_menu.clone();
+                position.child(
+                    ui::right_click_menu((
+                        SharedString::from(format!("graphite-saved-graph-{label}-menu")),
+                        *index,
+                    ))
+                    .trigger(move |_, _, _| socket)
+                    .maybe_menu(move |window, cx| menu(target, window, cx)),
+                )
+            } else {
+                position.child(socket)
             }
         }))
         .children(geometry.nodes.iter().filter_map(|geometry| {
@@ -310,7 +336,7 @@ pub(crate) fn render_saved_graph(
                 SavedGraphAction::DisconnectInput(index),
                 dispatch.clone(),
             );
-            let wire_menu = wire_menu.clone();
+            let menu = context_menu.clone();
             Some(
                 div()
                     .absolute()
@@ -319,7 +345,9 @@ pub(crate) fn render_saved_graph(
                     .child(
                         ui::right_click_menu(("graphite-saved-graph-input-menu", index))
                             .trigger(move |_, _, _| socket)
-                            .maybe_menu(move |window, cx| wire_menu(index, window, cx)),
+                            .maybe_menu(move |window, cx| {
+                                menu(SavedGraphMenuTarget::NodeInput(index), window, cx)
+                            }),
                     ),
             )
         }));
