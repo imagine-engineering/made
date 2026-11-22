@@ -10463,6 +10463,102 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_node_280_3_workspace_creates_and_enters_a_saved_custom_node(
+        cx: &mut TestAppContext,
+    ) {
+        let blank = create_gdd_folder(623, 189, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source folder");
+        let original = blank
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/create-custom-node.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG");
+        click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+        window.simulate_input("Custom Node");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-POSITION");
+        window.simulate_keystrokes("ctrl-a");
+        window.simulate_input("6, -9");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Custom Node");
+        let target = PathBuf::from("/project/created-custom-node.gdd");
+        window.simulate_new_path_selection(|_| Some(target.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![target]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened custom node copy");
+        assert_ne!(reopened, item);
+        let contents = reopened.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            item.model
+                .read(cx)
+                .gdd_contents()
+                .expect("saved GDD")
+                .clone()
+        });
+        let inspection = contents
+            .graph_inspection()
+            .await
+            .expect("exact saved graph");
+        let [root, nested] = inspection.networks.as_slice() else {
+            panic!("root and custom network")
+        };
+        let [node] = inspection.nodes.as_slice() else {
+            panic!("one saved custom node")
+        };
+        assert_eq!(root.parent, None);
+        assert_eq!(node.network_id(), root.id);
+        assert_eq!(node.nested_network(), Some(nested.id));
+        assert_eq!(node.display_name(), "Custom Node");
+        assert_eq!(nested.parent, Some(root.id));
+        assert_eq!(nested.import_count, 0);
+        assert_eq!(nested.export_count, 0);
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            assert_eq!(
+                form.active_network().expect("entered custom network").id,
+                nested.id
+            );
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_graph_005_2_workspace_inserts_the_selected_catalog_template(
         cx: &mut TestAppContext,
     ) {

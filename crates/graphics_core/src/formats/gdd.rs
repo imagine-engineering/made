@@ -68,6 +68,8 @@ use crate::evaluate::{
     UnaryNumericOperation, typecheck_detached_numeric_network,
 };
 
+use crate::registry::{CUSTOM_NODE_IDENTIFIER, custom_node_definition};
+
 mod xz;
 
 #[derive(Clone, Copy)]
@@ -2886,7 +2888,27 @@ impl InspectedGddV1 {
         }
         let definition = catalog_copy_node_definition(identifier)
             .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?;
-        self.insert_node_template_in_copy(&[], definition.default_node_template(), position, budget)
+        let mut template = definition.default_node_template();
+        if identifier == CUSTOM_NODE_IDENTIFIER {
+            let inspection = self.graph_inspection().await?;
+            let network = inspection
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .ok_or(GddArchiveError::MissingGraphNetwork)?;
+            template.node_type_metadata =
+                NodeTypePersistentMetadata::node(IVec2::from_array(position));
+            let interface = self.runtime_graph().await?.into_interface()?;
+            return self
+                .insert_graph_node_templates_in_copy(
+                    network,
+                    interface,
+                    vec![(NodeId(0), template)],
+                    budget,
+                )
+                .await;
+        }
+        self.insert_node_template_in_copy(&[], template, position, budget)
             .await
     }
 
@@ -4426,6 +4448,9 @@ pub fn can_insert_graphite_catalog_node(identifier: &str) -> bool {
 }
 
 fn catalog_copy_node_definition(identifier: &str) -> Option<&'static DocumentNodeDefinition> {
+    if identifier == CUSTOM_NODE_IDENTIFIER {
+        return custom_node_definition();
+    }
     let identifier = identifier.strip_prefix("PROTONODE:")?;
     let identifier = ProtoNodeIdentifier::with_owned_string(identifier.to_owned());
     let definition = resolve_proto_node_type(identifier.clone())?;
@@ -8328,6 +8353,68 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_280_2_saves_the_exact_custom_node_and_can_undo_it() {
+        use graphite_document_graph_storage::Position;
+
+        futures::executor::block_on(async {
+            let original = create_gdd_folder(820, 402, "Custom node".into(), budget())
+                .await
+                .expect("empty saved graph");
+            let copy = original
+                .insert_root_catalog_node_in_copy(CUSTOM_NODE_IDENTIFIER, [6, -9], budget())
+                .await
+                .expect("copy with exact source template");
+            let graph = copy.runtime_graph().await.expect("saved graph metadata");
+            let [node] = graph.nodes.as_slice() else {
+                panic!("exactly one new node");
+            };
+            assert_eq!(node.position, Some(Position::Absolute([6, -9])));
+            assert!(node.network_path.is_empty());
+            let nested = graph
+                .networks
+                .iter()
+                .find(|network| network.network_path == [node.local_id])
+                .expect("owned nested network");
+            assert_eq!(nested.reference.as_deref(), Some("Custom Node"));
+            assert!(
+                graph
+                    .network
+                    .nested_network(&nested.network_path)
+                    .is_some_and(|network| network.nodes.is_empty() && network.exports.is_empty())
+            );
+            let undone = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo removes the node and its network");
+            let undone_graph = undone.runtime_graph().await.expect("stored undo");
+            assert!(undone_graph.nodes.is_empty());
+            assert!(
+                undone_graph
+                    .networks
+                    .iter()
+                    .all(|network| network.network_path.is_empty())
+            );
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the custom node");
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .value_equal(copy.document.registry())
+            );
+            assert!(
+                original
+                    .graph_nodes()
+                    .await
+                    .expect("original graph")
+                    .is_empty()
+            );
+        });
+    }
+
+    #[test]
     fn at_gra_graph_005_1_round_trips_eligible_catalog_proto_defaults() {
         use crate::registry::GraphiteNodeCatalog;
 
@@ -8352,7 +8439,7 @@ mod tests {
             }
             assert!(count > 5);
             assert!(failures.is_empty(), "{}", failures.join("\n"));
-            for invalid in ["NETWORK:Custom Node", "PROTONODE:unknown-node", "Add"] {
+            for invalid in ["NETWORK:Merge", "PROTONODE:unknown-node", "Add"] {
                 assert!(matches!(
                     blank
                         .insert_root_catalog_node_in_copy(invalid, position, budget())

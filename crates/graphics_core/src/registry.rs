@@ -4,9 +4,14 @@ use graphite_core_types::{
     NodeIOTypes, ProtoNodeIdentifier,
     registry::{NODE_METADATA, NODE_REGISTRY, NodeMetadata},
 };
-use graphite_editor::messages::portfolio::document::node_graph::{
-    document_node_definitions::collect_node_types,
-    utility_types::{FrontendNodeType, InputTypeConstraint},
+use graphite_editor::messages::portfolio::document::{
+    node_graph::{
+        document_node_definitions::{
+            DocumentNodeDefinition, collect_node_types, resolve_network_node_type,
+        },
+        utility_types::{FrontendNodeType, InputTypeConstraint},
+    },
+    utility_types::network_interface::{NodeNetworkTemplate, NodeTemplateImplementation},
 };
 
 #[derive(Clone, Debug)]
@@ -67,6 +72,21 @@ pub fn registered_node(identifier: &str) -> Result<RegisteredNode, RegistryError
         metadata: metadata.ok_or(RegistryError::MissingSourceNode)?,
         signatures: signatures.ok_or(RegistryError::MissingSourceNode)?,
     })
+}
+
+pub(crate) const CUSTOM_NODE_IDENTIFIER: &str = "NETWORK:Custom Node";
+
+pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition> {
+    let definition = resolve_network_node_type("Custom Node")?;
+    let template = &definition.node_template;
+    let NodeTemplateImplementation::Network(network) = &template.implementation else {
+        return None;
+    };
+    let expected = NodeNetworkTemplate {
+        reference: Some(definition.identifier.into()),
+        ..Default::default()
+    };
+    (template.inputs.is_empty() && *network == expected).then_some(definition)
 }
 
 pub struct GraphiteCatalogCategory {
@@ -156,6 +176,30 @@ mod tests {
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
+
+    #[test]
+    fn at_gra_node_280_1_joins_the_pinned_empty_custom_network() {
+        let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
+        let groups = catalog.search("Custom Node");
+        let node = groups
+            .iter()
+            .flat_map(|group| &group.nodes)
+            .find(|node| node.identifier == CUSTOM_NODE_IDENTIFIER)
+            .expect("exact serialized identity");
+        assert_eq!(node.category, "General");
+        assert!(node.input_types.is_empty());
+        let definition = custom_node_definition().expect("pinned Custom Node definition");
+        let template = definition.default_node_template();
+        assert!(template.inputs.is_empty());
+        assert!(template.input_metadata.is_empty());
+        assert!(template.output_names.is_empty());
+        let NodeTemplateImplementation::Network(network) = template.implementation else {
+            panic!("pinned Custom Node network");
+        };
+        assert!(network.nodes.is_empty());
+        assert!(network.exports.is_empty());
+        assert_eq!(network.reference.as_deref(), Some("Custom Node"));
+    }
 
     #[test]
     fn at_gra_graph_001_1_catalog_keeps_all_source_visible_entries_and_categories() {
