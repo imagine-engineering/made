@@ -10689,6 +10689,91 @@ mod tests {
                 assert!(!item.is_dirty(cx));
             });
         }
+        let working = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("saved typed boundary");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        let bounds = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("editable custom canvas");
+        click_graph_point(
+            window,
+            bounds.origin + gpui::point(px(250.), px(177.)),
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        click(window, "GRAPHITE-GDD-ADD-Absolute Value");
+        let (internal, before_wire) = working.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready working graph")
+            };
+            let internal = form
+                .nodes
+                .iter()
+                .find(|node| node.network_id() == nested.id)
+                .expect("pinned internal node");
+            assert_eq!(internal.numeric_input_exposed(), Some(true));
+            (internal.storage_id(), item.model.read(cx).revision.clone())
+        });
+        click(window, "GRAPHITE-GDD-GRAPH-Import-3");
+        click(window, "GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION");
+        click(window, "GRAPHITE-GDD-GRAPH-Import-2");
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+        working.read_with(window, |item, cx| {
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before_wire));
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error))
+                if message.as_ref() == "Choose an exposed numeric input that accepts this import."));
+        });
+        click(window, "GRAPHITE-GDD-GRAPH-Import-3");
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+        click(window, "GRAPHITE-GDD-GRAPH-Export-1");
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        working.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready working graph") };
+            assert!(matches!(&form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::NumberList(values)) if values.is_empty()));
+            assert!(item.is_dirty(cx));
+        });
+        let wired_destination = PathBuf::from("/project/wired-custom-node.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(wired_destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &wired_destination)
+            .await
+            .expect("reopened native wired custom graph");
+        let graph = saved.graph_inspection().await.expect("saved typed ports");
+        let network = graph
+            .networks
+            .iter()
+            .find(|network| network.id == nested.id)
+            .expect("same child network");
+        let node = graph
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == internal)
+            .expect("same internal node");
+        assert_eq!(node.network_id(), nested.id);
+        assert_eq!(
+            node.input_ports()
+                .first()
+                .and_then(|port| port.source.as_ref()),
+            Some(&graphics_core::formats::gdd::GddGraphPortSource::Import(2)),
+        );
+        assert_eq!(
+            network
+                .exports()
+                .first()
+                .and_then(|port| port.source.as_ref()),
+            Some(&graphics_core::formats::gdd::GddGraphPortSource::Node {
+                storage_id: internal,
+                output_index: 0
+            }),
+        );
+        assert!(matches!(saved.preview_graph_numeric_output(node).await,
+            Ok(GddNumericValue::NumberList(values)) if values.is_empty()));
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
