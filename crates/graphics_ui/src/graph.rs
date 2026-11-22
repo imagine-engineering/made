@@ -1,7 +1,7 @@
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
-    Stateful, Subscription, Window, actions, point, rgb,
+    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
+    Point, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -112,6 +112,7 @@ pub(crate) enum SavedGraphAction {
     SelectNode(usize),
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
+    DisconnectInput(usize),
     CancelConnection,
 }
 
@@ -284,23 +285,31 @@ pub(crate) fn render_saved_graph(
             }
             let source = SavedGraphConnectionSource::NodeOutput(index);
             Some(saved_graph_button(
-                div()
-                    .id(("graphite-saved-graph-node-output", index))
-                    .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-NODE-OUTPUT-{index}"))
-                    .absolute()
-                    .left(position.x - px(6.))
-                    .top(position.y - px(6.))
-                    .size(px(12.))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(if view.pending_source == Some(source) {
-                        colors.text_accent
-                    } else {
-                        colors.text_muted
-                    }),
+                saved_graph_node_socket(
+                    "output",
+                    index,
+                    position,
+                    view.pending_source == Some(source),
+                    cx,
+                ),
                 format!("Connect output from {}", node.label()),
                 SavedGraphAction::ToggleSource(source),
+                dispatch.clone(),
+            ))
+        }))
+        .children(geometry.nodes.iter().filter_map(|geometry| {
+            let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
+            let position = project(geometry.primary_input?);
+            if !view.can_start_connection
+                || view.pending_source.is_some()
+                || !node.has_numeric_connection()
+            {
+                return None;
+            }
+            Some(saved_graph_button(
+                saved_graph_node_socket("input", index, position, false, cx),
+                format!("Disconnect saved input on {}", node.label()),
+                SavedGraphAction::DisconnectInput(index),
                 dispatch.clone(),
             ))
         }));
@@ -333,6 +342,36 @@ pub(crate) fn render_saved_graph(
                             ),
                     ),
             )
+        })
+}
+
+fn saved_graph_node_socket(
+    kind: &'static str,
+    index: usize,
+    position: Point<Pixels>,
+    active: bool,
+    cx: &App,
+) -> Stateful<Div> {
+    let colors = cx.theme().colors();
+    div()
+        .id(SharedString::from(format!(
+            "graphite-saved-graph-node-{kind}-{index}"
+        )))
+        .debug_selector(move || {
+            let kind = kind.to_ascii_uppercase();
+            format!("GRAPHITE-GDD-GRAPH-NODE-{kind}-{index}")
+        })
+        .absolute()
+        .left(position.x - px(6.))
+        .top(position.y - px(6.))
+        .size(px(12.))
+        .rounded_full()
+        .border_1()
+        .border_color(colors.border)
+        .bg(if active {
+            colors.text_accent
+        } else {
+            colors.text_muted
         })
 }
 

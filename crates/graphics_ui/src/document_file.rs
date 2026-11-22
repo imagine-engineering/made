@@ -1087,7 +1087,9 @@ impl GraphiteDocumentItem {
         {
             return;
         }
-        if let SavedGraphAction::SelectNode(index) = action {
+        if let SavedGraphAction::SelectNode(index) | SavedGraphAction::DisconnectInput(index) =
+            action
+        {
             self.select_copy_node(index, window, cx);
         }
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
@@ -1120,6 +1122,14 @@ impl GraphiteDocumentItem {
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
+                }
+            }
+            SavedGraphAction::DisconnectInput(index) => {
+                if form.selected == Some(index)
+                    && form.pending_canvas_source.is_none()
+                    && self.copy_task.is_none()
+                {
+                    self.save_disconnected_numeric_input(window, cx);
                 }
             }
             SavedGraphAction::SelectNode(index) => {
@@ -4400,6 +4410,17 @@ mod tests {
     async fn at_gra_graph_009_2_workspace_disconnects_a_scoped_import_and_previews_its_fallback(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_disconnects_scoped_import(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_009_2_workspace_disconnects_a_scoped_import_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_disconnects_scoped_import(cx, true).await;
+    }
+
+    async fn verify_workspace_disconnects_scoped_import(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -4421,12 +4442,25 @@ mod tests {
             .expect("native Graphite Inspector");
         let selector = "GRAPHITE-GDD-NODE-COPY-ITEM-3";
         choose_scoped_copy_node(window, selector);
-        click(window, "GRAPHITE-GDD-DISCONNECT-VALUE");
+        let command = if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-INPUT-6")
+                    .is_none()
+            );
+            "GRAPHITE-GDD-GRAPH-NODE-INPUT-3"
+        } else {
+            "GRAPHITE-GDD-DISCONNECT-VALUE"
+        };
+        click(window, command);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
         paint(window);
-        click(window, "GRAPHITE-GDD-DISCONNECT-VALUE");
+        click(window, command);
         let destination = PathBuf::from("/project/disconnected-import.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
@@ -4462,6 +4496,22 @@ mod tests {
             assert_eq!(contents.history_len(), original_history + 1);
             assert!(!item.is_dirty(cx));
         });
+        if canvas {
+            paint(window);
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-INPUT-3")
+                    .is_none()
+            );
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-INPUT-2")
+                    .is_some()
+            );
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

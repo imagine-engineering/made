@@ -349,6 +349,7 @@ pub struct GddGraphGeometry {
 pub struct GddGraphNodeGeometry {
     pub storage_id: StorageNodeId,
     pub bounds: [[f64; 2]; 2],
+    pub primary_input: Option<[f64; 2]>,
     pub primary_output: Option<[f64; 2]>,
 }
 
@@ -1018,6 +1019,10 @@ impl InspectedGddV1 {
                     .then(|| GddGraphNodeGeometry {
                         storage_id: *storage_id,
                         bounds: bounds.map(|point| point.to_array()),
+                        primary_input: finite_graph_point(
+                            interface
+                                .input_position(&InputConnector::primary_input(*local_id), path),
+                        ),
                         primary_output: finite_graph_point(
                             interface
                                 .output_position(&OutputConnector::primary_output(*local_id), path),
