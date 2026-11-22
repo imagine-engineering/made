@@ -80,6 +80,25 @@ pub struct CanvasEdge {
     pub label: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum CanvasLayout {
+    #[default]
+    LeftToRight,
+    TopToBottom,
+}
+
+impl CanvasLayout {
+    fn transpose(self, point: GraphPoint) -> GraphPoint {
+        match self {
+            Self::LeftToRight => point,
+            Self::TopToBottom => GraphPoint {
+                x: point.y,
+                y: point.x,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct CanvasGraph {
     pub nodes: Vec<CanvasNode>,
@@ -90,6 +109,7 @@ pub struct CanvasGraph {
     /// Deterministic post-layout positions, in graph coordinates.
     pub positions: BTreeMap<String, GraphPoint>,
     pub bounds: GraphRect,
+    pub(crate) layout: CanvasLayout,
 }
 
 impl CanvasGraph {
@@ -304,8 +324,7 @@ fn assemble_canvas_graph(mut nodes: Vec<CanvasNode>, mut edges: Vec<CanvasEdge>)
         nodes,
         edges,
         truncated,
-        positions: BTreeMap::new(),
-        bounds: GraphRect::default(),
+        ..CanvasGraph::default()
     };
     layout_canvas_graph(&mut graph);
     graph
@@ -386,6 +405,7 @@ pub fn layout_canvas_graph(graph: &mut CanvasGraph) {
         }
     }
     let predecessors: HashMap<&str, Vec<&str>> = predecessor_map(&forward_edges);
+    let successors = successor_map(&forward_edges);
     for _ in 0..2 {
         // Downward sweep: order by the mean predecessor order index.
         for members in layer_members.values_mut() {
@@ -394,20 +414,24 @@ pub fn layout_canvas_graph(graph: &mut CanvasGraph) {
         rebuild_order_index(&layer_members, &mut order_index);
         // Upward sweep: order by the mean successor order index.
         for members in layer_members.values_mut().rev() {
-            sort_by_barycenter(members, &successor_map(&forward_edges), &order_index);
+            sort_by_barycenter(members, &successors, &order_index);
         }
         rebuild_order_index(&layer_members, &mut order_index);
     }
 
     graph.positions.clear();
+    let block = graph.layout.transpose(GraphPoint {
+        x: NODE_WIDTH,
+        y: NODE_HEIGHT,
+    });
     for (layer, members) in &layer_members {
         for (index, id) in members.iter().enumerate() {
             graph.positions.insert(
                 id.clone(),
-                GraphPoint {
-                    x: PADDING + *layer as f32 * (NODE_WIDTH + HORIZONTAL_GAP),
-                    y: PADDING + index as f32 * (NODE_HEIGHT + VERTICAL_GAP),
-                },
+                graph.layout.transpose(GraphPoint {
+                    x: PADDING + *layer as f32 * (block.x + HORIZONTAL_GAP),
+                    y: PADDING + index as f32 * (block.y + VERTICAL_GAP),
+                }),
             );
         }
     }
@@ -551,14 +575,19 @@ fn recompute_bounds(graph: &mut CanvasGraph) {
 }
 
 fn edge_paths(graph: &CanvasGraph) -> Vec<Vec<GraphPoint>> {
+    let layout = graph.layout;
+    let block = layout.transpose(GraphPoint {
+        x: NODE_WIDTH,
+        y: NODE_HEIGHT,
+    });
     let mut multiplicity = HashMap::new();
     for edge in &graph.edges {
         *multiplicity.entry((&edge.from, &edge.to)).or_insert(0usize) += 1;
     }
-    let top = graph
+    let cross_boundary = graph
         .positions
         .values()
-        .map(|position| position.y)
+        .map(|position| layout.transpose(*position).y)
         .fold(PADDING, f32::min);
     let mut ranks = HashMap::new();
     let mut return_lane = 0;
@@ -577,27 +606,26 @@ fn edge_paths(graph: &CanvasGraph) -> Vec<Vec<GraphPoint>> {
             let count = multiplicity.get(&key).copied().unwrap_or(1);
             let lane = (*rank as f32 + 0.5) / count as f32 - 0.5;
             *rank += 1;
-            let port = NODE_HEIGHT / 2.0 + lane * (NODE_HEIGHT - 12.0);
+            let port = block.y / 2.0 + lane * (block.y - 12.0).min(60.0);
             let point = |x, y| GraphPoint { x, y };
-            let start = point(from.x + NODE_WIDTH, from.y + port);
+            let from = layout.transpose(*from);
+            let to = layout.transpose(*to);
+            let start = point(from.x + block.x, from.y + port);
             let end = point(to.x, to.y + port);
             let departure = point(start.x + 16.0 + lane * 12.0, start.y);
             let arrival = point(end.x - 16.0 - lane * 12.0, end.y);
-            if from.x < to.x {
-                return vec![start, departure, arrival, end];
+            let mut route = vec![start, departure];
+            if from.x >= to.x {
+                // Keep return edges outside the occupied ranks on either axis.
+                let bypass = cross_boundary - 18.0 - return_lane as f32 * 7.0;
+                return_lane += 1;
+                route.extend([point(departure.x, bypass), point(arrival.x, bypass)]);
             }
-
-            // Return edges stay outside the node rows so the cycle stays visible.
-            let bypass = top - 18.0 - return_lane as f32 * 7.0;
-            return_lane += 1;
-            vec![
-                start,
-                departure,
-                point(departure.x, bypass),
-                point(arrival.x, bypass),
-                arrival,
-                end,
-            ]
+            route.extend([arrival, end]);
+            route
+                .into_iter()
+                .map(|point| layout.transpose(point))
+                .collect()
         })
         .collect()
 }
@@ -674,7 +702,11 @@ impl CanvasState {
         }
     }
 
-    pub(crate) fn replace_graph(&mut self, graph: CanvasGraph) {
+    pub(crate) fn replace_graph(&mut self, mut graph: CanvasGraph) {
+        if graph.layout != self.graph.layout {
+            graph.layout = self.graph.layout;
+            layout_canvas_graph(&mut graph);
+        }
         let contains = |id: &str| graph.positions.contains_key(id);
         self.selection.retain(|id| contains(id));
         self.focus.take_if(|id| !contains(id));
@@ -687,6 +719,22 @@ impl CanvasState {
         self.end_pan();
         self.edge_paths = edge_paths(&graph);
         self.graph = graph;
+    }
+
+    pub(crate) fn set_layout(&mut self, layout: CanvasLayout) -> bool {
+        if self.graph.layout == layout {
+            return false;
+        }
+        self.graph.layout = layout;
+        layout_canvas_graph(&mut self.graph);
+        self.edge_paths = edge_paths(&self.graph);
+        self.hover = None;
+        self.hovered_edge = None;
+        self.box_selection = None;
+        self.end_pan();
+        let available = *self.canvas_size.lock().expect("canvas size");
+        self.fit(available);
+        true
     }
 
     /// Zooms by `factor` around a canvas-relative anchor point.
@@ -1204,17 +1252,30 @@ impl gpui::Render for CanvasState {
                             if let Ok(path) = builder.build() {
                                 window.paint_path(path, stroke_color);
                             }
-                            let length = (tip.x - before_tip.x).clamp(0.0, 10.0);
-                            let base_x = tip.x - length;
+                            let direction = GraphPoint {
+                                x: tip.x - before_tip.x,
+                                y: tip.y - before_tip.y,
+                            };
+                            let length = direction.x.hypot(direction.y);
+                            if length <= f32::EPSILON {
+                                continue;
+                            }
+                            let scale = length.min(10.0) / length;
+                            let offset_x = direction.x * scale;
+                            let offset_y = direction.y * scale;
+                            let base = GraphPoint {
+                                x: tip.x - offset_x,
+                                y: tip.y - offset_y,
+                            };
                             let mut builder = PathBuilder::fill();
                             builder.move_to(position(*tip));
                             builder.line_to(position(GraphPoint {
-                                x: base_x,
-                                y: tip.y - length * 0.4,
+                                x: base.x - offset_y * 0.4,
+                                y: base.y + offset_x * 0.4,
                             }));
                             builder.line_to(position(GraphPoint {
-                                x: base_x,
-                                y: tip.y + length * 0.4,
+                                x: base.x + offset_y * 0.4,
+                                y: base.y - offset_x * 0.4,
                             }));
                             builder.close();
                             if let Ok(path) = builder.build() {
@@ -1638,6 +1699,31 @@ mod tests {
             shared_position.x > left_position.x && left_position.x > root_position.x,
             "dependencies lay out left-to-right: {root_position:?} {left_position:?} {shared_position:?}"
         );
+    }
+
+    #[test]
+    fn vertical_layout_preserves_selection_and_survives_graph_replacement() {
+        let mut state = canvas_state_fixture();
+        assert!(state.select_node("c1", false, false));
+        state.inspected_edges.insert(0);
+        let horizontal = state.graph.positions.clone();
+        assert!(state.set_layout(CanvasLayout::TopToBottom));
+        let vertical = state.graph.positions.clone();
+        let root = vertical["root"];
+        let left = vertical["c1"];
+        assert!(root.y < left.y);
+        let route = state.edge_paths.first().expect("root route");
+        assert_eq!(route.first().expect("departure").y, root.y + NODE_HEIGHT);
+        assert_eq!(route.last().expect("arrival").y, left.y);
+        assert!(state.selection.contains("c1"));
+        assert!(state.inspected_edges.contains(&0));
+        assert!(!state.set_layout(CanvasLayout::TopToBottom));
+
+        state.replace_graph(canvas_graph_from_gradle(&gradle_fixture()));
+        assert_eq!(state.graph.positions, vertical);
+        assert!(state.selection.contains("c1"));
+        assert!(state.set_layout(CanvasLayout::LeftToRight));
+        assert_eq!(state.graph.positions, horizontal);
     }
 
     #[test]

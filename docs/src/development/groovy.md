@@ -262,7 +262,8 @@ Open **Show Dependency Diagram** from the module or configuration menu. Use
 the diagram toolbar to fit, zoom, change scope, search for and reveal a
 dependency, or open the Structure overview. Drag blank space to pan. Use
 Command-click or Control-click to toggle nodes in the selection. Shift-drag
-from blank space to extend the selection with a rectangle.
+from blank space to extend the selection with a rectangle. Use **Layout** in
+the blank-canvas menu to switch between left-to-right and top-to-bottom ranks.
 
 | Action                                                               | Where to find it                                                                                                                                                                                                     |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

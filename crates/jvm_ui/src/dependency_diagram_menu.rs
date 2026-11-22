@@ -15,7 +15,8 @@ use crate::dependencies_panel::{
 };
 use crate::dependency_diagram_item::{
     ExportDependencyDiagramImage, FitDependencyDiagram, ToggleDependencyDiagramStructure,
-    ZoomDependencyDiagramIn, ZoomDependencyDiagramOut,
+    UseHorizontalDependencyLayout, UseVerticalDependencyLayout, ZoomDependencyDiagramIn,
+    ZoomDependencyDiagramOut,
 };
 use sim_runtime::graph::GraphPoint;
 
@@ -72,6 +73,8 @@ pub enum DependencyDiagramMenuCommand {
     ZoomIn,
     ZoomOut,
     ToggleStructure,
+    LayoutLeftToRight,
+    LayoutTopToBottom,
 }
 
 impl DependencyDiagramMenuCommand {
@@ -148,6 +151,10 @@ pub fn dependency_diagram_menu_available(
         DependencyDiagramMenuCommand::ClearInspection => snapshot.has_inspection,
         DependencyDiagramMenuCommand::CopyDiagramSource => snapshot.has_source,
         DependencyDiagramMenuCommand::ExportImage => true,
+        DependencyDiagramMenuCommand::LayoutLeftToRight
+        | DependencyDiagramMenuCommand::LayoutTopToBottom => {
+            target == &DependencyDiagramContextTarget::Canvas
+        }
         DependencyDiagramMenuCommand::Fit
         | DependencyDiagramMenuCommand::ZoomIn
         | DependencyDiagramMenuCommand::ZoomOut
@@ -175,6 +182,8 @@ pub fn dependency_diagram_menu_label(command: DependencyDiagramMenuCommand) -> &
         DependencyDiagramMenuCommand::ZoomIn => "Zoom In",
         DependencyDiagramMenuCommand::ZoomOut => "Zoom Out",
         DependencyDiagramMenuCommand::ToggleStructure => "Toggle Structure Overview",
+        DependencyDiagramMenuCommand::LayoutLeftToRight => "Left to right",
+        DependencyDiagramMenuCommand::LayoutTopToBottom => "Top to bottom",
     }
 }
 
@@ -206,6 +215,8 @@ pub fn dependency_diagram_menu_groups(
         DependencyDiagramMenuCommand::ZoomIn,
         DependencyDiagramMenuCommand::ZoomOut,
         DependencyDiagramMenuCommand::ToggleStructure,
+        DependencyDiagramMenuCommand::LayoutLeftToRight,
+        DependencyDiagramMenuCommand::LayoutTopToBottom,
     ];
     let groups = vec![inspection.to_vec(), surfaces.to_vec(), view.to_vec()];
     let mut model = Vec::new();
@@ -246,6 +257,8 @@ pub fn dependency_diagram_menu_action(
         DependencyDiagramMenuCommand::ZoomIn => Box::new(ZoomDependencyDiagramIn),
         DependencyDiagramMenuCommand::ZoomOut => Box::new(ZoomDependencyDiagramOut),
         DependencyDiagramMenuCommand::ToggleStructure => Box::new(ToggleDependencyDiagramStructure),
+        DependencyDiagramMenuCommand::LayoutLeftToRight => Box::new(UseHorizontalDependencyLayout),
+        DependencyDiagramMenuCommand::LayoutTopToBottom => Box::new(UseVerticalDependencyLayout),
     }
 }
 
@@ -297,19 +310,25 @@ pub(crate) fn build_dependency_diagram_context_menu(
 
             let mut more = Vec::new();
             let mut comparison = Vec::new();
+            let mut layouts = Vec::new();
             let mut clear_inspection = false;
             for &command in group {
                 match command {
                     InspectAllRootPaths | InspectConflictOrigins => more.push(command),
                     PinSelection | PathsBetween | AddToSelectionSet | InspectSelectionSet
                     | ClearSelectionSet => comparison.push(command),
+                    LayoutLeftToRight | LayoutTopToBottom => layouts.push(command),
                     ClearInspection => clear_inspection = true,
                     _ => {
                         menu = add_menu_command(menu, command, &invocation.target, &item);
                     }
                 }
             }
-            for (label, commands) in [("More inspections", more), ("Compare", comparison)] {
+            for (label, commands) in [
+                ("More inspections", more),
+                ("Compare", comparison),
+                ("Layout", layouts),
+            ] {
                 if !commands.is_empty() {
                     let target = invocation.target.clone();
                     let item = item.clone();
@@ -499,6 +518,16 @@ mod tests {
         assert!(dependency_diagram_menu_available(
             DependencyDiagramMenuCommand::Fit,
             &canvas,
+            &snapshot
+        ));
+        assert!(dependency_diagram_menu_available(
+            DependencyDiagramMenuCommand::LayoutTopToBottom,
+            &canvas,
+            &snapshot
+        ));
+        assert!(!dependency_diagram_menu_available(
+            DependencyDiagramMenuCommand::LayoutTopToBottom,
+            &DependencyDiagramContextTarget::Node("n1".into()),
             &snapshot
         ));
     }

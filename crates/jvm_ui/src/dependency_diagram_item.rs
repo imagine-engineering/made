@@ -34,6 +34,8 @@ actions!(
         ZoomDependencyDiagramOut,
         ExportDependencyDiagramImage,
         ToggleDependencyDiagramStructure,
+        UseHorizontalDependencyLayout,
+        UseVerticalDependencyLayout,
         ShowDependencyDiagramContextMenu,
         DismissDependencyDiagramMenu
     ]
@@ -437,6 +439,18 @@ impl DependencyDiagramItem {
             let size = *canvas.canvas_size.lock().expect("canvas size");
             canvas.fit(size);
             cx.notify();
+        });
+    }
+
+    fn apply_layout(
+        &mut self,
+        layout: crate::dependency_graph_canvas::CanvasLayout,
+        cx: &mut Context<Self>,
+    ) {
+        self.canvas.update(cx, |canvas, cx| {
+            if canvas.set_layout(layout) {
+                cx.notify();
+            }
         });
     }
 
@@ -1117,6 +1131,20 @@ impl Render for DependencyDiagramItem {
                 }),
             )
             .on_action(
+                cx.listener(|item, _: &UseHorizontalDependencyLayout, _, cx| {
+                    item.apply_layout(
+                        crate::dependency_graph_canvas::CanvasLayout::LeftToRight,
+                        cx,
+                    )
+                }),
+            )
+            .on_action(cx.listener(|item, _: &UseVerticalDependencyLayout, _, cx| {
+                item.apply_layout(
+                    crate::dependency_graph_canvas::CanvasLayout::TopToBottom,
+                    cx,
+                )
+            }))
+            .on_action(
                 cx.listener(|item, event: &SelectDependencyDiagramScope, _, cx| {
                     item.apply_scope(event.label.clone(), cx)
                 }),
@@ -1597,6 +1625,7 @@ mod tests {
             truncated: false,
             positions: Default::default(),
             bounds: Default::default(),
+            layout: Default::default(),
         };
         layout_canvas_graph(&mut graph);
         graph
@@ -1855,6 +1884,7 @@ mod tests {
                     height: 44.0,
                 },
             },
+            layout: Default::default(),
         };
         let derivation = DependencyDiagramDerivation {
             canvas: graph,
