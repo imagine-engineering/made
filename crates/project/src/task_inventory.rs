@@ -2505,69 +2505,97 @@ mod tests {
             ]
         );
         assert_eq!(updated_settings.resolved.literal_prefix_args, 8);
-        let mut effective_model_snapshot = snapshot.clone();
-        let model = effective_model_snapshot.projects[0]
-            .maven
-            .as_mut()
-            .expect("fixture Maven model");
-        model.profiles.insert("evidence-selected".into(), true);
-        model.profiles.insert("evidence-other".into(), false);
-        model.plugins.push(MavenPlugin {
-            group_id: "org.apache.maven.plugins".into(),
-            artifact_id: "maven-help-plugin".into(),
-            version: Some("3.5.2".into()),
-            managed_only: false,
-            goals_known: true,
-            goal_prefix: Some("help".into()),
-            goals: vec![MavenGoal {
-                name: "effective-pom".into(),
-                phase: None,
-                description: None,
-                parameters_known: false,
-                parameters: Vec::new(),
-            }],
-        });
-        let mut effective_model = JvmBuildOperationReceipt::new(
-            &effective_model_snapshot,
-            true,
-            receipt.module_root.clone(),
-            vec![JvmBuildOperation::MavenGoal {
-                group: "org.apache.maven.plugins".into(),
-                artifact: "maven-help-plugin".into(),
-                version: "3.5.2".into(),
-                goal: "effective-pom".into(),
-            }],
-            PathStyle::Unix,
-        )
-        .expect("exact cached Maven Help goal");
-        effective_model.maven_options.profiles = vec![
-            MavenOperationProfile {
-                id: "evidence-selected".into(),
-                active: false,
-            },
-            MavenOperationProfile {
-                id: "evidence-other".into(),
-                active: true,
-            },
-        ];
         let worktree = project.read_with(cx, |project, cx| {
             project
                 .worktree_for_id(worktree_id, cx)
                 .expect("operation worktree")
         });
-        worktree.read_with(cx, |worktree, cx| {
-            let (plan, _) = jvm_operation_plan(
-                &effective_model,
-                &effective_model_snapshot,
+        for (artifact_id, version, goal, profiles, expected_profiles) in [
+            (
+                "maven-help-plugin",
+                "3.5.2",
+                "effective-pom",
+                vec![("evidence-selected", false), ("evidence-other", true)],
+                Some("!evidence-selected,evidence-other"),
+            ),
+            (
+                "maven-dependency-plugin",
+                "3.10.0",
+                "resolve-sources",
+                vec![],
+                None,
+            ),
+            (
+                "maven-dependency-plugin",
+                "3.10.0",
+                "resolve",
+                vec![("artifact-javadocs", true)],
+                Some("artifact-javadocs"),
+            ),
+            (
+                "maven-dependency-plugin",
+                "3.10.0",
+                "go-offline",
+                vec![],
+                None,
+            ),
+        ] {
+            let mut goal_snapshot = snapshot.clone();
+            let model = goal_snapshot
+                .projects
+                .first_mut()
+                .and_then(|module| module.maven.as_mut())
+                .expect("fixture Maven model");
+            model
+                .profiles
+                .extend(profiles.iter().map(|(id, active)| ((*id).into(), !active)));
+            let group = "org.apache.maven.plugins";
+            model.plugins.push(MavenPlugin {
+                group_id: group.into(),
+                artifact_id: artifact_id.into(),
+                version: Some(version.into()),
+                managed_only: false,
+                goals_known: true,
+                goal_prefix: None,
+                goals: vec![MavenGoal {
+                    name: goal.into(),
+                    phase: None,
+                    description: None,
+                    parameters_known: false,
+                    parameters: Vec::new(),
+                }],
+            });
+            let mut operation = JvmBuildOperationReceipt::new(
+                &goal_snapshot,
                 true,
+                receipt.module_root.clone(),
+                vec![JvmBuildOperation::MavenGoal {
+                    group: group.into(),
+                    artifact: artifact_id.into(),
+                    version: version.into(),
+                    goal: goal.into(),
+                }],
                 PathStyle::Unix,
-                &worktree.snapshot(),
-                cx,
             )
-            .expect("effective POM uses the ordinary offline Task plan");
-            assert_eq!(
-                plan.template.args,
-                [
+            .expect("exact cached Maven goal");
+            operation.maven_options.profiles = profiles
+                .into_iter()
+                .map(|(id, active)| MavenOperationProfile {
+                    id: id.into(),
+                    active,
+                })
+                .collect();
+            worktree.read_with(cx, |worktree, cx| {
+                let (plan, _) = jvm_operation_plan(
+                    &operation,
+                    &goal_snapshot,
+                    true,
+                    PathStyle::Unix,
+                    &worktree.snapshot(),
+                    cx,
+                )
+                .expect("cached goal uses the ordinary offline Task plan");
+                let mut expected_arguments = vec![
                     "--offline",
                     "--global-settings",
                     "/fixture/global settings.xml",
@@ -2575,12 +2603,15 @@ mod tests {
                     "/fixture/user $ZED_FILE settings.xml",
                     "--file",
                     "application/pom.xml",
-                    "--activate-profiles",
-                    "!evidence-selected,evidence-other",
-                    "org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom",
-                ]
-            );
-        });
+                ];
+                if let Some(selectors) = expected_profiles {
+                    expected_arguments.extend(["--activate-profiles", selectors]);
+                }
+                let coordinate = format!("{group}:{artifact_id}:{version}:{goal}");
+                expected_arguments.push(&coordinate);
+                assert_eq!(plan.template.args, expected_arguments);
+            });
+        }
         let verify_host = |task: &ResolvedTask, cx: &mut gpui::TestAppContext| {
             inventory.read_with(cx, |inventory, cx| {
                 inventory.verify_jvm_operation_host_inputs(&task.id, cx)

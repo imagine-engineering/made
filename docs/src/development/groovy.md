@@ -303,6 +303,14 @@ if you need to change activation, then choose **Run selected offline
 operation**. Maven writes the effective XML to the Task terminal using the
 host Maven settings and the selected profiles.
 
+When the provider reports goals for a declared `maven-dependency-plugin`,
+run `resolve-sources` to check cached source archives or `go-offline` to
+check repository readiness for the project’s dependencies, plugins, and
+reports. To check Javadoc archives, activate a project profile that
+configures `resolve` with the `javadoc` classifier and `jar` type. Review
+the resolved and unresolved artifacts in the Task terminal. Maven can
+exit successfully when a source archive is absent.
+
 Complete arbitrary-argument handling, before-launch hooks, and remote queue
 execution remain open. Selected test results appear in the Tests view.
 Supported debugging uses the Debug panel.
