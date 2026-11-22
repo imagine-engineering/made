@@ -21664,7 +21664,11 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "cargo test --locked -p sim_runtime --lib general_video_demux_decode",
             "cargo test --locked -p sim_media --lib general_video_demux_decode",
             "cargo test --locked -p sim_test_support --test video_general_demux_decode",
-            "env COMFY_CERTIFIED_FFMPEG_7_1_PACKAGE_ROOT=/path/to/certified-package cargo test --locked -p sim_test_support --features hardware-certification --test video_general_demux_decode certified_ffmpeg_7_1_goldens_match -- --ignored --exact --nocapture",
+            "cargo test --locked -p sim_test_support --features hardware-certification --test video_general_demux_decode -- --ignored --list "
+            "| grep -Fx 'certified_ffmpeg_7_1_goldens_match: test' "
+            "&& env COMFY_CERTIFIED_FFMPEG_7_1_PACKAGE_ROOT=/path/to/certified-package "
+            "cargo test --locked -p sim_test_support --features hardware-certification --test video_general_demux_decode "
+            "certified_ffmpeg_7_1_goldens_match -- --ignored --exact --nocapture",
             "cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_task563_video_demux_decode_001 -- --exact",
             "cargo check --locked -p sim_runtime -p sim_media -p sim_test_support",
             "cargo test --locked -p sim_runtime --all-targets",

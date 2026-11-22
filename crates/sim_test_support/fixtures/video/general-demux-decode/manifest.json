@@ -9,8 +9,8 @@
       "path": "inputs/h264-8bit-aac-rotation.mp4",
       "container": "mp4",
       "role": "first-video-last-decodable-audio-rotation",
-      "byte_length": 129,
-      "sha256": "8f0d9874427c471aebf36dd65d9dcb8e2e08daac30cce0eaf0d774031d47a528",
+      "byte_length": 127,
+      "sha256": "775518af5c75d9d8d78c25ba97b00aed9513d0e8189a0146f26d0fb6371234c3",
       "video_streams": [
         {
           "ordinal": 0,
@@ -57,8 +57,8 @@
       "path": "inputs/h264-10bit.mp4",
       "container": "mp4",
       "role": "ten-bit-depth",
-      "byte_length": 105,
-      "sha256": "bbbcc649e96307b03e91939e0a6ba2bfcf8597ee6d6ee111859e6fda4dcc845d",
+      "byte_length": 103,
+      "sha256": "f30f3bd517b5ec34d41ce8ba5442953936cce9464f1ebeac83032dea3c920807",
       "video_streams": [
         {
           "ordinal": 0,
@@ -76,8 +76,8 @@
       "path": "inputs/vp9-alpha.webm",
       "container": "webm",
       "role": "alpha-detection",
-      "byte_length": 90,
-      "sha256": "cedce073d05cef85d396ce8294ebbbed9297f59a80df9e37ef5ac4277e451f87",
+      "byte_length": 88,
+      "sha256": "175e42c6bba26ac35b553b7730659a8c5ed99481fc12c276b94d6171309f398b",
       "video_streams": [
         {
           "ordinal": 0,
@@ -95,8 +95,8 @@
       "path": "inputs/av1-average-rate-fallback.webm",
       "container": "webm",
       "role": "av1-one-fps-fallback",
-      "byte_length": 106,
-      "sha256": "27671323586fa37941341cc4a16cbade2116d0fb07c0969f23ae2f131bacf960",
+      "byte_length": 104,
+      "sha256": "0b3b9760a5ec3e3b22eaec499ac68bc04b1d581429e834e527c17c5b18355dae",
       "video_streams": [
         {
           "ordinal": 0,
@@ -114,8 +114,8 @@
       "path": "inputs/width-non-32-aligned.mp4",
       "container": "mp4",
       "role": "pad-smear-crop-even-width",
-      "byte_length": 125,
-      "sha256": "3f68b67eb26551c060ff150029367b59119c19f05ea33d98c7ea8047556bfd93",
+      "byte_length": 123,
+      "sha256": "a3f2750365e15b28a43f5fd825d781b7d4e0fe1dcd52c36da3f757f30c96ebd0",
       "video_streams": [
         {
           "ordinal": 0,
@@ -133,8 +133,8 @@
       "path": "inputs/height-only-nonalignment.mp4",
       "container": "mp4",
       "role": "height-only-does-not-align",
-      "byte_length": 133,
-      "sha256": "1e76ce8f5e4f22bf557706705e84c168dca8f075841aca748b96bfde7724963e",
+      "byte_length": 131,
+      "sha256": "c9950fda71b4cb86845344436450ecda7c704056f402f312bceb7feb6dd62b82",
       "video_streams": [
         {
           "ordinal": 0,
@@ -152,8 +152,8 @@
       "path": "inputs/missing-video-stream.mp4",
       "container": "mp4",
       "role": "missing-video-stream",
-      "byte_length": 97,
-      "sha256": "3a915a763df9956594c0182ec3dd12a734a4d3a870bab2a0b23e803374b63e15",
+      "byte_length": 95,
+      "sha256": "0062cdbc90e9946530f19e4b6943fb9ddf7f6e07fd285ea9bdd6f09a45d56ba9",
       "video_streams": [],
       "audio_streams": [
         {
