@@ -22,9 +22,9 @@ fn required_string<'a>(value: &'a Value, field: &str) -> Result<&'a str, io::Err
 #[test]
 fn namespace_and_version_facades_use_the_canonical_reference_owner()
 -> Result<(), Box<dyn std::error::Error>> {
-    let sim_ops = sim_ops_contract().ok_or("sim.ops typed contract is missing")?;
+    let sim_ops = sim_ops_contract().ok_or("comfy.ops typed contract is missing")?;
     assert_eq!(sim_ops.operation_id(), SIM_OPS_OPERATION_ID);
-    assert_eq!(sim_ops.canonical_target(), "sim.ops");
+    assert_eq!(sim_ops.canonical_target(), "comfy.ops");
     assert_eq!(
         sim_ops.inventory_kind(),
         ContractInventoryKind::NamespaceValueReference
@@ -109,34 +109,34 @@ fn typed_reference_evidence_is_exact_and_hash_sealed() -> Result<(), Box<dyn std
         expected_digest,
     ) in [
         (
-            "sim_ops.json",
+            "comfy_ops.json",
             SIM_OPS_OPERATION_ID,
             "COMFY-TENSOR-OP-7D7398921719:reference",
-            "e679b10b84eb0f356e3c728f1614334eb78a9fae25860755751f774b1fe89a23",
-            "sim.ops",
+            "6f1c6db35563773d91e2cf1917a604de40ba60bf982be8bda87afc0700e425f5",
+            "comfy.ops",
             "namespace",
             "NamespaceReference::ComfyOps",
-            "41b886ee2c5b746312f85b63717294166df3b1303425f7c7e423bd74a4a9202b",
+            "70d3ad526bd94b5abdbc0355fb0be8cd813c279ea9ad624dcba40d388b02dabc",
         ),
         (
             "torch_nn.json",
             TORCH_NEURAL_NETWORK_OPERATION_ID,
             "COMFY-TENSOR-OP-764A8E60B071:reference",
-            "425efadd438871c2a344f36d48f02038a6d86a683d1a8e285537eb7e190ffd1b",
+            "45bf568fd648d62a5e92b3e7d3017adc288527a8e0fd9bb46e15977ee6f9a84d",
             "torch.nn",
             "namespace",
             "NamespaceReference::TorchNeuralNetwork",
-            "eb849cb8795b52fa6ba8d9f7100f08802ba0aece640939d8c3ed0f4e5ff92d1f",
+            "5cb4f3c6b9b0f868dab7106b2bc5ed3d5e423a0b0d380fead76b4df843cd8289",
         ),
         (
             "torch_version_cuda.json",
             TORCH_CUDA_VERSION_OPERATION_ID,
             "COMFY-TENSOR-OP-7A62A3A11490:reference",
-            "1fafffdcb8efaa56f20e17f0ff9581d3791e3173df27d9ec1cc528812880b8e8",
+            "a3862191bc7aa535184d9273ac45a675a31801908ff04f990c2449de5aba2c70",
             "torch.version.cuda",
             "version-value",
             "VersionValueReference::Cuda",
-            "df789a6ae302fbd8c29f2abfbbfdd79b9563dbb02b5fd2b47fea6e0691ffe0a2",
+            "a3d2b426c3c244efa3e162bd7af9c41f6d97521304c84f1b92ddf6aa720a1457",
         ),
     ] {
         let fixture_path = workspace_root

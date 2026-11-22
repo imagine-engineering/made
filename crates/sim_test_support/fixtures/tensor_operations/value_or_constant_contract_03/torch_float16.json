@@ -3,7 +3,7 @@
   "resolution_module": "value_or_constant_contract_03",
   "operation_id": "COMFY-TENSOR-OP-6542124FE760",
   "baseline_overload_id": "COMFY-TENSOR-OP-6542124FE760:reference",
-  "baseline_fixture_sha256": "08746432ce89562750a9ad487a4fdfc779b26fac9746c09bf1226568056c3aeb",
+  "baseline_fixture_sha256": "81ec605a9304fdd621b54a2d517c16b590c32b855d0dfd317a01f4615051b14a",
   "owner_task_id": "comfy-parity-tensor-ops-value-or-constant-contract-comfy-tensor-op-6542124fe760",
   "inventory_kind": "namespace_value_reference",
   "canonical_target": "torch.float16",

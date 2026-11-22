@@ -26,7 +26,7 @@ fn descriptor(length: u64) -> Result<TensorDescriptor, TensorError> {
 
 #[test]
 fn cpu_adapter_is_a_compiled_alias_of_the_canonical_backend() -> Result<(), TensorError> {
-    assert!(GENERATED_MODULES.contains(&"ops/backend_cpu_comfy_model_0016"));
+    assert!(GENERATED_MODULES.contains(&"ops/backend_cpu_sim_model_0016"));
     assert_eq!(TypeId::of::<CpuTensorBackend>(), TypeId::of::<CpuBackend>());
     assert_eq!(
         TypeId::of::<CpuTensorWorkspaceAuthority>(),

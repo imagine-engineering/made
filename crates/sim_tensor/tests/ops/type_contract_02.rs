@@ -36,14 +36,14 @@ fn type_facades_use_the_canonical_reference_owner() -> Result<(), Box<dyn std::e
         ]
     );
     let disable_weight_init_rms_norm = sim_disable_weight_init_rms_norm_contract()
-        .ok_or("sim.ops.disable_weight_init.RMSNorm typed contract is missing")?;
+        .ok_or("comfy.ops.disable_weight_init.RMSNorm typed contract is missing")?;
     assert_eq!(
         disable_weight_init_rms_norm.operation_id(),
         SIM_DISABLE_WEIGHT_INIT_RMS_NORM_OPERATION_ID
     );
     assert_eq!(
         disable_weight_init_rms_norm.canonical_target(),
-        "sim.ops.disable_weight_init.RMSNorm"
+        "comfy.ops.disable_weight_init.RMSNorm"
     );
     assert_eq!(
         disable_weight_init_rms_norm.inventory_kind(),
@@ -59,9 +59,9 @@ fn type_facades_use_the_canonical_reference_owner() -> Result<(), Box<dyn std::e
     );
 
     let manual_cast =
-        sim_manual_cast_contract().ok_or("sim.ops.manual_cast typed contract is missing")?;
+        sim_manual_cast_contract().ok_or("comfy.ops.manual_cast typed contract is missing")?;
     assert_eq!(manual_cast.operation_id(), SIM_MANUAL_CAST_OPERATION_ID);
-    assert_eq!(manual_cast.canonical_target(), "sim.ops.manual_cast");
+    assert_eq!(manual_cast.canonical_target(), "comfy.ops.manual_cast");
     assert_eq!(
         manual_cast.inventory_kind(),
         ContractInventoryKind::TypeReference
@@ -197,31 +197,31 @@ fn typed_reference_evidence_is_exact_and_hash_sealed() -> Result<(), Box<dyn std
         expected_digest,
     ) in [
         (
-            "sim_disable_weight_init_rms_norm.json",
+            "comfy_disable_weight_init_rms_norm.json",
             SIM_DISABLE_WEIGHT_INIT_RMS_NORM_OPERATION_ID,
             "COMFY-TENSOR-OP-CA96BCF6B334:reference",
-            "5c71f30bea62a3576c3ffc90337770a7cbd21c847cac2606f59524e5e75fc32e",
-            "sim.ops.disable_weight_init.RMSNorm",
+            "316eac4cc92972fa61122d4f72c4f02e95912f6be1d22a6decb5d7f7b6f847c8",
+            "comfy.ops.disable_weight_init.RMSNorm",
             "TypeMarkerReference::ComfyDisableWeightInitRmsNorm",
-            "b9789980c7660b1930223cc702b324766372c8b61add99f5af2addd8a7de8aaa",
+            "a929f7721005bec088ee93f129a6658dabca219ff087253b1e047a8ef05f0a3b",
         ),
         (
-            "sim_manual_cast.json",
+            "comfy_manual_cast.json",
             SIM_MANUAL_CAST_OPERATION_ID,
             "COMFY-TENSOR-OP-BA6AE52D4258:reference",
-            "7596402499977020acedbc9800f1ac21a727a86f30708e4692579426fc9125fc",
-            "sim.ops.manual_cast",
+            "74c7eb22ac3709d0fde136a7ab1a4e7443d019842f97dad535d784a5f55e9d35",
+            "comfy.ops.manual_cast",
             "TypeMarkerReference::ComfyManualCast",
-            "b730cd5cb25ea938f5605b57d9e712b753e6963f0debc2b758d8be38e49d5176",
+            "47e6788bd03a21d1067dc211b5984c95d9d6ddaa4f60902806e264e701fc1ad6",
         ),
         (
             "torch_nn_rms_norm.json",
             TORCH_RMS_NORM_OPERATION_ID,
             "COMFY-TENSOR-OP-FD4EE56E61FC:reference",
-            "aeaa3a109be9ab51ac3468abfbd8ce9e52fc30829c4b8a1b56262e33800af8f9",
+            "3729dcc58117b510bb7f030406217bc2a6ba778d4e2b06ac701bff7246b05e77",
             "torch.nn.RMSNorm",
             "TypeMarkerReference::RmsNorm",
-            "ac728577df5b602e07977f5771c4f6f67b56f8a21795bfd48195805e1f5c9dfd",
+            "4209ce9d59756f7b42cea2a3c3a809adeeb8bb06655b0df3d8c7bfe9da599596",
         ),
     ] {
         let fixture_path = workspace_root

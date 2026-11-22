@@ -273,7 +273,7 @@ fn typed_reference_evidence_is_exact_and_hash_sealed() -> Result<(), Box<dyn std
             .ok_or("operation ID has an invalid prefix")?
             .to_ascii_lowercase();
         let baseline_path = workspace_root.join(format!(
-            "crates/sim_test_support/fixtures/tensor_signatures/contracts/sim-tensor-op-{operation_suffix}.json"
+            "crates/sim_test_support/fixtures/tensor_signatures/contracts/comfy-tensor-op-{operation_suffix}.json"
         ));
         let baseline_bytes = fs::read(baseline_path)?;
         let baseline_digest = format!("{:x}", Sha256::digest(&baseline_bytes));
