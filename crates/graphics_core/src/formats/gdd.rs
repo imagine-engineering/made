@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use graphite_core_types::Type;
 use graphite_core_types::{NodeParameter, ProtoNodeIdentifier};
 pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
@@ -57,6 +58,7 @@ use graphite_graph_craft::{
     },
     runtime_delta::RuntimeDelta,
 };
+use graphite_interpreted_executor::node_registry::NODE_REGISTRY;
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
@@ -354,9 +356,19 @@ pub struct GddGraphNetwork {
     primary_export_exposed: Option<bool>,
     numeric_imports: Vec<(usize, std::mem::Discriminant<GddNumericValue>)>,
     empty_exports: Vec<usize>,
+    imports: Vec<GddGraphInputPort>,
+    exports: Vec<GddGraphInputPort>,
 }
 
 impl GddGraphNetwork {
+    pub fn imports(&self) -> &[GddGraphInputPort] {
+        &self.imports
+    }
+
+    pub fn exports(&self) -> &[GddGraphInputPort] {
+        &self.exports
+    }
+
     pub fn import_name(&self, index: usize) -> Option<&str> {
         self.import_names
             .get(index)
@@ -497,6 +509,31 @@ pub struct GddGraphNode {
     can_supply_numeric_export: bool,
     can_copy_graph_node: bool,
     grid_position: Option<[i32; 2]>,
+    input_ports: Vec<GddGraphInputPort>,
+    output_names: Vec<String>,
+    unavailable_proto: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GddGraphPortSource {
+    Node {
+        storage_id: StorageNodeId,
+        output_index: usize,
+    },
+    Import(usize),
+    UnavailableNode {
+        local_id: NodeId,
+        output_index: usize,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct GddGraphInputPort {
+    pub index: usize,
+    pub name: Option<String>,
+    pub exposed: bool,
+    pub stored_type: Option<Type>,
+    pub source: Option<GddGraphPortSource>,
 }
 
 #[derive(Clone)]
@@ -647,6 +684,25 @@ pub enum GddPinnedNodeMove {
 }
 
 impl GddGraphNode {
+    pub fn storage_id(&self) -> StorageNodeId {
+        self.storage_id
+    }
+
+    pub fn input_ports(&self) -> &[GddGraphInputPort] {
+        &self.input_ports
+    }
+
+    pub fn output_name(&self, index: usize) -> Option<&str> {
+        self.output_names
+            .get(index)
+            .map(String::as_str)
+            .filter(|name| !name.is_empty())
+    }
+
+    pub fn unavailable_proto(&self) -> Option<&str> {
+        self.unavailable_proto.as_deref()
+    }
+
     pub fn network_id(&self) -> NetworkId {
         self.network_id
     }
@@ -935,9 +991,16 @@ impl InspectedGddV1 {
                     can_supply_numeric_export: false,
                     can_copy_graph_node: false,
                     grid_position: None,
+                    input_ports: Vec::new(),
+                    output_names: Vec::new(),
+                    unavailable_proto: None,
                 })
             })
             .collect::<Result<_, GddArchiveError>>()?;
+        let node_ids = nodes
+            .iter()
+            .map(|node| ((node.network_id, node.local_id), node.storage_id))
+            .collect::<BTreeMap<_, _>>();
         let mut interface = graph.into_interface()?;
         let mut network_paths = network_ids.iter().collect::<Vec<_>>();
         network_paths.sort_unstable_by_key(|(path, _)| *path);
@@ -962,7 +1025,7 @@ impl InspectedGddV1 {
                     || (Vec::new(), Vec::new()),
                     |metadata| {
                         let metadata = &metadata.persistent_metadata;
-                        let imports = metadata
+                        let imports: Vec<_> = metadata
                             .input_metadata
                             .iter()
                             .map(|input| input.persistent_metadata.input_name.clone())
@@ -976,6 +1039,33 @@ impl InspectedGddV1 {
                     .exports;
                 let imports = enclosing_network_inputs(interface.document_network(), path)
                     .ok_or(GddArchiveError::MissingGraphNetwork)?;
+                let import_scope = parent.unwrap_or(id);
+                let import_ports = imports
+                    .iter()
+                    .enumerate()
+                    .map(|(index, input)| {
+                        project_graph_input(
+                            index,
+                            input,
+                            import_names.get(index).map(String::as_str),
+                            import_scope,
+                            &node_ids,
+                        )
+                    })
+                    .collect();
+                let export_ports = exports
+                    .iter()
+                    .enumerate()
+                    .map(|(index, input)| {
+                        project_graph_input(
+                            index,
+                            input,
+                            export_names.get(index).map(String::as_str),
+                            id,
+                            &node_ids,
+                        )
+                    })
+                    .collect();
                 Ok(GddGraphNetwork {
                     id,
                     parent,
@@ -1014,6 +1104,8 @@ impl InspectedGddV1 {
                         .enumerate()
                         .filter_map(|(index, input)| empty_graph_export(input).then_some(index))
                         .collect(),
+                    imports: import_ports,
+                    exports: export_ports,
                 })
             })
             .collect::<Result<_, GddArchiveError>>()?;
@@ -1048,6 +1140,30 @@ impl InspectedGddV1 {
             };
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
+            let metadata = interface
+                .node_metadata(&node.local_id, path)
+                .map(|node| &node.persistent_metadata);
+            if let Some(metadata) = metadata {
+                node.output_names.clone_from(&metadata.output_names);
+            }
+            if let Some(document) = interface.document_node(&node.local_id, path) {
+                if let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation
+                    && !NODE_REGISTRY.contains_key(identifier)
+                {
+                    node.unavailable_proto = Some(identifier.to_string());
+                }
+                node.input_ports = document
+                    .inputs
+                    .iter()
+                    .enumerate()
+                    .map(|(index, input)| {
+                        let name = metadata
+                            .and_then(|metadata| metadata.input_metadata.get(index))
+                            .map(|metadata| metadata.persistent_metadata.input_name.as_str());
+                        project_graph_input(index, input, name, node.network_id, &node_ids)
+                    })
+                    .collect();
+            }
             node.numeric_input = graph_numeric_input(&interface, node);
             node.can_preview_numeric_output = !interface.is_layer(&node.local_id, path)
                 && interface
@@ -3974,6 +4090,46 @@ fn valid_graph_clipboard_nodes(nodes: &[(NodeId, NodeTemplate)]) -> bool {
                     NodeTemplateImplementation::Extract => false,
                 }
         })
+}
+
+fn project_graph_input(
+    index: usize,
+    input: &NodeInput,
+    name: Option<&str>,
+    scope: NetworkId,
+    node_ids: &BTreeMap<(NetworkId, NodeId), StorageNodeId>,
+) -> GddGraphInputPort {
+    let source = match input {
+        NodeInput::Node {
+            node_id,
+            output_index,
+        } => Some(node_ids.get(&(scope, *node_id)).map_or(
+            GddGraphPortSource::UnavailableNode {
+                local_id: *node_id,
+                output_index: *output_index,
+            },
+            |id| GddGraphPortSource::Node {
+                storage_id: *id,
+                output_index: *output_index,
+            },
+        )),
+        NodeInput::Import { import_index, .. } => Some(GddGraphPortSource::Import(*import_index)),
+        _ => None,
+    };
+    let stored_type = match input {
+        NodeInput::Value { tagged_value, .. } => Some(tagged_value.ty()),
+        NodeInput::Import { import_type, .. } => Some(import_type.clone()),
+        NodeInput::Inline(code) => Some(code.ty.clone()),
+        NodeInput::Reflection(metadata) => Some(metadata.ty()),
+        NodeInput::Node { .. } | NodeInput::Scope(_) => None,
+    };
+    GddGraphInputPort {
+        index,
+        name: name.filter(|name| !name.is_empty()).map(str::to_owned),
+        exposed: input.is_exposed(),
+        stored_type,
+        source,
+    }
 }
 
 fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {

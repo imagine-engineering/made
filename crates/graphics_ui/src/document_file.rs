@@ -479,6 +479,7 @@ struct NodeCopyForm {
     output_preview: NodeOutputPreview,
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
+    show_saved_ports: bool,
 }
 
 impl NodeCopyForm {
@@ -925,6 +926,7 @@ impl GraphiteDocumentItem {
                                     output_preview: NodeOutputPreview::Hidden,
                                     port_rename: None,
                                     node_selection: BTreeSet::new(),
+                                    show_saved_ports: false,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -1657,6 +1659,13 @@ impl GraphiteDocumentItem {
                     menu
                 });
                 let selected = form.selected_node();
+                let viewed_network = selected
+                    .and_then(|node| {
+                        form.networks
+                            .iter()
+                            .find(|network| network.id == node.network_id())
+                    })
+                    .or_else(|| form.clipboard_scope());
                 let selected_count = if form.node_selection.is_empty() {
                     usize::from(selected.is_some_and(|node| node.can_copy_graph_node()))
                 } else {
@@ -1898,6 +1907,30 @@ impl GraphiteDocumentItem {
                                 menu,
                             )),
                     ))
+                    .when_some(viewed_network, |panel, network| {
+                        let parent = network.parent.and_then(|id| {
+                            form.networks.iter().find(|network| network.id == id)
+                        });
+                        panel.child(
+                            div().debug_selector(|| "GRAPHITE-GDD-TOGGLE-SAVED-PORTS".into()).child(
+                                Button::new("graphite-gdd-toggle-saved-ports", if form.show_saved_ports {
+                                    "Hide Saved Ports"
+                                } else {
+                                    "Show Saved Ports"
+                                })
+                                .on_click(cx.listener(|item, _, _, cx| {
+                                    if let NodeCopyPanel::Ready(form) = &mut item.node_copy {
+                                        form.show_saved_ports = !form.show_saved_ports;
+                                        cx.notify();
+                                    }
+                                })),
+                            ),
+                        ).when(form.show_saved_ports, |panel| {
+                            panel.child(crate::graph::render_saved_graph_ports(
+                                network, parent, selected, &form.nodes,
+                            ))
+                        })
+                    })
                     .child(h_flex().gap_2().flex_wrap().children([
                         div().debug_selector(|| "GRAPHITE-GDD-COPY-NODES".into()).child(
                             Button::new("graphite-gdd-copy-nodes", match selected_count {
@@ -5496,6 +5529,109 @@ mod tests {
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r17_1_workspace_projects_scoped_ports_and_saved_wires(cx: &mut TestAppContext) {
+        use graphics_core::formats::gdd::GddGraphPortSource;
+
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/scoped-graph-ports.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("original GDD archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the scoped graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-3");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-PORTS");
+        paint(window);
+        for selector in [
+            "GRAPHITE-GDD-SAVED-Import-1",
+            "GRAPHITE-GDD-SAVED-Import-2",
+            "GRAPHITE-GDD-SAVED-Export-1",
+            "GRAPHITE-GDD-SAVED-Export-2",
+            "GRAPHITE-GDD-SAVED-Input-1",
+        ] {
+            assert!(
+                window.debug_bounds(selector).is_some(),
+                "missing {selector}"
+            );
+        }
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the scoped graph");
+            };
+            let scope = form.active_network().expect("nested scope");
+            let [primary, secondary] = scope.imports() else {
+                panic!("expected primary and secondary saved imports");
+            };
+            assert_eq!(primary.name.as_deref(), Some("First numeric input"));
+            assert_eq!(secondary.name.as_deref(), Some("Second numeric input"));
+            assert_eq!(secondary.index, 1);
+            assert!(primary.exposed && secondary.exposed);
+            assert_eq!(
+                secondary
+                    .stored_type
+                    .as_ref()
+                    .map(|ty| ty.identifier_name())
+                    .as_deref(),
+                Some("f64")
+            );
+            let node = form.selected_node().expect("consumer of the second import");
+            let [input] = node.input_ports() else {
+                panic!("expected one node input");
+            };
+            assert_eq!(input.source, Some(GddGraphPortSource::Import(1)));
+            let [_, export] = scope.exports() else {
+                panic!("expected two saved exports");
+            };
+            assert_eq!(export.name.as_deref(), Some("Second numeric output"));
+            assert_eq!(
+                export.source,
+                Some(GddGraphPortSource::Node {
+                    storage_id: node.storage_id(),
+                    output_index: 0,
+                })
+            );
+        });
+        click(window, "GRAPHITE-GDD-PARENT-NETWORK");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-SAVED-UNKNOWN-NODE")
+                .is_some()
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-Import-2").is_none());
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the source document");
+            };
+            assert_eq!(contents.history_len(), original_history);
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
                 .await
                 .expect("original archive"),
             original
