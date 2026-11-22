@@ -3392,7 +3392,8 @@ impl MavenSelectionFacts {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub enum JvmBuildOperation {
     MavenPhase {
         lifecycle: String,
@@ -3429,7 +3430,8 @@ impl JvmBuildOperation {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct MavenOperationOptions {
     pub profiles: Vec<MavenOperationProfile>,
     pub skip_tests: bool,
@@ -3441,14 +3443,23 @@ pub struct MavenOperationOptions {
     pub threads: Option<MavenReactorThreads>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum MavenReactorFailurePolicy {
     FailFast,
     FailAtEnd,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(try_from = "String")]
 pub struct MavenReactorThreads(String);
+
+impl TryFrom<String> for MavenReactorThreads {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        value.parse()
+    }
+}
 
 impl std::str::FromStr for MavenReactorThreads {
     type Err = anyhow::Error;
@@ -3472,7 +3483,8 @@ impl std::str::FromStr for MavenReactorThreads {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct MavenOperationProfile {
     pub id: String,
     pub active: bool,
@@ -3497,6 +3509,40 @@ pub struct JvmBuildOperationPlan {
 }
 
 impl JvmBuildOperationReceipt {
+    pub(crate) fn from_remote_selection(request: &proto::ResolveJvmBuildOperation) -> Result<Self> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Selection {
+            operations: Vec<JvmBuildOperation>,
+            #[serde(default)]
+            maven_options: MavenOperationOptions,
+        }
+
+        let invalid = || anyhow::anyhow!("Invalid JVM operation selection; refresh and retry");
+        let module_path = RelPath::from_unix_str(&request.module_path).map_err(|_| invalid())?;
+        ensure!(
+            module_path.as_unix_str() == request.module_path
+                && request.module_path.len() <= 4096
+                && !request.module_path.chars().any(char::is_control),
+            "{}",
+            invalid()
+        );
+        let selection: Selection =
+            serde_json::from_str(&request.selection_json).map_err(|_| invalid())?;
+        let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        Ok(Self {
+            server_id: LanguageServerId(usize::try_from(request.server_id).map_err(|_| invalid())?),
+            worktree_id,
+            generation: request.snapshot_generation,
+            module_root: ProjectPath {
+                worktree_id,
+                path: module_path.into(),
+            },
+            operations: selection.operations,
+            maven_options: selection.maven_options,
+        })
+    }
+
     pub fn new(
         snapshot: &JdtlsProjectSnapshot,
         current: bool,

@@ -362,6 +362,8 @@ pub struct LocalLspStore {
     #[cfg(feature = "jvm-tools")]
     host_jvm_session: Option<HostJvmSession>,
     #[cfg(feature = "jvm-tools")]
+    host_jvm_task_inventory: Option<WeakEntity<crate::Inventory>>,
+    #[cfg(feature = "jvm-tools")]
     manual_language_server_action: std::sync::Weak<()>,
     #[cfg(feature = "jvm-tools")]
     project_settings_observer: Option<WeakEntity<SettingsObserver>>,
@@ -420,6 +422,7 @@ struct HostJvmSession {
     pending_plan: Option<Arc<JvmConsumerPlan>>,
     pending_abort: Option<futures::future::AbortHandle>,
     accepted_generation: Option<u64>,
+    build_operation: Option<proto::JvmBuildOperationAuthorization>,
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -504,6 +507,7 @@ impl LocalLspStore {
                 abort.abort();
             }
             session.accepted_generation = None;
+            session.build_operation = None;
         }
         for consumer in self.registered_project_languages.values_mut() {
             consumer.remote_jvm = None;
@@ -5327,6 +5331,8 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_get_jdtls_project_snapshot);
         #[cfg(feature = "jvm-tools")]
+        client.add_entity_request_handler(Self::handle_resolve_jvm_build_operation);
+        #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_get_kotlin_workspace_snapshot);
         client.add_entity_request_handler(Self::handle_lsp_query);
         client.add_entity_message_handler(Self::handle_lsp_query_response);
@@ -5652,6 +5658,8 @@ impl LspStore {
                 default_jvm_language_task: None,
                 #[cfg(feature = "jvm-tools")]
                 host_jvm_session: None,
+                #[cfg(feature = "jvm-tools")]
+                host_jvm_task_inventory: None,
                 #[cfg(feature = "jvm-tools")]
                 manual_language_server_action: std::sync::Weak::new(),
                 #[cfg(feature = "jvm-tools")]
@@ -7785,6 +7793,7 @@ impl LspStore {
                 session.last_generation = request.generation;
                 session.pending_generation = Some(request.generation);
                 session.pending_plan = Some(plan.clone());
+                session.build_operation = None;
                 if plan.is_empty() {
                     session.accepted_generation = None;
                 }
@@ -7866,6 +7875,7 @@ impl LspStore {
                 session.pending_plan = None;
                 drop(session.pending_abort.take());
                 session.accepted_generation = Some(request.generation);
+                session.build_operation = None;
                 for (root, name, language) in admitted {
                     let stamp = JvmConsumerStamp {
                         peer,
@@ -7943,9 +7953,17 @@ impl LspStore {
             pending_plan: None,
             pending_abort: None,
             accepted_generation: None,
+            build_operation: None,
         });
         self.refresh_server_tree(cx);
         Ok(())
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn set_host_jvm_task_inventory(&mut self, inventory: &Entity<crate::Inventory>) {
+        if let Some(local) = self.as_local_mut() {
+            local.host_jvm_task_inventory = Some(inventory.downgrade());
+        }
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -14043,6 +14061,176 @@ impl LspStore {
             "{label} changed during refresh"
         );
         Ok(())
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn host_jvm_operation_session(
+        &self,
+        project_id: u64,
+        stamp: JvmConsumerStamp,
+        module: &ProjectPath,
+        cx: &App,
+    ) -> Result<&HostJvmSession> {
+        self.ensure_host_jvm_consumer_scope(project_id, stamp.peer)?;
+        let local = self
+            .as_local()
+            .context("The JVM operation requires the project host")?;
+        let session = local
+            .host_jvm_session
+            .as_ref()
+            .filter(|session| session.admits(stamp) && session.pending_generation.is_none())
+            .context("JVM project ownership changed; refresh and select the operation again")?;
+        ensure!(
+            TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+                let trusted = trusted.read(cx);
+                trusted.observed_worktree_trust(&self.worktree_store, module.worktree_id, cx)
+                    == Some(true)
+                    && !trusted.has_restricted_worktrees(&self.worktree_store, cx)
+            }),
+            "Trust the current host project before running JVM operations"
+        );
+        ensure!(
+            local.project_language_root_is_current(module, cx)
+                && local
+                    .registered_project_languages
+                    .iter()
+                    .any(|((root, language), consumer)| {
+                        root.worktree_id == module.worktree_id
+                            && module.path.starts_with(&root.path)
+                            && *language == LanguageName::new_static("Java")
+                            && consumer.remote_jvm == Some(stamp)
+                            && local.project_language_root_is_current(root, cx)
+                    }),
+            "The selected JVM module is outside the current host project selection; refresh and retry"
+        );
+        Ok(session)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn handle_resolve_jvm_build_operation(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::ResolveJvmBuildOperation>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::JvmBuildOperationResponse> {
+        const MAX_REQUEST_BYTES: usize = 262_144;
+        let request = envelope.payload;
+        ensure!(
+            envelope.original_sender_id.is_none()
+                && request.protocol_version == 1
+                && request.encoded_len() <= MAX_REQUEST_BYTES,
+            "Unsupported JVM operation request; reconnect with the current Groovy client"
+        );
+        let stamp = JvmConsumerStamp {
+            peer: envelope.sender_id,
+            generation: request.session_generation,
+        };
+        let receipt = jvm_project::JvmBuildOperationReceipt::from_remote_selection(&request)?;
+        let stale_authorization = || {
+            anyhow!("JVM operation authorization changed; refresh and select the operation again")
+        };
+        let (inventory, resolved, authorization) = this.update(&mut cx, |store, cx| {
+            let session = store.host_jvm_operation_session(
+                request.project_id,
+                stamp,
+                &receipt.module_root,
+                cx,
+            )?;
+            let inventory = store
+                .as_local()
+                .and_then(|local| local.host_jvm_task_inventory.as_ref())
+                .and_then(WeakEntity::upgrade)
+                .context("Tasks are unavailable on the JVM project host")?;
+            if let Some(authorization) = request.authorization.as_ref() {
+                ensure!(
+                    session.build_operation.as_ref() == Some(authorization),
+                    "{}",
+                    stale_authorization()
+                );
+                let id = task::TaskId(authorization.task_id.clone());
+                let resolved = inventory
+                    .read(cx)
+                    .registered_jvm_operation(&id, &receipt)
+                    .cloned()
+                    .ok_or_else(stale_authorization)?;
+                return Ok((inventory, resolved, authorization.clone()));
+            }
+
+            let (snapshot, current) = store
+                .jdtls_project_snapshot(receipt.worktree_id)
+                .context("Current host build metadata is unavailable; refresh and retry")?;
+            let (_, resolved) = inventory.update(cx, |inventory, cx| {
+                inventory.register_jvm_operation(receipt.clone(), snapshot, current, cx)
+            })?;
+            let authorization = proto::JvmBuildOperationAuthorization {
+                task_id: resolved.id.0.clone(),
+                token: uuid::Uuid::new_v4().simple().to_string(),
+            };
+            let session = store
+                .as_local_mut()
+                .and_then(|local| local.host_jvm_session.as_mut())
+                .context("The JVM project host connection is unavailable")?;
+            session.build_operation = Some(authorization.clone());
+            Ok::<_, anyhow::Error>((inventory, resolved, authorization))
+        })?;
+        inventory
+            .read_with(&cx, |inventory, cx| {
+                inventory.verify_jvm_operation_host_inputs(&resolved.id, cx)
+            })
+            .await?;
+        this.update(&mut cx, |store, cx| {
+            let session = store.host_jvm_operation_session(
+                request.project_id,
+                stamp,
+                &receipt.module_root,
+                cx,
+            )?;
+            ensure!(
+                session.build_operation.as_ref() == Some(&authorization),
+                "{}",
+                stale_authorization()
+            );
+            let (snapshot, current) = store
+                .jdtls_project_snapshot(receipt.worktree_id)
+                .context("Current host build metadata is unavailable; refresh and retry")?;
+            ensure!(
+                inventory.read(cx).jvm_operation_is_current(
+                    receipt.worktree_id,
+                    &resolved,
+                    snapshot,
+                    current,
+                    cx
+                ),
+                "The host build operation changed; refresh and select the operation again"
+            );
+            let spawn = resolved.resolved;
+            ensure!(
+                spawn.literal_command && spawn.literal_prefix_args == spawn.args.len(),
+                "The JVM operation cannot be represented as literal arguments"
+            );
+            let response = proto::JvmBuildOperationResponse {
+                protocol_version: 1,
+                authorization: Some(authorization),
+                label: spawn.label,
+                command: spawn
+                    .command
+                    .context("The host build command is unavailable")?,
+                arguments: spawn.args,
+                working_directory: spawn
+                    .cwd
+                    .as_deref()
+                    .and_then(Path::to_str)
+                    .context("The host build directory needs a valid Unicode path")?
+                    .to_owned(),
+                environment: spawn.env.into_iter().collect(),
+                literal_prefix_arguments: u32::try_from(spawn.literal_prefix_args)?,
+                windows_direct_program: spawn.windows_direct_program,
+            };
+            ensure!(
+                response.encoded_len() <= MAX_REQUEST_BYTES,
+                "The JVM operation exceeds the host size limit"
+            );
+            Ok(response)
+        })
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -25138,6 +25326,226 @@ mod tests {
             })
             .expect("current native host session");
         fixture.trust(cx, true);
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn remote_jvm_operations_bind_selection_and_authorization_to_the_host(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use jvm_project::{
+            GradleProject, GradleTask, JdtlsImportedBuildKind, JdtlsProject,
+            JdtlsProjectMembership, MavenLifecycle, MavenProject,
+        };
+
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        fixture
+            .fs
+            .insert_tree(
+                "/project-consumer",
+                serde_json::json!({
+                    "mvnw": "", "mvnw.cmd": "", "gradlew": "", "gradlew.bat": "", "build.gradle": ""
+                }),
+            )
+            .await;
+        fixture.settings(
+            r#"{"languages":{"Kotlin":{"enable_language_server":false}}}"#,
+            cx,
+        );
+        configure_host_jvm_fixture(&fixture, cx);
+        let inventory = fixture
+            .project
+            .read_with(cx, |project, cx| {
+                project.task_store().read(cx).task_inventory().cloned()
+            })
+            .expect("host Tasks inventory");
+        fixture
+            .store
+            .update(cx, |store, _| store.set_host_jvm_task_inventory(&inventory));
+        host_jvm_fixture_intent(&fixture, 1, true, cx)
+            .await
+            .expect("admit host JVM provider");
+        let server = fixture.servers.next().await.expect("host Java provider");
+        ProjectLanguageFixture::pump(cx);
+        let worktree_id = fixture.root.worktree_id;
+        let server_id = server.server.server_id();
+
+        for gradle in [false, true] {
+            let generation = fixture
+                .store
+                .update(cx, |store, _| -> Result<u64> {
+                    let state = store.jdtls_projects.entry(worktree_id).or_default();
+                    let token = state.begin(server_id, worktree_id)?;
+                    let mut project = JdtlsProject {
+                        module_root: fixture.root.clone(),
+                        membership: JdtlsProjectMembership::ImportedJava,
+                        imported_build_kind: JdtlsImportedBuildKind::Maven,
+                        source_roots: vec![],
+                        project_references: vec![],
+                        library_entries: 0,
+                        library_files: vec![],
+                        library_artifacts: vec![],
+                        project_vm_known: false,
+                        project_vm_java_major: None,
+                        server_launch_java_major: None,
+                        java_source_level: None,
+                        java_target_level: None,
+                        gradle: None,
+                        maven: None,
+                    };
+                    if gradle {
+                        project.imported_build_kind = JdtlsImportedBuildKind::Gradle;
+                        project.gradle = Some(GradleProject {
+                            dependency_graph: None,
+                            build_root: fixture.root.clone(),
+                            project_path: ":".into(),
+                            tasks: ["check", "assemble"]
+                                .map(|name| GradleTask {
+                                    path: format!(":{name}"),
+                                    name: name.into(),
+                                    group: None,
+                                    description: None,
+                                    options_known: false,
+                                    options: vec![],
+                                })
+                                .to_vec(),
+                            source_sets_known: false,
+                            source_sets: vec![],
+                            configurations_known: false,
+                            configurations: vec![],
+                        });
+                    } else {
+                        project.maven = Some(MavenProject {
+                            pom: ProjectPath {
+                                worktree_id,
+                                path: RelPath::from_unix_str("pom.xml")?.into(),
+                            },
+                            modules: vec![],
+                            group_id: "test".into(),
+                            artifact_id: "app".into(),
+                            version: "1".into(),
+                            packaging: "jar".into(),
+                            profiles: Default::default(),
+                            profile_definitions_known: false,
+                            profile_definitions: vec![],
+                            reactor_position: None,
+                            reactor_order_problem: None,
+                            plugins: vec![],
+                            lifecycles: vec![MavenLifecycle {
+                                id: "default".into(),
+                                phases: vec!["compile".into(), "verify".into()],
+                            }],
+                            dependency_graph: None,
+                        });
+                    }
+                    assert!(state.finish(token, vec![project], false));
+                    Ok(token.generation())
+                })
+                .expect("admit current Buildship or Maven metadata");
+            let selection = if gradle {
+                serde_json::json!({"operations": [
+                    {"GradleTask": {"path": ":check"}}, {"GradleTask": {"path": ":assemble"}}
+                ]})
+            } else {
+                serde_json::json!({"operations": [
+                    {"MavenPhase": {"lifecycle": "default", "phase": "compile"}},
+                    {"MavenPhase": {"lifecycle": "default", "phase": "verify"}}
+                ], "maven_options": {"threads": "0.50C"}})
+            };
+            let mut request = TypedEnvelope {
+                sender_id: proto::PeerId { owner_id: 0, id: 1 },
+                original_sender_id: None,
+                message_id: 3,
+                received_at: std::time::Instant::now(),
+                payload: proto::ResolveJvmBuildOperation {
+                    project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                    protocol_version: 1,
+                    session_generation: 1,
+                    worktree_id: worktree_id.to_proto(),
+                    server_id: server_id.to_proto(),
+                    snapshot_generation: generation,
+                    module_path: String::new(),
+                    selection_json: selection.to_string(),
+                    authorization: None,
+                },
+            };
+            let send = |request, cx: &gpui::TestAppContext| {
+                LspStore::handle_resolve_jvm_build_operation(
+                    fixture.store.clone(),
+                    request,
+                    cx.to_async(),
+                )
+            };
+            let first = send(request.clone(), cx)
+                .await
+                .expect("resolve the selected host operations");
+            let expected = if gradle {
+                [":check", ":assemble"]
+            } else {
+                ["compile", "verify"]
+            };
+            assert!(first.arguments.ends_with(&expected.map(str::to_owned)));
+            assert_eq!(
+                first.arguments.first().map(String::as_str),
+                Some("--offline")
+            );
+            assert_eq!(
+                first.literal_prefix_arguments as usize,
+                first.arguments.len()
+            );
+            assert!(
+                first
+                    .command
+                    .contains(if gradle { "gradlew" } else { "mvnw" })
+            );
+            if !gradle {
+                assert!(
+                    first
+                        .arguments
+                        .windows(2)
+                        .any(|args| args == ["--threads", "0.5C"])
+                );
+            }
+            request.payload.authorization = first.authorization.clone();
+            assert_eq!(
+                send(request.clone(), cx)
+                    .await
+                    .expect("renew the current host authorization"),
+                first
+            );
+
+            let mut forwarded = request.clone();
+            forwarded.original_sender_id = Some(request.sender_id);
+            assert!(send(forwarded, cx).await.is_err());
+            let mut wrong_peer = request.clone();
+            wrong_peer.sender_id.id += 1;
+            assert!(send(wrong_peer, cx).await.is_err());
+            let mut stale = request.clone();
+            stale.payload.snapshot_generation -= 1;
+            assert!(send(stale, cx).await.is_err());
+            let mut injected = request.clone();
+            injected.payload.authorization = None;
+            let mut selection = selection.clone();
+            selection["command"] = "client-supplied command".into();
+            injected.payload.selection_json = selection.to_string();
+            assert!(send(injected, cx).await.is_err());
+
+            let previous = request.clone();
+            request.payload.authorization = None;
+            let next = send(request.clone(), cx)
+                .await
+                .expect("supersede the current host authorization");
+            assert_ne!(first.authorization, next.authorization);
+            assert!(send(previous, cx).await.is_err());
+            request.payload.authorization = next.authorization;
+            let mut stale_session = request.clone();
+            stale_session.payload.session_generation += 1;
+            assert!(send(stale_session, cx).await.is_err());
+            if gradle {
+                fixture.trust(cx, false);
+                assert!(send(request, cx).await.is_err());
+            }
+        }
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]

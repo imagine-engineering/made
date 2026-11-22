@@ -59,3 +59,32 @@ message GetDirectoryEnvironment {
 message DirectoryEnvironment {
   map<string, string> environment = 1;
 }
+
+message ResolveJvmBuildOperation {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 session_generation = 3;
+  uint64 worktree_id = 4;
+  uint64 server_id = 5;
+  uint64 snapshot_generation = 6;
+  string module_path = 7;
+  string selection_json = 8;
+  JvmBuildOperationAuthorization authorization = 9;
+}
+
+message JvmBuildOperationAuthorization {
+  string task_id = 1;
+  string token = 2;
+}
+
+message JvmBuildOperationResponse {
+  uint32 protocol_version = 1;
+  JvmBuildOperationAuthorization authorization = 2;
+  string label = 3;
+  string command = 4;
+  repeated string arguments = 5;
+  string working_directory = 6;
+  map<string, string> environment = 7;
+  uint32 literal_prefix_arguments = 8;
+  bool windows_direct_program = 9;
+}

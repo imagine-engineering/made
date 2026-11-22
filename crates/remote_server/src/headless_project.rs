@@ -355,6 +355,10 @@ impl HeadlessProject {
             );
             #[cfg(feature = "jvm-tools")]
             lsp_store.set_project_settings_observer(&settings_observer);
+            #[cfg(feature = "jvm-tools")]
+            if let Some(inventory) = task_store.read(cx).task_inventory() {
+                lsp_store.set_host_jvm_task_inventory(inventory);
+            }
             lsp_store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
             lsp_store
         });

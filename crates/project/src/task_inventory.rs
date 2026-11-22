@@ -1642,6 +1642,18 @@ impl Inventory {
     }
 
     #[cfg(feature = "jvm-tools")]
+    pub(crate) fn registered_jvm_operation(
+        &self,
+        id: &TaskId,
+        receipt: &crate::jvm_project::JvmBuildOperationReceipt,
+    ) -> Option<&ResolvedTask> {
+        self.jvm_operations
+            .get(id)
+            .filter(|admitted| &admitted.receipt == receipt)
+            .map(|admitted| &admitted.resolved)
+    }
+
+    #[cfg(feature = "jvm-tools")]
     pub fn verify_jvm_operation_host_inputs(&self, id: &TaskId, cx: &App) -> Task<Result<()>> {
         let Some(admitted) = self.jvm_operations.get(id) else {
             return Task::ready(Err(anyhow::anyhow!(
