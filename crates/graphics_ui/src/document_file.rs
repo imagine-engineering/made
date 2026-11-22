@@ -6,7 +6,7 @@ use gpui::{
     SharedString, Task, WeakEntity, Window,
 };
 use graphics_core::formats::{
-    gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_archive},
+    gdd::{ArchiveFormat, GddArchiveBudget, PreservedGddV1, open_gdd_archive},
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use project::{Project, ProjectEntryId, ProjectPath};
@@ -22,7 +22,7 @@ const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
 
 enum InspectedDocument {
     Archive {
-        archive: Box<PreservedGddV1>,
+        archive: Arc<PreservedGddV1>,
         history_len: usize,
         hot_log_len: usize,
     },
@@ -97,7 +97,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                     InspectedDocument::Archive {
                         history_len: archive.history_len(),
                         hot_log_len: archive.hot_log_len(),
-                        archive: Box::new(archive),
+                        archive: Arc::new(archive),
                     },
                 ))
             }
@@ -150,13 +150,43 @@ pub(crate) struct GraphiteDocumentItem {
 }
 
 impl GraphiteDocumentItem {
-    fn save_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn save_copy(
+        &mut self,
+        format: Option<ArchiveFormat>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.copy_task.is_some() {
             return;
         }
         let model = self.model.read(cx);
+        let source = model.path.clone();
+        let project = self.project.clone();
+        let export = match (&model.document, format) {
+            (InspectedDocument::Archive { archive, .. }, Some(format)) => {
+                Some((archive.clone(), format))
+            }
+            (_, None) => None,
+            (InspectedDocument::Legacy(_), Some(_)) => return,
+        };
         let original = model.original.clone();
-        let suggested_name = format!("Copy of {}", model.name);
+        let suggested_name = match format {
+            Some(format) => {
+                let name = model.name.as_ref();
+                let lower_name = name.to_ascii_lowercase();
+                let stem = [".gdd.tar.xz", ".gdd.zip", ".gdd"]
+                    .into_iter()
+                    .find(|suffix| lower_name.ends_with(suffix))
+                    .and_then(|suffix| name.get(..name.len() - suffix.len()))
+                    .unwrap_or(name);
+                let suffix = match format {
+                    ArchiveFormat::Zip => ".gdd.zip",
+                    ArchiveFormat::Xz => ".gdd.tar.xz",
+                };
+                format!("Copy of {stem}{suffix}")
+            }
+            None => format!("Copy of {}", model.name),
+        };
         let selection = self
             .project
             .read_with(cx, |project, cx| {
@@ -190,13 +220,29 @@ impl GraphiteDocumentItem {
                 let Some(path) = prompt.await?? else {
                     return Ok(None);
                 };
-                item.read_with(cx, |_, _| ())?;
                 ensure!(
                     path.is_absolute(),
                     "Choose an absolute path for the Graphite copy."
                 );
+                let bytes = if let Some((archive, format)) = export {
+                    cx.background_spawn(async move {
+                        archive
+                            .export_archive(format, ARCHIVE_BUDGET.max_archive_bytes)
+                            .map(Arc::<[u8]>::from)
+                    })
+                    .await?
+                } else {
+                    original
+                };
+                item.read_with(cx, |_, _| ())?;
+                ensure!(
+                    project.read_with(cx, |project, cx| project
+                        .absolute_path(&source, cx)
+                        .is_some())?,
+                    "The Graphite worktree was closed."
+                );
                 filesystem
-                    .create_new_file_atomically(path.clone(), original)
+                    .create_new_file_atomically(path.clone(), bytes)
                     .await
                     .with_context(|| format!("Could not save a copy at {}", path.display()))?;
                 Ok(Some(path))
@@ -305,7 +351,9 @@ impl Render for GraphiteDocumentItem {
                 div().debug_selector(|| "GRAPHITE-SAVE-COPY".into()).child(
                     Button::new("graphite-save-copy", "Save a Copy")
                         .disabled(self.copy_task.is_some())
-                        .on_click(cx.listener(|item, _, window, cx| item.save_copy(window, cx))),
+                        .on_click(
+                            cx.listener(|item, _, window, cx| item.save_copy(None, window, cx)),
+                        ),
                 ),
             )
             .when_some(self.copy_feedback.clone(), |view, (message, color)| {
@@ -330,6 +378,23 @@ impl Render for GraphiteDocumentItem {
                 .child(Label::new(format!(
                     "{history_len} history entries · {hot_log_len} pending operations"
                 )))
+                .child(
+                    h_flex().gap_2().children(
+                        [
+                            ("GRAPHITE-EXPORT-GDD-ZIP", "Export ZIP", ArchiveFormat::Zip),
+                            ("GRAPHITE-EXPORT-GDD-XZ", "Export XZ", ArchiveFormat::Xz),
+                        ]
+                        .map(|(selector, label, format)| {
+                            div().debug_selector(move || selector.into()).child(
+                                Button::new(selector, label)
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(move |item, _, window, cx| {
+                                        item.save_copy(Some(format), window, cx)
+                                    })),
+                            )
+                        }),
+                    ),
+                )
             }
             InspectedDocument::Legacy(document) => {
                 let layout = match document.schema() {
@@ -502,6 +567,95 @@ mod tests {
                 .await
                 .expect("source file is intact"),
             bytes
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_007_and_008_workspace_exports_and_reopens_both_archive_formats(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/source.gdd.zip");
+        let original = archive_bytes(1, ExportFormat::Zip).await;
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source fixture");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source ZIP")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        paint(window);
+        click(window, "GRAPHITE-EXPORT-GDD-XZ");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| assert!(item.copy_feedback.is_none()));
+
+        for (selector, filename, format) in [
+            (
+                "GRAPHITE-EXPORT-GDD-ZIP",
+                "export.gdd.zip",
+                ArchiveFormat::Zip,
+            ),
+            (
+                "GRAPHITE-EXPORT-GDD-XZ",
+                "export.gdd.tar.xz",
+                ArchiveFormat::Xz,
+            ),
+        ] {
+            let destination = PathBuf::from("/project").join(filename);
+            click(window, selector);
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            item.read_with(window, |item, cx| {
+                assert!(matches!(item.copy_feedback, Some((_, Color::Default))));
+                assert!(!item.is_dirty(cx));
+            });
+            let exported = filesystem
+                .load_bytes(&destination)
+                .await
+                .expect("saved export");
+            assert_eq!(ArchiveFormat::detect(&exported), Some(format));
+            window.run_until_parked();
+            let copy = workspace
+                .update_in(window, |workspace, window, cx| {
+                    workspace.open_abs_path(destination, Default::default(), window, cx)
+                })
+                .await
+                .expect("reopen export through normal Workspace File Open")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("saved Graphite archive");
+            copy.read_with(window, |copy, cx| {
+                let InspectedDocument::Archive { archive, .. } = &copy.model.read(cx).document
+                else {
+                    panic!("expected an archive");
+                };
+                assert_eq!(archive.manifest().document_id, 171);
+                assert_eq!(archive.original_bytes(), exported);
+            });
+            workspace
+                .update_in(window, |workspace, window, cx| {
+                    workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+                })
+                .await
+                .expect("reactivate original");
+            paint(window);
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source file remains exact"),
+            original
         );
     }
 

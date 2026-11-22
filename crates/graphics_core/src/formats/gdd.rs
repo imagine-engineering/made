@@ -1,12 +1,16 @@
 use std::{
     collections::BTreeSet,
-    io::{Cursor, Read},
+    io::{self, Cursor, Read, Seek, SeekFrom, Write},
+    ops::Bound,
     sync::Arc,
 };
 
+pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
-    AnyContainer, ByteHolder, Container, ContainerError, archive::ArchiveFormat,
-    backends::memory::MemoryBackend, validate_path,
+    AnyContainer, ByteHolder, Container, ContainerError,
+    archive::{Archive, ArchiveWriter, Xz, Zip},
+    backends::memory::MemoryBackend,
+    validate_path,
 };
 use graphite_document_format::{
     GddV1, GddV1Layout, Layout, MANIFEST_CODEC, Manifest,
@@ -53,6 +57,8 @@ pub enum GddArchiveError {
     Container(#[from] ContainerError),
     #[error("The pinned Graphite storage reader could not open the document: {0}")]
     Storage(#[from] graphite_document_format::Error),
+    #[error("The pinned Graphite writer could not export the archive: {0}")]
+    Export(#[source] ContainerError),
 }
 
 #[derive(serde::Deserialize)]
@@ -63,7 +69,7 @@ struct ManifestHeader {
 
 pub struct PreservedGddV1 {
     original_bytes: Arc<[u8]>,
-    working: MemoryBackend,
+    entries: StagedArchive,
     document: GddV1,
 }
 
@@ -77,7 +83,7 @@ impl PreservedGddV1 {
     }
 
     pub fn read_entry(&self, path: &str) -> Result<ByteHolder, ContainerError> {
-        self.working.read(path)
+        self.entries.working.read(path)
     }
 
     pub fn history_len(&self) -> usize {
@@ -86,6 +92,62 @@ impl PreservedGddV1 {
 
     pub fn hot_log_len(&self) -> usize {
         self.document.session().hot_log().len()
+    }
+
+    pub fn export_archive(
+        &self,
+        format: ArchiveFormat,
+        max_archive_bytes: usize,
+    ) -> Result<Vec<u8>, GddArchiveError> {
+        match format {
+            ArchiveFormat::Zip => self.write_archive::<Zip>(max_archive_bytes),
+            ArchiveFormat::Xz => self.write_archive::<Xz>(max_archive_bytes),
+        }
+        .map_err(GddArchiveError::Export)
+    }
+
+    fn write_archive<Format: Archive>(
+        &self,
+        max_archive_bytes: usize,
+    ) -> Result<Vec<u8>, ContainerError>
+    where
+        Format::Writer<BoundedArchive>: ArchiveWriter<Sink = BoundedArchive>,
+    {
+        let mut archive = Format::writer(BoundedArchive {
+            bytes: Cursor::new(Vec::new()),
+            limit: max_archive_bytes as u64,
+        })?;
+        for path in &self.entries.names {
+            archive.write_entry(path, self.read_entry(path)?.as_slice())?;
+        }
+        Ok(archive.finish_into()?.bytes.into_inner())
+    }
+}
+
+struct BoundedArchive {
+    bytes: Cursor<Vec<u8>>,
+    limit: u64,
+}
+
+impl Write for BoundedArchive {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.bytes.position().saturating_add(bytes.len() as u64) > self.limit {
+            return Err(io::Error::new(
+                io::ErrorKind::FileTooLarge,
+                "Graphite archive export exceeds its byte budget",
+            ));
+        }
+        self.bytes.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.bytes.flush()
+    }
+}
+
+impl Seek for BoundedArchive {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.bytes.seek(position)
     }
 }
 
@@ -113,8 +175,9 @@ pub async fn open_gdd_archive(
 
 async fn open_staged_gdd(
     bytes: &Arc<[u8]>,
-    working: MemoryBackend,
+    entries: StagedArchive,
 ) -> Result<PreservedGddV1, GddArchiveError> {
+    let working = &entries.working;
     let layout = GddV1Layout;
     let path = path_for(layout.manifest_basename(), MANIFEST_CODEC);
     let OriginalJson(value) = serde_json::from_slice(working.read(&path)?.as_slice())?;
@@ -152,12 +215,12 @@ async fn open_staged_gdd(
     }
     Ok(PreservedGddV1 {
         original_bytes: bytes.clone(),
-        working,
+        entries,
         document,
     })
 }
 
-fn stage_zip(bytes: &[u8], budget: &GddArchiveBudget) -> Result<MemoryBackend, GddArchiveError> {
+fn stage_zip(bytes: &[u8], budget: &GddArchiveBudget) -> Result<StagedArchive, GddArchiveError> {
     if bytes.len() > budget.max_archive_bytes {
         return Err(GddArchiveError::BudgetExceeded);
     }
@@ -196,6 +259,11 @@ struct StagedEntries<'a> {
     working: MemoryBackend,
     names: BTreeSet<String>,
     total_bytes: u64,
+}
+
+struct StagedArchive {
+    working: MemoryBackend,
+    names: BTreeSet<String>,
 }
 
 impl<'a> StagedEntries<'a> {
@@ -238,14 +306,20 @@ impl<'a> StagedEntries<'a> {
         Ok(())
     }
 
-    fn finish(self) -> Result<MemoryBackend, GddArchiveError> {
+    fn finish(self) -> Result<StagedArchive, GddArchiveError> {
         if self.names.iter().any(|name| {
-            name.match_indices('/')
-                .any(|(index, _)| self.names.contains(&name[..index]))
+            let prefix = format!("{name}/");
+            self.names
+                .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
+                .next()
+                .is_some_and(|descendant| descendant.starts_with(&prefix))
         }) {
             return Err(GddArchiveError::InconsistentEntries);
         }
-        Ok(self.working)
+        Ok(StagedArchive {
+            working: self.working,
+            names: self.names,
+        })
     }
 }
 
@@ -285,7 +359,6 @@ fn zip_directory(bytes: &[u8], max_entries: usize) -> Result<(usize, u64), GddAr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use graphite_document_container::archive::{Archive, ArchiveWriter, Xz, Zip};
     use graphite_document_format::{Codec, ExportFormat, ExportOptions};
     use graphite_editor::messages::portfolio::document::DocumentMessageHandler;
     use graphite_graph_craft::application_io::resource::{HashMapResourceStorage, ResourceId};
@@ -322,6 +395,100 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_007_and_008_exports_every_entry_and_reopens_with_both_original_codecs() {
+        futures::executor::block_on(async {
+            for codec in [Codec::Postcard, Codec::Json] {
+                let mut original = document();
+                original
+                    .add_resource(ResourceId::from(79_u64), b"original image bytes")
+                    .expect("actual resource and its history");
+                if codec == Codec::Json {
+                    original
+                        .update_manifest(|manifest| {
+                            manifest.codecs.registry = Codec::Json;
+                            manifest.codecs.history = Codec::JsonLines;
+                        })
+                        .expect("original codecs");
+                }
+                let legacy = DocumentMessageHandler::default().serialize_document();
+                let original_bytes = export(&original, Some(legacy.as_bytes())).await;
+                let source = open_gdd_zip(&original_bytes, budget())
+                    .await
+                    .expect("pinned ZIP");
+                let mut fixture = Zip::writer(Cursor::new(Vec::new())).expect("pinned writer");
+                for path in &source.entries.names {
+                    fixture
+                        .write_entry(
+                            path,
+                            source.read_entry(path).expect("source entry").as_slice(),
+                        )
+                        .expect("write raw source entry");
+                }
+                fixture
+                    .write_entry("opaque/extension/state.bin", &[0, 213, 2])
+                    .expect("unknown entry");
+                let source_bytes = Arc::<[u8]>::from(
+                    fixture
+                        .finish_into()
+                        .expect("valid original envelope")
+                        .into_inner(),
+                );
+                let source = open_gdd_zip(&source_bytes, budget())
+                    .await
+                    .expect("admit full source");
+                let entries = &source.entries.names;
+                for format in [ArchiveFormat::Zip, ArchiveFormat::Xz] {
+                    assert!(source.export_archive(format, 5).is_err());
+                    let bytes = Arc::<[u8]>::from(
+                        source
+                            .export_archive(format, budget().max_archive_bytes)
+                            .expect("export complete source copy"),
+                    );
+                    assert_eq!(ArchiveFormat::detect(&bytes), Some(format));
+                    let copy = open_gdd_archive(&bytes, budget())
+                        .await
+                        .expect("reopen native export");
+                    let pinned = GddV1::open_from_archive(
+                        &bytes,
+                        AnyContainer::Memory(MemoryBackend::new()),
+                        GddV1Layout,
+                    )
+                    .await
+                    .expect("original Graphite reader opens the export");
+                    assert_eq!(copy.manifest().codecs.registry, codec);
+                    assert_eq!(pinned.manifest().codecs.registry, codec);
+                    assert_eq!(copy.history_len(), source.history_len());
+                    assert_eq!(pinned.session().history().count(), source.history_len());
+                    assert_eq!(&copy.entries.names, entries);
+                    for path in entries {
+                        assert_eq!(
+                            copy.read_entry(path).expect("copy entry").as_slice(),
+                            source.read_entry(path).expect("source entry").as_slice(),
+                            "{path}"
+                        );
+                    }
+                    assert_eq!(source.original_bytes(), source_bytes.as_ref());
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn at_r06_2_rejects_a_file_that_is_also_an_archive_parent() {
+        futures::executor::block_on(async {
+            let mut writer = Zip::writer(Cursor::new(Vec::new())).expect("pinned ZIP writer");
+            for path in ["opaque", "opaque-annotation", "opaque/child.bin"] {
+                writer.write_entry(path, b"fixture").expect("source entry");
+            }
+            let bytes = Arc::<[u8]>::from(writer.finish_into().expect("ZIP envelope").into_inner());
+            assert!(matches!(
+                open_gdd_archive(&bytes, budget()).await,
+                Err(GddArchiveError::InconsistentEntries)
+            ));
+        });
     }
 
     #[test]

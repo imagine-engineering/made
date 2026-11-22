@@ -1,9 +1,8 @@
 use std::io::{Cursor, Read};
 
-use graphite_document_container::backends::memory::MemoryBackend;
 use lzma_rust2::XzReader;
 
-use super::{GddArchiveBudget, GddArchiveError, StagedEntries};
+use super::{GddArchiveBudget, GddArchiveError, StagedArchive, StagedEntries};
 
 const TAR_BLOCK_BYTES: usize = 512;
 const XZ_HEADER_BYTES: usize = 12;
@@ -14,7 +13,7 @@ const CRC64_BYTES: usize = 8;
 pub(super) fn stage_xz(
     bytes: &[u8],
     budget: &GddArchiveBudget,
-) -> Result<MemoryBackend, GddArchiveError> {
+) -> Result<StagedArchive, GddArchiveError> {
     if bytes.len() > budget.max_archive_bytes {
         return Err(GddArchiveError::BudgetExceeded);
     }
