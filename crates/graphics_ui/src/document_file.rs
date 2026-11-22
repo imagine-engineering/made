@@ -34,7 +34,8 @@ use workspace::{
 };
 
 use crate::graph::{
-    SavedGraphAction, SavedGraphConnectionSource, SavedGraphMenuTarget, SavedGraphView,
+    SavedGraphAction, SavedGraphConnectionSource, SavedGraphDragStart, SavedGraphMenuTarget,
+    SavedGraphView,
 };
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
@@ -564,6 +565,7 @@ struct NodeCopyForm {
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
     saved_graph_focus: FocusHandle,
+    saved_graph_drag_start: SavedGraphDragStart,
     pending_canvas_source: Option<SavedGraphConnectionSource>,
 }
 
@@ -598,6 +600,7 @@ impl NodeCopyForm {
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_focus: cx.focus_handle(),
+            saved_graph_drag_start: Default::default(),
             pending_canvas_source: None,
         }
     }
@@ -682,6 +685,7 @@ impl NodeCopyForm {
         self.port_rename = None;
         self.node_selection.clear();
         self.saved_graph = SavedGraphPanel::Closed;
+        self.saved_graph_drag_start.set(None);
         self.pending_canvas_source = None;
     }
 
@@ -1486,6 +1490,7 @@ impl GraphiteDocumentItem {
             SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
         ) {
             form.saved_graph = SavedGraphPanel::Closed;
+            form.saved_graph_drag_start.set(None);
             form.pending_canvas_source = None;
             if form.saved_graph_focus.contains_focused(window, cx) {
                 self.focus_handle.focus(window, cx);
@@ -1566,7 +1571,9 @@ impl GraphiteDocumentItem {
                 }
                 self.select_copy_node(index, window, cx);
             }
-            SavedGraphAction::DisconnectInput(index) => self.select_copy_node(index, window, cx),
+            SavedGraphAction::DisconnectInput(index) | SavedGraphAction::MoveNode { index, .. } => {
+                self.select_copy_node(index, window, cx);
+            }
             _ => {}
         }
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
@@ -1599,6 +1606,25 @@ impl GraphiteDocumentItem {
             SavedGraphAction::CopySelection => self.copy_graph_clipboard(window, cx),
             SavedGraphAction::CutSelection => self.cut_graph_selection(window, cx),
             SavedGraphAction::PasteNodes => self.paste_graph_clipboard(window, cx),
+            SavedGraphAction::MoveNode { index, position } => {
+                if self.model.read(cx).working.is_some()
+                    && form.pending_canvas_source.is_none()
+                    && let Some(node) = form
+                        .nodes
+                        .get(index)
+                        .filter(|node| form.includes_node(node))
+                        .cloned()
+                {
+                    self.apply_graph_edit(
+                        GraphiteCopy::EditNode {
+                            node: Box::new(node),
+                            change: NodeCopyChange::GridPosition(position),
+                        },
+                        window,
+                        cx,
+                    );
+                }
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -1630,7 +1656,7 @@ impl GraphiteDocumentItem {
                     if form.selected == Some(index)
                         && let Some(command) = command
                     {
-                        self.edit_numeric_wire(command, window, cx);
+                        self.apply_graph_edit(command, window, cx);
                     } else {
                         self.copy_feedback = Some((message.into(), Color::Error));
                         cx.notify();
@@ -1640,7 +1666,7 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn edit_numeric_wire(
+    fn apply_graph_edit(
         &mut self,
         request: GraphiteCopy,
         window: &mut Window,
@@ -1783,7 +1809,7 @@ impl GraphiteDocumentItem {
         if network.can_connect_export_from(source)
             && network.empty_exports().contains(&export_index)
         {
-            self.edit_numeric_wire(
+            self.apply_graph_edit(
                 GraphiteCopy::EditNetworkWire(NetworkWireChange::Export {
                     network: Box::new(network.clone()),
                     source: Box::new(source.clone()),
@@ -1805,7 +1831,7 @@ impl GraphiteDocumentItem {
             return;
         };
         if let Some(command) = form.connect_network_import(import_index) {
-            self.edit_numeric_wire(command, window, cx);
+            self.apply_graph_edit(command, window, cx);
         }
     }
 
@@ -2409,7 +2435,7 @@ impl GraphiteDocumentItem {
                 node: Box::new(node.clone()),
                 change: NodeCopyChange::DisconnectNumericInput,
             };
-            self.edit_numeric_wire(request, window, cx);
+            self.apply_graph_edit(request, window, cx);
         }
     }
 
@@ -2440,7 +2466,7 @@ impl GraphiteDocumentItem {
                                     return;
                                 };
                                 if form.includes_node(&target) {
-                                    item.edit_numeric_wire(
+                                    item.apply_graph_edit(
                                         GraphiteCopy::EditNode {
                                             node: Box::new(target.clone()),
                                             change: NodeCopyChange::InsertNumericOnWire(operation),
@@ -2849,6 +2875,8 @@ impl GraphiteDocumentItem {
                                         selection: &form.node_selection,
                                         pending_source: form.pending_canvas_source,
                                         can_start_connection: self.copy_task.is_none(),
+                                        revision: &form.revision,
+                                        drag_start: self.model.read(cx).working.as_ref().map(|_| &form.saved_graph_drag_start),
                                     },
                                     window, cx,
                                     move |action, window, cx| {
@@ -8178,6 +8206,181 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("byte-exact source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_014_2_workspace_drags_a_node_in_the_working_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::Connection, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/working-drag.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the wired Graphite archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let (field, source_id, target_id) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("loaded source graph")
+            };
+            let [source, target] = form.nodes.as_slice() else {
+                panic!("two wired nodes")
+            };
+            assert_eq!(source.grid_position(), Some([0, 0]));
+            (form.value.clone(), source.storage_id(), target.storage_id())
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("-19", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let before = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+
+        let drag = |window: &mut gpui::VisualTestContext, end: gpui::Point<gpui::Pixels>| {
+            let start = window
+                .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0")
+                .expect("visible source node")
+                .center();
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                        position: start,
+                        button: gpui::MouseButton::Left,
+                        modifiers: gpui::Modifiers::default(),
+                        click_count: 1,
+                        first_mouse: false,
+                    }),
+                    cx,
+                )
+            });
+            paint(window);
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                        position: start + gpui::point(px(7.), px(0.)),
+                        pressed_button: Some(gpui::MouseButton::Left),
+                        modifiers: gpui::Modifiers::default(),
+                    }),
+                    cx,
+                );
+                assert!(cx.has_active_drag());
+            });
+            item.read_with(window, |item, cx| {
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before))
+            });
+            paint(window);
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                        position: end,
+                        pressed_button: Some(gpui::MouseButton::Left),
+                        modifiers: gpui::Modifiers::default(),
+                    }),
+                    cx,
+                );
+                window.dispatch_event(
+                    gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                        position: end,
+                        button: gpui::MouseButton::Left,
+                        modifiers: gpui::Modifiers::default(),
+                        click_count: 1,
+                    }),
+                    cx,
+                );
+                assert!(!cx.has_active_drag());
+            });
+            window.run_until_parked();
+            paint(window);
+        };
+        let canvas = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
+            .expect("open canvas");
+        let start = window
+            .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0")
+            .expect("source node")
+            .center();
+        for cancelled in [
+            canvas.origin + gpui::point(canvas.size.width + px(30.), px(40.)),
+            start + gpui::point(px(8.), px(0.)),
+        ] {
+            drag(window, cancelled);
+            item.read_with(window, |item, cx| {
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before))
+            });
+        }
+        drag(window, start + gpui::point(px(72.), px(48.)));
+        let check = |window: &gpui::VisualTestContext, position| {
+            item.read_with(window, |item, cx| {
+                assert!(item.is_dirty(cx));
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("working graph") };
+                let source = form.nodes.iter().find(|node| node.storage_id() == source_id).expect("same moved node");
+                let target = form.nodes.iter().find(|node| node.storage_id() == target_id).expect("same connected target");
+                assert_eq!(source.grid_position(), Some(position));
+                assert_eq!(target.numeric_connection_source(&form.nodes).map(GddGraphNode::storage_id), Some(source_id));
+                assert!(matches!(&form.saved_graph, SavedGraphPanel::Ready(graph) if graph.wires.len() == 1));
+            });
+        };
+        check(window, [3, 2]);
+        for (action, position) in [("GRAPHITE-GDD-UNDO", [0, 0]), ("GRAPHITE-GDD-REDO", [3, 2])] {
+            click(window, action);
+            window.run_until_parked();
+            paint(window);
+            check(window, position);
+        }
+
+        let destination = PathBuf::from("/project/saved-working-drag.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("published GDD folder");
+        let nodes = saved.graph_nodes().await.expect("reopened graph");
+        let source = nodes
+            .iter()
+            .find(|node| node.storage_id() == source_id)
+            .expect("moved source");
+        let target = nodes
+            .iter()
+            .find(|node| node.storage_id() == target_id)
+            .expect("connected target");
+        assert_eq!(source.grid_position(), Some([3, 2]));
+        assert_eq!(
+            target
+                .numeric_connection_source(&nodes)
+                .map(GddGraphNode::storage_id),
+            Some(source_id)
+        );
+        assert!(matches!(
+            saved.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Integer(19))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original source archive"),
             original
         );
     }

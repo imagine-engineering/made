@@ -1,7 +1,7 @@
 use editor::Editor;
 use gpui::{
     App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Modifiers,
-    MouseButton, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
+    MouseButton, Pixels, Point, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -12,6 +12,7 @@ use std::{
     cell::Cell,
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
+    sync::Arc,
 };
 use ui::{ContextMenu, DropdownMenu, GraphWireStroke, TintColor, graph_wire_layer, prelude::*};
 use workspace::{
@@ -114,6 +115,7 @@ pub(crate) fn render_saved_graph_ports(
 #[derive(Clone, Copy)]
 pub(crate) enum SavedGraphAction {
     SelectNode { index: usize, extend: bool },
+    MoveNode { index: usize, position: [i32; 2] },
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -121,6 +123,61 @@ pub(crate) enum SavedGraphAction {
     CopySelection,
     CutSelection,
     PasteNodes,
+}
+
+pub(crate) type SavedGraphDragStart = Rc<Cell<Option<(usize, Point<Pixels>)>>>;
+
+struct SavedGraphNodeDrag {
+    canvas: FocusHandle,
+    revision: Arc<()>,
+    index: usize,
+    position: [i32; 2],
+    scale: f64,
+    start: SavedGraphDragStart,
+}
+
+impl SavedGraphNodeDrag {
+    fn destination(&self, pointer: Point<Pixels>) -> Option<[i32; 2]> {
+        let (index, initial_pointer) = self.start.take()?;
+        if index != self.index {
+            return None;
+        }
+        let difference = pointer - initial_pointer;
+        let grid_scale = self.scale * f64::from(graphite_editor::consts::GRID_SIZE);
+        let offset = [difference.x, difference.y]
+            .map(|pixels| (f64::from(f32::from(pixels)) / grid_scale).round());
+        if offset.iter().any(|&value| {
+            !value.is_finite() || value < f64::from(i32::MIN) || value > f64::from(i32::MAX)
+        }) {
+            return None;
+        }
+        let [horizontal, vertical] = offset.map(|value| value as i32);
+        let position = [
+            self.position[0].checked_add(horizontal)?,
+            self.position[1].checked_add(vertical)?,
+        ];
+        (position != self.position).then_some(position)
+    }
+}
+
+struct SavedGraphDragPreview {
+    name: SharedString,
+    width: Pixels,
+    height: Pixels,
+}
+
+impl Render for SavedGraphDragPreview {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let colors = cx.theme().colors();
+        div()
+            .w(self.width)
+            .h(self.height)
+            .rounded_sm()
+            .border_1()
+            .border_color(colors.text_accent)
+            .bg(colors.surface_background)
+            .child(Label::new(self.name.clone()).size(LabelSize::XSmall))
+    }
 }
 
 impl SavedGraphAction {
@@ -155,6 +212,8 @@ pub(crate) struct SavedGraphView<'a> {
     pub selection: &'a BTreeSet<usize>,
     pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
+    pub revision: &'a Arc<()>,
+    pub drag_start: Option<&'a SavedGraphDragStart>,
 }
 
 pub(crate) fn render_saved_graph(
@@ -207,6 +266,9 @@ pub(crate) fn render_saved_graph(
     let colors = cx.theme().colors();
     let graph_focus = view.focus.clone();
     let dispatch_clipboard = dispatch.clone();
+    let movement = view.drag_start.filter(|_| {
+        view.can_start_connection && view.pending_source.is_none() && view.selection.len() < 2
+    });
     let graph = div()
         .id("graphite-saved-graph")
         .track_focus(view.focus)
@@ -222,6 +284,26 @@ pub(crate) fn render_saved_graph(
         .h(px(height as f32))
         .on_mouse_down(MouseButton::Left, move |_, window, cx| {
             graph_focus.focus(window, cx);
+        })
+        .when(movement.is_some(), |graph| {
+            let canvas = view.focus.clone();
+            let revision = view.revision.clone();
+            let dispatch = dispatch.clone();
+            graph.on_drop(move |drag: &SavedGraphNodeDrag, window, cx| {
+                if drag.canvas == canvas
+                    && Arc::ptr_eq(&drag.revision, &revision)
+                    && let Some(position) = drag.destination(window.mouse_position())
+                {
+                    dispatch(
+                        SavedGraphAction::MoveNode {
+                            index: drag.index,
+                            position,
+                        },
+                        window,
+                        cx,
+                    );
+                }
+            })
         })
         .on_key_down(move |event, window, cx| {
             let modifiers = event.keystroke.modifiers;
@@ -408,7 +490,7 @@ pub(crate) fn render_saved_graph(
         .children(geometry.nodes.iter().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
             let [top_left, bottom_right] = geometry.bounds.map(project);
-            Some(saved_graph_button(
+            let button = saved_graph_button(
                 div()
                     .id(("graphite-saved-graph-node", index))
                     .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-NODE-{index}"))
@@ -435,6 +517,38 @@ pub(crate) fn render_saved_graph(
                     extend: false,
                 },
                 dispatch.clone(),
+            );
+            Some(button.when_some(
+                movement.zip(node.grid_position()),
+                |button, (start, position)| {
+                    let pointer_start = start.clone();
+                    let name = SharedString::from(node.display_name());
+                    let width = bottom_right.x - top_left.x;
+                    let height = bottom_right.y - top_left.y;
+                    button
+                        .on_mouse_down(MouseButton::Left, move |event, _, _| {
+                            let modifiers = event.modifiers;
+                            pointer_start
+                                .set((!modifiers.modified()).then_some((index, event.position)));
+                        })
+                        .on_drag(
+                            SavedGraphNodeDrag {
+                                canvas: view.focus.clone(),
+                                revision: view.revision.clone(),
+                                index,
+                                position,
+                                scale,
+                                start: start.clone(),
+                            },
+                            move |_, _, _, cx| {
+                                cx.new(|_| SavedGraphDragPreview {
+                                    name: name.clone(),
+                                    width,
+                                    height,
+                                })
+                            },
+                        )
+                },
             ))
         }))
         .children(geometry.nodes.iter().filter_map(|geometry| {
