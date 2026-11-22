@@ -1093,6 +1093,11 @@ impl GraphiteDocumentItem {
                 form.pending_canvas_import = None;
                 cx.notify();
             }
+            SavedGraphAction::ConnectExport(index) => {
+                if form.pending_canvas_import.is_none() && self.copy_task.is_none() {
+                    self.connect_network_export(index, window, cx);
+                }
+            }
             SavedGraphAction::SelectNode(index) => {
                 let Some(import) = form.pending_canvas_import.take() else {
                     return;
@@ -5728,6 +5733,19 @@ mod tests {
     async fn at_gra_graph_022_2_workspace_appends_and_connects_a_nested_export_in_copies(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_adds_and_connects_export(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_022_2_workspace_connects_an_empty_export_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_adds_and_connects_export(cx, true).await;
+    }
+
+    async fn verify_workspace_adds_and_connects_export(cx: &mut TestAppContext, canvas: bool) {
+        use graphics_core::formats::gdd::GddGraphPortSource;
+
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -5795,18 +5813,38 @@ mod tests {
         assert_eq!(network.empty_exports(), &[2]);
         assert_eq!(contents.history_len(), original_history + 2);
 
-        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
-        click(window, "GRAPHITE-GDD-ENTER-NETWORK");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
-        paint(window);
-        click(window, "GRAPHITE-GDD-CONNECT-EXPORT-2");
+        let command = if canvas {
+            choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-4");
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-Export-3");
+            reopened.read_with(window, |item, cx| {
+                assert!(item.copy_task.is_none());
+                assert!(!item.is_dirty(cx));
+            });
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-6");
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-Export-1");
+            reopened.read_with(window, |item, _| assert!(item.copy_task.is_none()));
+            "GRAPHITE-GDD-GRAPH-Export-3"
+        } else {
+            choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-6");
+            "GRAPHITE-GDD-CONNECT-EXPORT-2"
+        };
+        let source_id = reopened.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the scoped graph");
+            };
+            form.selected_node()
+                .expect("selected numeric source")
+                .storage_id()
+        });
+        click(window, command);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
-        click(window, "GRAPHITE-GDD-CONNECT-EXPORT-2");
+        click(window, command);
         let destination = PathBuf::from("/project/wired-export.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
@@ -5837,6 +5875,16 @@ mod tests {
             .expect("same saved network");
         assert_eq!(wired_network.export_count, 3);
         assert!(wired_network.empty_exports().is_empty());
+        assert_eq!(
+            wired_network
+                .exports()
+                .get(2)
+                .and_then(|port| port.source.as_ref()),
+            Some(&GddGraphPortSource::Node {
+                storage_id: source_id,
+                output_index: 0
+            }),
+        );
         assert_eq!(wired_contents.history_len(), original_history + 3);
         assert_eq!(
             filesystem

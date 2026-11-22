@@ -111,6 +111,7 @@ pub(crate) fn render_saved_graph_ports(
 pub(crate) enum SavedGraphAction {
     SelectNode(usize),
     ToggleImport(usize),
+    ConnectExport(usize),
     CancelConnection,
 }
 
@@ -159,6 +160,12 @@ pub(crate) fn render_saved_graph(
         .enumerate()
         .map(|(index, node)| (node.storage_id(), (index, node)))
         .collect::<BTreeMap<_, _>>();
+    let can_connect_export = view.can_start_connection
+        && view.pending_import.is_none()
+        && view
+            .selected
+            .and_then(|index| nodes.get(index))
+            .is_some_and(|node| view.network.can_connect_export_from(node));
     let colors = cx.theme().colors();
     let graph = div()
         .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
@@ -216,6 +223,20 @@ pub(crate) fn render_saved_graph(
                         socket,
                         accessible,
                         SavedGraphAction::ToggleImport(*index),
+                        dispatch.clone(),
+                    )
+                }
+                ImportOrExport::Export(index)
+                    if can_connect_export && view.network.empty_exports().contains(index) =>
+                {
+                    let accessible = match view.network.export_name(*index) {
+                        Some(name) => format!("Connect selected node to {text} · {name}"),
+                        None => format!("Connect selected node to {text}"),
+                    };
+                    saved_graph_button(
+                        socket,
+                        accessible,
+                        SavedGraphAction::ConnectExport(*index),
                         dispatch.clone(),
                     )
                 }
