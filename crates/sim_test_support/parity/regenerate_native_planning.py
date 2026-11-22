@@ -6174,6 +6174,18 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
         module = rust_slug(name)
         if kind == "model family":
             identifier = f"comfy-parity-native-model-family-{slug(name)}-{suffix}"
+            family_number = suffix.removeprefix("comfy-model-")
+            family_paths = []
+            for directory in ("src", "tests"):
+                family_directory = Path(f"crates/sim_model/{directory}/families")
+                candidates = sorted(
+                    (REPOSITORY_ROOT / family_directory).glob(f"*_sim_model_{family_number}.rs")
+                )
+                if len(candidates) != 1:
+                    raise ValueError(
+                        f"{identifier} must map to one {directory} family module, got {candidates}"
+                    )
+                family_paths.append((family_directory / candidates[0].name).as_posix())
             if row["feature_id"] in {"COMFY-MODEL-0066", "COMFY-MODEL-0067"}:
                 layout_evidence = "prefixed and standalone source-native detector evidence with explicit unsupported-Diffusers rejection (the pinned generic Flux converter does not preserve Chroma-specific distilled-guidance, NeRF, or sentinel state)"
             elif row["feature_id"] == "COMFY-MODEL-0083":
@@ -6275,7 +6287,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             if row["feature_id"] in {"COMFY-MODEL-0096", "COMFY-MODEL-0097", "COMFY-MODEL-0098", "COMFY-MODEL-0099", "COMFY-MODEL-0100", "COMFY-MODEL-0101", "COMFY-MODEL-0102", "COMFY-MODEL-0103", "COMFY-MODEL-0104", "COMFY-MODEL-0105", "COMFY-MODEL-0106", "COMFY-MODEL-0107", "COMFY-MODEL-0108", "COMFY-MODEL-0109", "COMFY-MODEL-0110", "COMFY-MODEL-0111", "COMFY-MODEL-0112", "COMFY-MODEL-0113", "COMFY-MODEL-0114", "COMFY-MODEL-0153", "COMFY-MODEL-0154"}:
                 model_family_requirements.append(32)
                 model_family_design.extend([19, 20])
-            tasks.append(task(identifier, f"Implement native model family: {name}", model_family_requirements, model_family_design, ["VAL-MODEL-FAMILY-ROW-001", "VAL-MODEL-DETECTION-001", "VAL-MODEL-FORMAT-001", "VAL-MEMORY-001", "VAL-OWNERSHIP-001"], f"Implement only model-family row {row['feature_id']} as an immutable source-ordered registration and focused configuration/profile, transactional state-dictionary plan, and architecture-program selector over the authoritative ModelStore::family_probe adapter, sim_model::model_family, sim_model::patch_graph, and canonical tensor owners. Bind its exact source projection and provenance; {layout_evidence}; descriptor and latent identity; component routing, key transforms, generated values, and unmatched-key policy; shape-reduced native architecture; deterministic tiny oracle fixture and named forward plus conditioning checkpoints; memory constants or checked dynamic formula; and dtype/device matrix.", model_family_reads, [f"crates/sim_model/src/families/{module}_{suffix.replace('-', '_')}.rs", f"crates/sim_model/tests/families/{module}_{suffix.replace('-', '_')}.rs", f"crates/sim_test_support/fixtures/models/{slug(name)}-{suffix}"], "The one assigned family passes source-exact key-derived model-layout detection and normalized configuration, profile selection, descriptor and transactional multi-component state mapping, named forward and conditioning checkpoints, invalid/partial/ambiguous keys, misleading metadata, patch order, cancellation, OOM, and supported dtype/device fixtures without claiming another family or the aggregate closure. Provenance binds the pinned source and projection digests. Ownership tests prove the row and fixture delegate all validation, tensor mechanics, transaction commit, execution traversal, patching, memory arithmetic, parsing/cache, serialization, and cancellation state to the canonical owners.", sorted(set(model_family_dependencies))))
+            tasks.append(task(identifier, f"Implement native model family: {name}", model_family_requirements, model_family_design, ["VAL-MODEL-FAMILY-ROW-001", "VAL-MODEL-DETECTION-001", "VAL-MODEL-FORMAT-001", "VAL-MEMORY-001", "VAL-OWNERSHIP-001"], f"Implement only model-family row {row['feature_id']} as an immutable source-ordered registration and focused configuration/profile, transactional state-dictionary plan, and architecture-program selector over the authoritative ModelStore::family_probe adapter, sim_model::model_family, sim_model::patch_graph, and canonical tensor owners. Bind its exact source projection and provenance; {layout_evidence}; descriptor and latent identity; component routing, key transforms, generated values, and unmatched-key policy; shape-reduced native architecture; deterministic tiny oracle fixture and named forward plus conditioning checkpoints; memory constants or checked dynamic formula; and dtype/device matrix.", model_family_reads, [*family_paths, f"crates/sim_test_support/fixtures/models/{slug(name)}-{suffix}"], "The one assigned family passes source-exact key-derived model-layout detection and normalized configuration, profile selection, descriptor and transactional multi-component state mapping, named forward and conditioning checkpoints, invalid/partial/ambiguous keys, misleading metadata, patch order, cancellation, OOM, and supported dtype/device fixtures without claiming another family or the aggregate closure. Provenance binds the pinned source and projection digests. Ownership tests prove the row and fixture delegate all validation, tensor mechanics, transaction commit, execution traversal, patching, memory arithmetic, parsing/cache, serialization, and cancellation state to the canonical owners.", sorted(set(model_family_dependencies))))
             breadth_dependencies.append(identifier)
             model_family_tasks.append(identifier)
             special[row["feature_id"]].append(identifier)
@@ -21970,23 +21982,21 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "python3 crates/sim_test_support/parity/regenerate_all.py --check-twice",
         ]
     elif identifier.startswith("comfy-parity-native-model-family-"):
-        family_sources = [
+        family_tests = [
             Path(str(path)).stem
             for path in item["writes"]
-            if str(path).startswith("crates/sim_model/src/families/")
+            if str(path).startswith("crates/sim_model/tests/families/")
             and str(path).endswith(".rs")
         ]
-        if len(family_sources) != 1:
+        if len(family_tests) != 1:
             raise ValueError(
-                f"model-family task {identifier} must own one family source module"
+                f"model-family task {identifier} must own one family test module"
             )
-        generated_family_module = {
-            "pixartalpha_comfy_model_0110": "pixart_alpha_comfy_model_0110",
-        }.get(family_sources[0], family_sources[0])
+        (family_test,) = family_tests
         commands = [
             "cargo fmt --all -- --check",
             "cargo check --locked -p sim_model -p sim_test_support",
-            f"CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families generated_{generated_family_module}",
+            f"CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --test model_families generated_{family_test}",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_worker --test memory_conformance val_memory_001",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_001",
             "CARGO_INCREMENTAL=0 cargo test --locked -p sim_model --all-targets",
