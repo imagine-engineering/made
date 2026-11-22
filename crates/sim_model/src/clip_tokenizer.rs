@@ -1302,9 +1302,9 @@ const QWEN2_PRETOKENIZER_PATTERN: &str = r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p
 const QWEN35_PRETOKENIZER_PATTERN: &str = r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?[\p{L}\p{M}]+|\p{N}| ?[^\s\p{L}\p{M}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+";
 const LLAMA3_PRETOKENIZER_PATTERN: &str = r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+";
 pub const QWEN25_TOKENIZER_ARTIFACT_DIGEST: &str =
-    "1fb681b4e905b87b60a5e597adf33f825a9d4820855da3610d380796e7fd6258";
+    "7e9d154b1dad95ccefdf6d5f4802173b9266595eadcfa5217bb8e8147d09578d";
 pub const QWEN35_TOKENIZER_ARTIFACT_DIGEST: &str =
-    "c101b201cd118a38f16f1cb37368134ed9e4bdd72f551478d4ef53c96c316374";
+    "8281d29aff4fb566450316ff6d69e7ec3a18a39de3675c0c5553ef4e8acfe061";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Qwen2PretokenizerProfile {

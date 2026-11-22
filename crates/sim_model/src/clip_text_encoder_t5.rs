@@ -17,14 +17,14 @@ use sim_tensor::{
 use std::{collections::BTreeSet, mem};
 use thiserror::Error;
 
-pub const T5_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/t5.py";
+pub const T5_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/t5.py";
 pub const T5_SOURCE_SHA256: &str =
     "797f11b69256dffa8d9a6d236fe1e05d0c250c84d231a5993accde0ff44238bc";
-pub const BERT_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/bert.py";
+pub const BERT_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/bert.py";
 pub const BERT_SOURCE_SHA256: &str =
     "3f1f32353da95790285a10f452959a871aa949aab15a89b646a95abc6165955c";
 pub const SPIECE_TOKENIZER_SOURCE_PATH: &str =
-    "projects/comfy/ComfyUI/sim/text_encoders/spiece_tokenizer.py";
+    "projects/comfy/ComfyUI/comfy/text_encoders/spiece_tokenizer.py";
 pub const SPIECE_TOKENIZER_SOURCE_SHA256: &str =
     "300de9904c109171b2270524a35c372e6b8c145b88b3f9d242613d45c2bb559f";
 pub const T5_BIDIRECTIONAL_CATALOG_SYMBOLS: [&str; 19] = [

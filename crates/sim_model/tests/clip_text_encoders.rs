@@ -92,7 +92,7 @@ fn registry_is_versioned_total_unique_and_deterministic() -> Result<(), Box<dyn 
     assert_ne!(registry.identity_sha256(), [0_u8; 32]);
     assert!(matches!(
         registry.owner_for(
-            "projects/comfy/ComfyUI/sim/text_encoders/unknown.py",
+            "projects/comfy/ComfyUI/comfy/text_encoders/unknown.py",
             "Unknown"
         ),
         Err(TextEncoderRegistryError::UnknownContract { .. })

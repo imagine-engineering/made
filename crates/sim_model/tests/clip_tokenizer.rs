@@ -27,31 +27,31 @@ use std::{
 const TOKENIZER_IMPLEMENTATION_CLOSURE: [(&str, &str); 7] = [
     (
         "crates/sim_model/src/clip.rs",
-        "c94607fd822d04d9f3ecfbb3c90628d237c3fd70025858d641fe193506d02a1c",
+        "ce7883ddecf2d82ad11da3d6a658b6aa6c9be421be3d3665337b1868797179ec",
     ),
     (
         "crates/sim_model/src/clip_tokenizer.rs",
-        "a112a4fc8f8fe12463dd9c21eab4b10d631ab62a23552e99467ba32bdd1f418c",
+        "bd16365f2da02d36c9e52ee547f6e3c9ab6bdb8555fb6e4c9aacd57762459866",
     ),
     (
         "crates/sim_model/src/formats.rs",
-        "d3759e9348a00df970f77ba26036e47843d54ede8bc04a7606a2af22d86fba3f",
+        "38d7a9124e34afeb8b4751b3612619a488c2266253ac6546b85c0f58c4f95824",
     ),
     (
         "crates/sim_model/src/model_store.rs",
-        "94dcbaa44d4b0fdd76a63876a52b3aac2d015271faab9d3f6965d9cf1c89d743",
+        "1ca6aabdda4777e198f3a100558c2ec8dbbf44aa7df0ba5d9036b9082eeb911c",
     ),
     (
         "crates/sim_model/src/slices/native_diffusion.rs",
-        "d372f05ff5b2da3c79d095c8ac1a91dc561187b0b009cc548329a6a58bdde0aa",
+        "5f3ccbc4247a249f5ee2772cff0c6f52879956c3c0ee32a9853521c98d63e487",
     ),
     (
         "crates/sim_runtime/src/native_execution_controller.rs",
-        "5328af6fa842afe7042189ffb242d0c7b8aa8bb88780c63669577984777bea5f",
+        "50bda4d2e421b270fb4fb09cee75d32a94d037aceb3f2245a4e0e9866cc1cdcd",
     ),
     (
         "crates/sim_test_support/src/native_diffusion_fixture.rs",
-        "7b1a51af4135f6bb05a6a92d97e8711e4955a87d20616c103d2a2b128cfec203",
+        "1c63c63dee2c110df541138ff04ed312f755f8ac49c2bb3238d329c9555ff4e0",
     ),
 ];
 
@@ -427,7 +427,7 @@ fn qwen_artifacts(profile: &str) -> Result<(String, String, String), Box<dyn std
         .parent()
         .and_then(Path::parent)
         .ok_or("workspace root is unavailable")?
-        .join("projects/comfy/ComfyUI/sim/text_encoders")
+        .join("projects/comfy/ComfyUI/comfy/text_encoders")
         .join(profile);
     Ok((
         fs::read_to_string(root.join("tokenizer_config.json"))?,
@@ -1919,7 +1919,7 @@ fn source_row_closure_is_exact_unique_and_backed_by_valid_and_invalid_fixtures()
     )?;
     verify_tokenizer_implementation_closure(workspace)?;
     validate_fallible_allocation_atomicity_and_workspace_absence()?;
-    let source_path = "projects/comfy/ComfyUI/sim/sd1_clip.py";
+    let source_path = "projects/comfy/ComfyUI/comfy/sd1_clip.py";
     let source = fs::read(workspace.join(source_path))?;
     let mut matched = Vec::new();
     for line in catalog.lines().skip(1) {

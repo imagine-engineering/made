@@ -36,7 +36,7 @@ use sim_tensor::{
 use std::{collections::BTreeMap, mem};
 use thiserror::Error;
 
-pub const CLIP_VISION_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/clip_model.py";
+pub const CLIP_VISION_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/clip_model.py";
 pub const CLIP_VISION_SOURCE_SHA256: &str =
     "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845";
 pub const CLIP_VISION_SOURCE_TYPE_ID: &str = "CLIP_VISION";

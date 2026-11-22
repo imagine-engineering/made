@@ -27,20 +27,20 @@ use sim_types::CancellationToken;
 use std::{cmp::Ordering, collections::BTreeSet};
 use thiserror::Error;
 
-pub const LLAMA_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/llama.py";
+pub const LLAMA_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/llama.py";
 pub const LLAMA_SOURCE_SHA256: &str =
     "f4adf96f7ff8d320da909038285eebd1b36714123865cb5a8748276f718b345a";
 pub const TEXT_GENERATION_SOURCE_PATH: &str =
     "projects/comfy/ComfyUI/comfy_extras/nodes_textgen.py";
 pub const TEXT_GENERATION_SOURCE_SHA256: &str =
     "b328e8a2dc89cfd3a93ab49c1be880a3e89ec4521eef506823753617c86c99e9";
-pub const GEMMA4_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/gemma4.py";
+pub const GEMMA4_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py";
 pub const GEMMA4_SOURCE_SHA256: &str =
     "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6";
-pub const GPT_OSS_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/gpt_oss.py";
+pub const GPT_OSS_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/gpt_oss.py";
 pub const GPT_OSS_SOURCE_SHA256: &str =
     "2bff01e891f6e3c00e13a610006021cbce040f116ffd01d0680476c4a39d66dc";
-pub const QWEN35_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/qwen35.py";
+pub const QWEN35_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/qwen35.py";
 pub const QWEN35_SOURCE_SHA256: &str =
     "7cacfe7df0bd72f00e96d73ca9c4c82cf37b02aa03c7df7bcb875f611b826929";
 

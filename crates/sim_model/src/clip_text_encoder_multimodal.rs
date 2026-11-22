@@ -49,22 +49,23 @@ use std::{
 };
 use thiserror::Error;
 
-pub const IDEOGRAM4_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/ideogram4.py";
+pub const IDEOGRAM4_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/ideogram4.py";
 pub const IDEOGRAM4_SOURCE_SHA256: &str =
     "dfe31ad9c3204bf2f98c81cbc498284f661f4162f35486baed38a9a847c52343";
-pub const JINA_CLIP2_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/jina_clip_2.py";
+pub const JINA_CLIP2_SOURCE_PATH: &str =
+    "projects/comfy/ComfyUI/comfy/text_encoders/jina_clip_2.py";
 pub const JINA_CLIP2_SOURCE_SHA256: &str =
     "d5f8f32dc9ebcdc55956bc6249f115c78483555bdd895b82814376d06a6fb3d1";
-pub const OVIS_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/ovis.py";
+pub const OVIS_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/ovis.py";
 pub const OVIS_SOURCE_SHA256: &str =
     "80749123bfa24b2947fef548101a17cd73085e6743b07dd1cb3f30490f45b65f";
-pub const QWEN3VL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/qwen3vl.py";
+pub const QWEN3VL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/qwen3vl.py";
 pub const QWEN3VL_SOURCE_SHA256: &str =
     "b2dce382d1319926af148ed65939c3f731bd4c9a277fc39f8ef0ca3ce8af7d06";
-pub const QWEN_VL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/qwen_vl.py";
+pub const QWEN_VL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/qwen_vl.py";
 pub const QWEN_VL_SOURCE_SHA256: &str =
     "7edda1550592057ebf71deae3b5e7d5577502d68f26e578e41b367ca8824070f";
-pub const SAM3_CLIP_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/sam3_clip.py";
+pub const SAM3_CLIP_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/sam3_clip.py";
 pub const SAM3_CLIP_SOURCE_SHA256: &str =
     "86f1f28b88cc364adc585efdfc6b72947c09c16c1fe52c81ac543f9717fa60df";
 
@@ -76,7 +77,7 @@ pub const QWEN3VL_IMAGE_PAD_TOKEN: i64 = 151_655;
 pub const QWEN35_IMAGE_PAD_TOKEN: i64 = 248_056;
 pub const QWEN35_IMAGE_MEAN: [f32; 3] = [0.48145466, 0.4578275, 0.40821073];
 pub const QWEN35_IMAGE_STANDARD_DEVIATION: [f32; 3] = [0.26862954, 0.26130258, 0.27577711];
-pub const QWEN_MULTIMODAL_ROUTING_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/sd.py";
+pub const QWEN_MULTIMODAL_ROUTING_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/sd.py";
 pub const QWEN_MULTIMODAL_ROUTING_SOURCE_SHA256: &str =
     "9c378edbcaab01d00397cc0ef1cab7d37d25fca49c707a87cde451030ac6bf42";
 pub const QWEN3VL_IMAGE_MINIMUM_PIXELS: u64 = 3_136;
@@ -87,15 +88,15 @@ pub const QWEN3VL_IMAGE_SPATIAL_MERGE_SIZE: usize = 2;
 pub const GEMMA3_IMAGE_AREA_PIXELS: u64 = 896 * 896;
 pub const GEMMA3_MAXIMUM_PREPARED_PIXELS: u64 = GEMMA3_IMAGE_AREA_PIXELS * 4;
 pub const GEMMA3_IMAGE_SOFT_TOKENS: usize = 256;
-pub const GEMMA3_MULTIMODAL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/text_encoders/lt.py";
+pub const GEMMA3_MULTIMODAL_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/text_encoders/lt.py";
 pub const GEMMA3_MULTIMODAL_SOURCE_SHA256: &str =
     "9ddf9e68c4afd1cf848f881b7489abb49d37ac8ad6d5d2893eba4f98c9c37ca2";
 pub const GEMMA3_FOUR_B_MULTIMODAL_SOURCE_PATH: &str =
-    "projects/comfy/ComfyUI/sim/ldm/lumina/model/lumina2.py";
+    "projects/comfy/ComfyUI/comfy/ldm/lumina/model/lumina2.py";
 pub const GEMMA3_FOUR_B_MULTIMODAL_SOURCE_SHA256: &str =
     "f6af934b3d5014c6df37bb527167d1f94e44b1309079f57d4cb2f9460729da84";
 pub const GEMMA4_MULTIMODAL_SOURCE_PATH: &str =
-    "projects/comfy/ComfyUI/sim/text_encoders/gemma4.py";
+    "projects/comfy/ComfyUI/comfy/text_encoders/gemma4.py";
 pub const GEMMA4_MULTIMODAL_SOURCE_SHA256: &str =
     "c6ffbb2fbecd8f97e781a654a06ccf3910dc670867d38c0ce30542312f00cde6";
 pub const GEMMA4_IMAGE_PATCH_SIZE: u64 = 16;

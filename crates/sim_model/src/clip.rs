@@ -11230,7 +11230,7 @@ mod tests {
             .and_then(Path::parent)
             .ok_or("workspace root is unavailable")?;
         let tokenizer_json = fs::read(
-            root.join("projects/comfy/ComfyUI/sim/text_encoders/llama_tokenizer/tokenizer.json"),
+            root.join("projects/comfy/ComfyUI/comfy/text_encoders/llama_tokenizer/tokenizer.json"),
         )?;
         let tokenizer_sha256 = format!("{:x}", Sha256::digest(&tokenizer_json));
         let configuration_json = serde_json::to_vec(&serde_json::json!({

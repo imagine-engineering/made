@@ -19,10 +19,10 @@ use sim_tensor::{
 use std::{collections::BTreeSet, mem};
 use thiserror::Error;
 
-pub const CLIP_TEXT_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/clip_model.py";
+pub const CLIP_TEXT_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/clip_model.py";
 pub const CLIP_TEXT_SOURCE_SHA256: &str =
     "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845";
-pub const SD1_CLIP_SOURCE_PATH: &str = "projects/comfy/ComfyUI/sim/sd1_clip.py";
+pub const SD1_CLIP_SOURCE_PATH: &str = "projects/comfy/ComfyUI/comfy/sd1_clip.py";
 pub const SD1_CLIP_SOURCE_SHA256: &str =
     "46a778884423fe070144d8a0cb8ce94189452b92b18e5bf4145e83bb61f1b4b2";
 pub const CLIP_TEXT_CATALOG_SYMBOLS: [&str; 10] = [

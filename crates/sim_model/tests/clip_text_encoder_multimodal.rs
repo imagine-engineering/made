@@ -916,15 +916,14 @@ fn reduced_gemma4_decoder(
 }
 
 fn qwen25_prompt_tokenizer() -> Result<Arc<NativePromptTokenizer>, Box<dyn Error>> {
-    let tokenizer_configuration =
-        fs::read_to_string(workspace()?.join(
-            "projects/comfy/ComfyUI/sim/text_encoders/qwen25_tokenizer/tokenizer_config.json",
-        ))?;
+    let tokenizer_configuration = fs::read_to_string(workspace()?.join(
+        "projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/tokenizer_config.json",
+    ))?;
     let vocabulary = fs::read_to_string(
-        workspace()?.join("projects/comfy/ComfyUI/sim/text_encoders/qwen25_tokenizer/vocab.json"),
+        workspace()?.join("projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/vocab.json"),
     )?;
     let merges = fs::read_to_string(
-        workspace()?.join("projects/comfy/ComfyUI/sim/text_encoders/qwen25_tokenizer/merges.txt"),
+        workspace()?.join("projects/comfy/ComfyUI/comfy/text_encoders/qwen25_tokenizer/merges.txt"),
     )?;
     let family = Qwen2BpeTokenizer::from_artifacts(
         Qwen2PretokenizerProfile::Qwen2,
@@ -953,15 +952,14 @@ fn qwen25_prompt_tokenizer() -> Result<Arc<NativePromptTokenizer>, Box<dyn Error
 }
 
 fn qwen35_prompt_tokenizer() -> Result<Arc<NativePromptTokenizer>, Box<dyn Error>> {
-    let tokenizer_configuration =
-        fs::read_to_string(workspace()?.join(
-            "projects/comfy/ComfyUI/sim/text_encoders/qwen35_tokenizer/tokenizer_config.json",
-        ))?;
+    let tokenizer_configuration = fs::read_to_string(workspace()?.join(
+        "projects/comfy/ComfyUI/comfy/text_encoders/qwen35_tokenizer/tokenizer_config.json",
+    ))?;
     let vocabulary = fs::read_to_string(
-        workspace()?.join("projects/comfy/ComfyUI/sim/text_encoders/qwen35_tokenizer/vocab.json"),
+        workspace()?.join("projects/comfy/ComfyUI/comfy/text_encoders/qwen35_tokenizer/vocab.json"),
     )?;
     let merges = fs::read_to_string(
-        workspace()?.join("projects/comfy/ComfyUI/sim/text_encoders/qwen35_tokenizer/merges.txt"),
+        workspace()?.join("projects/comfy/ComfyUI/comfy/text_encoders/qwen35_tokenizer/merges.txt"),
     )?;
     let family = Qwen2BpeTokenizer::from_artifacts(
         Qwen2PretokenizerProfile::Qwen35Declared,
@@ -2327,12 +2325,21 @@ fn gemma_audio_preparation_is_source_exact_bounded_and_transactional() -> Result
     drop(silence);
     drop(prepared);
 
-    let mut resample_values = Vec::new();
-    resample_values.try_reserve_exact(2_205)?;
-    for sample in 0..2_205 {
-        let phase = std::f32::consts::TAU * 440.0 * sample as f32 / 44_100.0;
-        resample_values.push(phase.sin());
-    }
+    let source: Value = serde_json::from_str(include_str!(
+        "../../sim_test_support/fixtures/text_generation/gemma_multimodal/audio_preparation/source-oracle.json"
+    ))?;
+    let waveform = include_bytes!(
+        "../../sim_test_support/fixtures/text_generation/gemma_multimodal/audio_preparation/input-waveform.f32le"
+    );
+    assert_eq!(source["source"]["sha256"], manifest["sources"][0]["sha256"]);
+    assert_eq!(
+        source["input"]["sha256"],
+        format!("{:x}", Sha256::digest(waveform))
+    );
+    let resample_values = waveform
+        .chunks_exact(4)
+        .map(|sample| sample.try_into().map(f32::from_le_bytes))
+        .collect::<Result<Vec<_>, _>>()?;
     let resample_input = tensor(&backend, &[1, 1, 2_205], &resample_values, &setup)?;
     let resampled = prepare_gemma4_audio(&backend, &resample_input, 44_100, &setup)?;
     assert_eq!(resampled.resampled_samples(), 800);
@@ -2349,10 +2356,6 @@ fn gemma_audio_preparation_is_source_exact_bounded_and_transactional() -> Result
         assert!((actual - expected).abs() <= 2.0e-6);
     }
     let feature_bytes = resampled.log_mel().contiguous_bytes()?;
-    let source: Value = serde_json::from_str(include_str!(
-        "../../sim_test_support/fixtures/text_generation/gemma_multimodal/audio_preparation/source-oracle.json"
-    ))?;
-    assert_eq!(source["source"]["sha256"], manifest["sources"][0]["sha256"]);
     let expected = source["values"].as_array().ok_or("source audio values")?;
     assert_eq!(expected.len(), resampled_features.len());
     let tolerance = source["absolute_tolerance"]

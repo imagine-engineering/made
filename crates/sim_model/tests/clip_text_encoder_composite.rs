@@ -102,14 +102,14 @@ fn source_provenance_and_exact_row_closure_are_compiled() -> Result<(), Box<dyn 
     }
     assert!(
         composite_contract_fact(
-            "projects/comfy/ComfyUI/sim/text_encoders/ace.py",
+            "projects/comfy/ComfyUI/comfy/text_encoders/ace.py",
             "__typed_invalid__"
         )
         .is_none()
     );
     assert!(
         composite_symbol_behavior(
-            "projects/comfy/ComfyUI/sim/text_encoders/not_pinned.py",
+            "projects/comfy/ComfyUI/comfy/text_encoders/not_pinned.py",
             "T5Model"
         )
         .is_none()
