@@ -1245,6 +1245,103 @@ fn at_gra_node_085_native_reciprocal_preserves_typed_outputs_and_invalid_drafts(
 }
 
 #[gpui::test]
+fn at_gra_node_078_native_divide_matches_each_typed_mode_and_recovers(cx: &mut TestAppContext) {
+    use workspace::item::Item as _;
+
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let editors = item.read_with(cx, |item, _| {
+        [
+            item.augend_editor.clone(),
+            item.augend_y_editor.clone(),
+            item.addend_editor.clone(),
+            item.addend_y_editor.clone(),
+        ]
+    });
+    for (selector, inputs, expected) in [
+        ("GRAPHITE-MODE-DIVIDE-SCALAR", ["-9", "", "3", ""], "-3"),
+        (
+            "GRAPHITE-MODE-DIVIDE-LISTS",
+            ["10, 1, 6", "", "2, 0", ""],
+            "[5.0, 0.0, 0.0]",
+        ),
+        ("GRAPHITE-MODE-DIVIDE-INTEGER", ["-7", "", "2", ""], "-3"),
+        (
+            "GRAPHITE-MODE-DIVIDE-VECTOR",
+            ["6", "7", "2", "0"],
+            "[3.0, 0.0]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-SCALAR-VECTOR",
+            ["6", "", "0", "-3"],
+            "[0.0, -2.0]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-VECTOR-SCALAR",
+            ["6", "-8", "2", ""],
+            "[3.0, -4.0]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-INTEGER-LISTS",
+            ["8, -9223372036854775808, -9", "", "-1, -1, 2", ""],
+            "[-8, 0, -4]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-VECTOR-LISTS",
+            ["6", "-8", "2, 3", "0, -4"],
+            "[[3.0, 0.0], [2.0, 2.0]]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-SCALAR-VECTOR-LISTS",
+            ["6", "", "0, 2", "-3, 6"],
+            "[[0.0, -2.0], [3.0, 1.0]]",
+        ),
+        (
+            "GRAPHITE-MODE-DIVIDE-VECTOR-SCALAR-LISTS",
+            ["6", "-8", "2, 0", ""],
+            "[[3.0, -4.0], [0.0, 0.0]]",
+        ),
+    ] {
+        let button = cx.debug_bounds(selector).expect("admitted Divide mode");
+        cx.simulate_click(button.center(), gpui::Modifiers::default());
+        for (editor, input) in editors.iter().zip(inputs) {
+            editor.update_in(cx, |editor, window, cx| editor.set_text(input, window, cx));
+        }
+        cx.run_until_parked();
+        item.read_with(cx, |item, cx| {
+            let session = item.session.read(cx);
+            assert!(
+                session.diagnostic().is_none(),
+                "{selector}: {:?}",
+                session.diagnostic()
+            );
+            assert_eq!(session.result_text(), expected, "{selector}");
+            assert_eq!(item.tab_content_text(0, cx), "Graphite Divide");
+        });
+        assert!(cx.debug_bounds("GRAPHITE-RESULT").is_some());
+    }
+    let revision = item.read_with(cx, |item, cx| item.session.read(cx).revision());
+    let denominator = editors.get(2).expect("denominator editor");
+    denominator.update_in(cx, |editor, window, cx| {
+        editor.set_text("invalid", window, cx)
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_some());
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert_eq!(session.revision(), revision);
+        assert_eq!(session.result_text(), "[[3.0, -4.0], [0.0, 0.0]]");
+    });
+    denominator.update_in(cx, |editor, window, cx| editor.set_text("0, 2", window, cx));
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("GRAPHITE-INPUT-ERROR").is_none());
+    assert!(
+        cx.debug_bounds("GRAPHITE-RESULT-[[0.0, 0.0], [3.0, -4.0]]")
+            .is_some()
+    );
+}
+
+#[gpui::test]
 fn at_gra_node_086_native_root_matches_each_typed_mode_and_recovers(cx: &mut TestAppContext) {
     use workspace::item::Item as _;
 

@@ -72,7 +72,7 @@ mod tests {
         registry::{RegistryValueSource, RegistryWidgetOverride},
     };
     use graphite_glam::DVec2;
-    use graphite_math_nodes::{reciprocal, root, subtract};
+    use graphite_math_nodes::{divide, reciprocal, root, subtract};
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
@@ -105,6 +105,58 @@ mod tests {
             Type::Future(Box::new(output)),
             vec![input(left), input(right)],
         )
+    }
+
+    #[test]
+    fn at_gra_node_078_1_divide_exposes_exact_source_ports_and_ten_signatures() {
+        let identifier = divide::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "math_nodes::DivideNode");
+        assert_eq!(divide::NumeratorInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(divide::NumeratorInput::INDEX, 0);
+        assert_eq!(divide::DenominatorInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(divide::DenominatorInput::INDEX, 1);
+        let registered = registered_node(identifier.as_str()).expect("native Divide entry");
+        assert_eq!(registered.metadata.display_name, "Divide");
+        assert_eq!(registered.metadata.category, "Math: Arithmetic");
+        assert_eq!(registered.metadata.properties, None);
+        assert!(registered.metadata.context_features.is_empty());
+        let [numerator, denominator] = registered.metadata.fields.as_slice() else {
+            panic!("expected the two source Divide ports");
+        };
+        assert_eq!(numerator.name, "Numerator");
+        assert_eq!(numerator.default_type, Some(list!(f64)));
+        assert!(matches!(numerator.value_source, RegistryValueSource::None));
+        assert_eq!(denominator.name, "Denominator");
+        assert_eq!(denominator.default_type, Some(concrete!(f64)));
+        assert!(matches!(
+            denominator.value_source,
+            RegistryValueSource::Default("1.")
+        ));
+        assert!(matches!(
+            numerator.widget_override,
+            RegistryWidgetOverride::None
+        ));
+        assert!(matches!(
+            denominator.widget_override,
+            RegistryWidgetOverride::None
+        ));
+        let expected = HashSet::from([
+            binary_signature(item!(f64), item!(f64), concrete!(Item<f64>)),
+            binary_signature(item!(i64), item!(i64), concrete!(Item<i64>)),
+            binary_signature(item!(DVec2), item!(DVec2), concrete!(Item<DVec2>)),
+            binary_signature(item!(DVec2), item!(f64), concrete!(Item<DVec2>)),
+            binary_signature(item!(f64), item!(DVec2), concrete!(Item<DVec2>)),
+            binary_signature(list!(f64), list!(f64), concrete!(List<f64>)),
+            binary_signature(list!(i64), list!(i64), concrete!(List<i64>)),
+            binary_signature(list!(DVec2), list!(DVec2), concrete!(List<DVec2>)),
+            binary_signature(list!(DVec2), list!(f64), concrete!(List<DVec2>)),
+            binary_signature(list!(f64), list!(DVec2), concrete!(List<DVec2>)),
+        ]);
+        assert_eq!(registered.signatures.len(), expected.len());
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            expected
+        );
     }
 
     #[test]

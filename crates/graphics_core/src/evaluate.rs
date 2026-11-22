@@ -18,7 +18,7 @@ use graphite_graph_craft::{
     graphene_compiler::{Compiler, Executor},
 };
 use graphite_interpreted_executor::dynamic_executor::DynamicExecutor;
-use graphite_math_nodes::NthRoot;
+use graphite_math_nodes::{NthRoot, SafeDivide};
 use graphite_std::{
     ATTR_TRANSFORM, Artboard, Graphic,
     application_io::{ExportFormat, GetEditorPreferences, RenderConfig},
@@ -146,31 +146,127 @@ where
         .map_err(|_| AddEvaluationError)
 }
 
+pub fn evaluate_divide(numerator: f64, denominator: f64) -> Result<f64, AddEvaluationError> {
+    divide_value(numerator, denominator)
+}
+
+pub fn evaluate_divide_lists(
+    numerators: &[f64],
+    denominators: &[f64],
+) -> Result<Vec<f64>, AddEvaluationError> {
+    divide_list_items(numeric_items(numerators), numeric_items(denominators))
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_divide_i64(numerator: i64, denominator: i64) -> Result<i64, AddEvaluationError> {
+    divide_value(numerator, denominator)
+}
+
+pub fn evaluate_divide_i64_lists(
+    numerators: &[i64],
+    denominators: &[i64],
+) -> Result<Vec<i64>, AddEvaluationError> {
+    divide_list_items(numeric_items(numerators), numeric_items(denominators))
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_divide_vector(
+    numerator: [f64; 2],
+    denominator: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    divide_value(DVec2::from_array(numerator), DVec2::from_array(denominator))
+        .map(|value| value.to_array())
+}
+
+pub fn evaluate_divide_scalar_vector(
+    numerator: f64,
+    denominator: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    divide_value(numerator, DVec2::from_array(denominator)).map(|value| value.to_array())
+}
+
+pub fn evaluate_divide_vector_scalar(
+    numerator: [f64; 2],
+    denominator: f64,
+) -> Result<[f64; 2], AddEvaluationError> {
+    divide_value(DVec2::from_array(numerator), denominator).map(|value| value.to_array())
+}
+
+pub fn evaluate_divide_vector_lists(
+    numerators: &[[f64; 2]],
+    denominators: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    divide_list_items(vector_items(numerators), vector_items(denominators)).map(vector_elements)
+}
+
+pub fn evaluate_divide_scalar_vector_lists(
+    numerators: &[f64],
+    denominators: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    divide_list_items(numeric_items(numerators), vector_items(denominators)).map(vector_elements)
+}
+
+pub fn evaluate_divide_vector_scalar_lists(
+    numerators: &[[f64; 2]],
+    denominators: &[f64],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    divide_list_items(vector_items(numerators), numeric_items(denominators)).map(vector_elements)
+}
+
+fn divide_value<Numerator, Denominator>(
+    numerator: Numerator,
+    denominator: Denominator,
+) -> Result<Numerator::Output, AddEvaluationError>
+where
+    Numerator: SafeDivide<Denominator> + Clone + Send + Sync + 'static,
+    Denominator: Clone + Send + Sync + 'static,
+    Numerator::Output: Send + Sync + 'static,
+{
+    let node = graphite_math_nodes::DivideNode::new(
+        Input(Item::new_from_element(numerator)),
+        Input(Item::new_from_element(denominator)),
+    );
+    evaluate_source_node(&node).map(Item::into_element)
+}
+
+fn divide_list_items<Numerator, Denominator>(
+    numerators: List<Numerator>,
+    denominators: List<Denominator>,
+) -> Result<List<Numerator::Output>, AddEvaluationError>
+where
+    Numerator: SafeDivide<Denominator> + Clone + Send + Sync + 'static,
+    Denominator: Clone + Send + Sync + 'static,
+    Numerator::Output: Clone + Send + Sync + 'static,
+{
+    let node = graphite_math_nodes::DivideNodeMapped::new(Input(numerators), Input(denominators));
+    evaluate_source_node(&node)
+}
+
 pub fn evaluate_reciprocal(value: f64) -> Result<f64, AddEvaluationError> {
     let node = graphite_math_nodes::ReciprocalNode::new(Input(Item::new_from_element(value)));
-    evaluate_reciprocal_node(&node).map(Item::into_element)
+    evaluate_source_node(&node).map(Item::into_element)
 }
 
 pub fn evaluate_reciprocal_vector(value: [f64; 2]) -> Result<[f64; 2], AddEvaluationError> {
     let node = graphite_math_nodes::ReciprocalNode::new(Input(Item::new_from_element(
         DVec2::from_array(value),
     )));
-    evaluate_reciprocal_node(&node).map(|item| item.into_element().to_array())
+    evaluate_source_node(&node).map(|item| item.into_element().to_array())
 }
 
 pub fn evaluate_reciprocal_list(values: &[f64]) -> Result<Vec<f64>, AddEvaluationError> {
     let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(numeric_items(values)));
-    evaluate_reciprocal_node(&node).map(|items| items.into_iter().map(Item::into_element).collect())
+    evaluate_source_node(&node).map(|items| items.into_iter().map(Item::into_element).collect())
 }
 
 pub fn evaluate_reciprocal_vector_list(
     values: &[[f64; 2]],
 ) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
     let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(vector_items(values)));
-    evaluate_reciprocal_node(&node).map(vector_elements)
+    evaluate_source_node(&node).map(vector_elements)
 }
 
-fn evaluate_reciprocal_node<'node, Output, Evaluation: Future<Output = Output>>(
+fn evaluate_source_node<'node, Output, Evaluation: Future<Output = Output>>(
     node: &'node impl Node<'node, Context<'node>, Output = Evaluation>,
 ) -> Result<Output, AddEvaluationError> {
     futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())

@@ -9,7 +9,7 @@ use workspace::{
     item::{Item, ItemEvent, SaveOptions},
 };
 
-use crate::session::{AddMode, GraphicsSession};
+use crate::session::{AddMode, DivideMode, GraphicsSession};
 
 actions!(
     graphite,
@@ -425,6 +425,20 @@ impl Render for GraphicsWorkspaceItem {
         } else {
             "subtrahend"
         };
+        let numerator_label = if mode.augend_is_vector() {
+            "numerator.x"
+        } else if mode.is_list() {
+            "numerators"
+        } else {
+            "numerator"
+        };
+        let denominator_label = if mode.addend_is_vector() {
+            "denominator.x"
+        } else if mode.is_list() {
+            "denominators"
+        } else {
+            "denominator"
+        };
         let radicand_label = if mode.augend_is_vector() {
             "radicand.x"
         } else if mode.is_list() {
@@ -452,6 +466,8 @@ impl Render for GraphicsWorkspaceItem {
             "multiplier.y"
         } else if mode.is_subtract() {
             "minuend.y"
+        } else if mode.is_divide() {
+            "numerator.y"
         } else if mode.is_reciprocal() {
             "value.y"
         } else if mode.is_root() {
@@ -465,6 +481,8 @@ impl Render for GraphicsWorkspaceItem {
             "multiplicand.y"
         } else if mode.is_subtract() {
             "subtrahend.y"
+        } else if mode.is_divide() {
+            "denominator.y"
         } else if mode.is_root() {
             "degree.y"
         } else {
@@ -491,6 +509,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Graphite Sort"
             } else if mode.is_subtract() {
                 "Graphite Subtract"
+            } else if mode.is_divide() {
+                "Graphite Divide"
             } else if mode.is_reciprocal() {
                 "Graphite Reciprocal"
             } else if mode.is_root() {
@@ -510,6 +530,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Enter comma-separated numbers in each list."
             } else if mode.is_subtract() {
                 "Edit the inputs to calculate their difference."
+            } else if mode.is_divide() {
+                "Each zero denominator produces zero."
             } else if mode.is_reciprocal() {
                 "Each zero input produces zero."
             } else if mode.is_root() {
@@ -581,6 +603,16 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::MultiplyVectorScalarLists, "Multiply Vector × Scalar Lists", "GRAPHITE-MODE-MULTIPLY-VECTOR-SCALAR-LISTS"),
                         (AddMode::MultiplyAffine, "Multiply Affine", "GRAPHITE-MODE-MULTIPLY-AFFINE"),
                         (AddMode::MultiplyAffineLists, "Multiply Affine Lists", "GRAPHITE-MODE-MULTIPLY-AFFINE-LISTS"),
+                        (AddMode::Divide(DivideMode::Scalar), "Divide Scalar", "GRAPHITE-MODE-DIVIDE-SCALAR"),
+                        (AddMode::Divide(DivideMode::Lists), "Divide Lists", "GRAPHITE-MODE-DIVIDE-LISTS"),
+                        (AddMode::Divide(DivideMode::Integer), "Divide Integer", "GRAPHITE-MODE-DIVIDE-INTEGER"),
+                        (AddMode::Divide(DivideMode::Vector), "Divide Vector ÷ Vector", "GRAPHITE-MODE-DIVIDE-VECTOR"),
+                        (AddMode::Divide(DivideMode::ScalarVector), "Divide Scalar ÷ Vector", "GRAPHITE-MODE-DIVIDE-SCALAR-VECTOR"),
+                        (AddMode::Divide(DivideMode::VectorScalar), "Divide Vector ÷ Scalar", "GRAPHITE-MODE-DIVIDE-VECTOR-SCALAR"),
+                        (AddMode::Divide(DivideMode::IntegerLists), "Divide Integer Lists", "GRAPHITE-MODE-DIVIDE-INTEGER-LISTS"),
+                        (AddMode::Divide(DivideMode::VectorLists), "Divide Vector Lists", "GRAPHITE-MODE-DIVIDE-VECTOR-LISTS"),
+                        (AddMode::Divide(DivideMode::ScalarVectorLists), "Divide Scalar ÷ Vector Lists", "GRAPHITE-MODE-DIVIDE-SCALAR-VECTOR-LISTS"),
+                        (AddMode::Divide(DivideMode::VectorScalarLists), "Divide Vector ÷ Scalar Lists", "GRAPHITE-MODE-DIVIDE-VECTOR-SCALAR-LISTS"),
                         (AddMode::ReciprocalScalar, "Reciprocal Scalar", "GRAPHITE-MODE-RECIPROCAL-SCALAR"),
                         (AddMode::ReciprocalVector, "Reciprocal Vector", "GRAPHITE-MODE-RECIPROCAL-VECTOR"),
                         (AddMode::ReciprocalList, "Reciprocal List", "GRAPHITE-MODE-RECIPROCAL-LIST"),
@@ -695,7 +727,7 @@ impl Render for GraphicsWorkspaceItem {
                 .child(Label::new("Component order: m11, m12, m21, m22, tx, ty (column-major)."))
             })
             .when(
-                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists | AddMode::SubtractInteger | AddMode::SubtractIntegerLists),
+                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists | AddMode::SubtractInteger | AddMode::SubtractIntegerLists | AddMode::Divide(DivideMode::Integer | DivideMode::IntegerLists)),
                 |view| {
                     view.child(Label::new(
                         "Enter whole numbers in the 64-bit integer range.",
@@ -721,6 +753,8 @@ impl Render for GraphicsWorkspaceItem {
                         "values"
                     } else if mode.is_subtract() {
                         minuend_label
+                    } else if mode.is_divide() {
+                        numerator_label
                     } else if mode.is_reciprocal() {
                         reciprocal_label
                     } else if mode.is_root() {
@@ -743,6 +777,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "values"
                             } else if mode.is_subtract() {
                                 minuend_label
+                            } else if mode.is_divide() {
+                                numerator_label
                             } else if mode.is_reciprocal() {
                                 reciprocal_label
                             } else if mode.is_root() {
@@ -776,6 +812,8 @@ impl Render for GraphicsWorkspaceItem {
                         "sort keys (optional)"
                     } else if mode.is_subtract() {
                         subtrahend_label
+                    } else if mode.is_divide() {
+                        denominator_label
                     } else if mode.is_root() {
                         degree_label
                     } else if mode.is_multiply() {
@@ -796,6 +834,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "sort keys"
                             } else if mode.is_subtract() {
                                 subtrahend_label
+                            } else if mode.is_divide() {
+                                denominator_label
                             } else if mode.is_root() {
                                 degree_label
                             } else if mode.is_multiply() {
@@ -883,6 +923,8 @@ impl Item for GraphicsWorkspaceItem {
             "Graphite Sort".into()
         } else if self.session.read(cx).mode().is_subtract() {
             "Graphite Subtract".into()
+        } else if self.session.read(cx).mode().is_divide() {
+            "Graphite Divide".into()
         } else if self.session.read(cx).mode().is_reciprocal() {
             "Graphite Reciprocal".into()
         } else if self.session.read(cx).mode().is_root() {

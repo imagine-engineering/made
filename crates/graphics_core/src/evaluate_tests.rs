@@ -9,6 +9,60 @@ use std::{collections::HashSet, error::Error, time::Duration};
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn at_gra_node_078_2_divide_preserves_pinned_numeric_types_zeros_and_overflow() -> TestResult {
+    assert_eq!(evaluate_divide(9., -3.)?, -3.);
+    assert_eq!(evaluate_divide(9., -0.)?.to_bits(), 0_f64.to_bits());
+    assert!(evaluate_divide(9., f64::NAN)?.is_nan());
+    assert_eq!(evaluate_divide_i64(-7, 2)?, -3);
+    assert_eq!(evaluate_divide_i64(7, 0)?, 0);
+    assert_eq!(evaluate_divide_i64(i64::MIN, -1)?, 0);
+    assert_eq!(
+        evaluate_divide_lists(&[10., 1., 6.], &[2., 0.])?,
+        [5., 0., 0.]
+    );
+    assert_eq!(
+        evaluate_divide_i64_lists(&[8, i64::MIN, -9], &[-1, -1, 2])?,
+        [-8, 0, -4]
+    );
+    assert!(evaluate_divide_lists(&[1.], &[])?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_078_2_divide_keeps_vector_components_and_numerator_attributes() -> TestResult {
+    assert_eq!(evaluate_divide_vector([6., 7.], [2., 0.])?, [3., 0.]);
+    assert_eq!(evaluate_divide_scalar_vector(6., [0., -3.])?, [0., -2.]);
+    assert_eq!(evaluate_divide_vector_scalar([6., -8.], 2.)?, [3., -4.]);
+    assert_eq!(
+        evaluate_divide_vector_lists(&[[6., -8.]], &[[2., 0.], [3., -4.]])?,
+        [[3., 0.], [2., 2.]]
+    );
+    assert_eq!(
+        evaluate_divide_scalar_vector_lists(&[6.], &[[0., -3.], [2., 6.]])?,
+        [[0., -2.], [3., 1.]]
+    );
+    assert_eq!(
+        evaluate_divide_vector_scalar_lists(&[[6., -8.]], &[2., 0.])?,
+        [[3., -4.], [0., 0.]]
+    );
+    let numerators = [Item::new_from_element(DVec2::new(6., -8.)).with_attribute("origin", 17_i64)]
+        .into_iter()
+        .collect();
+    let denominators = [
+        Item::new_from_element(2.).with_attribute("denominator", true),
+        Item::new_from_element(0.),
+    ]
+    .into_iter()
+    .collect();
+    let result = divide_list_items(numerators, denominators)?;
+    for index in 0..result.len() {
+        assert_eq!(result.attribute::<i64>("origin", index), Some(&17));
+        assert!(result.attribute::<bool>("denominator", index).is_none());
+    }
+    Ok(())
+}
+
+#[test]
 fn at_gra_node_085_2_reciprocal_keeps_source_types_and_zero_semantics() -> TestResult {
     assert_eq!(evaluate_reciprocal(-4.)?, -0.25);
     assert_eq!(evaluate_reciprocal(-0.)?.to_bits(), 0_f64.to_bits());
@@ -34,7 +88,7 @@ fn at_gra_node_085_2_reciprocal_preserves_ordered_input_attributes() -> TestResu
     let node = graphite_math_nodes::ReciprocalNodeMapped::new(Input(
         [first, second].into_iter().collect::<List<_>>(),
     ));
-    let result = evaluate_reciprocal_node(&node)?;
+    let result = evaluate_source_node(&node)?;
     assert_eq!(
         result.iter_element_values().copied().collect::<Vec<_>>(),
         [DVec2::new(-0.25, 0.), DVec2::new(0., 0.125)]

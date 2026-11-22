@@ -20,6 +20,7 @@ pub(crate) enum AddMode {
     SubtractVectorLists,
     SubtractScalarVectorLists,
     SubtractVectorScalarLists,
+    Divide(DivideMode),
     ReciprocalScalar,
     ReciprocalVector,
     ReciprocalList,
@@ -49,7 +50,25 @@ pub(crate) enum AddMode {
     MixColor,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DivideMode {
+    Scalar,
+    Lists,
+    Integer,
+    Vector,
+    ScalarVector,
+    VectorScalar,
+    IntegerLists,
+    VectorLists,
+    ScalarVectorLists,
+    VectorScalarLists,
+}
+
 impl AddMode {
+    pub(crate) fn is_divide(self) -> bool {
+        matches!(self, Self::Divide(_))
+    }
+
     pub(crate) fn is_subtract(self) -> bool {
         matches!(
             self,
@@ -125,6 +144,13 @@ impl AddMode {
                 | Self::SubtractVectorLists
                 | Self::SubtractScalarVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::Divide(
+                    DivideMode::Lists
+                        | DivideMode::IntegerLists
+                        | DivideMode::VectorLists
+                        | DivideMode::ScalarVectorLists
+                        | DivideMode::VectorScalarLists
+                )
                 | Self::ReciprocalList
                 | Self::ReciprocalVectorList
                 | Self::RootLists
@@ -151,6 +177,12 @@ impl AddMode {
                 | Self::SubtractVectorScalar
                 | Self::SubtractVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::Divide(
+                    DivideMode::Vector
+                        | DivideMode::VectorScalar
+                        | DivideMode::VectorLists
+                        | DivideMode::VectorScalarLists
+                )
                 | Self::ReciprocalVector
                 | Self::ReciprocalVectorList
                 | Self::RootVector
@@ -175,6 +207,12 @@ impl AddMode {
                 | Self::SubtractScalarVector
                 | Self::SubtractVectorLists
                 | Self::SubtractScalarVectorLists
+                | Self::Divide(
+                    DivideMode::Vector
+                        | DivideMode::ScalarVector
+                        | DivideMode::VectorLists
+                        | DivideMode::ScalarVectorLists
+                )
                 | Self::RootVector
                 | Self::RootScalarVector
                 | Self::RootVectorLists
@@ -198,7 +236,8 @@ enum Inputs {
     VectorLists(Vec<[f64; 2]>, Vec<[f64; 2]>),
     ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
-    Subtract(SubtractInputs),
+    Subtract(NumericPairInputs),
+    Divide(NumericPairInputs),
     Reciprocal(ReciprocalInputs),
     Root(RootInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
@@ -224,7 +263,7 @@ enum Output {
     Color([f32; 4]),
 }
 
-enum SubtractInputs {
+enum NumericPairInputs {
     Scalar(f64, f64),
     Lists(Vec<f64>, Vec<f64>),
     Integer(i64, i64),
@@ -237,7 +276,7 @@ enum SubtractInputs {
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
 }
 
-impl SubtractInputs {
+impl NumericPairInputs {
     fn same_values(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Scalar(left, right), Self::Scalar(other_left, other_right)) => {
@@ -276,7 +315,7 @@ impl SubtractInputs {
         }
     }
 
-    fn evaluate(&self) -> Result<Output, graphics_core::AddEvaluationError> {
+    fn evaluate_subtract(&self) -> Result<Output, graphics_core::AddEvaluationError> {
         use graphics_core::evaluate as source;
 
         Ok(match self {
@@ -311,22 +350,59 @@ impl SubtractInputs {
         })
     }
 
-    fn expression(&self) -> String {
+    fn evaluate_divide(&self) -> Result<Output, graphics_core::AddEvaluationError> {
+        use graphics_core::evaluate as source;
+
+        Ok(match self {
+            Self::Scalar(numerator, denominator) => {
+                Output::Scalar(source::evaluate_divide(*numerator, *denominator)?)
+            }
+            Self::Lists(numerators, denominators) => {
+                Output::Lists(source::evaluate_divide_lists(numerators, denominators)?)
+            }
+            Self::Integer(numerator, denominator) => {
+                Output::Integer(source::evaluate_divide_i64(*numerator, *denominator)?)
+            }
+            Self::Vector(numerator, denominator) => {
+                Output::Vector(source::evaluate_divide_vector(*numerator, *denominator)?)
+            }
+            Self::ScalarVector(numerator, denominator) => Output::Vector(
+                source::evaluate_divide_scalar_vector(*numerator, *denominator)?,
+            ),
+            Self::VectorScalar(numerator, denominator) => Output::Vector(
+                source::evaluate_divide_vector_scalar(*numerator, *denominator)?,
+            ),
+            Self::IntegerLists(numerators, denominators) => {
+                Output::IntegerLists(source::evaluate_divide_i64_lists(numerators, denominators)?)
+            }
+            Self::VectorLists(numerators, denominators) => Output::VectorLists(
+                source::evaluate_divide_vector_lists(numerators, denominators)?,
+            ),
+            Self::ScalarVectorLists(numerators, denominators) => Output::VectorLists(
+                source::evaluate_divide_scalar_vector_lists(numerators, denominators)?,
+            ),
+            Self::VectorScalarLists(numerators, denominators) => Output::VectorLists(
+                source::evaluate_divide_vector_scalar_lists(numerators, denominators)?,
+            ),
+        })
+    }
+
+    fn expression(&self, symbol: char) -> String {
         match self {
-            Self::Scalar(left, right) => format!("{left} − {right}"),
-            Self::Lists(left, right) => format!("{left:?} − {right:?}"),
-            Self::Integer(left, right) => format!("{left} − {right}"),
-            Self::Vector(left, right) => format!("{left:?} − {right:?}"),
-            Self::ScalarVector(left, right) => format!("{left} − {right:?}"),
-            Self::VectorScalar(left, right) => format!("{left:?} − {right}"),
-            Self::IntegerLists(left, right) => format!("{left:?} − {right:?}"),
-            Self::VectorLists(left, right) => format!("{left:?} − {right:?}"),
-            Self::ScalarVectorLists(left, right) => format!("{left:?} − {right:?}"),
-            Self::VectorScalarLists(left, right) => format!("{left:?} − {right:?}"),
+            Self::Scalar(left, right) => format!("{left} {symbol} {right}"),
+            Self::Lists(left, right) => format!("{left:?} {symbol} {right:?}"),
+            Self::Integer(left, right) => format!("{left} {symbol} {right}"),
+            Self::Vector(left, right) => format!("{left:?} {symbol} {right:?}"),
+            Self::ScalarVector(left, right) => format!("{left} {symbol} {right:?}"),
+            Self::VectorScalar(left, right) => format!("{left:?} {symbol} {right}"),
+            Self::IntegerLists(left, right) => format!("{left:?} {symbol} {right:?}"),
+            Self::VectorLists(left, right) => format!("{left:?} {symbol} {right:?}"),
+            Self::ScalarVectorLists(left, right) => format!("{left:?} {symbol} {right:?}"),
+            Self::VectorScalarLists(left, right) => format!("{left:?} {symbol} {right:?}"),
         }
     }
 
-    fn mode(&self) -> AddMode {
+    fn subtract_mode(&self) -> AddMode {
         match self {
             Self::Scalar(..) => AddMode::SubtractScalar,
             Self::Lists(..) => AddMode::SubtractLists,
@@ -339,6 +415,21 @@ impl SubtractInputs {
             Self::ScalarVectorLists(..) => AddMode::SubtractScalarVectorLists,
             Self::VectorScalarLists(..) => AddMode::SubtractVectorScalarLists,
         }
+    }
+
+    fn divide_mode(&self) -> AddMode {
+        AddMode::Divide(match self {
+            Self::Scalar(..) => DivideMode::Scalar,
+            Self::Lists(..) => DivideMode::Lists,
+            Self::Integer(..) => DivideMode::Integer,
+            Self::Vector(..) => DivideMode::Vector,
+            Self::ScalarVector(..) => DivideMode::ScalarVector,
+            Self::VectorScalar(..) => DivideMode::VectorScalar,
+            Self::IntegerLists(..) => DivideMode::IntegerLists,
+            Self::VectorLists(..) => DivideMode::VectorLists,
+            Self::ScalarVectorLists(..) => DivideMode::ScalarVectorLists,
+            Self::VectorScalarLists(..) => DivideMode::VectorScalarLists,
+        })
     }
 }
 
@@ -777,7 +868,8 @@ impl Inputs {
                 augend.to_bits() == other_augend.to_bits()
                     && addend.to_bits() == other_addend.to_bits()
             }
-            (Self::Subtract(inputs), Self::Subtract(other_inputs)) => {
+            (Self::Subtract(inputs), Self::Subtract(other_inputs))
+            | (Self::Divide(inputs), Self::Divide(other_inputs)) => {
                 inputs.same_values(other_inputs)
             }
             (Self::Reciprocal(inputs), Self::Reciprocal(other_inputs)) => {
@@ -849,7 +941,8 @@ impl Inputs {
                 graphics_core::raster::evaluate_invert_color_channels(*channels)?,
             ),
             Self::Multiply(inputs) => inputs.evaluate()?,
-            Self::Subtract(inputs) => inputs.evaluate()?,
+            Self::Subtract(inputs) => inputs.evaluate_subtract()?,
+            Self::Divide(inputs) => inputs.evaluate_divide()?,
             Self::Reciprocal(inputs) => inputs.evaluate()?,
             Self::Root(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
@@ -904,7 +997,8 @@ impl Inputs {
             ),
             Self::InvertColor(channels) => format!("Invert RGBA {channels:?}"),
             Self::Multiply(inputs) => inputs.expression(),
-            Self::Subtract(inputs) => inputs.expression(),
+            Self::Subtract(inputs) => inputs.expression('−'),
+            Self::Divide(inputs) => inputs.expression('÷'),
             Self::Reciprocal(inputs) => inputs.expression(),
             Self::Root(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
@@ -1435,50 +1529,92 @@ impl GraphicsSession {
                 parse_number(augend, "augend")?,
                 parse_number(addend, "addend")?,
             ),
-            AddMode::SubtractScalar => Inputs::Subtract(SubtractInputs::Scalar(
+            AddMode::SubtractScalar => Inputs::Subtract(NumericPairInputs::Scalar(
                 parse_number(augend, "minuend")?,
                 parse_number(addend, "subtrahend")?,
             )),
-            AddMode::SubtractLists => Inputs::Subtract(SubtractInputs::Lists(
+            AddMode::SubtractLists => Inputs::Subtract(NumericPairInputs::Lists(
                 parse_number_list(augend, "minuends")?,
                 parse_number_list(addend, "subtrahends")?,
             )),
-            AddMode::SubtractInteger => Inputs::Subtract(SubtractInputs::Integer(
+            AddMode::SubtractInteger => Inputs::Subtract(NumericPairInputs::Integer(
                 parse_integer(augend, "minuend")?,
                 parse_integer(addend, "subtrahend")?,
             )),
-            AddMode::SubtractVector => Inputs::Subtract(SubtractInputs::Vector(
+            AddMode::SubtractVector => Inputs::Subtract(NumericPairInputs::Vector(
                 parse_vector(augend, augend_y, "minuend")?,
                 parse_vector(addend, addend_y, "subtrahend")?,
             )),
-            AddMode::SubtractScalarVector => Inputs::Subtract(SubtractInputs::ScalarVector(
+            AddMode::SubtractScalarVector => Inputs::Subtract(NumericPairInputs::ScalarVector(
                 parse_number(augend, "minuend")?,
                 parse_vector(addend, addend_y, "subtrahend")?,
             )),
-            AddMode::SubtractVectorScalar => Inputs::Subtract(SubtractInputs::VectorScalar(
+            AddMode::SubtractVectorScalar => Inputs::Subtract(NumericPairInputs::VectorScalar(
                 parse_vector(augend, augend_y, "minuend")?,
                 parse_number(addend, "subtrahend")?,
             )),
-            AddMode::SubtractIntegerLists => Inputs::Subtract(SubtractInputs::IntegerLists(
+            AddMode::SubtractIntegerLists => Inputs::Subtract(NumericPairInputs::IntegerLists(
                 parse_integer_list(augend, "minuends")?,
                 parse_integer_list(addend, "subtrahends")?,
             )),
-            AddMode::SubtractVectorLists => Inputs::Subtract(SubtractInputs::VectorLists(
+            AddMode::SubtractVectorLists => Inputs::Subtract(NumericPairInputs::VectorLists(
                 parse_vector_list(augend, augend_y, "minuend")?,
                 parse_vector_list(addend, addend_y, "subtrahend")?,
             )),
             AddMode::SubtractScalarVectorLists => {
-                Inputs::Subtract(SubtractInputs::ScalarVectorLists(
+                Inputs::Subtract(NumericPairInputs::ScalarVectorLists(
                     parse_number_list(augend, "minuends")?,
                     parse_vector_list(addend, addend_y, "subtrahend")?,
                 ))
             }
             AddMode::SubtractVectorScalarLists => {
-                Inputs::Subtract(SubtractInputs::VectorScalarLists(
+                Inputs::Subtract(NumericPairInputs::VectorScalarLists(
                     parse_vector_list(augend, augend_y, "minuend")?,
                     parse_number_list(addend, "subtrahends")?,
                 ))
             }
+            AddMode::Divide(mode) => Inputs::Divide(match mode {
+                DivideMode::Scalar => NumericPairInputs::Scalar(
+                    parse_number(augend, "numerator")?,
+                    parse_number(addend, "denominator")?,
+                ),
+                DivideMode::Lists => NumericPairInputs::Lists(
+                    parse_number_list(augend, "numerators")?,
+                    parse_number_list(addend, "denominators")?,
+                ),
+                DivideMode::Integer => NumericPairInputs::Integer(
+                    parse_integer(augend, "numerator")?,
+                    parse_integer(addend, "denominator")?,
+                ),
+                DivideMode::Vector => NumericPairInputs::Vector(
+                    parse_vector(augend, augend_y, "numerator")?,
+                    parse_vector(addend, addend_y, "denominator")?,
+                ),
+                DivideMode::ScalarVector => NumericPairInputs::ScalarVector(
+                    parse_number(augend, "numerator")?,
+                    parse_vector(addend, addend_y, "denominator")?,
+                ),
+                DivideMode::VectorScalar => NumericPairInputs::VectorScalar(
+                    parse_vector(augend, augend_y, "numerator")?,
+                    parse_number(addend, "denominator")?,
+                ),
+                DivideMode::IntegerLists => NumericPairInputs::IntegerLists(
+                    parse_integer_list(augend, "numerators")?,
+                    parse_integer_list(addend, "denominators")?,
+                ),
+                DivideMode::VectorLists => NumericPairInputs::VectorLists(
+                    parse_vector_list(augend, augend_y, "numerator")?,
+                    parse_vector_list(addend, addend_y, "denominator")?,
+                ),
+                DivideMode::ScalarVectorLists => NumericPairInputs::ScalarVectorLists(
+                    parse_number_list(augend, "numerators")?,
+                    parse_vector_list(addend, addend_y, "denominator")?,
+                ),
+                DivideMode::VectorScalarLists => NumericPairInputs::VectorScalarLists(
+                    parse_vector_list(augend, augend_y, "numerator")?,
+                    parse_number_list(addend, "denominators")?,
+                ),
+            }),
             AddMode::ReciprocalScalar => {
                 Inputs::Reciprocal(ReciprocalInputs::Scalar(parse_number(augend, "value")?))
             }
@@ -1627,7 +1763,9 @@ impl GraphicsSession {
             || (self.mode == AddMode::Sort) != matches!(self.evaluation.inputs, Inputs::Sort(..))
             || self.mode.is_multiply() != matches!(self.evaluation.inputs, Inputs::Multiply(..))
             || (self.mode.is_subtract() || matches!(&self.evaluation.inputs, Inputs::Subtract(_)))
-                && !matches!(&self.evaluation.inputs, Inputs::Subtract(inputs) if inputs.mode() == self.mode)
+                && !matches!(&self.evaluation.inputs, Inputs::Subtract(inputs) if inputs.subtract_mode() == self.mode)
+            || (self.mode.is_divide() || matches!(&self.evaluation.inputs, Inputs::Divide(_)))
+                && !matches!(&self.evaluation.inputs, Inputs::Divide(inputs) if inputs.divide_mode() == self.mode)
             || (self.mode.is_reciprocal()
                 || matches!(&self.evaluation.inputs, Inputs::Reciprocal(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Reciprocal(inputs) if inputs.mode() == self.mode)
