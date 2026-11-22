@@ -1015,7 +1015,7 @@ VALIDATIONS = {
     "VAL-DOCS-001": ("Documentation evidence reconciliation", "catalog", "docs, embedded-docs, navigation, redirects, localization, node docs, OpenAPI, and tooling catalogs", "Verify file closure and deltas, require executable corroboration for stronger evidence, retain documented-only claims, and reproduce recorded link/test/translation results."),
     "VAL-CLI-001": ("comfy-cli contract reconciliation", "CLI", "Every command, flag, schema, event, error, config, format, lifecycle, test, and source row", "Compare native/migration/defer mapping, help/schema output, invalid input, offline, cancellation, interrupted operation, and source-file closure without running Python in production."),
     "VAL-NODE-CLOSURE-001": ("Native node implementation closure", "node/catalog", "All local and API-node rows plus generated native descriptors", "Reconcile implementation/provider/placeholder status and per-node schema/behavior results with zero unexplained rows; fail any representative-only equivalence claim."),
-    "VAL-COMFY-BUILD-001": ("Opt-in Comfy product boundary", "build/package", "The default and Comfy-enabled Zed feature, dependency, runtime-surface, asset, and macOS/Linux/Windows package graphs", "Build and test default Zed without Comfy, build CPU and selected accelerator Comfy modes, prove the default normal dependency tree contains no comfy_* package, verify Comfy CLI/UI/runtime/settings surfaces are cfg-absent, and compare default versus explicit-Comfy package plans with deterministic zero-failure evidence."),
+    "VAL-COMFY-BUILD-001": ("Opt-in Sim product boundary", "build/package", "The default and Sim-enabled Zed feature, dependency, runtime-surface, asset, and macOS/Linux/Windows package graphs", "Compile the default and explicit Sim modes, preserve the existing agentic-tools default, and verify the ordinary and test-support dependency graphs omit Sim. Exercise the enabled Sim defaults and compare default and opt-in package plans. Record Windows and accelerator hardware qualification on their respective hosts."),
 }
 
 
@@ -12233,11 +12233,11 @@ def native_partner_provider_components_foundation_task(dependency: str) -> dict[
 def comfy_opt_in_build_boundary_task(dependency: str) -> dict[str, object]:
     return task(
         "comfy-parity-opt-in-product-build-boundary",
-        "Make the Comfy product integration compile-time opt-in",
+        "Make the Sim product integration compile-time opt-in",
         [45],
         [42],
         ["VAL-COMFY-BUILD-001", "VAL-NATIVE-BOUNDARY-001", "VAL-OWNERSHIP-001"],
-        "Exclude Comfy from Zed's default compile, link, runtime, test-support, asset, and package graphs while retaining the complete CPU and explicitly selected accelerator integration behind one compile-time feature and one explicit packaging option.",
+        "Exclude Sim from Zed's default compile, link, runtime, test-support, asset, and package graphs while retaining the complete CPU and explicitly selected accelerator integration behind one compile-time feature and one explicit packaging option.",
         [
             "Cargo.toml",
             "crates/zed/Cargo.toml",
@@ -12266,7 +12266,7 @@ def comfy_opt_in_build_boundary_task(dependency: str) -> dict[str, object]:
             "crates/extension_host/src/extension_store_test.rs",
             "assets/settings/default.json",
             "assets/settings/default-sim.json",
-            "script/check-comfy-feature-boundary",
+            "script/check-sim-feature-boundary",
             "script/bundle-mac",
             "script/bundle-linux",
             "script/bundle-windows.ps1",
@@ -12283,7 +12283,7 @@ def comfy_opt_in_build_boundary_task(dependency: str) -> dict[str, object]:
             "crates/sim_test_support/parity/tasks.md",
             "crates/sim_test_support/parity/traceability.md",
         ],
-        "The zed package has an empty default feature set and zero normal comfy_* dependencies unless `comfy` is selected. CPU Comfy and accelerator features retain existing behavior, ordinary test-support remains Comfy-free, and cfg gates remove every CLI, initialization, settings observer, panel, menu, action, keymap, worker, and Comfy asset surface from the default product. ExtensionHost validates component identifiers without a Comfy dependency. Default macOS, Linux, and Windows package plans omit the worker and Comfy assets, while an explicit Comfy package option preserves the existing worker/backend plan. Both modes pass focused build, test, dependency-tree, lint, and packaging smoke validation.",
+        "The zed package preserves its agentic-tools default and has zero normal sim_* dependencies unless `sim` is selected. CPU Sim and its explicitly selected accelerator backends retain existing behavior. Ordinary test-support remains Sim-free. The default product omits the Sim CLI, startup, settings observer, panel, menu, actions, keymap, worker, and assets. ExtensionHost validates component identifiers without a Sim dependency. Default macOS, Linux, and Windows package plans omit the worker and Sim assets, while the explicit Sim package option preserves the existing worker/backend plan. Both modes pass focused build, test, dependency-tree, lint, and packaging smoke validation.",
         [dependency],
         locked=True,
         criterion_ids=["45.1", "45.2", "45.3", "45.4", "45.5", "45.6"],
@@ -23452,6 +23452,7 @@ def task_validation_commands(item: dict[str, object]) -> str:
     if identifier == "comfy-parity-opt-in-product-build-boundary":
         commands = [
             "cargo fmt --all -- --check",
+            "cargo check --locked -p zed",
             "cargo check --locked -p zed --no-default-features",
             "cargo test --locked -p zed --no-default-features",
             "cargo check --locked -p zed --features sim",
@@ -23460,13 +23461,13 @@ def task_validation_commands(item: dict[str, object]) -> str:
             "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/parity/validate_backend_dependencies.py",
             "cargo test --locked -p sim_test_support --test native_release_boundary val_native_boundary_001_packaged_release -- --exact --nocapture",
             "cargo test --locked -p sim_test_support --test ownership_consolidation val_ownership_001 -- --exact --nocapture",
-            "./script/check-comfy-feature-boundary",
+            "./script/check-sim-feature-boundary",
             "./script/bundle-mac --dry-run",
-            "./script/bundle-mac --comfy --dry-run",
+            "./script/bundle-mac --sim --dry-run",
             "./script/bundle-linux --dry-run",
-            "./script/bundle-linux --comfy --dry-run",
+            "./script/bundle-linux --sim --dry-run",
             "pwsh -File script/bundle-windows.ps1 -DryRun",
-            "pwsh -File script/bundle-windows.ps1 -Comfy -DryRun",
+            "pwsh -File script/bundle-windows.ps1 -Sim -DryRun",
             "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/parity/test_regenerate_native_planning.py",
             "python3 crates/sim_test_support/parity/regenerate_all.py --check-twice",
             "python3 .agents/skills/coding/scripts/validate_spec.py crates/sim_test_support/parity --require-complete",
@@ -24814,6 +24815,12 @@ def write_tasks(tasks: list[dict[str, object]], criteria: dict[int, list[str]]) 
 def validation_runner(identifier: str) -> str:
     if identifier == "VAL-CATALOG-001":
         return "python3 crates/sim_test_support/parity/regenerate_all.py --check-twice"
+    if identifier == "VAL-COMFY-BUILD-001":
+        return "; ".join([
+            "./script/check-sim-feature-boundary",
+            "cargo check --locked -p zed",
+            "cargo test --locked -p zed --features sim,sim-test-support sim_build_boundary",
+        ])
     if identifier == "VAL-DOCS-001":
         return "python3 crates/sim_test_support/parity/generate_documentation_catalogs.py"
     if identifier == "VAL-CLI-001":
@@ -24958,6 +24965,13 @@ def write_validation() -> None:
                 "source and symbol SHA-256 values, passed status, and non-empty unique case IDs. "
                 "Every claimed task result has zero failures and skips; partial artifacts claim "
                 "only their exact passed rows."
+            )
+        if identifier == "VAL-COMFY-BUILD-001":
+            pass_artifact = (
+                "exit status 0 from both build profiles and the focused Sim defaults test, "
+                "plus `target/sim-feature-boundary/feature-boundary.json` for dependency and "
+                "package-plan evidence. Windows runtime and live accelerator evidence require "
+                "their native hosts."
             )
         if identifier == "VAL-CATALOG-001":
             pass_artifact = (
