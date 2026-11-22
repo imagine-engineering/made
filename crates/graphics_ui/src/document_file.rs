@@ -12167,6 +12167,67 @@ mod tests {
             );
             assert!(window.debug_bounds("GRAPHITE-GDD-ARTBOARD-IMAGE").is_some());
             assert!(window.update(|window, _| window.has_image_atlas_entry(&image)));
+            if clip {
+                click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+                let property = "GRAPHITE-GDD-BOOLEAN-INPUT";
+                let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
+                let read_clip = |window: &gpui::VisualTestContext| {
+                    item.read_with(window, |item, _| {
+                        let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                            panic!("working Artboard");
+                        };
+                        let node = form.selected_node().expect("selected Artboard");
+                        let clip = node.boolean_input().expect("original Clip property");
+                        assert_eq!(clip.name, "Clip");
+                        assert!(
+                            node.input_ports()
+                                .get(5)
+                                .is_some_and(|port| { !port.exposed && port.source.is_none() })
+                        );
+                        (node.storage_id(), clip.value)
+                    })
+                };
+                let (address, initial) = read_clip(window);
+                assert!(initial);
+                click(window, property);
+                assert_eq!(read_clip(window), (address, false));
+                assert!(window.debug_bounds("GRAPHITE-GDD-ARTBOARD-IMAGE").is_none());
+                click(window, preview);
+                item.read_with(window, |item, _| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                        panic!("working Artboard");
+                    };
+                    let NodeOutputPreview::ReadyImage(image) = &form.output_preview else {
+                        panic!("updated Artboard preview");
+                    };
+                    let offset = (20 * LAYER_PREVIEW_SIZE as usize + 10) * 4;
+                    let bytes = image.as_bytes(0).expect("native BGRA pixels");
+                    assert_eq!(
+                        bytes.get(offset..offset + 4),
+                        Some([255, 0, 0, 255].as_slice())
+                    );
+                });
+                click(window, "GRAPHITE-GDD-UNDO");
+                assert_eq!(read_clip(window), (address, true));
+                click(window, "GRAPHITE-GDD-REDO");
+                assert_eq!(read_clip(window), (address, false));
+                let destination = PathBuf::from("/project/artboard-edited-clip.gdd");
+                click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+                window.simulate_new_path_selection(|_| Some(destination.clone()));
+                window.run_until_parked();
+                let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+                    .await
+                    .expect("saved Clip edit");
+                let nodes = saved.graph_nodes().await.expect("saved Artboard graph");
+                let board = nodes
+                    .iter()
+                    .find(|node| node.storage_id() == address)
+                    .expect("same saved Artboard");
+                assert_eq!(
+                    board.boolean_input().map(|property| property.value),
+                    Some(false)
+                );
+            }
             assert_eq!(
                 filesystem.load_bytes(&path).await.expect("original ZIP"),
                 original

@@ -708,6 +708,7 @@ enum SavedGraphicProfile {
 }
 
 const LAYER_CONTENT_INPUT: usize = 1;
+const ARTBOARD_CLIP_INPUT: usize = 5;
 
 #[derive(Clone)]
 pub struct GddGraphNode {
@@ -1594,18 +1595,20 @@ impl InspectedGddV1 {
                     .and_then(graph_boolean_literal);
             }
             if path.is_empty()
-                && let Some((_, profile)) = interface
-                    .document_node(&node.local_id, path)
-                    .and_then(checked_saved_graphic_node)
+                && let Some(document) = interface.document_node(&node.local_id, path)
+                && let Some((_, profile)) = checked_saved_graphic_node(document)
             {
                 node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
-                node.can_set_document_artboard = empty_document_output
-                    && matches!(
-                        profile,
-                        SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
-                    )
-                    && interface.is_layer(&node.local_id, path);
+                if matches!(
+                    profile,
+                    SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
+                ) {
+                    node.can_set_document_artboard =
+                        empty_document_output && interface.is_layer(&node.local_id, path);
+                    node.boolean_input =
+                        hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip");
+                }
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
@@ -4324,8 +4327,7 @@ impl InspectedGddV1 {
                 .document_node(&node.local_id, path)
                 .and_then(graph_boolean_literal)
         };
-        if interface.is_layer(&node.local_id, path) || boolean_literal(&interface) != Some(previous)
-        {
+        if boolean_literal(&interface) != Some(previous) {
             return Err(GddArchiveError::UnsupportedGraphBooleanInput);
         }
         interface.set_input(
@@ -5412,7 +5414,7 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                         (2, location),
                         (3, dimensions),
                         (4, background),
-                        (5, clip),
+                        (ARTBOARD_CLIP_INPUT, clip),
                     ]);
                     (
                         artboard_node_definition()?,
@@ -5681,14 +5683,35 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
 const TRIGONOMETRIC_RADIANS_INDEX: usize = graphite_math_nodes::sine::RadiansInput::INDEX;
 
 fn graph_boolean_literal(document: &DocumentNode) -> Option<GddGraphBooleanInput> {
-    let DocumentNodeImplementation::ProtoNode(identifier) = &document.implementation else {
-        return None;
-    };
-    let (index, name) = numeric_boolean_port(identifier)?;
+    match &document.implementation {
+        DocumentNodeImplementation::ProtoNode(identifier) => {
+            let (index, name) = numeric_boolean_port(identifier)?;
+            hidden_graph_boolean(numeric_preview_inputs(document)?, index, name)
+        }
+        DocumentNodeImplementation::Network(_)
+            if matches!(
+                checked_saved_graphic_node(document),
+                Some((
+                    _,
+                    SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
+                ))
+            ) =>
+        {
+            hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip")
+        }
+        _ => None,
+    }
+}
+
+fn hidden_graph_boolean(
+    inputs: &[NodeInput],
+    index: usize,
+    name: &'static str,
+) -> Option<GddGraphBooleanInput> {
     let NodeInput::Value {
         tagged_value,
         exposed: false,
-    } = numeric_preview_inputs(document)?.get(index)?
+    } = inputs.get(index)?
     else {
         return None;
     };
@@ -10702,6 +10725,7 @@ mod tests {
                     "Always Positive",
                     true,
                 ),
+                ("NETWORK:Artboard", ARTBOARD_CLIP_INPUT, "Clip", true),
             ] {
                 let source = create_gdd_folder(841, 355, "Pinned Graphite".into(), budget())
                     .await
@@ -10710,9 +10734,9 @@ mod tests {
                     .await
                     .expect("exact pinned template");
                 let nodes = source.graph_nodes().await.expect("saved nodes");
-                let [node] = nodes.as_slice() else {
-                    panic!("one source node")
-                };
+                let mut roots = nodes.iter().filter(|node| node.network_path.is_empty());
+                let node = roots.next().expect("source root node");
+                assert!(roots.next().is_none());
                 let original = Some(GddGraphBooleanInput { index, name, value });
                 assert_eq!(node.boolean_input(), original);
                 let graph = source.runtime_graph().await.expect("source graph");
