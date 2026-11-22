@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
     ops::{Bound, Deref},
@@ -31,8 +31,8 @@ use graphite_editor::messages::portfolio::document::{
     utility_types::{
         misc::PTZ,
         network_interface::{
-            InputConnector, NavigationMetadata, NodeNetworkInterface, NodeTemplateImplementation,
-            NodeTypePersistentMetadata, OutputConnector, Previewing,
+            InputConnector, NavigationMetadata, NodeNetworkInterface, NodeTemplate,
+            NodeTemplateImplementation, NodeTypePersistentMetadata, OutputConnector, Previewing,
             editor_delta::{
                 ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
                 construct_batch,
@@ -164,6 +164,10 @@ pub enum GddArchiveError {
         "Only an isolated Graphite node outside an active preview can be removed in a folder copy."
     )]
     UnsupportedGraphNodeDeletion,
+    #[error(
+        "Select an ordinary numeric Graphite node with room for its duplicate on the graph grid."
+    )]
+    UnsupportedGraphNodeDuplication,
     #[error("Graphite could not allocate an unused node ID.")]
     GraphNodeIdentityCollision,
     #[error("The Graphite copy could not save the addressed node's change.")]
@@ -266,6 +270,7 @@ pub struct GddGraphNode {
     pinned_order: Option<(usize, usize)>,
     numeric_input: Option<GddNumericInput>,
     can_delete_in_copy: bool,
+    can_duplicate_in_copy: bool,
 }
 
 #[derive(Clone)]
@@ -414,6 +419,10 @@ impl GddGraphNode {
 
     pub fn can_delete_in_copy(&self) -> bool {
         self.can_delete_in_copy
+    }
+
+    pub fn can_duplicate_in_copy(&self) -> bool {
+        self.can_duplicate_in_copy
     }
 
     pub fn numeric_input(&self) -> Option<&GddNumericValue> {
@@ -618,6 +627,7 @@ impl InspectedGddV1 {
                 pinned_order: None,
                 numeric_input: None,
                 can_delete_in_copy: false,
+                can_duplicate_in_copy: false,
             })
             .collect();
         let mut interface = graph.into_interface()?;
@@ -653,6 +663,13 @@ impl InspectedGddV1 {
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
             node.numeric_input = graph_numeric_input(&interface, node);
+            node.can_duplicate_in_copy = node.numeric_input.is_some()
+                && !interface.is_chain(&node.local_id, path)
+                && interface
+                    .position(&node.local_id, path)
+                    .is_some_and(|position| {
+                        position.x.checked_add(2).is_some() && position.y.checked_add(2).is_some()
+                    });
             let wired = wired_nodes
                 .entry(path.clone())
                 .or_insert_with(|| graph_wired_output_nodes(&mut interface, path));
@@ -689,34 +706,74 @@ impl InspectedGddV1 {
         let position = IVec2::from_array(position);
         template.node_type_metadata = NodeTypePersistentMetadata::node(position);
 
-        let path = Vec::new();
+        let path = &[];
         let mut interface = self.runtime_graph().await?.into_interface()?;
         let node_id = NodeId::new();
-        if interface.document_node(&node_id, &path).is_some() {
+        if interface.document_node(&node_id, path).is_some() {
             return Err(GddArchiveError::GraphNodeIdentityCollision);
         }
         if interface
-            .insert_node(node_id, template.clone(), &path)
+            .insert_node(node_id, template.clone(), path)
             .is_some()
         {
             return Err(GddArchiveError::GraphNodeIdentityCollision);
         }
+        self.save_added_graph_node(interface, path, node_id, template, budget)
+            .await
+    }
+
+    pub async fn duplicate_graph_numeric_node_in_copy(
+        &self,
+        node: &GddGraphNode,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !node.can_duplicate_in_copy() {
+            return Err(GddArchiveError::UnsupportedGraphNodeDuplication);
+        }
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let new_id = NodeId::new();
+        if interface.document_node(&new_id, path).is_some() {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        let copied = interface
+            .copy_nodes(&HashMap::from([(node.local_id, NodeId(0))]), path)
+            .collect::<Vec<_>>();
+        let [(temporary_id, template)] = copied.as_slice() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        let temporary_id = *temporary_id;
+        let template = template.clone();
+        interface.insert_node_group(copied, HashMap::from([(temporary_id, new_id)]), path);
+        self.save_added_graph_node(interface, path, new_id, template, budget)
+            .await
+    }
+
+    async fn save_added_graph_node(
+        &self,
+        interface: NodeNetworkInterface,
+        path: &[NodeId],
+        node_id: NodeId,
+        template: NodeTemplate,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         let node = interface
-            .document_node(&node_id, &path)
+            .document_node(&node_id, path)
             .cloned()
             .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
         let metadata = interface
-            .node_metadata(&node_id, &path)
+            .node_metadata(&node_id, path)
             .map(|metadata| metadata.persistent_metadata.clone())
             .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
         let edits = [
             EditorDelta::Graph(RuntimeDelta::AddNode {
-                network_path: path.clone(),
+                network_path: path.to_vec(),
                 node_id,
                 node: Box::new(node),
             }),
             EditorDelta::NodeMetadataSnapshot {
-                network_path: path.clone(),
+                network_path: path.to_vec(),
                 node_id,
                 metadata: Box::new(metadata),
             },
@@ -748,34 +805,36 @@ impl InspectedGddV1 {
             )?;
         }
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
-        let [RegistryDelta::AddNode { id, node }, ..] = batch.ops.as_slice() else {
+        drop(interface);
+        let [RegistryDelta::AddNode { id, .. }, rest @ ..] = batch.ops.as_slice() else {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         };
         let id = *id;
-        if node.network() != ROOT_NETWORK
-            || !batch.ops.iter().skip(1).all(|operation| match operation {
-                RegistryDelta::AddResource { entry, .. } => {
-                    entry.has_embedded_source()
-                        && entry
-                            .hash
-                            .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
-                }
-                RegistryDelta::ChangeNodeAttribute { id: target, .. }
-                | RegistryDelta::ChangeNodeInputAttribute { id: target, .. } => *target == id,
-                _ => false,
-            })
-        {
+        if owner.registry().node_instances.contains_key(&id) {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        if !rest.iter().all(|operation| match operation {
+            RegistryDelta::AddResource { entry, .. } => {
+                entry.has_embedded_source()
+                    && entry
+                        .hash
+                        .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
+            }
+            RegistryDelta::ChangeNodeAttribute { id: target, .. }
+            | RegistryDelta::ChangeNodeInputAttribute { id: target, .. } => *target == id,
+            _ => false,
+        }) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let graph = copy.runtime_graph().await?;
         if !graph.nodes.iter().any(|node| {
-            node.storage_id == id && node.local_id == node_id && node.network_path.is_empty()
+            node.storage_id == id && node.local_id == node_id && node.network_path == path
         }) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let actual = graph.into_interface()?;
-        if actual.create_node_template(&node_id, &path) != Some(template) {
+        if actual.create_node_template(&node_id, path) != Some(template) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -2681,6 +2740,104 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_012_1_duplicates_a_nested_operation_with_source_fallback_and_exact_layout() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("source archive");
+            let nodes = original.graph_nodes().await.expect("source graph");
+            let [_, unsupported, _, _, selected, _] = nodes.as_slice() else {
+                panic!("expected source graph with a nested wired node");
+            };
+            assert!(!unsupported.can_duplicate_in_copy());
+            assert!(matches!(
+                original
+                    .duplicate_graph_numeric_node_in_copy(unsupported, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphNodeDuplication)
+            ));
+            assert!(selected.can_duplicate_in_copy());
+            let path = &selected.network_path;
+            let original_interface = original
+                .runtime_graph()
+                .await
+                .expect("runtime graph")
+                .into_interface()
+                .expect("source editor");
+            let original_position = original_interface
+                .position(&selected.local_id, path)
+                .expect("source absolute position");
+            let original_template = original_interface
+                .create_node_template(&selected.local_id, path)
+                .expect("source node template");
+            let copy = original
+                .duplicate_graph_numeric_node_in_copy(selected, budget())
+                .await
+                .expect("duplicate pinned numeric node");
+            let copied_nodes = copy.graph_nodes().await.expect("reopened graph");
+            assert_eq!(copied_nodes.len(), nodes.len() + 1);
+            let inserted = copied_nodes
+                .iter()
+                .find(|new| {
+                    !nodes
+                        .iter()
+                        .any(|original| original.storage_id == new.storage_id)
+                })
+                .expect("one fresh stable node ID");
+            assert_eq!(inserted.network_path, *path);
+            assert_ne!(inserted.local_id, selected.local_id);
+            assert_eq!(inserted.numeric_input_exposed(), Some(true));
+            let graph = copy
+                .runtime_graph()
+                .await
+                .expect("saved graph")
+                .into_interface()
+                .expect("saved source editor");
+            let inserted_template = graph
+                .create_node_template(&inserted.local_id, path)
+                .expect("saved duplicate template");
+            assert_eq!(
+                graph.position(&inserted.local_id, path),
+                Some(original_position + IVec2::new(2, 2))
+            );
+            assert_eq!(
+                inserted_template.input_metadata,
+                original_template.input_metadata
+            );
+            assert!(matches!(
+                inserted_template.inputs.as_slice(),
+                [NodeInput::Value { tagged_value, exposed: true }]
+                    if **tagged_value == TaggedValue::DVec2(DVec2::ZERO)
+            ));
+            let registry = copy.document.registry();
+            let original_registry = original.document.registry();
+            assert_eq!(registry.resources.len(), original_registry.resources.len());
+            for node in &nodes {
+                assert!(
+                    registry.node_instances[&node.storage_id]
+                        .value_equal(&original_registry.node_instances[&node.storage_id])
+                );
+            }
+            assert!(matches!(
+                copy.duplicate_graph_numeric_node_in_copy(selected, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo removes the duplicate");
+            assert!(undo.document.registry().value_equal(original_registry));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the duplicate");
+            assert!(redo.document.registry().value_equal(registry));
         });
     }
 

@@ -484,6 +484,7 @@ enum GraphiteCopy {
 
 enum NodeCopyChange {
     Rename(String),
+    DuplicateNumeric,
     DeleteIsolated,
     Pin(bool),
     MovePinned(GddPinnedNodeMove),
@@ -925,6 +926,38 @@ impl GraphiteDocumentItem {
                                             })),
                                     ),
                             )
+                            .when(selected.can_duplicate_in_copy(), |panel| {
+                                panel.child(
+                                    div()
+                                        .debug_selector(|| "GRAPHITE-GDD-DUPLICATE-NODE".into())
+                                        .child(
+                                            Button::new(
+                                                "graphite-gdd-duplicate-node",
+                                                "Duplicate Node in a Copy",
+                                            )
+                                            .disabled(self.copy_task.is_some())
+                                            .on_click(cx.listener(|item, _, window, cx| {
+                                                let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                else {
+                                                    return;
+                                                };
+                                                if let Some(node) = form
+                                                    .selected_node()
+                                                    .filter(|node| node.can_duplicate_in_copy())
+                                                {
+                                                    item.save_copy(
+                                                        GraphiteCopy::EditNode {
+                                                            node: node.clone(),
+                                                            change: NodeCopyChange::DuplicateNumeric,
+                                                        },
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                            })),
+                                        ),
+                                )
+                            })
                             .when(selected.can_delete_in_copy(), |panel| {
                                 panel.child(
                                     div()
@@ -1222,6 +1255,10 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Renamed",
                     GraphiteCopy::EditNode {
+                        change: NodeCopyChange::DuplicateNumeric,
+                        ..
+                    } => "Duplicated node in",
+                    GraphiteCopy::EditNode {
                         change: NodeCopyChange::DeleteIsolated,
                         ..
                     } => "Removed node in",
@@ -1390,6 +1427,11 @@ impl GraphiteDocumentItem {
                                 NodeCopyChange::Rename(name) => {
                                     archive
                                         .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
+                                        .await?
+                                }
+                                NodeCopyChange::DuplicateNumeric => {
+                                    archive
+                                        .duplicate_graph_numeric_node_in_copy(&node, ARCHIVE_BUDGET)
                                         .await?
                                 }
                                 NodeCopyChange::DeleteIsolated => {
@@ -2082,6 +2124,87 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_012_2_workspace_duplicates_the_selected_numeric_node_in_a_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = numeric_graph_archive(NumericGraphFixture::Connection).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/duplicate-source.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source nodes")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+        click(window, "GRAPHITE-GDD-DUPLICATE-NODE");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        item.read_with(window, |item, cx| {
+            assert!(item.copy_task.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-DUPLICATE-NODE");
+        let destination = PathBuf::from("/project/duplicated.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened copy");
+        assert_ne!(reopened, item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected GDD copy");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("reopened duplicate");
+        assert_eq!(nodes.len(), 3);
+        let wired = nodes
+            .iter()
+            .find(|node| node.has_numeric_connection())
+            .expect("original wire");
+        let upstream = wired
+            .numeric_connection_source(&nodes)
+            .expect("original upstream node");
+        assert!(matches!(
+            upstream.numeric_input(),
+            Some(GddNumericValue::Integer(-17))
+        ));
+        assert_eq!(
+            nodes
+                .iter()
+                .filter(|node| node.numeric_input_exposed() == Some(true))
+                .count(),
+            1
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained original ZIP"),
+            original
+        );
     }
 
     #[gpui::test]
