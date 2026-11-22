@@ -910,9 +910,6 @@ impl GraphiteDocumentItem {
                         let loaded = load.await;
                         if let Err(error) = item.update_in(cx, |item, window, cx| {
                             item.node_copy = match loaded {
-                                Ok(graph) if graph.nodes.is_empty() => {
-                                    NodeCopyPanel::Failed("This graph has no nodes.".into())
-                                }
                                 Ok(graph) => NodeCopyPanel::Ready(Box::new(NodeCopyForm {
                                     nodes: graph.nodes,
                                     networks: graph.networks,
@@ -3176,10 +3173,9 @@ impl Render for GraphiteDocumentItem {
                 .when(contents.has_saved_view(), |view| {
                     view.child(self.render_saved_view(cx))
                 })
-                .when(
-                    recovery.node_count > 0 && recovery.hot_log_len == 0,
-                    |view| view.child(self.render_node_copy(window, cx)),
-                )
+                .when(recovery.hot_log_len == 0, |view| {
+                    view.child(self.render_node_copy(window, cx))
+                })
                 .when(recovery.hot_log_len == 0, |view| {
                     view.child(self.render_insert_node(window, cx))
                 })
@@ -4091,6 +4087,107 @@ mod tests {
                 .await
                 .expect("original archive"),
             original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_pastes_a_numeric_node_into_a_new_blank_graphite_folder(
+        cx: &mut TestAppContext,
+    ) {
+        let (bytes, _) = numeric_graph_archive(NumericGraphFixture::SingleNode).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let original_path = PathBuf::from("/project/clipboard-origin.gdd.zip");
+        filesystem
+            .write(&original_path, &bytes)
+            .await
+            .expect("clipboard source");
+        window.run_until_parked();
+        workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(original_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-COPY-NODES");
+        window.run_until_parked();
+        assert!(
+            window
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .is_some_and(|text| text.starts_with("graphite: "))
+        );
+
+        let blank_path = PathBuf::from("/project/clipboard-blank.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.simulate_new_path_selection(|_| Some(blank_path.clone()));
+        window.run_until_parked();
+        let blank = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("native blank Graphite item");
+        let original = read_graphite_folder(filesystem.as_ref(), &blank_path)
+            .await
+            .expect("original blank folder")
+            .folder_files()
+            .expect("original bytes");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY");
+        window.run_until_parked();
+        paint(window);
+        assert!(blank.read_with(window, |item, _| {
+            matches!(&item.node_copy, NodeCopyPanel::Ready(form) if form.nodes.is_empty())
+        }));
+        click(window, "GRAPHITE-GDD-PASTE-NODES");
+        let destination = PathBuf::from("/project/clipboard-populated.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopen the pasted folder");
+        assert_ne!(reopened, blank);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the native pasted Graphite folder");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("saved root nodes");
+        let [node] = nodes.as_slice() else {
+            panic!("expected the single copied node");
+        };
+        assert!(matches!(
+            contents
+                .preview_graph_numeric_output(node)
+                .await
+                .expect("pasted source node"),
+            GddNumericValue::Integer(17)
+        ));
+        assert!(contents.can_move_history(GddHistoryDirection::Undo));
+        assert_eq!(
+            read_graphite_folder(filesystem.as_ref(), &blank_path)
+                .await
+                .expect("original blank folder")
+                .folder_files()
+                .expect("original bytes"),
+            original
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&original_path)
+                .await
+                .expect("clipboard source archive"),
+            bytes
         );
     }
 

@@ -901,7 +901,10 @@ impl InspectedGddV1 {
 
     pub async fn graph_inspection(&self) -> Result<GddGraphInspection, GddArchiveError> {
         let graph = self.runtime_graph().await?;
-        let network_ids = network_ids_from_entries(&graph.networks);
+        let mut network_ids = network_ids_from_entries(&graph.networks);
+        if self.graph_root_needs_initialization() {
+            network_ids.insert(Vec::new(), ROOT_NETWORK);
+        }
         let mut nodes: Vec<_> = graph
             .nodes
             .iter()
@@ -2355,7 +2358,10 @@ impl InspectedGddV1 {
                 metadata: Box::new(metadata),
             });
         }
-        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
+        if self.graph_root_needs_initialization() {
+            initialize_graph_root_history(&mut owner)?;
+        }
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
         let added = batch
             .ops
@@ -2611,29 +2617,7 @@ impl InspectedGddV1 {
         }
         let (mut owner, staged) = self.fork_working_copy(&budget).await?;
         if self.graph_root_needs_initialization() {
-            let mut empty = Registry::from_runtime_with_metadata(
-                &NodeNetwork::default(),
-                &NoMetadata,
-                &graphite_resource::ResourceRegistry::new(),
-                owner.session().peer(),
-            )
-            .map_err(GddArchiveError::GraphNodePreparation)?;
-            let network = empty
-                .networks
-                .remove(&ROOT_NETWORK)
-                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
-            // The pinned cursor never undoes the first interaction, so the empty graph
-            // needs a saved base before the first inserted node can be undone.
-            commit_graph_node_edit(
-                &mut owner,
-                ConstructedOps {
-                    ops: vec![RegistryDelta::AddNetwork {
-                        id: ROOT_NETWORK,
-                        network,
-                    }],
-                    declarations: Default::default(),
-                },
-            )?;
+            initialize_graph_root_history(&mut owner)?;
         }
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
         drop(interface);
@@ -4140,6 +4124,31 @@ async fn finish_graph_node_edit(
     staged.reopen_after_edit(budget).await
 }
 
+fn initialize_graph_root_history(owner: &mut GddV1) -> Result<(), GddArchiveError> {
+    let mut empty = Registry::from_runtime_with_metadata(
+        &NodeNetwork::default(),
+        &NoMetadata,
+        &graphite_resource::ResourceRegistry::new(),
+        owner.session().peer(),
+    )
+    .map_err(GddArchiveError::GraphNodePreparation)?;
+    let network = empty
+        .networks
+        .remove(&ROOT_NETWORK)
+        .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+    // The pinned cursor cannot undo the first interaction, so save the empty base first.
+    commit_graph_node_edit(
+        owner,
+        ConstructedOps {
+            ops: vec![RegistryDelta::AddNetwork {
+                id: ROOT_NETWORK,
+                network,
+            }],
+            declarations: Default::default(),
+        },
+    )
+}
+
 fn commit_graph_node_edit(owner: &mut GddV1, batch: ConstructedOps) -> Result<(), GddArchiveError> {
     let peer = owner.session().peer();
     let registers_peer = !batch.ops.is_empty() && !owner.registry().peer_users.contains_key(&peer);
@@ -5384,6 +5393,81 @@ mod tests {
                 .await
                 .expect("one redo");
             assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_011_1_pastes_into_a_fresh_graph_and_undo_restores_the_empty_root() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let source = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original numeric graph");
+            let nodes = source.graph_nodes().await.expect("source nodes");
+            let consumer = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("original downstream");
+            let producer = consumer
+                .numeric_connection_source(&nodes)
+                .expect("original upstream");
+            let clipboard = source
+                .copy_graph_nodes_to_clipboard(&[producer.clone(), consumer.clone()], budget())
+                .await
+                .expect("pinned clipboard group");
+            let empty = create_gdd_folder(792, 419, "Blank Graphite".into(), budget())
+                .await
+                .expect("fresh native folder");
+            let original = empty.folder_files().expect("original blank bytes");
+            assert!(empty.graph_root_needs_initialization());
+            let graph = empty.graph_inspection().await.expect("inspect blank scope");
+            assert!(graph.nodes.is_empty());
+            let [root] = graph.networks.as_slice() else {
+                panic!("expected the virtual root of the new folder");
+            };
+            assert_eq!(root.id, ROOT_NETWORK);
+            assert_eq!(root.parent, None);
+            let copy = empty
+                .paste_graph_nodes_in_copy(root, &clipboard, budget())
+                .await
+                .expect("paste in the blank root");
+            let nodes = copy.graph_nodes().await.expect("saved root nodes");
+            assert_eq!(nodes.len(), 2);
+            let consumer = nodes
+                .iter()
+                .find(|node| node.has_numeric_connection())
+                .expect("pasted downstream");
+            assert!(consumer.numeric_connection_source(&nodes).is_some());
+            assert!(matches!(
+                copy.preview_graph_numeric_output(consumer)
+                    .await
+                    .expect("execute the saved group"),
+                GddNumericValue::Number(-1.)
+            ));
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores the empty graph");
+            let graph = undo.graph_inspection().await.expect("saved empty root");
+            assert!(graph.nodes.is_empty());
+            assert_eq!(graph.networks.len(), 1);
+            assert_eq!(
+                graph.networks.first().map(|network| network.id),
+                Some(ROOT_NETWORK)
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo restores the complete group");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(copy.document.registry())
+            );
+            assert_eq!(
+                empty.folder_files().expect("original blank folder"),
+                original
+            );
         });
     }
 
