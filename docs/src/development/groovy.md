@@ -294,6 +294,13 @@ section to review the order, remove the last operation, clear the queue, or
 run offline. Saved run configurations appear in the queue row's context menu
 when available. Cancel a running queue from its Task terminal.
 
+To inspect an effective POM, expand **Plugins** under the Maven project and
+choose the `effective-pom` goal under `maven-help-plugin` when the provider
+reports its cached descriptor. Use the selected operation’s profile options
+if you need to change activation, then choose **Run selected offline
+operation**. Maven writes the effective XML to the Task terminal using the
+host Maven settings and the selected profiles.
+
 Complete arbitrary-argument handling, before-launch hooks, and remote queue
 execution remain open. Selected test results appear in the Tests view.
 Supported debugging uses the Debug panel.
