@@ -140,6 +140,8 @@ pub enum GddArchiveError {
     InvalidGraphInteger,
     #[error("Enter two finite numbers separated by a comma for the Graphite Value input.")]
     InvalidGraphVector,
+    #[error("Enter finite numbers separated by commas, or leave the Graphite Value list blank.")]
+    InvalidGraphNumberList,
     #[error("The Graphite Value input must keep its original number type.")]
     GraphInputTypeChanged,
     #[error("Enter a different value for the Graphite Value input.")]
@@ -261,21 +263,21 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum GddNumericInput {
     Literal(GddNumericPort),
     Connected { index: usize, upstream: NodeId },
 }
 
 impl GddNumericInput {
-    fn index(self) -> usize {
+    fn index(&self) -> usize {
         match self {
             Self::Literal(port) => port.index,
-            Self::Connected { index, .. } => index,
+            Self::Connected { index, .. } => *index,
         }
     }
 
-    fn same_input(self, other: Self) -> bool {
+    fn same_input(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Literal(first), Self::Literal(second)) => first.same_input(second),
             (
@@ -290,7 +292,7 @@ impl GddNumericInput {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct GddNumericPort {
     index: usize,
     value: GddNumericValue,
@@ -298,28 +300,32 @@ struct GddNumericPort {
 }
 
 impl GddNumericPort {
-    fn same_input(self, other: Self) -> bool {
+    fn same_input(&self, other: &Self) -> bool {
         self.index == other.index
             && self.exposed == other.exposed
-            && self.value.same_value(other.value)
+            && self.value.same_value(&other.value)
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum GddNumericValue {
     Number(f64),
     Integer(i64),
     Vector([f64; 2]),
+    NumberList(Arc<[f64]>),
 }
 
 impl GddNumericValue {
-    pub fn parse_like(self, text: &str) -> Result<Self, GddArchiveError> {
+    pub fn parse_like(&self, text: &str) -> Result<Self, GddArchiveError> {
         let text = text.trim();
-        match self {
-            Self::Number(_) => text
+        let finite_number = |text: &str| {
+            text.trim()
                 .parse::<f64>()
                 .ok()
-                .filter(|number| number.is_finite())
+                .filter(|value| value.is_finite())
+        };
+        match self {
+            Self::Number(_) => finite_number(text)
                 .map(Self::Number)
                 .ok_or(GddArchiveError::InvalidGraphNumber),
             Self::Integer(_) => text
@@ -330,30 +336,36 @@ impl GddNumericValue {
                 let (first, second) = text
                     .split_once(',')
                     .ok_or(GddArchiveError::InvalidGraphVector)?;
-                let components = [first, second].map(|component| component.trim().parse::<f64>());
-                match components {
-                    [Ok(first), Ok(second)] if first.is_finite() && second.is_finite() => {
-                        Ok(Self::Vector([first, second]))
-                    }
-                    _ => Err(GddArchiveError::InvalidGraphVector),
-                }
+                let first = finite_number(first).ok_or(GddArchiveError::InvalidGraphVector)?;
+                let second = finite_number(second).ok_or(GddArchiveError::InvalidGraphVector)?;
+                Ok(Self::Vector([first, second]))
             }
+            Self::NumberList(_) if text.is_empty() => Ok(Self::NumberList(Arc::from([]))),
+            Self::NumberList(_) => text
+                .split(',')
+                .map(|part| finite_number(part).ok_or(GddArchiveError::InvalidGraphNumberList))
+                .collect::<Result<Vec<_>, _>>()
+                .map(|values| Self::NumberList(values.into())),
         }
     }
 
-    fn same_value(self, other: Self) -> bool {
+    fn same_value(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Number(first), Self::Number(second)) => first.to_bits() == second.to_bits(),
             (Self::Integer(first), Self::Integer(second)) => first == second,
             (Self::Vector(first), Self::Vector(second)) => {
                 first.map(f64::to_bits) == second.map(f64::to_bits)
             }
+            (Self::NumberList(first), Self::NumberList(second)) => first
+                .iter()
+                .map(|value| value.to_bits())
+                .eq(second.iter().map(|value| value.to_bits())),
             _ => false,
         }
     }
 
-    fn same_type(self, other: Self) -> bool {
-        std::mem::discriminant(&self) == std::mem::discriminant(&other)
+    fn same_type(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
     }
 }
 
@@ -363,6 +375,15 @@ impl fmt::Display for GddNumericValue {
             Self::Number(value) => value.fmt(formatter),
             Self::Integer(value) => value.fmt(formatter),
             Self::Vector([first, second]) => write!(formatter, "{first}, {second}"),
+            Self::NumberList(values) => {
+                if let Some((first, remaining)) = values.split_first() {
+                    first.fmt(formatter)?;
+                    for value in remaining {
+                        write!(formatter, ", {value}")?;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -386,10 +407,10 @@ impl GddGraphNode {
         self.pinned
     }
 
-    pub fn numeric_input(&self) -> Option<GddNumericValue> {
+    pub fn numeric_input(&self) -> Option<&GddNumericValue> {
         self.numeric_port()
             .filter(|port| !port.exposed)
-            .map(|port| port.value)
+            .map(|port| &port.value)
     }
 
     pub fn numeric_input_exposed(&self) -> Option<bool> {
@@ -397,7 +418,10 @@ impl GddGraphNode {
     }
 
     pub fn has_numeric_connection(&self) -> bool {
-        matches!(self.numeric_input, Some(GddNumericInput::Connected { .. }))
+        matches!(
+            self.numeric_input.as_ref(),
+            Some(GddNumericInput::Connected { .. })
+        )
     }
 
     pub fn can_connect_numeric_input_from(&self, source: &Self) -> bool {
@@ -406,22 +430,24 @@ impl GddGraphNode {
             && self
                 .numeric_port()
                 .zip(source.numeric_port())
-                .is_some_and(|(input, output)| input.exposed && input.value.same_type(output.value))
+                .is_some_and(|(input, output)| {
+                    input.exposed && input.value.same_type(&output.value)
+                })
     }
 
     pub fn numeric_connection_source<'nodes>(&self, nodes: &'nodes [Self]) -> Option<&'nodes Self> {
-        let Some(GddNumericInput::Connected { upstream, .. }) = self.numeric_input else {
+        let Some(GddNumericInput::Connected { upstream, .. }) = self.numeric_input.as_ref() else {
             return None;
         };
         nodes
             .iter()
-            .find(|node| self.same_network_as(node) && node.local_id == upstream)
+            .find(|node| self.same_network_as(node) && node.local_id == *upstream)
     }
 
     pub fn can_reconnect_numeric_input_from(&self, previous: &Self, replacement: &Self) -> bool {
         matches!(
-            self.numeric_input,
-            Some(GddNumericInput::Connected { upstream, .. }) if upstream == previous.local_id
+            self.numeric_input.as_ref(),
+            Some(GddNumericInput::Connected { upstream, .. }) if *upstream == previous.local_id
         ) && self.same_network_as(previous)
             && self.same_network_as(replacement)
             && self.local_id != replacement.local_id
@@ -429,15 +455,15 @@ impl GddGraphNode {
             && previous
                 .numeric_port()
                 .zip(replacement.numeric_port())
-                .is_some_and(|(first, second)| first.value.same_type(second.value))
+                .is_some_and(|(first, second)| first.value.same_type(&second.value))
     }
 
     fn same_network_as(&self, source: &Self) -> bool {
         Arc::ptr_eq(&self.snapshot, &source.snapshot) && self.network_path == source.network_path
     }
 
-    fn numeric_port(&self) -> Option<GddNumericPort> {
-        match self.numeric_input? {
+    fn numeric_port(&self) -> Option<&GddNumericPort> {
+        match self.numeric_input.as_ref()? {
             GddNumericInput::Literal(port) => Some(port),
             GddNumericInput::Connected { .. } => None,
         }
@@ -928,23 +954,31 @@ impl InspectedGddV1 {
         if port.exposed {
             return Err(GddArchiveError::ExposedGraphNumericInput);
         }
-        let tagged_value = match (port.value, value) {
+        let tagged_value = match (&port.value, &value) {
             (GddNumericValue::Number(_), GddNumericValue::Number(number)) if number.is_finite() => {
-                TaggedValue::Number(number)
+                TaggedValue::Number(*number)
             }
             (GddNumericValue::Number(_), GddNumericValue::Number(_)) => {
                 return Err(GddArchiveError::InvalidGraphNumber);
             }
             (GddNumericValue::Integer(_), GddNumericValue::Integer(number)) => {
-                TaggedValue::Integer(number)
+                TaggedValue::Integer(*number)
             }
             (GddNumericValue::Vector(_), GddNumericValue::Vector(vector))
                 if vector.iter().all(|component| component.is_finite()) =>
             {
-                TaggedValue::DVec2(DVec2::from_array(vector))
+                TaggedValue::DVec2(DVec2::from_array(*vector))
             }
             (GddNumericValue::Vector(_), GddNumericValue::Vector(_)) => {
                 return Err(GddArchiveError::InvalidGraphVector);
+            }
+            (GddNumericValue::NumberList(_), GddNumericValue::NumberList(numbers))
+                if numbers.iter().all(|number| number.is_finite()) =>
+            {
+                TaggedValue::Numbers(numbers.to_vec())
+            }
+            (GddNumericValue::NumberList(_), GddNumericValue::NumberList(_)) => {
+                return Err(GddArchiveError::InvalidGraphNumberList);
             }
             _ => return Err(GddArchiveError::GraphInputTypeChanged),
         };
@@ -1172,7 +1206,7 @@ impl InspectedGddV1 {
         let path = &node.network_path;
         let input_index = expected.index();
         let connector = InputConnector::node_at_index(node.local_id, input_index);
-        if !graph_numeric_input(&interface, node).is_some_and(|actual| actual.same_input(expected))
+        if !graph_numeric_input(&interface, node).is_some_and(|actual| actual.same_input(&expected))
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -1206,7 +1240,7 @@ impl InspectedGddV1 {
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if !graph_numeric_input(&actual, node).is_some_and(|actual| actual.same_input(expected)) {
+        if !graph_numeric_input(&actual, node).is_some_and(|actual| actual.same_input(&expected)) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -1688,6 +1722,7 @@ fn graph_numeric_input(
         TaggedValue::Number(number) => GddNumericValue::Number(*number),
         TaggedValue::Integer(number) if integer_supported => GddNumericValue::Integer(*number),
         TaggedValue::DVec2(vector) => GddNumericValue::Vector(vector.to_array()),
+        TaggedValue::Numbers(numbers) => GddNumericValue::NumberList(numbers.as_slice().into()),
         _ => return None,
     };
     Some(GddNumericInput::Literal(GddNumericPort {
@@ -2871,7 +2906,7 @@ mod tests {
             assert!(
                 selected
                     .numeric_port()
-                    .is_some_and(|port| port.value.same_value(GddNumericValue::Number(-2.5)))
+                    .is_some_and(|port| port.value.same_value(&GddNumericValue::Number(-2.5)))
             );
             for unchanged in [root, wired] {
                 assert_eq!(
@@ -2924,6 +2959,114 @@ mod tests {
             );
             assert_eq!(hidden.history_len(), original.history_len() + 2);
             assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_031_1_edits_the_inserted_number_list_default_without_changing_type() {
+        futures::executor::block_on(async {
+            let blank = create_gdd_folder(918, 501, "Pinned Graphite".into(), budget())
+                .await
+                .expect("source folder");
+            let original = blank
+                .insert_root_numeric_node_in_copy(UnaryNumericOperation::Sign, [1, 2], budget())
+                .await
+                .expect("insert the default Sign definition");
+            let original_nodes = original.graph_nodes().await.expect("original default");
+            let [original_node] = original_nodes.as_slice() else {
+                panic!("expected one original node");
+            };
+            assert_eq!(original_node.numeric_input_exposed(), Some(true));
+            let hidden = original
+                .set_graph_numeric_input_exposed_in_copy(original_node, false, budget())
+                .await
+                .expect("expose the original literal editor");
+            let hidden_nodes = hidden.graph_nodes().await.expect("hidden list port");
+            let [node] = hidden_nodes.as_slice() else {
+                panic!("expected one edited node");
+            };
+            let Some(default @ GddNumericValue::NumberList(numbers)) = node.numeric_input() else {
+                panic!("expected the original typed list");
+            };
+            assert!(numbers.is_empty());
+            for malformed in ["2,,3", "0, NaN", "Infinity", "1,"] {
+                assert!(matches!(
+                    default.parse_like(malformed),
+                    Err(GddArchiveError::InvalidGraphNumberList)
+                ));
+            }
+            assert!(matches!(
+                hidden
+                    .set_graph_numeric_input_in_copy(node, GddNumericValue::Number(1.), budget())
+                    .await,
+                Err(GddArchiveError::GraphInputTypeChanged)
+            ));
+            assert!(matches!(
+                hidden
+                    .set_graph_numeric_input_in_copy(
+                        node,
+                        GddNumericValue::NumberList(Arc::from([f64::NAN])),
+                        budget(),
+                    )
+                    .await,
+                Err(GddArchiveError::InvalidGraphNumberList)
+            ));
+            let values = [-1.25, -0., -1.25, 0.03];
+            let draft = default
+                .parse_like("-1.25, -0, -1.25, 3e-2")
+                .expect("valid list");
+            let edited = hidden
+                .set_graph_numeric_input_in_copy(node, draft, budget())
+                .await
+                .expect("save the ordered list");
+            let bytes: Arc<[u8]> = edited
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("serialize the list")
+                .into();
+            let reopened = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("reopen the list");
+            let nodes = reopened.graph_nodes().await.expect("reopened nodes");
+            let [saved] = nodes.as_slice() else {
+                panic!("expected one reopened node");
+            };
+            assert_eq!(saved.storage_id, original_node.storage_id);
+            let Some(value @ GddNumericValue::NumberList(_)) = saved.numeric_input() else {
+                panic!("expected the saved source list");
+            };
+            assert!(value.same_value(&GddNumericValue::NumberList(Arc::from(values))));
+            assert_eq!(value.to_string(), "-1.25, -0, -1.25, 0.03");
+            assert!(matches!(
+                reopened
+                    .set_graph_numeric_input_in_copy(saved, value.clone(), budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInput)
+            ));
+            let empty = value
+                .parse_like(" ")
+                .expect("blank represents an empty list");
+            let cleared = reopened
+                .set_graph_numeric_input_in_copy(saved, empty, budget())
+                .await
+                .expect("clear the list");
+            let undo = cleared
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo restores the list");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(reopened.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo clears the list");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(cleared.document.registry())
+            );
         });
     }
 
@@ -3016,7 +3159,7 @@ mod tests {
             assert!(
                 edited_node
                     .numeric_input()
-                    .is_some_and(|value| value.same_value(GddNumericValue::Number(-0.)))
+                    .is_some_and(|value| value.same_value(&GddNumericValue::Number(-0.)))
             );
             assert!(matches!(
                 edited

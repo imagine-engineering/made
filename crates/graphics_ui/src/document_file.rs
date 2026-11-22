@@ -974,10 +974,10 @@ impl GraphiteDocumentItem {
                                     ))
                             })
                             .when_some(selected.numeric_input(), |panel, value| {
-                                let label = if matches!(value, GddNumericValue::Vector(_)) {
-                                    "Value (x, y)"
-                                } else {
-                                    "Value"
+                                let label = match value {
+                                    GddNumericValue::Vector(_) => "Value (x, y)",
+                                    GddNumericValue::NumberList(_) => "Value (comma-separated numbers)",
+                                    _ => "Value",
                                 };
                                 panel
                                     .child(Label::new(label))
@@ -2444,6 +2444,104 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_031_2_workspace_edits_a_new_nodes_number_list_default(
+        cx: &mut TestAppContext,
+    ) {
+        let blank = create_gdd_folder(451, 184, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source GDD folder");
+        let inserted = blank
+            .insert_root_numeric_node_in_copy(UnaryNumericOperation::Round, [3, 5], ARCHIVE_BUDGET)
+            .await
+            .expect("source Round defaults");
+        let original = inserted
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/round.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source file");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the inserted Round node")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        for (selector, destination, draft) in [
+            (
+                "GRAPHITE-GDD-SAVE-VALUE-EXPOSURE",
+                "/project/list-input.gdd",
+                None,
+            ),
+            (
+                "GRAPHITE-GDD-SAVE-NUMERIC-INPUT",
+                "/project/edited-list.gdd",
+                Some("-2.5, -0, -2.5"),
+            ),
+        ] {
+            let destination = PathBuf::from(destination);
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+            if let Some(draft) = draft {
+                let editor = current.read_with(window, |item, cx| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                        panic!("expected the list editor");
+                    };
+                    assert_eq!(form.value.read(cx).text(cx), "");
+                    form.value.clone()
+                });
+                editor.update_in(window, |editor, window, cx| {
+                    editor.set_text("1,,2", window, cx)
+                });
+                click(window, selector);
+                current.read_with(window, |item, _| {
+                    assert!(item.copy_task.is_none());
+                    assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("finite numbers separated by commas")));
+                });
+                editor.update_in(window, |editor, window, cx| {
+                    editor.set_text(draft, window, cx)
+                });
+                paint(window);
+            }
+            click(window, selector);
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopened list copy");
+            assert_ne!(reopened, current);
+            current = reopened;
+        }
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        current.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the reopened list editor");
+            };
+            assert_eq!(form.value.read(cx).text(cx), "-2.5, -0, -2.5");
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained source ZIP"),
             original
         );
     }
