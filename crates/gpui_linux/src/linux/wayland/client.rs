@@ -1007,6 +1007,15 @@ impl LinuxClient for WaylandClient {
                 });
                 (Some(parent), popup_grab.flatten())
             }
+            WindowKind::OwnedFloating(owner) => {
+                let parent = state
+                    .windows
+                    .values()
+                    .find(|window| window.handle() == *owner && window.toplevel().is_some())
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("floating window owner is unavailable"))?;
+                (Some(parent), None)
+            }
             _ => (state.keyboard_focused_window.clone(), None),
         };
 

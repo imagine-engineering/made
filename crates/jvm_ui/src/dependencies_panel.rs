@@ -2989,17 +2989,16 @@ impl DependenciesPanel {
         cx.notify();
     }
 
-    fn toggle_window_mode(&self, cx: &mut Context<Self>) {
+    fn present_in_dock_mode(&self, mode: DockMode, cx: &mut Context<Self>) {
         let workspace = self.workspace.clone();
         let weak_panel = cx.weak_entity();
-        let windowed = self.preferences.dock_mode != DockMode::Window;
         cx.defer(move |cx| {
             let Some(panel) = weak_panel.upgrade() else {
                 return;
             };
             let result = workspace
                 .update_in(cx, |workspace, window, cx| {
-                    workspace.set_panel_windowed(&panel, windowed, window, cx)
+                    workspace.set_panel_dock_mode(&panel, mode, window, cx)
                 })
                 .and_then(|result| result);
             panel.update(cx, |panel, cx| {
@@ -3008,11 +3007,7 @@ impl DependenciesPanel {
                     panel.preferences_notice =
                         Some("Could not change the Groovy tool window mode.".into());
                 } else {
-                    panel.preferences.dock_mode = if windowed {
-                        DockMode::Window
-                    } else {
-                        DockMode::Pinned
-                    };
+                    panel.preferences.dock_mode = mode;
                     panel.persist_preferences(cx);
                 }
                 cx.notify();
@@ -3021,7 +3016,7 @@ impl DependenciesPanel {
     }
 
     fn toggle_panel_zoom(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.preferences.dock_mode == DockMode::Window {
+        if self.preferences.dock_mode.is_detached() {
             cx.propagate();
             return;
         }
@@ -3236,7 +3231,7 @@ impl DependenciesPanel {
         self.preferences.view = view;
         self.persist_preferences(cx);
         self.rebuild(cx);
-        if self.preferences.dock_mode != DockMode::Window
+        if !self.preferences.dock_mode.is_detached()
             || self.focus_handle.contains_focused(window, cx)
         {
             window.focus(&self.focus_handle, cx);
@@ -8484,7 +8479,7 @@ impl Render for DependenciesPanel {
             "Pin Groovy panel"
         };
         let overlay = self.preferences.dock_mode == DockMode::Overlay;
-        let windowed = self.preferences.dock_mode == DockMode::Window;
+        let windowed = self.preferences.dock_mode.is_detached();
         let overlay_label = if overlay {
             "Dock Groovy panel"
         } else {
@@ -8665,8 +8660,19 @@ impl Render for DependenciesPanel {
                         Button::new("groovy-panel-window", if windowed { "Return to Dock" } else { "Open in Window" })
                             .aria_label(if windowed { "Return Groovy to its dock" } else { "Open Groovy in a separate window" })
                             .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.toggle_window_mode(cx))),
+                            .on_click(cx.listener(move |panel, _, _, cx| {
+                                let mode = if windowed { DockMode::Pinned } else { DockMode::Window };
+                                panel.present_in_dock_mode(mode, cx);
+                            })),
                     )
+                    .when(!windowed, |header| header.child(
+                        Button::new("groovy-panel-float", "Float")
+                            .aria_label("Float Groovy above its workspace")
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| {
+                                panel.present_in_dock_mode(DockMode::Floating, cx);
+                            })),
+                    ))
                     .when(icon_toolbar_active, |header| {
                         header.child(
                             h_flex()
@@ -26891,69 +26897,76 @@ mod tests {
             cx.notify();
             selection
         });
-        activate_dock_control(cx, "Open Groovy in a separate window");
-        let detached_window = cx
-            .read(|cx| cx.windows())
-            .into_iter()
-            .find(|window| !workspace_windows.contains(window))
-            .expect("separate Groovy window");
-        assert_eq!(
-            cx.read(|cx| cx.windows()).len(),
-            workspace_windows.len() + 1
-        );
-        assert!(!workspace.read_with(cx, |workspace, cx| workspace.top_dock().read(cx).is_open()));
-        panel.read_with(cx, |panel, _| {
-            assert_eq!(panel.preferences.dock_mode, DockMode::Window);
-            assert_eq!(panel.host.selected(), Some(&retained_selection));
-            assert!(panel.active);
-        });
-        detached_window
-            .update(cx, |_, window, cx| {
-                window.draw(cx).clear(cx);
-                assert!(panel.read(cx).focus_handle.contains_focused(window, cx));
-                window.dispatch_action(Box::new(workspace::CloseWindow), cx);
-            })
-            .expect("close the separate tool window");
-        cx.run_until_parked();
-        assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
-        assert!(!panel.read_with(cx, |panel, _| panel.active));
+        for (mode, label) in [
+            (DockMode::Window, "Open Groovy in a separate window"),
+            (DockMode::Floating, "Float Groovy above its workspace"),
+        ] {
+            activate_dock_control(cx, label);
+            let detached_window = cx
+                .read(|cx| cx.windows())
+                .into_iter()
+                .find(|window| !workspace_windows.contains(window))
+                .expect("separate Groovy window");
+            assert_eq!(
+                cx.read(|cx| cx.windows()).len(),
+                workspace_windows.len() + 1
+            );
+            assert!(
+                !workspace.read_with(cx, |workspace, cx| workspace.top_dock().read(cx).is_open())
+            );
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.preferences.dock_mode, mode);
+                assert_eq!(panel.host.selected(), Some(&retained_selection));
+                assert!(panel.active);
+            });
+            detached_window
+                .update(cx, |_, window, cx| {
+                    window.draw(cx).clear(cx);
+                    assert!(panel.read(cx).focus_handle.contains_focused(window, cx));
+                    window.dispatch_action(Box::new(workspace::CloseWindow), cx);
+                })
+                .expect("close the separate tool window");
+            cx.run_until_parked();
+            assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+            assert!(!panel.read_with(cx, |panel, _| panel.active));
 
-        cx.dispatch_action(ToggleDependenciesPanel);
-        cx.run_until_parked();
-        let reopened_window = cx
-            .read(|cx| cx.windows())
-            .into_iter()
-            .find(|window| !workspace_windows.contains(window))
-            .expect("reopened Groovy window");
-        assert_ne!(reopened_window, detached_window);
-        let mut reopened = gpui::VisualTestContext::from_window(reopened_window, cx);
-        reopened.update(|window, cx| {
-            window.activate_a11y_for_test();
-            window.draw(cx).clear(cx);
-        });
-        panel.update_in(&mut reopened, |panel, window, cx| {
-            assert_eq!(window.window_handle(), reopened_window);
-            let routed_window = panel
-                .with_workspace_window(window, cx, |_, window, _| window.window_handle())
-                .expect("route detached panel actions to their workspace");
-            assert_eq!(routed_window, owner_window);
-        });
-        panel.update_in(cx, |panel, window, cx| {
-            let routed_window = panel
-                .with_workspace_window(window, cx, |_, window, _| window.window_handle())
-                .expect("keep actions already dispatched from the workspace in that window");
-            assert_eq!(routed_window, owner_window);
-        });
-        activate_dock_control(&mut reopened, "Return Groovy to its dock");
-        cx.run_until_parked();
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
-        assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
-        panel.read_with(cx, |panel, _| {
-            assert_eq!(panel.preferences.dock_mode, DockMode::Pinned);
-            assert_eq!(panel.host.selected(), Some(&retained_selection));
-            assert!(panel.active);
-        });
+            cx.dispatch_action(ToggleDependenciesPanel);
+            cx.run_until_parked();
+            let reopened_window = cx
+                .read(|cx| cx.windows())
+                .into_iter()
+                .find(|window| !workspace_windows.contains(window))
+                .expect("reopened Groovy window");
+            assert_ne!(reopened_window, detached_window);
+            let mut reopened = gpui::VisualTestContext::from_window(reopened_window, cx);
+            reopened.update(|window, cx| {
+                window.activate_a11y_for_test();
+                window.draw(cx).clear(cx);
+            });
+            panel.update_in(&mut reopened, |panel, window, cx| {
+                assert_eq!(window.window_handle(), reopened_window);
+                let routed_window = panel
+                    .with_workspace_window(window, cx, |_, window, _| window.window_handle())
+                    .expect("route detached panel actions to their workspace");
+                assert_eq!(routed_window, owner_window);
+            });
+            panel.update_in(cx, |panel, window, cx| {
+                let routed_window = panel
+                    .with_workspace_window(window, cx, |_, window, _| window.window_handle())
+                    .expect("keep actions already dispatched from the workspace in that window");
+                assert_eq!(routed_window, owner_window);
+            });
+            activate_dock_control(&mut reopened, "Return Groovy to its dock");
+            cx.run_until_parked();
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+            assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.preferences.dock_mode, DockMode::Pinned);
+                assert_eq!(panel.host.selected(), Some(&retained_selection));
+                assert!(panel.active);
+            });
+        }
 
         let write = panel
             .update(cx, |panel, _| panel.preferences_write.take())

@@ -2019,6 +2019,9 @@ pub enum WindowKind {
     /// A floating window that appears on top of its parent window
     Floating,
 
+    /// A movable, nonmodal window kept above an explicitly identified owner.
+    OwnedFloating(AnyWindowHandle),
+
     /// A Wayland LayerShell window, used to draw overlays or backgrounds for applications such as
     /// docks, notifications or wallpapers.
     #[cfg(all(target_os = "linux", feature = "wayland"))]

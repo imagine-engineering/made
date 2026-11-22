@@ -418,6 +418,7 @@ impl WindowsWindow {
         handle: AnyWindowHandle,
         params: WindowParams,
         creation_info: WindowCreationInfo,
+        owner: Option<HWND>,
     ) -> Result<Self> {
         // Native popups are not implemented on Windows yet. Rejecting lets callers fall back to
         // gpui's in-window popovers.
@@ -483,6 +484,9 @@ impl WindowsWindow {
             let dwexstyle = if params.kind == WindowKind::Dialog {
                 dwstyle |= WS_POPUP | WS_CAPTION;
                 WS_EX_DLGMODALFRAME
+            } else if owner.is_some() {
+                dwstyle |= WS_POPUP | WS_CAPTION;
+                WS_EX_TOOLWINDOW
             } else {
                 WS_EX_APPWINDOW
             };
@@ -535,7 +539,7 @@ impl WindowsWindow {
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
-                parent_hwnd,
+                parent_hwnd.or(owner),
                 None,
                 Some(hinstance.into()),
                 Some(&context as *const _ as *const _),

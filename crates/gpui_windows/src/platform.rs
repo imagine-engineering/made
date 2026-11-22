@@ -528,7 +528,20 @@ impl Platform for WindowsPlatform {
         handle: AnyWindowHandle,
         options: WindowParams,
     ) -> Result<Box<dyn PlatformWindow>> {
-        let window = WindowsWindow::new(handle, options, self.generate_creation_info())?;
+        let owner = match &options.kind {
+            WindowKind::OwnedFloating(owner) => Some(
+                self.raw_window_handles
+                    .read()
+                    .iter()
+                    .map(|window| window.as_raw())
+                    .find(|hwnd| {
+                        window_from_hwnd(*hwnd).is_some_and(|window| window.handle == *owner)
+                    })
+                    .context("floating window owner not found")?,
+            ),
+            _ => None,
+        };
+        let window = WindowsWindow::new(handle, options, self.generate_creation_info(), owner)?;
         let handle = window.get_raw_handle();
         self.raw_window_handles.write().push(handle.into());
 

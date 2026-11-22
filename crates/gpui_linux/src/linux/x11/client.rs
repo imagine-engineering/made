@@ -62,7 +62,7 @@ use gpui::{
     AnyWindowHandle, Bounds, ClipboardItem, CursorStyle, DisplayId, FileDropEvent, Keystroke,
     Modifiers, ModifiersChangedEvent, MouseButton, Pixels, PlatformDisplay, PlatformInput,
     PlatformKeyboardLayout, PlatformWindow, Point, RequestFrameOptions, ScrollDelta, Size,
-    TouchPhase, WindowButtonLayout, WindowParams, point, px,
+    TouchPhase, WindowButtonLayout, WindowKind, WindowParams, point, px,
 };
 use gpui_wgpu::{CompositorGpuHint, GpuContext};
 
@@ -1600,10 +1600,22 @@ impl LinuxClient for X11Client {
         params: WindowParams,
     ) -> anyhow::Result<Box<dyn PlatformWindow>> {
         let mut state = self.0.borrow_mut();
-        let parent_window = state
-            .keyboard_focused_window
-            .and_then(|focused_window| state.windows.get(&focused_window))
-            .map(|w| w.window.clone());
+        let parent_window = if let WindowKind::OwnedFloating(owner) = &params.kind {
+            Some(
+                state
+                    .windows
+                    .values()
+                    .find(|window| window.handle() == *owner)
+                    .context("floating window owner not found")?
+                    .window
+                    .clone(),
+            )
+        } else {
+            state
+                .keyboard_focused_window
+                .and_then(|focused_window| state.windows.get(&focused_window))
+                .map(|window| window.window.clone())
+        };
         let x_window = state
             .xcb_connection
             .generate_id()

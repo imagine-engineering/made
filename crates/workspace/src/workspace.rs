@@ -4731,10 +4731,10 @@ impl Workspace {
         panel.to_any().downcast().ok()
     }
 
-    pub fn set_panel_windowed<T: Panel>(
+    pub fn set_panel_dock_mode<T: Panel>(
         &mut self,
         panel: &Entity<T>,
-        windowed: bool,
+        mode: DockMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
@@ -4748,8 +4748,8 @@ impl Workspace {
             .cloned()
             .context("Panel is unavailable in its dock")?;
         dock.update(cx, |dock, cx| {
-            if windowed {
-                dock.open_panel_window(handle.clone(), true, window, cx)?;
+            if mode.is_detached() {
+                dock.open_panel_window(handle.clone(), mode, true, window, cx)?;
                 handle.set_zoomed(false, window, cx);
             } else {
                 dock.close_panel_window(panel_id, cx)?;
@@ -4761,7 +4761,7 @@ impl Workspace {
             }
             Ok::<_, anyhow::Error>(())
         })?;
-        if windowed {
+        if mode.is_detached() {
             if self.zoomed_position == Some(dock.read(cx).position()) {
                 self.zoomed = None;
                 self.zoomed_position = None;
@@ -4891,11 +4891,12 @@ impl Workspace {
         for dock in self.all_docks().map(Clone::clone) {
             if let Some(panel_index) = dock.read(cx).panel_index_for_type::<T>() {
                 if let Some(panel) = dock.read(cx).panel_at(panel_index)
-                    && panel.dock_mode(cx) == DockMode::Window
+                    && panel.dock_mode(cx).is_detached()
                 {
+                    let mode = panel.dock_mode(cx);
                     let result = dock.update(cx, |dock, cx| {
                         if should_focus(panel.as_ref(), window, cx) {
-                            dock.open_panel_window(panel.clone(), true, window, cx)?;
+                            dock.open_panel_window(panel.clone(), mode, true, window, cx)?;
                         }
                         Ok::<_, anyhow::Error>(())
                     });
@@ -4945,10 +4946,11 @@ impl Workspace {
         for dock in self.all_docks().map(Clone::clone) {
             if let Some(panel_index) = dock.read(cx).panel_index_for_type::<T>() {
                 if let Some(panel) = dock.read(cx).panel_at(panel_index)
-                    && panel.dock_mode(cx) == DockMode::Window
+                    && panel.dock_mode(cx).is_detached()
                 {
+                    let mode = panel.dock_mode(cx);
                     if let Err(error) = dock.update(cx, |dock, cx| {
-                        dock.open_panel_window(panel, false, window, cx)
+                        dock.open_panel_window(panel, mode, false, window, cx)
                     }) {
                         self.show_error(format!("Could not open the tool window: {error}"), cx);
                     }
@@ -4979,7 +4981,7 @@ impl Workspace {
         for dock in self.all_docks().iter() {
             dock.update(cx, |dock, cx| {
                 if let Some(panel) = dock.panel::<T>() {
-                    if panel.read(cx).dock_mode() == DockMode::Window {
+                    if panel.read(cx).dock_mode().is_detached() {
                         if dock.close_panel_window(panel.entity_id(), cx).log_err() == Some(true) {
                             PanelHandle::set_active(&panel, false, window, cx);
                         }

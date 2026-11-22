@@ -339,7 +339,7 @@ impl Platform for WebPlatform {
             WindowKind::PopUp => {
                 return Err(WebWindowError::UnsupportedWindowKind("popup windows").into());
             }
-            WindowKind::Floating => {
+            WindowKind::Floating | WindowKind::OwnedFloating(_) => {
                 return Err(WebWindowError::UnsupportedWindowKind("floating windows").into());
             }
             WindowKind::Dialog => {

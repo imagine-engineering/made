@@ -350,11 +350,24 @@ pub enum DockMode {
     Unpinned,
     Overlay,
     Window,
+    Floating,
 }
 
 impl DockMode {
     pub fn is_pinned(&self) -> bool {
         *self == Self::Pinned
+    }
+
+    pub fn is_detached(self) -> bool {
+        matches!(self, Self::Window | Self::Floating)
+    }
+
+    fn detached_window_kind(self, owner: AnyWindowHandle) -> Option<WindowKind> {
+        match self {
+            Self::Window => Some(WindowKind::Normal),
+            Self::Floating => Some(WindowKind::OwnedFloating(owner)),
+            Self::Pinned | Self::Unpinned | Self::Overlay => None,
+        }
     }
 
     fn hides_on_focus_loss(self) -> bool {
@@ -654,6 +667,7 @@ impl Dock {
     pub(crate) fn open_panel_window(
         &mut self,
         panel: Arc<dyn PanelHandle>,
+        mode: DockMode,
         focus: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -673,6 +687,9 @@ impl Dock {
             .icon_tooltip(window, cx)
             .unwrap_or_else(|| panel.persistent_name());
         let bounds = WindowBounds::centered(size(px(640.), px(560.)), cx);
+        let kind = mode
+            .detached_window_kind(window.window_handle())
+            .context("Dock mode does not open a separate window")?;
         let handle = cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -681,7 +698,8 @@ impl Dock {
                 }),
                 window_bounds: Some(bounds),
                 focus,
-                kind: WindowKind::Normal,
+                kind,
+                is_minimizable: mode == DockMode::Window,
                 ..Default::default()
             },
             |window, cx| {
@@ -723,9 +741,7 @@ impl Dock {
     pub fn first_enabled_panel_idx(&mut self, cx: &mut Context<Self>) -> anyhow::Result<usize> {
         self.panel_entries
             .iter()
-            .position(|entry| {
-                entry.panel.enabled(cx) && entry.panel.dock_mode(cx) != DockMode::Window
-            })
+            .position(|entry| entry.panel.enabled(cx) && !entry.panel.dock_mode(cx).is_detached())
             .with_context(|| {
                 format!(
                     "Couldn't find any enabled panel for the {} dock.",
@@ -1056,7 +1072,7 @@ impl Dock {
                 && let Some(idx) = self.panel_index_for_persistent_name(active_panel.as_str(), cx)
                 && self
                     .panel_at(idx)
-                    .is_some_and(|panel| panel.dock_mode(cx) != DockMode::Window)
+                    .is_some_and(|panel| !panel.dock_mode(cx).is_detached())
             {
                 self.activate_panel(idx, window, cx);
             }
@@ -1807,6 +1823,27 @@ impl StatusItemView for PanelButtons {
 pub mod test {
     use super::*;
     use gpui::{App, Context, Window, actions, div};
+
+    #[cfg(test)]
+    #[gpui::test]
+    fn floating_panel_windows_name_the_workspace_owner(cx: &mut gpui::TestAppContext) {
+        let owner = cx
+            .add_empty_window()
+            .update(|window, _| window.window_handle());
+        let other = cx
+            .add_empty_window()
+            .update(|window, _| window.window_handle());
+        assert_ne!(owner, other);
+        assert_eq!(
+            DockMode::Floating.detached_window_kind(owner),
+            Some(WindowKind::OwnedFloating(owner))
+        );
+        assert_eq!(
+            DockMode::Window.detached_window_kind(owner),
+            Some(WindowKind::Normal)
+        );
+        assert_eq!(DockMode::Overlay.detached_window_kind(owner), None);
+    }
 
     pub struct TestPanel {
         pub position: DockPosition,

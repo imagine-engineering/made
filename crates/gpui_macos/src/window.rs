@@ -780,6 +780,7 @@ impl MacWindow {
             tabbing_identifier,
             ..
         }: WindowParams,
+        owner: Option<id>,
         cursor_visible: Arc<AtomicBool>,
         foreground_executor: ForegroundExecutor,
         background_executor: BackgroundExecutor,
@@ -826,7 +827,7 @@ impl MacWindow {
                     style_mask |= NSWindowStyleMaskNonactivatingPanel;
                     msg_send![PANEL_CLASS, alloc]
                 }
-                WindowKind::Floating | WindowKind::Dialog => {
+                WindowKind::Floating | WindowKind::OwnedFloating(_) | WindowKind::Dialog => {
                     msg_send![PANEL_CLASS, alloc]
                 }
             };
@@ -1001,7 +1002,7 @@ impl MacWindow {
             let mut sheet_parent = None;
 
             match kind {
-                WindowKind::Normal | WindowKind::Floating => {
+                WindowKind::Normal | WindowKind::Floating | WindowKind::OwnedFloating(_) => {
                     if kind == WindowKind::Floating {
                         // Let the window float keep above normal windows.
                         native_window.setLevel_(NSFloatingWindowLevel);
@@ -1091,6 +1092,10 @@ impl MacWindow {
                 }
             }
 
+            if let Some(owner) = owner {
+                let _: () = msg_send![owner, addChildWindow: native_window ordered: NSWindowOrderingMode::NSWindowAbove];
+            }
+
             if focus && show {
                 native_window.makeKeyAndOrderFront_(nil);
             } else if show {
@@ -1128,6 +1133,22 @@ impl MacWindow {
             } else {
                 None
             }
+        }
+    }
+
+    pub fn native_window_for_handle(handle: AnyWindowHandle) -> Option<id> {
+        unsafe {
+            let app = NSApplication::sharedApplication(nil);
+            let windows: id = msg_send![app, windows];
+            let count: NSUInteger = msg_send![windows, count];
+            (0..count).find_map(|index| {
+                let window: id = msg_send![windows, objectAtIndex: index];
+                if is_gpui_window(window) && get_window_state(&*window).lock().handle == handle {
+                    Some(window)
+                } else {
+                    None
+                }
+            })
         }
     }
 

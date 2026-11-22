@@ -649,6 +649,13 @@ impl Platform for MacPlatform {
         if let WindowKind::AnchoredPopup(_) = options.kind {
             return Err(PopupNotSupportedError.into());
         }
+        let owner = match &options.kind {
+            WindowKind::OwnedFloating(owner) => Some(
+                MacWindow::native_window_for_handle(*owner)
+                    .context("floating window owner not found")?,
+            ),
+            _ => None,
+        };
 
         let (cursor_visible, foreground_executor, background_executor, renderer_context) = {
             let guard = self.0.lock();
@@ -663,6 +670,7 @@ impl Platform for MacPlatform {
         Ok(Box::new(MacWindow::open(
             handle,
             options,
+            owner,
             cursor_visible,
             foreground_executor,
             background_executor,
