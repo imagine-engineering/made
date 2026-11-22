@@ -1020,6 +1020,23 @@ impl InspectedGddV1 {
         network: &GddGraphNetwork,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.append_network_import(network, false, budget).await
+    }
+
+    pub async fn append_secondary_nested_network_import_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.append_network_import(network, true, budget).await
+    }
+
+    async fn append_network_import(
+        &self,
+        network: &GddGraphNetwork,
+        secondary: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         self.check_network_edit_target(network)?;
         if !network.can_extend_ports_in_copy() {
             return Err(GddArchiveError::UnsupportedGraphImportAppend);
@@ -1047,6 +1064,27 @@ impl InspectedGddV1 {
             .map(StorageNodeId)
             .ok_or(GddArchiveError::MissingGraphNetwork)?;
         let previous_metadata = previous_metadata.input_metadata.clone();
+        if secondary && original_count == 0 {
+            let nested = interface
+                .nested_network(path)
+                .ok_or(GddArchiveError::StaleGraphNetwork)?;
+            if nested
+                .exports
+                .iter()
+                .chain(nested.nodes.values().flat_map(|node| &node.inputs))
+                .any(|input| matches!(input, NodeInput::Import { .. }))
+            {
+                return Err(GddArchiveError::UnsupportedGraphImportAppend);
+            }
+            let hidden = NodeInput::value(TaggedValue::None, false);
+            interface.add_import(TaggedValue::None, true, -1, "", "", path);
+            interface.set_input(
+                &InputConnector::primary_input(owner_id),
+                hidden.clone(),
+                parent_path,
+            );
+            expected_inputs.push(hidden);
+        }
         expected_inputs.push(NodeInput::value(TaggedValue::None, true));
         interface.add_import(TaggedValue::None, true, -1, "", "", path);
         if !interface
@@ -1426,6 +1464,23 @@ impl InspectedGddV1 {
         network: &GddGraphNetwork,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.append_network_export(network, false, budget).await
+    }
+
+    pub async fn append_secondary_nested_network_export_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.append_network_export(network, true, budget).await
+    }
+
+    async fn append_network_export(
+        &self,
+        network: &GddGraphNetwork,
+        secondary: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         use graphite_document_graph_storage::attr::node::ui::OUTPUT_NAMES;
 
         self.check_network_edit_target(network)?;
@@ -1442,12 +1497,28 @@ impl InspectedGddV1 {
             .ok_or(GddArchiveError::StaleGraphNetwork)?
             .exports
             .clone();
-        let export_index = expected_exports.len();
-        if export_index != network.export_count {
+        let original_count = expected_exports.len();
+        if original_count != network.export_count {
             return Err(GddArchiveError::StaleGraphNetwork);
         }
-        let expected_input = NodeInput::value(TaggedValue::None, true);
-        expected_exports.push(expected_input.clone());
+        if !self.graph_export_slots_contiguous(network.id, original_count) {
+            return Err(GddArchiveError::UnsupportedGraphExportAppend);
+        }
+        if secondary && original_count == 0 {
+            let parent = interface
+                .nested_network(parent_path)
+                .ok_or(GddArchiveError::StaleGraphNetwork)?;
+            if parent.exports.iter().chain(parent.nodes.values().flat_map(|node| &node.inputs))
+                .any(|input| matches!(input, NodeInput::Node { node_id, .. } if *node_id == owner_id))
+            {
+                return Err(GddArchiveError::UnsupportedGraphExportAppend);
+            }
+            let hidden = NodeInput::value(TaggedValue::None, false);
+            interface.add_export(TaggedValue::None, -1, "", path);
+            interface.set_input(&InputConnector::Export(0), hidden.clone(), path);
+            expected_exports.push(hidden);
+        }
+        expected_exports.push(NodeInput::value(TaggedValue::None, true));
         interface.add_export(TaggedValue::None, -1, "", path);
         if !interface
             .nested_network(path)
@@ -1464,27 +1535,36 @@ impl InspectedGddV1 {
             .map(StorageNodeId)
             .ok_or(GddArchiveError::MissingGraphNetwork)?;
         let output_names = owner_metadata.output_names.clone();
-        let edits = [
-            EditorDelta::Graph(RuntimeDelta::SetExport {
-                network_path: path.clone(),
-                export_index,
-                input: Some(expected_input),
-            }),
-            EditorDelta::NodeMetadata {
-                network_path: parent_path.to_vec(),
-                node_id: owner_id,
-                change: NodeMetadataChange::OutputNames(output_names.clone()),
-            },
-        ];
+        let mut edits: Vec<_> = expected_exports
+            .iter()
+            .enumerate()
+            .skip(original_count)
+            .map(|(index, input)| {
+                write_graph_connector(path, InputConnector::Export(index), input.clone())
+            })
+            .collect();
+        edits.push(EditorDelta::NodeMetadata {
+            network_path: parent_path.to_vec(),
+            node_id: owner_id,
+            change: NodeMetadataChange::OutputNames(output_names.clone()),
+        });
         let (owner, staged) = self.fork_working_copy(&budget).await?;
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
-        if !matches!(
-            batch.ops.as_slice(),
-            [RegistryDelta::SetNetworkExport { id, index, export: Some(_) },
-             RegistryDelta::ChangeNodeAttribute { id: node_id, delta }]
-                if *id == network.id && *index as usize == export_index
-                    && *node_id == owner_storage_id && delta.key == OUTPUT_NAMES
-        ) {
+        let Some((name_edit, ports)) = batch.ops.split_last() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        if !matches!(name_edit,
+            RegistryDelta::ChangeNodeAttribute { id, delta }
+                if *id == owner_storage_id && delta.key == OUTPUT_NAMES)
+            || ports.len() != expected_exports.len() - original_count
+            || !ports.iter().enumerate().all(|(offset, operation)| {
+                matches!(
+                    operation,
+                    RegistryDelta::SetNetworkExport { id, index, export: Some(_) }
+                        if *id == network.id && *index as usize == original_count + offset
+                )
+            })
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
@@ -4255,6 +4335,108 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_020_022_1_adds_secondary_ports_with_hidden_primary_defaults() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget()).await.expect("source graph");
+            let graph = original.graph_inspection().await.expect("source networks");
+            let [_, nested] = graph.networks.as_slice() else {
+                panic!("expected one empty nested interface");
+            };
+            assert_eq!(nested.import_count, 0);
+            assert_eq!(nested.export_count, 0);
+            let imported = original
+                .append_secondary_nested_network_import_in_copy(nested, budget())
+                .await
+                .expect("add both initial input slots in one interaction");
+            assert_eq!(imported.history_len(), original.history_len() + 1);
+            let graph = imported
+                .graph_inspection()
+                .await
+                .expect("saved initial imports");
+            let current = graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same nested network");
+            assert_eq!(current.import_count, 2);
+            assert_eq!(current.export_count, 0);
+            assert_eq!(current.primary_import_exposed(), Some(false));
+            let both = imported
+                .append_secondary_nested_network_export_in_copy(current, budget())
+                .await
+                .expect("also create the initial export slots");
+            let graph = both.graph_inspection().await.expect("saved ports");
+            let current = graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same saved interface");
+            assert_eq!(current.import_count, 2);
+            assert_eq!(current.export_count, 2);
+            assert_eq!(current.primary_export_exposed(), Some(false));
+            assert_eq!(current.empty_exports(), &[1]);
+            let interface = both
+                .runtime_graph()
+                .await
+                .expect("saved runtime")
+                .into_interface()
+                .expect("pinned source editor");
+            let Some((&owner_id, parent_path)) = nested.path.split_last() else {
+                panic!("expected saved enclosing node");
+            };
+            let ports = [
+                NodeInput::value(TaggedValue::None, false),
+                NodeInput::value(TaggedValue::None, true),
+            ];
+            assert_eq!(
+                interface
+                    .document_node(&owner_id, parent_path)
+                    .expect("original enclosing node")
+                    .inputs,
+                ports
+            );
+            assert_eq!(
+                interface
+                    .nested_network(&nested.path)
+                    .expect("original nested graph")
+                    .exports,
+                ports
+            );
+            assert_eq!(both.history_len(), imported.history_len() + 3);
+            let undo = both
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo removes both added exports");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(imported.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("redo restores both added exports");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(both.document.registry())
+            );
+            let before_import = imported
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo also removes both initial imports together");
+            assert!(
+                before_import
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            assert_eq!(original.original_bytes(), bytes.as_ref());
         });
     }
 
