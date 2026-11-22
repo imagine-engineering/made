@@ -30,6 +30,7 @@ use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
 
+use crate::graph::{SavedGraphAction, SavedGraphView};
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
 actions!(
@@ -481,6 +482,7 @@ struct NodeCopyForm {
     node_selection: BTreeSet<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
+    pending_canvas_import: Option<usize>,
 }
 
 enum SavedGraphPanel {
@@ -536,6 +538,20 @@ impl NodeCopyForm {
         self.port_rename = None;
         self.node_selection.clear();
         self.saved_graph = SavedGraphPanel::Closed;
+        self.pending_canvas_import = None;
+    }
+
+    fn connect_network_import(&self, import_index: usize) -> Option<GraphiteCopy> {
+        let (network, target) = self.active_network().zip(self.selected_node())?;
+        network
+            .compatible_numeric_imports(target)
+            .any(|index| index == import_index)
+            .then(|| GraphiteCopy::ConnectNetworkImport {
+                network: Box::new(network.clone()),
+                target: Box::new(target.clone()),
+                import_index,
+                reconnect: target.numeric_import_source().is_some(),
+            })
     }
 }
 
@@ -937,6 +953,7 @@ impl GraphiteDocumentItem {
                                     node_selection: BTreeSet::new(),
                                     show_saved_ports: false,
                                     saved_graph: SavedGraphPanel::Closed,
+                                    pending_canvas_import: None,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -989,6 +1006,7 @@ impl GraphiteDocumentItem {
             SavedGraphPanel::Loading { .. } | SavedGraphPanel::Ready(_)
         ) {
             form.saved_graph = SavedGraphPanel::Closed;
+            form.pending_canvas_import = None;
             cx.notify();
             return;
         }
@@ -1039,6 +1057,60 @@ impl GraphiteDocumentItem {
         {
             form.select_network(Some(index));
             cx.notify();
+        }
+    }
+
+    fn handle_saved_graph_action(
+        &mut self,
+        action: SavedGraphAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(&self.node_copy, NodeCopyPanel::Ready(form) if matches!(form.saved_graph, SavedGraphPanel::Ready(_)))
+        {
+            return;
+        }
+        if let SavedGraphAction::SelectNode(index) = action {
+            self.select_copy_node(index, window, cx);
+        }
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        match action {
+            SavedGraphAction::ToggleImport(index) => {
+                if self.copy_task.is_none()
+                    && form
+                        .active_network()
+                        .is_some_and(|network| network.can_start_numeric_import(index))
+                {
+                    form.pending_canvas_import =
+                        (form.pending_canvas_import != Some(index)).then_some(index);
+                    self.copy_feedback = None;
+                    cx.notify();
+                }
+            }
+            SavedGraphAction::CancelConnection => {
+                form.pending_canvas_import = None;
+                cx.notify();
+            }
+            SavedGraphAction::SelectNode(index) => {
+                let Some(import) = form.pending_canvas_import.take() else {
+                    return;
+                };
+                if self.copy_task.is_none() {
+                    if form.selected == Some(index)
+                        && let Some(command) = form.connect_network_import(import)
+                    {
+                        self.save_copy(command, window, cx);
+                    } else {
+                        self.copy_feedback = Some((
+                            "Choose an exposed numeric input that accepts this import.".into(),
+                            Color::Error,
+                        ));
+                        cx.notify();
+                    }
+                }
+            }
         }
     }
 
@@ -1127,23 +1199,8 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
-        let Some((network, target)) = form.active_network().zip(form.selected_node()) else {
-            return;
-        };
-        if network
-            .compatible_numeric_imports(target)
-            .any(|index| index == import_index)
-        {
-            self.save_copy(
-                GraphiteCopy::ConnectNetworkImport {
-                    network: Box::new(network.clone()),
-                    target: Box::new(target.clone()),
-                    import_index,
-                    reconnect: target.numeric_import_source().is_some(),
-                },
-                window,
-                cx,
-            );
+        if let Some(command) = form.connect_network_import(import_index) {
+            self.save_copy(command, window, cx);
         }
     }
 
@@ -1986,7 +2043,7 @@ impl GraphiteDocumentItem {
                             ))
                         })
                     })
-                    .when(form.clipboard_scope().is_some(), |panel| {
+                    .when_some(form.clipboard_scope(), |panel, network| {
                         let label = match &form.saved_graph {
                             SavedGraphPanel::Closed | SavedGraphPanel::Failed(_) => "Show Saved Graph",
                             SavedGraphPanel::Loading { .. } => "Cancel Graph Loading",
@@ -1999,10 +2056,24 @@ impl GraphiteDocumentItem {
                         match &form.saved_graph {
                             SavedGraphPanel::Ready(geometry) => {
                                 let item = cx.entity().downgrade();
+                                let scope = network.id;
                                 panel.child(crate::graph::render_saved_graph(
-                                    geometry, &form.nodes, form.selected, window, cx,
-                                    move |index, window, cx| {
-                                        if let Err(error) = item.update(cx, |item, cx| item.select_copy_node(index, window, cx)) {
+                                    geometry, &form.nodes,
+                                    SavedGraphView {
+                                        network,
+                                        selected: form.selected,
+                                        pending_import: form.pending_canvas_import,
+                                        can_start_connection: self.copy_task.is_none(),
+                                    },
+                                    window, cx,
+                                    move |action, window, cx| {
+                                        if let Err(error) = item.update(cx, |item, cx| {
+                                            if let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                && form.clipboard_scope().is_some_and(|network| network.id == scope)
+                                            {
+                                                item.handle_saved_graph_action(action, window, cx);
+                                            }
+                                        }) {
                                             log::debug!("Graphite saved graph selection closed: {error:#}");
                                         }
                                     },
@@ -4035,10 +4106,18 @@ mod tests {
         verify_scoped_numeric_import_wire(cx, ScopedImportScenario::ConnectBesideSim).await;
     }
 
+    #[gpui::test]
+    async fn at_gra_graph_007_2_workspace_connects_a_typed_import_from_the_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        verify_scoped_numeric_import_wire(cx, ScopedImportScenario::ConnectFromCanvas).await;
+    }
+
     enum ScopedImportScenario {
         Connect,
         Reconnect,
         ConnectBesideSim,
+        ConnectFromCanvas,
     }
 
     async fn verify_scoped_numeric_import_wire(
@@ -4046,6 +4125,7 @@ mod tests {
         scenario: ScopedImportScenario,
     ) {
         let reconnect = matches!(scenario, ScopedImportScenario::Reconnect);
+        let canvas = matches!(scenario, ScopedImportScenario::ConnectFromCanvas);
         let (target, selector, import, expected, added_history) = if reconnect {
             (
                 "GRAPHITE-GDD-NODE-COPY-ITEM-3",
@@ -4147,12 +4227,45 @@ mod tests {
         } else {
             choose_scoped_copy_node(window, target);
         }
-        click(window, selector);
+        if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-Import-2");
+            paint(window);
+            click(window, "GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION");
+            paint(window);
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION")
+                    .is_none()
+            );
+            click(window, "GRAPHITE-GDD-GRAPH-Import-2");
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-4");
+            paint(window);
+            source.read_with(window, |item, cx| {
+                assert!(matches!(&item.copy_feedback, Some((message, Color::Error))
+                    if message.as_ref() == "Choose an exposed numeric input that accepts this import."));
+                assert!(item.copy_task.is_none());
+                assert!(!item.is_dirty(cx));
+            });
+        }
+        let connect = |window: &mut gpui::VisualTestContext| {
+            if canvas {
+                click(window, "GRAPHITE-GDD-GRAPH-Import-2");
+                paint(window);
+                click(window, "GRAPHITE-GDD-GRAPH-NODE-6");
+            } else {
+                click(window, selector);
+            }
+        };
+        connect(window);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
         paint(window);
-        click(window, selector);
+        connect(window);
         let destination = PathBuf::from("/project/wired-numeric-import.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();

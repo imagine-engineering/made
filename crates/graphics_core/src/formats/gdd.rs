@@ -445,6 +445,14 @@ impl GddGraphNetwork {
                 (Some(index) != current && target == Some(kind)).then_some(index)
             })
     }
+
+    pub fn can_start_numeric_import(&self, index: usize) -> bool {
+        self.can_extend_ports
+            && self
+                .numeric_imports
+                .iter()
+                .any(|&(import, _)| import == index)
+    }
 }
 
 #[derive(Clone, Copy)]

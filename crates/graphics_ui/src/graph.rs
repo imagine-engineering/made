@@ -1,7 +1,7 @@
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
-    Subscription, Window, actions, point, rgb,
+    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
+    Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -107,13 +107,27 @@ pub(crate) fn render_saved_graph_ports(
         })
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum SavedGraphAction {
+    SelectNode(usize),
+    ToggleImport(usize),
+    CancelConnection,
+}
+
+pub(crate) struct SavedGraphView<'a> {
+    pub network: &'a GddGraphNetwork,
+    pub selected: Option<usize>,
+    pub pending_import: Option<usize>,
+    pub can_start_connection: bool,
+}
+
 pub(crate) fn render_saved_graph(
     geometry: &GddGraphGeometry,
     nodes: &[GddGraphNode],
-    selected: Option<usize>,
+    view: SavedGraphView<'_>,
     window: &Window,
     cx: &App,
-    select: impl Fn(usize, &mut Window, &mut App) + Clone + 'static,
+    dispatch: impl Fn(SavedGraphAction, &mut Window, &mut App) + Clone + 'static,
 ) -> impl IntoElement {
     let padding = 24.;
     let height = 256.;
@@ -146,7 +160,7 @@ pub(crate) fn render_saved_graph(
         .map(|(index, node)| (node.storage_id(), (index, node)))
         .collect::<BTreeMap<_, _>>();
     let colors = cx.theme().colors();
-    div()
+    let graph = div()
         .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
         .relative()
         .overflow_hidden()
@@ -154,7 +168,7 @@ pub(crate) fn render_saved_graph(
         .border_color(colors.border)
         .bg(colors.editor_background)
         .w(px(width as f32))
-        .max_w_full()
+        .flex_none()
         .h(px(height as f32))
         .child(graph_wire_layer(
             geometry
@@ -169,31 +183,52 @@ pub(crate) fn render_saved_graph(
         ))
         .children(geometry.boundary_ports.iter().map(|(port, position)| {
             let position = project(*position);
-            let (label, index) = match port {
-                ImportOrExport::Import(index) => ("Import", index),
-                ImportOrExport::Export(index) => ("Export", index),
+            let (label, element_id, index) = match port {
+                ImportOrExport::Import(index) => ("Import", "graphite-saved-graph-import", index),
+                ImportOrExport::Export(index) => ("Export", "graphite-saved-graph-export", index),
             };
             let number = index.saturating_add(1);
-            div()
+            let text = format!("{label} {number}");
+            let active =
+                matches!(port, ImportOrExport::Import(_)) && view.pending_import == Some(*index);
+            let socket = div()
+                .id((element_id, *index))
                 .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-{label}-{number}"))
                 .absolute()
                 .left(position.x - px(3.))
                 .top(position.y - px(3.))
-                .child(div().size(px(6.)).rounded_full().bg(colors.text_accent))
-                .child(Label::new(format!("{label} {number}")).size(LabelSize::XSmall))
+                .child(div().size(px(6.)).rounded_full().bg(if active {
+                    colors.text_accent
+                } else {
+                    colors.text_muted
+                }))
+                .child(Label::new(text.clone()).size(LabelSize::XSmall));
+            match port {
+                ImportOrExport::Import(index)
+                    if view.can_start_connection
+                        && view.network.can_start_numeric_import(*index) =>
+                {
+                    let accessible = match view.network.import_name(*index) {
+                        Some(name) => format!("Connect from {text} · {name}"),
+                        None => format!("Connect from {text}"),
+                    };
+                    saved_graph_button(
+                        socket,
+                        accessible,
+                        SavedGraphAction::ToggleImport(*index),
+                        dispatch.clone(),
+                    )
+                }
+                _ => socket,
+            }
         }))
         .children(geometry.nodes.iter().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
             let [top_left, bottom_right] = geometry.bounds.map(project);
-            let select = select.clone();
-            let select_with_key = select.clone();
-            Some(
+            Some(saved_graph_button(
                 div()
                     .id(("graphite-saved-graph-node", index))
                     .debug_selector(move || format!("GRAPHITE-GDD-GRAPH-NODE-{index}"))
-                    .role(Role::Button)
-                    .aria_label(node.label().to_owned())
-                    .tab_stop(true)
                     .absolute()
                     .left(top_left.x)
                     .top(top_left.y)
@@ -202,23 +237,69 @@ pub(crate) fn render_saved_graph(
                     .overflow_hidden()
                     .border_1()
                     .rounded_sm()
-                    .border_color(if selected == Some(index) {
+                    .border_color(if view.selected == Some(index) {
                         colors.text_accent
                     } else {
                         colors.border
                     })
                     .bg(colors.surface_background)
-                    .cursor_pointer()
-                    .child(Label::new(node.display_name().to_owned()).size(LabelSize::XSmall))
-                    .on_key_down(move |event, window, cx| {
-                        if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                            cx.stop_propagation();
-                            select_with_key(index, window, cx);
-                        }
-                    })
-                    .on_click(move |_, window, cx| select(index, window, cx)),
+                    .child(Label::new(node.display_name().to_owned()).size(LabelSize::XSmall)),
+                node.label().to_owned(),
+                SavedGraphAction::SelectNode(index),
+                dispatch.clone(),
+            ))
+        }));
+    v_flex()
+        .gap_1()
+        .child(
+            div()
+                .id("graphite-saved-graph-viewport")
+                .w_full()
+                .overflow_x_scroll()
+                .child(graph),
+        )
+        .when(view.pending_import.is_some(), |panel| {
+            panel.child(
+                h_flex()
+                    .gap_2()
+                    .flex_wrap()
+                    .child(Label::new("Choose a node with a compatible numeric input."))
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION".into())
+                            .child(
+                                Button::new(
+                                    "graphite-gdd-cancel-graph-connection",
+                                    "Cancel Connection",
+                                )
+                                .on_click(move |_, window, cx| {
+                                    dispatch(SavedGraphAction::CancelConnection, window, cx);
+                                }),
+                            ),
+                    ),
             )
-        }))
+        })
+}
+
+fn saved_graph_button(
+    element: Stateful<Div>,
+    label: String,
+    action: SavedGraphAction,
+    dispatch: impl Fn(SavedGraphAction, &mut Window, &mut App) + Clone + 'static,
+) -> Stateful<Div> {
+    let dispatch_key = dispatch.clone();
+    element
+        .role(Role::Button)
+        .aria_label(label)
+        .tab_stop(true)
+        .cursor_pointer()
+        .on_key_down(move |event, window, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                cx.stop_propagation();
+                dispatch_key(action, window, cx);
+            }
+        })
+        .on_click(move |_, window, cx| dispatch(action, window, cx))
 }
 
 actions!(
