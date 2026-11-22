@@ -1,11 +1,13 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
     ops::{Bound, Deref},
     path::PathBuf,
     sync::Arc,
 };
 
+use graphite_core_types::NodeParameter;
 pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
     AnyContainer, ByteHolder, Container, ContainerError,
@@ -27,7 +29,7 @@ use graphite_editor::messages::portfolio::document::{
     utility_types::{
         misc::PTZ,
         network_interface::{
-            NavigationMetadata, NodeNetworkInterface, Previewing,
+            InputConnector, NavigationMetadata, NodeNetworkInterface, Previewing,
             editor_delta::{
                 ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
                 construct_batch,
@@ -42,7 +44,10 @@ use graphite_editor::messages::portfolio::document::{
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
-use graphite_graph_craft::document::{NodeId, NodeNetwork};
+use graphite_graph_craft::{
+    document::{DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork, value::TaggedValue},
+    runtime_delta::RuntimeDelta,
+};
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
@@ -120,6 +125,16 @@ pub enum GddArchiveError {
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
     InvalidPinnedNodeMove,
+    #[error("The selected Graphite node has no supported unexposed numeric value.")]
+    UnsupportedGraphNumericInput,
+    #[error("Enter a finite number for the Graphite Value input.")]
+    InvalidGraphNumber,
+    #[error("Enter a whole number in the 64-bit integer range for the Graphite Value input.")]
+    InvalidGraphInteger,
+    #[error("The Graphite Value input must keep its original number type.")]
+    GraphInputTypeChanged,
+    #[error("Enter a different value for the Graphite Value input.")]
+    UnchangedGraphInput,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -218,6 +233,48 @@ pub struct GddGraphNode {
     name: String,
     pinned: bool,
     pinned_order: Option<(usize, usize)>,
+    numeric_input: Option<GddNumericValue>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum GddNumericValue {
+    Number(f64),
+    Integer(i64),
+}
+
+impl GddNumericValue {
+    pub fn parse_like(self, text: &str) -> Result<Self, GddArchiveError> {
+        let text = text.trim();
+        match self {
+            Self::Number(_) => text
+                .parse::<f64>()
+                .ok()
+                .filter(|number| number.is_finite())
+                .map(Self::Number)
+                .ok_or(GddArchiveError::InvalidGraphNumber),
+            Self::Integer(_) => text
+                .parse::<i64>()
+                .map(Self::Integer)
+                .map_err(|_| GddArchiveError::InvalidGraphInteger),
+        }
+    }
+
+    fn same_value(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Number(first), Self::Number(second)) => first.to_bits() == second.to_bits(),
+            (Self::Integer(first), Self::Integer(second)) => first == second,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for GddNumericValue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Number(value) => value.fmt(formatter),
+            Self::Integer(value) => value.fmt(formatter),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -237,6 +294,10 @@ impl GddGraphNode {
 
     pub fn is_pinned(&self) -> bool {
         self.pinned
+    }
+
+    pub fn numeric_input(&self) -> Option<GddNumericValue> {
+        self.numeric_input
     }
 
     pub fn pinned_position(&self) -> Option<(usize, usize)> {
@@ -377,6 +438,7 @@ impl InspectedGddV1 {
                 name: node.display_name.clone().unwrap_or_default(),
                 pinned: node.pinned,
                 pinned_order: None,
+                numeric_input: None,
             })
             .collect();
         let interface = graph.into_interface()?;
@@ -410,6 +472,7 @@ impl InspectedGddV1 {
             };
             let label = interface.display_name(&node.local_id, path);
             node.label = format!("{parent} · {label} [{}]", node.local_id.0);
+            node.numeric_input = graph_numeric_input(&interface, node).map(|(_, value)| value);
         }
         Ok(nodes)
     }
@@ -586,6 +649,69 @@ impl InspectedGddV1 {
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
         if actual.ordered_pinned_nodes(path) != expected {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn set_graph_numeric_input_in_copy(
+        &self,
+        node: &GddGraphNode,
+        value: GddNumericValue,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let (input_index, previous) = graph_numeric_input(&interface, node)
+            .ok_or(GddArchiveError::UnsupportedGraphNumericInput)?;
+        let tagged_value = match (previous, value) {
+            (GddNumericValue::Number(_), GddNumericValue::Number(number)) if number.is_finite() => {
+                TaggedValue::Number(number)
+            }
+            (GddNumericValue::Number(_), GddNumericValue::Number(_)) => {
+                return Err(GddArchiveError::InvalidGraphNumber);
+            }
+            (GddNumericValue::Integer(_), GddNumericValue::Integer(number)) => {
+                TaggedValue::Integer(number)
+            }
+            _ => return Err(GddArchiveError::GraphInputTypeChanged),
+        };
+        let connector = InputConnector::node_at_index(node.local_id, input_index);
+        let input = NodeInput::value(tagged_value, false);
+        if interface.input_from_connector(&connector, path) == Some(&input) {
+            return Err(GddArchiveError::UnchangedGraphInput);
+        }
+        interface.set_input(&connector, input, path);
+        if !graph_numeric_input(&interface, node)
+            .is_some_and(|(_, accepted)| accepted.same_value(value))
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let input = interface
+            .input_from_connector(&connector, path)
+            .cloned()
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let edit = EditorDelta::Graph(RuntimeDelta::SetInput {
+            network_path: path.clone(),
+            node_id: node.local_id,
+            input_index,
+            input,
+        });
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
+        if !matches!(
+            batch.ops.as_slice(),
+            [RegistryDelta::ChangeNodeInput { id, index, .. }]
+                if *id == node.storage_id && usize::try_from(*index).ok() == Some(input_index)
+        ) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if !graph_numeric_input(&actual, node)
+            .is_some_and(|(index, actual)| index == input_index && actual.same_value(value))
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -964,6 +1090,50 @@ impl InspectedGddV1 {
         }
         Ok(archive.finish_into()?.bytes.into_inner())
     }
+}
+
+fn graph_numeric_input(
+    interface: &NodeNetworkInterface,
+    node: &GddGraphNode,
+) -> Option<(usize, GddNumericValue)> {
+    use graphite_math_nodes::{absolute_value, ceiling, floor, round, sign};
+
+    let path = &node.network_path;
+    let DocumentNodeImplementation::ProtoNode(identifier) =
+        interface.implementation(&node.local_id, path)?
+    else {
+        return None;
+    };
+    let (_, input_index, integer_supported) = [
+        (
+            absolute_value::IDENTIFIER,
+            absolute_value::ValueInput::INDEX,
+            true,
+        ),
+        (ceiling::IDENTIFIER, ceiling::ValueInput::INDEX, false),
+        (floor::IDENTIFIER, floor::ValueInput::INDEX, false),
+        (round::IDENTIFIER, round::ValueInput::INDEX, false),
+        (sign::IDENTIFIER, sign::ValueInput::INDEX, false),
+    ]
+    .into_iter()
+    .find(|(admitted, _, _)| admitted == identifier)?;
+    if interface.number_of_inputs(&node.local_id, path) != 1 {
+        return None;
+    }
+    let connector = InputConnector::node_at_index(node.local_id, input_index);
+    let NodeInput::Value {
+        tagged_value,
+        exposed: false,
+    } = interface.input_from_connector(&connector, path)?
+    else {
+        return None;
+    };
+    let value = match &**tagged_value {
+        TaggedValue::Number(number) => GddNumericValue::Number(*number),
+        TaggedValue::Integer(number) if integer_supported => GddNumericValue::Integer(*number),
+        _ => return None,
+    };
+    Some((input_index, value))
 }
 
 fn prepare_graph_node_edit(
@@ -1471,6 +1641,218 @@ mod tests {
             )
             .expect("save an actual nested source graph");
         owner
+    }
+
+    #[test]
+    fn at_gra_graph_031_1_preserves_typed_literals_and_targets_the_exact_nested_slot() {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_math_nodes::{absolute_value, sign};
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let node = |identifier, input| graphite_graph_craft::document::DocumentNode {
+                implementation: DocumentNodeImplementation::ProtoNode(identifier),
+                inputs: vec![input],
+                ..Default::default()
+            };
+            let nested = NodeNetwork {
+                nodes: [
+                    (
+                        NodeId(7),
+                        node(
+                            sign::IDENTIFIER,
+                            NodeInput::value(TaggedValue::Number(-2.5), false),
+                        ),
+                    ),
+                    (
+                        NodeId(9),
+                        node(
+                            sign::IDENTIFIER,
+                            NodeInput::value(TaggedValue::Number(2.), true),
+                        ),
+                    ),
+                    (
+                        NodeId(11),
+                        node(sign::IDENTIFIER, NodeInput::node(NodeId(7), 0)),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            let network = NodeNetwork {
+                nodes: [
+                    (
+                        NodeId(7),
+                        node(
+                            absolute_value::IDENTIFIER,
+                            NodeInput::value(TaggedValue::Integer(-17), false),
+                        ),
+                    ),
+                    (
+                        NodeId(24),
+                        graphite_graph_craft::document::DocumentNode {
+                            implementation: DocumentNodeImplementation::Network(nested),
+                            ..Default::default()
+                        },
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            };
+            let mut owner = document();
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save an actual numeric source graph");
+            let bytes: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("export the source graph and its node definitions")
+                .into();
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original document");
+            let nodes = original.graph_nodes().await.expect("typed values");
+            let [root, parent, nested, exposed, wired] = nodes.as_slice() else {
+                panic!("expected the original five nodes");
+            };
+            assert!(parent.numeric_input().is_none());
+            assert!(matches!(
+                root.numeric_input(),
+                Some(GddNumericValue::Integer(-17))
+            ));
+            assert!(matches!(
+                nested.numeric_input(),
+                Some(GddNumericValue::Number(-2.5))
+            ));
+            for unavailable in [exposed, wired] {
+                assert!(unavailable.numeric_input().is_none());
+                assert!(matches!(
+                    original
+                        .set_graph_numeric_input_in_copy(
+                            unavailable,
+                            GddNumericValue::Number(1.),
+                            budget()
+                        )
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphNumericInput)
+                ));
+            }
+            for (value, expected) in [
+                (
+                    GddNumericValue::Integer(1),
+                    GddArchiveError::GraphInputTypeChanged,
+                ),
+                (
+                    GddNumericValue::Number(f64::INFINITY),
+                    GddArchiveError::InvalidGraphNumber,
+                ),
+                (
+                    GddNumericValue::Number(-2.5),
+                    GddArchiveError::UnchangedGraphInput,
+                ),
+            ] {
+                let error = original
+                    .set_graph_numeric_input_in_copy(nested, value, budget())
+                    .await
+                    .err()
+                    .expect("invalid input");
+                assert_eq!(
+                    std::mem::discriminant(&error),
+                    std::mem::discriminant(&expected)
+                );
+            }
+            let edited = original
+                .set_graph_numeric_input_in_copy(nested, GddNumericValue::Number(-0.), budget())
+                .await
+                .expect("save the exact negative zero value");
+            assert_eq!(edited.history_len(), original.history_len() + 1);
+            for untouched in [root, parent, exposed, wired] {
+                assert_eq!(
+                    edited
+                        .document
+                        .registry()
+                        .node_instances
+                        .get(&untouched.storage_id),
+                    original
+                        .document
+                        .registry()
+                        .node_instances
+                        .get(&untouched.storage_id)
+                );
+            }
+            let new_nodes = edited.graph_nodes().await.expect("edited typed values");
+            let edited_node = new_nodes
+                .iter()
+                .find(|node| node.storage_id == nested.storage_id)
+                .expect("same storage identity");
+            assert!(
+                edited_node
+                    .numeric_input()
+                    .is_some_and(|value| value.same_value(GddNumericValue::Number(-0.)))
+            );
+            assert!(matches!(
+                edited
+                    .set_graph_numeric_input_in_copy(
+                        edited_node,
+                        GddNumericValue::Number(0.),
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInput)
+            ));
+            assert!(matches!(
+                edited
+                    .set_graph_numeric_input_in_copy(nested, GddNumericValue::Number(3.), budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let undone = edited
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo numeric edit");
+            assert!(
+                undone
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("redo numeric edit");
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .value_equal(edited.document.registry())
+            );
+
+            let integer_edit = original
+                .set_graph_numeric_input_in_copy(root, GddNumericValue::Integer(i64::MAX), budget())
+                .await
+                .expect("edit exact signed integer");
+            let new_nodes = integer_edit
+                .graph_nodes()
+                .await
+                .expect("exact integer input");
+            let integer_node = new_nodes
+                .iter()
+                .find(|node| node.storage_id == root.storage_id)
+                .expect("same root node");
+            assert!(matches!(
+                integer_node.numeric_input(),
+                Some(GddNumericValue::Integer(i64::MAX))
+            ));
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
     }
 
     #[test]

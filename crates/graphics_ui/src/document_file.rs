@@ -12,8 +12,8 @@ use gpui::{
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddExportContent, GddGraphNode, GddHistoryDirection,
-        GddPinnedNodeMove, GddRecoverySource, GddSavedView, InspectedGddV1, create_gdd_folder,
-        inspect_gdd_folder_files, open_gdd_archive,
+        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddSavedView, InspectedGddV1,
+        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -443,6 +443,7 @@ struct NodeCopyForm {
     nodes: Vec<GddGraphNode>,
     selected: Option<usize>,
     name: Entity<Editor>,
+    value: Entity<Editor>,
 }
 
 impl NodeCopyForm {
@@ -479,6 +480,7 @@ enum NodeCopyChange {
     Rename(String),
     Pin(bool),
     MovePinned(GddPinnedNodeMove),
+    NumericInput(GddNumericValue),
 }
 
 enum PreparedCopy {
@@ -509,6 +511,7 @@ impl GraphiteDocumentItem {
                                     nodes,
                                     selected: None,
                                     name: cx.new(|cx| Editor::single_line(window, cx)),
+                                    value: cx.new(|cx| Editor::single_line(window, cx)),
                                 }),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -531,7 +534,37 @@ impl GraphiteDocumentItem {
             form.selected = Some(index);
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
+            if let Some(value) = node.numeric_input() {
+                form.value.update(cx, |editor, cx| {
+                    editor.set_text(value.to_string(), window, cx)
+                });
+            }
             cx.notify();
+        }
+    }
+
+    fn save_numeric_value(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form.selected_node() else {
+            return;
+        };
+        let Some(original_value) = node.numeric_input() else {
+            return;
+        };
+        match original_value.parse_like(&form.value.read(cx).text(cx)) {
+            Ok(value) => {
+                let request = GraphiteCopy::EditNode {
+                    node: node.clone(),
+                    change: NodeCopyChange::NumericInput(value),
+                };
+                self.save_copy(request, window, cx);
+            }
+            Err(error) => {
+                self.copy_feedback = Some((error.to_string().into(), Color::Error));
+                cx.notify();
+            }
         }
     }
 
@@ -712,6 +745,30 @@ impl GraphiteDocumentItem {
                                         }),
                                     ))
                             })
+                            .when(selected.numeric_input().is_some(), |panel| {
+                                panel
+                                    .child(Label::new("Value"))
+                                    .child(
+                                        div()
+                                            .id("graphite-gdd-node-copy-value")
+                                            .aria_label("Value")
+                                            .child(form.value.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .debug_selector(|| "GRAPHITE-GDD-SAVE-NUMERIC-INPUT".into())
+                                            .child(
+                                                Button::new(
+                                                    "graphite-gdd-save-numeric-input",
+                                                    "Save Value in a Copy",
+                                                )
+                                                .disabled(self.copy_task.is_some())
+                                                .on_click(cx.listener(|item, _, window, cx| {
+                                                    item.save_numeric_value(window, cx);
+                                                })),
+                                            ),
+                                    )
+                            })
                     })
             }
             NodeCopyPanel::Failed(error) => {
@@ -874,6 +931,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::MovePinned(_),
                         ..
                     } => "Reordered",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::NumericInput(_),
+                        ..
+                    } => "Edited",
                 };
                 format!("{prefix} {stem}{suffix}")
             }
@@ -1004,6 +1065,15 @@ impl GraphiteDocumentItem {
                                         .move_pinned_graph_node_in_copy(
                                             &node,
                                             movement,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::NumericInput(value) => {
+                                    archive
+                                        .set_graph_numeric_input_in_copy(
+                                            &node,
+                                            value,
                                             ARCHIVE_BUDGET,
                                         )
                                         .await?
@@ -1523,15 +1593,149 @@ mod tests {
         (original, owner.session().history().count())
     }
 
-    fn choose_nested_copy_node(window: &mut gpui::VisualTestContext) {
+    fn choose_copy_node(window: &mut gpui::VisualTestContext, selector: &'static str) {
         paint(window);
         click(window, "GRAPHITE-GDD-NODE-COPY");
         window.run_until_parked();
         paint(window);
         click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
         paint(window);
-        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        click(window, selector);
         paint(window);
+    }
+
+    fn choose_nested_copy_node(window: &mut gpui::VisualTestContext) {
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_031_2_workspace_saves_and_reopens_a_typed_numeric_value(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_graph_storage::NoMetadata;
+        use graphite_graph_craft::document::{
+            DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
+            value::TaggedValue,
+        };
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::math_nodes::absolute_value;
+
+        let node = DocumentNode {
+            implementation: DocumentNodeImplementation::ProtoNode(absolute_value::IDENTIFIER),
+            inputs: vec![NodeInput::value(TaggedValue::Integer(-17), false)],
+            ..Default::default()
+        };
+        let graph = NodeNetwork {
+            nodes: [(NodeId(7), node)].into_iter().collect(),
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            184,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("pinned GDD storage");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &NoMetadata, &ResourceRegistry::new(), &resources)
+            .expect("save pinned integer fixture");
+        let original = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/value.gdd.zip");
+        let destination = PathBuf::from("/project/edited.gdd");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source file");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let field = source.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the node form");
+            };
+            assert_eq!(form.value.read(cx).text(cx), "-17");
+            form.value.clone()
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("3.5", window, cx)
+        });
+        click(window, "GRAPHITE-GDD-SAVE-NUMERIC-INPUT");
+        source.read_with(window, |item, cx| {
+            assert!(item.copy_task.is_none());
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error)) if message.contains("64-bit integer")));
+            assert!(!item.is_dirty(cx));
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("-9007199254740993", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-NUMERIC-INPUT");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(
+            filesystem
+                .metadata(&destination)
+                .await
+                .expect("cancelled save")
+                .is_none()
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-NUMERIC-INPUT");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("open the edited graph");
+        assert_ne!(reopened, source);
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected reopened node form");
+            };
+            assert_eq!(form.value.read(cx).text(cx), "-9007199254740993");
+            assert!(!item.is_dirty(cx));
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected GDD document");
+            };
+            assert_eq!(
+                contents.history_len(),
+                owner.session().history().count() + 1
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained source"),
+            original
+        );
     }
 
     #[gpui::test]
