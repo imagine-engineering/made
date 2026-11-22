@@ -6,7 +6,7 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-    GddRootLayerChange, ImportOrExport,
+    GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
 };
 use std::{
     cell::Cell,
@@ -30,76 +30,91 @@ pub(crate) fn render_saved_graph_ports(
     parent: Option<&GddGraphNetwork>,
     selected: Option<&GddGraphNode>,
     nodes: &[GddGraphNode],
+    resolved: Option<&GddResolvedNumericPorts>,
 ) -> impl IntoElement {
-    let rows =
-        |ports: &[GddGraphInputPort], kind: &'static str, scope: Option<&GddGraphNetwork>| {
-            ports
-                .iter()
-                .map(|port| {
-                    let number = port.index + 1;
-                    let mut text = format!("{kind} {number}");
-                    if let Some(name) = &port.name {
-                        text.push_str(&format!(" · {name}"));
-                    }
-                    if let Some(ty) = &port.stored_type {
-                        text.push_str(&format!(" · {ty}"));
-                    }
-                    if !port.exposed {
-                        text.push_str(" · Hidden");
-                    }
-                    let source = match &port.source {
-                        Some(GddGraphPortSource::Node {
-                            storage_id,
-                            output_index,
-                        }) => nodes
-                            .iter()
-                            .find(|node| node.storage_id() == *storage_id)
-                            .map(|node| {
-                                let output = node
-                                    .output_name(*output_index)
-                                    .map(str::to_owned)
-                                    .unwrap_or_else(|| {
-                                        format!("Output {}", output_index.saturating_add(1))
-                                    });
-                                format!("{} · {output}", node.label())
-                            }),
-                        Some(GddGraphPortSource::Import(index)) => Some(
-                            scope
-                                .and_then(|scope| scope.import_name(*index))
-                                .map_or_else(
-                                    || format!("Import {}", index.saturating_add(1)),
-                                    |name| format!("Import {} · {name}", index.saturating_add(1)),
-                                ),
-                        ),
-                        Some(GddGraphPortSource::UnavailableNode {
-                            local_id,
-                            output_index,
-                        }) => Some(format!(
-                            "Unavailable node [{}] · Output {}",
-                            local_id.0,
-                            output_index.saturating_add(1)
-                        )),
-                        None => None,
-                    };
-                    if let Some(source) = source {
-                        text.push_str(&format!(" ← {source}"));
-                    }
-                    div()
-                        .debug_selector(move || format!("GRAPHITE-GDD-SAVED-{kind}-{number}"))
-                        .child(Label::new(text))
-                })
-                .collect::<Vec<_>>()
-        };
+    let rows = |ports: &[GddGraphInputPort],
+                kind: &'static str,
+                scope: Option<&GddGraphNetwork>,
+                resolved: Option<&GddResolvedNumericPorts>| {
+        ports
+            .iter()
+            .map(|port| {
+                let number = port.index + 1;
+                let mut text = format!("{kind} {number}");
+                if let Some(name) = &port.name {
+                    text.push_str(&format!(" · {name}"));
+                }
+                if let Some(ty) = resolved.and_then(|types| types.inputs.get(port.index)) {
+                    text.push_str(&format!(" · {} (compiled)", ty.nested_type()));
+                } else if let Some(ty) = &port.stored_type {
+                    text.push_str(&format!(" · {ty}"));
+                }
+                if !port.exposed {
+                    text.push_str(" · Hidden");
+                }
+                let source = match &port.source {
+                    Some(GddGraphPortSource::Node {
+                        storage_id,
+                        output_index,
+                    }) => nodes
+                        .iter()
+                        .find(|node| node.storage_id() == *storage_id)
+                        .map(|node| {
+                            let output = node
+                                .output_name(*output_index)
+                                .map(str::to_owned)
+                                .unwrap_or_else(|| {
+                                    format!("Output {}", output_index.saturating_add(1))
+                                });
+                            format!("{} · {output}", node.label())
+                        }),
+                    Some(GddGraphPortSource::Import(index)) => Some(
+                        scope
+                            .and_then(|scope| scope.import_name(*index))
+                            .map_or_else(
+                                || format!("Import {}", index.saturating_add(1)),
+                                |name| format!("Import {} · {name}", index.saturating_add(1)),
+                            ),
+                    ),
+                    Some(GddGraphPortSource::UnavailableNode {
+                        local_id,
+                        output_index,
+                    }) => Some(format!(
+                        "Unavailable node [{}] · Output {}",
+                        local_id.0,
+                        output_index.saturating_add(1)
+                    )),
+                    None => None,
+                };
+                if let Some(source) = source {
+                    text.push_str(&format!(" ← {source}"));
+                }
+                div()
+                    .debug_selector(move || format!("GRAPHITE-GDD-SAVED-{kind}-{number}"))
+                    .child(Label::new(text))
+            })
+            .collect::<Vec<_>>()
+    };
     v_flex()
         .gap_1()
         .debug_selector(|| "GRAPHITE-GDD-SAVED-PORTS".into())
         .child(Label::new(network.name.clone()))
-        .children(rows(network.imports(), "Import", parent))
-        .children(rows(network.exports(), "Export", Some(network)))
+        .children(rows(network.imports(), "Import", parent, None))
+        .children(rows(network.exports(), "Export", Some(network), None))
         .when_some(selected, |panel, node| {
             panel
                 .child(Label::new(node.label().to_owned()))
-                .children(rows(node.input_ports(), "Input", Some(network)))
+                .children(rows(node.input_ports(), "Input", Some(network), resolved))
+                .when_some(resolved, |panel, types| {
+                    panel.child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-RESOLVED-OUTPUT".into())
+                            .child(Label::new(format!(
+                                "Output 1 · {} (compiled)",
+                                types.output.nested_type()
+                            ))),
+                    )
+                })
                 .when_some(node.unavailable_proto(), |panel, identifier| {
                     panel.child(
                         div()

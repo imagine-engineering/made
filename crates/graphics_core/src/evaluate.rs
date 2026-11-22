@@ -19,7 +19,8 @@ use graphite_graph_craft::{
     proto::{GraphErrors, ProtoNetwork, TypingContext},
 };
 use graphite_interpreted_executor::{
-    dynamic_executor::DynamicExecutor, node_registry::NODE_REGISTRY,
+    dynamic_executor::{DynamicExecutor, NodeTypes},
+    node_registry::NODE_REGISTRY,
 };
 use graphite_math_nodes::{NthRoot, SafeDivide};
 use graphite_std::{
@@ -411,6 +412,13 @@ impl NumericGraphEvaluator {
                 "The pinned Graphite evaluator stopped while preparing the numeric graph.".into(),
             ))
         })
+    }
+
+    pub(crate) fn node_types(&self, node: NodeId) -> Option<NodeTypes> {
+        self.0
+            .document_node_types(std::iter::once([NUMERIC_NETWORK_WRAPPER, node].into()))
+            .next()
+            .map(|(_, types)| types)
     }
 
     pub(crate) async fn evaluate(&self) -> Result<TaggedValue, String> {

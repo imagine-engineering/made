@@ -348,19 +348,34 @@ pub struct GddGraphInspection {
     pub networks: Vec<GddGraphNetwork>,
 }
 
-pub struct GddNumericGraphEvaluator(NumericGraphEvaluator);
+pub struct GddNumericGraphEvaluator {
+    evaluator: NumericGraphEvaluator,
+    snapshot: Arc<()>,
+    network_path: Vec<NodeId>,
+}
+
+pub struct GddResolvedNumericPorts {
+    pub inputs: Vec<Type>,
+    pub output: Type,
+}
 
 impl GddNumericGraphEvaluator {
-    async fn prepare(detached: NodeNetwork) -> Result<Self, GddArchiveError> {
-        NumericGraphEvaluator::prepare(detached)
-            .await
-            .map(Self)
-            .map_err(|error| GddArchiveError::GraphNumericPreviewEvaluation(error.to_string()))
+    pub fn resolved_ports(&self, node: &GddGraphNode) -> Option<GddResolvedNumericPorts> {
+        if !Arc::ptr_eq(&self.snapshot, &node.snapshot) || self.network_path != node.network_path {
+            return None;
+        }
+        let types = self.evaluator.node_types(node.local_id)?;
+        // The source map stores the evaluation context before the actual input slots.
+        let inputs = types.inputs.get(1..)?;
+        (inputs.len() == node.input_ports.len()).then(|| GddResolvedNumericPorts {
+            inputs: inputs.to_vec(),
+            output: types.output,
+        })
     }
 
     pub async fn evaluate(&self) -> Result<GddNumericValue, GddArchiveError> {
         let output = self
-            .0
+            .evaluator
             .evaluate()
             .await
             .map_err(GddArchiveError::GraphNumericPreviewEvaluation)?;
@@ -3008,7 +3023,14 @@ impl InspectedGddV1 {
         let imports = enclosing_network_inputs(&graph.network, &node.network_path)
             .ok_or(GddArchiveError::StaleGraphNode)?;
         let detached = numeric_preview_network(source, node.local_id, imports)?;
-        GddNumericGraphEvaluator::prepare(detached).await
+        let evaluator = NumericGraphEvaluator::prepare(detached)
+            .await
+            .map_err(|error| GddArchiveError::GraphNumericPreviewEvaluation(error.to_string()))?;
+        Ok(GddNumericGraphEvaluator {
+            evaluator,
+            snapshot: self.snapshot.clone(),
+            network_path: node.network_path.clone(),
+        })
     }
 
     pub async fn prepare_document_numeric_output(
@@ -3038,10 +3060,14 @@ impl InspectedGddV1 {
         }
         let (detached, path) =
             document_numeric_export_network(&graph.network, *node_id, output_index)?;
-        NumericGraphEvaluator::prepare(detached)
+        let evaluator = NumericGraphEvaluator::prepare(detached)
             .await
-            .map(GddNumericGraphEvaluator)
-            .map_err(|error| document_numeric_compilation_error(error, &path, &graph.nodes))
+            .map_err(|error| document_numeric_compilation_error(error, &path, &graph.nodes))?;
+        Ok(GddNumericGraphEvaluator {
+            evaluator,
+            snapshot: self.snapshot.clone(),
+            network_path: path,
+        })
     }
 
     pub async fn duplicate_graph_numeric_node_in_copy(

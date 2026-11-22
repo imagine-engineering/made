@@ -3542,8 +3542,10 @@ impl GraphiteDocumentItem {
                                 })),
                             ),
                         ).when(form.show_saved_ports, |panel| {
+                            let resolved = form.document_run_evaluator.as_ref().zip(selected)
+                                .and_then(|(evaluator, node)| evaluator.resolved_ports(node));
                             panel.child(crate::graph::render_saved_graph_ports(
-                                network, parent, selected, &form.nodes,
+                                network, parent, selected, &form.nodes, resolved.as_ref(),
                             ))
                         })
                     })
@@ -9995,6 +9997,102 @@ mod tests {
             assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
             assert!(!item.is_dirty(cx));
             assert!(form.document_run_evaluator.is_none());
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("GDD")
+                    .history_len(),
+                history
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("unchanged source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_039_2_workspace_shows_compiler_resolved_numeric_ports(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_graph_craft::{Type, concrete};
+
+        let (original, history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/resolved-numeric-ports.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-PORTS");
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-Input-1").is_some());
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-RESOLVED-OUTPUT")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-RUN-GRAPH");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-RESOLVED-OUTPUT")
+                .is_some()
+        );
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            let evaluator = form
+                .document_run_evaluator
+                .as_ref()
+                .expect("compiled output");
+            let selected = form.selected_node().expect("nested numeric node");
+            assert_eq!(selected.name(), "Repeated value");
+            let resolved = evaluator
+                .resolved_ports(selected)
+                .expect("resolved selected ports");
+            let [input] = resolved.inputs.as_slice() else {
+                panic!("only the saved input slot")
+            };
+            for ty in [input, &resolved.output] {
+                assert!(
+                    matches!(ty.nested_type(), Type::Item(element) if **element == concrete!(f64)),
+                    "expected the pinned Item<f64> type, got {ty}"
+                );
+            }
+            let same_name = form
+                .nodes
+                .iter()
+                .find(|node| {
+                    node.name() == selected.name() && node.network_id() != selected.network_id()
+                })
+                .expect("same name in a different saved scope");
+            assert!(evaluator.resolved_ports(same_name).is_none());
+            assert!(form.nodes.iter().any(|node| {
+                node.network_id() == selected.network_id()
+                    && node.storage_id() != selected.storage_id()
+                    && evaluator.resolved_ports(node).is_none()
+            }));
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+            assert!(!item.is_dirty(cx));
             assert_eq!(
                 item.model
                     .read(cx)
