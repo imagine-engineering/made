@@ -312,12 +312,14 @@ impl GraphWorkspaceModel {
         result
     }
 
-    pub fn observe_external_change(&mut self, bytes: Vec<u8>) -> Result<(), GraphWorkspaceError> {
+    pub fn observe_external_change(&mut self, bytes: Vec<u8>) -> Result<bool, GraphWorkspaceError> {
         let result = self
             .save_coordinator
             .observe_external_change(bytes)
             .map_err(GraphWorkspaceError::from);
-        self.record_result(&result, "External workflow change detected");
+        if !matches!(result, Ok(false)) {
+            self.record_result(&result, "External workflow change detected");
+        }
         result
     }
 

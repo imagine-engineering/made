@@ -3006,11 +3006,34 @@ impl WorkflowSaveCoordinator {
         Ok(())
     }
 
-    pub fn observe_external_change(&mut self, bytes: Vec<u8>) -> Result<(), WorkflowSaveError> {
+    pub fn observe_external_change(&mut self, bytes: Vec<u8>) -> Result<bool, WorkflowSaveError> {
         validate_save_bytes(&bytes)?;
+        let revision = ContentRevision::from_bytes(&bytes);
+        let known_revision = self
+            .external
+            .as_ref()
+            .map(|external| &external.revision)
+            .or(matches!(
+                self.authority,
+                WorkflowAuthority::InSync
+                    | WorkflowAuthority::LocalDirty
+                    | WorkflowAuthority::SavePrepared
+            )
+            .then_some(&self.base.revision));
+        let prepared_local_write = self.prepared.as_ref().is_some_and(|prepared| {
+            !prepared.save_copy
+                && prepared.target_identity == self.document_identity
+                && prepared.bytes == bytes
+        });
+        if prepared_local_write
+            || (!self.external_missing
+                && self.authority != WorkflowAuthority::Interrupted
+                && known_revision == Some(&revision))
+        {
+            return Ok(false);
+        }
         self.external_missing = false;
         self.missing_recreation_approved = false;
-        let revision = ContentRevision::from_bytes(&bytes);
         if revision == self.base.revision {
             self.external = None;
             self.prepared = None;
@@ -3019,14 +3042,14 @@ impl WorkflowSaveCoordinator {
             } else {
                 WorkflowAuthority::LocalDirty
             };
-            return Ok(());
+            return Ok(true);
         }
         if bytes == self.local_bytes {
             self.base = VersionedWorkflowContent { revision, bytes };
             self.external = None;
             self.prepared = None;
             self.authority = WorkflowAuthority::InSync;
-            return Ok(());
+            return Ok(true);
         }
         self.external = Some(VersionedWorkflowContent { revision, bytes });
         self.prepared = None;
@@ -3035,7 +3058,7 @@ impl WorkflowSaveCoordinator {
         } else {
             WorkflowAuthority::Conflict
         };
-        Ok(())
+        Ok(true)
     }
 
     pub fn observe_external_deletion(&mut self) -> Result<(), WorkflowSaveError> {
@@ -3998,6 +4021,45 @@ mod tests {
         assert!(reversible.editing_hidden());
         assert_eq!(reversible.configuration().unknown["future"], 1);
         assert_eq!(reversible.workflow().value()["future"], true);
+    }
+
+    #[test]
+    fn workflow_watch_observations_keep_pending_writes_and_report_external_conflicts()
+    -> Result<(), WorkflowSaveError> {
+        let base = b"original workflow".to_vec();
+        let edited = b"edited workflow".to_vec();
+        let external = b"external workflow".to_vec();
+        let identity = "workflow.json";
+        let mut coordinator = WorkflowSaveCoordinator::new(
+            identity,
+            WorkflowStorageProvider::LocalFile,
+            base.clone(),
+        )?;
+        let initial_revision = coordinator.base().revision.clone();
+        let operation = Uuid::from_u128(164);
+        coordinator.edit(edited.clone())?;
+        coordinator.prepare_save(operation, initial_revision.clone(), identity, false)?;
+
+        assert!(!coordinator.observe_external_change(base)?);
+        assert!(!coordinator.observe_external_change(edited.clone())?);
+        assert_eq!(coordinator.authority(), WorkflowAuthority::SavePrepared);
+        coordinator.commit_save(
+            operation,
+            initial_revision,
+            ContentRevision::from_bytes(&edited),
+        )?;
+        assert!(!coordinator.observe_external_change(edited.clone())?);
+        assert_eq!(coordinator.authority(), WorkflowAuthority::InSync);
+
+        coordinator.edit(b"further local edits".to_vec())?;
+        let revision = coordinator.base().revision.clone();
+        coordinator.prepare_save(operation, revision, identity, false)?;
+        assert!(coordinator.observe_external_change(external.clone())?);
+        assert!(!coordinator.observe_external_change(external)?);
+        assert_eq!(coordinator.authority(), WorkflowAuthority::Conflict);
+        assert_eq!(coordinator.comparison().base, edited);
+        assert_eq!(coordinator.comparison().local, b"further local edits");
+        Ok(())
     }
 
     #[test]

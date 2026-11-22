@@ -1082,55 +1082,59 @@ impl GraphWorkspaceItem {
         self.file_watch = Some(cx.spawn(async move |this, cx| {
             let (mut events, watcher) = fs.watch(&watch_path, Duration::from_millis(100)).await;
             let _watcher = watcher;
+            let revision_state = |coordinator: &sim_runtime::WorkflowSaveCoordinator| {
+                (
+                    coordinator.base().revision.clone(),
+                    coordinator
+                        .external()
+                        .map(|external| external.revision.clone()),
+                    coordinator.external_missing(),
+                )
+            };
             while let Some(events) = events.next().await {
                 if !events.iter().any(|event| event.path == path) {
                     continue;
                 }
-                match fs.load_bytes(&path).await {
-                    Ok(bytes) => {
-                        if this
-                            .update(cx, |this, cx| {
-                                match this.model.observe_external_change(bytes) {
-                                    Ok(()) => {
-                                        cx.emit(ItemEvent::UpdateTab);
-                                        cx.notify();
-                                    }
-                                    Err(error) => {
-                                        this.model.report_error(error);
-                                        cx.notify();
-                                    }
-                                }
-                            })
-                            .is_err()
-                        {
-                            break;
+                loop {
+                    let Ok(previous_revision) =
+                        this.update(cx, |this, _| revision_state(&this.model.save_coordinator))
+                    else {
+                        return;
+                    };
+                    let bytes = fs.load_bytes(&path).await;
+                    let missing = bytes.is_err() && !fs.is_file(&path).await;
+                    let handled = this.update(cx, |this, cx| {
+                        // A read started before a save or conflict update can still return old bytes.
+                        if revision_state(&this.model.save_coordinator) != previous_revision {
+                            return false;
                         }
-                    }
-                    Err(error) => {
-                        let missing = !fs.is_file(&path).await;
-                        if this
-                            .update(cx, |this, cx| {
-                                if missing {
-                                    match this.model.observe_external_deletion() {
-                                        Ok(()) => cx.emit(ItemEvent::UpdateTab),
-                                        Err(error) => {
-                                            this.model.report_error(error);
-                                            cx.emit(ItemEvent::UpdateTab);
-                                        }
-                                    }
-                                } else {
-                                    this.model.report_error(format!(
-                                        "failed to read externally changed workflow {}: {error}",
-                                        path.display()
-                                    ));
-                                    cx.emit(ItemEvent::UpdateTab);
+                        match bytes {
+                            Ok(bytes) => match this.model.observe_external_change(bytes) {
+                                Ok(true) => cx.emit(ItemEvent::UpdateTab),
+                                Ok(false) => return true,
+                                Err(error) => this.model.report_error(error),
+                            },
+                            Err(_) if missing => {
+                                if let Err(error) = this.model.observe_external_deletion() {
+                                    this.model.report_error(error);
                                 }
-                                cx.notify();
-                            })
-                            .is_err()
-                        {
-                            break;
+                                cx.emit(ItemEvent::UpdateTab);
+                            }
+                            Err(error) => {
+                                this.model.report_error(format!(
+                                    "failed to read externally changed workflow {}: {error}",
+                                    path.display()
+                                ));
+                                cx.emit(ItemEvent::UpdateTab);
+                            }
                         }
+                        cx.notify();
+                        true
+                    });
+                    match handled {
+                        Ok(true) => break,
+                        Ok(false) => continue,
+                        Err(_) => return,
                     }
                 }
             }
@@ -3965,6 +3969,9 @@ mod lifecycle_tests {
         });
         save.await.expect("save local workflow");
         let saved_bytes = fs.load_bytes(path).await.expect("read saved workflow");
+        cx.background_executor
+            .timer(Duration::from_millis(150))
+            .await;
         item.read_with(cx, |item, _| {
             assert_eq!(
                 item.model.save_coordinator.authority(),
@@ -3972,6 +3979,7 @@ mod lifecycle_tests {
             );
             assert_eq!(saved_bytes, item.model.save_coordinator.base().bytes);
             assert!(item.model.last_error.is_none());
+            assert_eq!(item.model.announcement.as_deref(), Some("Workflow saved"));
         });
 
         item.update(cx, |item, cx| {
