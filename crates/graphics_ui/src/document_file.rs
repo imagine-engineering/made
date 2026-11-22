@@ -10,8 +10,8 @@ use gpui::{
 };
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, InspectedGddV1, create_gdd_folder,
-        inspect_gdd_folder_files, open_gdd_archive,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, GddRecoverySource, InspectedGddV1,
+        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -52,19 +52,13 @@ const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
 };
 
 enum InspectedDocument {
-    Gdd {
-        contents: Arc<InspectedGddV1>,
-        history_len: usize,
-        hot_log_len: usize,
-    },
+    Gdd { contents: Arc<InspectedGddV1> },
     Legacy(PreservedLegacyDocument),
 }
 
 impl InspectedDocument {
     fn gdd(contents: InspectedGddV1) -> Self {
         Self::Gdd {
-            history_len: contents.history_len(),
-            hot_log_len: contents.hot_log_len(),
             contents: Arc::new(contents),
         }
     }
@@ -773,12 +767,14 @@ impl Render for GraphiteDocumentItem {
                 view.child(Label::new(message).color(color))
             });
         match &model.document {
-            InspectedDocument::Gdd {
-                contents,
-                history_len,
-                hot_log_len,
-            } => {
+            InspectedDocument::Gdd { contents } => {
                 let manifest = contents.manifest();
+                let recovery = contents.recovery();
+                let recovery_source = match recovery.source {
+                    GddRecoverySource::RegistryAndHistory => "Opened saved registry and history",
+                    GddRecoverySource::RegistryOnly => "Opened saved registry",
+                    GddRecoverySource::HistoryOnly => "Rebuilt registry from history",
+                };
                 let label = if model.original.is_none() {
                     "Graphite GDD folder"
                 } else {
@@ -793,9 +789,18 @@ impl Render for GraphiteDocumentItem {
                     "Recorded editor version {}",
                     manifest.editor_version
                 )))
-                .child(Label::new(format!(
-                    "{history_len} history entries · {hot_log_len} pending operations"
-                )))
+                .child(
+                    v_flex()
+                        .debug_selector(|| "GRAPHITE-GDD-RECOVERY".into())
+                        .child(Label::new(recovery_source))
+                        .child(Label::new(format!(
+                            "{} networks · {} nodes · {} history entries · {} pending operations",
+                            recovery.network_count,
+                            recovery.node_count,
+                            recovery.history_len,
+                            recovery.hot_log_len,
+                        ))),
+                )
                 .child(
                     h_flex()
                         .flex_wrap()
@@ -973,6 +978,140 @@ mod tests {
             )
             .await
             .expect("export actual Graphite storage")
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_016_2_workspace_displays_recovered_history_and_rejects_a_truncated_hot_log(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_document_container::archive::{Archive, ArchiveWriter, Zip};
+        use graphite_document_format::{Layout, io::path_for};
+        use graphite_document_graph_storage::{
+            HotOp, Network, NetworkId, PeerId, ROOT_NETWORK, RegistryDelta, TimeStamp,
+        };
+        use std::io::Cursor;
+
+        let peer = PeerId(7);
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            peer,
+            172,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("create original GDD owner");
+        for (id, counter) in [(ROOT_NETWORK, 1), (NetworkId(41), 2)] {
+            owner
+                .apply_hot_op(HotOp {
+                    op: RegistryDelta::AddNetwork {
+                        id,
+                        network: Network::default(),
+                    },
+                    timestamp: TimeStamp { counter, peer },
+                })
+                .expect("original network operation");
+            if id == ROOT_NETWORK {
+                owner.retire_pending_interaction().expect("retired history");
+            }
+        }
+        let original: Arc<[u8]> = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions {
+                    include_registry: false,
+                    ..ExportOptions::default()
+                },
+                &HashMapResourceStorage::new(),
+                None,
+            )
+            .await
+            .expect("original history and hot log export")
+            .into();
+        let hot_path = path_for(
+            GddV1Layout.hot_log_basename(),
+            owner.manifest().codecs.hot_log,
+        );
+        let admitted = open_gdd_archive(&original, ARCHIVE_BUDGET)
+            .await
+            .expect("pinned archive with pending operation");
+        let mut writer = Zip::writer(Cursor::new(Vec::new())).expect("pinned ZIP writer");
+        for (name, mut bytes) in admitted.folder_files().expect("exact source records") {
+            if name == Path::new(&hot_path) {
+                bytes.truncate(3);
+            }
+            writer
+                .write_entry(name.to_str().expect("validated UTF-8 entry"), &bytes)
+                .expect("write the malformed history fixture");
+        }
+        let malformed = writer
+            .finish_into()
+            .expect("valid ZIP envelope")
+            .into_inner();
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let original_path = PathBuf::from("/project/history-recovery.gdd.zip");
+        let malformed_path = PathBuf::from("/project/truncated-pending.gdd.zip");
+        filesystem
+            .write(&original_path, &original)
+            .await
+            .expect("original history");
+        filesystem
+            .write(&malformed_path, &malformed)
+            .await
+            .expect("malformed pending log");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(original_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("recover through Workspace File Open")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native GDD Inspector");
+        paint(window);
+        assert!(window.debug_bounds("GRAPHITE-GDD-RECOVERY").is_some());
+        item.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected recovered GDD");
+            };
+            let recovery = contents.recovery();
+            assert_eq!(recovery.source, GddRecoverySource::HistoryOnly);
+            assert_eq!(recovery.network_count, 2);
+            assert_eq!(recovery.history_len, 1);
+            assert_eq!(recovery.hot_log_len, 1);
+            assert!(!item.is_dirty(cx));
+        });
+        let rejected = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(malformed_path.clone(), Default::default(), window, cx)
+            })
+            .await;
+        assert!(
+            matches!(rejected, Err(error) if format!("{error:#}").contains("frame length prefix truncated"))
+        );
+        assert_eq!(
+            workspace.read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            }),
+            Some(item)
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&original_path)
+                .await
+                .expect("original recovery fixture"),
+            original.as_ref(),
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&malformed_path)
+                .await
+                .expect("original malformed fixture"),
+            malformed,
+        );
     }
 
     #[gpui::test]

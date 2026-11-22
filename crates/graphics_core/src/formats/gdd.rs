@@ -122,9 +122,26 @@ pub struct PreservedGddV1 {
     inspected: InspectedGddV1,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GddRecoverySource {
+    RegistryAndHistory,
+    RegistryOnly,
+    HistoryOnly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GddRecoverySummary {
+    pub source: GddRecoverySource,
+    pub network_count: usize,
+    pub node_count: usize,
+    pub history_len: usize,
+    pub hot_log_len: usize,
+}
+
 pub struct InspectedGddV1 {
     entries: StagedArchive,
     document: GddV1,
+    recovery: GddRecoverySummary,
 }
 
 impl PreservedGddV1 {
@@ -155,11 +172,15 @@ impl InspectedGddV1 {
     }
 
     pub fn history_len(&self) -> usize {
-        self.document.session().history().count()
+        self.recovery.history_len
     }
 
     pub fn hot_log_len(&self) -> usize {
-        self.document.session().hot_log().len()
+        self.recovery.hot_log_len
+    }
+
+    pub fn recovery(&self) -> GddRecoverySummary {
+        self.recovery
     }
 
     pub fn missing_linked_resources(&self) -> Result<BTreeSet<ResourceHash>, GddArchiveError> {
@@ -531,12 +552,26 @@ async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddAr
         layout.history_basename(),
         manifest.codecs.history,
     ));
-    if !registry_exists && !history_exists {
-        return Err(GddArchiveError::MissingDocument);
-    }
+    let source = match (registry_exists, history_exists) {
+        (true, true) => GddRecoverySource::RegistryAndHistory,
+        (true, false) => GddRecoverySource::RegistryOnly,
+        (false, true) => GddRecoverySource::HistoryOnly,
+        (false, false) => return Err(GddArchiveError::MissingDocument),
+    };
     let document = GddV1::open_in(AnyContainer::Memory(working.clone()), layout).await?;
     validate_embedded_resources(&document).await?;
-    Ok(InspectedGddV1 { entries, document })
+    let recovery = GddRecoverySummary {
+        source,
+        network_count: document.registry().networks.len(),
+        node_count: document.registry().node_instances.len(),
+        history_len: document.session().history().count(),
+        hot_log_len: document.session().hot_log().len(),
+    };
+    Ok(InspectedGddV1 {
+        entries,
+        document,
+        recovery,
+    })
 }
 
 async fn validate_embedded_resources(document: &GddV1) -> Result<(), GddArchiveError> {
@@ -777,6 +812,87 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_016_1_recovers_registry_history_and_hot_frames_with_the_original_owner() {
+        use graphite_document_graph_storage::{HotOp, Network, NetworkId, ROOT_NETWORK, TimeStamp};
+
+        futures::executor::block_on(async {
+            let mut owner = document();
+            let pending_network = NetworkId(42);
+            let peer = owner.session().peer();
+            owner
+                .apply_hot_op(HotOp {
+                    op: RegistryDelta::AddNetwork {
+                        id: ROOT_NETWORK,
+                        network: Network::default(),
+                    },
+                    timestamp: TimeStamp { counter: 1, peer },
+                })
+                .expect("first source operation");
+            owner
+                .retire_pending_interaction()
+                .expect("one retired interaction");
+            owner
+                .apply_hot_op(HotOp {
+                    op: RegistryDelta::AddNetwork {
+                        id: pending_network,
+                        network: Network::default(),
+                    },
+                    timestamp: TimeStamp { counter: 2, peer },
+                })
+                .expect("pending original operation");
+            for (source, include_registry, include_history) in [
+                (GddRecoverySource::RegistryAndHistory, true, true),
+                (GddRecoverySource::RegistryOnly, true, false),
+                (GddRecoverySource::HistoryOnly, false, true),
+            ] {
+                let original: Arc<[u8]> = owner
+                    .export_to_bytes(
+                        ExportFormat::Zip,
+                        ExportOptions {
+                            include_registry,
+                            include_history,
+                            ..ExportOptions::default()
+                        },
+                        &HashMapResourceStorage::new(),
+                        None,
+                    )
+                    .await
+                    .expect("actual source export")
+                    .into();
+                let recovered = open_gdd_zip(&original, budget())
+                    .await
+                    .expect("recover the recorded route");
+                let summary = recovered.recovery();
+                assert_eq!(summary.source, source);
+                assert_eq!(summary.network_count, 2);
+                assert_eq!(summary.node_count, 0);
+                assert_eq!(summary.hot_log_len, usize::from(include_history));
+                assert!(recovered.document.registry().value_equal(owner.registry()));
+                if include_history {
+                    assert_eq!(summary.history_len, 1);
+                    let [pending] = recovered.document.session().hot_log() else {
+                        panic!("expected a single replayed operation");
+                    };
+                    assert_eq!(pending.timestamp, TimeStamp { counter: 2, peer });
+                    assert!(matches!(
+                        pending.op,
+                        RegistryDelta::AddNetwork { id, .. } if id == pending_network
+                    ));
+                    assert!(
+                        !recovered
+                            .document
+                            .session()
+                            .retired_registry()
+                            .networks
+                            .contains_key(&pending_network)
+                    );
+                }
+                assert_eq!(recovered.original_bytes(), original.as_ref());
+            }
+        });
     }
 
     #[test]
