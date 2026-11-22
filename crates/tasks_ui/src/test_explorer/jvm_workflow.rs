@@ -514,6 +514,13 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
         .await;
         return;
     }
+    let draw_timed_frame = |cx: &mut VisualTestContext, operation: &str, started: Instant| {
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        eprintln!(
+            "Mounted Gradle graph timing: {operation}={:.3} ms",
+            started.elapsed().as_secs_f64() * 1000.0,
+        );
+    };
     let select_configuration = |cx: &mut VisualTestContext| {
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.focus_panel::<DependenciesPanel>(window, cx);
@@ -576,7 +583,9 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
         cx,
         "Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies",
     );
+    let started = Instant::now();
     press_enter(cx);
+    draw_timed_frame(cx, "open", started);
     let diagram = workspace
         .read_with(cx, |workspace, cx| {
             workspace.item_of_type::<DependencyDiagramItem>(cx)
@@ -611,9 +620,11 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
                 window.simulate_next_frame(cx);
             });
         }
+        let started = Instant::now();
         cx.simulate_input(query);
-        cx.update(|window, cx| {
+        let presented = cx.update(|window, cx| {
             window.draw(cx).clear(cx);
+            let presented = started.elapsed();
             let tree: serde_json::Value =
                 serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram search"))
                     .expect("accessibility JSON");
@@ -632,9 +643,16 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
                         .as_str()
                         .is_some_and(|status| status.contains("Diagram unavailable"))
             }));
+            presented
         });
+        eprintln!(
+            "Mounted Gradle graph timing: search-{query}={:.3} ms",
+            presented.as_secs_f64() * 1000.0,
+        );
+        let started = Instant::now();
         dispatch(cx, "menu::Confirm");
         cx.run_until_parked();
+        draw_timed_frame(cx, &format!("reveal-{query}"), started);
     };
     search_dependency(cx, "leaf-12-08", "verification:leaf-12-08:1.0");
     diagram.read_with(cx, |diagram, cx| {
@@ -654,15 +672,19 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
         "Mounted Gradle Dependencies admitted 126 components and 413 edges and searched to the exact provider edge for verification:leaf-12-08:1.0"
     );
     let viewport = diagram.read_with(cx, |diagram, cx| diagram.canvas().read(cx).viewport.clone());
+    let started = Instant::now();
     dispatch(cx, "groovy_dependencies_panel::InspectGraphNeighbours");
     cx.run_until_parked();
+    draw_timed_frame(cx, "neighbours", started);
     diagram.read_with(cx, |diagram, cx| {
         let canvas = diagram.canvas().read(cx);
         assert!(canvas.inspected.contains(&incoming.from));
         assert!(canvas.inspected_edges.contains(&incoming_index));
     });
+    let started = Instant::now();
     dispatch(cx, "groovy_dependencies_panel::InspectGraphRootPaths");
     cx.run_until_parked();
+    draw_timed_frame(cx, "shortest-root-paths", started);
     let root_edge = graph
         .edges
         .iter()
@@ -713,8 +735,10 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
         .find(|component| component.module.as_deref() == Some("shared-observer"))
         .expect("dependency with 96 root paths");
     search_dependency(cx, "shared-observer", "verification:shared-observer:1.0");
+    let started = Instant::now();
     dispatch(cx, "groovy_dependencies_panel::InspectGraphAllRootPaths");
     cx.run_until_parked();
+    draw_timed_frame(cx, "all-root-paths", started);
     assert!(
         inspection_announces(
             cx,
