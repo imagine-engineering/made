@@ -6508,13 +6508,13 @@ impl Panel for AgentPanel {
     }
 
     fn position_is_valid(&self, position: DockPosition) -> bool {
-        position != DockPosition::Bottom
+        matches!(position, DockPosition::Left | DockPosition::Right)
     }
 
     fn set_position(&mut self, position: DockPosition, _: &mut Window, cx: &mut Context<Self>) {
         let side = match position {
             DockPosition::Left => "left",
-            DockPosition::Right | DockPosition::Bottom => "right",
+            DockPosition::Right | DockPosition::Bottom | DockPosition::Top => "right",
         };
         telemetry::event!("Agent Panel Side Changed", side = side);
         settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
@@ -6529,14 +6529,14 @@ impl Panel for AgentPanel {
         let settings = AgentSettings::get_global(cx);
         match self.position(window, cx) {
             DockPosition::Left | DockPosition::Right => settings.default_width,
-            DockPosition::Bottom => settings.default_height,
+            DockPosition::Bottom | DockPosition::Top => settings.default_height,
         }
     }
 
     fn min_size(&self, window: &Window, cx: &App) -> Option<Pixels> {
         match self.position(window, cx) {
             DockPosition::Left | DockPosition::Right => Some(MIN_PANEL_WIDTH),
-            DockPosition::Bottom => None,
+            DockPosition::Bottom | DockPosition::Top => None,
         }
     }
 

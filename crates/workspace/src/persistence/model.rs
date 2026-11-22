@@ -155,6 +155,8 @@ pub struct DockStructure {
     pub left: DockData,
     pub right: DockData,
     pub bottom: DockData,
+    #[serde(default)]
+    pub top: DockData,
 }
 
 impl RemoteConnectionKind {
@@ -181,11 +183,13 @@ impl Column for DockStructure {
         let (left, next_index) = DockData::column(statement, start_index)?;
         let (right, next_index) = DockData::column(statement, next_index)?;
         let (bottom, next_index) = DockData::column(statement, next_index)?;
+        let (top, next_index) = DockData::column(statement, next_index)?;
         Ok((
             DockStructure {
                 left,
                 right,
                 bottom,
+                top,
             },
             next_index,
         ))
@@ -196,7 +200,8 @@ impl Bind for DockStructure {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         let next_index = statement.bind(&self.left, start_index)?;
         let next_index = statement.bind(&self.right, next_index)?;
-        statement.bind(&self.bottom, next_index)
+        let next_index = statement.bind(&self.bottom, next_index)?;
+        statement.bind(&self.top, next_index)
     }
 }
 

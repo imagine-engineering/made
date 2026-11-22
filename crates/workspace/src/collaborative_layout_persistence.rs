@@ -44,6 +44,8 @@ pub(crate) struct CollaborativeLayoutState {
 struct CollaborativeDockRequests {
     left: bool,
     bottom: bool,
+    #[serde(default)]
+    top: bool,
     right: bool,
 }
 
@@ -69,6 +71,7 @@ impl CollaborativeLayoutState {
         match position {
             DockPosition::Left => self.requested_docks.left,
             DockPosition::Bottom => self.requested_docks.bottom,
+            DockPosition::Top => self.requested_docks.top,
             DockPosition::Right => self.requested_docks.right,
         }
     }
@@ -77,6 +80,7 @@ impl CollaborativeLayoutState {
         match position {
             DockPosition::Left => self.requested_docks.left = true,
             DockPosition::Bottom => self.requested_docks.bottom = true,
+            DockPosition::Top => self.requested_docks.top = true,
             DockPosition::Right => self.requested_docks.right = true,
         }
         self

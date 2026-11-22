@@ -4653,6 +4653,10 @@ impl OutlinePanel {
                                     KeyBinding::for_action(&workspace::ToggleBottomDock, cx)
                                         .into_any_element()
                                 }
+                                DockPosition::Top => {
+                                    KeyBinding::for_action(&workspace::ToggleTopDock, cx)
+                                        .into_any_element()
+                                }
                                 DockPosition::Right => {
                                     KeyBinding::for_action(&workspace::ToggleRightDock, cx)
                                         .into_any_element()
@@ -4975,7 +4979,7 @@ impl Panel for OutlinePanel {
     fn set_position(&mut self, position: DockPosition, _: &mut Window, cx: &mut Context<Self>) {
         settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
             let dock = match position {
-                DockPosition::Left | DockPosition::Bottom => DockSide::Left,
+                DockPosition::Left | DockPosition::Bottom | DockPosition::Top => DockSide::Left,
                 DockPosition::Right => DockSide::Right,
             };
             settings.outline_panel.get_or_insert_default().dock = Some(dock);

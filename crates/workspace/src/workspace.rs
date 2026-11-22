@@ -517,6 +517,8 @@ actions!(
         SuppressNotification,
         /// Toggles the bottom dock.
         ToggleBottomDock,
+        /// Toggles the top dock.
+        ToggleTopDock,
         /// Toggles centered layout mode.
         ToggleCenteredLayout,
         /// Toggles edit prediction feature globally for all files.
@@ -1572,6 +1574,7 @@ pub struct Workspace {
     center: PaneGroup,
     left_dock: Entity<Dock>,
     bottom_dock: Entity<Dock>,
+    top_dock: Entity<Dock>,
     right_dock: Entity<Dock>,
     panes: Vec<Entity<Pane>>,
     panes_by_item: HashMap<EntityId, WeakEntity<Pane>>,
@@ -1961,9 +1964,11 @@ impl Workspace {
 
         let left_dock = Dock::new(DockPosition::Left, modal_layer.clone(), window, cx);
         let bottom_dock = Dock::new(DockPosition::Bottom, modal_layer.clone(), window, cx);
+        let top_dock = Dock::new(DockPosition::Top, modal_layer.clone(), window, cx);
         let right_dock = Dock::new(DockPosition::Right, modal_layer.clone(), window, cx);
         let left_dock_buttons = cx.new(|cx| PanelButtons::new(left_dock.clone(), cx));
         let bottom_dock_buttons = cx.new(|cx| PanelButtons::new(bottom_dock.clone(), cx));
+        let top_dock_buttons = cx.new(|cx| PanelButtons::new(top_dock.clone(), cx));
         let right_dock_buttons = cx.new(|cx| PanelButtons::new(right_dock.clone(), cx));
         let multi_workspace = window
             .root::<MultiWorkspace>()
@@ -1980,6 +1985,7 @@ impl Workspace {
             status_bar.add_left_item(left_dock_buttons, window, cx);
             status_bar.add_right_item(right_dock_buttons, window, cx);
             status_bar.add_right_item(bottom_dock_buttons, window, cx);
+            status_bar.add_right_item(top_dock_buttons, window, cx);
             status_bar
         });
 
@@ -2119,6 +2125,7 @@ impl Workspace {
             suppressed_notifications: HashSet::default(),
             left_dock,
             bottom_dock,
+            top_dock,
             right_dock,
             _panels_task: None,
             project: project.clone(),
@@ -2477,6 +2484,7 @@ impl Workspace {
                                     (&workspace.right_dock, &default_docks.right),
                                     (&workspace.left_dock, &default_docks.left),
                                     (&workspace.bottom_dock, &default_docks.bottom),
+                                    (&workspace.top_dock, &default_docks.top),
                                 ] {
                                     dock.update(cx, |dock, cx| {
                                         dock.serialized_dock = Some(serialized_dock.clone());
@@ -2558,50 +2566,35 @@ impl Workspace {
         &self.right_dock
     }
 
-    pub fn all_docks(&self) -> [&Entity<Dock>; 3] {
-        [&self.left_dock, &self.bottom_dock, &self.right_dock]
+    pub fn top_dock(&self) -> &Entity<Dock> {
+        &self.top_dock
+    }
+
+    pub fn all_docks(&self) -> [&Entity<Dock>; 4] {
+        [
+            &self.left_dock,
+            &self.bottom_dock,
+            &self.right_dock,
+            &self.top_dock,
+        ]
     }
 
     pub fn capture_dock_state(&self, _window: &Window, cx: &App) -> DockStructure {
-        let left_dock = self.left_dock.read(cx);
-        let left_visible = left_dock.is_open();
-        let left_active_panel = left_dock
-            .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
-        // `zoomed_position` is kept in sync with individual panel zoom state
-        // by the dock code in `Dock::new` and `Dock::add_panel`.
-        let left_dock_zoom = self.zoomed_position == Some(DockPosition::Left);
-
-        let right_dock = self.right_dock.read(cx);
-        let right_visible = right_dock.is_open();
-        let right_active_panel = right_dock
-            .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
-        let right_dock_zoom = self.zoomed_position == Some(DockPosition::Right);
-
-        let bottom_dock = self.bottom_dock.read(cx);
-        let bottom_visible = bottom_dock.is_open();
-        let bottom_active_panel = bottom_dock
-            .active_panel()
-            .map(|panel| panel.persistent_name().to_string());
-        let bottom_dock_zoom = self.zoomed_position == Some(DockPosition::Bottom);
-
+        let dock_data = |position| {
+            let dock = self.dock_at_position(position).read(cx);
+            DockData {
+                visible: dock.is_open(),
+                active_panel: dock
+                    .active_panel()
+                    .map(|panel| panel.persistent_name().to_string()),
+                zoom: self.zoomed_position == Some(position),
+            }
+        };
         DockStructure {
-            left: DockData {
-                visible: left_visible,
-                active_panel: left_active_panel,
-                zoom: left_dock_zoom,
-            },
-            right: DockData {
-                visible: right_visible,
-                active_panel: right_active_panel,
-                zoom: right_dock_zoom,
-            },
-            bottom: DockData {
-                visible: bottom_visible,
-                active_panel: bottom_active_panel,
-                zoom: bottom_dock_zoom,
-            },
+            left: dock_data(DockPosition::Left),
+            right: dock_data(DockPosition::Right),
+            bottom: dock_data(DockPosition::Bottom),
+            top: dock_data(DockPosition::Top),
         }
     }
 
@@ -2615,6 +2608,7 @@ impl Workspace {
             (&self.left_dock, docks.left),
             (&self.bottom_dock, docks.bottom),
             (&self.right_dock, docks.right),
+            (&self.top_dock, docks.top),
         ] {
             dock.update(cx, |dock, cx| {
                 dock.serialized_dock = Some(data);
@@ -2630,6 +2624,7 @@ impl Workspace {
             (DockPosition::Left, &self.left_dock),
             (DockPosition::Right, &self.right_dock),
             (DockPosition::Bottom, &self.bottom_dock),
+            (DockPosition::Top, &self.top_dock),
         ]
         .into_iter()
         .find(|(_, dock)| {
@@ -2701,6 +2696,7 @@ impl Workspace {
         match position {
             DockPosition::Left => &self.left_dock,
             DockPosition::Bottom => &self.bottom_dock,
+            DockPosition::Top => &self.top_dock,
             DockPosition::Right => &self.right_dock,
         }
     }
@@ -2875,7 +2871,7 @@ impl Workspace {
         let opposite_position = match position {
             DockPosition::Left => DockPosition::Right,
             DockPosition::Right => DockPosition::Left,
-            DockPosition::Bottom => return None,
+            DockPosition::Top | DockPosition::Bottom => return None,
         };
 
         let opposite_dock = self.dock_at_position(opposite_position).read(cx);
@@ -2951,7 +2947,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        for dock in [&self.left_dock, &self.bottom_dock, &self.right_dock] {
+        for dock in self.all_docks() {
             dock.update(cx, |dock, cx| dock.remove_panel(panel, window, cx));
         }
     }
@@ -5666,6 +5662,7 @@ impl Workspace {
             LeftDock,
             RightDock,
             BottomDock,
+            TopDock,
             Center,
         }
 
@@ -5680,6 +5677,7 @@ impl Workspace {
                 (&self.left_dock, Origin::LeftDock),
                 (&self.right_dock, Origin::RightDock),
                 (&self.bottom_dock, Origin::BottomDock),
+                (&self.top_dock, Origin::TopDock),
             ]
             .into_iter()
             .find_map(|(dock, origin)| {
@@ -5742,6 +5740,10 @@ impl Workspace {
 
             (Origin::Sidebar, _) => None,
 
+            (Origin::TopDock, SplitDirection::Down) => get_last_active_pane()
+                .map(Target::Pane)
+                .or_else(|| try_dock(&self.bottom_dock)),
+
             // We're in the center, so we first try to go to a different pane,
             // otherwise try to go to a dock.
             (Origin::Center, direction) => {
@@ -5749,7 +5751,7 @@ impl Workspace {
                     Some(Target::Pane(pane))
                 } else {
                     match direction {
-                        SplitDirection::Up => None,
+                        SplitDirection::Up => try_dock(&self.top_dock),
                         SplitDirection::Down => try_dock(&self.bottom_dock),
                         SplitDirection::Left => {
                             let dock_target = try_dock(&self.left_dock);
@@ -5951,11 +5953,7 @@ impl Workspace {
             let Some(panel_size) = self.dock_size(&dock, window, cx) else {
                 return;
             };
-            match dock.position() {
-                DockPosition::Left => self.resize_left_dock(panel_size + amount, window, cx),
-                DockPosition::Bottom => self.resize_bottom_dock(panel_size + amount, window, cx),
-                DockPosition::Right => self.resize_right_dock(panel_size + amount, window, cx),
-            }
+            self.resize_dock(dock.position(), panel_size + amount, window, cx);
         } else {
             self.center
                 .resize(&self.active_pane, axis, amount, &self.bounds, cx);
@@ -8633,6 +8631,7 @@ impl Workspace {
                     (&mut workspace.right_dock, docks.right),
                     (&mut workspace.left_dock, docks.left),
                     (&mut workspace.bottom_dock, docks.bottom),
+                    (&mut workspace.top_dock, docks.top),
                 ]
                 .iter_mut()
                 {
@@ -8749,6 +8748,12 @@ impl Workspace {
         if self.bottom_dock.read(cx).is_open() {
             if let Some(active_panel) = self.bottom_dock.read(cx).active_panel() {
                 context.set("bottom_dock", active_panel.panel_key());
+            }
+        }
+
+        if self.top_dock.read(cx).is_open() {
+            if let Some(active_panel) = self.top_dock.read(cx).active_panel() {
+                context.set("top_dock", active_panel.panel_key());
             }
         }
 
@@ -9086,6 +9091,9 @@ impl Workspace {
                     workspace.toggle_dock(DockPosition::Bottom, window, cx);
                 },
             ))
+            .on_action(cx.listener(|workspace, _: &ToggleTopDock, window, cx| {
+                workspace.toggle_dock(DockPosition::Top, window, cx);
+            }))
             .on_action(cx.listener(
                 |workspace: &mut Workspace, _: &CloseActiveDock, window, cx| {
                     if !workspace.close_active_dock(window, cx) {
@@ -9619,6 +9627,16 @@ impl Workspace {
         self.render_dock_at(position, dock, false, window, cx)
     }
 
+    fn render_top_dock(&self, window: &mut Window, cx: &mut App) -> Option<Stateful<Div>> {
+        #[cfg(feature = "multiplayer-tools")]
+        if self.workspace_presentation() == WorkspacePresentation::Collaborative
+            && !self.collaborative_dock_requested(DockPosition::Top, cx)
+        {
+            return None;
+        }
+        self.render_dock(DockPosition::Top, &self.top_dock, window, cx)
+    }
+
     fn render_dock_at(
         &self,
         position: DockPosition,
@@ -9649,6 +9667,7 @@ impl Workspace {
             DockPosition::Left => ("left-dock", "Left dock"),
             DockPosition::Right => ("right-dock", "Right dock"),
             DockPosition::Bottom => ("bottom-dock", "Bottom dock"),
+            DockPosition::Top => ("top-dock", "Top dock"),
         };
         let dock_is_open = dock.read(cx).is_open();
         let a11y_active = window.is_a11y_active();
@@ -9688,6 +9707,7 @@ impl Workspace {
                     DockPosition::Bottom => {
                         overlay.bottom_0().left_0().right_0().h(size).max_h_full()
                     }
+                    DockPosition::Top => overlay.top_0().left_0().right_0().h(size).max_h_full(),
                 });
             }
             let min_size = panel.min_size(window, cx);
@@ -9726,7 +9746,7 @@ impl Workspace {
     }
 
     /// Returns the currently-visible major window regions ("parts"), in a stable
-    /// cyclic order: title bar, left dock, editor, right dock, bottom dock,
+    /// cyclic order: title bar, top dock, left dock, editor, right dock, bottom dock,
     /// status bar. Closed docks are skipped. Used by
     /// [`FocusNextPart`]/[`FocusPreviousPart`] so keyboard and screen-reader
     /// users can move between regions without a mouse.
@@ -9768,6 +9788,10 @@ impl Workspace {
             // its first control rather than the toolbar container.
             parts.push(FocusablePart::toolbar(self.titlebar_focus_handle.clone()));
         }
+        parts.extend(dock_part(
+            &self.top_dock,
+            &self.region_focus_handles.top_dock,
+        ));
         parts.extend(dock_part(
             &self.left_dock,
             &self.region_focus_handles.left_dock,
@@ -9989,7 +10013,9 @@ impl Workspace {
         match dock_pos {
             DockPosition::Left => self.resize_left_dock(new_size, window, cx),
             DockPosition::Right => self.resize_right_dock(new_size, window, cx),
-            DockPosition::Bottom => self.resize_bottom_dock(new_size, window, cx),
+            DockPosition::Top | DockPosition::Bottom => {
+                self.resize_vertical_dock(dock_pos, new_size, window, cx);
+            }
         }
     }
 
@@ -10049,16 +10075,41 @@ impl Workspace {
         });
     }
 
-    fn resize_bottom_dock(&mut self, new_size: Pixels, window: &mut Window, cx: &mut App) {
-        let size = new_size.min(self.bounds.bottom() - RESIZE_HANDLE_SIZE - self.bounds.top());
-        self.bottom_dock.update(cx, |bottom_dock, cx| {
+    fn resize_vertical_dock(
+        &mut self,
+        position: DockPosition,
+        new_size: Pixels,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let (dock, opposite) = if position == DockPosition::Top {
+            (&self.top_dock, &self.bottom_dock)
+        } else {
+            (&self.bottom_dock, &self.top_dock)
+        };
+        let opposite = opposite.read(cx);
+        let opposite_size = if !dock.read(cx).is_overlay_visible(cx)
+            && opposite.is_open()
+            && !opposite.is_overlay_visible(cx)
+            && self.zoomed_position != Some(opposite.position())
+        {
+            opposite
+                .stored_active_panel_size(window, cx)
+                .unwrap_or_default()
+        } else {
+            Pixels::ZERO
+        };
+        let available =
+            (self.bounds.size.height - RESIZE_HANDLE_SIZE - opposite_size).max(Pixels::ZERO);
+        let size = new_size.min(available);
+        dock.update(cx, |dock, cx| {
             if WorkspaceSettings::get_global(cx)
                 .resize_all_panels_in_dock
-                .contains(&DockPosition::Bottom)
+                .contains(&position)
             {
-                bottom_dock.resize_all_panels(Some(size), None, window, cx);
+                dock.resize_all_panels(Some(size), None, window, cx);
             } else {
-                bottom_dock.resize_active_panel(Some(size), None, window, cx);
+                dock.resize_active_panel(Some(size), None, window, cx);
             }
         });
     }
@@ -10456,6 +10507,7 @@ struct RegionFocusHandles {
     left_dock: FocusHandle,
     right_dock: FocusHandle,
     bottom_dock: FocusHandle,
+    top_dock: FocusHandle,
     editor: FocusHandle,
 }
 
@@ -10465,6 +10517,7 @@ impl RegionFocusHandles {
             left_dock: cx.focus_handle(),
             right_dock: cx.focus_handle(),
             bottom_dock: cx.focus_handle(),
+            top_dock: cx.focus_handle(),
             editor: cx.focus_handle(),
         }
     }
@@ -10474,6 +10527,7 @@ impl RegionFocusHandles {
             DockPosition::Left => &self.left_dock,
             DockPosition::Right => &self.right_dock,
             DockPosition::Bottom => &self.bottom_dock,
+            DockPosition::Top => &self.top_dock,
         }
     }
 }
@@ -10732,13 +10786,15 @@ impl Render for Workspace {
                                                     )
                                                 });
 
-                                                this.bottom_dock.update(cx, |dock, cx| {
-                                                    dock.clamp_panel_size(
-                                                        bounds.size.height,
-                                                        window,
-                                                        cx,
-                                                    )
-                                                });
+                                                for dock in [&this.bottom_dock, &this.top_dock] {
+                                                    dock.update(cx, |dock, cx| {
+                                                        dock.clamp_panel_size(
+                                                            bounds.size.height,
+                                                            window,
+                                                            cx,
+                                                        )
+                                                    });
+                                                }
                                             }
                                         })
                                     },
@@ -10774,9 +10830,18 @@ impl Render for Workspace {
                                                     );
                                                 }
                                                 DockPosition::Bottom => {
-                                                    workspace.resize_bottom_dock(
+                                                    workspace.resize_vertical_dock(
+                                                        DockPosition::Bottom,
                                                         workspace.bounds.bottom()
                                                             - e.event.position.y,
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }
+                                                DockPosition::Top => {
+                                                    workspace.resize_vertical_dock(
+                                                        DockPosition::Top,
+                                                        e.event.position.y - workspace.bounds.top(),
                                                         window,
                                                         cx,
                                                     );
@@ -10787,7 +10852,8 @@ impl Render for Workspace {
                                     },
                                 ))
                             })
-                            .child(match self.workspace_presentation() {
+                            .children(self.render_top_dock(window, cx))
+                            .child(div().flex_1().min_h_0().w_full().child(match self.workspace_presentation() {
                                 WorkspacePresentation::Editor => (match bottom_dock_layout {
                                     BottomDockLayout::Full => div()
                                         .flex()
@@ -11046,11 +11112,12 @@ impl Render for Workspace {
                                 WorkspacePresentation::Collaborative => unreachable!(
                                     "effective workspace presentation is always Editor without multiplayer-tools"
                                 ),
-                            })
+                            }))
                             .children([
                                 (DockPosition::Left, &self.left_dock),
                                 (DockPosition::Right, &self.right_dock),
                                 (DockPosition::Bottom, &self.bottom_dock),
+                                (DockPosition::Top, &self.top_dock),
                             ].into_iter().filter_map(|(position, dock)| {
                                 #[cfg(feature = "multiplayer-tools")]
                                 if self.workspace_presentation() == WorkspacePresentation::Collaborative
@@ -11080,6 +11147,7 @@ impl Render for Workspace {
                                     Some(DockPosition::Left) => div.right_2().border_r_1(),
                                     Some(DockPosition::Right) => div.left_2().border_l_1(),
                                     Some(DockPosition::Bottom) => div.top_2().border_t_1(),
+                                    Some(DockPosition::Top) => div.bottom_2().border_b_1(),
                                     None => div.top_2().bottom_2().left_2().right_2().border_1(),
                                 })
                             }))
@@ -13712,7 +13780,7 @@ fn load_legacy_panel_size(
     let json = kvp.read_kvp(&legacy_key).log_err().flatten()?;
     let state = serde_json::from_str::<LegacyPanelState>(&json).log_err()?;
     let size = match dock_position {
-        DockPosition::Bottom => state.height,
+        DockPosition::Bottom | DockPosition::Top => state.height,
         DockPosition::Left | DockPosition::Right => state.width,
     }?;
 
@@ -20191,9 +20259,14 @@ mod tests {
             panel
         });
 
-        // Dispatch the `MoveFocusedPanelToNextPosition` action, moving the
-        // panel to the next valid position which, in this case, is the left
-        // dock.
+        cx.dispatch_action(MoveFocusedPanelToNextPosition);
+        workspace.update(cx, |workspace, cx| {
+            assert!(workspace.top_dock().read(cx).is_open());
+            assert!(!workspace.right_dock().read(cx).is_open());
+            assert_eq!(panel.read(cx).position, DockPosition::Top);
+        });
+
+        // The last valid position wraps back to the left dock.
         cx.dispatch_action(MoveFocusedPanelToNextPosition);
         workspace.update(cx, |workspace, cx| {
             assert!(workspace.left_dock().read(cx).is_open());

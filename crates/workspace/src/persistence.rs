@@ -1105,6 +1105,11 @@ impl Domain for WorkspaceDb {
             ALTER TABLE workspaces ADD COLUMN workspace_presentation TEXT NOT NULL DEFAULT "editor"
                 CHECK(workspace_presentation IN ("editor", "collaborative"));
         ),
+        sql!(
+            ALTER TABLE workspaces ADD COLUMN top_dock_visible INTEGER;
+            ALTER TABLE workspaces ADD COLUMN top_dock_active_panel TEXT;
+            ALTER TABLE workspaces ADD COLUMN top_dock_zoom INTEGER;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1200,6 +1205,9 @@ impl WorkspaceDb {
                     bottom_dock_visible,
                     bottom_dock_active_panel,
                     bottom_dock_zoom,
+                    top_dock_visible,
+                    top_dock_active_panel,
+                    top_dock_zoom,
                     window_id
                 FROM workspaces
                 WHERE
@@ -1323,6 +1331,9 @@ impl WorkspaceDb {
                     bottom_dock_visible,
                     bottom_dock_active_panel,
                     bottom_dock_zoom,
+                    top_dock_visible,
+                    top_dock_active_panel,
+                    top_dock_zoom,
                     window_id,
                     remote_connection_id
                 FROM workspaces
@@ -1676,11 +1687,14 @@ impl WorkspaceDb {
                         bottom_dock_visible,
                         bottom_dock_active_panel,
                         bottom_dock_zoom,
+                        top_dock_visible,
+                        top_dock_active_panel,
+                        top_dock_zoom,
                         session_id,
                         window_id,
                         timestamp
                     )
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, CURRENT_TIMESTAMP)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, CURRENT_TIMESTAMP)
                     ON CONFLICT DO
                     UPDATE SET
                         paths = ?2,
@@ -1698,8 +1712,11 @@ impl WorkspaceDb {
                         bottom_dock_visible = ?14,
                         bottom_dock_active_panel = ?15,
                         bottom_dock_zoom = ?16,
-                        session_id = ?17,
-                        window_id = ?18,
+                        top_dock_visible = ?17,
+                        top_dock_active_panel = ?18,
+                        top_dock_zoom = ?19,
+                        session_id = ?20,
+                        window_id = ?21,
                         timestamp = CURRENT_TIMESTAMP
                 );
                 let mut prepared_query = conn.exec_bound(query)?;
@@ -3447,7 +3464,14 @@ mod tests {
             bookmarks: Default::default(),
             breakpoints: Default::default(),
             display: Default::default(),
-            docks: Default::default(),
+            docks: DockStructure {
+                top: model::DockData {
+                    visible: true,
+                    active_panel: Some("Dependencies".into()),
+                    zoom: true,
+                },
+                ..DockStructure::default()
+            },
             centered_layout: false,
             workspace_presentation: crate::WorkspacePresentation::Editor,
             session_id: None,
@@ -3466,6 +3490,7 @@ mod tests {
 
         let round_trip_workspace = db.workspace_for_roots(&["/tmp", "/tmp2"]);
         assert_eq!(workspace, round_trip_workspace.unwrap());
+        assert_eq!(Some(workspace), db.workspace_for_id(WorkspaceId(5)));
     }
 
     #[gpui::test]

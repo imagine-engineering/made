@@ -827,6 +827,7 @@ pub enum DockPosition {
     Left,
     Bottom,
     Right,
+    Top,
 }
 
 /// Configuration of voice calls in Zed.

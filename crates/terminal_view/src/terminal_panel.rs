@@ -1939,8 +1939,8 @@ impl Panel for TerminalPanel {
         TerminalSettings::get_global(cx).dock.into()
     }
 
-    fn position_is_valid(&self, _: DockPosition) -> bool {
-        true
+    fn position_is_valid(&self, position: DockPosition) -> bool {
+        position != DockPosition::Top
     }
 
     fn starts_open(&self, _: &Window, cx: &App) -> bool {
@@ -1953,12 +1953,13 @@ impl Panel for TerminalPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let dock = match position {
+            DockPosition::Left => TerminalDockPosition::Left,
+            DockPosition::Bottom => TerminalDockPosition::Bottom,
+            DockPosition::Right => TerminalDockPosition::Right,
+            DockPosition::Top => return,
+        };
         settings::update_settings_file(self.fs.clone(), cx, move |settings, _| {
-            let dock = match position {
-                DockPosition::Left => TerminalDockPosition::Left,
-                DockPosition::Bottom => TerminalDockPosition::Bottom,
-                DockPosition::Right => TerminalDockPosition::Right,
-            };
             settings.terminal.get_or_insert_default().dock = Some(dock);
         });
     }
@@ -1967,7 +1968,7 @@ impl Panel for TerminalPanel {
         let settings = TerminalSettings::get_global(cx);
         match self.position(window, cx) {
             DockPosition::Left | DockPosition::Right => settings.default_width,
-            DockPosition::Bottom => settings.default_height,
+            DockPosition::Bottom | DockPosition::Top => settings.default_height,
         }
     }
 

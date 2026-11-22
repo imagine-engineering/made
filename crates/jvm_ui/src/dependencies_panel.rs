@@ -8299,11 +8299,8 @@ impl Panel for DependenciesPanel {
         self.position
     }
 
-    fn position_is_valid(&self, position: DockPosition) -> bool {
-        matches!(
-            position,
-            DockPosition::Left | DockPosition::Bottom | DockPosition::Right
-        )
+    fn position_is_valid(&self, _: DockPosition) -> bool {
+        true
     }
 
     fn set_position(&mut self, position: DockPosition, _: &mut Window, cx: &mut Context<Self>) {
@@ -9888,6 +9885,7 @@ mod tests {
             settings::DockPosition::Left,
             settings::DockPosition::Bottom,
             settings::DockPosition::Right,
+            settings::DockPosition::Top,
         ] {
             let preferences = BuildViewPreferences {
                 dock_position: position,
@@ -9901,7 +9899,7 @@ mod tests {
                 preferences
             );
         }
-        for position in ["top", "floating", "window", "private-canary"] {
+        for position in ["floating", "window", "private-canary"] {
             let mut foreign: serde_json::Value =
                 serde_json::from_str(&serialized).expect("position fixture");
             foreign["dock_position"] = serde_json::json!(position);
@@ -25509,6 +25507,7 @@ mod tests {
         );
         for position in [
             DockPosition::Bottom,
+            DockPosition::Top,
             DockPosition::Left,
             DockPosition::Right,
         ] {
@@ -25518,12 +25517,7 @@ mod tests {
             });
             cx.run_until_parked();
             workspace.update_in(cx, |workspace, window, cx| {
-                let dock = match position {
-                    DockPosition::Left => workspace.left_dock(),
-                    DockPosition::Bottom => workspace.bottom_dock(),
-                    DockPosition::Right => workspace.right_dock(),
-                }
-                .read(cx);
+                let dock = workspace.dock_at_position(position).read(cx);
                 assert!(dock.is_open());
                 assert!(dock.panel_for_id(panel.entity_id()).is_some());
                 assert!(panel.read(cx).focus_handle.is_focused(window));
@@ -26786,6 +26780,48 @@ mod tests {
         activate_dock_control(cx, "Pin Groovy panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(docked_editor));
+
+        panel.update_in(cx, |panel, window, cx| {
+            panel.set_position(DockPosition::Top, window, cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let initial_top_size = cx.debug_bounds("top-dock").expect("top dock bounds").size;
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.resize_pane(gpui::Axis::Vertical, px(24.), window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let top_docked_editor = cx
+            .debug_bounds("editor-region")
+            .expect("editor below top dock");
+        let top_dock = cx.debug_bounds("top-dock").expect("top dock bounds");
+        assert_eq!(top_dock.size.height, initial_top_size.height + px(24.));
+        assert_eq!(top_dock.bottom(), top_docked_editor.top());
+        assert_eq!(top_dock.size.width, top_docked_editor.size.width);
+        workspace.update_in(cx, |workspace, window, cx| {
+            assert_eq!(
+                workspace.focused_dock_position(window, cx),
+                Some(DockPosition::Top)
+            );
+            let captured = workspace.capture_dock_state(window, cx);
+            assert!(captured.top.visible);
+            assert_eq!(
+                captured.top.active_panel.as_deref(),
+                Some(DependenciesPanel::persistent_name())
+            );
+            assert!(!captured.bottom.visible);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        activate_dock_control(cx, "Undock Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(cx.debug_bounds("editor-region"), Some(overlay_editor));
+        let top_overlay = cx.debug_bounds("top-dock").expect("top overlay bounds");
+        assert_eq!(top_overlay.top(), overlay_editor.top());
+        assert_eq!(top_overlay.size, top_dock.size);
+        activate_dock_control(cx, "Pin Groovy panel");
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
+
         let write = panel
             .update(cx, |panel, _| panel.preferences_write.take())
             .expect("ordered preferences write");
@@ -26805,7 +26841,7 @@ mod tests {
         .expect("restore workspace presentation");
         restored.read_with(cx, |panel, _| {
             assert_eq!(panel.preferences, expected_preferences);
-            assert_eq!(panel.position, DockPosition::Bottom);
+            assert_eq!(panel.position, DockPosition::Top);
             assert_eq!(panel.view, BuildToolView::Maven);
             assert!(!panel.active);
             assert!(

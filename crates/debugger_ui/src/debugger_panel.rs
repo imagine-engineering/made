@@ -1672,8 +1672,8 @@ impl Panel for DebugPanel {
         DebuggerSettings::get_global(cx).dock.into()
     }
 
-    fn position_is_valid(&self, _: DockPosition) -> bool {
-        true
+    fn position_is_valid(&self, position: DockPosition) -> bool {
+        position != DockPosition::Top
     }
 
     fn set_position(

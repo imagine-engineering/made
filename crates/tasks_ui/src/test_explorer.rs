@@ -2645,7 +2645,7 @@ impl Panel for TestsPanel {
         settings::update_settings_file(<dyn fs::Fs>::global(cx), cx, move |settings, _| {
             settings.tests_panel.get_or_insert_default().dock = Some(match position {
                 DockPosition::Right => DockSide::Right,
-                DockPosition::Left | DockPosition::Bottom => DockSide::Left,
+                DockPosition::Left | DockPosition::Bottom | DockPosition::Top => DockSide::Left,
             });
         });
     }

@@ -144,18 +144,17 @@ pub trait PanelHandle: Send + Sync {
     fn hide_button_setting(&self, cx: &App) -> Option<HideStatusItem>;
     fn move_to_next_position(&self, window: &mut Window, cx: &mut App) {
         let current_position = self.position(window, cx);
-        let next_position = [
-            DockPosition::Left,
-            DockPosition::Bottom,
-            DockPosition::Right,
-        ]
-        .into_iter()
-        .filter(|position| self.position_is_valid(*position, cx))
-        .skip_while(|valid_position| *valid_position != current_position)
-        .nth(1)
-        .unwrap_or(DockPosition::Left);
-
-        self.set_position(next_position, window, cx);
+        let mut positions = DockPosition::POSITIONS
+            .into_iter()
+            .filter(|position| self.position_is_valid(*position, cx));
+        if let Some(next_position) = positions
+            .clone()
+            .skip_while(|position| *position != current_position)
+            .nth(1)
+            .or_else(|| positions.next())
+        {
+            self.set_position(next_position, window, cx);
+        }
     }
 }
 
@@ -321,6 +320,7 @@ pub enum DockPosition {
     Left,
     Bottom,
     Right,
+    Top,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -344,6 +344,7 @@ impl From<settings::DockPosition> for DockPosition {
             settings::DockPosition::Left => Self::Left,
             settings::DockPosition::Bottom => Self::Bottom,
             settings::DockPosition::Right => Self::Right,
+            settings::DockPosition::Top => Self::Top,
         }
     }
 }
@@ -354,6 +355,7 @@ impl Into<settings::DockPosition> for DockPosition {
             Self::Left => settings::DockPosition::Left,
             Self::Bottom => settings::DockPosition::Bottom,
             Self::Right => settings::DockPosition::Right,
+            Self::Top => settings::DockPosition::Top,
         }
     }
 }
@@ -369,18 +371,21 @@ impl From<TerminalDockPosition> for DockPosition {
 }
 
 impl DockPosition {
+    const POSITIONS: [Self; 4] = [Self::Left, Self::Bottom, Self::Right, Self::Top];
+
     fn label(&self) -> &'static str {
         match self {
             Self::Left => "Left",
             Self::Bottom => "Bottom",
             Self::Right => "Right",
+            Self::Top => "Top",
         }
     }
 
     pub fn axis(&self) -> Axis {
         match self {
             Self::Left | Self::Right => Axis::Horizontal,
-            Self::Bottom => Axis::Vertical,
+            Self::Top | Self::Bottom => Axis::Vertical,
         }
     }
 }
@@ -687,12 +692,7 @@ impl Dock {
                 if panel.is_zoomed(window, cx) {
                     workspace.zoomed_position = Some(new_position);
                 }
-                match new_position {
-                    DockPosition::Left => &workspace.left_dock,
-                    DockPosition::Bottom => &workspace.bottom_dock,
-                    DockPosition::Right => &workspace.right_dock,
-                }
-                .clone()
+                workspace.dock_at_position(new_position).clone()
             })
             .log_err()
         else {
@@ -737,6 +737,10 @@ impl Dock {
 
         workspace
             .update(cx, |workspace, cx| {
+                #[cfg(feature = "multiplayer-tools")]
+                if was_visible {
+                    workspace.request_collaborative_dock(new_position, cx);
+                }
                 workspace.serialize_workspace(window, cx);
             })
             .log_err();
@@ -1185,6 +1189,7 @@ impl Dock {
         match self.position {
             DockPosition::Left => crate::ToggleLeftDock.boxed_clone(),
             DockPosition::Bottom => crate::ToggleBottomDock.boxed_clone(),
+            DockPosition::Top => crate::ToggleTopDock.boxed_clone(),
             DockPosition::Right => crate::ToggleRightDock.boxed_clone(),
         }
     }
@@ -1291,6 +1296,15 @@ impl Render for Dock {
                             .h(RESIZE_HANDLE_SIZE)
                             .cursor_row_resize(),
                     ),
+                    DockPosition::Top => deferred(
+                        handle
+                            .absolute()
+                            .bottom(-RESIZE_HANDLE_SIZE / 2.)
+                            .left(px(0.))
+                            .w_full()
+                            .h(RESIZE_HANDLE_SIZE)
+                            .cursor_row_resize(),
+                    ),
                     DockPosition::Right => deferred(
                         handle
                             .absolute()
@@ -1322,6 +1336,7 @@ impl Render for Dock {
                     DockPosition::Left => this.border_r_1(),
                     DockPosition::Right => this.border_l_1(),
                     DockPosition::Bottom => this.border_t_1(),
+                    DockPosition::Top => this.border_b_1(),
                 })
                 .child(
                     div()
@@ -1388,7 +1403,9 @@ impl PanelButtons {
 
         let (menu_anchor, menu_attach) = match dock.position {
             DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
-            DockPosition::Bottom | DockPosition::Right => (Anchor::BottomRight, Anchor::TopRight),
+            DockPosition::Bottom | DockPosition::Right | DockPosition::Top => {
+                (Anchor::BottomRight, Anchor::TopRight)
+            }
         };
 
         let dock_entity = self.dock.clone();
@@ -1435,16 +1452,15 @@ impl PanelButtons {
                 Some(
                     right_click_menu(name)
                         .menu(move |window, cx| {
-                            const POSITIONS: [DockPosition; 3] = [
-                                DockPosition::Left,
-                                DockPosition::Right,
-                                DockPosition::Bottom,
-                            ];
-
                             let panel_hide = panel.hide_button_setting(cx);
                             ContextMenu::build(window, cx, |mut menu, _, cx| {
                                 let mut has_position_entries = false;
-                                for position in POSITIONS {
+                                for position in [
+                                    DockPosition::Left,
+                                    DockPosition::Right,
+                                    DockPosition::Bottom,
+                                    DockPosition::Top,
+                                ] {
                                     if panel.position_is_valid(position, cx) {
                                         let is_current = position == dock_position;
                                         let panel = panel.clone();
@@ -1582,10 +1598,7 @@ impl PanelButtons {
         h_flex()
             .gap_1()
             .when(
-                has_buttons
-                    && !in_status_menu
-                    && (dock.position == DockPosition::Bottom
-                        || dock.position == DockPosition::Right),
+                has_buttons && !in_status_menu && dock.position != DockPosition::Left,
                 |this| this.child(Divider::vertical().color(DividerColor::Border)),
             )
             .children(buttons)
