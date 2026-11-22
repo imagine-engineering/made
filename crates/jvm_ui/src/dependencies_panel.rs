@@ -3326,9 +3326,15 @@ impl DependenciesPanel {
             inspection.maven_scope = maven_scope;
         }
         self.prepare_pair_inspection(&mut inspection)?;
-        let projection = graph_inspection_projection(snapshot, self.view, &inspection)
+        let graph_view = match selection.target() {
+            GraphQueryTarget::Gradle { .. } => BuildToolView::Gradle,
+            GraphQueryTarget::Maven(_) => BuildToolView::Maven,
+        };
+        let projection = graph_inspection_projection(snapshot, graph_view, &inspection)
             .context("The target has no current provider dependency facts to inspect.")?;
-        self.display_graph_inspection(inspection, cx);
+        if self.view == graph_view || self.view == BuildToolView::Dependencies {
+            self.display_graph_inspection(inspection, cx);
+        }
         Ok(projection.overlay)
     }
 
@@ -3479,9 +3485,23 @@ impl DependenciesPanel {
         Ok(self.graph_pin.is_some())
     }
 
-    pub(crate) fn clear_graph_inspection(&mut self, cx: &mut Context<Self>) {
+    fn clear_graph_inspection(&mut self, cx: &mut Context<Self>) {
         self.graph_inspection = None;
         self.rebuild(cx);
+    }
+
+    pub(crate) fn clear_diagram_inspection(
+        &mut self,
+        selection: &GraphSelection,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .graph_inspection
+            .as_ref()
+            .is_some_and(|inspection| inspection.selection == *selection)
+        {
+            self.clear_graph_inspection(cx);
+        }
     }
 
     /// Resolves the selected row into canvas facts for the diagram surfaces.
@@ -15139,6 +15159,31 @@ mod tests {
                 assert!(panel.resolve_selected_graph(cx).is_none());
             });
             let target = DependencyDiagramContextTarget::Node(node.clone());
+            let other_view = match provider {
+                GraphFixtureProvider::Gradle => BuildToolView::Maven,
+                GraphFixtureProvider::Maven => BuildToolView::Gradle,
+            };
+            panel.update_in(cx, |panel, window, cx| {
+                panel.set_view(other_view, window, cx);
+            });
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::InspectRootPaths,
+                    &target,
+                    cx,
+                );
+                let canvas = item.canvas().read(cx);
+                assert!(canvas.inspected.contains(&node));
+                assert!(!canvas.inspected_edges.is_empty());
+                assert_eq!(canvas.selection, original_selection);
+                assert_eq!(canvas.viewport, viewport);
+            });
+            panel.update_in(cx, |panel, window, cx| {
+                assert_eq!(panel.view, other_view);
+                assert!(panel.graph_inspection.is_none());
+                panel.set_view(view, window, cx);
+            });
+            assert_eq!(commands.load(Ordering::SeqCst), 3);
             for (command, mode) in [
                 (
                     DependencyDiagramMenuCommand::InspectNeighbours,

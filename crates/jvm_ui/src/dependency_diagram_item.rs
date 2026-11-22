@@ -694,7 +694,9 @@ impl DependencyDiagramItem {
                 });
                 source
                     .panel
-                    .update(cx, |panel, cx| panel.clear_graph_inspection(cx))
+                    .update(cx, |panel, cx| {
+                        panel.clear_diagram_inspection(&source.selection, cx)
+                    })
                     .map(|_| None)
             }
             AllUsages => {
