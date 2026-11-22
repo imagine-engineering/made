@@ -108,6 +108,12 @@ struct GddWorkingCopy {
     save_in_progress: Weak<()>,
 }
 
+struct PreparedWorkingSnapshot {
+    contents: Arc<InspectedGddV1>,
+    inspection: GddGraphInspection,
+    cut_clipboard: Option<String>,
+}
+
 impl GddWorkingCopy {
     fn new(saved: Arc<InspectedGddV1>, inspection: Arc<GddGraphInspection>) -> Self {
         Self {
@@ -1834,6 +1840,32 @@ impl GraphiteDocumentItem {
                     cx,
                 );
             }
+            GraphiteCopy::PasteNodeGroup { network, clipboard } => {
+                self.stage_working_snapshot(
+                    revision,
+                    async move {
+                        contents
+                            .paste_graph_nodes_in_copy(&network, &clipboard, ARCHIVE_BUDGET)
+                            .await
+                    },
+                    window,
+                    cx,
+                );
+            }
+            GraphiteCopy::CutNodeGroup { nodes } => {
+                let staged = cx.background_spawn(async move {
+                    let (contents, text) = contents
+                        .cut_graph_nodes_in_copy(&nodes, ARCHIVE_BUDGET)
+                        .await?;
+                    let inspection = contents.graph_inspection().await?;
+                    anyhow::Ok(PreparedWorkingSnapshot {
+                        contents: Arc::new(contents),
+                        inspection,
+                        cut_clipboard: Some(text),
+                    })
+                });
+                self.install_working_snapshot(revision, staged, window, cx);
+            }
             request => self.save_copy(request, window, cx),
         }
     }
@@ -2359,7 +2391,7 @@ impl GraphiteDocumentItem {
             cx.notify();
             return;
         };
-        self.save_copy(
+        self.apply_graph_edit(
             GraphiteCopy::PasteNodeGroup {
                 network: Box::new(network.clone()),
                 clipboard,
@@ -2383,7 +2415,7 @@ impl GraphiteDocumentItem {
                 ));
                 cx.notify();
             }
-            _ => self.save_copy(GraphiteCopy::CutNodeGroup { nodes }, window, cx),
+            _ => self.apply_graph_edit(GraphiteCopy::CutNodeGroup { nodes }, window, cx),
         }
     }
 
@@ -2534,20 +2566,47 @@ impl GraphiteDocumentItem {
         let staged = cx.background_spawn(async move {
             let contents = edit.await?;
             let inspection = contents.graph_inspection().await?;
-            anyhow::Ok((Arc::new(contents), inspection))
+            anyhow::Ok(PreparedWorkingSnapshot {
+                contents: Arc::new(contents),
+                inspection,
+                cut_clipboard: None,
+            })
         });
+        self.install_working_snapshot(expected, staged, window, cx);
+    }
+
+    fn install_working_snapshot(
+        &mut self,
+        expected: Arc<()>,
+        staged: Task<anyhow::Result<PreparedWorkingSnapshot>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.copy_feedback = None;
         self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
             let staged = staged.await;
             if let Err(error) = item.update_in(cx, |item, _, cx| {
                 item.copy_task = None;
-                let result = staged.and_then(|(contents, inspection)| {
+                let result = staged.and_then(|staged| {
                     item.model.update(cx, |model, cx| {
-                        model.replace_working_snapshot(&expected, contents, inspection, cx)
-                    })
+                        model.replace_working_snapshot(
+                            &expected,
+                            staged.contents,
+                            staged.inspection,
+                            cx,
+                        )
+                    })?;
+                    Ok(staged.cut_clipboard)
                 });
                 match result {
-                    Ok(()) => cx.emit(ItemEvent::Edit),
+                    Ok(clipboard) => {
+                        if let Some(text) = clipboard {
+                            cx.write_to_clipboard(ClipboardItem::new_string(text));
+                            item.copy_feedback =
+                                Some(("Cut Graphite nodes.".into(), Color::Success));
+                        }
+                        cx.emit(ItemEvent::Edit);
+                    }
                     Err(error) => {
                         item.copy_feedback = Some((format!("{error:#}").into(), Color::Error));
                     }
@@ -2803,7 +2862,7 @@ impl GraphiteDocumentItem {
         );
         match &self.node_copy {
             NodeCopyPanel::Ready(form) => {
-                let wire_suffix = if self.model.read(cx).working.is_some() {
+                let edit_suffix = if self.model.read(cx).working.is_some() {
                     ""
                 } else {
                     " in a Copy"
@@ -3004,8 +3063,8 @@ impl GraphiteDocumentItem {
                                 panel.when(imports.peek().is_some(), |panel| {
                                     panel.child(h_flex().gap_2().flex_wrap().children(imports.map(|index| {
                                         let label = match network.import_name(index) {
-                                            Some(name) => format!("{action} Import {} ({name}){wire_suffix}", index + 1),
-                                            None => format!("{action} Import {}{wire_suffix}", index + 1),
+                                            Some(name) => format!("{action} Import {} ({name}){edit_suffix}", index + 1),
+                                            None => format!("{action} Import {}{edit_suffix}", index + 1),
                                         };
                                         div()
                                             .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-IMPORT-{index}"))
@@ -3172,13 +3231,13 @@ impl GraphiteDocumentItem {
                             .on_click(cx.listener(|item, _, window, cx| item.copy_graph_clipboard(window, cx))),
                         ),
                         div().debug_selector(|| "GRAPHITE-GDD-PASTE-NODES".into()).child(
-                            Button::new("graphite-gdd-paste-nodes", "Paste Nodes in a Copy")
+                            Button::new("graphite-gdd-paste-nodes", format!("Paste Nodes{edit_suffix}"))
                                 .disabled(form.clipboard_scope().is_none() || self.copy_task.is_some())
                                 .on_click(cx.listener(|item, _, window, cx| item.paste_graph_clipboard(window, cx))),
                         ),
                     ]).when(selected_count > 1, |controls| controls.child(
                         div().debug_selector(|| "GRAPHITE-GDD-CUT-NODES".into()).child(
-                            Button::new("graphite-gdd-cut-nodes", format!("Cut {selected_count} Nodes in a Copy"))
+                            Button::new("graphite-gdd-cut-nodes", format!("Cut {selected_count} Nodes{edit_suffix}"))
                                 .disabled(self.copy_task.is_some())
                                 .on_click(cx.listener(|item, _, window, cx| {
                                     item.cut_graph_selection(window, cx);
@@ -3199,7 +3258,7 @@ impl GraphiteDocumentItem {
                                     .debug_selector(move || format!("GRAPHITE-GDD-CONNECT-EXPORT-{export_index}"))
                                     .child(Button::new(
                                         ("graphite-gdd-connect-export", export_index),
-                                        format!("Connect to Export {}{wire_suffix}", export_index + 1),
+                                        format!("Connect to Export {}{edit_suffix}", export_index + 1),
                                     )
                                     .disabled(self.copy_task.is_some())
                                     .on_click(cx.listener(move |item, _, window, cx| {
@@ -3363,7 +3422,7 @@ impl GraphiteDocumentItem {
                             .when(selected.can_delete_in_copy() && selected.can_copy_graph_node(), |panel| {
                                 panel.child(
                                     div().debug_selector(|| "GRAPHITE-GDD-CUT-NODE".into()).child(
-                                        Button::new("graphite-gdd-cut-node", "Cut This Node in a Copy")
+                                        Button::new("graphite-gdd-cut-node", format!("Cut This Node{edit_suffix}"))
                                             .disabled(self.copy_task.is_some())
                                             .on_click(cx.listener(|item, _, window, cx| {
                                                 let NodeCopyPanel::Ready(form) = &item.node_copy else {
@@ -3372,7 +3431,7 @@ impl GraphiteDocumentItem {
                                                 if let Some(node) = form.selected_node().filter(|node| {
                                                     node.can_delete_in_copy() && node.can_copy_graph_node()
                                                 }) {
-                                                    item.save_copy(
+                                                    item.apply_graph_edit(
                                                         GraphiteCopy::CutNodeGroup { nodes: vec![node.clone()] },
                                                         window,
                                                         cx,
@@ -6571,6 +6630,206 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_cuts_and_pastes_in_the_working_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::Reconnection, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/working-clipboard.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        window.run_until_parked();
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let snapshot = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, cx| {
+                let model = item.model.read(cx);
+                (
+                    model.gdd_contents().expect("GDD").clone(),
+                    model.revision.clone(),
+                    item.is_dirty(cx),
+                )
+            })
+        };
+        let (source, initial_revision, dirty) = snapshot(window);
+        assert!(!dirty);
+        let initial_nodes = source.graph_nodes().await.expect("original nodes");
+        let [source, target, survivor] = initial_nodes.as_slice() else {
+            panic!("wired pair and survivor")
+        };
+        let initial_ids = initial_nodes
+            .iter()
+            .map(GddGraphNode::storage_id)
+            .collect::<BTreeSet<_>>();
+        let survivor_id = survivor.storage_id();
+        assert_eq!(
+            target
+                .numeric_connection_source(&initial_nodes)
+                .map(GddGraphNode::storage_id),
+            Some(source.storage_id())
+        );
+        let clipboard = |window: &mut gpui::VisualTestContext| {
+            window
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .expect("clipboard contents")
+        };
+
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+        paint(window);
+        window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
+        saved_graph_shortcut(window, "x");
+        assert_eq!(clipboard(window), "previous clipboard");
+        let (_, revision, dirty) = snapshot(window);
+        assert!(Arc::ptr_eq(&initial_revision, &revision));
+        assert!(!dirty);
+
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-GRAPH-NODE-1",
+            gpui::MouseButton::Left,
+            gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+        );
+        saved_graph_shortcut(window, "x");
+        let cut_clipboard = clipboard(window);
+        assert!(cut_clipboard.starts_with("graphite: "));
+        let (cut, revision, dirty) = snapshot(window);
+        assert!(!Arc::ptr_eq(&initial_revision, &revision));
+        assert!(dirty);
+        let remaining = cut.graph_nodes().await.expect("working cut");
+        assert!(
+            remaining
+                .iter()
+                .map(GddGraphNode::storage_id)
+                .eq([survivor_id])
+        );
+
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        paint(window);
+        let (restored, _, dirty) = snapshot(window);
+        assert!(dirty);
+        assert!(restored.can_move_history(GddHistoryDirection::Redo));
+        let restored_nodes = restored.graph_nodes().await.expect("restored nodes");
+        assert_eq!(
+            restored_nodes
+                .iter()
+                .map(GddGraphNode::storage_id)
+                .collect::<BTreeSet<_>>(),
+            initial_ids
+        );
+        let restored_target = restored_nodes
+            .iter()
+            .find(|node| node.storage_id() == target.storage_id())
+            .expect("restored wire target");
+        assert_eq!(
+            restored_target
+                .numeric_connection_source(&restored_nodes)
+                .map(GddGraphNode::storage_id),
+            Some(source.storage_id())
+        );
+        click(window, "GRAPHITE-GDD-REDO");
+        window.run_until_parked();
+        paint(window);
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-GRAPH",
+            gpui::MouseButton::Left,
+            Default::default(),
+        );
+        let (_, before_paste, _) = snapshot(window);
+        window.write_to_clipboard(ClipboardItem::new_string("graphite: {".into()));
+        saved_graph_shortcut(window, "v");
+        assert!(Arc::ptr_eq(&before_paste, &snapshot(window).1));
+        assert_eq!(clipboard(window), "graphite: {");
+        item.read_with(window, |item, _| {
+            assert!(matches!(&item.copy_feedback, Some((_, Color::Error))))
+        });
+
+        window.write_to_clipboard(ClipboardItem::new_string(cut_clipboard.clone()));
+        saved_graph_shortcut(window, "v");
+        let (pasted, revision, dirty) = snapshot(window);
+        assert!(!Arc::ptr_eq(&before_paste, &revision));
+        assert!(dirty);
+        assert_eq!(clipboard(window), cut_clipboard);
+        let check_paste = async |document: &InspectedGddV1| {
+            let nodes = document.graph_nodes().await.expect("pasted working graph");
+            assert_eq!(nodes.len(), 3);
+            assert!(nodes.iter().any(|node| node.storage_id() == survivor_id));
+            let target = nodes
+                .iter()
+                .find(|node| node.has_numeric_connection())
+                .expect("restored internal wire");
+            let source = target
+                .numeric_connection_source(&nodes)
+                .expect("wire source");
+            assert!(!initial_ids.contains(&source.storage_id()));
+            assert!(!initial_ids.contains(&target.storage_id()));
+            assert!(matches!(
+                document.preview_graph_numeric_output(target).await,
+                Ok(GddNumericValue::Integer(17))
+            ));
+            [source.storage_id(), target.storage_id()]
+        };
+        let pasted_ids = check_paste(&pasted).await;
+        click(window, "GRAPHITE-GDD-UNDO");
+        window.run_until_parked();
+        paint(window);
+        assert!(
+            snapshot(window)
+                .0
+                .graph_nodes()
+                .await
+                .expect("undo paste")
+                .iter()
+                .map(GddGraphNode::storage_id)
+                .eq([survivor_id])
+        );
+        click(window, "GRAPHITE-GDD-REDO");
+        window.run_until_parked();
+        paint(window);
+        assert_eq!(check_paste(&snapshot(window).0).await, pasted_ids);
+        let destination = PathBuf::from("/project/saved-working-clipboard.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopen working clipboard changes");
+        assert_eq!(check_paste(&saved).await, pasted_ids);
+        assert!(!snapshot(window).2);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
             original
         );
     }
