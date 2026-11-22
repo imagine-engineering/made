@@ -537,6 +537,10 @@ enum GraphiteCopy {
         network: Box<GddGraphNetwork>,
         kind: NetworkPortKind,
     },
+    SetPrimaryImportExposure {
+        network: Box<GddGraphNetwork>,
+        exposed: bool,
+    },
     EditNetworkPort {
         network: Box<GddGraphNetwork>,
         change: NetworkPortChange,
@@ -999,6 +1003,28 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn toggle_primary_network_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(network) = form
+            .active_network()
+            .filter(|network| network.can_extend_ports_in_copy())
+        else {
+            return;
+        };
+        if let Some(exposed) = network.primary_import_exposed() {
+            self.save_copy(
+                GraphiteCopy::SetPrimaryImportExposure {
+                    network: Box::new(network.clone()),
+                    exposed: !exposed,
+                },
+                window,
+                cx,
+            );
+        }
+    }
+
     fn edit_network_port(
         &mut self,
         network: &GddGraphNetwork,
@@ -1424,6 +1450,22 @@ impl GraphiteDocumentItem {
                                                         item.append_network_port(kind, window, cx);
                                                     })))
                                         }))
+                                        .when_some(network.primary_import_exposed(), |bar, exposed| {
+                                            let label = if exposed {
+                                                "Hide Primary Import in a Copy"
+                                            } else {
+                                                "Expose Primary Import in a Copy"
+                                            };
+                                            bar.child(
+                                                div()
+                                                    .debug_selector(|| "GRAPHITE-GDD-PRIMARY-IMPORT-EXPOSURE".into())
+                                                    .child(Button::new("graphite-gdd-primary-import-exposure", label)
+                                                        .disabled(self.copy_task.is_some())
+                                                        .on_click(cx.listener(|item, _, window, cx| {
+                                                            item.toggle_primary_network_import(window, cx);
+                                                        }))),
+                                            )
+                                        })
                                     }),
                             )
                             .when(network.can_extend_ports_in_copy() && self.copy_task.is_none(), |panel| {
@@ -2001,6 +2043,12 @@ impl GraphiteDocumentItem {
                         ..
                     } => "Added export in",
                     GraphiteCopy::ConnectNetworkExport { .. } => "Connected export in",
+                    GraphiteCopy::SetPrimaryImportExposure { exposed: true, .. } => {
+                        "Exposed primary import in"
+                    }
+                    GraphiteCopy::SetPrimaryImportExposure { exposed: false, .. } => {
+                        "Hidden primary import in"
+                    }
                     GraphiteCopy::EditNetworkPort {
                         change:
                             NetworkPortChange::Remove {
@@ -2231,6 +2279,15 @@ impl GraphiteDocumentItem {
                                         &network,
                                         &source,
                                         export_index,
+                                        ARCHIVE_BUDGET,
+                                    )
+                                    .await?,
+                            ),
+                            GraphiteCopy::SetPrimaryImportExposure { network, exposed } => Some(
+                                archive
+                                    .set_primary_network_import_exposed_in_copy(
+                                        &network,
+                                        exposed,
                                         ARCHIVE_BUDGET,
                                     )
                                     .await?,
@@ -3476,6 +3533,96 @@ mod tests {
         assert_eq!(network.import_count, 2);
         assert_eq!(network.export_count, 2);
         assert_eq!(contents.history_len(), original_history + added_history);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_029_2_workspace_hides_and_reexposes_the_primary_import(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/primary-import.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        for (exposed, destination, added_history) in [
+            (false, "/project/hidden-primary-import.gdd", 2),
+            (true, "/project/exposed-primary-import.gdd", 3),
+        ] {
+            choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-1");
+            click(window, "GRAPHITE-GDD-ENTER-NETWORK");
+            paint(window);
+            let network_id = current.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected scoped graph");
+                };
+                let network = form.active_network().expect("original scoped network");
+                assert_eq!(network.primary_import_exposed(), Some(!exposed));
+                network.id
+            });
+            click(window, "GRAPHITE-GDD-PRIMARY-IMPORT-EXPOSURE");
+            window.simulate_new_path_selection(|_| None);
+            window.run_until_parked();
+            assert!(!current.read_with(window, |item, cx| item.is_dirty(cx)));
+
+            paint(window);
+            click(window, "GRAPHITE-GDD-PRIMARY-IMPORT-EXPOSURE");
+            let path = PathBuf::from(destination);
+            window.simulate_new_path_selection(|_| Some(path.clone()));
+            window.run_until_parked();
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![path]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("reopen the edited folder");
+            assert_ne!(reopened, current);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected native Graphite folder");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let graph = contents
+                .graph_inspection()
+                .await
+                .expect("reopened nested network");
+            let network = graph
+                .networks
+                .iter()
+                .find(|network| network.id == network_id)
+                .expect("same nested network identity");
+            assert_eq!(network.primary_import_exposed(), Some(exposed));
+            assert_eq!(network.import_name(0), Some("First numeric input"));
+            assert_eq!(network.import_name(1), Some("Second numeric input"));
+            assert_eq!(network.import_count, 2);
+            assert_eq!(network.export_count, 2);
+            assert_eq!(contents.history_len(), original_history + added_history);
+            current = reopened;
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

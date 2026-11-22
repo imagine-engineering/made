@@ -152,6 +152,8 @@ pub enum GddArchiveError {
     UnsupportedGraphPortRename,
     #[error("Enter a different Graphite port name.")]
     UnchangedGraphPortName,
+    #[error("Select a literal primary import in a standalone nested Graphite network.")]
+    UnsupportedGraphPrimaryImportExposure,
     #[error("Select an ordinary numeric output in the same Graphite network and an empty export.")]
     UnsupportedGraphExportConnection,
     #[error("Graphite could not resolve the selected export type. {0}")]
@@ -323,6 +325,7 @@ pub struct GddGraphNetwork {
     snapshot: Arc<()>,
     path: Vec<NodeId>,
     can_extend_ports: bool,
+    primary_import_exposed: Option<bool>,
     empty_exports: Vec<usize>,
 }
 
@@ -343,6 +346,10 @@ impl GddGraphNetwork {
 
     pub fn can_extend_ports_in_copy(&self) -> bool {
         self.can_extend_ports
+    }
+
+    pub fn primary_import_exposed(&self) -> Option<bool> {
+        self.primary_import_exposed
     }
 
     pub fn empty_exports(&self) -> &[usize] {
@@ -887,6 +894,15 @@ impl InspectedGddV1 {
                                 metadata.persistent_metadata.reference.is_none()
                             })
                     }),
+                    primary_import_exposed: path
+                        .split_last()
+                        .and_then(|(node_id, parent_path)| {
+                            interface.document_node(node_id, parent_path)
+                        })
+                        .and_then(|node| match node.inputs.first() {
+                            Some(NodeInput::Value { exposed, .. }) => Some(*exposed),
+                            _ => None,
+                        }),
                     empty_exports: interface
                         .nested_network(path)
                         .ok_or(GddArchiveError::MissingGraphNetwork)?
@@ -1315,6 +1331,94 @@ impl InspectedGddV1 {
                 .any(|(current, original)| {
                     current.input != original.input || current.attributes != original.attributes
                 })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn set_primary_network_import_exposed_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        exposed: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        let unsupported = || GddArchiveError::UnsupportedGraphPrimaryImportExposure;
+        if !network.can_extend_ports_in_copy() {
+            return Err(unsupported());
+        }
+        let path = &network.path;
+        let (&owner_id, parent_path) = path.split_last().ok_or_else(unsupported)?;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let primary = InputConnector::primary_input(owner_id);
+        let mut input = interface
+            .input_from_connector(&primary, parent_path)
+            .cloned()
+            .ok_or_else(unsupported)?;
+        let NodeInput::Value {
+            exposed: current, ..
+        } = &mut input
+        else {
+            return Err(unsupported());
+        };
+        if *current == exposed {
+            return Err(GddArchiveError::UnchangedGraphInputExposure);
+        }
+        *current = exposed;
+        let affected = interface
+            .outward_wires(path)
+            .and_then(|wires| wires.get(&OutputConnector::Import(0)))
+            .cloned()
+            .ok_or_else(unsupported)?;
+        let mut consumers = Vec::with_capacity(affected.len());
+        for connector in affected {
+            let InputConnector::Node {
+                node_id,
+                input_index,
+            } = connector
+            else {
+                return Err(unsupported());
+            };
+            if interface.is_layer(&node_id, path) || interface.is_chain(&node_id, path) {
+                return Err(unsupported());
+            }
+            consumers.push((node_id, input_index, connector));
+        }
+        consumers.sort_unstable_by_key(|&(node, input, _)| (node, input));
+        interface.set_input(&primary, input.clone(), parent_path);
+        let mut edits = Vec::with_capacity(consumers.len() + 1);
+        edits.push(EditorDelta::Graph(RuntimeDelta::SetInput {
+            network_path: parent_path.to_vec(),
+            node_id: owner_id,
+            input_index: 0,
+            input: input.clone(),
+        }));
+        let mut detached = Vec::with_capacity(consumers.len());
+        // The pinned exposure command detaches old inner consumers in both directions.
+        for (node_id, input_index, connector) in consumers {
+            interface.disconnect_input(&connector, path);
+            let fallback = interface
+                .input_from_connector(&connector, path)
+                .filter(|input| matches!(input, NodeInput::Value { exposed: true, .. }))
+                .cloned()
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            edits.push(EditorDelta::Graph(RuntimeDelta::SetInput {
+                network_path: path.clone(),
+                node_id,
+                input_index,
+                input: fallback.clone(),
+            }));
+            detached.push((connector, fallback));
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.input_from_connector(&primary, parent_path) != Some(&input)
+            || detached.iter().any(|(connector, fallback)| {
+                actual.input_from_connector(connector, path) != Some(fallback)
+            })
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -4880,6 +4984,152 @@ mod tests {
                     .value_equal(copy.document.registry())
             );
             assert_eq!(exports.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_029_1_toggles_primary_import_exposure_without_duplicating_its_value() {
+        use graphite_graph_craft::concrete;
+
+        futures::executor::block_on(async {
+            let (original, owner_id) = network_import_fixture().await;
+            let graph = original.graph_inspection().await.expect("source networks");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected the enclosing nested interface");
+            };
+            assert_eq!(root.primary_import_exposed(), None);
+            assert_eq!(nested.primary_import_exposed(), Some(true));
+            assert!(matches!(
+                original
+                    .set_primary_network_import_exposed_in_copy(root, true, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphPrimaryImportExposure)
+            ));
+            assert!(matches!(
+                original
+                    .set_primary_network_import_exposed_in_copy(nested, true, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInputExposure)
+            ));
+            let hidden = original
+                .set_primary_network_import_exposed_in_copy(nested, false, budget())
+                .await
+                .expect("hide the nested primary port");
+            assert!(matches!(
+                hidden
+                    .set_primary_network_import_exposed_in_copy(nested, true, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let hidden_graph = hidden
+                .graph_inspection()
+                .await
+                .expect("hidden port in saved graph");
+            let current = hidden_graph
+                .networks
+                .iter()
+                .find(|network| network.id == nested.id)
+                .expect("same nested network");
+            assert_eq!(current.primary_import_exposed(), Some(false));
+            assert_eq!(current.import_count, nested.import_count);
+            assert_eq!(current.export_count, nested.export_count);
+            let hidden_interface = hidden
+                .runtime_graph()
+                .await
+                .expect("saved interface")
+                .into_interface()
+                .expect("pinned source interface");
+            let holder = InputConnector::primary_input(NodeId(24));
+            assert_eq!(
+                hidden_interface.input_from_connector(&holder, &[]),
+                Some(&NodeInput::value(TaggedValue::Number(-2.), false))
+            );
+            let disconnected = InputConnector::primary_input(NodeId(7));
+            let saved_fallback =
+                hidden_interface.input_from_connector(&disconnected, &[NodeId(24)]);
+            let mut source = original
+                .runtime_graph()
+                .await
+                .expect("original interface")
+                .into_interface()
+                .expect("pinned source interface");
+            source.set_input(
+                &holder,
+                NodeInput::value(TaggedValue::Number(-2.), false),
+                &[],
+            );
+            source.disconnect_input(&disconnected, &[NodeId(24)]);
+            assert!(matches!(
+                saved_fallback,
+                Some(NodeInput::Value { exposed: true, .. })
+            ));
+            assert_eq!(
+                saved_fallback,
+                source.input_from_connector(&disconnected, &[NodeId(24)])
+            );
+            for node_id in [NodeId(9), NodeId(11)] {
+                assert_eq!(
+                    hidden_interface.input_from_connector(
+                        &InputConnector::primary_input(node_id),
+                        &[NodeId(24)]
+                    ),
+                    Some(&NodeInput::import(concrete!(f64), 1))
+                );
+            }
+            let [first, second] = hidden.document.registry().node_instances[&owner_id].inputs()
+            else {
+                panic!("exactly two existing stored imports");
+            };
+            let [source_first, source_second] =
+                original.document.registry().node_instances[&owner_id].inputs()
+            else {
+                panic!("exactly two original imports");
+            };
+            assert_eq!(first.attributes, source_first.attributes);
+            assert_eq!(second, source_second);
+            assert_eq!(
+                hidden.document.registry().networks,
+                original.document.registry().networks
+            );
+            assert_eq!(hidden.history_len(), original.history_len() + 2);
+            let undo = hidden
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(
+                undo.document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(
+                redo.document
+                    .registry()
+                    .value_equal(hidden.document.registry())
+            );
+
+            let shown = hidden
+                .set_primary_network_import_exposed_in_copy(current, true, budget())
+                .await
+                .expect("expose the existing value again");
+            let interface = shown
+                .runtime_graph()
+                .await
+                .expect("saved exposure")
+                .into_interface()
+                .expect("pinned interface");
+            assert_eq!(
+                interface.input_from_connector(&holder, &[]),
+                Some(&NodeInput::value(TaggedValue::Number(-2.), true))
+            );
+            assert_eq!(
+                interface.input_from_connector(&disconnected, &[NodeId(24)]),
+                saved_fallback
+            );
+            assert_eq!(shown.history_len(), hidden.history_len() + 1);
         });
     }
 
