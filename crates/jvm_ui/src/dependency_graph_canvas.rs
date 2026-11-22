@@ -732,9 +732,13 @@ impl CanvasState {
         self.hovered_edge = None;
         self.box_selection = None;
         self.end_pan();
+        self.fit_to_canvas();
+        true
+    }
+
+    pub(crate) fn fit_to_canvas(&mut self) {
         let available = *self.canvas_size.lock().expect("canvas size");
         self.fit(available);
-        true
     }
 
     /// Zooms by `factor` around a canvas-relative anchor point.

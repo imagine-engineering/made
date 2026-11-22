@@ -445,8 +445,7 @@ impl DependencyDiagramItem {
     /// Fits the graph bounds into the canvas' last painted size.
     pub fn fit_canvas(&mut self, cx: &mut Context<Self>) {
         self.canvas.update(cx, |canvas, cx| {
-            let size = *canvas.canvas_size.lock().expect("canvas size");
-            canvas.fit(size);
+            canvas.fit_to_canvas();
             cx.notify();
         });
     }
@@ -1528,26 +1527,39 @@ impl DependencyDiagramPopup {
     pub fn target(&self) -> &DependencyDiagramTarget {
         &self.target
     }
+
+    fn fit_canvas(&self, cx: &mut Context<Self>) {
+        self.canvas.update(cx, |canvas, cx| {
+            canvas.fit_to_canvas();
+            cx.notify();
+        });
+    }
 }
 
 impl Render for DependencyDiagramPopup {
     fn render(
         &mut self,
-        _window: &mut gpui::Window,
+        window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl gpui::IntoElement {
         use ui::prelude::*;
 
         let theme = cx.theme().colors().clone();
         let title = self.target.title();
+        let viewport = window.viewport_size();
+        let margin = window.rem_size();
+        let width = (viewport.width - margin * 2.).max(px(0.)).min(px(960.));
+        // The shared modal layer offsets its content by five rem from the top.
+        let height = (viewport.height - margin * 6.).max(px(0.)).min(px(640.));
         div()
             .key_context("DependencyDiagramPopup")
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(|_, _: &DismissDependencyDiagramPopup, _, cx| {
                 cx.emit(DismissEvent);
             }))
-            .w(gpui::Pixels::from(960.0))
-            .h(gpui::Pixels::from(640.0))
+            .on_action(cx.listener(|popup, _: &FitDependencyDiagram, _, cx| popup.fit_canvas(cx)))
+            .w(width)
+            .h(height)
             .flex()
             .flex_col()
             .bg(theme.background)
@@ -1556,13 +1568,22 @@ impl Render for DependencyDiagramPopup {
             .rounded_md()
             .overflow_hidden()
             .child(
-                div()
+                h_flex()
+                    .gap_1()
                     .px_2()
                     .py_1()
                     .text_size(px(13.0))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.text)
-                    .child(title),
+                    .child(div().flex_1().min_w_0().truncate().child(title))
+                    .child(
+                        ui::IconButton::new("dependency-popup-fit", ui::IconName::Maximize)
+                            .shape(ui::IconButtonShape::Square)
+                            .tab_index(0_isize)
+                            .aria_label("Fit dependency diagram")
+                            .tooltip(ui::Tooltip::text("Fit diagram"))
+                            .on_click(cx.listener(|popup, _, _, cx| popup.fit_canvas(cx))),
+                    ),
             )
             .child(self.canvas.clone())
     }
@@ -1637,6 +1658,67 @@ mod tests {
         theme_settings::init(LoadThemes::JustBase, cx);
         editor::init(cx);
         crate::init(cx);
+    }
+
+    #[gpui::test]
+    async fn dependency_diagram_popup_fits_a_narrow_workspace(cx: &mut TestAppContext) {
+        cx.update(init);
+        let fs = project::FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/groovy-diagram-popup",
+            serde_json::json!({"pom.xml": "<project/>"}),
+        )
+        .await;
+        let project = project::Project::test(fs, ["/groovy-diagram-popup".as_ref()], cx).await;
+        let window = cx.open_window(gpui::size(gpui::px(480.), gpui::px(360.)), |window, cx| {
+            workspace::MultiWorkspace::test_new(project, window, cx)
+        });
+        let container = window.root(cx).expect("mounted workspace");
+        let cx = &mut gpui::VisualTestContext::from_window(*window, cx);
+        let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.toggle_modal(window, cx, |_, cx| DependencyDiagramPopup {
+                canvas: cx.new(|_| CanvasState::new(fixture_graph())),
+                target: DependencyDiagramTarget {
+                    module_label: "app".into(),
+                    provider: DependencyDiagramProvider::Maven,
+                    configuration: None,
+                },
+                focus_handle: cx.focus_handle(),
+                _panel_subscription: None,
+            });
+        });
+        cx.run_until_parked();
+        let canvas = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let popup = workspace
+                .read(cx)
+                .active_modal::<DependencyDiagramPopup>(cx)
+                .expect("diagram popup");
+            let canvas = popup.read(cx).canvas().clone();
+            let canvas_state = canvas.read(cx);
+            let origin = *canvas_state.canvas_origin.lock().expect("painted origin");
+            let size = *canvas_state.canvas_size.lock().expect("painted size");
+            let viewport = window.viewport_size();
+            assert!(size.width > 0. && size.height > 0.);
+            assert!(origin.x >= 0. && origin.x + size.width <= f32::from(viewport.width));
+            assert!(origin.y >= 0. && origin.y + size.height <= f32::from(viewport.height));
+            canvas
+        });
+        canvas.update(cx, |canvas, cx| {
+            canvas.viewport.scale = 8.;
+            cx.notify();
+        });
+        cx.dispatch_action(FitDependencyDiagram);
+        canvas.read_with(cx, |canvas, _| assert!(canvas.viewport.scale < 8.));
+        cx.simulate_keystrokes("escape");
+        workspace.read_with(cx, |workspace, cx| {
+            assert!(
+                workspace
+                    .active_modal::<DependencyDiagramPopup>(cx)
+                    .is_none()
+            );
+        });
     }
 
     #[gpui::test]
