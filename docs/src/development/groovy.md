@@ -61,6 +61,10 @@ JetBrains' official `kotlin-lsp` by default and
 download requires network access unless it is already cached. No server binary
 is bundled or certified for release by this development candidate.
 
+The pinned macOS ARM64 Kotlin LSP `263.4702.0` candidate reports an expired
+EAP build and exits at startup. The language-server status points to the
+installed-binary override or deliberate alternate-server selection.
+
 To choose the alternate Kotlin server, use the Settings Editor or add this to
 your project or user settings:
 
@@ -247,23 +251,49 @@ explicit. **Cancel graph collection** cancels only that operation. Default
 library summaries do not establish directness; separately collected graphs
 retain the provider's component or occurrence identities and available edges.
 
-Graph search and fact filters inspect admitted data without resolving it
-again. Maven's scope filter preserves reported scopes; it does not reinterpret
-Gradle configurations. **Neighbours** and **Shortest root paths** inspect the
-selected current dependency, including equal shortest paths and explicit
-coverage gaps. These views do not prove source usages or declaration origins.
-**Show diagram** renders a bounded diagram from the same current facts. Image
-interaction, full diagram exports and reference window modes remain gaps.
-Stale data, trust revocation and changed provider ownership disable actions or
-remove their derived presentation.
+Graph search and fact filters read admitted data without resolving it again.
+**Tree groups** switches the fact list between grouped and flat rows. Maven's
+scope filter uses the reported edge scopes. Gradle diagram scopes come from
+resolvable configurations reported by the provider.
 
-For an admitted current local task, phase or goal, **Run selected offline
-operation** uses the existing Tasks and terminal path. **Add selected
-operation** and **Run ordered offline operations** compose bounded operations
-for the same current module. These controls do not provide named run
-configurations, complete arbitrary-argument handling, before-launch hooks or
-remote execution parity. Selected test results still belong to the Tests
-view, and supported debugging uses the Debug panel.
+### Dependency diagram and analyzer {#dependency-diagram-and-analyzer}
+
+Open **Show Dependency Diagram** from the module or configuration menu. Use
+the diagram toolbar to fit, zoom, change scope, search for and reveal a
+dependency, or open the Structure overview. Drag blank space to pan. Use
+Command-click or Control-click to toggle nodes in the selection. Shift-drag
+from blank space to extend the selection with a rectangle.
+
+| Action                                                               | Where to find it                                                                                                                                                                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open, preview, or analyze dependencies                               | The module or configuration menu offers **Show Dependency Diagram**, **Show Dependency Diagram Popup**, and **Analyze Dependencies**. Close the tab with the editor's close action. Use Escape to dismiss the popup. |
+| Inspect neighbours or shortest root paths                            | Use the diagram toolbar or dependency menu. The fact tree also offers both actions when a dependency row is selected.                                                                                                |
+| Inspect all root paths or conflict origins                           | Use **More inspections** in the dependency menu. **Conflict origins** appears when the current provider data records mediation for that dependency. A bounded path result reports truncation.                        |
+| Inspect usages                                                       | **All usages** in the diagram opens the analyzer on the same dependency and scope. **Usages in the tree** shows reverse relationships in the Dependencies panel.                                                     |
+| Pin a dependency, trace paths between dependencies, or compare a set | Use **Compare** in the dependency menu. **Clear inspection** removes the active result independently of the pin and set.                                                                                             |
+| Copy source or export an image                                       | **Copy Diagram Source** copies Mermaid source. **Export Image** copies an SVG of the canvas to the clipboard.                                                                                                        |
+
+Open the diagram context menu with {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu}.
+In the analyzer and Dependencies tree, use {#kb groovy_dependencies_panel::ShowDependencyRowMenu}
+on the selected row. The analyzer supports searchable tree and flat lists,
+scope and conflict filters, group IDs, and a Usages pane. **Show in Dependency
+Diagram** reveals the selected occurrence in the diagram. Declaration navigation
+requires a current provider-reported location. Stale data, trust revocation,
+and changed provider ownership invalidate the derived presentation.
+
+### Ordered offline operations {#ordered-offline-operations}
+
+For a current local task, phase or goal, **Run selected offline operation**
+uses the existing Tasks and terminal path. On an eligible operation, use
+**Add to Queue**. Open **Ordered operations** in Dependencies, or use the
+ordered-operations control in the diagram or analyzer toolbar. Expand the
+section to review the order, remove the last operation, clear the queue, or
+run offline. Saved run configurations appear in the queue row's context menu
+when available. Cancel a running queue from its Task terminal.
+
+Complete arbitrary-argument handling, before-launch hooks, and remote queue
+execution remain open. Selected test results appear in the Tests view.
+Supported debugging uses the Debug panel.
 
 The complete required scope and remaining gaps are in the
 [tool-window parity inventory](./groovy-tool-window-parity.md#capability-matrix).
