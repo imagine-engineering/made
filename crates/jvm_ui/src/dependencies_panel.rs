@@ -1,3 +1,4 @@
+use anyhow::Context as _;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -834,7 +835,7 @@ impl GraphSelection {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GraphInspectionMode {
+pub(crate) enum GraphInspectionMode {
     Neighbours,
     ShortestRootPaths,
     ConflictOrigins,
@@ -845,7 +846,7 @@ enum GraphInspectionMode {
 }
 
 impl GraphInspectionMode {
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Neighbours => "Selected dependency neighbours",
             Self::ShortestRootPaths => "Shortest root paths",
@@ -963,22 +964,19 @@ fn dependency_canvas_for_selection(
                 };
                 // Maven scope filtering keeps the existing fact-filter
                 // semantics: edges outside the chosen scope are not admitted.
-                let (admitted, chosen_scope) = match scope {
+                let chosen_scope = match scope {
                     Some(DependencyDiagramScope::MavenScope(label)) => {
-                        let chosen = maven_graph_scope_from_label(label);
-                        let mut filtered = (**graph).clone();
-                        filtered.edges.retain(|edge| chosen.matches(&edge.scope));
-                        (Some(filtered), chosen)
+                        maven_graph_scope_from_label(label)
                     }
                     Some(_) => continue,
-                    None => (None, MavenGraphScope::default()),
+                    None => MavenGraphScope::default(),
                 };
-                let admitted_graph: &project::jvm_project::MavenDependencyGraph =
-                    admitted.as_ref().unwrap_or(graph);
                 let mut selected = BTreeSet::new();
                 selected.insert(node.to_owned());
                 return Some(DependencyDiagramDerivation {
-                    canvas: canvas_graph_from_maven(admitted_graph),
+                    canvas: canvas_graph_from_maven(graph, |edge| {
+                        chosen_scope.matches(&edge.scope)
+                    }),
                     target: DependencyDiagramTarget {
                         module_label: dependency_module_label(&module.module_root),
                         provider: DependencyDiagramProvider::Maven,
@@ -1444,12 +1442,12 @@ fn graph_component_row_id(id: LanguageToolNodeId) -> LanguageToolNodeId {
     LanguageToolNodeId(format!("{}:occurrence:0", id.0))
 }
 
-fn graph_inspection_edges<'a>(
+fn graph_inspection_edges_bounded<'a>(
     root: &'a str,
     selected: &'a str,
     edges: &[(&'a str, Option<&'a str>)],
     mode: GraphInspectionMode,
-) -> (Vec<usize>, Option<usize>) {
+) -> (Vec<usize>, Option<usize>, bool) {
     if matches!(
         mode,
         GraphInspectionMode::AllRootPaths | GraphInspectionMode::PathsBetween
@@ -1482,10 +1480,10 @@ fn graph_inspection_edges<'a>(
                 if *budget == 0 || paths.len() >= MAX_PATHS {
                     return;
                 }
+                *budget -= 1;
                 if on_stack.contains(next) {
                     continue;
                 }
-                *budget -= 1;
                 if *next == selected {
                     path.push((node, *next));
                     paths.push(path.clone());
@@ -1522,7 +1520,11 @@ fn graph_inspection_edges<'a>(
                 hops.contains(&(*from, *target)).then_some(index)
             })
             .collect::<Vec<_>>();
-        return (indices, Some(paths.len()));
+        return (
+            indices,
+            Some(paths.len()),
+            budget == 0 || paths.len() == MAX_PATHS,
+        );
     }
     if mode == GraphInspectionMode::AllUsages {
         // Reverse reachability over admitted facts: every edge inside the
@@ -1556,7 +1558,7 @@ fn graph_inspection_edges<'a>(
             }
         }
         let user_count = reachable.len() - 1;
-        return (indices, Some(user_count));
+        return (indices, Some(user_count), false);
     }
     if mode == GraphInspectionMode::ConflictOrigins {
         // Conflict origins report only the mediation facts that reached the
@@ -1568,6 +1570,7 @@ fn graph_inspection_edges<'a>(
                 .filter_map(|(index, (_, target))| (*target == Some(selected)).then_some(index))
                 .collect(),
             None,
+            false,
         );
     }
     if mode == GraphInspectionMode::Neighbours {
@@ -1580,6 +1583,7 @@ fn graph_inspection_edges<'a>(
                 })
                 .collect(),
             None,
+            false,
         );
     }
     let distances = |start: &'a str, reverse: bool| {
@@ -1623,7 +1627,18 @@ fn graph_inspection_edges<'a>(
             (Some(length) == shortest).then_some(index)
         })
         .collect();
-    (retained, shortest)
+    (retained, shortest, false)
+}
+
+#[cfg(test)]
+fn graph_inspection_edges<'a>(
+    root: &'a str,
+    selected: &'a str,
+    edges: &[(&'a str, Option<&'a str>)],
+    mode: GraphInspectionMode,
+) -> (Vec<usize>, Option<usize>) {
+    let (edges, metric, _) = graph_inspection_edges_bounded(root, selected, edges, mode);
+    (edges, metric)
 }
 
 fn gradle_inspection_relations(
@@ -1950,14 +1965,42 @@ fn build_selection_set_row(
     (row.id.clone(), row)
 }
 
+pub(crate) struct DiagramInspection {
+    pub edges: Vec<usize>,
+    pub status: String,
+}
+
+struct GraphInspectionProjection {
+    id: LanguageToolNodeId,
+    row: LanguageToolNode,
+    overlay: DiagramInspection,
+}
+
 fn graph_inspection_row(
     snapshot: &JdtlsProjectSnapshot,
     view: BuildToolView,
     inspection: &GraphInspection,
 ) -> Option<(LanguageToolNodeId, LanguageToolNode)> {
+    let projection = graph_inspection_projection(snapshot, view, inspection)?;
+    Some((projection.id, projection.row))
+}
+
+fn graph_inspection_projection(
+    snapshot: &JdtlsProjectSnapshot,
+    view: BuildToolView,
+    inspection: &GraphInspection,
+) -> Option<GraphInspectionProjection> {
     use project::jvm_project::GradleDependencySelector;
     if inspection.mode == GraphInspectionMode::SelectionSetRelations {
-        return graph_selection_set_row(snapshot, view, inspection);
+        let (id, row) = graph_selection_set_row(snapshot, view, inspection)?;
+        return Some(GraphInspectionProjection {
+            id,
+            row,
+            overlay: DiagramInspection {
+                edges: Vec::new(),
+                status: String::new(),
+            },
+        });
     }
     for module in &snapshot.projects {
         let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
@@ -2148,8 +2191,8 @@ fn graph_inspection_row(
             }
             _ => continue,
         };
-        let (indices, distance) =
-            graph_inspection_edges(root, &inspection.node, &relations, inspection.mode);
+        let (indices, distance, truncated) =
+            graph_inspection_edges_bounded(root, &inspection.node, &relations, inspection.mode);
         let mut nodes = HashSet::from([inspection.node.as_str()]);
         if inspection.mode == GraphInspectionMode::ShortestRootPaths
             || inspection.mode == GraphInspectionMode::PathsBetween
@@ -2157,7 +2200,7 @@ fn graph_inspection_row(
             nodes.insert(root);
         }
         let mut rows = Vec::new();
-        for index in indices {
+        for &index in &indices {
             if let Some((from, target)) = relations.get(index) {
                 nodes.insert(*from);
                 if let Some(target) = target {
@@ -2225,9 +2268,14 @@ fn graph_inspection_row(
             (GraphInspectionMode::ShortestRootPaths, Some(distance)) => format!("Shortest distance {distance}; all equal-shortest paths retained without recursive expansion"),
             (GraphInspectionMode::ShortestRootPaths, None) => "No root path in admitted facts; incomplete coverage cannot prove absence; repair provider/cache settings and recollect".into(),
         };
-        return Some((
-            graph_id,
-            graph_fact_row(
+        let path_status = if truncated {
+            format!("{path_status}. Enumeration reached its limit and may omit additional paths.")
+        } else {
+            path_status
+        };
+        return Some(GraphInspectionProjection {
+            id: graph_id,
+            row: graph_fact_row(
                 graph_fact_id(&module_id, "inspection", &[&inspection.node]),
                 inspection.mode.label().into(),
                 format!(
@@ -2254,7 +2302,11 @@ fn graph_inspection_row(
                     ),
                 ],
             ),
-        ));
+            overlay: DiagramInspection {
+                edges: indices,
+                status: path_status,
+            },
+        });
     }
     None
 }
@@ -3104,6 +3156,34 @@ impl DependenciesPanel {
             }
             inspection.anchor = Some(pin.node);
         }
+        self.display_graph_inspection(inspection, cx);
+    }
+
+    pub(crate) fn inspect_diagram_graph(
+        &mut self,
+        selection: &GraphSelection,
+        node: &str,
+        mode: GraphInspectionMode,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<DiagramInspection> {
+        let project = self.project.read(cx);
+        let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)
+            .filter(|snapshot| selection.matches(snapshot, true))
+            .context("The diagram no longer has current dependency facts. Refresh and collect the graph before inspecting.")?;
+        let inspection = GraphInspection {
+            selection: selection.clone(),
+            node: node.into(),
+            anchor: None,
+            set_members: Vec::new(),
+            mode,
+        };
+        let projection = graph_inspection_projection(snapshot, self.view, &inspection)
+            .context("The target has no current provider dependency facts to inspect.")?;
+        self.display_graph_inspection(inspection, cx);
+        Ok(projection.overlay)
+    }
+
+    fn display_graph_inspection(&mut self, inspection: GraphInspection, cx: &mut Context<Self>) {
         self.graph_notice = None;
         self.graph_inspection = Some(inspection);
         self.rebuild(cx);
@@ -3282,7 +3362,7 @@ impl DependenciesPanel {
         cx.notify();
     }
 
-    fn clear_graph_inspection(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn clear_graph_inspection(&mut self, cx: &mut Context<Self>) {
         self.graph_inspection = None;
         self.rebuild(cx);
     }
@@ -9214,13 +9294,17 @@ mod tests {
             branches.push(("root", Some(node.as_str()) as Option<&str>));
             branches.push((node.as_str(), Some("selected")));
         }
-        let (indices, count) = graph_inspection_edges(
+        let (indices, count, limited) = graph_inspection_edges_bounded(
             "root",
             "selected",
             &branches,
             GraphInspectionMode::AllRootPaths,
         );
         assert_eq!(count, Some(64), "the path cap keeps enumeration bounded");
+        assert!(
+            limited,
+            "bounded enumeration reports that it reached the limit"
+        );
         assert_eq!(indices.len(), 128, "each capped branch keeps its two hops");
         // The captured diamond has exactly two root paths to the winner.
         let (_, gradle) = captured_graphs();
@@ -14669,6 +14753,90 @@ mod tests {
                     workspace.items_of_type::<DependencyDiagramItem>(cx).next()
                 })
                 .expect("diagram tab item");
+            use crate::dependency_diagram_menu::{
+                DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
+            };
+            let (node, original_selection, viewport) = diagram_item.read_with(cx, |item, cx| {
+                let canvas = item.canvas().read(cx);
+                let root = canvas
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|node| node.kind == crate::dependency_graph_canvas::CanvasNodeKind::Root)
+                    .expect("provider root");
+                let node = canvas
+                    .graph
+                    .edges
+                    .iter()
+                    .find(|edge| {
+                        edge.from == root.id
+                            && edge.variant
+                                == crate::dependency_graph_canvas::CanvasEdgeVariant::Dependency
+                    })
+                    .expect("admitted direct dependency")
+                    .to
+                    .clone();
+                (node, canvas.selection.clone(), canvas.viewport.clone())
+            });
+            panel.update(cx, |panel, cx| {
+                panel.host.select_first();
+                assert!(panel.resolve_selected_graph(cx).is_none());
+            });
+            let target = DependencyDiagramContextTarget::Node(node.clone());
+            for (command, mode) in [
+                (
+                    DependencyDiagramMenuCommand::InspectNeighbours,
+                    GraphInspectionMode::Neighbours,
+                ),
+                (
+                    DependencyDiagramMenuCommand::InspectRootPaths,
+                    GraphInspectionMode::ShortestRootPaths,
+                ),
+                (
+                    DependencyDiagramMenuCommand::InspectAllRootPaths,
+                    GraphInspectionMode::AllRootPaths,
+                ),
+            ] {
+                diagram_item.update(cx, |item, cx| {
+                    item.inspect_canvas_target(command, &target, cx)
+                });
+                panel.read_with(cx, |panel, _| {
+                    let inspection = panel
+                        .graph_inspection
+                        .as_ref()
+                        .expect("shared panel inspection");
+                    assert_eq!(inspection.node, node);
+                    assert_eq!(inspection.mode, mode);
+                });
+                diagram_item.read_with(cx, |item, cx| {
+                    let canvas = item.canvas().read(cx);
+                    assert!(canvas.inspected.contains(&node));
+                    assert!(!canvas.inspected_edges.is_empty());
+                    assert_eq!(canvas.selection, original_selection);
+                    assert_eq!(canvas.viewport.offset, viewport.offset);
+                    assert_eq!(canvas.viewport.scale, viewport.scale);
+                });
+            }
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::ClearInspection,
+                    &DependencyDiagramContextTarget::Canvas,
+                    cx,
+                );
+            });
+            diagram_item.read_with(cx, |item, cx| {
+                assert!(item.canvas().read(cx).inspected_edges.is_empty());
+            });
+            panel.update(cx, |panel, cx| {
+                assert!(panel.graph_inspection.is_none());
+                panel.host.select(inspection_target.clone());
+                cx.notify();
+            });
+            assert_eq!(
+                commands.load(Ordering::SeqCst),
+                3,
+                "canvas inspection reads admitted facts"
+            );
             let (scope_options, current_scope) = cx.update(|_, cx| {
                 (
                     diagram_item.read(cx).scope_options().to_vec(),

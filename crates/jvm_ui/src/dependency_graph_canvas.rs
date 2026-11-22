@@ -52,6 +52,7 @@ pub enum CanvasEdgeVariant {
 #[derive(Clone, Debug)]
 pub struct CanvasEdge {
     pub id: String,
+    pub provider_index: usize,
     pub from: String,
     pub to: String,
     pub variant: CanvasEdgeVariant,
@@ -127,7 +128,7 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
 
     let mut edges = Vec::new();
     let mut unresolved_count = 0usize;
-    for edge in &graph.edges {
+    for (provider_index, edge) in graph.edges.iter().enumerate() {
         let requested_label = match &edge.requested {
             project::jvm_project::GradleDependencySelector::Module {
                 group,
@@ -169,6 +170,7 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
         };
         edges.push(CanvasEdge {
             id: format!("gradle-edge:{}:{}", edge.from, requested_label),
+            provider_index,
             from: edge.from.clone(),
             to: target,
             variant,
@@ -181,7 +183,10 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
 
 /// Adapts an admitted Maven dependency graph. Nodes are occurrences (the
 /// provider reports one node per placement), preserving repeated artifacts.
-pub fn canvas_graph_from_maven(graph: &MavenDependencyGraph) -> CanvasGraph {
+pub fn canvas_graph_from_maven(
+    graph: &MavenDependencyGraph,
+    include_edge: impl Fn(&project::jvm_project::MavenDependencyEdge) -> bool,
+) -> CanvasGraph {
     let mut components = HashMap::new();
     for component in &graph.components {
         let artifact = if component.classifier.is_empty() {
@@ -220,7 +225,10 @@ pub fn canvas_graph_from_maven(graph: &MavenDependencyGraph) -> CanvasGraph {
         root.kind = CanvasNodeKind::Root;
     }
     let mut edges = Vec::new();
-    for edge in &graph.edges {
+    for (provider_index, edge) in graph.edges.iter().enumerate() {
+        if !include_edge(edge) {
+            continue;
+        }
         let mut label = edge.scope.clone();
         if edge.optional {
             label.push_str("; optional");
@@ -239,6 +247,7 @@ pub fn canvas_graph_from_maven(graph: &MavenDependencyGraph) -> CanvasGraph {
                 "maven-edge:{}:{}:{}",
                 edge.from_node, edge.target_node, edge.position
             ),
+            provider_index,
             from: edge.from_node.clone(),
             to: edge.target_node.clone(),
             variant: if edge.omitted {
@@ -535,6 +544,7 @@ pub struct CanvasState {
     /// Node ids of the active inspection highlight (selected node, neighbours,
     /// active paths).
     pub inspected: Vec<String>,
+    pub inspected_edges: BTreeSet<usize>,
     pub hover: Option<String>,
     pub focus: Option<String>,
     /// Box selection in graph coordinates, if one is being drawn.
@@ -561,6 +571,7 @@ impl CanvasState {
             viewport: sim_runtime::graph::GraphViewport::default(),
             selection: BTreeSet::new(),
             inspected: Vec::new(),
+            inspected_edges: BTreeSet::new(),
             hover: None,
             focus: None,
             box_selection: None,
@@ -582,6 +593,7 @@ impl CanvasState {
         self.focus.take_if(|id| !contains(id));
         self.hover = None;
         self.inspected.clear();
+        self.inspected_edges.clear();
         self.box_selection = None;
         self.end_pan();
         self.graph = graph;
@@ -779,7 +791,9 @@ impl gpui::Render for CanvasState {
                     viewport.graph_to_screen(from),
                     viewport.graph_to_screen(to),
                     edge.variant,
-                    selection.contains(&edge.from) || selection.contains(&edge.to),
+                    self.inspected_edges.contains(&edge.provider_index)
+                        || (self.inspected.is_empty()
+                            && (selection.contains(&edge.from) || selection.contains(&edge.to))),
                 ))
             })
             .collect();
@@ -1410,7 +1424,7 @@ mod tests {
             }"#,
         )
         .expect("maven fixture");
-        let canvas = canvas_graph_from_maven(&graph);
+        let canvas = canvas_graph_from_maven(&graph, |_| true);
         assert_eq!(canvas.nodes.len(), 4, "one node per occurrence");
         let occurrences = canvas
             .nodes

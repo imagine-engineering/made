@@ -9,7 +9,8 @@ use std::sync::Mutex;
 
 use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
-    CopyDependencyDiagramSource, InspectGraphAllUsages, InspectGraphNeighbours,
+    CopyDependencyDiagramSource, GraphInspectionMode, InspectGraphAllRootPaths,
+    InspectGraphAllUsages, InspectGraphConflictOrigins, InspectGraphNeighbours,
     InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
 };
 use crate::dependency_diagram_item::{
@@ -24,7 +25,7 @@ pub enum DependencyDiagramContextTarget {
     /// Blank canvas: the menu operates on the view.
     Canvas,
     /// A secondary-click inside the multi-selection preserves the selection.
-    Selection,
+    Selection(String),
     /// A secondary-click on an unselected node targets that node.
     Node(String),
 }
@@ -53,6 +54,8 @@ pub struct DependencyDiagramMenuSnapshot {
 pub enum DependencyDiagramMenuCommand {
     InspectNeighbours,
     InspectRootPaths,
+    InspectAllRootPaths,
+    InspectConflictOrigins,
     PathsBetween,
     AllUsages,
     PinSelection,
@@ -69,6 +72,27 @@ pub enum DependencyDiagramMenuCommand {
     ToggleStructure,
 }
 
+impl DependencyDiagramMenuCommand {
+    pub(crate) fn inspection_mode(self) -> Option<GraphInspectionMode> {
+        match self {
+            Self::InspectNeighbours => Some(GraphInspectionMode::Neighbours),
+            Self::InspectRootPaths => Some(GraphInspectionMode::ShortestRootPaths),
+            Self::InspectAllRootPaths => Some(GraphInspectionMode::AllRootPaths),
+            Self::InspectConflictOrigins => Some(GraphInspectionMode::ConflictOrigins),
+            _ => None,
+        }
+    }
+}
+
+impl DependencyDiagramContextTarget {
+    pub(crate) fn node(&self) -> Option<&str> {
+        match self {
+            Self::Canvas => None,
+            Self::Node(node) | Self::Selection(node) => Some(node),
+        }
+    }
+}
+
 /// Stages the context target from a secondary click: an unselected node
 /// targets that node, a click inside the multi-selection preserves the
 /// selection, and a blank-canvas click acts on the view.
@@ -77,7 +101,9 @@ pub fn stage_dependency_diagram_target(
     selection: &std::collections::BTreeSet<String>,
 ) -> DependencyDiagramContextTarget {
     match hit_node {
-        Some(node) if selection.contains(node) => DependencyDiagramContextTarget::Selection,
+        Some(node) if selection.len() > 1 && selection.contains(node) => {
+            DependencyDiagramContextTarget::Selection(node.to_owned())
+        }
         Some(node) => DependencyDiagramContextTarget::Node(node.to_owned()),
         None => DependencyDiagramContextTarget::Canvas,
     }
@@ -91,12 +117,13 @@ pub fn dependency_diagram_menu_available(
     target: &DependencyDiagramContextTarget,
     snapshot: &DependencyDiagramMenuSnapshot,
 ) -> bool {
-    let node_or_selection = matches!(target, DependencyDiagramContextTarget::Node(_))
-        || matches!(target, DependencyDiagramContextTarget::Selection);
+    let node_or_selection = target.node().is_some();
     match command {
-        DependencyDiagramMenuCommand::InspectNeighbours => node_or_selection,
-        DependencyDiagramMenuCommand::InspectRootPaths => {
-            matches!(target, DependencyDiagramContextTarget::Node(_))
+        DependencyDiagramMenuCommand::InspectNeighbours
+        | DependencyDiagramMenuCommand::InspectRootPaths
+        | DependencyDiagramMenuCommand::InspectAllRootPaths
+        | DependencyDiagramMenuCommand::InspectConflictOrigins => {
+            node_or_selection && snapshot.has_source
         }
         DependencyDiagramMenuCommand::AllUsages => node_or_selection,
         DependencyDiagramMenuCommand::PathsBetween => {
@@ -125,7 +152,9 @@ pub fn dependency_diagram_menu_available(
 pub fn dependency_diagram_menu_label(command: DependencyDiagramMenuCommand) -> &'static str {
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours => "Inspect neighbours",
-        DependencyDiagramMenuCommand::InspectRootPaths => "Inspect root paths",
+        DependencyDiagramMenuCommand::InspectRootPaths => "Inspect shortest root paths",
+        DependencyDiagramMenuCommand::InspectAllRootPaths => "Inspect all root paths",
+        DependencyDiagramMenuCommand::InspectConflictOrigins => "Inspect conflict origins",
         DependencyDiagramMenuCommand::AllUsages => "All usages",
         DependencyDiagramMenuCommand::PathsBetween => "Inspect paths between",
         DependencyDiagramMenuCommand::PinSelection => "Pin dependency",
@@ -152,6 +181,8 @@ pub fn dependency_diagram_menu_groups(
     let inspection = [
         DependencyDiagramMenuCommand::InspectNeighbours,
         DependencyDiagramMenuCommand::InspectRootPaths,
+        DependencyDiagramMenuCommand::InspectAllRootPaths,
+        DependencyDiagramMenuCommand::InspectConflictOrigins,
         DependencyDiagramMenuCommand::PathsBetween,
         DependencyDiagramMenuCommand::AllUsages,
         DependencyDiagramMenuCommand::PinSelection,
@@ -193,6 +224,10 @@ pub fn dependency_diagram_menu_action(
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours => Box::new(InspectGraphNeighbours),
         DependencyDiagramMenuCommand::InspectRootPaths => Box::new(InspectGraphRootPaths),
+        DependencyDiagramMenuCommand::InspectAllRootPaths => Box::new(InspectGraphAllRootPaths),
+        DependencyDiagramMenuCommand::InspectConflictOrigins => {
+            Box::new(InspectGraphConflictOrigins)
+        }
         DependencyDiagramMenuCommand::AllUsages => Box::new(InspectGraphAllUsages),
         DependencyDiagramMenuCommand::PathsBetween => Box::new(InspectGraphPathsBetween),
         DependencyDiagramMenuCommand::PinSelection => Box::new(PinGraphSelection),
@@ -237,8 +272,9 @@ impl DependencyDiagramContextState {
 /// Builds the native context menu for the staged target: groups render with
 /// separators between them, every entry is availability-filtered, and a menu
 /// with no available commands is not built at all (wrong-target rejection).
-pub fn build_dependency_diagram_context_menu(
+pub(crate) fn build_dependency_diagram_context_menu(
     state: &DependencyDiagramContextState,
+    item: gpui::WeakEntity<crate::dependency_diagram_item::DependencyDiagramItem>,
     window: &mut gpui::Window,
     cx: &mut gpui::App,
 ) -> Option<gpui::Entity<ui::ContextMenu>> {
@@ -255,10 +291,24 @@ pub fn build_dependency_diagram_context_menu(
                 menu = menu.separator();
             }
             for command in group {
-                menu = menu.action(
-                    dependency_diagram_menu_label(*command),
-                    dependency_diagram_menu_action(*command),
-                );
+                let command = *command;
+                let label = dependency_diagram_menu_label(command);
+                let action = dependency_diagram_menu_action(command);
+                if command.inspection_mode().is_some()
+                    || command == DependencyDiagramMenuCommand::ClearInspection
+                {
+                    let target = invocation.target.clone();
+                    let item = item.clone();
+                    menu = menu.entry(label, Some(action), move |_, cx| {
+                        if let Some(item) = item.upgrade() {
+                            item.update(cx, |item, cx| {
+                                item.inspect_canvas_target(command, &target, cx);
+                            });
+                        }
+                    });
+                } else {
+                    menu = menu.action(label, action);
+                }
             }
         }
         menu
@@ -286,8 +336,11 @@ mod tests {
         );
         // A secondary-click inside the multi-selection preserves it.
         assert_eq!(
-            stage_dependency_diagram_target(Some("n1"), &selection_with("n1")),
-            DependencyDiagramContextTarget::Selection
+            stage_dependency_diagram_target(
+                Some("n1"),
+                &BTreeSet::from(["n1".into(), "n2".into()])
+            ),
+            DependencyDiagramContextTarget::Selection("n1".into())
         );
         // A blank-canvas click acts on the view.
         assert_eq!(
@@ -396,7 +449,7 @@ mod tests {
     fn analyzer_diagram_linkage_all_usages_targets_dependencies(cx: &mut gpui::TestAppContext) {
         let _ = cx;
         let node = DependencyDiagramContextTarget::Node("n1".into());
-        let selection = DependencyDiagramContextTarget::Selection;
+        let selection = DependencyDiagramContextTarget::Selection("n1".into());
         let canvas = DependencyDiagramContextTarget::Canvas;
         let snapshot = DependencyDiagramMenuSnapshot {
             selection_len: 1,
