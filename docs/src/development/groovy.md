@@ -330,6 +330,15 @@ section to review the order, remove the last operation, clear the queue, or
 run offline. Saved run configurations appear in the queue row's context menu
 when available. Cancel a running queue from its Task terminal.
 
+For Gradle, put invocation-wide options in `java.import.gradle.arguments`
+under `lsp.jdtls.settings`. For example, use
+`["--no-parallel", "--max-workers=2"]` to disable parallel project execution
+and limit concurrent workers. The setting also accepts `["--max-workers", "2"]`
+and literal `-Pname=value` project properties. Gradle uses the last of
+`--parallel` and `--no-parallel` if both appear. Set one positive worker
+count. Discovered Tasks remain offline. Use **Task options** for arguments
+declared by the selected task.
+
 **Saved configurations** lists project and user Tasks with their source
 locations. The selected row, quick-run button, and queue menu all target the
 same saved entry. When labels match, choose by source location. Removing a

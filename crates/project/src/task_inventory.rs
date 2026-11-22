@@ -8,6 +8,8 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "jvm-tools")]
+use anyhow::Context as _;
 use anyhow::Result;
 use collections::{HashMap, HashSet, VecDeque};
 use dap::DapRegistry;
@@ -407,17 +409,49 @@ fn apply_gradle_task_settings(
     arguments.extend(gradle_task_jvm_argument(preferences)?);
     if let Some(value) = jdtls_preference(preferences, "java.import.gradle.arguments") {
         let configured = value.as_array().ok_or_else(|| {
-            anyhow::anyhow!("Set java.import.gradle.arguments to an array of -Pname=value strings for selected Gradle Tasks")
+            anyhow::anyhow!(
+                "Set java.import.gradle.arguments to an array of strings for selected Gradle Tasks"
+            )
         })?;
         anyhow::ensure!(
             configured.len() <= 32,
             "Configure at most 32 Gradle arguments for selected Tasks"
         );
-        for value in configured {
-            let argument = value.as_str().ok_or_else(|| {
-                anyhow::anyhow!("Gradle Task arguments must be -Pname=value strings")
-            })?;
-            if argument == "--offline" {
+        let mut configured = configured.iter();
+        let mut worker_limit_set = false;
+        while let Some(value) = configured.next() {
+            let argument = value
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Gradle Task arguments must be strings"))?;
+            match argument {
+                "--offline" => continue,
+                "--parallel" | "--no-parallel" => {
+                    arguments.push(argument.to_owned());
+                    continue;
+                }
+                _ => {}
+            }
+            let worker_limit = if argument == "--max-workers" {
+                Some(configured.next().and_then(|value| value.as_str()).context(
+                    "Set --max-workers to a positive integer in java.import.gradle.arguments",
+                )?)
+            } else {
+                argument.strip_prefix("--max-workers=")
+            };
+            if let Some(worker_limit) = worker_limit {
+                anyhow::ensure!(
+                    !worker_limit_set,
+                    "Configure --max-workers only once in java.import.gradle.arguments"
+                );
+                let workers = worker_limit
+                    .parse::<i32>()
+                    .ok()
+                    .filter(|value| *value > 0)
+                    .context(
+                        "Set --max-workers to a positive integer in java.import.gradle.arguments",
+                    )?;
+                arguments.push(format!("--max-workers={workers}"));
+                worker_limit_set = true;
                 continue;
             }
             let valid_project_property = argument
@@ -433,7 +467,7 @@ fn apply_gradle_task_settings(
                 valid_project_property
                     && argument.len() <= 4096
                     && !argument.chars().any(char::is_control),
-                "Selected Gradle Tasks accept -Pname=value project properties and --offline in java.import.gradle.arguments"
+                "Selected Gradle Tasks accept -Pname=value, --offline, --parallel, --no-parallel and --max-workers in java.import.gradle.arguments"
             );
             arguments.push(argument.to_owned());
         }
@@ -2235,7 +2269,7 @@ mod tests {
             "java.import.gradle.home": "/host/Gradle $ZED_FILE $$ 8",
             "java.import.gradle.java.home": "/host/Gradle ${ZED_FILE} JDK",
             "java.import.gradle.user.home": "/host/gradle $ZED_FILE cache",
-            "java.import.gradle.arguments": ["--offline", "-Pflavor=dev $ZED_FILE", "-Pempty=", "-Pflavor=last value"],
+            "java.import.gradle.arguments": ["--offline", "-Pflavor=dev $ZED_FILE", "--parallel", "--max-workers", "2", "-Pempty=", "--no-parallel", "-Pflavor=last value"],
             "java.import.gradle.jvmArguments": ["-Xmx384m", "-Dprobe=space $ZED_FILE \"quote\" 'single' \\literal", "-Dempty="]
         });
         let mut wrapper_plan = plan.clone();
@@ -2287,12 +2321,15 @@ mod tests {
                 "/host/gradle $ZED_FILE cache",
                 r#"-Dorg.gradle.jvmargs="-Xmx384m" "-Dprobe=space $ZED_FILE "'"'"quote"'"'" 'single' \literal" "-Dempty=""#,
                 "-Pflavor=dev $ZED_FILE",
+                "--parallel",
+                "--max-workers=2",
                 "-Pempty=",
+                "--no-parallel",
                 "-Pflavor=last value",
                 ":verify",
             ]
         );
-        assert_eq!(task.resolved.literal_prefix_args, 9);
+        assert_eq!(task.resolved.literal_prefix_args, 12);
         assert_eq!(
             gradle_task_jvm_argument(&serde_json::json!({"java.import.gradle.jvmArguments": []}))
                 .expect("empty list is explicit")
@@ -2316,6 +2353,14 @@ mod tests {
             serde_json::json!([":otherTask"]),
             serde_json::json!(["-P=empty"]),
             serde_json::json!(["-Pbad=\n"]),
+            serde_json::json!(["--max-workers"]),
+            serde_json::json!(["--max-workers", "--parallel"]),
+            serde_json::json!(["--max-workers", 2]),
+            serde_json::json!(["--max-workers=0"]),
+            serde_json::json!(["--max-workers=2147483648"]),
+            serde_json::json!(["--max-workers=2", "--max-workers", "3"]),
+            serde_json::json!(["--no-parallel=true"]),
+            serde_json::json!(["--", ":otherTask"]),
             serde_json::json!("-Pname=value"),
             serde_json::json!(vec!["-Pname=value"; 33]),
         ] {

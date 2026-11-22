@@ -14368,10 +14368,19 @@ mod tests {
                 let events = events.lock().expect("events");
                 assert_eq!(events.len(), 1);
                 let task = events.first().expect("one shared Tasks invocation");
-                assert_eq!(task.args, expected.template.args);
                 assert_eq!(task.literal_prefix_args, task.args.len());
                 if provider == GraphFixtureProvider::Gradle {
-                    assert_eq!(task.args.get(1).map(String::as_str), Some("--"));
+                    assert_eq!(
+                        task.args.get(..5).expect("Gradle invocation options"),
+                        [
+                            "--offline",
+                            "--no-parallel",
+                            "--max-workers=3",
+                            "--parallel",
+                            "--"
+                        ]
+                    );
+                    assert_eq!(task.args.get(4..), expected.template.args.get(1..));
                     assert!(task.args.windows(3).any(|arguments| arguments
                         == [
                             ":application:verify",
@@ -14379,6 +14388,7 @@ mod tests {
                             "--probe"
                         ]));
                 } else {
+                    assert_eq!(task.args, expected.template.args);
                     assert_eq!(
                         task.args.get(3..10).expect("Maven arguments"),
                         [
@@ -14763,7 +14773,17 @@ mod tests {
     ) {
         use settings::SettingsStore;
         cx.update(|cx| {
-            let settings = SettingsStore::test(cx);
+            let mut settings = SettingsStore::test(cx);
+            if provider == GraphFixtureProvider::Gradle
+                && outcome == MavenGraphOutcome::OrderedOperationControls
+            {
+                settings
+                    .set_user_settings(
+                        r#"{"lsp":{"jdtls":{"settings":{"java.import.gradle.arguments":["--offline","--no-parallel","--max-workers=3","--parallel"]}}}}"#,
+                        cx,
+                    )
+                    .expect("host Gradle invocation options");
+            }
             cx.set_global(settings);
             trusted_worktrees::init(DbTrustedPaths::default(), cx);
             theme_settings::init(LoadThemes::JustBase, cx);
