@@ -87,3 +87,30 @@ Only rootUri and pomUri are replaced with stable synthetic test URIs; component,
 occurrence, edge and cut-cycle facts are unchanged. Decoder tests qualify the
 Rust boundary, not a new provider/native/remote/release journey. The original
 source-bound evidence remains in the immutable occurrence archive.
+
+## Mounted dependency diagram and analyzer
+
+Use a disposable copy of the cached Maven repository under
+`$fixture/maven-home/repository`. From the repository root, run
+`python3 crates/project/test_data/groovy_jvm_maven/prepare-diagram-fixture.py "$fixture"`.
+The generator adds five cached POMs and six empty fixture JARs. The Java module
+can import with its artifacts present even though one transitive descriptor is
+absent. Two branches request different versions of `shared`. Resolver retains
+both occurrences and mediates to the first version.
+
+Set `GROOVY_MAVEN_GRAPH_ROOT` to `$fixture/graph-project`,
+`GROOVY_MAVEN_GRAPH_SETTINGS` to `$fixture/settings.xml`, and set
+`GROOVY_JDTLS_LAUNCHER`, `GROOVY_LSP_JAVA_HOME`, and
+`GROOVY_MAVEN_MODEL_JAR` to the pinned JDTLS launcher, provider JDK, and
+verified Groovy provider bundle. Build the `tasks_ui` library tests offline and
+run the test binary in an environment that allows loopback and denies external
+network access.
+
+```sh
+cargo test --locked --offline -p tasks_ui --features jvm-workflow-test-support --lib --no-run
+<tasks_ui-test-binary> --ignored --exact --nocapture \
+  test_explorer::jvm_workflow::cached_maven_graph_reaches_mounted_dependency_analyzer
+```
+
+The mounted test exercises cached collection, diagram and analyzer navigation,
+and conflict and unresolved filters against the real provider response.

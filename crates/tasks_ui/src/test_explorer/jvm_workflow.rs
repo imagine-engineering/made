@@ -46,20 +46,21 @@ pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkf
 }
 
 #[cfg(all(test, unix))]
-#[gpui::test]
-#[ignore = "requires a disposable offline Gradle graph, pinned JDTLS and its Gradle delegate"]
-async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestAppContext) {
-    use gpui::InputEvent as _;
-    use jvm_ui::{
-        DependenciesPanel, ShowGradle,
-        dependency_analyzer_item::{DependencyAnalyzerItem, ShowInDependencyDiagram},
-        dependency_diagram_item::{DependencyDiagramItem, DependencyDiagramPopup},
-        dependency_graph_canvas::{CanvasEdgeVariant, MAX_CANVAS_EDGES, MAX_CANVAS_NODES},
-    };
+fn graph_fixture_path(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var_os(name).expect(name))
+        .canonicalize()
+        .expect(name)
+}
+
+#[cfg(all(test, unix))]
+async fn start_graph_jdtls(
+    root: &std::path::Path,
+    options: serde_json::Value,
+    bundles: &[std::path::PathBuf],
+    cx: &mut TestAppContext,
+) -> (Entity<Project>, WorktreeId, tempfile::TempDir) {
     use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher};
-    use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
     use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
-    use std::path::PathBuf;
 
     struct FixtureLogger;
     impl log::Log for FixtureLogger {
@@ -78,28 +79,9 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
     if log::set_logger(&FixtureLogger).is_ok() {
         log::set_max_level(log::LevelFilter::Warn);
     }
-    let input_path = |name| {
-        PathBuf::from(std::env::var_os(name).expect(name))
-            .canonicalize()
-            .expect(name)
-    };
-    let root = input_path("GROOVY_GRADLE_GRAPH_ROOT");
-    let launcher = input_path("GROOVY_JDTLS_LAUNCHER");
-    let delegate = input_path("GROOVY_GRADLE_MODEL_JAR");
-    let provider_java = input_path("GROOVY_LSP_JAVA_HOME");
-    let build_java = input_path("GROOVY_BUILD_JAVA_HOME");
-    let gradle_installation = input_path("GROOVY_GRADLE_HOME");
-    let gradle_user_home = input_path("GRADLE_USER_HOME");
-    let provider_data = tempfile::tempdir().expect("fresh Gradle provider state");
-    let options = serde_json::json!({
-        "autobuild": {"enabled": false},
-        "configuration": {"updateBuildConfiguration": "disabled"},
-        "import": {"maven": {"enabled": false}, "gradle": {
-            "enabled": true, "offline": {"enabled": true}, "wrapper": {"enabled": false},
-            "home": gradle_installation, "java": {"home": build_java},
-            "user": {"home": gradle_user_home}, "arguments": ["--offline"],
-        }},
-    });
+    let launcher = graph_fixture_path("GROOVY_JDTLS_LAUNCHER");
+    let provider_java = graph_fixture_path("GROOVY_LSP_JAVA_HOME");
+    let provider_data = tempfile::tempdir().expect("fresh JDTLS provider state");
     let settings = serde_json::json!({"lsp": {"jdtls": {
         "binary": {"path": launcher, "arguments": [
             format!("--java-executable={}/bin/java", provider_java.display()),
@@ -119,27 +101,17 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         editor::init(cx);
         jvm_ui::init(cx);
     });
-    let project = Project::test(
-        Arc::new(fs::RealFs::new(None, cx.executor())),
-        [root.as_path()],
-        cx,
-    )
-    .await;
-    let (worktrees, worktree_id, languages, lsp_store) = project.read_with(cx, |project, cx| {
+    let project = Project::test(Arc::new(fs::RealFs::new(None, cx.executor())), [root], cx).await;
+    let (worktrees, worktree_id, languages) = project.read_with(cx, |project, cx| {
         let worktrees = project.worktree_store();
         let worktree_id = worktrees
             .read(cx)
             .worktrees()
             .next()
-            .expect("Gradle graph worktree")
+            .expect("JDTLS graph worktree")
             .read(cx)
             .id();
-        (
-            worktrees,
-            worktree_id,
-            project.languages().clone(),
-            project.lsp_store(),
-        )
+        (worktrees, worktree_id, project.languages().clone())
     });
     cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("fixture trust"))
         .update(cx, |trust, cx| {
@@ -167,11 +139,86 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
             name: "jdtls",
             initialization_options: Some(serde_json::json!({
                 "settings": {"java": options},
-                "bundles": [delegate],
+                "bundles": bundles,
             })),
             ..Default::default()
         },
     );
+    (project, worktree_id, provider_data)
+}
+
+#[cfg(all(test, unix))]
+async fn mount_dependencies_panel(
+    project: Entity<Project>,
+    cx: &mut TestAppContext,
+) -> (
+    Entity<Workspace>,
+    Entity<jvm_ui::DependenciesPanel>,
+    &mut VisualTestContext,
+) {
+    use jvm_ui::DependenciesPanel;
+
+    let (container, cx) =
+        cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
+    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+    let async_cx = cx.update(|window, cx| window.to_async(cx));
+    let panel = DependenciesPanel::load(workspace.downgrade(), async_cx)
+        .await
+        .expect("existing Dependencies panel");
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_panel(panel.clone(), window, cx);
+        workspace.right_dock().update(cx, |dock, cx| {
+            dock.set_open(true, window, cx);
+        });
+        workspace.focus_panel::<DependenciesPanel>(window, cx);
+        window.activate_a11y_for_test();
+    });
+    (workspace, panel, cx)
+}
+
+#[cfg(all(test, unix))]
+fn dispatch_graph_action(cx: &mut VisualTestContext, action_name: &str) {
+    cx.update(|window, cx| {
+        let action = cx.build_action(action_name, None).expect(action_name);
+        window.dispatch_action(action, cx);
+    });
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires a disposable offline Gradle graph, pinned JDTLS and its Gradle delegate"]
+async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestAppContext) {
+    use self::dispatch_graph_action as dispatch;
+    use gpui::InputEvent as _;
+    use jvm_ui::{
+        DependenciesPanel, ShowGradle,
+        dependency_analyzer_item::{DependencyAnalyzerItem, ShowInDependencyDiagram},
+        dependency_diagram_item::{DependencyDiagramItem, DependencyDiagramPopup},
+        dependency_graph_canvas::{CanvasEdgeVariant, MAX_CANVAS_EDGES, MAX_CANVAS_NODES},
+    };
+    use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
+
+    let root = graph_fixture_path("GROOVY_GRADLE_GRAPH_ROOT");
+    let build_java = graph_fixture_path("GROOVY_BUILD_JAVA_HOME");
+    let gradle_installation = graph_fixture_path("GROOVY_GRADLE_HOME");
+    let gradle_user_home = graph_fixture_path("GRADLE_USER_HOME");
+    let options = serde_json::json!({
+        "autobuild": {"enabled": false},
+        "configuration": {"updateBuildConfiguration": "disabled"},
+        "import": {"maven": {"enabled": false}, "gradle": {
+            "enabled": true, "offline": {"enabled": true}, "wrapper": {"enabled": false},
+            "home": gradle_installation, "java": {"home": build_java},
+            "user": {"home": gradle_user_home}, "arguments": ["--offline"],
+        }},
+    });
+    let (project, worktree_id, _provider_data) = start_graph_jdtls(
+        &root,
+        options,
+        &[graph_fixture_path("GROOVY_GRADLE_MODEL_JAR")],
+        cx,
+    )
+    .await;
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
     let (_source, _open_source) = project
         .update(cx, |project, cx| {
             project.open_local_buffer_with_lsp(
@@ -210,22 +257,7 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
             .timer(Duration::from_millis(100))
             .await;
     }
-    let (container, cx) = cx.add_window_view(|window, cx| {
-        workspace::MultiWorkspace::test_new(project.clone(), window, cx)
-    });
-    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
-    let async_cx = cx.update(|window, cx| window.to_async(cx));
-    let panel = DependenciesPanel::load(workspace.downgrade(), async_cx)
-        .await
-        .expect("existing Dependencies panel");
-    workspace.update_in(cx, |workspace, window, cx| {
-        workspace.add_panel(panel.clone(), window, cx);
-        workspace.right_dock().update(cx, |dock, cx| {
-            dock.set_open(true, window, cx);
-        });
-        workspace.focus_panel::<DependenciesPanel>(window, cx);
-        window.activate_a11y_for_test();
-    });
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
     let focus_control = |cx: &mut VisualTestContext, label| {
         assert!(
             (0..48).any(|_| cx.update(|window, cx| {
@@ -356,12 +388,6 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         }
     };
     select_configuration(cx);
-    let dispatch = |cx: &mut VisualTestContext, action_name| {
-        cx.update(|window, cx| {
-            let action = cx.build_action(action_name, None).expect(action_name);
-            window.dispatch_action(action, cx);
-        });
-    };
     dispatch(cx, "groovy_dependencies_panel::CollectSelectedGraph");
     let deadline = Instant::now() + Duration::from_secs(90);
     let graph = loop {
@@ -623,6 +649,364 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         assert_eq!(analyzer.scope().label(), "qualificationGraph");
     });
     eprintln!("Mounted Gradle opened the diagram popup and analyzer from the same admitted scope");
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires a disposable offline Maven graph, pinned JDTLS and its Maven provider"]
+async fn cached_maven_graph_reaches_mounted_dependency_analyzer(cx: &mut TestAppContext) {
+    use jvm_ui::{
+        DependenciesPanel, ShowMaven,
+        dependency_analyzer_item::{
+            DependencyAnalyzerFilter, DependencyAnalyzerItem, DependencyAnalyzerPresentation,
+            SelectDependencyAnalyzerFilter, ShowInDependencyDiagram,
+            ToggleDependencyAnalyzerPresentation,
+        },
+        dependency_diagram_item::{DependencyDiagramItem, SelectDependencyDiagramScope},
+        dependency_graph_canvas::{CanvasEdgeVariant, CanvasNodeKind},
+    };
+    use language_tools::language_tool_tree::{ExpandAll, Refresh, SelectFirst, SelectNext};
+
+    let root = graph_fixture_path("GROOVY_MAVEN_GRAPH_ROOT");
+    let settings = graph_fixture_path("GROOVY_MAVEN_GRAPH_SETTINGS");
+    let options = serde_json::json!({
+        "autobuild": {"enabled": false},
+        "configuration": {"maven": {"userSettings": settings}},
+        "import": {"gradle": {"enabled": false}, "maven": {
+            "enabled": true, "offline": {"enabled": true},
+        }},
+    });
+    let (project, worktree_id, _provider_data) = start_graph_jdtls(
+        &root,
+        options,
+        &[graph_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+        cx,
+    )
+    .await;
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let (_source, _open_source) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(
+                root.join("application/src/main/java/evidence/GraphProbe.java"),
+                cx,
+            )
+        })
+        .await
+        .expect("Maven module source");
+    let pom = "application/pom.xml";
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now();
+    loop {
+        cx.run_until_parked();
+        if lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot.projects.iter().any(|module| {
+                            module
+                                .maven
+                                .as_ref()
+                                .is_some_and(|maven| maven.pom.path.as_unix_str() == pom)
+                        })
+                })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "JDTLS did not import the Maven module"
+        );
+        if Instant::now() >= refresh_at {
+            lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ShowMaven);
+    cx.run_until_parked();
+    cx.dispatch_action(Refresh);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        cx.run_until_parked();
+        if lsp_store.read_with(cx, |store, _| {
+            !store.jdtls_project_query_pending(worktree_id)
+                && store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(_, current)| current)
+        }) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "Maven ownership did not refresh");
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let select_application = |cx: &mut VisualTestContext| {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.dispatch_action(ExpandAll);
+        let row = panel.read_with(cx, |panel, _| {
+            let (status, rows, navigation) = panel.snapshot_for_test();
+            rows.iter()
+                .position(|row| {
+                    row.is_branch
+                        && row.id.0.starts_with("jdtls:")
+                        && navigation.get(&row.id).is_some_and(|path| {
+                            path.worktree_id == worktree_id && path.path.as_unix_str() == pom
+                        })
+                })
+                .unwrap_or_else(|| panic!("imported Maven application is selectable: {status:?}"))
+        });
+        cx.dispatch_action(SelectFirst);
+        for _ in 0..row {
+            cx.dispatch_action(SelectNext);
+        }
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    };
+    select_application(cx);
+    assert!(!lsp_store.read_with(cx, |store, _| {
+        store.jdtls_project_query_pending(worktree_id)
+    }));
+    dispatch_graph_action(cx, "groovy_dependencies_panel::CollectSelectedGraph");
+    if !lsp_store.read_with(cx, |store, _| {
+        store.jdtls_project_query_pending(worktree_id)
+    }) {
+        let status = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("Dependencies tree"))
+                    .expect("accessibility JSON");
+            tree["nodes"]
+                .as_object()
+                .expect("accessibility nodes")
+                .values()
+                .find(|node| node["aria"]["label"] == "Dependency graph status")
+                .map(|node| node["aria"]["value"].clone())
+        });
+        panic!("the Maven graph action did not start a provider request: {status:?}");
+    }
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let (graph, generation) = loop {
+        cx.run_until_parked();
+        if let Some(graph) = lsp_store.read_with(cx, |store, _| {
+            let (snapshot, current) = store.jdtls_project_snapshot(worktree_id)?;
+            if !current {
+                return None;
+            }
+            snapshot.projects.iter().find_map(|module| {
+                let maven = module.maven.as_ref()?;
+                if maven.pom.path.as_unix_str() != pom {
+                    return None;
+                }
+                Some((maven.dependency_graph.clone()?, snapshot.generation))
+            })
+        }) {
+            break graph;
+        }
+        assert!(
+            Instant::now() < deadline
+                && !lsp_store
+                    .read_with(cx, |store, _| store.jdtls_project_query_failed(worktree_id)),
+            "the selected offline Maven graph was not admitted"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    assert_eq!((graph.components.len(), graph.edges.len()), (7, 6));
+    assert!(graph.offline && graph.cached_only && graph.occurrences_known);
+    let component = |name: &str, version: &str| {
+        graph
+            .components
+            .iter()
+            .find(|component| component.artifact_id == name && component.version == version)
+            .expect("fixture component")
+    };
+    let winner = graph
+        .edges
+        .iter()
+        .find(|edge| edge.component == component("shared", "1").id)
+        .expect("first requested version");
+    let loser = graph
+        .edges
+        .iter()
+        .find(|edge| edge.component == component("shared", "2").id)
+        .expect("second requested version");
+    assert!(!winner.omitted && !winner.direct);
+    assert!(loser.omitted && !loser.direct);
+    assert_ne!(winner.target_node, loser.target_node);
+    assert_eq!(loser.selected_node, winner.target_node);
+    let missing = component("uncached", "1");
+    let missing_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.component == missing.id)
+        .expect("edge to the occurrence with an unavailable descriptor");
+    let test_edge = graph
+        .edges
+        .iter()
+        .find(|edge| edge.component == component("test-only", "1").id)
+        .expect("test scope occurrence");
+    assert_eq!(test_edge.scope, "test");
+    assert!(!graph.collection_complete && !graph.structural_coverage_known);
+    assert!(
+        graph
+            .unavailable_descriptors
+            .iter()
+            .any(|fact| fact.component == missing.id)
+    );
+
+    select_application(cx);
+    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowDependencyDiagram");
+    cx.run_until_parked();
+    let diagram = workspace
+        .read_with(cx, |workspace, cx| {
+            workspace.active_item_as::<DependencyDiagramItem>(cx)
+        })
+        .expect("diagram from the selected Maven project");
+    let canvas = diagram.read_with(cx, |diagram, _| {
+        assert_eq!(diagram.scope().label(), "All scopes");
+        diagram.canvas().clone()
+    });
+    canvas.update(cx, |canvas, _| {
+        assert!(canvas.graph.edges.iter().any(|edge| {
+            edge.from == loser.from_node
+                && edge.to == loser.target_node
+                && edge.variant == CanvasEdgeVariant::Omitted
+        }));
+        assert!(canvas.graph.nodes.iter().any(|node| {
+            node.component_id == missing.id && node.kind == CanvasNodeKind::Unresolved
+        }));
+        assert!(canvas.graph.edges.iter().any(|edge| {
+            edge.from == missing_edge.from_node
+                && edge.to == missing_edge.target_node
+                && edge.variant == CanvasEdgeVariant::Unresolved
+        }));
+        assert!(
+            canvas
+                .graph
+                .edges
+                .iter()
+                .any(|edge| edge.to == test_edge.target_node)
+        );
+    });
+    cx.dispatch_action(SelectDependencyDiagramScope {
+        label: "compile".to_owned(),
+    });
+    cx.run_until_parked();
+    diagram.read_with(cx, |diagram, _| {
+        assert_eq!(diagram.scope().label(), "compile")
+    });
+    canvas.update(cx, |canvas, _| {
+        assert!(
+            !canvas
+                .graph
+                .edges
+                .iter()
+                .any(|edge| edge.to == test_edge.target_node)
+        );
+        assert!(canvas.select_node(&winner.target_node, false, false));
+    });
+    dispatch_graph_action(cx, "groovy_dependencies_panel::InspectGraphAllUsages");
+    cx.run_until_parked();
+    let analyzer = workspace
+        .read_with(cx, |workspace, cx| {
+            workspace.active_item_as::<DependencyAnalyzerItem>(cx)
+        })
+        .expect("Maven All usages opens the analyzer");
+    analyzer.read_with(cx, |analyzer, _| {
+        assert_eq!(analyzer.scope().label(), "compile");
+        assert_eq!(analyzer.selected_key(), Some(winner.target_node.as_str()));
+        assert!(!analyzer.usages_truncated());
+    });
+    cx.dispatch_action(ShowInDependencyDiagram {
+        node_key: winner.target_node.clone(),
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        workspace.read_with(cx, |workspace, cx| {
+            workspace.active_item_as::<DependencyDiagramItem>(cx)
+        }),
+        Some(diagram.clone())
+    );
+    diagram.read_with(cx, |diagram, _| {
+        assert_eq!(diagram.scope().label(), "compile")
+    });
+    assert_eq!(
+        canvas.read_with(cx, |canvas, _| canvas.focus.clone()),
+        Some(winner.target_node.clone())
+    );
+
+    canvas.update(cx, |canvas, _| {
+        assert!(canvas.select_node(&missing_edge.target_node, false, false));
+    });
+    dispatch_graph_action(cx, "groovy_dependencies_panel::InspectGraphAllUsages");
+    cx.run_until_parked();
+    analyzer.read_with(cx, |analyzer, _| {
+        assert_eq!(
+            analyzer.selected_key(),
+            Some(missing_edge.target_node.as_str())
+        );
+    });
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ToggleDependencyAnalyzerPresentation);
+    analyzer.read_with(cx, |analyzer, _| {
+        assert_eq!(
+            analyzer.presentation(),
+            DependencyAnalyzerPresentation::Flat
+        );
+    });
+    for (filter, expected) in [
+        (
+            DependencyAnalyzerFilter::Conflicts,
+            vec![&winner.target_node, &loser.target_node],
+        ),
+        (
+            DependencyAnalyzerFilter::Unresolved,
+            vec![&missing_edge.target_node],
+        ),
+    ] {
+        cx.dispatch_action(SelectDependencyAnalyzerFilter { filter });
+        cx.run_until_parked();
+        analyzer.read_with(cx, |analyzer, _| assert_eq!(analyzer.filter(), filter));
+        cx.dispatch_action(SelectFirst);
+        let mut selected = Vec::new();
+        for _ in &expected {
+            selected.push(analyzer.read_with(cx, |analyzer, _| {
+                analyzer
+                    .selected_key()
+                    .expect("filtered occurrence")
+                    .to_owned()
+            }));
+            cx.dispatch_action(SelectNext);
+        }
+        assert_eq!(
+            analyzer.read_with(cx, |analyzer, _| analyzer.selected_key().map(str::to_owned)),
+            selected.last().cloned(),
+            "the {filter:?} filter ends after its matching occurrences"
+        );
+        selected.sort_unstable();
+        let mut expected = expected.into_iter().cloned().collect::<Vec<_>>();
+        expected.sort_unstable();
+        assert_eq!(selected, expected);
+    }
+    lsp_store.read_with(cx, |store, _| {
+        let (snapshot, current) = store
+            .jdtls_project_snapshot(worktree_id)
+            .expect("admitted graph");
+        assert!(current);
+        assert_eq!(snapshot.generation, generation);
+    });
+    eprintln!(
+        "Mounted Maven checked mediation and missing descriptors, diagram–analyzer navigation, and conflict and unresolved filters"
+    );
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

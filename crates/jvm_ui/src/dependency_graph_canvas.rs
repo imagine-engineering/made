@@ -35,13 +35,19 @@ pub enum CanvasNodeKind {
 
 #[derive(Clone, Debug)]
 pub struct CanvasNode {
-    /// Provider component or occurrence identity; unresolved targets use
-    /// numbered synthetic ids (`unresolved:{index}`).
+    /// Provider component or occurrence identity. Unresolved Gradle selectors
+    /// without a provider component use numbered synthetic ids.
     pub id: String,
     pub component_id: String,
     pub label: String,
     pub version: Option<String>,
     pub kind: CanvasNodeKind,
+}
+
+impl CanvasNode {
+    pub(crate) fn has_provider_identity(&self) -> bool {
+        !self.component_id.is_empty()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -268,6 +274,11 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph, focus: Option<&st
 }
 
 pub(crate) fn maven_canvas_nodes(graph: &MavenDependencyGraph) -> Vec<CanvasNode> {
+    let unavailable: HashSet<_> = graph
+        .unavailable_descriptors
+        .iter()
+        .map(|descriptor| descriptor.component.as_str())
+        .collect();
     let mut components = HashMap::new();
     for component in &graph.components {
         let artifact = if component.classifier.is_empty() {
@@ -299,7 +310,11 @@ pub(crate) fn maven_canvas_nodes(graph: &MavenDependencyGraph) -> Vec<CanvasNode
             component_id: node.component.clone(),
             label,
             version,
-            kind: CanvasNodeKind::Module,
+            kind: if unavailable.contains(node.component.as_str()) {
+                CanvasNodeKind::Unresolved
+            } else {
+                CanvasNodeKind::Module
+            },
         });
     }
     if let Some(root) = nodes.iter_mut().find(|node| node.id == graph.root_node) {
@@ -316,6 +331,11 @@ pub fn canvas_graph_from_maven(
     focus: Option<&str>,
 ) -> CanvasGraph {
     let nodes = maven_canvas_nodes(graph);
+    let unresolved: HashSet<_> = nodes
+        .iter()
+        .filter(|node| node.kind == CanvasNodeKind::Unresolved)
+        .map(|node| node.id.as_str())
+        .collect();
     let mut edges = Vec::new();
     for (provider_index, edge) in graph.edges.iter().enumerate() {
         if !include_edge(edge) {
@@ -334,6 +354,10 @@ pub fn canvas_graph_from_maven(
                     .unwrap_or_default()
             ));
         }
+        let descriptor_unavailable = unresolved.contains(edge.target_node.as_str());
+        if descriptor_unavailable {
+            label.push_str("; dependency descriptor unavailable offline");
+        }
         edges.push(CanvasEdge {
             id: format!(
                 "maven-edge:{}:{}:{}",
@@ -344,6 +368,8 @@ pub fn canvas_graph_from_maven(
             to: edge.target_node.clone(),
             variant: if edge.omitted {
                 CanvasEdgeVariant::Omitted
+            } else if descriptor_unavailable {
+                CanvasEdgeVariant::Unresolved
             } else {
                 CanvasEdgeVariant::Dependency
             },
@@ -827,15 +853,15 @@ impl CanvasState {
         self.graph = graph;
     }
 
-    pub(crate) fn clear_unresolved_selection(&mut self) {
-        let is_unresolved = |id: &str| {
+    pub(crate) fn clear_placeholder_selection(&mut self) {
+        let is_placeholder = |id: &str| {
             self.graph
                 .node(id)
-                .is_some_and(|node| node.kind == CanvasNodeKind::Unresolved)
+                .is_some_and(|node| !node.has_provider_identity())
         };
-        self.selection.retain(|id| !is_unresolved(id));
-        self.focus.take_if(|id| is_unresolved(id));
-        self.node_focus.retain(|id, _| !is_unresolved(id));
+        self.selection.retain(|id| !is_placeholder(id));
+        self.focus.take_if(|id| is_placeholder(id));
+        self.node_focus.retain(|id, _| !is_placeholder(id));
     }
 
     pub(crate) fn set_layout(&mut self, layout: CanvasLayout) -> bool {
@@ -1866,7 +1892,7 @@ mod tests {
     }
 
     #[test]
-    fn maven_adapter_preserves_occurrence_identity_and_omitted_edges() {
+    fn maven_adapter_preserves_occurrence_identity_and_marks_unavailable_descriptors() {
         let graph: MavenDependencyGraph = serde_json::from_str(
             r#"{
                 "version": 2,
@@ -1889,10 +1915,12 @@ mod tests {
                     {"from": "c0", "fromNode": "n0", "targetNode": "n2", "selectedNode": "n2", "position": 1, "component": "c1", "selected": "c1", "omitted": true, "direct": false, "versionConstraint": "2.0", "premanagedVersion": null, "premanagedScope": null, "premanagedOptional": null, "managedBits": 0, "originalScope": "runtime", "originalOptional": null, "scope": "runtime", "optional": false, "exclusions": [], "premanagedExclusions": null},
                     {"from": "c1", "fromNode": "n1", "targetNode": "n3", "selectedNode": "n3", "position": 0, "component": "c2", "selected": "c2", "omitted": false, "direct": false, "versionConstraint": null, "premanagedVersion": null, "premanagedScope": null, "premanagedOptional": null, "managedBits": 0, "originalScope": "compile", "originalOptional": null, "scope": "compile", "optional": true, "exclusions": [], "premanagedExclusions": null}
                 ],
-                "unavailableDescriptors": [],
-                "collectionComplete": true,
-                "structuralCoverageKnown": true,
-                "problem": null,
+                "unavailableDescriptors": [
+                    {"component": "c2", "problem": "offline-metadata-unavailable-check-cache-and-refresh"}
+                ],
+                "collectionComplete": false,
+                "structuralCoverageKnown": false,
+                "problem": "offline-metadata-unavailable-check-cache-and-refresh",
                 "originsKnown": true,
                 "artifactsKnown": true,
                 "offline": true,
@@ -1925,13 +1953,17 @@ mod tests {
             .iter()
             .find(|node| node.kind == CanvasNodeKind::Root);
         assert_eq!(root.map(|node| node.id.as_str()), Some("n0"));
-        assert!(
-            canvas
-                .edges
-                .iter()
-                .any(|edge| edge.label.contains("optional")),
-            "optional scope is preserved on the edge label"
-        );
+        let unresolved = canvas.node("n3").expect("unavailable Maven occurrence");
+        assert_eq!(unresolved.kind, CanvasNodeKind::Unresolved);
+        assert!(unresolved.has_provider_identity());
+        assert!(canvas.edges.iter().any(|edge| edge.to == "n3"
+            && edge.variant == CanvasEdgeVariant::Unresolved
+            && edge.label.contains("optional")
+            && edge.label.contains("descriptor unavailable offline")));
+        let mut state = CanvasState::new(canvas);
+        assert!(state.select_node("n3", false, false));
+        state.clear_placeholder_selection();
+        assert_eq!(state.focus.as_deref(), Some("n3"));
     }
 
     fn canvas_state_fixture() -> CanvasState {

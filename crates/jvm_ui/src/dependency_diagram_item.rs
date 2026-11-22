@@ -15,7 +15,7 @@ use crate::dependency_diagram_menu::{
     DependencyDiagramContextTarget, DependencyDiagramMenuCommand, DependencyDiagramMenuSnapshot,
     dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
-use crate::dependency_graph_canvas::{CanvasGraph, CanvasNode, CanvasNodeKind, CanvasState};
+use crate::dependency_graph_canvas::{CanvasGraph, CanvasNode, CanvasState};
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     Render, SharedString, Task, Window, actions,
@@ -452,7 +452,7 @@ impl DependencyDiagramItem {
                 source.selection = receipt.selection.clone();
                 self.receipt = Some(receipt);
                 self.canvas.update(cx, |canvas, _| {
-                    canvas.clear_unresolved_selection();
+                    canvas.clear_placeholder_selection();
                 });
                 self.replace_derivation(derivation, cx);
             }
@@ -637,11 +637,11 @@ impl DependencyDiagramItem {
         let Some(derivation) = source.project_neighbourhood(id, &self.scope, cx) else {
             return false;
         };
-        // An unresolved placeholder's ordinal is local to this graph revision.
+        // A synthetic Gradle placeholder's ordinal is local to this graph revision.
         if derivation
             .canvas
             .node(id)
-            .is_some_and(|node| node.kind != CanvasNodeKind::Unresolved)
+            .is_some_and(|node| node.has_provider_identity())
         {
             source.node = id.to_owned();
         }
@@ -728,7 +728,7 @@ impl DependencyDiagramItem {
                 canvas
                     .graph
                     .node(id)
-                    .is_some_and(|node| node.kind != CanvasNodeKind::Unresolved)
+                    .is_some_and(|node| node.has_provider_identity())
             }),
             has_matching_pin,
             can_add_to_set: accepts_set && selection_set_len < 8,
