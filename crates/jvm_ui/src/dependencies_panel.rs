@@ -680,6 +680,7 @@ pub struct DependenciesPanel {
     graph_diagram_legend: Vec<(LanguageToolNodeId, String)>,
     position: DockPosition,
     active: bool,
+    zoomed: bool,
     view: BuildToolView,
     preferences: BuildViewPreferences,
     preferences_key: Option<String>,
@@ -2942,6 +2943,15 @@ impl DependencyNavigation {
 }
 
 impl DependenciesPanel {
+    fn toggle_panel_zoom(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_handle.focus(window, cx);
+        cx.emit(if self.zoomed {
+            PanelEvent::ZoomOut
+        } else {
+            PanelEvent::ZoomIn
+        });
+    }
+
     #[cfg(feature = "test-support")]
     pub fn snapshot_for_test(
         &self,
@@ -3053,6 +3063,7 @@ impl DependenciesPanel {
                     graph_context_menu: None,
                     position: preferences.dock_position.into(),
                     active: false,
+                    zoomed: false,
                     view: preferences.view,
                     preferences,
                     preferences_key,
@@ -8276,6 +8287,15 @@ impl Panel for DependenciesPanel {
         px(280.)
     }
 
+    fn is_zoomed(&self, _: &Window, _: &App) -> bool {
+        self.zoomed
+    }
+
+    fn set_zoomed(&mut self, zoomed: bool, _: &mut Window, cx: &mut Context<Self>) {
+        self.zoomed = zoomed;
+        cx.notify();
+    }
+
     fn icon(&self, _: &Window, _: &App) -> Option<ui::IconName> {
         match self.view {
             BuildToolView::Gradle => Some(ui::IconName::Gradle),
@@ -8372,6 +8392,11 @@ impl Render for DependenciesPanel {
         let click_panel = cx.weak_entity();
         let toggle_panel = cx.weak_entity();
         let menu_panel = cx.weak_entity();
+        let zoom_label = if self.zoomed {
+            "Restore Groovy panel size"
+        } else {
+            "Maximize Groovy panel"
+        };
         v_flex()
             .id("groovy-dependencies-panel")
             .role(Role::Group)
@@ -8389,6 +8414,7 @@ impl Render for DependenciesPanel {
                 .with_priority(3)
             }))
             .size_full()
+            .on_action(cx.listener(|panel, _: &workspace::ToggleZoom, window, cx| panel.toggle_panel_zoom(window, cx)))
             .on_action(cx.listener(|panel, _: &RunSelectedOfflineOperation, window, cx| panel.run_selected_offline_operation(window,cx)))
             .on_action(cx.listener(
                 |panel, _: &RunSelectedConfiguration, window, cx| {
@@ -8513,6 +8539,16 @@ impl Render for DependenciesPanel {
                     .gap_1()
                     .justify_between()
                     .child(self.view.label())
+                    .child(
+                        IconButton::new("groovy-panel-zoom", ui::IconName::Maximize)
+                            .toggle_state(self.zoomed)
+                            .selected_icon(ui::IconName::Minimize)
+                            .shape(ui::IconButtonShape::Square)
+                            .tab_index(0_isize)
+                            .aria_label(zoom_label)
+                            .tooltip(Tooltip::text(zoom_label))
+                            .on_click(cx.listener(|panel, _, window, cx| panel.toggle_panel_zoom(window, cx))),
+                    )
                     .when(icon_toolbar_active, |header| {
                         header.child(
                             h_flex()
@@ -9140,6 +9176,7 @@ mod tests {
     use settings::WorktreeId;
     use theme::LoadThemes;
     use util::rel_path::RelPath;
+    use workspace::dock::PanelHandle as _;
 
     use super::*;
 
@@ -26218,6 +26255,74 @@ mod tests {
                 });
             }
         }
+        let queries_before_zoom = project_queries.load(Ordering::SeqCst);
+        let dock = workspace.read_with(cx, |workspace, _| workspace.right_dock().clone());
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(px(324.)), None, window, cx);
+        });
+        let dock_size = dock.read_with(cx, |dock, _| dock.active_panel_size());
+        assert_eq!(dock_size.expect("active dock size").size, Some(px(324.)));
+        for (label, maximized) in [
+            ("Maximize Groovy panel", true),
+            ("Restore Groovy panel size", false),
+        ] {
+            assert!(
+                (0..64).any(|_| cx.update(|window, cx| {
+                    window.focus_next(cx);
+                    window.draw(cx).clear(cx);
+                    let tree: serde_json::Value = serde_json::from_str(
+                        &window
+                            .debug_a11y_tree_json()
+                            .expect("dock accessibility tree"),
+                    )
+                    .expect("accessibility JSON");
+                    tree["gpui_focus"].as_str().is_some_and(|focus| {
+                        tree["nodes"][focus]["aria"]["label"] == label
+                            && tree["nodes"][focus]["aria"]["role"] == "Button"
+                    })
+                })),
+                "keyboard focus reaches {label}"
+            );
+            cx.update(|window, cx| {
+                let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
+                window.dispatch_event(
+                    gpui::KeyDownEvent {
+                        keystroke: keystroke.clone(),
+                        is_held: false,
+                        prefer_character_input: false,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+                window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
+            });
+            cx.run_until_parked();
+            workspace.read_with(cx, |workspace, _| {
+                assert_eq!(
+                    workspace.zoomed_item(),
+                    maximized.then(|| panel.to_any().downgrade()).as_ref()
+                );
+            });
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.zoomed, maximized);
+                assert_eq!(panel.view, BuildToolView::Gradle);
+                assert_eq!(panel.host.selected(), Some(&member_id));
+            });
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                assert!(panel.read(cx).focus_handle.contains_focused(window, cx));
+            });
+        }
+        assert_eq!(
+            dock.read_with(cx, |dock, _| dock.active_panel_size()),
+            dock_size
+        );
+        assert_eq!(
+            project_queries.load(Ordering::SeqCst),
+            queries_before_zoom,
+            "changing dock size does not query the provider"
+        );
+        panel.update_in(cx, |panel, window, cx| panel.focus_handle.focus(window, cx));
         panel.update_in(cx, |panel, window, cx| {
             panel.set_view(BuildToolView::Dependencies, window, cx)
         });
@@ -26391,6 +26496,22 @@ mod tests {
         panel.update_in(cx, |panel, window, _| {
             assert!(panel.focus_handle.is_focused(window));
         });
+        for maximized in [true, false] {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.dispatch_action(workspace::ToggleZoom);
+            cx.run_until_parked();
+            workspace.read_with(cx, |workspace, _| {
+                assert_eq!(
+                    workspace.zoomed_item(),
+                    maximized.then(|| panel.to_any().downgrade()).as_ref()
+                );
+            });
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.zoomed, maximized);
+                assert_eq!(panel.view, BuildToolView::Maven);
+                assert_eq!(panel.position, DockPosition::Bottom);
+            });
+        }
         assert_eq!(
             project_queries.load(Ordering::SeqCst),
             queries_before_options

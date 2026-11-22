@@ -162,6 +162,11 @@ assumed current.
 
 ## Dependencies panel {#dependencies-panel}
 
+Use **Maximize Groovy panel** to give the Dependencies, Gradle, or Maven
+view the workspace's available space. **Restore Groovy panel size** returns
+to the previous dock size and preserves the current tree selection. The
+workspace's **Toggle Zoom** action also works while the panel has focus.
+
 The `jvm-tools` development build has a Dependencies panel for trusted
 Maven and Gradle projects. Open it from **View → Dependencies**. It shows
 provider-labeled rows from both JDTLS and Kotlin LSP when both snapshots are
