@@ -18,7 +18,7 @@ use graphite_document_format::{
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
-use graphite_document_graph_storage::RegistryDelta;
+use graphite_document_graph_storage::{PeerId, RegistryDelta};
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
@@ -441,6 +441,28 @@ pub async fn inspect_gdd_folder_files(
     open_staged_gdd(entries.finish()?).await
 }
 
+pub async fn create_gdd_folder(
+    document_id: u64,
+    peer_id: u64,
+    editor_version: String,
+    budget: GddArchiveBudget,
+) -> Result<InspectedGddV1, GddArchiveError> {
+    let working = MemoryBackend::new();
+    GddV1::create_in(
+        AnyContainer::Memory(working.clone()),
+        GddV1Layout,
+        PeerId(peer_id),
+        document_id,
+        editor_version,
+        crate::resources::GRAPHITE_IMAGE_SOURCE_REVISION.into(),
+    )?;
+    let mut entries = StagedEntries::new(&budget);
+    for name in working.list("")? {
+        entries.install(&name, working.read(&name)?.as_slice())?;
+    }
+    open_staged_gdd(entries.finish()?).await
+}
+
 async fn open_staged_gdd(entries: StagedArchive) -> Result<InspectedGddV1, GddArchiveError> {
     let working = &entries.working;
     let layout = GddV1Layout;
@@ -712,6 +734,43 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_gdd_003_1_creates_original_folder_payloads_at_the_current_pin() {
+        futures::executor::block_on(async {
+            let contents = create_gdd_folder(92, 37, "Made".into(), budget())
+                .await
+                .expect("pinned GDD owner creates the first snapshot");
+            let manifest = contents.manifest();
+            assert_eq!(manifest.format_version, SUPPORTED_FORMAT_VERSION);
+            assert_eq!(manifest.document_id, 92);
+            assert_eq!(manifest.editor_version, "Made");
+            assert_eq!(
+                manifest.stdlib_version,
+                crate::resources::GRAPHITE_IMAGE_SOURCE_REVISION
+            );
+            assert_eq!(contents.document.session().peer(), PeerId(37));
+            assert_eq!(contents.history_len(), 0);
+            assert_eq!(contents.hot_log_len(), 0);
+            assert_eq!(contents.entries.names.len(), 3);
+            assert!(
+                contents
+                    .read_entry(&path_for(
+                        GddV1Layout.registry_basename(),
+                        manifest.codecs.registry
+                    ))
+                    .is_ok()
+            );
+            assert!(
+                contents
+                    .read_entry(&path_for(
+                        GddV1Layout.session_basename(),
+                        manifest.codecs.session
+                    ))
+                    .is_ok()
+            );
+        });
     }
 
     #[test]

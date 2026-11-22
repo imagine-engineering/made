@@ -5,17 +5,17 @@ use std::{
 
 use anyhow::{Context as _, anyhow, ensure};
 use gpui::{
-    AnyEntity, App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle,
+    App, AppContext as _, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, FocusHandle,
     Focusable, PathPromptOptions, Render, SharedString, Task, WeakEntity, Window, actions,
 };
 use graphics_core::formats::{
     gdd::{
-        ArchiveFormat, GddArchiveBudget, GddExportContent, InspectedGddV1,
+        ArchiveFormat, GddArchiveBudget, GddExportContent, InspectedGddV1, create_gdd_folder,
         inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
-use project::{Project, ProjectEntryId, ProjectPath};
+use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{Button, Checkbox, Color, Label, LabelSize, ToggleState, prelude::*};
 use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
@@ -26,6 +26,8 @@ actions!(
     [
         /// Opens a local Graphite GDD folder for inspection.
         OpenGraphiteFolder,
+        /// Creates a new local Graphite GDD folder.
+        NewGraphiteFolder,
     ]
 );
 
@@ -34,6 +36,9 @@ pub(crate) fn init(cx: &mut App) {
     cx.observe_new(|workspace: &mut Workspace, _, _cx| {
         workspace.register_action(|workspace, _: &OpenGraphiteFolder, window, cx| {
             open_graphite_folder(workspace, window, cx);
+        });
+        workspace.register_action(|workspace, _: &NewGraphiteFolder, window, cx| {
+            new_graphite_folder(workspace, window, cx);
         });
     })
     .detach();
@@ -70,7 +75,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     path: ProjectPath,
     entry_id: Option<ProjectEntryId>,
     // The project tracks hidden worktrees weakly.
-    _worktree: AnyEntity,
+    _worktree: Entity<Worktree>,
     original: Option<Arc<[u8]>>,
     document: InspectedDocument,
 }
@@ -153,7 +158,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 name,
                 path,
                 entry_id,
-                _worktree: worktree.into_any(),
+                _worktree: worktree,
                 original: Some(original),
                 document,
             }))
@@ -200,58 +205,122 @@ fn open_graphite_folder(
             return Err(anyhow!("Choose one Graphite folder."));
         };
         let path = path.clone();
-        let name = path
-            .file_name()
-            .context("Graphite folder has no name")?
-            .to_string_lossy()
-            .into_owned();
         let contents = cx
             .background_spawn({
                 let path = path.clone();
                 async move { read_graphite_folder(filesystem.as_ref(), &path).await }
             })
             .await
-            .with_context(|| format!("Opening Graphite folder {name}"))?;
+            .with_context(|| format!("Opening Graphite folder {}", path.display()))?;
+        open_folder_item(workspace, &project, &path, contents, cx).await
+    })
+    .detach_and_prompt_err("Could not open Graphite folder", window, cx, |_, _, _| None);
+}
+
+fn new_graphite_folder(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    let project = workspace.project().clone();
+    let project_model = project.read(cx);
+    let filesystem = project_model.fs().clone();
+    let local = project_model.is_local();
+    let selection = local.then(|| {
+        workspace.prompt_for_new_path(
+            DirectoryLister::Local(project.clone(), filesystem.clone()),
+            Some("Untitled.gdd".into()),
+            window,
+            cx,
+        )
+    });
+    cx.spawn_in(window, async move |workspace, cx| {
+        let Some(paths) = selection
+            .context("Create a Graphite folder from a local workspace.")?
+            .await?
+        else {
+            return Ok(());
+        };
+        let [path] = paths.as_slice() else {
+            return Err(anyhow!("Choose one Graphite folder."));
+        };
+        let (document_id, peer_id) = uuid::Uuid::new_v4().as_u64_pair();
+        let (contents, files) = cx
+            .background_spawn(async move {
+                let contents =
+                    create_gdd_folder(document_id, peer_id, "Made".into(), ARCHIVE_BUDGET).await?;
+                let files = contents.folder_files()?;
+                anyhow::Ok((contents, files))
+            })
+            .await?;
         ensure!(
             workspace.read_with(cx, |workspace, _| workspace.project() == &project)?,
             "The Graphite workspace has changed."
         );
-        let (worktree, project_path) = cx
-            .update(|_, cx| Workspace::project_path_for_path(project.clone(), &path, false, cx))?
-            .await?;
-        workspace.update_in(cx, |workspace, window, cx| {
-            ensure!(
-                workspace.project() == &project,
-                "The Graphite workspace has changed."
-            );
-            let entry_id = workspace
-                .project()
-                .read(cx)
-                .entry_for_path(&project_path, cx)
-                .map(|entry| entry.id);
-            let model = cx.new(|_| GraphiteDocumentProjectItem {
-                name: name.into(),
-                path: project_path,
-                entry_id,
-                _worktree: worktree.into_any(),
-                original: None,
-                document: InspectedDocument::gdd(contents),
-            });
-            workspace.open_project_item::<GraphiteDocumentItem>(
-                workspace.active_pane().clone(),
-                model,
-                true,
-                true,
-                false,
-                false,
-                window,
-                cx,
-            );
-            anyhow::Ok(())
-        })??;
-        Ok(())
+        filesystem
+            .create_new_directory_atomically(path.clone(), files)
+            .await
+            .with_context(|| format!("Creating Graphite folder {}", path.display()))?;
+        open_folder_item(workspace, &project, path, contents, cx)
+            .await
+            .with_context(|| {
+                format!(
+                    "The Graphite folder was created at {}. Opening it failed",
+                    path.display()
+                )
+            })
     })
-    .detach_and_prompt_err("Could not open Graphite folder", window, cx, |_, _, _| None);
+    .detach_and_prompt_err("New Graphite folder", window, cx, |_, _, _| None);
+}
+
+async fn open_folder_item(
+    workspace: WeakEntity<Workspace>,
+    project: &Entity<Project>,
+    path: &Path,
+    contents: InspectedGddV1,
+    cx: &mut AsyncWindowContext,
+) -> anyhow::Result<()> {
+    let name = path
+        .file_name()
+        .context("Graphite folder has no name")?
+        .to_string_lossy()
+        .into_owned();
+    ensure!(
+        workspace.read_with(cx, |workspace, _| workspace.project() == project)?,
+        "The Graphite workspace has changed."
+    );
+    let (worktree, project_path) = cx
+        .update(|_, cx| Workspace::project_path_for_path(project.clone(), path, false, cx))?
+        .await?;
+    workspace.update_in(cx, |workspace, window, cx| {
+        ensure!(
+            workspace.project() == project,
+            "The Graphite workspace has changed."
+        );
+        let entry_id = project
+            .read(cx)
+            .entry_for_path(&project_path, cx)
+            .map(|entry| entry.id);
+        let model = cx.new(|_| GraphiteDocumentProjectItem {
+            name: name.into(),
+            path: project_path,
+            entry_id,
+            _worktree: worktree,
+            original: None,
+            document: InspectedDocument::gdd(contents),
+        });
+        workspace.open_project_item::<GraphiteDocumentItem>(
+            workspace.active_pane().clone(),
+            model,
+            true,
+            true,
+            false,
+            false,
+            window,
+            cx,
+        );
+        anyhow::Ok(())
+    })?
 }
 
 async fn read_graphite_folder(
@@ -1068,6 +1137,79 @@ mod tests {
                 .await
                 .expect("incomplete original is intact"),
             incomplete
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_gdd_003_2_workspace_creates_and_reopens_a_new_gdd_folder(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(
+            workspace
+                .read_with(window, |workspace, cx| workspace
+                    .active_item_as::<GraphiteDocumentItem>(cx))
+                .is_none()
+        );
+
+        let path = PathBuf::from("/new.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|parent| {
+            assert_eq!(parent, Path::new("/project"));
+            Some(path.clone())
+        });
+        window.run_until_parked();
+        let item = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("new GDD folder in native Workspace");
+        let contents = read_graphite_folder(filesystem.as_ref(), &path)
+            .await
+            .expect("reopen the persisted source layout");
+        assert_ne!(contents.manifest().document_id, 0);
+        assert_eq!(contents.manifest().editor_version, "Made");
+        item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            let InspectedDocument::Gdd {
+                contents: active, ..
+            } = &model.document
+            else {
+                panic!("expected the created GDD folder");
+            };
+            assert_eq!(
+                active.manifest().document_id,
+                contents.manifest().document_id
+            );
+            assert_eq!(
+                active.folder_files().expect("saved snapshot"),
+                contents.folder_files().expect("same records on disk")
+            );
+            assert!(!item.is_dirty(cx));
+        });
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| Some(path.clone()));
+        window.run_until_parked();
+        let still_original = read_graphite_folder(filesystem.as_ref(), &path)
+            .await
+            .expect("original directory remains usable");
+        assert_eq!(
+            still_original.manifest().document_id,
+            contents.manifest().document_id
+        );
+        assert_eq!(
+            workspace.read_with(window, |workspace, cx| workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)),
+            Some(item)
         );
     }
 
