@@ -1,10 +1,43 @@
 use gpui::{App, Window};
 use graphics_core::formats::gdd::{GddRootLayer, GddRootLayerChange};
+use std::collections::BTreeSet;
 use ui::{Button, ButtonStyle, Color, Label, LabelSize, TintColor, prelude::*};
 
 pub(crate) enum SavedLayerAction {
-    Select,
+    Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
+}
+
+pub(crate) fn update_layer_selection(
+    order: &[usize],
+    index: usize,
+    anchor: &mut Option<usize>,
+    selection: &mut BTreeSet<usize>,
+    extend: bool,
+    range: bool,
+) {
+    if let Some(origin) = anchor.filter(|origin| range && order.contains(origin)) {
+        if !extend {
+            selection.clear();
+        }
+        selection.extend([origin, index]);
+        selection.extend(
+            order
+                .iter()
+                .copied()
+                .skip_while(|&row| row != origin && row != index)
+                .skip(1)
+                .take_while(|&row| row != origin && row != index),
+        );
+    } else {
+        *anchor = Some(index);
+        if !extend {
+            selection.clear();
+        }
+        if !extend || !selection.remove(&index) {
+            selection.insert(index);
+        }
+    }
 }
 
 pub(crate) fn render_saved_layer(
@@ -29,8 +62,23 @@ pub(crate) fn render_saved_layer(
                         .toggle_state(selected)
                         .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                         .disabled(!can_select)
-                        .on_click(move |_, window, cx| {
-                            select(SavedLayerAction::Select, window, cx)
+                        .on_click(move |event, window, cx| {
+                            let modifiers = event.modifiers();
+                            let opposite_accelerator = if cfg!(target_os = "macos") {
+                                modifiers.control
+                            } else {
+                                modifiers.platform
+                            };
+                            if !modifiers.alt && !opposite_accelerator {
+                                select(
+                                    SavedLayerAction::Select {
+                                        extend: modifiers.secondary(),
+                                        range: modifiers.shift,
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            }
                         }),
                 ),
         )

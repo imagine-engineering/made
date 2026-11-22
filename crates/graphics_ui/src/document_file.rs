@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     path::{Path, PathBuf},
     sync::{Arc, Weak},
@@ -600,6 +600,7 @@ struct NodeCopyForm {
     output_preview: NodeOutputPreview,
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
+    layer_selection_anchor: Option<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
     saved_graph_focus: FocusHandle,
@@ -636,6 +637,7 @@ impl NodeCopyForm {
             output_preview: NodeOutputPreview::Hidden,
             port_rename: None,
             node_selection: BTreeSet::new(),
+            layer_selection_anchor: None,
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_focus: cx.focus_handle(),
@@ -653,6 +655,10 @@ impl NodeCopyForm {
     ) -> Option<usize> {
         let network_id = self.active_network().map(|network| network.id);
         let selected_id = self.selected_node().map(GddGraphNode::storage_id);
+        let layer_anchor = self
+            .layer_selection_anchor
+            .and_then(|index| self.nodes.get(index))
+            .map(GddGraphNode::storage_id);
         let group = self
             .node_selection
             .iter()
@@ -666,6 +672,11 @@ impl NodeCopyForm {
         let active_network =
             network_id.and_then(|id| self.networks.iter().position(|network| network.id == id));
         self.select_network(active_network);
+        self.layer_selection_anchor = layer_anchor.and_then(|id| {
+            self.nodes
+                .iter()
+                .position(|node| self.includes_node(node) && node.storage_id() == id)
+        });
         self.node_selection = self
             .nodes
             .iter()
@@ -724,6 +735,7 @@ impl NodeCopyForm {
         self.output_preview = NodeOutputPreview::Hidden;
         self.port_rename = None;
         self.node_selection.clear();
+        self.layer_selection_anchor = None;
         self.saved_graph = SavedGraphPanel::Closed;
         self.saved_graph_drag_start.set(None);
         self.saved_graph_box_selection.set(None);
@@ -1688,6 +1700,13 @@ impl GraphiteDocumentItem {
             SavedGraphAction::BoxSelection { bounds, modifiers } => {
                 self.select_saved_graph_box(bounds, modifiers, window, cx);
             }
+            SavedGraphAction::SelectLayer {
+                index,
+                extend,
+                range,
+            } => {
+                self.select_saved_layer(index, extend, range, window, cx);
+            }
             SavedGraphAction::MoveNode { index, position } => {
                 self.move_canvas_nodes(index, position, window, cx);
             }
@@ -1948,6 +1967,84 @@ impl GraphiteDocumentItem {
             form.node_selection.insert(index);
             Some(index)
         };
+        if let Some(active) = active {
+            self.select_copy_node(active, window, cx);
+        } else {
+            form.selected = None;
+            form.output_preview = NodeOutputPreview::Hidden;
+            cx.notify();
+        }
+    }
+
+    fn select_saved_layer(
+        &mut self,
+        index: usize,
+        extend: bool,
+        range: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+            return;
+        };
+        let Ok(layers) = &graph.root_layers else {
+            return;
+        };
+        if form.pending_canvas_source.is_some() {
+            return;
+        }
+        let Some(scope) = form
+            .clipboard_scope()
+            .filter(|network| network.parent.is_none())
+            .map(|network| network.id)
+        else {
+            return;
+        };
+        let nodes_by_id = form
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.network_id() == scope)
+            .map(|(index, node)| (node.storage_id(), index))
+            .collect::<BTreeMap<_, _>>();
+        let order = layers
+            .iter()
+            .filter_map(|layer| nodes_by_id.get(&layer.storage_id).copied())
+            .collect::<Vec<_>>();
+        if !order.contains(&index) {
+            return;
+        }
+        let in_scope = |index| {
+            form.nodes
+                .get(index)
+                .is_some_and(|node: &GddGraphNode| node.network_id() == scope)
+        };
+        form.node_selection.retain(|&index| in_scope(index));
+        if form.node_selection.is_empty() {
+            form.node_selection
+                .extend(form.selected.filter(|&index| in_scope(index)));
+        }
+        crate::layers::update_layer_selection(
+            &order,
+            index,
+            &mut form.layer_selection_anchor,
+            &mut form.node_selection,
+            extend,
+            range,
+        );
+        let active = if form.node_selection.contains(&index) {
+            Some(index)
+        } else {
+            form.selected
+                .filter(|index| form.node_selection.contains(index))
+                .or_else(|| form.node_selection.first().copied())
+        };
+        if form.node_selection.len() == 1 {
+            form.node_selection.clear();
+        }
         if let Some(active) = active {
             self.select_copy_node(active, window, cx);
         } else {
@@ -8496,6 +8593,102 @@ mod tests {
         }
         assert_eq!(
             filesystem.load_bytes(&path).await.expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_002_2_workspace_extends_and_range_selects_saved_layers(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) = graph_layer_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/saved-layer-selection.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the layer graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        let choose = |window: &mut gpui::VisualTestContext,
+                      selector,
+                      modifiers,
+                      expected: &[usize],
+                      anchor| {
+            click_saved_graph(window, selector, gpui::MouseButton::Left, modifiers);
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                let mut selection = form.node_selection.clone();
+                selection.extend(form.selected);
+                assert!(selection.iter().copied().eq(expected.iter().copied()));
+                assert_eq!(form.layer_selection_anchor, Some(anchor));
+                assert!(!item.is_dirty(cx));
+                let model = item.model.read(cx);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert_eq!(model.gdd_contents().expect("GDD").history_len(), history);
+            });
+        };
+        let parent = "GRAPHITE-GDD-SAVED-LAYER-1";
+        let child = "GRAPHITE-GDD-SAVED-LAYER-2";
+        let sibling = "GRAPHITE-GDD-SAVED-LAYER-0";
+        let accelerator = gpui::Modifiers {
+            platform: cfg!(target_os = "macos"),
+            control: !cfg!(target_os = "macos"),
+            ..Default::default()
+        };
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..Default::default()
+        };
+        choose(window, parent, Default::default(), &[1], 1);
+        choose(window, sibling, accelerator, &[0, 1], 0);
+        choose(window, child, shift, &[0, 2], 0);
+        choose(
+            window,
+            parent,
+            gpui::Modifiers {
+                shift: true,
+                ..accelerator
+            },
+            &[0, 1, 2],
+            0,
+        );
+        choose(window, child, accelerator, &[0, 1], 2);
+        choose(
+            window,
+            parent,
+            gpui::Modifiers {
+                alt: true,
+                ..Default::default()
+            },
+            &[0, 1],
+            2,
+        );
+        choose(window, sibling, shift, &[0, 2], 2);
+        choose(window, child, accelerator, &[0], 2);
+        choose(window, sibling, accelerator, &[], 0);
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }

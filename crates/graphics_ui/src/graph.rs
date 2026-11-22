@@ -127,6 +127,11 @@ pub(crate) enum SavedGraphAction {
         bounds: [[f64; 2]; 2],
         modifiers: Modifiers,
     },
+    SelectLayer {
+        index: usize,
+        extend: bool,
+        range: bool,
+    },
     EditLayer {
         index: usize,
         change: GddRootLayerChange,
@@ -772,10 +777,13 @@ pub(crate) fn render_saved_graph(
                             .then_some(view.pending_source.is_none() && view.can_start_connection),
                         move |action, window, cx| {
                             let action = match action {
-                                SavedLayerAction::Select => SavedGraphAction::SelectNode {
-                                    index,
-                                    extend: false,
-                                },
+                                SavedLayerAction::Select { extend, range } => {
+                                    SavedGraphAction::SelectLayer {
+                                        index,
+                                        extend,
+                                        range,
+                                    }
+                                }
                                 SavedLayerAction::Edit(change) => {
                                     SavedGraphAction::EditLayer { index, change }
                                 }
