@@ -432,6 +432,27 @@ impl GddGraphNetwork {
         &self.exports
     }
 
+    pub fn connected_export_node<'nodes>(
+        &self,
+        nodes: &'nodes [GddGraphNode],
+    ) -> Option<&'nodes GddGraphNode> {
+        let [export] = self.exports.as_slice() else {
+            return None;
+        };
+        let Some(GddGraphPortSource::Node {
+            storage_id,
+            output_index: 0,
+        }) = &export.source
+        else {
+            return None;
+        };
+        nodes.iter().find(|node| {
+            node.storage_id == *storage_id
+                && node.network_id == self.id
+                && Arc::ptr_eq(&self.snapshot, &node.snapshot)
+        })
+    }
+
     pub fn import_name(&self, index: usize) -> Option<&str> {
         self.import_names
             .get(index)

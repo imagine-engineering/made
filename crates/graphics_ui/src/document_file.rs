@@ -599,6 +599,7 @@ struct NodeCopyForm {
     value: Entity<Editor>,
     position: Entity<Editor>,
     output_preview: NodeOutputPreview,
+    document_run: NodeOutputPreview,
     port_rename: Option<PortRenameForm>,
     node_selection: BTreeSet<usize>,
     layer_selection_anchor: Option<usize>,
@@ -638,6 +639,7 @@ impl NodeCopyForm {
             value: cx.new(|cx| Editor::single_line(window, cx)),
             position: cx.new(|cx| Editor::single_line(window, cx)),
             output_preview: NodeOutputPreview::Hidden,
+            document_run: NodeOutputPreview::Hidden,
             port_rename: None,
             node_selection: BTreeSet::new(),
             layer_selection_anchor: None,
@@ -678,6 +680,7 @@ impl NodeCopyForm {
             .collect::<BTreeSet<_>>();
         self.snapshot = snapshot;
         self.revision = revision;
+        self.document_run = NodeOutputPreview::Hidden;
         self.nodes.clone_from(&inspection.nodes);
         self.networks.clone_from(&inspection.networks);
         let active_network =
@@ -828,6 +831,19 @@ enum NodeOutputPreview {
     Pending { _task: Task<()> },
     Ready(GddNumericValue),
     Failed(SharedString),
+}
+
+impl NodeOutputPreview {
+    fn feedback(&self) -> Option<(String, Color)> {
+        match self {
+            Self::Ready(GddNumericValue::NumberList(values)) if values.is_empty() => {
+                Some(("[]".into(), Color::Default))
+            }
+            Self::Ready(value) => Some((value.to_string(), Color::Default)),
+            Self::Failed(error) => Some((error.to_string(), Color::Error)),
+            Self::Hidden | Self::Pending { .. } => None,
+        }
+    }
 }
 
 enum SavedViewPanel {
@@ -2615,6 +2631,64 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
+    fn run_document_graph(&mut self, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if !Arc::ptr_eq(&form.revision, &self.model.read(cx).revision) {
+            return;
+        }
+        if matches!(form.document_run, NodeOutputPreview::Pending { .. }) {
+            form.document_run = NodeOutputPreview::Hidden;
+            cx.notify();
+            return;
+        }
+        let Some(node) = form
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .and_then(|network| network.connected_export_node(&form.nodes))
+            .cloned()
+        else {
+            form.document_run = NodeOutputPreview::Failed(
+                "Run Graph requires a single document export connected to a node's primary output."
+                    .into(),
+            );
+            cx.notify();
+            return;
+        };
+        let contents = form.snapshot.clone();
+        let revision = form.revision.clone();
+        let evaluation = cx.background_spawn(async move {
+            futures::executor::block_on(contents.preview_graph_numeric_output(&node))
+                .map_err(|error| format!("{}: {error}", node.label()))
+        });
+        form.document_run = NodeOutputPreview::Pending {
+            _task: cx.spawn(async move |item, cx| {
+                let result = evaluation.await;
+                if let Err(error) = item.update(cx, |item, cx| {
+                    let NodeCopyPanel::Ready(form) = &mut item.node_copy else {
+                        return;
+                    };
+                    if !Arc::ptr_eq(&form.revision, &revision)
+                        || !Arc::ptr_eq(&item.model.read(cx).revision, &revision)
+                        || !matches!(form.document_run, NodeOutputPreview::Pending { .. })
+                    {
+                        return;
+                    }
+                    form.document_run = match result {
+                        Ok(value) => NodeOutputPreview::Ready(value),
+                        Err(error) => NodeOutputPreview::Failed(error.into()),
+                    };
+                    cx.notify();
+                }) {
+                    log::debug!("Graphite document run closed: {error:#}");
+                }
+            }),
+        };
+        cx.notify();
+    }
+
     fn toggle_graph_selection(&mut self, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
@@ -2763,14 +2837,6 @@ impl GraphiteDocumentItem {
             NodeOutputPreview::Ready(_) => "Hide Numeric Preview",
             NodeOutputPreview::Failed(_) => "Retry Numeric Preview",
         };
-        let result = match preview {
-            NodeOutputPreview::Ready(GddNumericValue::NumberList(values)) if values.is_empty() => {
-                Some(("[]".into(), Color::Default))
-            }
-            NodeOutputPreview::Ready(value) => Some((value.to_string(), Color::Default)),
-            NodeOutputPreview::Failed(error) => Some((error.to_string(), Color::Error)),
-            NodeOutputPreview::Hidden | NodeOutputPreview::Pending { .. } => None,
-        };
         v_flex()
             .gap_2()
             .child(
@@ -2780,10 +2846,36 @@ impl GraphiteDocumentItem {
                         cx.listener(|item, _, _, cx| item.toggle_node_output_preview(cx)),
                     )),
             )
-            .when_some(result, |panel, (message, color)| {
+            .when_some(preview.feedback(), |panel, (message, color)| {
                 panel.child(
                     div()
                         .debug_selector(|| "GRAPHITE-GDD-NUMERIC-RESULT".into())
+                        .child(Label::new(message).color(color)),
+                )
+            })
+    }
+
+    fn render_document_run(run: &NodeOutputPreview, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = if matches!(run, NodeOutputPreview::Pending { .. }) {
+            "Cancel Run"
+        } else {
+            "Run Graph"
+        };
+        h_flex()
+            .gap_2()
+            .flex_wrap()
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-RUN-GRAPH".into())
+                    .child(
+                        Button::new("graphite-gdd-run-graph", label)
+                            .on_click(cx.listener(|item, _, _, cx| item.run_document_graph(cx))),
+                    ),
+            )
+            .when_some(run.feedback(), |row, (message, color)| {
+                row.child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-GRAPH-RUN-RESULT".into())
                         .child(Label::new(message).color(color)),
                 )
             })
@@ -3425,10 +3517,14 @@ impl GraphiteDocumentItem {
                             SavedGraphPanel::Loading { .. } => "Cancel Graph Loading",
                             SavedGraphPanel::Ready(_) => "Hide Saved Graph",
                         };
-                        let panel = panel.child(div().debug_selector(|| "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH".into()).child(
-                            Button::new("graphite-gdd-toggle-saved-graph", label)
-                                .on_click(cx.listener(|item, _, window, cx| item.toggle_saved_graph(window, cx))),
-                        ));
+                        let panel = panel.child(h_flex().gap_2().flex_wrap().child(
+                            div().debug_selector(|| "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH".into()).child(
+                                Button::new("graphite-gdd-toggle-saved-graph", label)
+                                    .on_click(cx.listener(|item, _, window, cx| item.toggle_saved_graph(window, cx))),
+                            ),
+                        ).when(matches!(form.saved_graph, SavedGraphPanel::Ready(_)), |row| {
+                            row.child(Self::render_document_run(&form.document_run, cx))
+                        }));
                         match &form.saved_graph {
                             SavedGraphPanel::Ready(geometry) => {
                                 let item = cx.entity().downgrade();
@@ -5443,6 +5539,7 @@ mod tests {
         Connection,
         Reconnection,
         NestedConnection,
+        RootExport,
     }
 
     async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
@@ -5495,7 +5592,8 @@ mod tests {
             }
             NumericGraphFixture::Connection
             | NumericGraphFixture::Reconnection
-            | NumericGraphFixture::NestedConnection => Some(NodeInput::node(NodeId(7), 0)),
+            | NumericGraphFixture::NestedConnection
+            | NumericGraphFixture::RootExport => Some(NodeInput::node(NodeId(7), 0)),
         };
         if let Some(second_input) = second_input {
             graph.nodes.insert(
@@ -5511,7 +5609,9 @@ mod tests {
         }
         if matches!(
             fixture,
-            NumericGraphFixture::Reconnection | NumericGraphFixture::ExposedInputWithAlternative
+            NumericGraphFixture::Reconnection
+                | NumericGraphFixture::ExposedInputWithAlternative
+                | NumericGraphFixture::RootExport
         ) {
             graph.nodes.insert(
                 NodeId(9),
@@ -5524,8 +5624,13 @@ mod tests {
                 },
             );
         }
-        if matches!(fixture, NumericGraphFixture::NestedConnection) {
+        if matches!(
+            fixture,
+            NumericGraphFixture::NestedConnection | NumericGraphFixture::RootExport
+        ) {
             graph.exports = vec![NodeInput::node(NodeId(8), 0)];
+        }
+        if matches!(fixture, NumericGraphFixture::NestedConnection) {
             graph = NodeNetwork {
                 nodes: [(
                     NodeId(24),
@@ -9353,6 +9458,152 @@ mod tests {
                 .await
                 .expect("original archive"),
             original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_037_2_workspace_runs_the_current_document_output(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::RootExport, true).await;
+        let (unsupported, _) = graph_layer_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/manual-graph-run.gdd.zip");
+        let unsupported_path = PathBuf::from("/project/manual-unsupported-graph-run.gdd.zip");
+        for (source, bytes) in [(&path, &original), (&unsupported_path, &unsupported)] {
+            filesystem.write(source, bytes).await.expect("source GDD");
+        }
+        window.run_until_parked();
+        let open = |path: PathBuf, window: &mut gpui::VisualTestContext| {
+            workspace.update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path, Default::default(), window, cx)
+            })
+        };
+        let invoke = |window: &mut gpui::VisualTestContext, selector| {
+            paint(window);
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        let item = open(path.clone(), window)
+            .await
+            .expect("open the saved output")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        invoke(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        let (original_revision, exported_id) = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            assert_eq!(form.selected, Some(2));
+            let root = form
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("document network");
+            let node = root
+                .connected_export_node(&form.nodes)
+                .expect("linked document output");
+            assert_ne!(
+                form.selected_node()
+                    .expect("unrelated selection")
+                    .storage_id(),
+                node.storage_id()
+            );
+            (item.model.read(cx).revision.clone(), node.storage_id())
+        });
+        let check = |window: &gpui::VisualTestContext, expected, revision: &Arc<()>| {
+            item.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("ready graph") };
+                assert!(matches!(&form.document_run, NodeOutputPreview::Ready(GddNumericValue::Integer(value)) if *value == expected));
+                assert!(matches!(&form.output_preview, NodeOutputPreview::Hidden));
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, revision));
+                let root = form.networks.iter().find(|network| network.parent.is_none()).expect("document network");
+                assert_eq!(root.connected_export_node(&form.nodes).map(GddGraphNode::storage_id), Some(exported_id));
+            });
+        };
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        check(window, 17, &original_revision);
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("GDD")
+                    .history_len(),
+                history
+            );
+        });
+
+        invoke(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        invoke(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        invoke(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let field = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            form.value.clone()
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("-29", window, cx)
+        });
+        invoke(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        let working_revision = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            assert!(matches!(&form.document_run, NodeOutputPreview::Hidden));
+            assert!(item.is_dirty(cx));
+            item.model.read(cx).revision.clone()
+        });
+        assert!(!Arc::ptr_eq(&working_revision, &original_revision));
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        check(window, 29, &working_revision);
+        invoke(window, "GRAPHITE-GDD-UNDO");
+        let undo_revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        check(window, 17, &undo_revision);
+
+        let unsupported_item = open(unsupported_path.clone(), window)
+            .await
+            .expect("open unsupported output")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        invoke(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        let revision =
+            unsupported_item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        invoke(window, "GRAPHITE-GDD-RUN-GRAPH");
+        unsupported_item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            let NodeOutputPreview::Failed(error) = &form.document_run else {
+                panic!("node-addressed output error")
+            };
+            assert!(error.contains("Artwork [20]"));
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original numeric archive"),
+            original
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&unsupported_path)
+                .await
+                .expect("original layer archive"),
+            unsupported
         );
     }
 
