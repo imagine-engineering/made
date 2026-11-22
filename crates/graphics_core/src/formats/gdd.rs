@@ -166,6 +166,10 @@ pub enum GddArchiveError {
     UnsupportedGraphImportConnection,
     #[error("Graphite could not type-check the selected import connection. {0}")]
     GraphImportTypeMismatch(String),
+    #[error("Select an ordinary connected numeric input for the Graphite node insertion.")]
+    UnsupportedGraphWireInsertion,
+    #[error("Graphite could not type-check the inserted node on this wire. {0}")]
+    GraphWireInsertionTypeMismatch(String),
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
     #[error("The Graphite node already has the requested pin state.")]
@@ -526,6 +530,11 @@ struct GddNumericPort {
     index: usize,
     value: GddNumericValue,
     exposed: bool,
+}
+
+struct GraphWireInsertion {
+    consumer: StorageNodeId,
+    input: InputConnector,
 }
 
 impl GddNumericPort {
@@ -1058,20 +1067,7 @@ impl InspectedGddV1 {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
-        let identifier = numeric_node_identifier(operation);
-        let definition = resolve_proto_node_type(identifier.clone()).ok_or(
-            GddArchiveError::MissingGraphNodeDefinition(operation.name()),
-        )?;
-        let template = definition.default_node_template();
-        if !matches!(
-            &template.implementation,
-            NodeTemplateImplementation::ProtoNode(actual) if actual == &identifier
-        ) || !matches!(template.inputs.as_slice(), [NodeInput::Value { .. }])
-        {
-            return Err(GddArchiveError::MissingGraphNodeDefinition(
-                operation.name(),
-            ));
-        }
+        let template = numeric_node_template(operation)?;
         self.insert_root_node_template_in_copy(template, position, budget)
             .await
     }
@@ -2259,8 +2255,89 @@ impl InspectedGddV1 {
         {
             return Err(GddArchiveError::GraphNodeIdentityCollision);
         }
-        self.save_added_graph_node(interface, path, node_id, template, budget)
+        self.save_added_graph_node(interface, path, node_id, template, None, budget)
             .await
+    }
+
+    pub async fn insert_numeric_node_on_wire_in_copy(
+        &self,
+        target: &GddGraphNode,
+        operation: UnaryNumericOperation,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(target)?;
+        let unsupported = || GddArchiveError::UnsupportedGraphWireInsertion;
+        let path = target.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let original_input = graph_numeric_input(&interface, target)
+            .filter(|input| !matches!(input, GddNumericInput::Literal(_)))
+            .ok_or_else(unsupported)?;
+        if !interface.is_absolute(&target.local_id, path) {
+            return Err(unsupported());
+        }
+        let connector = InputConnector::node_at_index(target.local_id, original_input.index());
+        let source = interface
+            .upstream_output_connector(&connector, path)
+            .ok_or_else(unsupported)?;
+        if let Some(source) = source.node_id()
+            && (interface.is_layer(&source, path) || !interface.is_absolute(&source, path))
+        {
+            return Err(unsupported());
+        }
+        let position = interface
+            .position(&target.local_id, path)
+            .ok_or_else(unsupported)?;
+        let horizontal = position.x.checked_sub(4).ok_or_else(unsupported)?;
+        let mut template = numeric_node_template(operation)?;
+        if !matches!(
+            template.inputs.as_slice(),
+            [NodeInput::Value { exposed: true, .. }]
+        ) {
+            return Err(unsupported());
+        }
+        template.node_type_metadata =
+            NodeTypePersistentMetadata::node(IVec2::new(horizontal, position.y));
+        let layout = graph_port_edit_layout(&interface, [path])?;
+        let node_id = NodeId::new();
+        if interface.document_node(&node_id, path).is_some() {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        if interface.insert_node(node_id, template, path).is_some() {
+            return Err(GddArchiveError::GraphNodeIdentityCollision);
+        }
+        interface.insert_node_between(&node_id, &connector, 0, path);
+        if interface.upstream_output_connector(&connector, path)
+            != Some(OutputConnector::primary_output(node_id))
+            || interface.upstream_output_connector(&InputConnector::primary_input(node_id), path)
+                != Some(source)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let mut updated_layout = graph_port_edit_layout(&interface, [path])?;
+        if updated_layout.remove(&(path, node_id)).is_none() || updated_layout != layout {
+            return Err(unsupported());
+        }
+        let nested = interface.nested_network(path).ok_or_else(unsupported)?;
+        let imports =
+            enclosing_network_inputs(interface.document_network(), path).ok_or_else(unsupported)?;
+        let detached = numeric_preview_network(nested, target.local_id, imports)?;
+        typecheck_detached_numeric_network(detached)
+            .map_err(GddArchiveError::GraphWireInsertionTypeMismatch)?;
+        let template = interface
+            .create_node_template(&node_id, path)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        self.save_added_graph_node(
+            interface,
+            path,
+            node_id,
+            template,
+            Some(GraphWireInsertion {
+                consumer: target.storage_id,
+                input: connector,
+            }),
+            budget,
+        )
+        .await
     }
 
     pub async fn preview_graph_numeric_output(
@@ -2309,7 +2386,7 @@ impl InspectedGddV1 {
         let temporary_id = *temporary_id;
         let template = template.clone();
         interface.insert_node_group(copied, HashMap::from([(temporary_id, new_id)]), path);
-        self.save_added_graph_node(interface, path, new_id, template, budget)
+        self.save_added_graph_node(interface, path, new_id, template, None, budget)
             .await
     }
 
@@ -2319,6 +2396,7 @@ impl InspectedGddV1 {
         path: &[NodeId],
         node_id: NodeId,
         template: NodeTemplate,
+        insertion: Option<GraphWireInsertion>,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         let node = interface
@@ -2329,7 +2407,7 @@ impl InspectedGddV1 {
             .node_metadata(&node_id, path)
             .map(|metadata| metadata.persistent_metadata.clone())
             .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
-        let edits = [
+        let mut edits = vec![
             EditorDelta::Graph(RuntimeDelta::AddNode {
                 network_path: path.to_vec(),
                 node_id,
@@ -2341,6 +2419,10 @@ impl InspectedGddV1 {
                 metadata: Box::new(metadata),
             },
         ];
+        let output = NodeInput::node(node_id, 0);
+        if let Some(insertion) = &insertion {
+            edits.push(write_graph_connector(path, insertion.input, output.clone()));
+        }
         let (mut owner, staged) = self.fork_working_copy(&budget).await?;
         if self.graph_root_needs_initialization() {
             let mut empty = Registry::from_runtime_with_metadata(
@@ -2385,6 +2467,19 @@ impl InspectedGddV1 {
             }
             RegistryDelta::ChangeNodeAttribute { id: target, .. }
             | RegistryDelta::ChangeNodeInputAttribute { id: target, .. } => *target == id,
+            RegistryDelta::ChangeNodeInput {
+                id: target,
+                index,
+                new_input:
+                    graphite_document_graph_storage::NodeInput::Node {
+                        id: upstream,
+                        index: 0,
+                    },
+            } => insertion.as_ref().is_some_and(|insertion| {
+                *target == insertion.consumer
+                    && *index as usize == insertion.input.input_index()
+                    && *upstream == id
+            }),
             _ => false,
         }) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
@@ -2397,7 +2492,11 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let actual = graph.into_interface()?;
-        if actual.create_node_template(&node_id, path) != Some(template) {
+        if actual.create_node_template(&node_id, path) != Some(template)
+            || insertion.is_some_and(|insertion| {
+                actual.input_from_connector(&insertion.input, path) != Some(&output)
+            })
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -3455,6 +3554,26 @@ fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentif
     }
 }
 
+fn numeric_node_template(
+    operation: UnaryNumericOperation,
+) -> Result<NodeTemplate, GddArchiveError> {
+    let identifier = numeric_node_identifier(operation);
+    let definition = resolve_proto_node_type(identifier.clone()).ok_or(
+        GddArchiveError::MissingGraphNodeDefinition(operation.name()),
+    )?;
+    let template = definition.default_node_template();
+    if !matches!(
+        &template.implementation,
+        NodeTemplateImplementation::ProtoNode(actual) if actual == &identifier
+    ) || !matches!(template.inputs.as_slice(), [NodeInput::Value { .. }])
+    {
+        return Err(GddArchiveError::MissingGraphNodeDefinition(
+            operation.name(),
+        ));
+    }
+    Ok(template)
+}
+
 fn empty_graph_export(input: &NodeInput) -> bool {
     matches!(input, NodeInput::Value { tagged_value, exposed: true } if **tagged_value == TaggedValue::None)
 }
@@ -3736,9 +3855,9 @@ fn graph_node_has_isolated_layout(interface: &NodeNetworkInterface, node: &GddGr
 
 type GraphPortEditLayout<'a> = BTreeMap<(&'a [NodeId], NodeId), NodeTypePersistentMetadata>;
 
-fn graph_port_edit_layout<'a>(
+fn graph_port_edit_layout<'a, const SCOPES: usize>(
     interface: &NodeNetworkInterface,
-    scopes: [&'a [NodeId]; 2],
+    scopes: [&'a [NodeId]; SCOPES],
 ) -> Result<GraphPortEditLayout<'a>, GddArchiveError> {
     let mut layout = BTreeMap::new();
     for scope in scopes {
@@ -5056,6 +5175,121 @@ mod tests {
                 .await
                 .expect("one redo");
             assert!(redo.document.registry().value_equal(registry));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_010_1_inserts_a_typed_node_on_a_wire_as_one_history_interaction() {
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("node wire fixture");
+            let nodes = original.graph_nodes().await.expect("source numeric nodes");
+            let target = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(11))
+                .expect("the existing connected consumer");
+            let producer = target
+                .numeric_connection_source(&nodes)
+                .expect("prior wired source");
+            assert!(matches!(
+                original
+                    .insert_numeric_node_on_wire_in_copy(
+                        producer,
+                        UnaryNumericOperation::AbsoluteValue,
+                        budget()
+                    )
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphWireInsertion)
+            ));
+            for (operation, value) in [
+                (UnaryNumericOperation::AbsoluteValue, 1.),
+                (UnaryNumericOperation::Ceiling, -1.),
+                (UnaryNumericOperation::Floor, -1.),
+                (UnaryNumericOperation::Round, -1.),
+                (UnaryNumericOperation::Sign, -1.),
+            ] {
+                let copy = original
+                    .insert_numeric_node_on_wire_in_copy(target, operation, budget())
+                    .await
+                    .expect("insert an exact pinned source node on the wire");
+                assert!(matches!(
+                    copy.insert_numeric_node_on_wire_in_copy(target, operation, budget())
+                        .await,
+                    Err(GddArchiveError::StaleGraphNode)
+                ));
+                let nodes = copy.graph_nodes().await.expect("saved numeric graph");
+                let consumer = nodes
+                    .iter()
+                    .find(|node| node.storage_id == target.storage_id)
+                    .expect("same downstream identity");
+                let added = consumer
+                    .numeric_connection_source(&nodes)
+                    .expect("new intermediary");
+                assert_ne!(added.storage_id, producer.storage_id);
+                assert!(added.label().contains(operation.name()));
+                assert_eq!(
+                    added
+                        .numeric_connection_source(&nodes)
+                        .expect("original upstream")
+                        .storage_id,
+                    producer.storage_id
+                );
+                let output = copy
+                    .preview_graph_numeric_output(consumer)
+                    .await
+                    .expect("pinned output");
+                assert!(output.same_value(&GddNumericValue::Number(value)));
+                assert_eq!(
+                    copy.document.registry().networks,
+                    original.document.registry().networks
+                );
+                let undo = copy
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await
+                    .expect("one undo removes the node and restores the prior wire");
+                assert!(
+                    undo.document
+                        .registry()
+                        .value_equal(original.document.registry())
+                );
+                let redo = undo
+                    .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                    .await
+                    .expect("one redo restores both new edges");
+                assert!(
+                    redo.document
+                        .registry()
+                        .value_equal(copy.document.registry())
+                );
+            }
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+
+            let (imported, _) = network_import_fixture().await;
+            let nodes = imported.graph_nodes().await.expect("import wire fixture");
+            let target = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(9))
+                .expect("same nested numeric import consumer");
+            let copy = imported
+                .insert_numeric_node_on_wire_in_copy(target, UnaryNumericOperation::Sign, budget())
+                .await
+                .expect("insert on a nested import");
+            let nodes = copy.graph_nodes().await.expect("reopened source");
+            let consumer = nodes
+                .iter()
+                .find(|node| node.storage_id == target.storage_id)
+                .expect("same downstream node");
+            let intermediary = consumer
+                .numeric_connection_source(&nodes)
+                .expect("inserted Sign");
+            assert_eq!(intermediary.numeric_import_source(), Some(1));
+            let output = copy
+                .preview_graph_numeric_output(consumer)
+                .await
+                .expect("pinned result");
+            assert!(output.same_value(&GddNumericValue::Number(1.)));
         });
     }
 

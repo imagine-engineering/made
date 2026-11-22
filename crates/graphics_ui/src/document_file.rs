@@ -61,6 +61,14 @@ const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
     max_entries: 8192,
 };
 
+const GRAPHITE_NUMERIC_OPERATIONS: [UnaryNumericOperation; 5] = [
+    UnaryNumericOperation::AbsoluteValue,
+    UnaryNumericOperation::Ceiling,
+    UnaryNumericOperation::Floor,
+    UnaryNumericOperation::Round,
+    UnaryNumericOperation::Sign,
+];
+
 enum InspectedDocument {
     Gdd { contents: Arc<InspectedGddV1> },
     Legacy(PreservedLegacyDocument),
@@ -634,6 +642,7 @@ enum NodeCopyChange {
     NumericInput(GddNumericValue),
     NumericInputExposure(bool),
     DisconnectNumericInput,
+    InsertNumericOnWire(UnaryNumericOperation),
     ConnectNumericInput {
         source: Box<GddGraphNode>,
         previous: Option<Box<GddGraphNode>>,
@@ -804,13 +813,7 @@ impl GraphiteDocumentItem {
             .when_some(self.new_node_position.clone(), |panel, position| {
                 let item = cx.entity().downgrade();
                 let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
-                    for operation in [
-                        UnaryNumericOperation::AbsoluteValue,
-                        UnaryNumericOperation::Ceiling,
-                        UnaryNumericOperation::Floor,
-                        UnaryNumericOperation::Round,
-                        UnaryNumericOperation::Sign,
-                    ] {
+                    for operation in GRAPHITE_NUMERIC_OPERATIONS {
                         let item = item.clone();
                         menu = menu.custom_entry(
                             move |_, _| {
@@ -1315,6 +1318,60 @@ impl GraphiteDocumentItem {
             };
             self.save_copy(request, window, cx);
         }
+    }
+
+    fn render_numeric_wire_insertion(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let item = cx.entity().downgrade();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for operation in GRAPHITE_NUMERIC_OPERATIONS {
+                let item = item.clone();
+                menu = menu.custom_entry(
+                    move |_, _| {
+                        div()
+                            .debug_selector(move || {
+                                format!("GRAPHITE-GDD-INSERT-ON-WIRE-{}", operation.name())
+                            })
+                            .p_2()
+                            .child(Label::new(operation.name()))
+                            .into_any_element()
+                    },
+                    move |window, cx| {
+                        if let Some(item) = item.upgrade() {
+                            item.update(cx, |item, cx| {
+                                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                                    return;
+                                };
+                                if let Some(target) = form.selected_node().filter(|target| {
+                                    target.has_numeric_connection()
+                                        && target.can_preview_numeric_output()
+                                }) {
+                                    item.save_copy(
+                                        GraphiteCopy::EditNode {
+                                            node: Box::new(target.clone()),
+                                            change: NodeCopyChange::InsertNumericOnWire(operation),
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                }
+                            });
+                        }
+                    },
+                );
+            }
+            menu
+        });
+        div()
+            .debug_selector(|| "GRAPHITE-GDD-INSERT-ON-WIRE".into())
+            .child(DropdownMenu::new(
+                "graphite-gdd-insert-on-wire",
+                "Insert a Node on Wire in a Copy",
+                menu,
+            ))
     }
 
     fn render_numeric_connection_menu(
@@ -1947,6 +2004,12 @@ impl GraphiteDocumentItem {
                                         ),
                                 )
                             })
+                            .when(
+                                selected.has_numeric_connection()
+                                    && selected.can_preview_numeric_output()
+                                    && self.copy_task.is_none(),
+                                |panel| panel.child(self.render_numeric_wire_insertion(window, cx)),
+                            )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
                             .when(selected.can_preview_numeric_output(), |panel| {
                                 panel.child(Self::render_node_output_preview(&form.output_preview, cx))
@@ -2239,6 +2302,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::DisconnectNumericInput,
                         ..
                     } => "Disconnected",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::InsertNumericOnWire(_),
+                        ..
+                    } => "Inserted node on wire in",
                     GraphiteCopy::EditNode {
                         change:
                             NodeCopyChange::ConnectNumericInput {
@@ -2615,6 +2682,15 @@ impl GraphiteDocumentItem {
                                     archive
                                         .disconnect_graph_numeric_input_in_copy(
                                             &node,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                                NodeCopyChange::InsertNumericOnWire(operation) => {
+                                    archive
+                                        .insert_numeric_node_on_wire_in_copy(
+                                            &node,
+                                            operation,
                                             ARCHIVE_BUDGET,
                                         )
                                         .await?
@@ -3689,6 +3765,101 @@ mod tests {
             assert_eq!(network.import_name(1), Some("Second numeric input"));
             assert_eq!(network.import_count, 2);
             assert_eq!(contents.history_len(), original_history + 1);
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_010_2_workspace_inserts_a_numeric_node_on_the_selected_wire(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, original_history) = graph_navigation_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/insert-on-wire.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source network")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Graphite Inspector");
+        choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-3");
+        let label = source.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the scoped graph");
+            };
+            let node = form.selected_node().expect("source wire target");
+            assert_eq!(node.numeric_import_source(), Some(1));
+            node.label().to_owned()
+        });
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
+        paint(window);
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        let destination = PathBuf::from("/project/inserted-on-wire.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopen the inserted node");
+        assert_ne!(reopened, source);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected native Graphite folder");
+            };
+            contents.clone()
+        });
+        let graph = contents.graph_inspection().await.expect("saved graph");
+        let selected = match graph.nodes.iter().position(|node| node.label() == label) {
+            Some(3) => "GRAPHITE-GDD-NODE-COPY-ITEM-3",
+            Some(4) => "GRAPHITE-GDD-NODE-COPY-ITEM-4",
+            _ => panic!("expected the original node and one new node in the selected scope"),
+        };
+        choose_scoped_copy_node(window, selected);
+        click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+        window.run_until_parked();
+        reopened.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("expected the numeric preview");
+            };
+            let node = form.selected_node().expect("same target node");
+            let added = node
+                .numeric_connection_source(&form.nodes)
+                .expect("inserted upstream Sign");
+            assert!(added.label().contains("Sign"));
+            assert_eq!(added.numeric_import_source(), Some(1));
+            assert!(matches!(
+                form.output_preview,
+                NodeOutputPreview::Ready(GddNumericValue::Number(1.))
+            ));
+            assert!(contents.history_len() > original_history);
             assert!(!item.is_dirty(cx));
         });
         assert_eq!(
