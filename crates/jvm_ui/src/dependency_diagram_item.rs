@@ -587,6 +587,9 @@ impl DependencyDiagramItem {
     /// context-menu gesture stages the same target a right-click would and
     /// shows the menu at the node's screen position.
     fn show_context_menu_for_focus(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        if self.context_handle.is_deployed() {
+            return;
+        }
         let canvas = self.canvas.read(cx);
         let focused = canvas
             .focused_node(window)
@@ -620,19 +623,12 @@ impl DependencyDiagramItem {
         });
     }
 
-    /// Dismisses the staged context menu and restores focus to the diagram
-    /// item: the Escape path for the keyboard context-menu gesture.
-    fn dismiss_context_menu(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+    fn dismiss_context_menu(&mut self, cx: &mut Context<Self>) {
         if !self.context_handle.is_deployed() {
             cx.propagate();
             return;
         }
         self.context_handle.hide(cx);
-        window.focus(&self.focus_handle, cx);
-        // Re-assert the restoration on the next frame so a deferred focus
-        // claim from the dismissed overlay cannot outlast the gesture.
-        let focus_handle = self.focus_handle.clone();
-        window.on_next_frame(move |window, cx| window.focus(&focus_handle, cx));
         cx.notify();
     }
 
@@ -1236,8 +1232,8 @@ impl Render for DependencyDiagramItem {
                 }),
             )
             .on_action(
-                cx.listener(|item, _: &DismissDependencyDiagramMenu, window, cx| {
-                    item.dismiss_context_menu(window, cx)
+                cx.listener(|item, _: &DismissDependencyDiagramMenu, _, cx| {
+                    item.dismiss_context_menu(cx)
                 }),
             )
             .child(toolbar)
@@ -2171,68 +2167,41 @@ mod tests {
         });
         let context_handle = cx.update(|_, cx| item.read(cx).context_handle.clone());
 
-        // Focus the item and one of its nodes; the platform keyboard
-        // context-menu gesture stages the focused node's target and shows the
-        // menu at the node's screen position.
-        item.update(cx, |item, cx| {
-            item.canvas
-                .update(cx, |canvas, _| canvas.focus = Some("c1".into()));
+        let node_focus = item.read_with(cx, |item, cx| {
+            item.canvas()
+                .read(cx)
+                .focus_handle_for_node("c1")
+                .expect("canvas node focus handle")
         });
         cx.update(|window, cx| {
-            window.focus(&item.read(cx).focus_handle(cx), cx);
-            // Flush the pending focus so the menu's dismissal restores this
-            // exact handle (focus becomes effective on the next frame).
+            window.focus(&node_focus, cx);
             window.draw(cx).clear(cx);
         });
-        cx.update(|window, cx| {
-            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
-        });
+        cx.simulate_keystrokes("shift-f10");
         assert!(
             context_handle.is_deployed(),
-            "the keyboard gesture deploys the context menu at the focused node"
+            "opens from keyboard node focus"
         );
 
-        // Escape dismisses the menu and restores focus to the diagram item:
-        // the item's key context binds Escape to the dismissal action, which
-        // hides the menu and re-focuses the item handle. The navigation
-        // keystroke runs first, like a user arrowing through the menu before
-        // cancelling.
-        cx.simulate_keystrokes("down");
-        cx.simulate_keystrokes("escape");
-        cx.update(|window, cx| {
-            window.draw(cx).clear(cx);
-        });
-        let (dismissed, restored) = cx.update(|window, cx| {
-            (
-                !context_handle.is_deployed(),
-                item.read(cx).focus_handle(cx).is_focused(window),
-            )
-        });
-        assert!(dismissed, "Escape dismisses the keyboard context menu");
-        assert!(restored, "focus returns to the diagram item after Escape");
-
-        // Second gesture: the shared ui::ContextMenu keeps arrow-key
-        // navigation inside the deployed menu without dismissing it. The
-        // handle's focus API mirrors the platform gesture handing focus to
-        // the menu (the test window does not flush the deferred focus frames).
-        cx.update(|window, cx| {
-            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
-        });
-        assert!(
-            context_handle.is_deployed(),
-            "the gesture re-deploys the menu"
-        );
         cx.update(|window, cx| context_handle.focus(window, cx));
         cx.simulate_keystrokes("down");
         let navigating = cx.update(|window, cx| {
             context_handle.is_deployed() && context_handle.is_focused(window, cx)
         });
         assert!(navigating, "arrow keys navigate the deployed menu");
+        cx.simulate_keystrokes("shift-f10");
         cx.simulate_keystrokes("escape");
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+        });
+        let (dismissed, restored) =
+            cx.update(|window, _| (!context_handle.is_deployed(), node_focus.is_focused(window)));
+        assert!(dismissed, "Escape dismisses the keyboard context menu");
         assert!(
-            !context_handle.is_deployed(),
-            "Escape dismisses the navigated menu"
+            restored,
+            "focus returns to the exact dependency after Escape"
         );
+
         item.update(cx, |item, cx| {
             item.canvas.update(cx, |canvas, cx| {
                 canvas.focus = None;
@@ -2241,8 +2210,10 @@ mod tests {
             });
         });
         cx.update(|window, cx| {
-            item.update(cx, |item, cx| item.show_context_menu_for_focus(window, cx));
+            window.focus(&item.read(cx).focus_handle(cx), cx);
+            window.draw(cx).clear(cx);
         });
+        cx.simulate_keystrokes("shift-f10");
         assert!(
             context_handle.is_deployed(),
             "the gesture can open the blank-canvas menu"
