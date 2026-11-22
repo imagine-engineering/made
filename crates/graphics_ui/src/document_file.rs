@@ -874,6 +874,83 @@ enum NodeCopyChange {
     },
 }
 
+impl NodeCopyChange {
+    async fn stage(
+        self,
+        archive: &InspectedGddV1,
+        node: &GddGraphNode,
+    ) -> Result<InspectedGddV1, GddArchiveError> {
+        match self {
+            Self::Rename(name) => {
+                archive
+                    .rename_graph_node_in_copy(node, name, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::DuplicateNumeric => {
+                archive
+                    .duplicate_graph_numeric_node_in_copy(node, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::DeleteIsolated => {
+                archive
+                    .delete_isolated_graph_node_in_copy(node, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::GridPosition(position) => {
+                archive
+                    .move_graph_node_in_copy(node, position, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::Pin(pinned) => {
+                archive
+                    .set_graph_node_pinned_in_copy(node, pinned, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::MovePinned(movement) => {
+                archive
+                    .move_pinned_graph_node_in_copy(node, movement, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::NumericInput(value) => {
+                archive
+                    .set_graph_numeric_input_in_copy(node, value, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::NumericInputExposure(exposed) => {
+                archive
+                    .set_graph_numeric_input_exposed_in_copy(node, exposed, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::DisconnectNumericInput => {
+                archive
+                    .disconnect_graph_numeric_input_in_copy(node, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::InsertNumericOnWire(operation) => {
+                archive
+                    .insert_numeric_node_on_wire_in_copy(node, operation, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ConnectNumericInput {
+                source,
+                previous: Some(previous),
+            } => {
+                archive
+                    .reconnect_graph_numeric_input_in_copy(node, &previous, &source, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ConnectNumericInput {
+                source,
+                previous: None,
+            } => {
+                archive
+                    .connect_graph_numeric_input_in_copy(node, &source, ARCHIVE_BUDGET)
+                    .await
+            }
+        }
+    }
+}
+
 enum PreparedCopy {
     File(Arc<[u8]>),
     Folder {
@@ -1496,13 +1573,40 @@ impl GraphiteDocumentItem {
                     if form.selected == Some(index)
                         && let Some(command) = command
                     {
-                        self.save_copy(command, window, cx);
+                        self.edit_numeric_wire(command, window, cx);
                     } else {
                         self.copy_feedback = Some((message.into(), Color::Error));
                         cx.notify();
                     }
                 }
             }
+        }
+    }
+
+    fn edit_numeric_wire(
+        &mut self,
+        request: GraphiteCopy,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let model = self.model.read(cx);
+        match request {
+            GraphiteCopy::EditNode { node, change } if model.working.is_some() => {
+                let Some(contents) = model.gdd_contents().cloned() else {
+                    return;
+                };
+                let revision = model.revision.clone();
+                self.stage_working_snapshot(
+                    revision,
+                    async move { change.stage(&contents, &node).await },
+                    window,
+                    cx,
+                );
+            }
+            request => self.save_copy(request, window, cx),
         }
     }
 
@@ -2235,7 +2339,7 @@ impl GraphiteDocumentItem {
                 node: Box::new(node.clone()),
                 change: NodeCopyChange::DisconnectNumericInput,
             };
-            self.save_copy(request, window, cx);
+            self.edit_numeric_wire(request, window, cx);
         }
     }
 
@@ -3084,7 +3188,11 @@ impl GraphiteDocumentItem {
                                         .child(
                                             Button::new(
                                                 "graphite-gdd-disconnect-value",
-                                                "Disconnect Value in a Copy",
+                                                if self.model.read(cx).working.is_some() {
+                                                    "Disconnect Value"
+                                                } else {
+                                                    "Disconnect Value in a Copy"
+                                                },
                                             )
                                             .disabled(self.copy_task.is_some())
                                             .on_click(cx.listener(|item, _, window, cx| {
@@ -3850,106 +3958,9 @@ impl GraphiteDocumentItem {
                                     )
                                     .await?,
                             ),
-                            GraphiteCopy::EditNode { node, change } => Some(match change {
-                                NodeCopyChange::Rename(name) => {
-                                    archive
-                                        .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
-                                        .await?
-                                }
-                                NodeCopyChange::DuplicateNumeric => {
-                                    archive
-                                        .duplicate_graph_numeric_node_in_copy(&node, ARCHIVE_BUDGET)
-                                        .await?
-                                }
-                                NodeCopyChange::DeleteIsolated => {
-                                    archive
-                                        .delete_isolated_graph_node_in_copy(&node, ARCHIVE_BUDGET)
-                                        .await?
-                                }
-                                NodeCopyChange::GridPosition(position) => {
-                                    archive
-                                        .move_graph_node_in_copy(&node, position, ARCHIVE_BUDGET)
-                                        .await?
-                                }
-                                NodeCopyChange::Pin(pinned) => {
-                                    archive
-                                        .set_graph_node_pinned_in_copy(
-                                            &node,
-                                            pinned,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::MovePinned(movement) => {
-                                    archive
-                                        .move_pinned_graph_node_in_copy(
-                                            &node,
-                                            movement,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::NumericInput(value) => {
-                                    archive
-                                        .set_graph_numeric_input_in_copy(
-                                            &node,
-                                            value,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::NumericInputExposure(exposed) => {
-                                    archive
-                                        .set_graph_numeric_input_exposed_in_copy(
-                                            &node,
-                                            exposed,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::DisconnectNumericInput => {
-                                    archive
-                                        .disconnect_graph_numeric_input_in_copy(
-                                            &node,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::InsertNumericOnWire(operation) => {
-                                    archive
-                                        .insert_numeric_node_on_wire_in_copy(
-                                            &node,
-                                            operation,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::ConnectNumericInput {
-                                    source,
-                                    previous: Some(previous),
-                                } => {
-                                    archive
-                                        .reconnect_graph_numeric_input_in_copy(
-                                            &node,
-                                            &previous,
-                                            &source,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                                NodeCopyChange::ConnectNumericInput {
-                                    source,
-                                    previous: None,
-                                } => {
-                                    archive
-                                        .connect_graph_numeric_input_in_copy(
-                                            &node,
-                                            &source,
-                                            ARCHIVE_BUDGET,
-                                        )
-                                        .await?
-                                }
-                            }),
+                            GraphiteCopy::EditNode { node, change } => {
+                                Some(change.stage(&archive, &node).await?)
+                            }
                         };
                         if let Some(copy) = revision {
                             return Ok(PreparedCopy::Folder {
@@ -4707,6 +4718,7 @@ mod tests {
     enum NumericGraphFixture {
         SingleNode,
         ExposedInput,
+        ExposedInputWithAlternative,
         Connection,
         Reconnection,
         NestedConnection,
@@ -4756,7 +4768,8 @@ mod tests {
         };
         let second_input = match fixture {
             NumericGraphFixture::SingleNode => None,
-            NumericGraphFixture::ExposedInput => {
+            NumericGraphFixture::ExposedInput
+            | NumericGraphFixture::ExposedInputWithAlternative => {
                 Some(NodeInput::value(TaggedValue::Integer(0), true))
             }
             NumericGraphFixture::Connection
@@ -4775,7 +4788,10 @@ mod tests {
                 },
             );
         }
-        if matches!(fixture, NumericGraphFixture::Reconnection) {
+        if matches!(
+            fixture,
+            NumericGraphFixture::Reconnection | NumericGraphFixture::ExposedInputWithAlternative
+        ) {
             graph.nodes.insert(
                 NodeId(9),
                 DocumentNode {
@@ -8119,6 +8135,137 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_007_008_009_2_workspace_edits_numeric_wires_in_the_working_canvas(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, _) = numeric_graph_archive_with_layout(
+            NumericGraphFixture::ExposedInputWithAlternative,
+            true,
+        )
+        .await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/working-wires.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open wired source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        let (field, before_ids) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("graph properties")
+            };
+            let [first, target, second] = form.nodes.as_slice() else {
+                panic!("one target and two sources")
+            };
+            (
+                form.value.clone(),
+                [first.storage_id(), target.storage_id(), second.storage_id()],
+            )
+        });
+        field.update_in(window, |editor, window, cx| {
+            editor.set_text("-19", window, cx)
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-APPLY-NUMERIC-INPUT");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        let check_wire = |window: &mut gpui::VisualTestContext,
+                          source: Option<usize>,
+                          value: GddNumericValue| {
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+            window.run_until_parked();
+            paint(window);
+            item.read_with(window, |item, cx| {
+                assert!(item.is_dirty(cx));
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("working graph") };
+                let selected = form.selected_node().expect("retained target selection");
+                assert_eq!(selected.storage_id(), before_ids[1]);
+                assert_eq!(selected.numeric_connection_source(&form.nodes).map(GddGraphNode::storage_id), source.map(|index| before_ids[index]));
+                assert!(matches!(&form.saved_graph, SavedGraphPanel::Ready(geometry) if geometry.wires.len() == usize::from(source.is_some())));
+                match (&form.output_preview, value) {
+                    (NodeOutputPreview::Ready(GddNumericValue::Integer(result)), GddNumericValue::Integer(expected)) => assert_eq!(*result, expected),
+                    (NodeOutputPreview::Ready(GddNumericValue::Vector(result)), GddNumericValue::Vector(expected)) => assert_eq!(*result, expected),
+                    _ => panic!("expected the pinned typed output"),
+                }
+            });
+        };
+        for (socket, index, expected) in [
+            ("GRAPHITE-GDD-GRAPH-NODE-OUTPUT-2", 2, 31),
+            ("GRAPHITE-GDD-GRAPH-NODE-OUTPUT-0", 0, 19),
+        ] {
+            click(window, socket);
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-1");
+            check_wire(window, Some(index), GddNumericValue::Integer(expected));
+        }
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-INPUT-1");
+        check_wire(window, None, GddNumericValue::Vector([0., 0.]));
+
+        for (action, source, expected) in [
+            ("GRAPHITE-GDD-UNDO", Some(0), GddNumericValue::Integer(19)),
+            ("GRAPHITE-GDD-UNDO", Some(2), GddNumericValue::Integer(31)),
+            ("GRAPHITE-GDD-UNDO", None, GddNumericValue::Integer(0)),
+            ("GRAPHITE-GDD-REDO", Some(2), GddNumericValue::Integer(31)),
+            ("GRAPHITE-GDD-REDO", Some(0), GddNumericValue::Integer(19)),
+            ("GRAPHITE-GDD-REDO", None, GddNumericValue::Vector([0., 0.])),
+            ("GRAPHITE-GDD-UNDO", Some(0), GddNumericValue::Integer(19)),
+        ] {
+            click(window, action);
+            check_wire(window, source, expected);
+        }
+        let destination = PathBuf::from("/project/saved-working-wires.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        let contents = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved working folder");
+        let nodes = contents.graph_nodes().await.expect("reopened graph");
+        let [first, target, second] = nodes.as_slice() else {
+            panic!("same three saved nodes")
+        };
+        assert_eq!(
+            [first.storage_id(), target.storage_id(), second.storage_id()],
+            before_ids
+        );
+        assert_eq!(
+            target
+                .numeric_connection_source(&nodes)
+                .map(GddGraphNode::storage_id),
+            Some(first.storage_id())
+        );
+        assert!(matches!(
+            contents.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Integer(19))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original source ZIP"),
             original
         );
     }
