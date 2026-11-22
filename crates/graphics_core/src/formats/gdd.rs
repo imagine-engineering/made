@@ -8970,6 +8970,223 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_281_3_pinned_merge_keeps_order_provenance_and_hit_geometry_after_reopen() {
+        use graphite_core_types::{
+            Color, Context,
+            list::{Item, List, NodeIdPath},
+        };
+        use graphite_glam::UVec2;
+        use graphite_graph_craft::{
+            application_io::{PlatformApplicationIo, PlatformEditorApi},
+            document::value::RenderOutputType,
+            graphene_compiler::{Compiler, Executor},
+        };
+        use graphite_interpreted_executor::{
+            dynamic_executor::DynamicExecutor, util::wrap_network_in_scope,
+        };
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::{
+            ATTR_EDITOR_LAYER_PATH, Graphic,
+            application_io::{ExportFormat as RenderFormat, RenderConfig},
+            bounds::RenderBoundingBox,
+            memo::IORecord,
+            renderer::{
+                Render, RenderParams, RenderSvgSegmentList, SvgRender, graphic_list_bounding_box,
+            },
+            transform::Footprint,
+            vector_nodes::{fill, generator_nodes::rectangle},
+        };
+
+        let first_layer = NodeId(41);
+        let second_layer = NodeId(53);
+        let draw_shape = |rectangle_id, fill_id, dimensions: [f64; 2], color| {
+            let mut shape = resolve_proto_node_type(rectangle::IDENTIFIER)
+                .expect("source Rectangle")
+                .default_node_template();
+            let [width, height] = dimensions;
+            for (index, dimension) in [
+                (rectangle::WidthInput::INDEX, width),
+                (rectangle::HeightInput::INDEX, height),
+            ] {
+                *shape.inputs.get_mut(index).expect("source dimension") =
+                    NodeInput::value(TaggedValue::Number(dimension), false);
+            }
+            let mut paint = resolve_proto_node_type(fill::IDENTIFIER)
+                .expect("source Fill")
+                .default_node_template();
+            *paint
+                .inputs
+                .get_mut(fill::ContentInput::INDEX)
+                .expect("source paint content") = NodeInput::node(rectangle_id, 0);
+            *paint
+                .inputs
+                .get_mut(fill::PaintInput::INDEX)
+                .expect("source paint") = NodeInput::value(TaggedValue::Color(color), false);
+            [
+                (rectangle_id, shape.into_parts().0),
+                (fill_id, paint.into_parts().0),
+            ]
+        };
+        let merge = |base, content| {
+            let mut node = merge_node_definition()
+                .expect("source Merge")
+                .default_node_template();
+            let [base_port, content_port] = node.inputs.as_mut_slice() else {
+                panic!("original Base and Content ports")
+            };
+            if let Some(base) = base {
+                *base_port = NodeInput::node(base, 0);
+            }
+            *content_port = NodeInput::node(content, 0);
+            node.into_parts().0
+        };
+        let source = NodeNetwork {
+            nodes: draw_shape(NodeId(11), NodeId(12), [60., 18.], Color::RED)
+                .into_iter()
+                .chain(draw_shape(NodeId(21), NodeId(22), [14., 44.], Color::BLUE))
+                .chain([
+                    (first_layer, merge(None, NodeId(12))),
+                    (second_layer, merge(Some(first_layer), NodeId(22))),
+                ])
+                .collect(),
+            exports: vec![NodeInput::node(second_layer, 0)],
+            ..Default::default()
+        };
+        let render = |network: NodeNetwork| async move {
+            let api = Arc::new(PlatformEditorApi {
+                application_io: Some(Arc::new(PlatformApplicationIo::default())),
+                ..Default::default()
+            });
+            let mut network = wrap_network_in_scope(network, api);
+            graphite_preprocessor::Preprocessor::new()
+                .preprocess(&mut network, &|_| None)
+                .expect("exact source preprocessing");
+            let proto = Compiler {}
+                .compile_single(network)
+                .expect("compile exact Merge network");
+            let executor = DynamicExecutor::new(proto)
+                .await
+                .expect("construct the registered Merge pipeline");
+            let configuration = RenderConfig {
+                viewport: Footprint {
+                    transform: DAffine2::from_translation(DVec2::splat(64.)),
+                    resolution: UVec2::splat(128),
+                    ..Footprint::DEFAULT
+                },
+                scale: 1.,
+                export_format: RenderFormat::Svg,
+                for_export: true,
+                ..Default::default()
+            };
+            let output = Executor::execute(&&executor, configuration.into_context())
+                .await
+                .expect("CPU SVG Merge output");
+            let TaggedValue::RenderOutput(output) = output else {
+                panic!("original SVG output")
+            };
+            let RenderOutputType::Svg { svg, image_data } = output.data else {
+                panic!("CPU-only SVG")
+            };
+            assert!(image_data.is_empty());
+            let svg = svg.to_ascii_lowercase();
+            let red = svg.find("#ff0000").expect("bottom layer paint");
+            let blue = svg.find("#0000ff").expect("top layer paint");
+            assert!(red < blue, "source stack follows Base then Content");
+            assert_eq!(
+                output
+                    .metadata
+                    .click_targets
+                    .keys()
+                    .copied()
+                    .collect::<BTreeSet<_>>(),
+                BTreeSet::from([first_layer, second_layer])
+            );
+            let mut thumbnails = Vec::new();
+            for (layer, size, visible_color, other_color) in [
+                (first_layer, DVec2::new(60., 18.), "#ff0000", "#0000ff"),
+                (second_layer, DVec2::new(14., 44.), "#0000ff", "#ff0000"),
+            ] {
+                let targets = output
+                    .metadata
+                    .click_targets
+                    .get(&layer)
+                    .expect("separate layer click targets");
+                let [target] = targets.as_slice() else {
+                    panic!("one target for each layer")
+                };
+                assert_eq!(target.bounding_box(), Some([-size / 2., size / 2.]));
+                let monitored = executor
+                    .introspect(&[layer, NodeId(4)])
+                    .expect("unique source Monitor");
+                let content = if let Some(record) =
+                    monitored.downcast_ref::<IORecord<Context<'static>, List<Graphic>>>()
+                {
+                    record.output.clone()
+                } else {
+                    let record = monitored
+                        .downcast_ref::<IORecord<Context<'static>, Item<Graphic>>>()
+                        .expect("source Graphic Monitor output");
+                    List::new_from_item(record.output.clone())
+                };
+                assert_eq!(content.len(), 1);
+                let path = content
+                    .attribute::<NodeIdPath>(ATTR_EDITOR_LAYER_PATH, 0)
+                    .expect("original provenance attribute");
+                assert!(path.0.iter_element_values().copied().eq([layer]));
+                let RenderBoundingBox::Rectangle(bounds) =
+                    graphic_list_bounding_box(&content, DAffine2::IDENTITY)
+                else {
+                    panic!("source thumbnail bounds");
+                };
+                assert_eq!(bounds, [-size / 2., size / 2.]);
+                let [minimum, maximum] = bounds;
+                let mut thumbnail = SvgRender::new();
+                content.render_svg(
+                    &mut thumbnail,
+                    &RenderParams {
+                        thumbnail: true,
+                        ..Default::default()
+                    },
+                );
+                thumbnail.format_svg(minimum, maximum);
+                let thumbnail = thumbnail.svg.to_svg_string().to_ascii_lowercase();
+                assert!(thumbnail.contains(visible_color));
+                assert!(!thumbnail.contains(other_color));
+                thumbnails.push(thumbnail);
+            }
+            (svg, thumbnails)
+        };
+
+        futures::executor::block_on(async {
+            let expected = render(source.clone()).await;
+            let mut owner = document();
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&source, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("persist the exact source network");
+            let original: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source ZIP")
+                .into();
+            let budget = GddArchiveBudget {
+                max_entries: 128,
+                ..budget()
+            };
+            let saved = open_gdd_zip(&original, budget)
+                .await
+                .expect("reopened overlapping layers");
+            let graph = saved.runtime_graph().await.expect("saved graph");
+            assert_eq!(render(graph.network).await, expected);
+        });
+    }
+
+    #[test]
     fn at_gra_graph_005_1_round_trips_eligible_catalog_proto_defaults() {
         use crate::registry::GraphiteNodeCatalog;
 
