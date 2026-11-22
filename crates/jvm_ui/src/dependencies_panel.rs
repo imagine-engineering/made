@@ -3404,7 +3404,7 @@ impl DependenciesPanel {
             return None;
         }
         let (selection, node) = self.resolve_selected_canvas_graph(cx)?;
-        self.canvas_diagram_load_for(panel, &selection, &node, cx)
+        self.canvas_diagram_load_for(panel, &selection, &node, None, cx)
     }
 
     /// Derives the diagram open bundle for an explicit selection and node so
@@ -3415,14 +3415,21 @@ impl DependenciesPanel {
         panel: gpui::WeakEntity<DependenciesPanel>,
         selection: &GraphSelection,
         node: &str,
+        scope: Option<&DependencyDiagramScope>,
         cx: &App,
     ) -> Option<DependencyDiagramOpen> {
         if self.host_unavailable(cx) {
             return None;
         }
         let project = self.project.clone();
-        let derivation =
-            derive_dependency_diagram(self.project.read(cx), self.view, selection, node, None, cx)?;
+        let derivation = derive_dependency_diagram(
+            self.project.read(cx),
+            self.view,
+            selection,
+            node,
+            scope,
+            cx,
+        )?;
         Some(DependencyDiagramOpen {
             derivation,
             source: DependencyDiagramSource {
@@ -3436,13 +3443,18 @@ impl DependenciesPanel {
     }
 
     /// Opens the diagram tab or focuses the matching open one.
-    fn open_or_focus_diagram_tab(&self, open: DependencyDiagramOpen, cx: &mut Context<Self>) {
-        let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+    fn open_or_focus_diagram_tab(
+        &self,
+        open: DependencyDiagramOpen,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Entity<DependencyDiagramItem>> {
+        self.workspace.update_in(cx, |workspace, window, cx| {
             let existing = workspace
                 .items_of_type::<DependencyDiagramItem>(cx)
                 .find(|item| item.read(cx).matches_target(&open.source.selection));
             if let Some(item) = existing {
                 workspace.activate_item(&item, true, true, window, cx);
+                item
             } else {
                 DependencyDiagramItem::open(
                     open.derivation,
@@ -3450,9 +3462,9 @@ impl DependenciesPanel {
                     workspace,
                     window,
                     cx,
-                );
+                )
             }
-        });
+        })
     }
 
     fn show_dependency_diagram(&mut self, cx: &mut Context<Self>) {
@@ -3475,7 +3487,9 @@ impl DependenciesPanel {
             return;
         }
         if let Some(open) = self.canvas_diagram_load(cx.weak_entity(), cx) {
-            self.open_or_focus_diagram_tab(open, cx);
+            if let Err(error) = self.open_or_focus_diagram_tab(open, cx) {
+                self.show_graph_error(error, cx);
+            }
         } else {
             // No admitted facts: show the collection affordance without
             // starting a provider query.
@@ -3491,34 +3505,27 @@ impl DependenciesPanel {
         &mut self,
         selection: &GraphSelection,
         node: &str,
+        scope: &DependencyDiagramScope,
         cx: &mut Context<Self>,
-    ) {
+    ) -> anyhow::Result<()> {
+        let open = self.canvas_diagram_load_for(cx.weak_entity(), selection, node, Some(scope), cx)
+            .context("The analyzer's dependency graph is unavailable. Refresh and collect graph facts before opening the diagram.")?;
+        anyhow::ensure!(
+            open.derivation.canvas.node(node).is_some(),
+            "This dependency is outside the nodes visible in the diagram."
+        );
         self.graph_notice = None;
         self.graph_diagram_selection = Some(selection.clone());
-        self.graph_diagram = None;
-        self.graph_diagram_source = None;
-        self.graph_diagram_legend.clear();
         self.rebuild(cx);
-        if self.graph_diagram.is_none() && self.graph_notice.is_none() {
-            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram"), cx);
-            return;
-        }
-        let Some(open) = self.canvas_diagram_load_for(cx.weak_entity(), selection, node, cx) else {
-            // No admitted facts: show the collection affordance without
-            // starting a provider query.
-            self.graph_notice = Some("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram".into());
-            cx.notify();
-            return;
-        };
-        self.open_or_focus_diagram_tab(open, cx);
-        let _ = self.workspace.update(cx, |workspace, cx| {
-            let diagram = workspace
-                .items_of_type::<DependencyDiagramItem>(cx)
-                .find(|item| item.read(cx).matches_target(selection));
-            if let Some(item) = diagram {
-                item.update(cx, |item, cx| item.reveal_node_by_id(node, cx));
+
+        let item = self.open_or_focus_diagram_tab(open, cx)?;
+        item.update(cx, |item, cx| {
+            if item.scope() != scope {
+                item.apply_scope(scope.label(), cx);
             }
+            item.select_analyzer_node(node, cx);
         });
+        Ok(())
     }
 
     /// Opens the Gradle build script that declares a dependency, routed from
@@ -3664,74 +3671,62 @@ impl DependenciesPanel {
             view: self.view,
             panel,
         };
-        self.open_or_focus_analyzer_tab(derivation, Some(source), cx);
+        if let Err(error) = self.open_or_focus_analyzer_tab(derivation, source, None, cx) {
+            self.show_graph_error(error, cx);
+        }
     }
 
-    /// Opens the analyzer tab or focuses the matching open one.
     fn open_or_focus_analyzer_tab(
         &self,
         derivation: DependencyAnalyzerDerivation,
-        source: Option<crate::dependency_analyzer_item::DependencyAnalyzerSource>,
+        source: crate::dependency_analyzer_item::DependencyAnalyzerSource,
+        preselect: Option<&str>,
         cx: &mut Context<Self>,
-    ) {
-        let _ = self.workspace.update_in(cx, |workspace, window, cx| {
+    ) -> anyhow::Result<()> {
+        self.workspace.update_in(cx, |workspace, window, cx| {
             let existing = workspace
                 .items_of_type::<DependencyAnalyzerItem>(cx)
-                .find(|item| {
-                    source
-                        .as_ref()
-                        .is_some_and(|source| item.read(cx).matches_target(&source.selection))
-                });
-            if let Some(item) = existing {
+                .find(|item| item.read(cx).matches_target(&source.selection));
+            let scope = derivation.scope.clone();
+            let item = if let Some(item) = existing {
                 workspace.activate_item(&item, true, true, window, cx);
+                item
             } else {
-                DependencyAnalyzerItem::open(derivation, source, workspace, window, cx);
+                DependencyAnalyzerItem::open(derivation, Some(source), workspace, window, cx)
+            };
+            if let Some(node) = preselect {
+                item.update(cx, |item, cx| {
+                    if item.scope() != &scope {
+                        item.apply_scope(scope.label(), cx);
+                    }
+                    item.preselect_node(node, cx);
+                });
             }
-        });
+        })
     }
 
-    /// Opens the analyzer for the diagram's All usages command: the diagram's
-    /// selection, node and scope choice carry over so the analyzer opens on
-    /// the same dependency and configuration, without a provider query.
     pub(crate) fn open_analyzer_for_diagram(
         &mut self,
         selection: &GraphSelection,
-        node: Option<String>,
-        scope: &crate::dependency_diagram_item::DependencyDiagramScope,
+        node: &str,
+        scope: &DependencyDiagramScope,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        let Some(derivation) = derive_dependency_analyzer(
+        let derivation = derive_dependency_analyzer(
             self.project.read(cx),
             self.view,
             selection,
             Some(scope),
             cx,
-        ) else {
-            // Collection affordance without a provider query.
-            anyhow::bail!(
-                "A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying All usages"
-            );
-        };
+        )
+        .context("Collect a current dependency graph before opening All usages.")?;
         let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
             project: self.project.clone(),
             selection: selection.clone(),
             view: self.view,
             panel: cx.weak_entity(),
         };
-        self.open_or_focus_analyzer_tab(derivation, Some(source), cx);
-        let _ = self.workspace.update(cx, |workspace, cx| {
-            let analyzer = workspace
-                .items_of_type::<DependencyAnalyzerItem>(cx)
-                .find(|item| item.read(cx).matches_target(selection));
-            if let Some(item) = analyzer {
-                item.update(cx, |item, cx| {
-                    if let Some(node) = &node {
-                        item.preselect_node(node, cx);
-                    }
-                });
-            }
-        });
-        Ok(())
+        self.open_or_focus_analyzer_tab(derivation, source, Some(node), cx)
     }
 
     /// Builds the tree context menu for the selected row. Menu contents come
@@ -14968,6 +14963,44 @@ mod tests {
                 commands.load(Ordering::SeqCst),
                 3,
                 "canvas inspection reads admitted facts"
+            );
+            diagram_item.update(cx, |item, cx| {
+                item.canvas().update(cx, |canvas, cx| {
+                    canvas.selection = BTreeSet::from([root.clone()]);
+                    cx.notify();
+                });
+                item.inspect_canvas_target(DependencyDiagramMenuCommand::AllUsages, &target, cx);
+            });
+            cx.run_until_parked();
+            let linked_analyzer = workspace
+                .read_with(cx, |workspace, cx| {
+                    workspace.items_of_type::<DependencyAnalyzerItem>(cx).next()
+                })
+                .expect("All usages opens the analyzer");
+            linked_analyzer.read_with(cx, |item, cx| {
+                assert_eq!(item.selected_key(), Some(node.as_str()));
+                assert_eq!(item.scope(), diagram_item.read(cx).scope());
+                assert!(item.usages().iter().any(|usage| usage.user_node == root));
+            });
+            linked_analyzer.update(cx, |item, cx| item.collapse_all_rows(cx));
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(DependencyDiagramMenuCommand::AllUsages, &target, cx);
+            });
+            linked_analyzer.read_with(cx, |item, _| {
+                assert_eq!(
+                    item.selected_key(),
+                    Some(node.as_str()),
+                    "target is found under collapsed branches"
+                );
+            });
+            linked_analyzer.update(cx, |item, cx| item.show_in_dependency_diagram(&node, cx));
+            diagram_item.read_with(cx, |item, cx| {
+                assert!(item.canvas().read(cx).selection.contains(&node));
+            });
+            assert_eq!(
+                commands.load(Ordering::SeqCst),
+                3,
+                "linkage cannot query the provider"
             );
             let (scope_options, current_scope) = cx.update(|_, cx| {
                 (

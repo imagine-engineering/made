@@ -682,6 +682,7 @@ fn gradle_coordinate_label(occurrence: &GradleOccurrence) -> String {
 #[derive(Clone, Debug)]
 pub(crate) struct AnalyzerUsage {
     pub label: String,
+    pub user_node: String,
     pub declaration: Option<String>,
 }
 
@@ -722,6 +723,7 @@ pub(crate) fn analyzer_usages(graph: &DependencyAnalyzerGraph, node_key: &str) -
                     .and_then(|component| component.project_path.clone());
                 rows.push(AnalyzerUsage {
                     label: format!("used by {user}"),
+                    user_node: edge.from.clone(),
                     declaration,
                 });
             }
@@ -756,6 +758,7 @@ pub(crate) fn analyzer_usages(graph: &DependencyAnalyzerGraph, node_key: &str) -
                 // Maven facts carry no Gradle declaration location.
                 rows.push(AnalyzerUsage {
                     label: detail,
+                    user_node: edge.from_node.clone(),
                     declaration: None,
                 });
             }
@@ -1125,13 +1128,16 @@ impl DependencyAnalyzerItem {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
-        let node_key = self.selected_key.clone();
-        let declaration = self
-            .usages
-            .get(index)
-            .and_then(|usage| usage.declaration.clone())
-            .filter(|_| node_key.is_some());
-        self.stage_row_context_menu(node_key, declaration, position, window, cx);
+        let Some(usage) = self.usages.get(index) else {
+            return;
+        };
+        self.stage_row_context_menu(
+            Some(usage.user_node.clone()),
+            usage.declaration.clone(),
+            position,
+            window,
+            cx,
+        );
     }
 
     fn stage_row_context_menu(
@@ -1189,16 +1195,28 @@ impl DependencyAnalyzerItem {
             cx.notify();
             return;
         };
-        let selection = source.selection.clone();
         let node_key = node_key.to_owned();
-        let result = source.panel.update(cx, |panel, cx| {
-            panel.show_dependency_diagram_for_analyzer(&selection, &node_key, cx)
+        let scope = self.derivation.scope.clone();
+        let item = cx.weak_entity();
+        // Opening a pane item reads the current one.
+        cx.defer(move |cx| {
+            let Some(item) = item.upgrade() else {
+                return;
+            };
+            if !item.read(cx).receipt_is_current(cx) {
+                return;
+            }
+            let result = source.panel.update(cx, |panel, cx| {
+                panel.show_dependency_diagram_for_analyzer(&source.selection, &node_key, &scope, cx)
+            });
+            item.update(cx, |item, cx| {
+                item.notice = match result {
+                    Ok(Ok(())) => None,
+                    Ok(Err(error)) | Err(error) => Some(error.to_string()),
+                };
+                cx.notify();
+            });
         });
-        self.notice = match result {
-            Ok(()) => None,
-            Err(error) => Some(error.to_string()),
-        };
-        cx.notify();
     }
 
     /// Routes Go to Gradle Declaration through the opening panel, which owns
@@ -1220,6 +1238,19 @@ impl DependencyAnalyzerItem {
             cx.notify();
             return;
         };
+        let has_origin = self.selected_key.as_ref().is_some_and(|node| {
+            analyzer_declaration_target(&self.derivation.graph, node).as_deref() == Some(declaring)
+        }) || self
+            .usages
+            .iter()
+            .any(|usage| usage.declaration.as_deref() == Some(declaring));
+        if !has_origin {
+            self.notice = Some(
+                "The provider did not report a current Gradle declaration for this usage.".into(),
+            );
+            cx.notify();
+            return;
+        }
         let selection = source.selection.clone();
         let declaring = declaring.to_owned();
         let result = source.panel.update(cx, |panel, cx| {
@@ -1262,15 +1293,22 @@ impl DependencyAnalyzerItem {
         cx.notify();
     }
 
-    /// The click path for one tree row: selection drives the Usages pane.
-    /// Preselects a node by its admitted key when the analyzer is opened with
-    /// an explicit target (All usages from the diagram); a key the current
-    /// filters or rows cannot represent leaves the selection empty.
     pub fn preselect_node(&mut self, key: &str, cx: &mut Context<Self>) {
         let id = analyzer_row_id_for_node(key);
-        if self.host.visible_rows().iter().any(|row| row.id == id) {
-            self.select_node_row(id, cx);
+        if self.filter != DependencyAnalyzerFilter::All
+            && !self.search_entries(cx).iter().any(|entry| entry.id == id.0)
+            && analyzer_rows(
+                &self.derivation.graph,
+                DependencyAnalyzerFilter::All,
+                DependencyAnalyzerPresentation::Flat,
+                self.show_group_ids,
+            )
+            .iter()
+            .any(|row| row.id == id)
+        {
+            self.apply_filter(DependencyAnalyzerFilter::All, cx);
         }
+        self.reveal_row(id, cx);
     }
 
     pub fn select_node_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {

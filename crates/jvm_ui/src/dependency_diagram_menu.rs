@@ -129,7 +129,7 @@ pub fn dependency_diagram_menu_available(
         | DependencyDiagramMenuCommand::InspectConflictOrigins => {
             node_or_selection && snapshot.has_source
         }
-        DependencyDiagramMenuCommand::AllUsages => node_or_selection,
+        DependencyDiagramMenuCommand::AllUsages => node_or_selection && snapshot.has_source,
         DependencyDiagramMenuCommand::PathsBetween => {
             node_or_selection && snapshot.has_matching_pin
         }
@@ -303,6 +303,7 @@ pub(crate) fn build_dependency_diagram_context_menu(
                     || matches!(
                         command,
                         DependencyDiagramMenuCommand::ClearInspection
+                            | DependencyDiagramMenuCommand::AllUsages
                             | DependencyDiagramMenuCommand::PinSelection
                             | DependencyDiagramMenuCommand::AddToSelectionSet
                             | DependencyDiagramMenuCommand::ClearSelectionSet

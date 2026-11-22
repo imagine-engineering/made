@@ -665,6 +665,10 @@ impl DependencyDiagramItem {
                     .update(cx, |panel, cx| panel.clear_graph_inspection(cx))
                     .map(|_| None)
             }
+            AllUsages => {
+                self.open_analyzer_for_target(target, cx);
+                return;
+            }
             ClearSelectionSet => source.panel.update(cx, |panel, cx| {
                 panel.clear_graph_selection_set(cx);
                 Some("Dependency comparison set cleared.".into())
@@ -767,12 +771,11 @@ impl DependencyDiagramItem {
         self.inspect_canvas_target(command, &target, cx);
     }
 
-    /// Opens the analyzer on the diagram's current dependency and
-    /// configuration: the canvas selection (or the diagram's own node) is
-    /// preselected and the diagram's scope choice carries over, through the
-    /// opening panel's shared derivation path. All usages never queries a
-    /// provider.
-    fn open_analyzer_for_selection(&mut self, _window: &mut gpui::Window, cx: &mut Context<Self>) {
+    fn open_analyzer_for_target(
+        &mut self,
+        target: &DependencyDiagramContextTarget,
+        cx: &mut Context<Self>,
+    ) {
         let Some(source) = self.source.clone() else {
             self.notice = Some(
                 "The diagram's opening panel is unavailable; reopen the diagram from the Dependencies panel, then retry All usages"
@@ -781,24 +784,51 @@ impl DependencyDiagramItem {
             cx.notify();
             return;
         };
-        let node = self
-            .canvas
-            .read(cx)
-            .selection
-            .iter()
-            .next()
-            .cloned()
-            .or_else(|| Some(source.node.clone()));
-        let selection = source.selection.clone();
-        let scope = self.scope.clone();
-        let result = source.panel.update(cx, |panel, cx| {
-            panel.open_analyzer_for_diagram(&selection, node, &scope, cx)
-        });
-        self.notice = match result {
-            Ok(Ok(())) => None,
-            Ok(Err(error)) | Err(error) => Some(error.to_string()),
+        let Some(node) = target.node() else {
+            return;
         };
-        cx.notify();
+        let node = node.to_owned();
+        let scope = self.scope.clone();
+        let item = cx.weak_entity();
+        // Opening a pane item reads the current one.
+        cx.defer(move |cx| {
+            let Some(item) = item.upgrade() else {
+                return;
+            };
+            if !item.read(cx).receipt_is_current(cx) {
+                return;
+            }
+            let result = source.panel.update(cx, |panel, cx| {
+                panel.open_analyzer_for_diagram(&source.selection, &node, &scope, cx)
+            });
+            item.update(cx, |item, cx| {
+                item.notice = match result {
+                    Ok(Ok(())) => None,
+                    Ok(Err(error)) | Err(error) => Some(error.to_string()),
+                };
+                cx.notify();
+            });
+        });
+    }
+
+    pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.canvas.update(cx, |canvas, cx| {
+            let size = *canvas.canvas_size.lock().expect("canvas size");
+            let node_size = canvas.graph.node_size();
+            let scale = canvas.viewport.scale;
+            let is_visible = canvas.node_screen_position(id).is_some_and(|position| {
+                position.x >= 0.0
+                    && position.y >= 0.0
+                    && position.x + node_size.width * scale <= size.width
+                    && position.y + node_size.height * scale <= size.height
+            });
+            if is_visible {
+                canvas.select_node(id, false, false);
+            } else {
+                canvas.reveal_node(id);
+            }
+            cx.notify();
+        });
     }
 
     /// Exports the current canvas as a deterministic SVG image and copies it
@@ -1038,8 +1068,8 @@ impl Render for DependencyDiagramItem {
             .on_action(cx.listener(|item, _: &InspectGraphConflictOrigins, _, cx| {
                 item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectConflictOrigins, cx);
             }))
-            .on_action(cx.listener(|item, _: &InspectGraphAllUsages, window, cx| {
-                item.open_analyzer_for_selection(window, cx)
+            .on_action(cx.listener(|item, _: &InspectGraphAllUsages, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::AllUsages, cx);
             }))
             .on_action(cx.listener(|item, _: &InspectGraphPathsBetween, _, cx| {
                 item.inspect_canvas_focus(DependencyDiagramMenuCommand::PathsBetween, cx);
@@ -2057,8 +2087,8 @@ mod tests {
         // All usages without an opening panel reports guidance instead of
         // dispatching; the same rejection covers a stale diagram whose panel
         // is gone.
-        cx.update(|window, cx| {
-            item.update(cx, |item, cx| item.open_analyzer_for_selection(window, cx));
+        item.update(cx, |item, cx| {
+            item.open_analyzer_for_target(&DependencyDiagramContextTarget::Node("c1".into()), cx);
         });
         let notice = cx.update(|_, cx| item.read(cx).notice.clone());
         assert!(
