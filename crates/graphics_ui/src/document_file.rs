@@ -674,6 +674,7 @@ struct NodeCopyForm {
     name: Entity<Editor>,
     value: Entity<Editor>,
     position: Entity<Editor>,
+    artboard_background: Entity<Editor>,
     output_preview: NodeOutputPreview,
     document_run: NodeOutputPreview,
     document_run_evaluator: Option<Arc<GddNumericGraphEvaluator>>,
@@ -716,6 +717,7 @@ impl NodeCopyForm {
             name: cx.new(|cx| Editor::single_line(window, cx)),
             value: cx.new(|cx| Editor::single_line(window, cx)),
             position: cx.new(|cx| Editor::single_line(window, cx)),
+            artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
             output_preview: NodeOutputPreview::Hidden,
             document_run: NodeOutputPreview::Hidden,
             document_run_evaluator: None,
@@ -1136,6 +1138,7 @@ enum NodeCopyChange {
     NumericInputExposure(bool),
     BooleanInput(bool),
     ArtboardGeometry(GddArtboardGeometry),
+    ArtboardBackground([f32; 4]),
     SetDocumentArtboard,
     ConnectGraphicContent(Box<GddGraphNode>),
     DisconnectNumericInput,
@@ -1201,6 +1204,11 @@ impl NodeCopyChange {
             Self::ArtboardGeometry(geometry) => {
                 archive
                     .set_artboard_geometry_in_copy(node, geometry, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ArtboardBackground(channels) => {
+                archive
+                    .set_artboard_background_in_copy(node, channels, ARCHIVE_BUDGET)
                     .await
             }
             Self::SetDocumentArtboard => {
@@ -1787,6 +1795,12 @@ impl GraphiteDocumentItem {
                 });
                 form.value.update(cx, |editor, cx| {
                     editor.set_text(format!("{width}, {height}"), window, cx)
+                });
+            }
+            if let Some(background) = node.artboard_background() {
+                let [red, green, blue, alpha] = background.to_gamma_srgb_channels();
+                form.artboard_background.update(cx, |editor, cx| {
+                    editor.set_text(format!("{red}, {green}, {blue}, {alpha}"), window, cx)
                 });
             }
             cx.notify();
@@ -3280,6 +3294,38 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn change_artboard_background(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form
+            .selected_node()
+            .filter(|node| node.artboard_background().is_some())
+        else {
+            return;
+        };
+        match crate::session::parse_color(
+            &form.artboard_background.read(cx).text(cx),
+            "Artboard Background",
+        ) {
+            Ok(channels) => self.apply_graph_edit(
+                GraphiteCopy::EditNode {
+                    node: Box::new(node.clone()),
+                    change: NodeCopyChange::ArtboardBackground(channels),
+                },
+                window,
+                cx,
+            ),
+            Err(error) => {
+                self.copy_feedback = Some((error.into(), Color::Error));
+                cx.notify();
+            }
+        }
+    }
+
     fn stage_working_snapshot(
         &mut self,
         expected: Arc<()>,
@@ -3608,6 +3654,43 @@ impl GraphiteDocumentItem {
                         .disabled(self.copy_task.is_some())
                         .on_click(cx.listener(|item, _, window, cx| {
                             item.change_artboard_geometry(window, cx)
+                        })),
+                    ),
+            )
+    }
+
+    fn render_artboard_background(
+        &self,
+        form: &NodeCopyForm,
+        working: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let label = "Background (sRGB RGBA, 0–1)";
+        v_flex()
+            .gap_1()
+            .child(Label::new(label))
+            .child(
+                div()
+                    .id("graphite-gdd-artboard-background")
+                    .aria_label(label)
+                    .debug_selector(|| "GRAPHITE-GDD-ARTBOARD-BACKGROUND".into())
+                    .child(form.artboard_background.clone()),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-APPLY-ARTBOARD-BACKGROUND".into())
+                    .child(
+                        Button::new(
+                            "graphite-gdd-apply-artboard-background",
+                            if working {
+                                "Apply Background"
+                            } else {
+                                "Save Background in a Copy"
+                            },
+                        )
+                        .disabled(self.copy_task.is_some())
+                        .on_click(cx.listener(|item, _, window, cx| {
+                            item.change_artboard_background(window, cx)
                         })),
                     ),
             )
@@ -4441,6 +4524,9 @@ impl GraphiteDocumentItem {
                             .when(selected.artboard_geometry().is_some(), |panel| {
                                 panel.child(self.render_artboard_geometry(form, working, cx))
                             })
+                            .when(selected.artboard_background().is_some(), |panel| {
+                                panel.child(self.render_artboard_background(form, working, cx))
+                            })
                             .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
@@ -4911,7 +4997,8 @@ impl GraphiteDocumentItem {
                         change:
                             NodeCopyChange::NumericInput(_)
                             | NodeCopyChange::BooleanInput(_)
-                            | NodeCopyChange::ArtboardGeometry(_),
+                            | NodeCopyChange::ArtboardGeometry(_)
+                            | NodeCopyChange::ArtboardBackground(_),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -12426,6 +12513,26 @@ mod tests {
         assert_eq!(read_geometry(window), (address, initial));
         click(window, "GRAPHITE-GDD-REDO");
         assert_eq!(read_geometry(window), (address, expected));
+        let read_background = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Artboard properties");
+                };
+                let node = form.selected_node().expect("selected Artboard");
+                node.artboard_background().expect("native Background")
+            })
+        };
+        let white = read_background(window);
+        assert_eq!([white.r(), white.g(), white.b(), white.a()], [1.; 4]);
+        set_field(window, "GRAPHITE-GDD-ARTBOARD-BACKGROUND", "1, 0, 0, 1");
+        click(window, "GRAPHITE-GDD-APPLY-ARTBOARD-BACKGROUND");
+        let red = read_background(window);
+        assert_eq!([red.r(), red.g(), red.b(), red.a()], [1., 0., 0., 1.]);
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(read_background(window), white);
+        assert_eq!(read_geometry(window), (address, expected));
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(read_background(window), red);
         let exported = PathBuf::from("/project/changed-artboard-bounds.svg");
         click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
         window.simulate_new_path_selection(|_| Some(exported.clone()));
@@ -12435,11 +12542,9 @@ mod tests {
             .load_bytes(&exported)
             .await
             .expect("exported document SVG");
-        assert!(
-            std::str::from_utf8(&bytes)
-                .expect("SVG text")
-                .contains(r#"viewBox="0 0 65 32" width="65" height="32""#)
-        );
+        let svg = std::str::from_utf8(&bytes).expect("SVG text");
+        assert!(svg.contains(r#"viewBox="0 0 65 32" width="65" height="32""#));
+        assert!(svg.contains(r##"fill="#ff0000""##));
         let saved = PathBuf::from("/project/changed-artboard-bounds.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
         window.simulate_new_path_selection(|_| Some(saved.clone()));
@@ -12453,6 +12558,7 @@ mod tests {
             .find(|node| node.storage_id() == address)
             .expect("same Artboard address");
         assert_eq!(board.artboard_geometry(), Some(expected));
+        assert_eq!(board.artboard_background(), Some(red));
         assert!(matches!(
             board.layer_preview(),
             Some(GddGraphLayerPreview::Artboard { origin, size })

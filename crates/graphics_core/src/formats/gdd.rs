@@ -8,7 +8,7 @@ use std::{
 };
 
 use graphite_core_types::Type;
-use graphite_core_types::{NodeParameter, ProtoNodeIdentifier};
+use graphite_core_types::{Color, NodeParameter, ProtoNodeIdentifier};
 pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
     AnyContainer, ByteHolder, Container, ContainerError,
@@ -280,6 +280,10 @@ pub enum GddArchiveError {
     UnsupportedArtboardGeometry,
     #[error("The Artboard geometry exceeds the finite SVG bounds.")]
     InvalidArtboardGeometry,
+    #[error("Choose an Artboard with an editable Background color.")]
+    UnsupportedArtboardBackground,
+    #[error("Enter finite sRGB channels between zero and one for edited Background values.")]
+    InvalidArtboardBackground,
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -714,6 +718,7 @@ enum SavedGraphicProfile {
 const LAYER_CONTENT_INPUT: usize = 1;
 const ARTBOARD_LOCATION_INPUT: usize = 2;
 const ARTBOARD_DIMENSIONS_INPUT: usize = 3;
+const ARTBOARD_BACKGROUND_INPUT: usize = 4;
 const ARTBOARD_CLIP_INPUT: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -789,6 +794,7 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
     boolean_input: Option<GddGraphBooleanInput>,
     artboard_geometry: Option<GddArtboardGeometry>,
+    artboard_background: Option<Color>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
@@ -1132,6 +1138,10 @@ impl GddGraphNode {
         self.artboard_geometry
     }
 
+    pub fn artboard_background(&self) -> Option<Color> {
+        self.artboard_background
+    }
+
     pub fn has_numeric_connection(&self) -> bool {
         matches!(
             self.numeric_input.as_ref(),
@@ -1456,6 +1466,7 @@ impl InspectedGddV1 {
                     numeric_input: None,
                     boolean_input: None,
                     artboard_geometry: None,
+                    artboard_background: None,
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
@@ -1683,6 +1694,7 @@ impl InspectedGddV1 {
                     node.boolean_input =
                         hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip");
                     node.artboard_geometry = GddArtboardGeometry::hidden(document);
+                    node.artboard_background = hidden_artboard_background(document);
                 }
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
@@ -4521,6 +4533,69 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn set_artboard_background_in_copy(
+        &self,
+        node: &GddGraphNode,
+        channels: [f32; 4],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let original = node
+            .artboard_background()
+            .ok_or(GddArchiveError::UnsupportedArtboardBackground)?;
+        let current = original.to_gamma_srgb_channels();
+        let changed: [bool; 4] = std::array::from_fn(|index| current[index] != channels[index]);
+        if changed
+            .into_iter()
+            .zip(channels)
+            .any(|(changed, channel)| changed && !(0.0..=1.0).contains(&channel))
+        {
+            return Err(GddArchiveError::InvalidArtboardBackground);
+        }
+        let [red, green, blue, alpha] = channels;
+        let entered = Color::from_gamma_srgb_channels(red, green, blue, alpha);
+        let original_linear = [original.r(), original.g(), original.b(), original.a()];
+        let entered_linear = [entered.r(), entered.g(), entered.b(), entered.a()];
+        // Decoding an unchanged display value can change the saved linear RGB bits.
+        let [red, green, blue, alpha] = std::array::from_fn(|index| {
+            if changed[index] {
+                entered_linear[index]
+            } else {
+                original_linear[index]
+            }
+        });
+        let color = Color::from_rgbaf32_unchecked(red, green, blue, alpha);
+        if color == original {
+            return Err(GddArchiveError::UnchangedGraphInput);
+        }
+        let path = node.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let background = |interface: &NodeNetworkInterface| {
+            interface
+                .document_node(&node.local_id, path)
+                .and_then(hidden_artboard_background)
+        };
+        if background(&interface) != Some(original) {
+            return Err(GddArchiveError::UnsupportedArtboardBackground);
+        }
+        interface.set_input(
+            &InputConnector::node_at_index(node.local_id, ARTBOARD_BACKGROUND_INPUT),
+            NodeInput::value(TaggedValue::Color(color), false),
+            path,
+        );
+        if background(&interface) != Some(color) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = self
+            .finish_graph_input(node, interface, ARTBOARD_BACKGROUND_INPUT, None, budget)
+            .await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if background(&actual) != Some(color) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
     pub async fn set_graph_numeric_input_exposed_in_copy(
         &self,
         node: &GddGraphNode,
@@ -5571,7 +5646,7 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                     replacements.extend([
                         (ARTBOARD_LOCATION_INPUT, location),
                         (ARTBOARD_DIMENSIONS_INPUT, dimensions),
-                        (4, background),
+                        (ARTBOARD_BACKGROUND_INPUT, background),
                         (ARTBOARD_CLIP_INPUT, clip),
                     ]);
                     (
@@ -5857,6 +5932,20 @@ fn graph_boolean_literal(document: &DocumentNode) -> Option<GddGraphBooleanInput
         {
             hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip")
         }
+        _ => None,
+    }
+}
+
+fn hidden_artboard_background(document: &DocumentNode) -> Option<Color> {
+    let NodeInput::Value {
+        tagged_value,
+        exposed: false,
+    } = document.inputs.get(ARTBOARD_BACKGROUND_INPUT)?
+    else {
+        return None;
+    };
+    match **tagged_value {
+        TaggedValue::Color(color) => Some(color),
         _ => None,
     }
 }
@@ -9737,6 +9826,121 @@ mod tests {
                     .await,
                 Err(GddArchiveError::StaleGraphNode)
             ));
+        });
+    }
+
+    #[test]
+    fn at_gra_node_282_2_edits_only_the_saved_artboard_background_literal() {
+        use graphite_graph_craft::document::value::RenderOutputType;
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut template = artboard_node_definition()
+                .expect("pinned Artboard")
+                .default_node_template();
+            let original = Color::from_rgbaf32_unchecked(0.12345679, 0., 1., 1.);
+            *template
+                .inputs
+                .get_mut(ARTBOARD_BACKGROUND_INPUT)
+                .expect("typed Background") = NodeInput::value(TaggedValue::Color(original), false);
+            let board_id = NodeId(15);
+            let source = template.into_parts().0;
+            let network = NodeNetwork {
+                nodes: [(board_id, source.clone())].into_iter().collect(),
+                exports: vec![NodeInput::node(board_id, 0)],
+                ..Default::default()
+            };
+            let resources = HashMapResourceStorage::new();
+            let mut owner = document();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save an Artboard with a linear Background color");
+            let original_zip: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source archive")
+                .into();
+            let archive = open_gdd_zip(&original_zip, budget()).await.expect("reopen");
+            let nodes = archive.graph_nodes().await.expect("saved graph");
+            let node = nodes
+                .iter()
+                .find(|node| node.artboard_background().is_some())
+                .expect("Artboard with a Background");
+            assert_eq!(node.artboard_background(), Some(original));
+            let [red, green, blue, alpha] = original.to_gamma_srgb_channels();
+            assert!(matches!(
+                archive
+                    .set_artboard_background_in_copy(node, [red, green, blue, alpha], budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphInput)
+            ));
+            for invalid in [-0.1, 1.1, f32::NAN] {
+                assert!(matches!(
+                    archive
+                        .set_artboard_background_in_copy(
+                            node,
+                            [red, invalid, blue, alpha],
+                            budget()
+                        )
+                        .await,
+                    Err(GddArchiveError::InvalidArtboardBackground)
+                ));
+            }
+            let channels = [red, 0.25, blue, 0.5];
+            let staged = archive
+                .set_artboard_background_in_copy(node, channels, budget())
+                .await
+                .expect("decode edited Green and Alpha with the pinned transfer function");
+            assert_eq!(staged.history_len(), archive.history_len() + 1);
+            let current = staged.runtime_graph().await.expect("staged revision");
+            let green = Color::from_gamma_srgb_channels(0., 0.25, 0., 1.).g();
+            let color = Color::from_rgbaf32_unchecked(original.r(), green, original.b(), 0.5);
+            let mut expected = source;
+            *expected
+                .inputs
+                .get_mut(ARTBOARD_BACKGROUND_INPUT)
+                .expect("typed Background") = NodeInput::value(TaggedValue::Color(color), false);
+            assert_eq!(current.network.nodes.get(&board_id), Some(&expected));
+            assert_eq!(current.network.exports, network.exports);
+            assert!(matches!(
+                staged
+                    .set_artboard_background_in_copy(node, channels, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+
+            let edited_zip: Arc<[u8]> = staged
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("export edited archive")
+                .into();
+            let reopened = open_gdd_zip(&edited_zip, budget())
+                .await
+                .expect("reopen edit");
+            let edited_nodes = reopened.graph_nodes().await.expect("reopened graph");
+            let edited = edited_nodes
+                .iter()
+                .find(|edited| edited.storage_id() == node.storage_id())
+                .expect("same Artboard address");
+            assert_eq!(edited.artboard_background(), Some(color));
+            let output = reopened
+                .export_document_artboard_svg(
+                    edited,
+                    CpuSvgEvaluationBudget {
+                        max_viewport_pixels: 1920 * 1080,
+                        max_output_bytes: 64 * 1024,
+                    },
+                )
+                .await
+                .expect("pinned SVG background");
+            let RenderOutputType::Svg { svg, .. } = output.data else {
+                panic!("source SVG output")
+            };
+            assert!(svg.contains(r#"fill-opacity="0.5""#));
         });
     }
 
