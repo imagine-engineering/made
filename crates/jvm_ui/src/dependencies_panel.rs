@@ -235,7 +235,7 @@ impl MavenGraphScope {
 
 const PANEL_KEY: &str = "GroovyDependenciesPanel";
 const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
-const VIEW_STATE_VERSION: u32 = 9;
+const VIEW_STATE_VERSION: u32 = 10;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
 const BASIC_MAVEN_PHASES: &[&str] = &[
@@ -261,6 +261,8 @@ struct BuildViewPreferences {
     maven_graph_scope: MavenGraphScope,
     graph_fact_presentation: GraphFactPresentation,
     ordered_operations_expanded: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    dock_unpinned: bool,
 }
 
 impl Default for BuildViewPreferences {
@@ -282,6 +284,7 @@ impl Default for BuildViewPreferences {
             maven_graph_scope: MavenGraphScope::All,
             graph_fact_presentation: GraphFactPresentation::Tree,
             ordered_operations_expanded: false,
+            dock_unpinned: false,
         }
     }
 }
@@ -589,7 +592,11 @@ impl BuildViewPreferences {
                     ..Default::default()
                 })
             }
-            VIEW_STATE_VERSION => Ok(serde_json::from_str(serialized)?),
+            9 | VIEW_STATE_VERSION => {
+                let mut preferences: Self = serde_json::from_str(serialized)?;
+                preferences.version = VIEW_STATE_VERSION;
+                Ok(preferences)
+            }
             _ => anyhow::bail!("Unsupported build view preferences version"),
         }
     }
@@ -8296,6 +8303,10 @@ impl Panel for DependenciesPanel {
         cx.notify();
     }
 
+    fn hide_on_focus_loss(&self) -> bool {
+        self.preferences.dock_unpinned
+    }
+
     fn icon(&self, _: &Window, _: &App) -> Option<ui::IconName> {
         match self.view {
             BuildToolView::Gradle => Some(ui::IconName::Gradle),
@@ -8396,6 +8407,11 @@ impl Render for DependenciesPanel {
             "Restore Groovy panel size"
         } else {
             "Maximize Groovy panel"
+        };
+        let pin_label = if self.preferences.dock_unpinned {
+            "Pin Groovy panel"
+        } else {
+            "Unpin Groovy panel"
         };
         v_flex()
             .id("groovy-dependencies-panel")
@@ -8539,6 +8555,19 @@ impl Render for DependenciesPanel {
                     .gap_1()
                     .justify_between()
                     .child(self.view.label())
+                    .child(
+                        IconButton::new("groovy-panel-pin", ui::IconName::Pin)
+                            .toggle_state(!self.preferences.dock_unpinned)
+                            .shape(ui::IconButtonShape::Square)
+                            .tab_index(0_isize)
+                            .aria_label(pin_label)
+                            .tooltip(Tooltip::text(pin_label))
+                            .on_click(cx.listener(|panel, _, _, cx| {
+                                panel.preferences.dock_unpinned = !panel.preferences.dock_unpinned;
+                                panel.persist_preferences(cx);
+                                cx.notify();
+                            })),
+                    )
                     .child(
                         IconButton::new("groovy-panel-zoom", ui::IconName::Maximize)
                             .toggle_state(self.zoomed)
@@ -9645,6 +9674,32 @@ mod tests {
         assert_eq!(
             migrated.ordered_operations_expanded, false,
             "the migrated section stays collapsed"
+        );
+    }
+
+    #[test]
+    fn dock_pinning_preserves_existing_workspace_preferences() {
+        let pinned = BuildViewPreferences {
+            view: BuildToolView::Maven,
+            dock_position: settings::DockPosition::Bottom,
+            ordered_operations_expanded: true,
+            ..Default::default()
+        };
+        let mut previous = serde_json::to_value(&pinned).expect("version 9 preferences");
+        previous["version"] = serde_json::json!(9);
+        assert_eq!(
+            BuildViewPreferences::restore(Some(&previous.to_string()))
+                .expect("migrated preferences"),
+            pinned
+        );
+        let unpinned = BuildViewPreferences {
+            dock_unpinned: true,
+            ..pinned
+        };
+        let serialized = serde_json::to_string(&unpinned).expect("workspace preferences");
+        assert_eq!(
+            BuildViewPreferences::restore(Some(&serialized)).expect("restored preferences"),
+            unpinned
         );
     }
 
@@ -15465,21 +15520,45 @@ mod tests {
                     assert!(graph.node(target).is_none());
                     assert!(graph.node(unresolved).is_none());
                 });
+                let diagram_search = "Search dependency diagram nodes";
+                let preview_search = "Search dependency preview nodes";
                 let open_search = |cx: &mut gpui::VisualTestContext, control_label: &str| {
-                    assert!(
-                        (0..32).any(|_| cx.update(|window, cx| {
+                    cx.update(|window, cx| {
+                        let focus = if control_label == diagram_search {
+                            diagram.focus_handle(cx)
+                        } else {
+                            workspace
+                                .read(cx)
+                                .active_modal::<DependencyDiagramPopup>(cx)
+                                .expect("dependency preview")
+                                .focus_handle(cx)
+                        };
+                        focus.focus(window, cx);
+                        window.draw(cx).clear(cx);
+                    });
+                    let mut visited = HashSet::new();
+                    loop {
+                        let (focus, matches_control) = cx.update(|window, cx| {
                             window.focus_next(cx);
                             window.draw(cx).clear(cx);
                             let tree: serde_json::Value = serde_json::from_str(
                                 &window.debug_a11y_tree_json().expect("diagram toolbar"),
                             )
                             .expect("accessibility JSON");
-                            tree["gpui_focus"].as_str().is_some_and(|focus| {
-                                tree["nodes"][focus]["aria"]["label"] == control_label
-                            })
-                        })),
-                        "keyboard focus reaches diagram search"
-                    );
+                            let focus = tree["gpui_focus"].as_str().expect("keyboard focus");
+                            (
+                                focus.to_owned(),
+                                tree["nodes"][focus]["aria"]["label"] == control_label,
+                            )
+                        });
+                        if matches_control {
+                            break;
+                        }
+                        assert!(
+                            visited.insert(focus),
+                            "keyboard focus reaches {control_label}"
+                        );
+                    }
                     press_button(cx, "enter");
                     for _ in 0..2 {
                         cx.update(|window, cx| {
@@ -15517,8 +15596,6 @@ mod tests {
                     });
                     cx.run_until_parked();
                 };
-                let diagram_search = "Search dependency diagram nodes";
-                let preview_search = "Search dependency preview nodes";
                 search_and_confirm(
                     cx,
                     diagram_search,
@@ -26262,10 +26339,7 @@ mod tests {
         });
         let dock_size = dock.read_with(cx, |dock, _| dock.active_panel_size());
         assert_eq!(dock_size.expect("active dock size").size, Some(px(324.)));
-        for (label, maximized) in [
-            ("Maximize Groovy panel", true),
-            ("Restore Groovy panel size", false),
-        ] {
+        let activate_dock_control = |cx: &mut gpui::VisualTestContext, label: &str| {
             assert!(
                 (0..64).any(|_| cx.update(|window, cx| {
                     window.focus_next(cx);
@@ -26297,6 +26371,12 @@ mod tests {
                 window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
             });
             cx.run_until_parked();
+        };
+        for (label, maximized) in [
+            ("Maximize Groovy panel", true),
+            ("Restore Groovy panel size", false),
+        ] {
+            activate_dock_control(cx, label);
             workspace.read_with(cx, |workspace, _| {
                 assert_eq!(
                     workspace.zoomed_item(),
@@ -26322,6 +26402,78 @@ mod tests {
             queries_before_zoom,
             "changing dock size does not query the provider"
         );
+        let focus_editor = |cx: &mut gpui::VisualTestContext| {
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.active_pane().focus_handle(cx).focus(window, cx);
+            });
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.run_until_parked();
+        };
+        let focus_groovy = |cx: &mut gpui::VisualTestContext| {
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.focus_panel::<DependenciesPanel>(window, cx);
+            });
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.run_until_parked();
+        };
+
+        focus_editor(cx);
+        assert!(dock.read_with(cx, |dock, _| dock.is_open()));
+        focus_groovy(cx);
+        activate_dock_control(cx, "Unpin Groovy panel");
+        assert!(panel.read_with(cx, |panel, _| panel.preferences.dock_unpinned));
+        focus_groovy(cx);
+        assert!(dock.read_with(cx, |dock, _| dock.is_open()));
+
+        struct DockModeTestModal(FocusHandle);
+
+        impl Focusable for DockModeTestModal {
+            fn focus_handle(&self, _: &App) -> FocusHandle {
+                self.0.clone()
+            }
+        }
+
+        impl Render for DockModeTestModal {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div().track_focus(&self.0)
+            }
+        }
+
+        impl EventEmitter<gpui::DismissEvent> for DockModeTestModal {}
+        impl workspace::ModalView for DockModeTestModal {}
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.toggle_modal(window, cx, |_, cx| DockModeTestModal(cx.focus_handle()));
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(dock.read_with(cx, |dock, _| dock.is_open()));
+        workspace.update_in(cx, |workspace, window, cx| {
+            assert!(workspace.hide_modal(window, cx));
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        focus_editor(cx);
+        assert!(!dock.read_with(cx, |dock, _| dock.is_open()));
+        focus_groovy(cx);
+        assert!(dock.read_with(cx, |dock, _| dock.is_open()));
+        assert_eq!(
+            dock.read_with(cx, |dock, _| dock.active_panel_size()),
+            dock_size
+        );
+        panel.read_with(cx, |panel, _| {
+            assert_eq!(panel.host.selected(), Some(&member_id));
+        });
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            let captured = workspace.capture_dock_state(window, cx);
+            assert!(captured.right.visible);
+            workspace.set_dock_structure(captured, window, cx);
+        });
+        assert!(!dock.read_with(cx, |dock, _| dock.is_open()));
+        focus_groovy(cx);
+        activate_dock_control(cx, "Pin Groovy panel");
+        focus_editor(cx);
+        assert!(dock.read_with(cx, |dock, _| dock.is_open()));
+        focus_groovy(cx);
         panel.update_in(cx, |panel, window, cx| panel.focus_handle.focus(window, cx));
         panel.update_in(cx, |panel, window, cx| {
             panel.set_view(BuildToolView::Dependencies, window, cx)

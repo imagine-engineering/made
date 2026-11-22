@@ -166,6 +166,10 @@ Use **Maximize Groovy panel** to give the Dependencies, Gradle, or Maven
 view the workspace's available space. **Restore Groovy panel size** returns
 to the previous dock size and preserves the current tree selection. The
 workspace's **Toggle Zoom** action also works while the panel has focus.
+The panel is pinned by default. **Unpin Groovy panel** hides it when you
+focus the editor or another tool window. Reopen it using the normal
+Groovy view action, or choose **Pin Groovy panel** to keep it visible.
+The workspace remembers the pin setting.
 
 The `jvm-tools` development build has a Dependencies panel for trusted
 Maven and Gradle projects. Open it from **View → Dependencies**. It shows

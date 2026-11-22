@@ -80,6 +80,9 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn starts_open(&self, _window: &Window, _cx: &App) -> bool {
         false
     }
+    fn hide_on_focus_loss(&self) -> bool {
+        false
+    }
     fn set_zoomed(&mut self, _zoomed: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn set_active(&mut self, _active: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
     fn pane(&self) -> Option<Entity<Pane>> {
@@ -114,6 +117,7 @@ pub trait PanelHandle: Send + Sync {
     fn position_is_valid(&self, position: DockPosition, cx: &App) -> bool;
     fn set_position(&self, position: DockPosition, window: &mut Window, cx: &mut App);
     fn is_zoomed(&self, window: &Window, cx: &App) -> bool;
+    fn hide_on_focus_loss(&self, cx: &App) -> bool;
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App);
     fn set_active(&self, active: bool, window: &mut Window, cx: &mut App);
     fn remote_id(&self) -> Option<proto::PanelId>;
@@ -189,6 +193,10 @@ where
 
     fn is_zoomed(&self, window: &Window, cx: &App) -> bool {
         self.read(cx).is_zoomed(window, cx)
+    }
+
+    fn hide_on_focus_loss(&self, cx: &App) -> bool {
+        self.read(cx).hide_on_focus_loss()
     }
 
     fn set_zoomed(&self, zoomed: bool, window: &mut Window, cx: &mut App) {
@@ -372,7 +380,7 @@ pub struct PanelSizeState {
 struct PanelEntry {
     panel: Arc<dyn PanelHandle>,
     size_state: PanelSizeState,
-    _subscriptions: [Subscription; 4],
+    _subscriptions: [Subscription; 5],
 }
 
 pub struct PanelButtons {
@@ -569,6 +577,44 @@ impl Dock {
         }
     }
 
+    fn hide_unfocused_panel(
+        &mut self,
+        panel_id: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if window.focused(cx).is_none() || self.modal_layer.read(cx).has_active_modal() {
+            return;
+        }
+        let Some(panel) = self
+            .visible_panel()
+            .filter(|panel| {
+                panel.panel_id() == panel_id
+                    && panel.hide_on_focus_loss(cx)
+                    && !panel.panel_focus_handle(cx).contains_focused(window, cx)
+            })
+            .cloned()
+        else {
+            return;
+        };
+        self.set_open(false, window, cx);
+        if panel.is_zoomed(window, cx) {
+            panel.set_zoomed(false, window, cx);
+        }
+        let zoom_target = panel.to_any().downgrade();
+        self.workspace
+            .update(cx, |workspace, cx| {
+                if workspace.zoomed.as_ref() == Some(&zoom_target) {
+                    workspace.zoomed = None;
+                    workspace.zoomed_position = None;
+                    cx.emit(Event::ZoomChanged);
+                    cx.notify();
+                }
+                workspace.serialize_workspace(window, cx);
+            })
+            .log_err();
+    }
+
     pub fn set_panel_zoomed(
         &mut self,
         panel: &AnyView,
@@ -681,7 +727,13 @@ impl Dock {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> usize {
+        let panel_id = Entity::entity_id(&panel);
         let subscriptions = [
+            cx.on_focus_out(
+                &panel.panel_focus_handle(cx),
+                window,
+                move |this, _, window, cx| this.hide_unfocused_panel(panel_id, window, cx),
+            ),
             cx.observe_in(&panel, window, {
                 let workspace = workspace.clone();
                 move |this, panel, window, cx| {
@@ -826,12 +878,17 @@ impl Dock {
                 self.activate_panel(idx, window, cx);
             }
 
+            let visible = serialized.visible
+                && self
+                    .active_panel()
+                    .is_none_or(|panel| !panel.hide_on_focus_loss(cx));
             if serialized.zoom
+                && visible
                 && let Some(panel) = self.active_panel()
             {
                 panel.set_zoomed(true, window, cx)
             }
-            self.set_open(serialized.visible, window, cx);
+            self.set_open(visible, window, cx);
             return true;
         }
         false
