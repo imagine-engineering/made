@@ -2062,7 +2062,7 @@ mod tests {
             );
         }
         assert_eq!(
-            svg.match_indices("<line ").count(),
+            svg.match_indices("<polyline ").count(),
             canvas.edges.len(),
             "the export strokes every admitted edge"
         );

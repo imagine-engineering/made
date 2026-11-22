@@ -50,6 +50,26 @@ pub enum CanvasEdgeVariant {
     Omitted,
 }
 
+impl CanvasEdgeVariant {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Dependency => "Dependency",
+            Self::Constraint => "Constraint",
+            Self::Unresolved => "Unresolved dependency",
+            Self::Omitted => "Omitted dependency",
+        }
+    }
+
+    fn dash_pattern(self) -> Option<(f32, f32)> {
+        match self {
+            Self::Dependency => None,
+            Self::Constraint => Some((3.0, 3.0)),
+            Self::Unresolved => Some((7.0, 4.0)),
+            Self::Omitted => Some((2.0, 5.0)),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CanvasEdge {
     pub id: String,
@@ -130,21 +150,18 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
     let mut edges = Vec::new();
     let mut unresolved_count = 0usize;
     for (provider_index, edge) in graph.edges.iter().enumerate() {
-        let requested_label = match &edge.requested {
+        let (requested_label, requested_version) = match &edge.requested {
             project::jvm_project::GradleDependencySelector::Module {
                 group,
                 module,
                 version,
                 ..
-            } => {
-                let mut label = component_label(Some(group), module);
-                if edge.resolved && edge.selected.is_some() {
-                    label.push_str(&format!(" {version}"));
-                }
-                label
-            }
+            } => (
+                component_label(Some(group), module),
+                (!version.is_empty()).then(|| version.clone()),
+            ),
             project::jvm_project::GradleDependencySelector::Project { project_path, .. } => {
-                project_path.clone()
+                (project_path.clone(), None)
             }
         };
         let target = match (&edge.resolved, &edge.selected) {
@@ -155,8 +172,8 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
                 nodes.push(CanvasNode {
                     id: target.clone(),
                     component_id: String::new(),
-                    label: "Unresolved".to_owned(),
-                    version: None,
+                    label: requested_label.clone(),
+                    version: requested_version.clone(),
                     kind: CanvasNodeKind::Unresolved,
                 });
                 target
@@ -170,12 +187,15 @@ pub fn canvas_graph_from_gradle(graph: &GradleResolutionGraph) -> CanvasGraph {
             CanvasEdgeVariant::Dependency
         };
         edges.push(CanvasEdge {
-            id: format!("gradle-edge:{}:{}", edge.from, requested_label),
+            id: format!("gradle-edge:{provider_index}"),
             provider_index,
             from: edge.from.clone(),
             to: target,
             variant,
-            label: requested_label,
+            label: match requested_version {
+                Some(version) => format!("{requested_label} {version}"),
+                None => requested_label,
+            },
         });
     }
 
@@ -298,10 +318,9 @@ fn assemble_canvas_graph(mut nodes: Vec<CanvasNode>, mut edges: Vec<CanvasEdge>)
 pub fn layout_canvas_graph(graph: &mut CanvasGraph) {
     let ids: Vec<String> = graph.nodes.iter().map(|node| node.id.clone()).collect();
     let id_set: HashSet<String> = ids.iter().cloned().collect();
-    let mut outgoing: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut outgoing: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut incoming: HashMap<String, usize> = HashMap::new();
     let mut forward_edges: Vec<(String, String)> = Vec::new();
-    let mut _back_edges: Vec<(String, String)> = Vec::new();
     for id in &ids {
         incoming.entry(id.clone()).or_insert(0);
     }
@@ -309,26 +328,16 @@ pub fn layout_canvas_graph(graph: &mut CanvasGraph) {
         if !id_set.contains(&edge.from) || !id_set.contains(&edge.to) {
             continue;
         }
-        if edge.from == edge.to {
-            _back_edges.push((edge.from.clone(), edge.to.clone()));
-            continue;
-        }
-        if reaches(&outgoing, &edge.from, &edge.to) {
-            // Back edge: retained for rendering but excluded from layering.
-            _back_edges.push((edge.from.clone(), edge.to.clone()));
-        } else {
-            outgoing
+        if edge.from != edge.to
+            && !reaches(&outgoing, &edge.to, &edge.from)
+            && outgoing
                 .entry(edge.from.clone())
                 .or_default()
-                .push(edge.to.clone());
+                .insert(edge.to.clone())
+        {
             forward_edges.push((edge.from.clone(), edge.to.clone()));
             *incoming.entry(edge.to.clone()).or_insert(0) += 1;
         }
-    }
-    // Deterministic successor order: sort once here.
-    for successors in outgoing.values_mut() {
-        successors.sort();
-        successors.dedup();
     }
 
     // Longest-path layering in topological order (Kahn's algorithm over the
@@ -405,18 +414,18 @@ pub fn layout_canvas_graph(graph: &mut CanvasGraph) {
     recompute_bounds(graph);
 }
 
-fn reaches(outgoing: &BTreeMap<String, Vec<String>>, from: &str, to: &str) -> bool {
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut queue: Vec<String> = vec![from.to_owned()];
+fn reaches(outgoing: &BTreeMap<String, BTreeSet<String>>, from: &str, to: &str) -> bool {
+    let mut seen = HashSet::new();
+    let mut queue = vec![from];
     while let Some(id) = queue.pop() {
-        if !seen.insert(id.clone()) {
+        if !seen.insert(id) {
             continue;
         }
-        for next in outgoing.get(&id).cloned().unwrap_or_default() {
+        for next in outgoing.get(id).into_iter().flatten() {
             if next == to {
                 return true;
             }
-            if seen.insert(next.clone()) {
+            if !seen.contains(next.as_str()) {
                 queue.push(next);
             }
         }
@@ -526,6 +535,12 @@ fn recompute_bounds(graph: &mut CanvasGraph) {
         max.x = max.x.max(position.x + NODE_WIDTH);
         max.y = max.y.max(position.y + NODE_HEIGHT);
     }
+    for point in edge_paths(graph).into_iter().flatten() {
+        min.x = min.x.min(point.x);
+        min.y = min.y.min(point.y);
+        max.x = max.x.max(point.x);
+        max.y = max.y.max(point.y);
+    }
     graph.bounds = GraphRect {
         origin: min,
         size: GraphSize {
@@ -533,6 +548,71 @@ fn recompute_bounds(graph: &mut CanvasGraph) {
             height: (max.y - min.y).max(NODE_HEIGHT),
         },
     };
+}
+
+fn edge_paths(graph: &CanvasGraph) -> Vec<Vec<GraphPoint>> {
+    let mut multiplicity = HashMap::new();
+    for edge in &graph.edges {
+        *multiplicity.entry((&edge.from, &edge.to)).or_insert(0usize) += 1;
+    }
+    let top = graph
+        .positions
+        .values()
+        .map(|position| position.y)
+        .fold(PADDING, f32::min);
+    let mut ranks = HashMap::new();
+    let mut return_lane = 0;
+    graph
+        .edges
+        .iter()
+        .map(|edge| {
+            let (Some(from), Some(to)) = (
+                graph.positions.get(&edge.from),
+                graph.positions.get(&edge.to),
+            ) else {
+                return Vec::new();
+            };
+            let key = (&edge.from, &edge.to);
+            let rank = ranks.entry(key).or_insert(0usize);
+            let count = multiplicity.get(&key).copied().unwrap_or(1);
+            let lane = (*rank as f32 + 0.5) / count as f32 - 0.5;
+            *rank += 1;
+            let port = NODE_HEIGHT / 2.0 + lane * (NODE_HEIGHT - 12.0);
+            let point = |x, y| GraphPoint { x, y };
+            let start = point(from.x + NODE_WIDTH, from.y + port);
+            let end = point(to.x, to.y + port);
+            let departure = point(start.x + 16.0 + lane * 12.0, start.y);
+            let arrival = point(end.x - 16.0 - lane * 12.0, end.y);
+            if from.x < to.x {
+                return vec![start, departure, arrival, end];
+            }
+
+            // Return edges stay outside the node rows so the cycle stays visible.
+            let bypass = top - 18.0 - return_lane as f32 * 7.0;
+            return_lane += 1;
+            vec![
+                start,
+                departure,
+                point(departure.x, bypass),
+                point(arrival.x, bypass),
+                arrival,
+                end,
+            ]
+        })
+        .collect()
+}
+
+fn point_segment_distance(point: GraphPoint, start: GraphPoint, end: GraphPoint) -> f32 {
+    let delta_x = end.x - start.x;
+    let delta_y = end.y - start.y;
+    let length_squared = delta_x * delta_x + delta_y * delta_y;
+    if length_squared <= f32::EPSILON {
+        return (point.x - start.x).hypot(point.y - start.y);
+    }
+    let projection = (((point.x - start.x) * delta_x + (point.y - start.y) * delta_y)
+        / length_squared)
+        .clamp(0.0, 1.0);
+    (point.x - start.x - projection * delta_x).hypot(point.y - start.y - projection * delta_y)
 }
 
 /// Interactive read-only canvas state: viewport, selection, hover/focus
@@ -547,6 +627,8 @@ pub struct CanvasState {
     pub inspected: Vec<String>,
     pub inspected_edges: BTreeSet<usize>,
     pub hover: Option<String>,
+    hovered_edge: Option<usize>,
+    edge_paths: Vec<Vec<GraphPoint>>,
     pub focus: Option<String>,
     node_focus: BTreeMap<String, gpui::FocusHandle>,
     /// Box selection in graph coordinates, if one is being drawn.
@@ -569,12 +651,14 @@ pub struct CanvasState {
 impl CanvasState {
     pub fn new(graph: CanvasGraph) -> Self {
         Self {
+            edge_paths: edge_paths(&graph),
             graph,
             viewport: sim_runtime::graph::GraphViewport::default(),
             selection: BTreeSet::new(),
             inspected: Vec::new(),
             inspected_edges: BTreeSet::new(),
             hover: None,
+            hovered_edge: None,
             focus: None,
             node_focus: BTreeMap::new(),
             box_selection: None,
@@ -596,10 +680,12 @@ impl CanvasState {
         self.focus.take_if(|id| !contains(id));
         self.node_focus.retain(|id, _| contains(id));
         self.hover = None;
+        self.hovered_edge = None;
         self.inspected.clear();
         self.inspected_edges.clear();
         self.box_selection = None;
         self.end_pan();
+        self.edge_paths = edge_paths(&graph);
         self.graph = graph;
     }
 
@@ -654,6 +740,24 @@ impl CanvasState {
             }
         }
         None
+    }
+
+    fn edge_at(&self, point: GraphPoint) -> Option<usize> {
+        let point = self.viewport.screen_to_graph(point);
+        let radius = 6.0 / self.viewport.scale;
+        self.edge_paths
+            .iter()
+            .enumerate()
+            .filter_map(|(index, path)| {
+                let distance = path
+                    .iter()
+                    .zip(path.iter().skip(1))
+                    .map(|(start, end)| point_segment_distance(point, *start, *end))
+                    .fold(f32::INFINITY, f32::min);
+                (distance <= radius).then_some((index, distance))
+            })
+            .min_by(|(_, left), (_, right)| left.total_cmp(right))
+            .map(|(index, _)| index)
     }
 
     /// Toggles a node in the selection; without modifiers the selection is
@@ -828,7 +932,7 @@ impl gpui::Render for CanvasState {
         let viewport = self.viewport.clone();
         let node_size = self.graph.node_size();
         let scale = viewport.scale;
-        let overlay_node = focused.as_ref().or(self.hover.as_ref());
+        let overlay_node = self.hover.as_ref().or(focused.as_ref());
         let selection = self.selection.clone();
         let inspected: HashSet<String> = self.inspected.iter().cloned().collect();
         let box_selection = self.box_selection;
@@ -836,21 +940,23 @@ impl gpui::Render for CanvasState {
         let canvas_size = self.canvas_size.clone();
 
         // Snapshot the painted geometry so the edge canvas can stroke it.
-        let edges: Vec<(GraphPoint, GraphPoint, CanvasEdgeVariant, bool)> = self
+        let edges: Vec<_> = self
             .graph
             .edges
             .iter()
-            .filter_map(|edge| {
-                let from = self.graph.positions.get(&edge.from).copied()?;
-                let to = self.graph.positions.get(&edge.to).copied()?;
-                Some((
-                    viewport.graph_to_screen(from),
-                    viewport.graph_to_screen(to),
+            .zip(&self.edge_paths)
+            .enumerate()
+            .map(|(index, (edge, path))| {
+                (
+                    path.iter()
+                        .map(|point| viewport.graph_to_screen(*point))
+                        .collect::<Vec<_>>(),
                     edge.variant,
-                    self.inspected_edges.contains(&edge.provider_index)
+                    self.hovered_edge == Some(index)
+                        || self.inspected_edges.contains(&edge.provider_index)
                         || (self.inspected.is_empty()
                             && (selection.contains(&edge.from) || selection.contains(&edge.to))),
-                ))
+                )
             })
             .collect();
         let edge_color = Rgba::from(theme.border);
@@ -895,13 +1001,36 @@ impl gpui::Render for CanvasState {
             )
         });
 
-        let hover_label = overlay_node.and_then(|id| self.graph.node(id)).map(|node| {
-            let mut label = node.label.clone();
-            if let Some(version) = &node.version {
-                label.push_str(&format!(" {version}"));
-            }
-            label
-        });
+        let hover_label = self
+            .hovered_edge
+            .and_then(|index| self.graph.edges.get(index))
+            .map(|edge| {
+                let source = self
+                    .graph
+                    .node(&edge.from)
+                    .map_or(&edge.from, |node| &node.label);
+                let target = self
+                    .graph
+                    .node(&edge.to)
+                    .map_or(&edge.to, |node| &node.label);
+                format!(
+                    "{} from {source} to {target} ({})",
+                    edge.variant.label(),
+                    edge.label
+                )
+            })
+            .or_else(|| {
+                overlay_node.and_then(|id| self.graph.node(id)).map(|node| {
+                    let mut label = node.label.clone();
+                    if let Some(version) = &node.version {
+                        label.push_str(&format!(" {version}"));
+                    }
+                    if node.kind == CanvasNodeKind::Unresolved {
+                        label.push_str(" (unresolved)");
+                    }
+                    label
+                })
+            });
 
         div()
             .id(gpui::ElementId::Name(
@@ -956,18 +1085,32 @@ impl gpui::Render for CanvasState {
             .on_mouse_move(cx.listener(
                 move |state, event: &gpui::MouseMoveEvent, _, cx: &mut gpui::Context<Self>| {
                     let position = state.canvas_position(event.position);
-                    if event.pressed_button == Some(gpui::MouseButton::Left)
-                        && !state.update_box_selection(position)
-                    {
-                        state.update_pan(position);
+                    let dragging = event.pressed_button == Some(gpui::MouseButton::Left);
+                    if dragging {
+                        if !state.update_box_selection(position) {
+                            state.update_pan(position);
+                        }
                     }
                     let hover = state.node_at(position);
-                    if hover != state.hover {
+                    let edge = if hover.is_none() && !dragging {
+                        state.edge_at(position)
+                    } else {
+                        None
+                    };
+                    if dragging || hover != state.hover || edge != state.hovered_edge {
                         state.hover = hover;
+                        state.hovered_edge = edge;
+                        cx.notify();
                     }
-                    cx.notify();
                 },
             ))
+            .on_mouse_exit(cx.listener(|state, _, _, cx| {
+                let hover = state.hover.take();
+                let edge = state.hovered_edge.take();
+                if hover.is_some() || edge.is_some() {
+                    cx.notify();
+                }
+            }))
             .on_mouse_up(
                 gpui::MouseButton::Left,
                 cx.listener(Self::finish_pointer_selection),
@@ -1024,7 +1167,16 @@ impl gpui::Render for CanvasState {
                             width: bounds.size.width.into(),
                             height: bounds.size.height.into(),
                         };
-                        for (from, to, variant, selected) in &edges {
+                        let position = |graph_point: GraphPoint| {
+                            point(
+                                bounds.origin.x + px(graph_point.x),
+                                bounds.origin.y + px(graph_point.y),
+                            )
+                        };
+                        for (points, variant, selected) in &edges {
+                            let [from, rest @ .., before_tip, tip] = points.as_slice() else {
+                                continue;
+                            };
                             let stroke_color = if *selected {
                                 edge_inspected_color
                             } else {
@@ -1042,53 +1194,29 @@ impl gpui::Render for CanvasState {
                                 1.5
                             };
                             let mut builder = PathBuilder::stroke(px(width));
-                            builder.move_to(point(
-                                bounds.origin.x + px(from.x),
-                                bounds.origin.y + px(from.y),
-                            ));
-                            builder.line_to(point(
-                                bounds.origin.x + px(to.x),
-                                bounds.origin.y + px(to.y),
-                            ));
+                            if let Some((dash, gap)) = variant.dash_pattern() {
+                                builder = builder.dash_array(&[px(dash), px(gap)]);
+                            }
+                            builder.move_to(position(*from));
+                            for next in rest.iter().chain([before_tip, tip]) {
+                                builder.line_to(position(*next));
+                            }
                             if let Ok(path) = builder.build() {
                                 window.paint_path(path, stroke_color);
                             }
-                            // Arrowhead at the target end.
-                            let direction = GraphPoint {
-                                x: to.x - from.x,
-                                y: to.y - from.y,
-                            };
-                            let length =
-                                (direction.x * direction.x + direction.y * direction.y).sqrt();
-                            if length <= f32::EPSILON {
-                                continue;
-                            }
-                            let unit = GraphPoint {
-                                x: direction.x / length,
-                                y: direction.y / length,
-                            };
-                            let perp = GraphPoint {
-                                x: -unit.y,
-                                y: unit.x,
-                            };
-                            let tip = *to;
-                            let base = GraphPoint {
-                                x: tip.x - unit.x * 10.0,
-                                y: tip.y - unit.y * 10.0,
-                            };
+                            let length = (tip.x - before_tip.x).clamp(0.0, 10.0);
+                            let base_x = tip.x - length;
                             let mut builder = PathBuilder::fill();
-                            builder.move_to(point(
-                                bounds.origin.x + px(tip.x),
-                                bounds.origin.y + px(tip.y),
-                            ));
-                            builder.line_to(point(
-                                bounds.origin.x + px(base.x + perp.x * 4.0),
-                                bounds.origin.y + px(base.y + perp.y * 4.0),
-                            ));
-                            builder.line_to(point(
-                                bounds.origin.x + px(base.x - perp.x * 4.0),
-                                bounds.origin.y + px(base.y - perp.y * 4.0),
-                            ));
+                            builder.move_to(position(*tip));
+                            builder.line_to(position(GraphPoint {
+                                x: base_x,
+                                y: tip.y - length * 0.4,
+                            }));
+                            builder.line_to(position(GraphPoint {
+                                x: base_x,
+                                y: tip.y + length * 0.4,
+                            }));
+                            builder.close();
                             if let Ok(path) = builder.build() {
                                 window.paint_path(path, stroke_color);
                             }
@@ -1157,13 +1285,9 @@ impl gpui::Render for CanvasState {
                     } else {
                         theme.border
                     };
-                    let title = if kind == CanvasNodeKind::Unresolved {
-                        label
-                    } else {
-                        match &version {
-                            Some(version) => format!("{label} {version}"),
-                            None => label,
-                        }
+                    let title = match &version {
+                        Some(version) => format!("{label} {version}"),
+                        None => label,
                     };
                     let accessible = format!(
                         "Dependency {}{}",
@@ -1262,23 +1386,29 @@ pub fn canvas_graph_svg(graph: &CanvasGraph) -> String {
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.0}\" height=\"{height:.0}\" viewBox=\"0 0 {width:.0} {height:.0}\">\n"
     );
     svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"#1a1a1f\"/>\n");
+    svg.push_str("<defs><marker id=\"dependency-arrow\" viewBox=\"0 0 10 8\" refX=\"10\" refY=\"4\" markerWidth=\"8\" markerHeight=\"8\" orient=\"auto\"><path d=\"M 0 0 L 10 4 L 0 8 Z\" fill=\"#7d7d87\"/></marker></defs>\n");
     let origin = GraphPoint {
         x: bounds.origin.x - padding,
         y: bounds.origin.y - padding,
     };
-    for edge in &graph.edges {
-        let (Some(from), Some(to)) = (
-            graph.positions.get(&edge.from).copied(),
-            graph.positions.get(&edge.to).copied(),
-        ) else {
+    for (edge, path) in graph.edges.iter().zip(edge_paths(graph)) {
+        if path.is_empty() {
             continue;
-        };
+        }
+        let points = path
+            .iter()
+            .map(|point| format!("{:.1},{:.1}", point.x - origin.x, point.y - origin.y))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let dash = edge
+            .variant
+            .dash_pattern()
+            .map_or_else(String::new, |(dash, gap)| {
+                format!(" stroke-dasharray=\"{dash} {gap}\"")
+            });
         svg.push_str(&format!(
-            "<line x1=\"{x1:.1}\" y1=\"{y1:.1}\" x2=\"{x2:.1}\" y2=\"{y2:.1}\" stroke=\"#7d7d87\" stroke-width=\"1\"/>\n",
-            x1 = from.x - origin.x,
-            y1 = from.y - origin.y,
-            x2 = to.x - origin.x,
-            y2 = to.y - origin.y,
+            "<polyline points=\"{points}\" fill=\"none\" stroke=\"#7d7d87\" stroke-width=\"1.5\" marker-end=\"url(#dependency-arrow)\"{dash}><title>{title}</title></polyline>\n",
+            title = svg_escape(&format!("{}: {}", edge.variant.label(), edge.label)),
         ));
     }
     for node in &graph.nodes {
@@ -1290,6 +1420,10 @@ pub fn canvas_graph_svg(graph: &CanvasGraph) -> String {
             CanvasNodeKind::Module | CanvasNodeKind::Project => "#3b6ea5",
             CanvasNodeKind::Unresolved => "#a5573b",
         };
+        let label = match &node.version {
+            Some(version) => format!("{} {version}", node.label),
+            None => node.label.clone(),
+        };
         svg.push_str(&format!(
             "<rect x=\"{x:.1}\" y=\"{y:.1}\" width=\"{width:.1}\" height=\"{height:.1}\" rx=\"4\" fill=\"{fill}\"/>\n<text x=\"{text_x:.1}\" y=\"{text_y:.1}\" font-family=\"sans-serif\" font-size=\"11\" fill=\"#e8e8ee\">{label}</text>\n",
             x = origin_node.x - origin.x,
@@ -1298,7 +1432,7 @@ pub fn canvas_graph_svg(graph: &CanvasGraph) -> String {
             height = node_size.height,
             text_x = origin_node.x - origin.x + 6.0,
             text_y = origin_node.y - origin.y + node_size.height - 6.0,
-            label = svg_escape(&node.label),
+            label = svg_escape(&label),
         ));
     }
     svg.push_str("</svg>\n");
@@ -1390,12 +1524,13 @@ mod tests {
             shared.map(|node| node.version.as_deref()),
             Some(Some("3.0"))
         );
-        assert!(
-            graph
-                .nodes
-                .iter()
-                .any(|node| node.kind == CanvasNodeKind::Unresolved)
-        );
+        let unresolved = graph
+            .nodes
+            .iter()
+            .find(|node| node.kind == CanvasNodeKind::Unresolved)
+            .expect("unresolved node");
+        assert_eq!(unresolved.label, "org.example:missing");
+        assert_eq!(unresolved.version.as_deref(), Some("9.0"));
         assert_eq!(
             graph.edges.iter().filter(|edge| edge.to == "c3").count(),
             2,
@@ -1414,6 +1549,80 @@ mod tests {
                 .find(|node| node.kind == CanvasNodeKind::Root)
                 .is_some()
         );
+    }
+
+    #[test]
+    fn cycle_and_parallel_edges_keep_their_own_routes_and_provider_identity() {
+        let mut fixture = gradle_fixture();
+        let first = fixture.edges.first().expect("root edge").clone();
+        let mut constraint = first.clone();
+        constraint.constraint = true;
+        fixture.edges.push(constraint);
+        let mut back = first;
+        back.from = "c3".into();
+        back.selected = Some("root".into());
+        fixture.edges.push(back.clone());
+        back.selected = Some("c3".into());
+        fixture.edges.push(back);
+
+        let graph = canvas_graph_from_gradle(&fixture);
+        let state = CanvasState::new(graph);
+        let paths = &state.edge_paths;
+        assert_eq!(*paths, edge_paths(&canvas_graph_from_gradle(&fixture)));
+        let root = state.graph.positions["root"];
+        let left = state.graph.positions["c1"];
+        let shared = state.graph.positions["c3"];
+        assert!(root.x < left.x && left.x < shared.x);
+
+        let edge_index = |variant, from: &str, to: &str| {
+            state
+                .graph
+                .edges
+                .iter()
+                .position(|edge| edge.variant == variant && edge.from == from && edge.to == to)
+                .expect("routed fixture edge")
+        };
+        let dependency = edge_index(CanvasEdgeVariant::Dependency, "root", "c1");
+        let constraint = edge_index(CanvasEdgeVariant::Constraint, "root", "c1");
+        assert_ne!(
+            state.graph.edges[dependency].id,
+            state.graph.edges[constraint].id
+        );
+        for index in [dependency, constraint] {
+            let [start, _, _, end] = paths[index].as_slice() else {
+                panic!("forward route")
+            };
+            assert_eq!(start.x, root.x + NODE_WIDTH);
+            assert_eq!(end.x, left.x);
+            assert_eq!(
+                state.edge_at(GraphPoint {
+                    x: start.x + 8.0,
+                    y: start.y
+                }),
+                Some(index)
+            );
+        }
+        for (target, position) in [("root", root), ("c3", shared)] {
+            let index = edge_index(CanvasEdgeVariant::Dependency, "c3", target);
+            let [_, _, upper_right, upper_left, _, end] = paths[index].as_slice() else {
+                panic!("return route")
+            };
+            assert_eq!(end.x, position.x);
+            assert!(upper_right.y < root.y);
+            assert_eq!(upper_left.y, upper_right.y);
+            assert!(
+                paths[index]
+                    .iter()
+                    .all(|point| state.graph.bounds.contains(*point))
+            );
+        }
+
+        let svg = canvas_graph_svg(&state.graph);
+        assert_eq!(svg.matches("<polyline ").count(), state.graph.edges.len());
+        assert!(svg.contains("stroke-dasharray=\"3 3\""));
+        assert!(svg.contains("stroke-dasharray=\"7 4\""));
+        assert!(svg.contains("marker-end=\"url(#dependency-arrow)\""));
+        assert!(svg.contains("org.example:missing 9.0"));
     }
 
     #[test]
