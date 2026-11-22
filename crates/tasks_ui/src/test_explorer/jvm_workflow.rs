@@ -52,7 +52,7 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
     use gpui::InputEvent as _;
     use jvm_ui::{
         DependenciesPanel, ShowGradle,
-        dependency_analyzer_item::DependencyAnalyzerItem,
+        dependency_analyzer_item::{DependencyAnalyzerItem, ShowInDependencyDiagram},
         dependency_diagram_item::{DependencyDiagramItem, DependencyDiagramPopup},
         dependency_graph_canvas::{CanvasEdgeVariant, MAX_CANVAS_EDGES, MAX_CANVAS_NODES},
     };
@@ -432,38 +432,41 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
         assert!(canvas.graph.node(&leaf.id).is_none());
     });
 
-    focus_control(cx, "Search dependency diagram nodes");
-    press_enter(cx);
-    for _ in 0..2 {
+    let search_dependency = |cx: &mut VisualTestContext, query: &str, coordinate: &str| {
+        focus_control(cx, "Search dependency diagram nodes");
+        press_enter(cx);
+        for _ in 0..2 {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                window.simulate_next_frame(cx);
+            });
+        }
+        cx.simulate_input(query);
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
-            window.simulate_next_frame(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram search"))
+                    .expect("accessibility JSON");
+            let nodes = tree["nodes"].as_object().expect("accessibility nodes");
+            assert_eq!(
+                nodes
+                    .values()
+                    .filter(|node| node["aria"]["label"] == coordinate)
+                    .count(),
+                1,
+                "the picker renders one exact dependency",
+            );
+            assert!(!nodes.values().any(|node| {
+                node["aria"]["label"] == "Dependency graph status"
+                    && node["aria"]["value"]
+                        .as_str()
+                        .is_some_and(|status| status.contains("Diagram unavailable"))
+            }));
         });
-    }
-    cx.simulate_input("leaf-12-08");
-    cx.update(|window, cx| {
-        window.draw(cx).clear(cx);
-        let tree: serde_json::Value =
-            serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram search"))
-                .expect("accessibility JSON");
-        let nodes = tree["nodes"].as_object().expect("accessibility nodes");
-        assert_eq!(
-            nodes
-                .values()
-                .filter(|node| { node["aria"]["label"] == "verification:leaf-12-08:1.0" })
-                .count(),
-            1,
-            "the picker renders one exact transitive dependency",
-        );
-        assert!(!nodes.values().any(|node| {
-            node["aria"]["label"] == "Dependency graph status"
-                && node["aria"]["value"]
-                    .as_str()
-                    .is_some_and(|status| status.contains("Diagram unavailable"))
-        }));
-    });
-    dispatch(cx, "menu::Confirm");
-    cx.run_until_parked();
+        dispatch(cx, "menu::Confirm");
+        cx.run_until_parked();
+    };
+    search_dependency(cx, "leaf-12-08", "verification:leaf-12-08:1.0");
     diagram.read_with(cx, |diagram, cx| {
         let canvas = diagram.canvas().read(cx);
         assert_eq!(canvas.focus.as_deref(), Some(leaf.id.as_str()));
@@ -479,6 +482,120 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
     });
     eprintln!(
         "Mounted Gradle Dependencies admitted 126 components and 413 edges and searched to the exact provider edge for verification:leaf-12-08:1.0"
+    );
+    let viewport = diagram.read_with(cx, |diagram, cx| diagram.canvas().read(cx).viewport.clone());
+    dispatch(cx, "groovy_dependencies_panel::InspectGraphNeighbours");
+    cx.run_until_parked();
+    diagram.read_with(cx, |diagram, cx| {
+        let canvas = diagram.canvas().read(cx);
+        assert!(canvas.inspected.contains(&incoming.from));
+        assert!(canvas.inspected_edges.contains(&incoming_index));
+    });
+    dispatch(cx, "groovy_dependencies_panel::InspectGraphRootPaths");
+    cx.run_until_parked();
+    let root_edge = graph
+        .edges
+        .iter()
+        .position(|edge| {
+            edge.from == graph.root_component
+                && edge.selected.as_deref() == Some(incoming.from.as_str())
+        })
+        .expect("root edge to the leaf's branch");
+    diagram.read_with(cx, |diagram, cx| {
+        let canvas = diagram.canvas().read(cx);
+        let visible_path = canvas
+            .graph
+            .edges
+            .iter()
+            .map(|edge| edge.provider_index)
+            .filter(|index| [root_edge, incoming_index].contains(index))
+            .collect();
+        assert_eq!(canvas.inspected_edges, visible_path);
+        assert_eq!(canvas.viewport, viewport);
+    });
+    let inspection_announces = |cx: &mut VisualTestContext, heading: &str, details: &[&str]| {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram inspection"))
+                    .expect("accessibility JSON");
+            tree["nodes"]
+                .as_object()
+                .expect("accessibility nodes")
+                .values()
+                .any(|node| {
+                    node["aria"]["value"].as_str().is_some_and(|value| {
+                        value.starts_with(heading)
+                            && details.iter().all(|detail| value.contains(detail))
+                    })
+                })
+        })
+    };
+    assert!(inspection_announces(
+        cx,
+        "Shortest root paths:",
+        &["Shortest distance 2"]
+    ));
+
+    let observer = graph
+        .components
+        .iter()
+        .find(|component| component.module.as_deref() == Some("shared-observer"))
+        .expect("dependency with 96 root paths");
+    search_dependency(cx, "shared-observer", "verification:shared-observer:1.0");
+    dispatch(cx, "groovy_dependencies_panel::InspectGraphAllRootPaths");
+    cx.run_until_parked();
+    assert!(
+        inspection_announces(
+            cx,
+            "All root paths:",
+            &["64 bounded simple paths", "Enumeration reached its limit",]
+        ),
+        "the diagram announces the actual path truncation"
+    );
+    let generation = lsp_store.read_with(cx, |store, _| {
+        store
+            .jdtls_project_snapshot(worktree_id)
+            .expect("current graph")
+            .0
+            .generation
+    });
+    dispatch(cx, "groovy_dependencies_panel::InspectGraphAllUsages");
+    cx.run_until_parked();
+    let linked_analyzer = workspace
+        .read_with(cx, |workspace, cx| {
+            workspace.active_item_as::<DependencyAnalyzerItem>(cx)
+        })
+        .expect("All usages activates the analyzer");
+    linked_analyzer.read_with(cx, |analyzer, _| {
+        assert_eq!(analyzer.selected_key(), Some(observer.id.as_str()));
+        assert_eq!(analyzer.scope().label(), "qualificationGraph");
+        assert!(analyzer.usages_truncated());
+    });
+    cx.dispatch_action(ShowInDependencyDiagram {
+        node_key: observer.id.clone(),
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        workspace.read_with(cx, |workspace, cx| workspace
+            .active_item_as::<DependencyDiagramItem>(cx)),
+        Some(diagram.clone()),
+    );
+    diagram.read_with(cx, |diagram, cx| {
+        assert_eq!(
+            diagram.canvas().read(cx).focus.as_deref(),
+            Some(observer.id.as_str())
+        );
+    });
+    lsp_store.read_with(cx, |store, _| {
+        let (snapshot, current) = store
+            .jdtls_project_snapshot(worktree_id)
+            .expect("current graph");
+        assert!(current);
+        assert_eq!(snapshot.generation, generation);
+    });
+    eprintln!(
+        "Mounted Gradle checked neighbours, shortest paths, 64 of 96 root paths and round-trip analyzer navigation without refreshing the provider"
     );
     select_configuration(cx);
     dispatch(cx, "groovy_dependencies_panel::ShowDependencyDiagramPopup");

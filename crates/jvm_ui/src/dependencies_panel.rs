@@ -1627,72 +1627,50 @@ fn graph_inspection_edges_bounded<'a>(
         // hops and cannot add paths beyond admitted facts.
         const MAX_PATHS: usize = 64;
         const MAX_HOP_EXAMINATIONS: usize = 4096;
-        let mut adjacency = HashMap::<&str, Vec<&str>>::new();
-        for (from, target) in edges {
+        let mut adjacency = HashMap::<&str, Vec<(usize, &str)>>::new();
+        for (index, (from, target)) in edges.iter().enumerate() {
             if let Some(target) = target {
-                adjacency.entry(from).or_default().push(target);
+                adjacency.entry(from).or_default().push((index, target));
             }
         }
-        let mut paths: Vec<Vec<(&str, &str)>> = Vec::new();
-        let mut budget = MAX_HOP_EXAMINATIONS;
-        fn walk<'a>(
-            node: &'a str,
-            selected: &'a str,
-            adjacency: &HashMap<&'a str, Vec<&'a str>>,
-            on_stack: &mut HashSet<&'a str>,
-            path: &mut Vec<(&'a str, &'a str)>,
-            paths: &mut Vec<Vec<(&'a str, &'a str)>>,
-            budget: &mut usize,
-        ) {
-            for next in adjacency.get(node).into_iter().flatten() {
-                if *budget == 0 || paths.len() >= MAX_PATHS {
-                    return;
-                }
-                *budget -= 1;
-                if on_stack.contains(next) {
-                    continue;
-                }
-                if *next == selected {
-                    path.push((node, *next));
-                    paths.push(path.clone());
-                    path.pop();
-                } else {
-                    path.push((node, *next));
-                    on_stack.insert(*next);
-                    walk(next, selected, adjacency, on_stack, path, paths, budget);
-                    on_stack.remove(*next);
-                    path.pop();
-                }
-            }
-        }
+        let outgoing = |node| adjacency.get(node).into_iter().flatten();
+        let mut stack = vec![(root, outgoing(root))];
+        let mut on_stack = HashSet::from([root]);
         let mut path = Vec::new();
-        walk(
-            root,
-            selected,
-            &adjacency,
-            &mut HashSet::from([root]),
-            &mut path,
-            &mut paths,
-            &mut budget,
-        );
-        let hops = paths
-            .iter()
-            .flat_map(|path| path.iter())
-            .copied()
-            .collect::<HashSet<_>>();
-        let indices = edges
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (from, target))| {
-                let target = (*target).as_ref()?;
-                hops.contains(&(*from, *target)).then_some(index)
-            })
-            .collect::<Vec<_>>();
-        return (
-            indices,
-            Some(paths.len()),
-            budget == 0 || paths.len() == MAX_PATHS,
-        );
+        let mut retained = BTreeSet::new();
+        let mut path_count = 0;
+        let mut examined = 0;
+        let mut truncated = false;
+        while let Some((node, outgoing_edges)) = stack.last_mut() {
+            let Some(&(index, target)) = outgoing_edges.next() else {
+                on_stack.remove(node);
+                stack.pop();
+                path.pop();
+                continue;
+            };
+            if examined == MAX_HOP_EXAMINATIONS {
+                truncated = true;
+                break;
+            }
+            examined += 1;
+            if on_stack.contains(target) {
+                continue;
+            }
+            if target == selected {
+                if path_count == MAX_PATHS {
+                    truncated = true;
+                    break;
+                }
+                path_count += 1;
+                retained.extend(path.iter().copied());
+                retained.insert(index);
+            } else {
+                on_stack.insert(target);
+                path.push(index);
+                stack.push((target, outgoing(target)));
+            }
+        }
+        return (retained.into_iter().collect(), Some(path_count), truncated);
     }
     if mode == GraphInspectionMode::AllUsages {
         // Reverse reachability over admitted facts: every edge inside the
@@ -10097,23 +10075,20 @@ mod tests {
             );
         }
         // A chain stays a single bounded path.
-        let chain_nodes: Vec<String> = (0..=600).map(|index| format!("chain-{index}")).collect();
-        let chain: Vec<(&str, Option<&str>)> = (0..600)
-            .map(|index| {
-                (
-                    chain_nodes[index].as_str(),
-                    Some(chain_nodes[index + 1].as_str()),
-                )
-            })
+        let chain_nodes: Vec<String> = (0..4096).map(|index| format!("chain-{index}")).collect();
+        let chain: Vec<(&str, Option<&str>)> = chain_nodes
+            .iter()
+            .map(String::as_str)
+            .zip(chain_nodes.iter().skip(1).map(|node| Some(node.as_str())))
             .collect();
         let (indices, count) = graph_inspection_edges(
-            chain_nodes[0].as_str(),
-            chain_nodes[600].as_str(),
+            chain_nodes.first().expect("chain root"),
+            chain_nodes.last().expect("chain target"),
             &chain,
             GraphInspectionMode::AllRootPaths,
         );
         assert_eq!(count, Some(1), "a chain is one path");
-        assert_eq!(indices.len(), 600, "every chain hop stays reported");
+        assert_eq!(indices.len(), 4095, "every chain hop stays reported");
         // Parallel branches exceed the path cap and stay bounded.
         let branch_nodes: Vec<String> = (0..70).map(|index| format!("branch-{index}")).collect();
         let mut branches = Vec::new();
@@ -10133,6 +10108,18 @@ mod tests {
             "bounded enumeration reports that it reached the limit"
         );
         assert_eq!(indices.len(), 128, "each capped branch keeps its two hops");
+        let parallel = [("root", Some("selected")); 65];
+        for length in [64, 65] {
+            let (indices, count, limited) = graph_inspection_edges_bounded(
+                "root",
+                "selected",
+                &parallel[..length],
+                GraphInspectionMode::AllRootPaths,
+            );
+            assert_eq!(count, Some(64));
+            assert_eq!(limited, length == 65, "only a remaining route is truncated");
+            assert_eq!(indices, (0..64).collect::<Vec<_>>());
+        }
         // The captured diamond has exactly two root paths to the winner.
         let (_, gradle) = captured_graphs();
         let shared = gradle
