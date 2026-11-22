@@ -4,7 +4,10 @@
 //! and never query a provider; filters, group IDs, presentation, selection and
 //! the Usages pane live on the item so they survive tab switches.
 
-use crate::dependencies_panel::{BuildToolView, GraphQueryTarget, GraphSelection};
+use crate::dependencies_panel::{
+    BuildToolView, DependencyGraphReceipt, GraphQueryTarget, GraphSelection,
+    current_dependency_graph_receipt, derive_dependency_analyzer,
+};
 use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget, DependencySearch,
     DependencySearchEntry,
@@ -136,6 +139,30 @@ pub enum DependencyAnalyzerGraph {
     },
 }
 
+impl DependencyAnalyzerGraph {
+    fn clear(&mut self) {
+        match self {
+            Self::Gradle {
+                components, edges, ..
+            } => {
+                *components = Vec::new();
+                *edges = Vec::new();
+            }
+            Self::Maven {
+                nodes,
+                components,
+                edges,
+                unavailable_descriptors,
+            } => {
+                *nodes = Vec::new();
+                *components = Vec::new();
+                *edges = Vec::new();
+                *unavailable_descriptors = Vec::new();
+            }
+        }
+    }
+}
+
 /// One analyzer derivation: admitted facts plus the scope the picker applied.
 pub struct DependencyAnalyzerDerivation {
     pub target: DependencyDiagramTarget,
@@ -160,6 +187,9 @@ pub struct DependencyAnalyzerItem {
     host: LanguageToolTreeHost,
     derivation: DependencyAnalyzerDerivation,
     source: Option<DependencyAnalyzerSource>,
+    receipt: Option<DependencyGraphReceipt>,
+    _panel_subscription: Option<gpui::Subscription>,
+    search_handle: ui::PopoverMenuHandle<picker::Picker<DependencySearch>>,
     filter: DependencyAnalyzerFilter,
     presentation: DependencyAnalyzerPresentation,
     show_group_ids: bool,
@@ -814,13 +844,23 @@ impl DependencyAnalyzerItem {
     pub fn new(
         derivation: DependencyAnalyzerDerivation,
         source: Option<DependencyAnalyzerSource>,
-        cx: &mut App,
+        cx: &mut Context<Self>,
     ) -> Self {
+        let receipt = source.as_ref().and_then(|source| {
+            current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx)
+        });
+        let panel_subscription = source.as_ref().and_then(|source| {
+            let panel = source.panel.upgrade()?;
+            Some(cx.observe(&panel, |item, _, cx| item.refresh_receipt(cx)))
+        });
         let focus_handle = cx.focus_handle();
         let mut item = Self {
             host: LanguageToolTreeHost::with_focus_handle(focus_handle.clone()),
             derivation,
             source,
+            receipt,
+            _panel_subscription: panel_subscription,
+            search_handle: ui::PopoverMenuHandle::default(),
             filter: DependencyAnalyzerFilter::All,
             presentation: DependencyAnalyzerPresentation::Tree,
             show_group_ids: true,
@@ -856,6 +896,61 @@ impl DependencyAnalyzerItem {
         let item = cx.new(|cx| Self::new(derivation, source, cx));
         workspace.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
         item
+    }
+
+    pub(crate) fn matches_target(&self, selection: &GraphSelection) -> bool {
+        self.source
+            .as_ref()
+            .is_some_and(|source| source.selection.target() == selection.target())
+    }
+
+    fn receipt_is_current(&self, cx: &App) -> bool {
+        let Some(source) = &self.source else {
+            return true;
+        };
+        self.receipt.is_some()
+            && self.receipt
+                == current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx)
+    }
+
+    fn refresh_receipt(&mut self, cx: &mut Context<Self>) {
+        let Some(source) = &mut self.source else {
+            return;
+        };
+        let project = source.project.read(cx);
+        let receipt = current_dependency_graph_receipt(project, &source.selection, cx);
+        if receipt == self.receipt {
+            return;
+        }
+        let derivation = receipt.as_ref().and_then(|receipt| {
+            derive_dependency_analyzer(
+                project,
+                source.view,
+                &receipt.selection,
+                Some(&self.derivation.scope),
+                cx,
+            )
+        });
+        self.search_handle.hide(cx);
+        if let Some((menu, _, _)) = self.row_context_menu.take() {
+            menu.update(cx, |_, cx| cx.emit(gpui::DismissEvent));
+        }
+
+        match (receipt, derivation) {
+            (Some(receipt), Some(derivation)) => {
+                source.selection = receipt.selection.clone();
+                self.receipt = Some(receipt);
+                self.derivation = derivation;
+                self.notice = None;
+            }
+            _ => {
+                self.receipt = None;
+                self.derivation.graph.clear();
+                self.derivation.scope_options.clear();
+                self.notice = Some("Dependency graph facts are unavailable. Refresh and collect graph facts in the Dependencies panel.".into());
+            }
+        }
+        self.replace_rows(cx);
     }
 
     pub fn target(&self) -> &DependencyDiagramTarget {
@@ -906,7 +1001,10 @@ impl DependencyAnalyzerItem {
         self.selected_key.as_deref()
     }
 
-    pub(crate) fn search_entries(&self) -> Vec<DependencySearchEntry> {
+    pub(crate) fn search_entries(&self, cx: &App) -> Vec<DependencySearchEntry> {
+        if !self.receipt_is_current(cx) {
+            return Vec::new();
+        }
         analyzer_rows(
             &self.derivation.graph,
             self.filter,
@@ -922,6 +1020,9 @@ impl DependencyAnalyzerItem {
     }
 
     pub(crate) fn reveal_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         fn find_ancestors(
             rows: &[LanguageToolNode],
             id: &LanguageToolNodeId,
@@ -974,13 +1075,8 @@ impl DependencyAnalyzerItem {
             DependencyDiagramScope::MavenScope(_) => DependencyDiagramScope::MavenScope(label),
         };
         let project = source.project.read(cx);
-        match crate::dependencies_panel::derive_dependency_analyzer(
-            project,
-            source.view,
-            &source.selection,
-            Some(&scope),
-            cx,
-        ) {
+        match derive_dependency_analyzer(project, source.view, &source.selection, Some(&scope), cx)
+        {
             Some(derivation) => {
                 self.derivation = derivation;
                 self.selected_key = None;
@@ -1046,6 +1142,9 @@ impl DependencyAnalyzerItem {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         let show_in_diagram = node_key.is_some() && self.source.is_some();
         let focus_handle = self.focus_handle.clone();
         let menu = ui::ContextMenu::build(window, cx, |menu, _, _| {
@@ -1079,6 +1178,9 @@ impl DependencyAnalyzerItem {
     /// diagram surfaces; the row's node key lets the diagram emphasize the
     /// targeted dependency when the canvas admits it.
     pub fn show_in_dependency_diagram(&mut self, node_key: &str, cx: &mut Context<Self>) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         let Some(source) = self.source.clone() else {
             self.notice = Some(
                 "The analyzer's opening panel is unavailable; reopen the analyzer from the Dependencies panel, then retry Show in Diagram"
@@ -1107,6 +1209,9 @@ impl DependencyAnalyzerItem {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         let Some(source) = self.source.clone() else {
             self.notice = Some(
                 "The analyzer's opening panel is unavailable; reopen the analyzer from the Dependencies panel, then retry Go to Gradle Declaration"
@@ -1290,6 +1395,7 @@ impl Render for DependencyAnalyzerItem {
             )
             .child(
                 ui::PopoverMenu::new("dependency-analyzer-search")
+                    .with_handle(self.search_handle.clone())
                     .trigger(
                         ui::IconButton::new(
                             "dependency-analyzer-search-icon",
@@ -1302,7 +1408,7 @@ impl Render for DependencyAnalyzerItem {
                     )
                     .menu(move |window, cx| {
                         let item = search_item.upgrade()?;
-                        let entries = item.read(cx).search_entries();
+                        let entries = item.read(cx).search_entries(cx);
                         let item = search_item.clone();
                         Some(
                             DependencySearch::new(entries, move |id, cx| {

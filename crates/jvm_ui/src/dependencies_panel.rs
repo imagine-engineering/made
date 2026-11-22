@@ -1045,9 +1045,96 @@ fn dependency_canvas_for_selection(
     None
 }
 
-/// Derives diagram facts for the diagram surfaces from admitted provider
-/// state: walks visible trusted worktrees, matches the selection and applies
-/// the chosen scope. Read-only; never queries a provider.
+enum DependencyGraphRevision {
+    Maven(std::sync::Weak<project::jvm_project::MavenDependencyGraph>),
+    Gradle(std::sync::Weak<project::jvm_project::GradleDependencyGraph>),
+}
+
+pub(crate) struct DependencyGraphReceipt {
+    pub selection: GraphSelection,
+    graph: DependencyGraphRevision,
+}
+
+impl PartialEq for DependencyGraphReceipt {
+    fn eq(&self, other: &Self) -> bool {
+        use DependencyGraphRevision::*;
+
+        self.selection == other.selection
+            && match (&self.graph, &other.graph) {
+                (Maven(left), Maven(right)) => left.ptr_eq(right),
+                (Gradle(left), Gradle(right)) => left.ptr_eq(right),
+                _ => false,
+            }
+    }
+}
+
+fn admitted_dependency_snapshot<'a>(
+    project: &Project,
+    worktree_id: WorktreeId,
+    cx: &'a App,
+) -> Option<&'a JdtlsProjectSnapshot> {
+    if project.is_disconnected(cx)
+        || project
+            .remote_connection_state(cx)
+            .is_some_and(|state| state != remote::ConnectionState::Connected)
+    {
+        return None;
+    }
+
+    let worktree = project.worktree_for_id(worktree_id, cx)?;
+    if !worktree.read(cx).is_visible()
+        || TrustedWorktrees::try_get_global(cx)?
+            .read(cx)
+            .restricted_worktrees(&project.worktree_store(), cx)
+            .into_iter()
+            .any(|(restricted, _)| restricted == worktree_id)
+    {
+        return None;
+    }
+
+    let (snapshot, current) = project
+        .lsp_store()
+        .read(cx)
+        .jdtls_project_snapshot(worktree_id)?;
+    current.then_some(snapshot)
+}
+
+pub(crate) fn current_dependency_graph_receipt(
+    project: &Project,
+    selection: &GraphSelection,
+    cx: &App,
+) -> Option<DependencyGraphReceipt> {
+    let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)?;
+    let graph = snapshot
+        .projects
+        .iter()
+        .find_map(|module| match &selection.target {
+            GraphQueryTarget::Maven(pom) => {
+                let maven = module.maven.as_ref().filter(|maven| maven.pom == *pom)?;
+                Some(DependencyGraphRevision::Maven(Arc::downgrade(
+                    maven.dependency_graph.as_ref()?,
+                )))
+            }
+            GraphQueryTarget::Gradle {
+                module: root,
+                configuration,
+            } if module.module_root == *root => {
+                let graph = module.gradle.as_ref()?.dependency_graph.as_ref()?;
+                (graph.resolution.configuration == *configuration)
+                    .then(|| DependencyGraphRevision::Gradle(Arc::downgrade(graph)))
+            }
+            _ => None,
+        })?;
+    Some(DependencyGraphReceipt {
+        selection: GraphSelection {
+            server_id: snapshot.server_id,
+            generation: snapshot.generation,
+            target: selection.target.clone(),
+        },
+        graph,
+    })
+}
+
 pub(crate) fn derive_dependency_diagram(
     project: &Project,
     view: BuildToolView,
@@ -1056,38 +1143,13 @@ pub(crate) fn derive_dependency_diagram(
     scope: Option<&DependencyDiagramScope>,
     cx: &App,
 ) -> Option<DependencyDiagramDerivation> {
-    let worktrees = project.worktree_store();
-    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
+    let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)?;
+    if !selection.matches(snapshot, true) {
         return None;
-    };
-    let restricted = trusted
-        .read(cx)
-        .restricted_worktrees(&worktrees, cx)
-        .into_iter()
-        .map(|(id, _)| id)
-        .collect::<HashSet<_>>();
-    let store = project.lsp_store();
-    let store = store.read(cx);
-    for worktree in worktrees.read(cx).worktrees() {
-        let worktree = worktree.read(cx);
-        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
-            continue;
-        }
-        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
-            continue;
-        };
-        if let Some(derivation) =
-            dependency_canvas_for_selection(snapshot, view, selection, node, scope)
-        {
-            return Some(derivation);
-        }
     }
-    None
+    dependency_canvas_for_selection(snapshot, view, selection, node, scope)
 }
 
-/// Derives analyzer facts for the analyzer surfaces from admitted provider
-/// state: walks visible trusted worktrees and matches the selection under the
-/// chosen scope. Read-only; never queries a provider.
 pub(crate) fn derive_dependency_analyzer(
     project: &Project,
     view: BuildToolView,
@@ -1095,69 +1157,25 @@ pub(crate) fn derive_dependency_analyzer(
     scope: Option<&DependencyDiagramScope>,
     cx: &App,
 ) -> Option<crate::dependency_analyzer_item::DependencyAnalyzerDerivation> {
-    let worktrees = project.worktree_store();
-    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
+    let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)?;
+    if !selection.matches(snapshot, true) {
         return None;
-    };
-    let restricted = trusted
-        .read(cx)
-        .restricted_worktrees(&worktrees, cx)
-        .into_iter()
-        .map(|(id, _)| id)
-        .collect::<HashSet<_>>();
-    let store = project.lsp_store();
-    let store = store.read(cx);
-    for worktree in worktrees.read(cx).worktrees() {
-        let worktree = worktree.read(cx);
-        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
-            continue;
-        }
-        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
-            continue;
-        };
-        if let Some(derivation) = crate::dependency_analyzer_item::dependency_analyzer_for_selection(
-            snapshot, view, selection, scope,
-        ) {
-            return Some(derivation);
-        }
     }
-    None
+    crate::dependency_analyzer_item::dependency_analyzer_for_selection(
+        snapshot, view, selection, scope,
+    )
 }
 
-/// Re-derives the exact Mermaid export payload for a diagram from admitted
-/// facts, so the diagram toolbar's Copy Diagram Source behaves identically to
-/// the panel's existing action.
 pub(crate) fn dependency_diagram_source_export(
     project: &Project,
     view: BuildToolView,
     selection: &GraphSelection,
     cx: &App,
 ) -> Option<String> {
-    let worktrees = project.worktree_store();
-    let Some(trusted) = TrustedWorktrees::try_get_global(cx) else {
-        return None;
-    };
-    let restricted = trusted
-        .read(cx)
-        .restricted_worktrees(&worktrees, cx)
-        .into_iter()
-        .map(|(id, _)| id)
-        .collect::<HashSet<_>>();
-    let store = project.lsp_store();
-    let store = store.read(cx);
-    for worktree in worktrees.read(cx).worktrees() {
-        let worktree = worktree.read(cx);
-        if !worktree.is_visible() || restricted.contains(&worktree.id()) {
-            continue;
-        }
-        let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
-            continue;
-        };
-        if let Ok(Some(source)) = dependency_diagram_source(snapshot, true, view, selection) {
-            return Some(source);
-        }
-    }
-    None
+    let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)?;
+    dependency_diagram_source(snapshot, true, view, selection)
+        .ok()
+        .flatten()
 }
 
 /// Maps a Maven fact-filter scope label back to its enum value.
@@ -3316,7 +3334,7 @@ impl DependenciesPanel {
         let _ = self.workspace.update_in(cx, |workspace, window, cx| {
             let existing = workspace
                 .items_of_type::<DependencyDiagramItem>(cx)
-                .find(|item| item.read(cx).target() == &open.derivation.target);
+                .find(|item| item.read(cx).matches_target(&open.source.selection));
             if let Some(item) = existing {
                 workspace.activate_item(&item, true, true, window, cx);
             } else {
@@ -3386,12 +3404,11 @@ impl DependenciesPanel {
             cx.notify();
             return;
         };
-        let target = open.derivation.target.clone();
         self.open_or_focus_diagram_tab(open, cx);
         let _ = self.workspace.update(cx, |workspace, cx| {
             let diagram = workspace
                 .items_of_type::<DependencyDiagramItem>(cx)
-                .find(|item| item.read(cx).target() == &target);
+                .find(|item| item.read(cx).matches_target(selection));
             if let Some(item) = diagram {
                 item.update(cx, |item, cx| item.reveal_node_by_id(node, cx));
             }
@@ -3495,12 +3512,7 @@ impl DependenciesPanel {
             Some(open) => {
                 let _ = self.workspace.update_in(cx, |workspace, window, cx| {
                     workspace.toggle_modal(window, cx, |_window, cx| {
-                        DependencyDiagramPopup::new(
-                            open.derivation.canvas,
-                            open.derivation.target,
-                            open.derivation.selected,
-                            cx,
-                        )
+                        DependencyDiagramPopup::new(open, cx)
                     });
                 });
             }
@@ -3559,7 +3571,11 @@ impl DependenciesPanel {
         let _ = self.workspace.update_in(cx, |workspace, window, cx| {
             let existing = workspace
                 .items_of_type::<DependencyAnalyzerItem>(cx)
-                .find(|item| item.read(cx).target() == &derivation.target);
+                .find(|item| {
+                    source
+                        .as_ref()
+                        .is_some_and(|source| item.read(cx).matches_target(&source.selection))
+                });
             if let Some(item) = existing {
                 workspace.activate_item(&item, true, true, window, cx);
             } else {
@@ -3590,7 +3606,6 @@ impl DependenciesPanel {
                 "A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying All usages"
             );
         };
-        let target = derivation.target.clone();
         let source = crate::dependency_analyzer_item::DependencyAnalyzerSource {
             project: self.project.clone(),
             selection: selection.clone(),
@@ -3601,7 +3616,7 @@ impl DependenciesPanel {
         let _ = self.workspace.update(cx, |workspace, cx| {
             let analyzer = workspace
                 .items_of_type::<DependencyAnalyzerItem>(cx)
-                .find(|item| item.read(cx).target() == &target);
+                .find(|item| item.read(cx).matches_target(selection));
             if let Some(item) = analyzer {
                 item.update(cx, |item, cx| {
                     if let Some(node) = &node {
@@ -3875,6 +3890,7 @@ impl DependenciesPanel {
             self.rebuild(cx);
         } else {
             self.host.mark_dirty();
+            cx.notify();
         }
     }
 
@@ -15112,7 +15128,7 @@ mod tests {
                 "missing origin cannot open another file"
             );
             panel.update(cx, |panel, cx| {
-                panel.host.select(inspection_target);
+                panel.host.select(inspection_target.clone());
                 panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx);
                 assert!(panel.graph_inspection.is_some());
                 panel.show_dependency_diagram(cx);
@@ -15124,6 +15140,62 @@ mod tests {
                     panel.host.selected().cloned().expect("selected target"),
                     panel.selected_graph().expect("capture target"),
                 )
+            });
+            let mut foreign_receipt = captured.1.clone();
+            foreign_receipt.generation = foreign_receipt.generation.wrapping_add(1);
+            panel.read_with(cx, |panel, cx| {
+                assert!(
+                    derive_dependency_analyzer(
+                        panel.project.read(cx),
+                        panel.view,
+                        &foreign_receipt,
+                        None,
+                        cx,
+                    )
+                    .is_none()
+                );
+                assert!(
+                    derive_dependency_diagram(
+                        panel.project.read(cx),
+                        panel.view,
+                        &foreign_receipt,
+                        "",
+                        None,
+                        cx,
+                    )
+                    .is_none()
+                );
+            });
+            panel.update(cx, |panel, cx| {
+                panel.host.select(inspection_target.clone());
+                panel.analyze_dependencies(cx);
+            });
+            cx.run_until_parked();
+            panel.update(cx, |panel, cx| {
+                panel.show_dependency_diagram_popup(cx);
+            });
+            cx.run_until_parked();
+            let analyzer_item = workspace
+                .read_with(cx, |workspace, cx| {
+                    assert!(
+                        workspace
+                            .active_modal::<DependencyDiagramPopup>(cx)
+                            .is_some()
+                    );
+                    workspace.items_of_type::<DependencyAnalyzerItem>(cx).next()
+                })
+                .expect("current analyzer tab");
+            analyzer_item.read_with(cx, |item, cx| {
+                assert!(
+                    !item.search_entries(cx).is_empty(),
+                    "analyzer has admitted facts"
+                );
+            });
+            diagram_item.read_with(cx, |item, cx| {
+                assert!(
+                    !item.canvas().read(cx).graph.nodes.is_empty(),
+                    "diagram has admitted facts"
+                );
             });
             fs.insert_file(
                 std::path::Path::new(if provider == GraphFixtureProvider::Maven {
@@ -15145,6 +15217,25 @@ mod tests {
                     "external build changes invalidate the diagram receipt"
                 )
             });
+            diagram_item.read_with(cx, |item, cx| {
+                let canvas = item.canvas().read(cx);
+                assert!(canvas.graph.nodes.is_empty());
+                assert!(canvas.graph.edges.is_empty());
+                assert!(canvas.selection.is_empty());
+                assert!(item.scope_options().is_empty());
+            });
+            analyzer_item.read_with(cx, |item, cx| {
+                assert!(item.search_entries(cx).is_empty());
+                assert!(item.usages().is_empty());
+                assert!(item.scope_options().is_empty());
+            });
+            workspace.read_with(cx, |workspace, cx| {
+                assert!(
+                    workspace
+                        .active_modal::<DependencyDiagramPopup>(cx)
+                        .is_none()
+                );
+            });
             panel.update(cx, |panel, cx| {
                 panel
                     .graph_selections
@@ -15158,6 +15249,31 @@ mod tests {
                 3,
                 "stale captured target must not dispatch"
             );
+            refresh(cx);
+            lsp_store
+                .update(cx, |store, cx| {
+                    query_fixture_graph(
+                        store,
+                        worktree_id,
+                        selected_project.clone(),
+                        cx,
+                        provider,
+                        "parityGraph",
+                    )
+                })
+                .expect("fresh graph query")
+                .await
+                .expect("fresh graph receipt");
+            pump(cx);
+            assert_eq!(commands.load(Ordering::SeqCst), 4);
+            diagram_item.read_with(cx, |item, cx| {
+                assert!(!item.canvas().read(cx).graph.nodes.is_empty());
+                assert!(!item.scope_options().is_empty());
+            });
+            analyzer_item.read_with(cx, |item, cx| {
+                assert!(!item.search_entries(cx).is_empty());
+                assert!(!item.scope_options().is_empty());
+            });
             trust.update(cx, |trusted, cx| {
                 trusted.restrict(
                     worktree_store.downgrade(),
@@ -15176,9 +15292,15 @@ mod tests {
             cx.run_until_parked();
             assert_eq!(
                 commands.load(Ordering::SeqCst),
-                3,
+                4,
                 "revoked trust cannot resolve metadata"
             );
+            diagram_item.read_with(cx, |item, cx| {
+                assert!(item.canvas().read(cx).graph.nodes.is_empty());
+            });
+            analyzer_item.read_with(cx, |item, cx| {
+                assert!(item.search_entries(cx).is_empty());
+            });
             return;
         }
         let generation = lsp_store.read_with(cx, |store, _| {

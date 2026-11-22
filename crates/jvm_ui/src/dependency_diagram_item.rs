@@ -6,8 +6,10 @@
 
 use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
-    CopyDependencyDiagramSource, InspectGraphAllUsages, InspectGraphNeighbours,
-    InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
+    CopyDependencyDiagramSource, DependencyGraphReceipt, InspectGraphAllUsages,
+    InspectGraphNeighbours, InspectGraphPathsBetween, InspectGraphRootPaths,
+    InspectGraphSelectionSet, PinGraphSelection, current_dependency_graph_receipt,
+    derive_dependency_diagram,
 };
 use crate::dependency_graph_canvas::CanvasState;
 use gpui::{
@@ -249,6 +251,9 @@ pub struct DependencyDiagramItem {
     pub(crate) canvas: gpui::Entity<CanvasState>,
     target: DependencyDiagramTarget,
     source: Option<DependencyDiagramSource>,
+    receipt: Option<DependencyGraphReceipt>,
+    _panel_subscription: Option<gpui::Subscription>,
+    search_handle: ui::PopoverMenuHandle<Picker<DependencySearch>>,
     scope: DependencyDiagramScope,
     scope_options: Vec<String>,
     structure_visible: bool,
@@ -272,8 +277,15 @@ impl DependencyDiagramItem {
     pub fn new(
         derivation: DependencyDiagramDerivation,
         source: Option<DependencyDiagramSource>,
-        cx: &mut App,
+        cx: &mut Context<Self>,
     ) -> Self {
+        let receipt = source.as_ref().and_then(|source| {
+            current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx)
+        });
+        let panel_subscription = source.as_ref().and_then(|source| {
+            let panel = source.panel.upgrade()?;
+            Some(cx.observe(&panel, |item, _, cx| item.refresh_receipt(cx)))
+        });
         let mut canvas = CanvasState::new(derivation.canvas);
         canvas.selection = derivation.selected;
         let context_state = std::sync::Arc::new(
@@ -286,6 +298,9 @@ impl DependencyDiagramItem {
             canvas: cx.new(|_| canvas),
             target: derivation.target,
             source,
+            receipt,
+            _panel_subscription: panel_subscription,
+            search_handle: ui::PopoverMenuHandle::default(),
             scope: derivation.scope,
             scope_options: derivation.scope_options,
             structure_visible: false,
@@ -312,6 +327,76 @@ impl DependencyDiagramItem {
         let item = cx.new(|cx| Self::new(derivation, source, cx));
         workspace.add_item_to_active_pane(Box::new(item.clone()), None, true, window, cx);
         item
+    }
+
+    pub(crate) fn matches_target(&self, selection: &crate::GraphSelection) -> bool {
+        self.source
+            .as_ref()
+            .is_some_and(|source| source.selection.target() == selection.target())
+    }
+
+    fn receipt_is_current(&self, cx: &App) -> bool {
+        let Some(source) = &self.source else {
+            return true;
+        };
+        self.receipt.is_some()
+            && self.receipt
+                == current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx)
+    }
+
+    fn refresh_receipt(&mut self, cx: &mut Context<Self>) {
+        let Some(source) = &mut self.source else {
+            return;
+        };
+        let project = source.project.read(cx);
+        let receipt = current_dependency_graph_receipt(project, &source.selection, cx);
+        if receipt == self.receipt {
+            return;
+        }
+        let derivation = receipt.as_ref().and_then(|receipt| {
+            derive_dependency_diagram(
+                project,
+                source.view,
+                &receipt.selection,
+                &source.node,
+                Some(&self.scope),
+                cx,
+            )
+        });
+        self.search_handle.hide(cx);
+        self.context_handle.hide(cx);
+        match (receipt, derivation) {
+            (Some(receipt), Some(derivation)) => {
+                source.selection = receipt.selection.clone();
+                self.receipt = Some(receipt);
+                self.replace_derivation(derivation, cx);
+            }
+            _ => {
+                self.receipt = None;
+                self.scope_options.clear();
+                self.canvas.update(cx, |canvas, cx| {
+                    canvas.replace_graph(Default::default());
+                    cx.notify();
+                });
+                self.notice = Some("Dependency graph facts are unavailable. Refresh and collect graph facts in the Dependencies panel.".into());
+            }
+        }
+        cx.notify();
+    }
+
+    fn replace_derivation(
+        &mut self,
+        derivation: DependencyDiagramDerivation,
+        cx: &mut Context<Self>,
+    ) {
+        self.canvas.update(cx, |canvas, cx| {
+            canvas.replace_graph(derivation.canvas);
+            cx.notify();
+        });
+        self.target = derivation.target;
+        self.scope = derivation.scope;
+        self.scope_options = derivation.scope_options;
+        self.notice = None;
     }
 
     pub fn canvas(&self) -> &gpui::Entity<CanvasState> {
@@ -399,7 +484,7 @@ impl DependencyDiagramItem {
             DependencyDiagramScope::MavenScope(_) => DependencyDiagramScope::MavenScope(label),
         };
         let project = source.project.read(cx);
-        match crate::dependencies_panel::derive_dependency_diagram(
+        match derive_dependency_diagram(
             project,
             source.view,
             &source.selection,
@@ -407,17 +492,7 @@ impl DependencyDiagramItem {
             Some(&scope),
             cx,
         ) {
-            Some(derivation) => {
-                self.canvas = cx.new(|_| {
-                    let mut canvas = CanvasState::new(derivation.canvas);
-                    canvas.selection = derivation.selected;
-                    canvas
-                });
-                self.target = derivation.target;
-                self.scope = derivation.scope;
-                self.scope_options = derivation.scope_options;
-                self.notice = None;
-            }
+            Some(derivation) => self.replace_derivation(derivation, cx),
             None => {
                 self.notice = Some(
                     "No admitted graph facts match the chosen scope; refresh provider graph facts, then retry".into(),
@@ -428,6 +503,9 @@ impl DependencyDiagramItem {
     }
 
     fn search_entries(&self, cx: &App) -> Vec<DependencySearchEntry> {
+        if !self.receipt_is_current(cx) {
+            return Vec::new();
+        }
         self.canvas
             .read(cx)
             .graph
@@ -444,6 +522,9 @@ impl DependencyDiagramItem {
     }
 
     pub fn reveal_node_by_id(&mut self, id: &str, cx: &mut Context<Self>) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         let revealed = self.canvas.update(cx, |canvas, cx| {
             let revealed = canvas.reveal_node(id);
             if revealed {
@@ -577,6 +658,9 @@ impl DependencyDiagramItem {
     /// Exports the current canvas as a deterministic SVG image and copies it
     /// to the clipboard; distinct from the Mermaid Copy Diagram Source payload.
     pub fn export_diagram_image(&mut self, cx: &mut Context<Self>) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
         let svg = crate::dependency_graph_canvas::canvas_graph_svg(&self.canvas.read(cx).graph);
         let bytes = svg.chars().count();
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(svg));
@@ -600,6 +684,7 @@ impl Render for DependencyDiagramItem {
         let scope_label = self.scope.label();
         let scope_options = self.scope_options.clone();
         let search_item = cx.weak_entity();
+        let admitted = self.receipt_is_current(cx);
         let structure_visible = self.structure_visible;
         let notice = self.notice.clone();
 
@@ -674,6 +759,7 @@ impl Render for DependencyDiagramItem {
             )
             .child(
                 ui::PopoverMenu::new("dependency-diagram-search")
+                    .with_handle(self.search_handle.clone())
                     .trigger(
                         IconButton::new(
                             "dependency-diagram-search-icon",
@@ -722,6 +808,7 @@ impl Render for DependencyDiagramItem {
                     .shape(ui::IconButtonShape::Square)
                     .tab_index(0_isize)
                     .aria_label("Copy dependency diagram source")
+                    .disabled(!admitted)
                     .tooltip(ui::Tooltip::text("Copy Diagram Source"))
                     .on_click(cx.listener(|item, _, _, cx| item.copy_diagram_source(cx))),
             )
@@ -730,6 +817,7 @@ impl Render for DependencyDiagramItem {
                     .shape(ui::IconButtonShape::Square)
                     .tab_index(0_isize)
                     .aria_label("Export dependency diagram image")
+                    .disabled(!admitted)
                     .tooltip(ui::Tooltip::text("Export Image"))
                     .on_click(cx.listener(|item, _, _, cx| item.export_diagram_image(cx))),
             );
@@ -1108,21 +1196,37 @@ pub struct DependencyDiagramPopup {
     canvas: gpui::Entity<CanvasState>,
     target: DependencyDiagramTarget,
     focus_handle: FocusHandle,
+    _panel_subscription: Option<gpui::Subscription>,
 }
 
 impl DependencyDiagramPopup {
-    pub fn new(
-        graph: crate::dependency_graph_canvas::CanvasGraph,
-        target: DependencyDiagramTarget,
-        selected: BTreeSet<String>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let mut canvas = CanvasState::new(graph);
-        canvas.selection = selected;
+    pub fn new(open: DependencyDiagramOpen, cx: &mut Context<Self>) -> Self {
+        let DependencyDiagramOpen { derivation, source } = open;
+        let receipt =
+            current_dependency_graph_receipt(source.project.read(cx), &source.selection, cx);
+        let panel_subscription = source.panel.upgrade().map(|panel| {
+            cx.observe(&panel, move |popup, _, cx| {
+                let current = current_dependency_graph_receipt(
+                    source.project.read(cx),
+                    &source.selection,
+                    cx,
+                );
+                if current != receipt {
+                    popup.canvas.update(cx, |canvas, cx| {
+                        canvas.replace_graph(Default::default());
+                        cx.notify();
+                    });
+                    cx.emit(DismissEvent);
+                }
+            })
+        });
+        let mut canvas = CanvasState::new(derivation.canvas);
+        canvas.selection = derivation.selected;
         Self {
             canvas: cx.new(|_| canvas),
-            target,
+            target: derivation.target,
             focus_handle: cx.focus_handle(),
+            _panel_subscription: panel_subscription,
         }
     }
 

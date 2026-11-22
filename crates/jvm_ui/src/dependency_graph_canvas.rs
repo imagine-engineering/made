@@ -58,7 +58,7 @@ pub struct CanvasEdge {
     pub label: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CanvasGraph {
     pub nodes: Vec<CanvasNode>,
     pub edges: Vec<CanvasEdge>,
@@ -574,6 +574,17 @@ impl CanvasState {
             context_state: None,
             context_handle: None,
         }
+    }
+
+    pub(crate) fn replace_graph(&mut self, graph: CanvasGraph) {
+        let contains = |id: &str| graph.positions.contains_key(id);
+        self.selection.retain(|id| contains(id));
+        self.focus.take_if(|id| !contains(id));
+        self.hover = None;
+        self.inspected.clear();
+        self.box_selection = None;
+        self.end_pan();
+        self.graph = graph;
     }
 
     /// Zooms by `factor` around a canvas-relative anchor point.

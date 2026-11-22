@@ -600,7 +600,7 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
 
     // Search lists admitted rows and selecting a match selects and reveals it.
     item.update(cx, |item, cx| item.collapse_all_rows(cx));
-    let matches = cx.update(|_, cx| item.read(cx).search_entries());
+    let matches = cx.update(|_, cx| item.read(cx).search_entries(cx));
     let result = matches
         .iter()
         .find(|entry| entry.label == "org.example:left:1.0")
