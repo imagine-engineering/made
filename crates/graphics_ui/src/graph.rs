@@ -14,7 +14,7 @@ use crate::session::{AddMode, GraphicsSession};
 actions!(
     graphite,
     [
-        /// Opens native Graphite Add, Subtract, Multiply, Sort, Invert and Color Mix evaluations.
+        /// Opens native Graphite arithmetic, sort and color evaluations.
         OpenGraphite,
         /// Focuses the next control in the current Graphite Artboard.
         FocusNextArtboardControl,
@@ -425,12 +425,28 @@ impl Render for GraphicsWorkspaceItem {
         } else {
             "subtrahend"
         };
+        let radicand_label = if mode.augend_is_vector() {
+            "radicand.x"
+        } else if mode.is_list() {
+            "radicands"
+        } else {
+            "radicand"
+        };
+        let degree_label = if mode.addend_is_vector() {
+            "degree.x"
+        } else if mode.is_list() {
+            "degrees"
+        } else {
+            "degree"
+        };
         let first_y_label = if mode == AddMode::InvertColor {
             "green"
         } else if mode.is_multiply() {
             "multiplier.y"
         } else if mode.is_subtract() {
             "minuend.y"
+        } else if mode.is_root() {
+            "radicand.y"
         } else {
             "augend.y"
         };
@@ -440,6 +456,8 @@ impl Render for GraphicsWorkspaceItem {
             "multiplicand.y"
         } else if mode.is_subtract() {
             "subtrahend.y"
+        } else if mode.is_root() {
+            "degree.y"
         } else {
             "addend.y"
         };
@@ -464,6 +482,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Graphite Sort"
             } else if mode.is_subtract() {
                 "Graphite Subtract"
+            } else if mode.is_root() {
+                "Graphite Root"
             } else if mode.is_multiply() {
                 "Graphite Multiply"
             } else {
@@ -479,6 +499,8 @@ impl Render for GraphicsWorkspaceItem {
                 "Enter comma-separated numbers in each list."
             } else if mode.is_subtract() {
                 "Edit the inputs to calculate their difference."
+            } else if mode.is_root() {
+                "Degrees of zero or less produce zero."
             } else if mode.is_multiply() {
                 "Edit the inputs to calculate their product."
             } else {
@@ -546,6 +568,14 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::MultiplyVectorScalarLists, "Multiply Vector × Scalar Lists", "GRAPHITE-MODE-MULTIPLY-VECTOR-SCALAR-LISTS"),
                         (AddMode::MultiplyAffine, "Multiply Affine", "GRAPHITE-MODE-MULTIPLY-AFFINE"),
                         (AddMode::MultiplyAffineLists, "Multiply Affine Lists", "GRAPHITE-MODE-MULTIPLY-AFFINE-LISTS"),
+                        (AddMode::RootScalar, "Root Scalar", "GRAPHITE-MODE-ROOT-SCALAR"),
+                        (AddMode::RootLists, "Root Lists", "GRAPHITE-MODE-ROOT-LISTS"),
+                        (AddMode::RootVector, "Root Vector with Vector Degree", "GRAPHITE-MODE-ROOT-VECTOR"),
+                        (AddMode::RootScalarVector, "Root Scalar with Vector Degree", "GRAPHITE-MODE-ROOT-SCALAR-VECTOR"),
+                        (AddMode::RootVectorScalar, "Root Vector with Scalar Degree", "GRAPHITE-MODE-ROOT-VECTOR-SCALAR"),
+                        (AddMode::RootVectorLists, "Root Vector Lists", "GRAPHITE-MODE-ROOT-VECTOR-LISTS"),
+                        (AddMode::RootScalarVectorLists, "Root Scalar List with Vector Degrees", "GRAPHITE-MODE-ROOT-SCALAR-VECTOR-LISTS"),
+                        (AddMode::RootVectorScalarLists, "Root Vector List with Scalar Degrees", "GRAPHITE-MODE-ROOT-VECTOR-SCALAR-LISTS"),
 
                     ]
                     .into_iter()
@@ -674,6 +704,8 @@ impl Render for GraphicsWorkspaceItem {
                         "values"
                     } else if mode.is_subtract() {
                         minuend_label
+                    } else if mode.is_root() {
+                        radicand_label
                     } else if mode.is_multiply() {
                         if mode.augend_is_vector() { "multiplier.x" } else { "multiplier" }
                     } else if mode.augend_is_vector() {
@@ -692,6 +724,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "values"
                             } else if mode.is_subtract() {
                                 minuend_label
+                            } else if mode.is_root() {
+                                radicand_label
                             } else if mode.is_multiply() {
                                 "multiplier"
                             } else {
@@ -721,6 +755,8 @@ impl Render for GraphicsWorkspaceItem {
                         "sort keys (optional)"
                     } else if mode.is_subtract() {
                         subtrahend_label
+                    } else if mode.is_root() {
+                        degree_label
                     } else if mode.is_multiply() {
                         if mode.addend_is_vector() { "multiplicand.x" } else { "multiplicand" }
                     } else if mode.addend_is_vector() {
@@ -739,6 +775,8 @@ impl Render for GraphicsWorkspaceItem {
                                 "sort keys"
                             } else if mode.is_subtract() {
                                 subtrahend_label
+                            } else if mode.is_root() {
+                                degree_label
                             } else if mode.is_multiply() {
                                 "multiplicand"
                             } else {
@@ -824,6 +862,8 @@ impl Item for GraphicsWorkspaceItem {
             "Graphite Sort".into()
         } else if self.session.read(cx).mode().is_subtract() {
             "Graphite Subtract".into()
+        } else if self.session.read(cx).mode().is_root() {
+            "Graphite Root".into()
         } else if self.session.read(cx).mode().is_multiply() {
             "Graphite Multiply".into()
         } else {

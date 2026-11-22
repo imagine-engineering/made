@@ -18,6 +18,7 @@ use graphite_graph_craft::{
     graphene_compiler::{Compiler, Executor},
 };
 use graphite_interpreted_executor::dynamic_executor::DynamicExecutor;
+use graphite_math_nodes::NthRoot;
 use graphite_std::{
     ATTR_TRANSFORM, Artboard, Graphic,
     application_io::{ExportFormat, GetEditorPreferences, RenderConfig},
@@ -141,6 +142,105 @@ where
     Left::Output: Clone + Send + Sync + 'static,
 {
     let node = graphite_math_nodes::SubtractNodeMapped::new(Input(minuends), Input(subtrahends));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map_err(|_| AddEvaluationError)
+}
+
+pub fn evaluate_root(radicand: f64, degree: f64) -> Result<f64, AddEvaluationError> {
+    root_value(radicand, degree)
+}
+
+pub fn evaluate_root_vector(
+    radicand: [f64; 2],
+    degree: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    root_value(DVec2::from_array(radicand), DVec2::from_array(degree))
+        .map(|result| result.to_array())
+}
+
+pub fn evaluate_root_scalar_vector(
+    radicand: f64,
+    degree: [f64; 2],
+) -> Result<[f64; 2], AddEvaluationError> {
+    root_value(radicand, DVec2::from_array(degree)).map(|result| result.to_array())
+}
+
+pub fn evaluate_root_vector_scalar(
+    radicand: [f64; 2],
+    degree: f64,
+) -> Result<[f64; 2], AddEvaluationError> {
+    root_value(DVec2::from_array(radicand), degree).map(|result| result.to_array())
+}
+
+pub fn evaluate_root_lists(
+    radicands: &[f64],
+    degrees: &[f64],
+) -> Result<Vec<f64>, AddEvaluationError> {
+    root_list_items(numeric_items(radicands), numeric_items(degrees))
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+}
+
+pub fn evaluate_root_vector_lists(
+    radicands: &[[f64; 2]],
+    degrees: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    root_list_items(vector_items(radicands), vector_items(degrees)).map(vector_elements)
+}
+
+pub fn evaluate_root_scalar_vector_lists(
+    radicands: &[f64],
+    degrees: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    root_list_items(numeric_items(radicands), vector_items(degrees)).map(vector_elements)
+}
+
+pub fn evaluate_root_vector_scalar_lists(
+    radicands: &[[f64; 2]],
+    degrees: &[f64],
+) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+    root_list_items(vector_items(radicands), numeric_items(degrees)).map(vector_elements)
+}
+
+fn root_value<Radicand, Degree>(
+    radicand: Radicand,
+    degree: Degree,
+) -> Result<Radicand::Output, AddEvaluationError>
+where
+    Radicand: NthRoot<Degree> + Clone + Send + Sync + 'static,
+    Degree: Clone + Send + Sync + 'static,
+    Radicand::Output: Send + Sync + 'static,
+{
+    root_item(
+        Item::new_from_element(radicand),
+        Item::new_from_element(degree),
+    )
+    .map(Item::into_element)
+}
+
+fn root_item<Radicand, Degree>(
+    radicand: Item<Radicand>,
+    degree: Item<Degree>,
+) -> Result<Item<Radicand::Output>, AddEvaluationError>
+where
+    Radicand: NthRoot<Degree> + Clone + Send + Sync + 'static,
+    Degree: Clone + Send + Sync + 'static,
+    Radicand::Output: Send + Sync + 'static,
+{
+    let node = graphite_math_nodes::RootNode::new(Input(radicand), Input(degree));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
+        .map_err(|_| AddEvaluationError)
+}
+
+fn root_list_items<Radicand, Degree>(
+    radicands: List<Radicand>,
+    degrees: List<Degree>,
+) -> Result<List<Radicand::Output>, AddEvaluationError>
+where
+    Radicand: NthRoot<Degree> + Clone + Send + Sync + 'static,
+    Degree: Clone + Send + Sync + 'static,
+    Radicand::Output: Clone + Send + Sync + 'static,
+{
+    let node = graphite_math_nodes::RootNodeMapped::new(Input(radicands), Input(degrees));
     futures::executor::block_on(AssertUnwindSafe(node.eval(Context::default())).catch_unwind())
         .map_err(|_| AddEvaluationError)
 }

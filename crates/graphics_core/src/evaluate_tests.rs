@@ -9,6 +9,62 @@ use std::{collections::HashSet, error::Error, time::Duration};
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn at_gra_node_086_2_root_preserves_source_degree_and_domain_semantics() -> TestResult {
+    assert_eq!(evaluate_root(81., 2.)?, 9.);
+    assert_eq!(evaluate_root(-64., 3.)?, -4.);
+    assert_eq!(evaluate_root(81., 0.)?, 0.);
+    assert_eq!(evaluate_root(-64., -2.)?, 0.);
+    assert_eq!(evaluate_root(-0., 2.)?.to_bits(), (-0_f64).to_bits());
+    assert!(evaluate_root(-4., 2.)?.is_nan());
+    assert_eq!(
+        evaluate_root_lists(&[81., -64., 64., 125.], &[2., 3.])?,
+        [9., -4., 4., 5.]
+    );
+    assert!(evaluate_root_lists(&[4.], &[])?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_086_2_root_uses_pinned_vector_mappings_and_radicand_attributes() -> TestResult {
+    assert_eq!(evaluate_root_vector([81., -64.], [2., 3.])?, [9., -4.]);
+    assert_eq!(evaluate_root_scalar_vector(64., [2., 3.])?, [8., 4.]);
+    assert_eq!(evaluate_root_vector_scalar([81., 64.], 2.)?, [9., 8.]);
+    assert_eq!(
+        evaluate_root_vector_lists(&[[81., -64.]], &[[2., 3.], [0., 3.]])?,
+        [[9., -4.], [0., -4.]]
+    );
+    assert_eq!(
+        evaluate_root_scalar_vector_lists(&[64., 81.], &[[2., 0.]])?,
+        [[8., 0.], [9., 0.]]
+    );
+    assert_eq!(
+        evaluate_root_vector_scalar_lists(&[[64., 81.]], &[2., 0.])?,
+        [[8., 9.], [0., 0.]]
+    );
+
+    let radicand = Item::new_from_element(64_f64).with_attribute("side", String::from("radicand"));
+    let degree = Item::new_from_element(2_f64).with_attribute("degree-only", true);
+    let item = root_item(radicand.clone(), degree.clone())?;
+    assert_eq!(item.into_parts(), (8., radicand.clone().into_parts().1));
+    let items = root_list_items(
+        [radicand].into_iter().collect(),
+        [degree, Item::new_from_element(3.)].into_iter().collect(),
+    )?;
+    assert_eq!(
+        items.iter_element_values().copied().collect::<Vec<_>>(),
+        [8., 4.]
+    );
+    for index in 0..items.len() {
+        assert_eq!(
+            items.attribute::<String>("side", index).map(String::as_str),
+            Some("radicand")
+        );
+        assert!(items.attribute::<bool>("degree-only", index).is_none());
+    }
+    Ok(())
+}
+
+#[test]
 fn at_gra_node_087_2_subtract_f64_preserves_operand_order_and_source_mapping() -> TestResult {
     assert_eq!(evaluate_subtract(2., 5.)?, -3.);
     assert_eq!(evaluate_subtract(0., -3.)?, 3.);

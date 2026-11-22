@@ -20,6 +20,14 @@ pub(crate) enum AddMode {
     SubtractVectorLists,
     SubtractScalarVectorLists,
     SubtractVectorScalarLists,
+    RootScalar,
+    RootLists,
+    RootVector,
+    RootScalarVector,
+    RootVectorScalar,
+    RootVectorLists,
+    RootScalarVectorLists,
+    RootVectorScalarLists,
     Sort,
     MultiplyScalar,
     MultiplyLists,
@@ -72,6 +80,20 @@ impl AddMode {
         )
     }
 
+    pub(crate) fn is_root(self) -> bool {
+        matches!(
+            self,
+            Self::RootScalar
+                | Self::RootLists
+                | Self::RootVector
+                | Self::RootScalarVector
+                | Self::RootVectorScalar
+                | Self::RootVectorLists
+                | Self::RootScalarVectorLists
+                | Self::RootVectorScalarLists
+        )
+    }
+
     pub(crate) fn is_affine(self) -> bool {
         matches!(self, Self::MultiplyAffine | Self::MultiplyAffineLists)
     }
@@ -89,6 +111,10 @@ impl AddMode {
                 | Self::SubtractVectorLists
                 | Self::SubtractScalarVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::RootLists
+                | Self::RootVectorLists
+                | Self::RootScalarVectorLists
+                | Self::RootVectorScalarLists
                 | Self::MultiplyLists
                 | Self::MultiplyIntegerLists
                 | Self::MultiplyVectorLists
@@ -109,6 +135,10 @@ impl AddMode {
                 | Self::SubtractVectorScalar
                 | Self::SubtractVectorLists
                 | Self::SubtractVectorScalarLists
+                | Self::RootVector
+                | Self::RootVectorScalar
+                | Self::RootVectorLists
+                | Self::RootVectorScalarLists
                 | Self::MultiplyVector
                 | Self::MultiplyVectorScalar
                 | Self::MultiplyVectorLists
@@ -127,6 +157,10 @@ impl AddMode {
                 | Self::SubtractScalarVector
                 | Self::SubtractVectorLists
                 | Self::SubtractScalarVectorLists
+                | Self::RootVector
+                | Self::RootScalarVector
+                | Self::RootVectorLists
+                | Self::RootScalarVectorLists
                 | Self::MultiplyVector
                 | Self::MultiplyScalarVector
                 | Self::MultiplyVectorLists
@@ -147,6 +181,7 @@ enum Inputs {
     ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
     Subtract(SubtractInputs),
+    Root(RootInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
     InvertColor([f32; 4]),
@@ -301,6 +336,129 @@ impl Output {
             Self::Affine(value) => format!("{value:?}"),
             Self::AffineLists(value) => format!("{value:?}"),
             Self::Color(value) => format!("{value:?}"),
+        }
+    }
+}
+
+enum RootInputs {
+    Scalar(f64, f64),
+    Lists(Vec<f64>, Vec<f64>),
+    Vector([f64; 2], [f64; 2]),
+    ScalarVector(f64, [f64; 2]),
+    VectorScalar([f64; 2], f64),
+    VectorLists(Vec<[f64; 2]>, Vec<[f64; 2]>),
+    ScalarVectorLists(Vec<f64>, Vec<[f64; 2]>),
+    VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
+}
+
+impl RootInputs {
+    fn mode(&self) -> AddMode {
+        match self {
+            Self::Scalar(..) => AddMode::RootScalar,
+            Self::Lists(..) => AddMode::RootLists,
+            Self::Vector(..) => AddMode::RootVector,
+            Self::ScalarVector(..) => AddMode::RootScalarVector,
+            Self::VectorScalar(..) => AddMode::RootVectorScalar,
+            Self::VectorLists(..) => AddMode::RootVectorLists,
+            Self::ScalarVectorLists(..) => AddMode::RootScalarVectorLists,
+            Self::VectorScalarLists(..) => AddMode::RootVectorScalarLists,
+        }
+    }
+
+    fn same_values(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Scalar(radicand, degree), Self::Scalar(other_radicand, other_degree)) => {
+                radicand.to_bits() == other_radicand.to_bits()
+                    && degree.to_bits() == other_degree.to_bits()
+            }
+            (Self::Lists(radicands, degrees), Self::Lists(other_radicands, other_degrees)) => {
+                same_values(radicands, other_radicands) && same_values(degrees, other_degrees)
+            }
+            (Self::Vector(radicand, degree), Self::Vector(other_radicand, other_degree)) => {
+                same_values(radicand, other_radicand) && same_values(degree, other_degree)
+            }
+            (
+                Self::ScalarVector(radicand, degree),
+                Self::ScalarVector(other_radicand, other_degree),
+            ) => {
+                radicand.to_bits() == other_radicand.to_bits() && same_values(degree, other_degree)
+            }
+            (
+                Self::VectorScalar(radicand, degree),
+                Self::VectorScalar(other_radicand, other_degree),
+            ) => {
+                same_values(radicand, other_radicand) && degree.to_bits() == other_degree.to_bits()
+            }
+            (
+                Self::VectorLists(radicands, degrees),
+                Self::VectorLists(other_radicands, other_degrees),
+            ) => same_vectors(radicands, other_radicands) && same_vectors(degrees, other_degrees),
+            (
+                Self::ScalarVectorLists(radicands, degrees),
+                Self::ScalarVectorLists(other_radicands, other_degrees),
+            ) => same_values(radicands, other_radicands) && same_vectors(degrees, other_degrees),
+            (
+                Self::VectorScalarLists(radicands, degrees),
+                Self::VectorScalarLists(other_radicands, other_degrees),
+            ) => same_vectors(radicands, other_radicands) && same_values(degrees, other_degrees),
+            _ => false,
+        }
+    }
+
+    fn evaluate(&self) -> Result<Output, EvaluationError> {
+        use graphics_core::evaluate;
+        Ok(match self {
+            Self::Scalar(radicand, degree) => {
+                Output::Scalar(evaluate::evaluate_root(*radicand, *degree)?)
+            }
+            Self::Lists(radicands, degrees) => {
+                Output::Lists(evaluate::evaluate_root_lists(radicands, degrees)?)
+            }
+            Self::Vector(radicand, degree) => {
+                Output::Vector(evaluate::evaluate_root_vector(*radicand, *degree)?)
+            }
+            Self::ScalarVector(radicand, degree) => {
+                Output::Vector(evaluate::evaluate_root_scalar_vector(*radicand, *degree)?)
+            }
+            Self::VectorScalar(radicand, degree) => {
+                Output::Vector(evaluate::evaluate_root_vector_scalar(*radicand, *degree)?)
+            }
+            Self::VectorLists(radicands, degrees) => {
+                Output::VectorLists(evaluate::evaluate_root_vector_lists(radicands, degrees)?)
+            }
+            Self::ScalarVectorLists(radicands, degrees) => Output::VectorLists(
+                evaluate::evaluate_root_scalar_vector_lists(radicands, degrees)?,
+            ),
+            Self::VectorScalarLists(radicands, degrees) => Output::VectorLists(
+                evaluate::evaluate_root_vector_scalar_lists(radicands, degrees)?,
+            ),
+        })
+    }
+
+    fn expression(&self) -> String {
+        match self {
+            Self::Scalar(radicand, degree) => format!("Root of {radicand} with degree {degree}"),
+            Self::Lists(radicands, degrees) => {
+                format!("Root of {radicands:?} with degree {degrees:?}")
+            }
+            Self::Vector(radicand, degree) => {
+                format!("Root of {radicand:?} with degree {degree:?}")
+            }
+            Self::ScalarVector(radicand, degree) => {
+                format!("Root of {radicand} with degree {degree:?}")
+            }
+            Self::VectorScalar(radicand, degree) => {
+                format!("Root of {radicand:?} with degree {degree}")
+            }
+            Self::VectorLists(radicands, degrees) => {
+                format!("Root of {radicands:?} with degree {degrees:?}")
+            }
+            Self::ScalarVectorLists(radicands, degrees) => {
+                format!("Root of {radicands:?} with degree {degrees:?}")
+            }
+            Self::VectorScalarLists(radicands, degrees) => {
+                format!("Root of {radicands:?} with degree {degrees:?}")
+            }
         }
     }
 }
@@ -554,6 +712,7 @@ impl Inputs {
             (Self::Subtract(inputs), Self::Subtract(other_inputs)) => {
                 inputs.same_values(other_inputs)
             }
+            (Self::Root(inputs), Self::Root(other_inputs)) => inputs.same_values(other_inputs),
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
                 same_values(augend, other_augend) && same_values(addend, other_addend)
             }
@@ -620,6 +779,7 @@ impl Inputs {
             ),
             Self::Multiply(inputs) => inputs.evaluate()?,
             Self::Subtract(inputs) => inputs.evaluate()?,
+            Self::Root(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
             }
@@ -673,6 +833,7 @@ impl Inputs {
             Self::InvertColor(channels) => format!("Invert RGBA {channels:?}"),
             Self::Multiply(inputs) => inputs.expression(),
             Self::Subtract(inputs) => inputs.expression(),
+            Self::Root(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
             Self::Integer(augend, addend) => format!("{augend} + {addend}"),
@@ -1245,6 +1406,38 @@ impl GraphicsSession {
                     parse_number_list(addend, "subtrahends")?,
                 ))
             }
+            AddMode::RootScalar => Inputs::Root(RootInputs::Scalar(
+                parse_number(augend, "radicand")?,
+                parse_number(addend, "degree")?,
+            )),
+            AddMode::RootLists => Inputs::Root(RootInputs::Lists(
+                parse_number_list(augend, "radicands")?,
+                parse_number_list(addend, "degrees")?,
+            )),
+            AddMode::RootVector => Inputs::Root(RootInputs::Vector(
+                parse_vector(augend, augend_y, "radicand")?,
+                parse_vector(addend, addend_y, "degree")?,
+            )),
+            AddMode::RootScalarVector => Inputs::Root(RootInputs::ScalarVector(
+                parse_number(augend, "radicand")?,
+                parse_vector(addend, addend_y, "degree")?,
+            )),
+            AddMode::RootVectorScalar => Inputs::Root(RootInputs::VectorScalar(
+                parse_vector(augend, augend_y, "radicand")?,
+                parse_number(addend, "degree")?,
+            )),
+            AddMode::RootVectorLists => Inputs::Root(RootInputs::VectorLists(
+                parse_vector_list(augend, augend_y, "radicand")?,
+                parse_vector_list(addend, addend_y, "degree")?,
+            )),
+            AddMode::RootScalarVectorLists => Inputs::Root(RootInputs::ScalarVectorLists(
+                parse_number_list(augend, "radicands")?,
+                parse_vector_list(addend, addend_y, "degree")?,
+            )),
+            AddMode::RootVectorScalarLists => Inputs::Root(RootInputs::VectorScalarLists(
+                parse_vector_list(augend, augend_y, "radicand")?,
+                parse_number_list(addend, "degrees")?,
+            )),
             AddMode::Lists => Inputs::Lists(
                 parse_number_list(augend, "augend")?,
                 parse_number_list(addend, "addend")?,
@@ -1350,6 +1543,8 @@ impl GraphicsSession {
             || self.mode.is_multiply() != matches!(self.evaluation.inputs, Inputs::Multiply(..))
             || (self.mode.is_subtract() || matches!(&self.evaluation.inputs, Inputs::Subtract(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Subtract(inputs) if inputs.mode() == self.mode)
+            || (self.mode.is_root() || matches!(&self.evaluation.inputs, Inputs::Root(_)))
+                && !matches!(&self.evaluation.inputs, Inputs::Root(inputs) if inputs.mode() == self.mode)
         {
             return format!("Last valid result: {}", self.result_text());
         }
