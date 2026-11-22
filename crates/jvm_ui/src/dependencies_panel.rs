@@ -4851,7 +4851,6 @@ impl DependenciesPanel {
         if let Some(error) = error {
             self.operation_notice = Some(error.to_string());
         }
-        self.host.expand_nodes([ordered_operation_root_id()]);
         cx.notify();
     }
 
@@ -4939,14 +4938,36 @@ impl DependenciesPanel {
     fn toggle_tree_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {
         self.host.select(id.clone());
         if id == ordered_operation_root_id() {
-            self.preferences.ordered_operations_expanded =
-                !self.preferences.ordered_operations_expanded;
-            self.persist_preferences(cx);
-            self.rebuild(cx);
+            self.set_ordered_operations_expanded(!self.preferences.ordered_operations_expanded, cx);
             return;
         }
         self.host.toggle(&id);
         cx.notify();
+    }
+
+    fn set_ordered_operations_expanded(&mut self, expanded: bool, cx: &mut Context<Self>) {
+        if self.preferences.ordered_operations_expanded != expanded {
+            self.preferences.ordered_operations_expanded = expanded;
+            self.persist_preferences(cx);
+        }
+        let root = ordered_operation_root_id();
+        if self.host.expanded().contains(&root) != expanded {
+            self.host.toggle(&root);
+        }
+        cx.notify();
+    }
+
+    fn set_all_tree_rows_expanded(&mut self, expanded: bool, cx: &mut Context<Self>) {
+        if expanded {
+            self.host.expand_all();
+        } else {
+            self.host.collapse_all();
+        }
+        if self.ordered_operations.is_empty() {
+            cx.notify();
+        } else {
+            self.set_ordered_operations_expanded(expanded, cx);
+        }
     }
 
     fn clear_ordered_operations(&mut self, cx: &mut Context<Self>) {
@@ -7711,14 +7732,12 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|panel, _: &CancelGraphCollection, _, cx| panel.cancel_graph_collection(cx)))
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::ExpandAll, _, cx| {
-                    panel.host.expand_all();
-                    cx.notify();
+                    panel.set_all_tree_rows_expanded(true, cx);
                 }),
             )
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::CollapseAll, _, cx| {
-                    panel.host.collapse_all();
-                    cx.notify();
+                    panel.set_all_tree_rows_expanded(false, cx);
                 }),
             )
             .on_action(
@@ -8177,24 +8196,32 @@ impl Render for DependenciesPanel {
                             .tab_index(0_isize)
                             .child(self.operation_option_editor.clone())))
                     .when(self.view != BuildToolView::Dependencies, |header| header.child(
-                        v_flex().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
-                            .child(Button::new("groovy-add-ordered-operation", "Add selected operation")
+                        v_flex().gap_1().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
+                            .child(Button::new("groovy-ordered-operations-disclosure", format!("Ordered operations ({})", self.ordered_operations.len()))
+                                .aria_label("Ordered operations")
+                                .aria_expanded(self.preferences.ordered_operations_expanded)
+                                .aria_value(format!("{} selected", self.ordered_operations.len()))
+                                .start_icon(Icon::new(if self.preferences.ordered_operations_expanded { IconName::ChevronDown } else { IconName::ChevronRight }).size(IconSize::XSmall))
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, _, _, cx| panel.set_ordered_operations_expanded(!panel.preferences.ordered_operations_expanded, cx))))
+                            .when(self.preferences.ordered_operations_expanded, |section| section.child(h_flex().flex_wrap().gap_1()
+                            .child(Button::new("groovy-add-ordered-operation", "Add selected")
                                 .aria_label("Add selected current operation to the ordered offline run")
                                 .disabled(!can_run_operation || self.ordered_operations.len() >= 32).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, _, cx| panel.add_selected_ordered_operation(cx))))
-                            .child(Button::new("groovy-remove-last-ordered-operation", "Remove last operation")
+                            .child(Button::new("groovy-remove-last-ordered-operation", "Remove last")
                                 .aria_label("Remove last ordered operation without starting execution")
                                 .disabled(self.ordered_operations.is_empty()).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, _, cx| panel.remove_last_ordered_operation(cx))))
-                            .child(Button::new("groovy-clear-ordered-operations", "Clear ordered selection")
+                            .child(Button::new("groovy-clear-ordered-operations", "Clear")
                                 .aria_label("Clear ordered operation selection; running Tasks are unchanged")
                                 .disabled(self.ordered_operations.is_empty()).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, _, cx| panel.clear_ordered_operations(cx))))
-                            .child(Button::new("groovy-run-ordered-offline-operations", "Run ordered offline operations")
+                            .child(Button::new("groovy-run-ordered-offline-operations", "Run offline")
                                 .aria_label("Run ordered offline operations for the current local module through Tasks")
                                 .aria_value(format!("{} selected", self.ordered_operations.len()))
                                 .disabled(!can_run_ordered).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx))))))
+                                .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx))))))))
                     .child(Button::new("groovy-show-dependency-diagram", "Show diagram")
                         .aria_label("Show a bounded diagram of current admitted dependency graph facts")
                         .tab_index(0_isize).toggle_state(self.graph_diagram.is_some())
@@ -8222,8 +8249,7 @@ impl Render for DependenciesPanel {
                                 .disabled(!can_expand_all)
                                 .on_click(cx.listener(
                                     |panel, _, _, cx| {
-                                        panel.host.expand_all();
-                                        cx.notify();
+                                        panel.set_all_tree_rows_expanded(true, cx);
                                     },
                                 )),
                             )
@@ -8238,8 +8264,7 @@ impl Render for DependenciesPanel {
                                 .disabled(!can_collapse_all)
                                 .on_click(cx.listener(
                                     |panel, _, _, cx| {
-                                        panel.host.collapse_all();
-                                        cx.notify();
+                                        panel.set_all_tree_rows_expanded(false, cx);
                                     },
                                 )),
                             )
@@ -13256,9 +13281,28 @@ mod tests {
             cx.run_until_parked();
         };
         if ordered_only {
+            let disclosure_label = "Ordered operations";
             let add_label = "Add selected current operation to the ordered offline run";
             let run_label =
                 "Run ordered offline operations for the current local module through Tasks";
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
+                        .expect("AX JSON");
+                let nodes = tree["nodes"].as_object().expect("nodes");
+                assert!(
+                    nodes
+                        .values()
+                        .any(|node| node["aria"]["label"] == disclosure_label)
+                );
+                assert!(!nodes.values().any(|node| {
+                    node["aria"]["label"] == add_label || node["aria"]["label"] == run_label
+                }));
+            });
+            focus(cx, disclosure_label);
+            press(cx);
+            assert!(panel.read_with(cx, |panel, _| panel.preferences.ordered_operations_expanded));
             let add_order = |cx: &mut gpui::VisualTestContext| {
                 for index in [1, 0, 1] {
                     let (id, _) = selections
@@ -13278,6 +13322,16 @@ mod tests {
             cx.run_until_parked();
             assert!(events.lock().expect("events").is_empty());
             add_order(cx);
+            focus(cx, disclosure_label);
+            press(cx);
+            panel.update(cx, |panel, cx| panel.rebuild(cx));
+            panel.read_with(cx, |panel, _| {
+                assert!(!panel.preferences.ordered_operations_expanded);
+                assert!(!panel.host.expanded().contains(&ordered_operation_root_id()));
+                assert_eq!(panel.ordered_operations.len(), 3);
+            });
+            focus(cx, disclosure_label);
+            press(cx);
             panel.read_with(cx, |panel, _| {
                 assert_eq!(panel.ordered_operations.len(), 3);
                 for (receipt, index) in panel.ordered_operations.iter().zip([1, 0, 1]) {
