@@ -3433,6 +3433,43 @@ impl JvmBuildOperation {
 pub struct MavenOperationOptions {
     pub profiles: Vec<MavenOperationProfile>,
     pub skip_tests: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub non_recursive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_policy: Option<MavenReactorFailurePolicy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<MavenReactorThreads>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub enum MavenReactorFailurePolicy {
+    FailFast,
+    FailAtEnd,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct MavenReactorThreads(String);
+
+impl std::str::FromStr for MavenReactorThreads {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        if let Some(cores) = value.strip_suffix('C') {
+            let multiplier: f32 = cores
+                .parse()
+                .ok()
+                .filter(|multiplier: &f32| multiplier.is_finite() && *multiplier > 0.)
+                .context("Maven threads per core must be a positive number, such as 0.5C")?;
+            Ok(Self(format!("{multiplier}C")))
+        } else {
+            let threads: i32 = value
+                .parse()
+                .ok()
+                .filter(|threads| *threads > 0)
+                .context("Maven thread count must be a positive integer, such as 2")?;
+            Ok(Self(threads.to_string()))
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -3789,6 +3826,14 @@ impl JvmBuildOperationReceipt {
 }
 
 impl MavenOperationOptions {
+    pub fn option_count(&self) -> usize {
+        self.profiles.len()
+            + usize::from(self.skip_tests)
+            + usize::from(self.non_recursive)
+            + usize::from(self.failure_policy.is_some())
+            + usize::from(self.threads.is_some())
+    }
+
     fn append_arguments(&self, maven: &MavenProject, arguments: &mut Vec<String>) -> Result<()> {
         ensure!(
             self.profiles.len() <= 32,
@@ -3824,6 +3869,21 @@ impl MavenOperationOptions {
         }
         if self.skip_tests {
             arguments.push("-DskipTests".into());
+        }
+        if self.non_recursive {
+            arguments.push("--non-recursive".into());
+        }
+        if let Some(policy) = self.failure_policy {
+            arguments.push(
+                match policy {
+                    MavenReactorFailurePolicy::FailFast => "--fail-fast",
+                    MavenReactorFailurePolicy::FailAtEnd => "--fail-at-end",
+                }
+                .into(),
+            );
+        }
+        if let Some(threads) = &self.threads {
+            arguments.extend(["--threads".into(), threads.0.clone()]);
         }
         Ok(())
     }
@@ -11478,6 +11538,10 @@ mod tests {
             }],
             PathStyle::Unix,
         )?;
+        assert_eq!(
+            serde_json::to_value(&receipt.maven_options)?,
+            serde_json::json!({ "profiles": [], "skip_tests": false })
+        );
         receipt.maven_options = MavenOperationOptions {
             profiles: vec![
                 MavenOperationProfile {
@@ -11490,6 +11554,9 @@ mod tests {
                 },
             ],
             skip_tests: true,
+            non_recursive: true,
+            failure_policy: Some(MavenReactorFailurePolicy::FailAtEnd),
+            threads: Some("0.50C".parse()?),
         };
         assert_eq!(
             receipt
@@ -11503,9 +11570,16 @@ mod tests {
                 "--activate-profiles",
                 "ci,!legacy",
                 "-DskipTests",
+                "--non-recursive",
+                "--fail-at-end",
+                "--threads",
+                "0.5C",
                 "verify"
             ]
         );
+        for invalid in ["0", "-2", "2.5", "2147483648", "0C", "-2C", "NaNC", "infC"] {
+            assert!(invalid.parse::<MavenReactorThreads>().is_err());
+        }
         assert!(receipt.plan(&snapshot, false, PathStyle::Unix).is_err());
         for invalid in ["missing", "ci,!legacy", "!ci", "ci\n"] {
             receipt.maven_options.profiles.push(MavenOperationProfile {

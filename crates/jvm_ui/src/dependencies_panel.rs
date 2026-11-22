@@ -21,7 +21,7 @@ use project::{
         GradleAnnotationProcessorOutput, GradleProject, JdtlsProjectMembership,
         JdtlsProjectSnapshot, JvmBuildOperation, JvmBuildOperationReceipt, KotlinBuildSystem,
         KotlinWorkspaceDependency, KotlinWorkspaceSnapshot, MavenOperationOptions,
-        MavenOperationProfile,
+        MavenOperationProfile, MavenReactorFailurePolicy,
     },
     task_inventory::{MavenSettingsFile, TaskSourceKind},
     trusted_worktrees::TrustedWorktrees,
@@ -5511,7 +5511,7 @@ impl DependenciesPanel {
                     if gradle {
                         r#"["--option=value", "--flag"]"#
                     } else {
-                        r#"["-Pprofile", "-P!profile", "-DskipTests"]"#
+                        r#"["-Pprofile", "--non-recursive", "--threads=2"]"#
                     },
                     window,
                     cx,
@@ -7402,24 +7402,58 @@ fn parse_gradle_task_options(
 }
 
 fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOptions> {
-    let arguments =
-        parse_operation_option_arguments(value, r#"["-Pprofile", "-P!profile", "-DskipTests"]"#)?;
+    let arguments = parse_operation_option_arguments(
+        value,
+        r#"["-Pprofile", "--non-recursive", "--threads=2"]"#,
+    )?;
     let mut options = MavenOperationOptions::default();
     for argument in arguments {
-        if argument == "-DskipTests" {
-            anyhow::ensure!(!options.skip_tests, "Configure skipping tests only once");
-            options.skip_tests = true;
-        } else {
-            let profile = argument.strip_prefix("-P").ok_or_else(|| {
-                anyhow::anyhow!("Use -Pprofile to activate a declared Maven profile, -P!profile to deactivate it, or -DskipTests")
-            })?;
-            let (id, active) = profile
-                .strip_prefix('!')
-                .map_or((profile, true), |id| (id, false));
-            options.profiles.push(MavenOperationProfile {
-                id: id.into(),
-                active,
-            });
+        match argument.as_str() {
+            "-DskipTests" => {
+                anyhow::ensure!(!options.skip_tests, "Configure skipping tests only once");
+                options.skip_tests = true;
+            }
+            "-N" | "--non-recursive" => {
+                anyhow::ensure!(
+                    !options.non_recursive,
+                    "Configure non-recursive execution only once"
+                );
+                options.non_recursive = true;
+            }
+            "-ff" | "--fail-fast" | "-fae" | "--fail-at-end" => {
+                anyhow::ensure!(
+                    options.failure_policy.is_none(),
+                    "Choose one Maven failure policy: --fail-fast or --fail-at-end"
+                );
+                options.failure_policy = Some(match argument.as_str() {
+                    "-ff" | "--fail-fast" => MavenReactorFailurePolicy::FailFast,
+                    _ => MavenReactorFailurePolicy::FailAtEnd,
+                });
+            }
+            _ => {
+                if let Some(profile) = argument.strip_prefix("-P") {
+                    let (id, active) = profile
+                        .strip_prefix('!')
+                        .map_or((profile, true), |id| (id, false));
+                    options.profiles.push(MavenOperationProfile {
+                        id: id.into(),
+                        active,
+                    });
+                } else if let Some(threads) = argument
+                    .strip_prefix("--threads=")
+                    .or_else(|| argument.strip_prefix("-T"))
+                {
+                    anyhow::ensure!(
+                        options.threads.is_none(),
+                        "Configure Maven threads only once"
+                    );
+                    options.threads = Some(threads.parse()?);
+                } else {
+                    anyhow::bail!(
+                        "Use a declared profile (-Pprofile or -P!profile), -DskipTests, --non-recursive, --fail-fast, --fail-at-end, or --threads=2"
+                    );
+                }
+            }
         }
     }
     Ok(options)
@@ -7522,7 +7556,7 @@ fn compose_ordered_operations(
         if receipt.maven_options != MavenOperationOptions::default() {
             anyhow::ensure!(
                 maven_options.is_none_or(|options| options == &receipt.maven_options),
-                "Choose the same Maven profiles and test settings for the entire ordered run"
+                "Choose the same Maven options for the entire ordered run"
             );
             maven_options = Some(&receipt.maven_options);
         }
@@ -7559,8 +7593,7 @@ fn ordered_operation_tree(ordered: &[JvmBuildOperationReceipt]) -> LanguageToolN
                 }
                 None => "Unavailable operation; clear and select again".into(),
             };
-            let maven_option_count = receipt.maven_options.profiles.len()
-                + usize::from(receipt.maven_options.skip_tests);
+            let maven_option_count = receipt.maven_options.option_count();
             let label = if maven_option_count == 0 {
                 format!("{}. {name}", index + 1)
             } else {
@@ -8794,7 +8827,7 @@ impl Render for DependenciesPanel {
                             .aria_label(if selected_gradle_task {
                                 "Configure declared options for the selected Gradle task"
                             } else {
-                                "Configure profiles and test settings for the selected Maven operation"
+                                "Configure profiles, test settings and reactor behavior for the selected Maven operation"
                             })
                             .toggle_state(show_operation_options)
                             .tab_index(0_isize)
@@ -8807,7 +8840,7 @@ impl Render for DependenciesPanel {
                             .aria_description(if selected_gradle_task {
                                 "Enter a JSON array of --option=value or --flag strings. Gradle validates the values."
                             } else {
-                                "Enter a JSON array with -Pprofile to activate, -P!profile to deactivate, or -DskipTests. Maven options apply to the entire run."
+                                "Enter a JSON array with -Pprofile, -P!profile, -DskipTests, --non-recursive, --fail-fast or --fail-at-end, and --threads=2 or --threads=0.5C. Maven options apply to the entire run."
                             })
                             .on_a11y_action(gpui::AccessibleAction::SetValue, {
                                 let editor = self.operation_option_editor.downgrade();
@@ -14249,7 +14282,7 @@ mod tests {
                 });
                 focus(
                     cx,
-                    "Configure profiles and test settings for the selected Maven operation",
+                    "Configure profiles, test settings and reactor behavior for the selected Maven operation",
                 );
                 press(cx);
                 panel.update_in(cx, |panel, window, cx| {
@@ -14260,14 +14293,65 @@ mod tests {
                     panel.run_selected_offline_operation(window, cx);
                     let error = panel.operation_notice.as_deref().expect("profile error");
                     assert!(error.contains("declared") && !error.contains("private-canary"));
+                    for (options, expected) in [
+                        (
+                            r#"["--fail-fast","--fail-at-end"]"#,
+                            "Choose one Maven failure policy",
+                        ),
+                        (
+                            r#"["--threads=2","-T3"]"#,
+                            "Configure Maven threads only once",
+                        ),
+                        (
+                            r#"["--threads=0"]"#,
+                            "Maven thread count must be a positive integer",
+                        ),
+                        (
+                            r#"["--threads=NaNC"]"#,
+                            "Maven threads per core must be a positive number",
+                        ),
+                        (
+                            r#"["-N","--non-recursive"]"#,
+                            "Configure non-recursive execution only once",
+                        ),
+                        (r#"["--fail-never"]"#, "Use a declared profile"),
+                    ] {
+                        input.update(cx, |editor, cx| editor.set_text(options, window, cx));
+                        panel.run_selected_offline_operation(window, cx);
+                        assert!(
+                            panel
+                                .operation_notice
+                                .as_deref()
+                                .is_some_and(|notice| notice.contains(expected))
+                        );
+                    }
                     input.update(cx, |editor, cx| {
-                        editor.set_text(r#"["-Pci","-P!legacy","-DskipTests"]"#, window, cx);
+                        editor.set_text(
+                            r#"["-Pci","-P!legacy","-DskipTests","-N","-fae","-T2"]"#,
+                            window,
+                            cx,
+                        );
                     });
                 });
                 assert!(events.lock().expect("events").is_empty());
             }
             add_order(cx);
             let combined = panel.read_with(cx, |panel, _| {
+                if provider == GraphFixtureProvider::Maven {
+                    let mut conflicting = panel.ordered_operations.clone();
+                    conflicting
+                        .last_mut()
+                        .expect("queued Maven operation")
+                        .maven_options
+                        .failure_policy = Some(MavenReactorFailurePolicy::FailFast);
+                    let error =
+                        compose_ordered_operations(&conflicting, &panel.operation_selections)
+                            .expect_err("conflicting Maven queue policies");
+                    assert_eq!(
+                        error.to_string(),
+                        "Choose the same Maven options for the entire ordered run"
+                    );
+                }
                 compose_ordered_operations(&panel.ordered_operations, &panel.operation_selections)
                     .expect("combined receipt")
             });
@@ -14296,8 +14380,16 @@ mod tests {
                         ]));
                 } else {
                     assert_eq!(
-                        task.args.get(3..6).expect("Maven arguments"),
-                        ["--activate-profiles", "ci,!legacy", "-DskipTests",]
+                        task.args.get(3..10).expect("Maven arguments"),
+                        [
+                            "--activate-profiles",
+                            "ci,!legacy",
+                            "-DskipTests",
+                            "--non-recursive",
+                            "--fail-at-end",
+                            "--threads",
+                            "2",
+                        ]
                     );
                 }
             }

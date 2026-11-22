@@ -335,6 +335,20 @@ locations. The selected row, quick-run button, and queue menu all target the
 same saved entry. When labels match, choose by source location. Removing a
 configuration invalidates its old quick-run and queue targets.
 
+For a Maven phase or goal, open **Task options** and enter a JSON array of the
+options you want. Use `-Pci` to activate a declared profile, `-P!legacy` to
+deactivate one, or `-DskipTests` to skip test execution. Use
+`--non-recursive` to run against the selected POM without its submodules.
+Choose `--fail-fast` to stop on a reactor failure or `--fail-at-end` to finish
+unaffected modules and report failure at the end. Set a fixed thread count
+with `--threads=2` or a multiplier with `--threads=0.5C`. Maven calculates the
+multiplier against the host JVM's available processors.
+
+These options apply to the entire ordered Maven run. Conflicting options in
+queued entries prevent dispatch. Maven still applies its own precedence for
+`.mvn/maven.config`. For example, a configured fail-fast flag takes
+precedence over fail-at-end.
+
 To inspect an effective POM, expand **Plugins** under the Maven project and
 choose the `effective-pom` goal under `maven-help-plugin` when the provider
 reports its cached descriptor. Use the selected operation’s profile options
