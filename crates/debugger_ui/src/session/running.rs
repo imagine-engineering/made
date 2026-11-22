@@ -48,7 +48,7 @@ use settings::Settings;
 use stack_frame_list::StackFrameList;
 use task::{
     BuildTaskDefinition, DebugScenario, SharedTaskContext, Shell, ShellBuilder, SpawnInTerminal,
-    TaskContext, ZedDebugConfig, substitute_variables_in_str,
+    StructuredTaskHandle, TaskContext, ZedDebugConfig, substitute_variables_in_str,
 };
 use terminal_view::TerminalView;
 use ui::{
@@ -119,7 +119,7 @@ pub struct RunningState {
     stack_frame_list: Entity<stack_frame_list::StackFrameList>,
     loaded_sources_list: Entity<LoadedSourceList>,
     pub debug_terminal: Entity<DebugTerminal>,
-    selected_java_test_terminal: Option<WeakEntity<terminal::Terminal>>,
+    selected_java_test_task: Option<StructuredTaskHandle>,
     module_list: Entity<module_list::ModuleList>,
     console: Entity<Console>,
     breakpoint_list: Entity<BreakpointList>,
@@ -918,6 +918,7 @@ impl RunningState {
 
         let _subscriptions = vec![
             cx.on_app_quit(move |this, cx| {
+                this.stop_selected_java_test(cx);
                 let shutdown = this
                     .session
                     .update(cx, |session, cx| session.on_app_quit(cx));
@@ -977,7 +978,7 @@ impl RunningState {
                         .detach_and_log_err(cx),
 
                     SessionEvent::DebuggeeTerminated => {
-                        this.selected_java_test_terminal = None;
+                        this.selected_java_test_task = None;
                     }
 
                     _ => {}
@@ -991,9 +992,10 @@ impl RunningState {
                 &session,
                 |this, session, event: &SessionStateEvent, cx| match event {
                     SessionStateEvent::Shutdown => {
-                        this.stop_selected_java_test(cx);
                         if session.read(cx).is_building() {
                             this.shutdown(cx);
+                        } else {
+                            this.stop_selected_java_test(cx);
                         }
                     }
                     _ => {}
@@ -1063,7 +1065,7 @@ impl RunningState {
             loaded_sources_list: loaded_source_list,
             pane_close_subscriptions,
             debug_terminal,
-            selected_java_test_terminal: None,
+            selected_java_test_task: None,
             dock_axis,
             _schedule_serialize: None,
             scenario: None,
@@ -1317,13 +1319,16 @@ impl RunningState {
                         .with_context(|| format!("Java test Debug port {port} is unavailable"))?;
                 }
 
-                let terminal = project
-                    .update(cx, |project, cx| {
-                        project.create_terminal_task(
-                            task_with_shell.clone(),
-                            cx,
-                        )
-                    }).await?;
+                let creation = if selected_java_test.is_some() {
+                    this.update(cx, |this, cx| {
+                        this.create_selected_java_test_terminal(&project, task_with_shell, cx)
+                    })?
+                } else {
+                    project.update(cx, |project, cx| {
+                        project.create_terminal_task(task_with_shell, cx)
+                    })
+                };
+                let terminal = creation.await?;
 
                 let terminal_view = cx.new_window_entity(|window, cx| {
                     TerminalView::new(
@@ -1337,9 +1342,6 @@ impl RunningState {
                 })?;
 
                 this.update_in(cx, |this, window, cx| {
-                    if selected_java_test.is_some() {
-                        this.selected_java_test_terminal = Some(terminal.downgrade());
-                    }
                     this.ensure_pane_item(DebuggerPaneItem::Terminal, window, cx);
                     this.debug_terminal.update(cx, |debug_terminal, cx| {
                         debug_terminal.terminal = Some(terminal_view);
@@ -2055,6 +2057,7 @@ impl RunningState {
     }
 
     pub(crate) fn shutdown(&mut self, cx: &mut Context<Self>) {
+        let owns_selected_java_test = self.selected_java_test_task.is_some();
         self.stop_selected_java_test(cx);
         self.workspace
             .update(cx, |workspace, cx| {
@@ -2073,7 +2076,7 @@ impl RunningState {
             matches!(session.state, session::SessionState::Booting(_))
         });
 
-        if is_building {
+        if is_building && !owns_selected_java_test {
             self.debug_terminal.update(cx, |terminal, cx| {
                 if let Some(view) = terminal.terminal.as_ref() {
                     view.update(cx, |view, cx| {
@@ -2086,11 +2089,25 @@ impl RunningState {
     }
 
     fn stop_selected_java_test(&mut self, cx: &mut Context<Self>) {
-        if let Some(terminal) = self.selected_java_test_terminal.take() {
-            terminal
-                .update(cx, |terminal, _| terminal.kill_active_task())
-                .log_err();
+        if let Some(task) = self.selected_java_test_task.take() {
+            task.cancel(cx);
         }
+    }
+
+    fn create_selected_java_test_terminal(
+        &mut self,
+        project: &Entity<Project>,
+        spawn_task: SpawnInTerminal,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<terminal::Terminal>>> {
+        if self.session.read(cx).is_terminated() {
+            return Task::ready(Err(anyhow!("The selected Java test Debug session stopped")));
+        }
+        let task = StructuredTaskHandle::new(spawn_task.id.clone());
+        self.selected_java_test_task = Some(task.clone());
+        project.update(cx, |project, cx| {
+            project.create_terminal_task_with_structured_handle(spawn_task, Some(task), cx)
+        })
     }
 
     pub fn stop_thread(&self, cx: &mut Context<Self>) {
@@ -2307,6 +2324,160 @@ mod tests {
                     .is_some()
             );
         }
+    }
+
+    #[cfg(all(unix, feature = "jvm-workflow-tests"))]
+    #[gpui::test]
+    #[expect(clippy::result_large_err)]
+    async fn restricting_java_debug_cancels_preparing_and_attached_tasks(cx: &mut TestAppContext) {
+        use dap::{
+            StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest,
+            adapters::DebugAdapterBinary,
+        };
+        use futures::channel::oneshot;
+        use project::trusted_worktrees::{self, DbTrustedPaths, PathTrust, TrustedWorktrees};
+
+        cx.executor().allow_parking();
+        init_test(cx);
+        cx.update(|cx| trusted_worktrees::init(DbTrustedPaths::default(), cx));
+        let root = std::env::temp_dir();
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(&root, json!({"pom.xml": "<project/>"}))
+            .await;
+        let project = Project::test_with_worktree_trust(fs, [root.as_path()], cx).await;
+        let window = init_test_workspace(&project, cx).await;
+        let (store, worktrees, worktree, environment) = project.read_with(cx, |project, cx| {
+            (
+                project.dap_store(),
+                project.worktree_store(),
+                project.visible_worktrees(cx).next().expect("Java worktree"),
+                project.environment().clone(),
+            )
+        });
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let trust = cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("Trust owner"));
+        let paths = || collections::HashSet::from_iter([PathTrust::Worktree(worktree_id)]);
+        trust.update(cx, |trust, cx| trust.trust(&worktrees, paths(), cx));
+        let ordinary = start_debug_session(&window, cx, |_| {}).expect("Unrelated Debug session");
+        let _intercept = project::debugger::test::intercept_debug_sessions(cx, |client| {
+            client.on_request::<dap::requests::Attach, _>(|_, _| Ok(()));
+        });
+
+        for hold_preparation in [true, false] {
+            trust.update(cx, |trust, cx| trust.trust(&worktrees, paths(), cx));
+            let session = store.update(cx, |store, cx| {
+                store.new_session(
+                    Some("Selected Java test".into()),
+                    "Java".into(),
+                    SharedTaskContext::default(),
+                    None,
+                    Default::default(),
+                    cx,
+                )
+            });
+            let running = window
+                .update(cx, |multi, window, cx| {
+                    let workspace = multi.workspace().downgrade();
+                    cx.new(|cx| {
+                        RunningState::new(
+                            session.clone(),
+                            project.clone(),
+                            workspace,
+                            None,
+                            None,
+                            Axis::Horizontal,
+                            window,
+                            cx,
+                        )
+                    })
+                })
+                .expect("Debug window");
+            let held_environment = hold_preparation.then(|| {
+                let (entered, entered_receiver) = oneshot::channel();
+                let (resume, resume_receiver) = oneshot::channel();
+                environment.update(cx, |environment, _| {
+                    environment
+                        .delay_next_local_directory_environment_for_test(
+                            Arc::from(root.as_path()),
+                            entered,
+                            resume_receiver,
+                        )
+                        .expect("Hold terminal preparation");
+                });
+                (entered_receiver, resume)
+            });
+            let (creation, handle) = running.update(cx, |running, cx| {
+                let creation = running.create_selected_java_test_terminal(
+                    &project,
+                    SpawnInTerminal {
+                        cwd: Some(root.clone()),
+                        command: Some("/bin/sh".into()),
+                        args: vec!["-c".into(), "read answer".into()],
+                        ..Default::default()
+                    },
+                    cx,
+                );
+                let handle = running.selected_java_test_task.clone().expect("Owned Task");
+                (creation, handle)
+            });
+
+            if let Some((entered, resume)) = held_environment {
+                entered.await.expect("Terminal preparation entered");
+                trust.update(cx, |trust, cx| {
+                    trust.restrict(worktrees.downgrade(), paths(), cx)
+                });
+                cx.run_until_parked();
+                resume.send(None).expect("Resume terminal preparation");
+                assert!(
+                    creation.await.is_err(),
+                    "Restricted preparation spawned a terminal"
+                );
+            } else {
+                let terminal = creation.await.expect("Running selected test terminal");
+                session
+                    .update(cx, |session, cx| {
+                        session.boot(
+                            DebugAdapterBinary {
+                                command: Some("command".into()),
+                                arguments: Vec::new(),
+                                envs: Default::default(),
+                                cwd: None,
+                                connection: None,
+                                request_args: StartDebuggingRequestArguments {
+                                    request: StartDebuggingRequestArgumentsRequest::Attach,
+                                    configuration: json!({"request": "attach"}),
+                                },
+                            },
+                            worktree.clone(),
+                            store.downgrade(),
+                            cx,
+                        )
+                    })
+                    .await
+                    .expect("Mock adapter attached");
+                assert!(session.read_with(cx, |session, _| session.is_started()));
+                trust.update(cx, |trust, cx| {
+                    trust.restrict(worktrees.downgrade(), paths(), cx)
+                });
+                let status = terminal
+                    .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
+                    .await
+                    .expect("Owned terminal process exited");
+                assert!(!status.success());
+            }
+            assert!(matches!(
+                handle.state(),
+                task::StructuredTaskState::Cancelled {
+                    termination_confirmed: true,
+                    ..
+                }
+            ));
+            assert!(session.read_with(cx, |session, _| session.is_terminated()));
+            assert!(!ordinary.read_with(cx, |session, _| session.is_terminated()));
+        }
+        store
+            .update(cx, |store, cx| store.shutdown_sessions(cx))
+            .await;
     }
 
     struct HeldNamedDebugAdapter {

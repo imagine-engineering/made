@@ -1612,6 +1612,14 @@ impl TerminalBuilder {
                 alternate_scroll,
             );
 
+            anyhow::ensure!(
+                !task
+                    .as_ref()
+                    .and_then(|task| task.structured_task.as_ref())
+                    .is_some_and(|handle| handle.state().is_terminal()),
+                "The structured Task was cancelled before process creation"
+            );
+
             // When `no_pty` is set (headless hosts), run the task as a plain
             // subprocess and pump its piped output into the same emulator the
             // PTY path would feed.

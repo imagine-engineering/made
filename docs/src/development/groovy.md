@@ -442,8 +442,9 @@ The installed Java extension exposes a `Java` debug adapter. In a trusted
 local project, select a verified Java case in Tests and choose
 **Debug Selected Test**. The debugger waits for the selected test JVM to
 suspend, then attaches through the Java adapter. Gradle uses its test Debug
-port 5005. Maven uses a separate loopback port for each launch. Stop the
-Debug session to cancel a waiting test.
+port 5005. Maven uses a separate loopback port for each launch. Stopping the
+Debug session or restricting project trust cancels its selected test Task,
+including during terminal preparation.
 
 Selected-test breakpoint journeys in the installed desktop product and on
 separate hosts remain qualification gates. The extension's built-in run and
