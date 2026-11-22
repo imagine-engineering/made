@@ -10,7 +10,9 @@ use workspace::{
     item::{Item, ItemEvent, SaveOptions},
 };
 
-use crate::session::{AddMode, DivideMode, GraphicsSession, UnaryNumericMode};
+use crate::session::{
+    AddMode, ArtboardHistoryDirection, DivideMode, GraphicsSession, UnaryNumericMode,
+};
 
 actions!(
     graphite,
@@ -3475,6 +3477,29 @@ impl GraphiteArtboardItem {
         cx.notify();
     }
 
+    fn move_history(
+        &mut self,
+        direction: ArtboardHistoryDirection,
+        revision: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if self.drafts.iter().any(|draft| *draft)
+            || self.field_diagnostics.iter().any(Option::is_some)
+        {
+            self.preview_diagnostic =
+                Some("Apply or discard the Artboard field edits first".into());
+        } else {
+            self.preview_diagnostic = self
+                .session
+                .update(cx, |session, cx| {
+                    session.move_history(direction, revision, cx)
+                })
+                .err()
+                .map(|error| error.to_string());
+        }
+        cx.notify();
+    }
+
     fn begin_gesture(&mut self, cx: &mut Context<Self>) {
         let outcome = self.session.update(cx, |session, cx| {
             session.begin_gesture(session.revision(), cx)
@@ -3653,6 +3678,7 @@ impl Render for GraphiteArtboardItem {
         let parameters = self.session.read(cx).authoring_parameters();
         let has_image = self.session.read(cx).authoring_image_placement().is_some();
         let gesture_active = self.session.read(cx).gesture().is_some();
+        let revision = self.session.read(cx).revision();
         let can_apply = !self.drafts.iter().any(|draft| *draft)
             && !self.field_diagnostics.iter().any(Option::is_some);
         let pending = self.pending_preview.is_some() || self.session.read(cx).is_pending();
@@ -3821,6 +3847,40 @@ impl Render for GraphiteArtboardItem {
                                             cx.listener(|item, _, _, cx| item.begin_gesture(cx)),
                                         ),
                                 ),
+                        )
+                        .children(
+                            [
+                                (
+                                    ArtboardHistoryDirection::Undo,
+                                    "Undo",
+                                    "GRAPHITE-ARTBOARD-UNDO",
+                                    23isize,
+                                ),
+                                (
+                                    ArtboardHistoryDirection::Redo,
+                                    "Redo",
+                                    "GRAPHITE-ARTBOARD-REDO",
+                                    24isize,
+                                ),
+                            ]
+                            .map(
+                                |(direction, label, selector, tab_index)| {
+                                    div().debug_selector(move || selector.into()).child(
+                                        Button::new(selector, label)
+                                            .tab_index(tab_index)
+                                            .disabled(
+                                                !can_apply
+                                                    || !self
+                                                        .session
+                                                        .read(cx)
+                                                        .can_move_history(direction),
+                                            )
+                                            .on_click(cx.listener(move |item, _, _, cx| {
+                                                item.move_history(direction, revision, cx);
+                                            })),
+                                    )
+                                },
+                            ),
                         )
                     })
                     .when(gesture_active, |row| {

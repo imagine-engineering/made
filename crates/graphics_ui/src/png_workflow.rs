@@ -1766,6 +1766,9 @@ pub(crate) mod tests {
                 original_identity
             );
         });
+        let initial_edit = item.read_with(window, |item, cx| {
+            item.session().read(cx).document().edit_state()
+        });
         edit_artboard_field(&item, 9, "12", window);
         assert!(item.read_with(window, |item, cx| item.is_dirty(cx)));
         let replacement =
@@ -1783,6 +1786,39 @@ pub(crate) mod tests {
                 .expect("new verified dependency")
                 .clone()
         });
+        let (latest_source, authored) = item.read_with(window, |item, cx| {
+            let document = item.session().read(cx).document();
+            (
+                document
+                    .encoded_png_input()
+                    .expect("updated source")
+                    .source()
+                    .clone(),
+                document.edit_state(),
+            )
+        });
+        paint(window);
+        click(window, "GRAPHITE-ARTBOARD-UNDO");
+        for (expected, action) in [
+            (initial_edit, Some("GRAPHITE-ARTBOARD-REDO")),
+            (authored, None),
+        ] {
+            item.read_with(window, |item, cx| {
+                let document = item.session().read(cx).document();
+                assert_eq!(document.edit_state(), expected);
+                assert_eq!(item.input_version(cx), Some(&updated_version));
+                assert!(std::sync::Arc::ptr_eq(
+                    document
+                        .encoded_png_input()
+                        .expect("current input")
+                        .source(),
+                    &latest_source,
+                ));
+            });
+            if let Some(action) = action {
+                click(window, action);
+            }
+        }
         let successor = item
             .update_in(window, |item, _, cx| item.save_sim(cx))
             .expect("save the edited source Artboard");

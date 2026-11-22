@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use graphics_core::evaluate::RoundingOperation;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3987,6 +3989,8 @@ pub enum ArtboardSessionError {
     MissingEncodedPngInput,
     GestureAlreadyActive,
     InvalidGesture,
+    NothingToUndo,
+    NothingToRedo,
 }
 
 impl std::fmt::Display for ArtboardSessionError {
@@ -4016,6 +4020,8 @@ impl std::fmt::Display for ArtboardSessionError {
             Self::InvalidGesture => {
                 formatter.write_str("The Artboard edit gesture is no longer owned by this session")
             }
+            Self::NothingToUndo => formatter.write_str("There is no Artboard edit to undo"),
+            Self::NothingToRedo => formatter.write_str("There is no Artboard edit to redo"),
         }
     }
 }
@@ -4114,6 +4120,8 @@ struct PendingArtboardGesture {
 
 pub struct GraphiteArtboardSession {
     document: graphics_core::evaluate::CpuSvgArtboardDocument,
+    undo: VecDeque<graphics_core::evaluate::CpuSvgArtboardEditState>,
+    redo: VecDeque<graphics_core::evaluate::CpuSvgArtboardEditState>,
     gesture: Option<PendingArtboardGesture>,
     png_cancellation: Option<std::sync::Arc<sim_tensor::CancellationToken>>,
     authority: Option<std::sync::Arc<ArtboardRequestAuthority>>,
@@ -4122,6 +4130,12 @@ pub struct GraphiteArtboardSession {
     diagnostic: Option<ArtboardSessionError>,
     generation: u64,
     resource_revoked: bool,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ArtboardHistoryDirection {
+    Undo,
+    Redo,
 }
 
 impl gpui::EventEmitter<ArtboardSessionEvent> for GraphiteArtboardSession {}
@@ -4136,6 +4150,8 @@ impl GraphiteArtboardSession {
     pub fn new(document: graphics_core::evaluate::CpuSvgArtboardDocument) -> Self {
         Self {
             document,
+            undo: VecDeque::new(),
+            redo: VecDeque::new(),
             gesture: None,
             png_cancellation: None,
             authority: None,
@@ -4161,6 +4177,91 @@ impl GraphiteArtboardSession {
 
     pub fn revision(&self) -> u64 {
         self.document.revision()
+    }
+
+    pub(crate) fn can_move_history(&self, direction: ArtboardHistoryDirection) -> bool {
+        self.gesture.is_none()
+            && match direction {
+                ArtboardHistoryDirection::Undo => !self.undo.is_empty(),
+                ArtboardHistoryDirection::Redo => !self.redo.is_empty(),
+            }
+    }
+
+    fn record_authored_change(
+        &mut self,
+        previous: graphics_core::evaluate::CpuSvgArtboardEditState,
+    ) {
+        if self.document.edit_state() != previous {
+            self.undo.push_back(previous);
+            if self.undo.len() > graphite_editor::consts::MAX_UNDO_HISTORY_LEN {
+                self.undo.pop_front();
+            }
+            self.redo.clear();
+        }
+    }
+
+    pub(crate) fn move_history(
+        &mut self,
+        direction: ArtboardHistoryDirection,
+        expected_revision: u64,
+        cx: &mut gpui::Context<Self>,
+    ) -> Result<bool, ArtboardSessionError> {
+        use graphics_core::evaluate::{CpuSvgDocumentError, CpuSvgEncodedPngInput};
+
+        if self.gesture.is_some() {
+            return Err(ArtboardSessionError::GestureAlreadyActive);
+        }
+        if expected_revision != self.revision() {
+            return Err(ArtboardSessionError::Document(
+                CpuSvgDocumentError::StaleRevision,
+            ));
+        }
+        let previous = self.document.edit_state();
+        let configuration = self.document.configuration();
+        let (from, to, empty) = match direction {
+            ArtboardHistoryDirection::Undo => (
+                &mut self.undo,
+                &mut self.redo,
+                ArtboardSessionError::NothingToUndo,
+            ),
+            ArtboardHistoryDirection::Redo => (
+                &mut self.redo,
+                &mut self.undo,
+                ArtboardSessionError::NothingToRedo,
+            ),
+        };
+        let state = from.back().copied().ok_or(empty)?;
+        let changed = match (state.image_placement, self.document.encoded_png_input()) {
+            (Some(placement), Some(input)) => {
+                let input = CpuSvgEncodedPngInput::new(input.source().clone(), placement)
+                    .map_err(ArtboardSessionError::Document)?;
+                self.document.apply_encoded_png(
+                    expected_revision,
+                    state.parameters,
+                    configuration,
+                    input,
+                )
+            }
+            (None, None) => self
+                .document
+                .apply(expected_revision, state.parameters, configuration),
+            _ => return Err(ArtboardSessionError::MissingEncodedPngInput),
+        }
+        .map_err(ArtboardSessionError::Document)?;
+        if changed {
+            from.pop_back();
+            to.push_back(previous);
+            self.invalidate_changed_document();
+            self.changed(cx);
+        }
+        Ok(changed)
+    }
+
+    fn invalidate_changed_document(&mut self) {
+        self.cancel_owned_request();
+        if !self.resource_revoked {
+            self.diagnostic = None;
+        }
     }
 
     pub fn gesture(&self) -> Option<ArtboardGesture> {
@@ -4289,6 +4390,7 @@ impl GraphiteArtboardSession {
         let parameters = gesture.candidate.parameters();
         let configuration = gesture.candidate.configuration();
         let input = gesture.candidate.encoded_png_input().cloned();
+        let previous = self.document.edit_state();
         let changed = match input {
             Some(input) => {
                 self.document
@@ -4301,10 +4403,8 @@ impl GraphiteArtboardSession {
         .map_err(ArtboardSessionError::Document)?;
         self.gesture = None;
         if changed {
-            self.cancel_owned_request();
-            if !self.resource_revoked {
-                self.diagnostic = None;
-            }
+            self.record_authored_change(previous);
+            self.invalidate_changed_document();
         }
         self.changed(cx);
         Ok(changed)
@@ -4364,15 +4464,13 @@ impl GraphiteArtboardSession {
         configuration: graphite_std::application_io::RenderConfig,
         cx: &mut gpui::Context<Self>,
     ) -> Result<bool, graphics_core::evaluate::CpuSvgDocumentError> {
+        let previous = self.document.edit_state();
         let changed = self
             .document
             .apply(expected_revision, parameters, configuration)?;
         if changed {
-            self.cancel_owned_request();
-            // Keep editable metadata after permission loss without reviving evaluation authority.
-            if !self.resource_revoked {
-                self.diagnostic = None;
-            }
+            self.record_authored_change(previous);
+            self.invalidate_changed_document();
             self.changed(cx);
         }
         Ok(changed)
@@ -4405,10 +4503,7 @@ impl GraphiteArtboardSession {
             )
             .map_err(ArtboardSessionError::Document)?;
         if changed {
-            self.cancel_owned_request();
-            if !self.resource_revoked {
-                self.diagnostic = None;
-            }
+            self.invalidate_changed_document();
             self.changed(cx);
         }
         Ok(changed)
@@ -4428,6 +4523,7 @@ impl GraphiteArtboardSession {
             .clone();
         let input = graphics_core::evaluate::CpuSvgEncodedPngInput::new(source, placement)
             .map_err(ArtboardSessionError::Document)?;
+        let previous = self.document.edit_state();
         let changed = self
             .document
             .apply_encoded_png(
@@ -4438,11 +4534,8 @@ impl GraphiteArtboardSession {
             )
             .map_err(ArtboardSessionError::Document)?;
         if changed {
-            self.cancel_owned_request();
-            // Authoring retained work does not restore revoked resource authority.
-            if !self.resource_revoked {
-                self.diagnostic = None;
-            }
+            self.record_authored_change(previous);
+            self.invalidate_changed_document();
             self.changed(cx);
         }
         Ok(changed)

@@ -643,6 +643,22 @@ pub struct CpuSvgArtboardDocument {
     accepted: Option<AcceptedCpuSvgOutput>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct CpuSvgArtboardEditState {
+    pub parameters: CpuSvgArtboardParameters,
+    pub image_placement: Option<DAffine2>,
+}
+
+impl PartialEq for CpuSvgArtboardEditState {
+    fn eq(&self, other: &Self) -> bool {
+        let placement_bits = |placement: Option<DAffine2>| {
+            placement.map(|placement| placement.to_cols_array().map(f64::to_bits))
+        };
+        same_parameters(self.parameters, other.parameters)
+            && placement_bits(self.image_placement) == placement_bits(other.image_placement)
+    }
+}
+
 impl CpuSvgArtboardDocument {
     pub fn new(
         document_id_encoding: u64,
@@ -757,6 +773,15 @@ impl CpuSvgArtboardDocument {
 
     pub fn encoded_png_input(&self) -> Option<&CpuSvgEncodedPngInput> {
         self.checkpoint.encoded_png.as_ref()
+    }
+
+    pub fn edit_state(&self) -> CpuSvgArtboardEditState {
+        CpuSvgArtboardEditState {
+            parameters: self.parameters(),
+            image_placement: self
+                .encoded_png_input()
+                .map(CpuSvgEncodedPngInput::placement),
+        }
     }
 
     pub fn apply_encoded_png(

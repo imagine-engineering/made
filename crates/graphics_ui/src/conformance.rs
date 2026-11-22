@@ -15820,6 +15820,122 @@ pub(crate) mod artboard_workspace_controls {
         }
 
         #[gpui::test]
+        async fn at_gra_hist_003_004_native_artboard_history_moves_one_committed_interaction(
+            cx: &mut TestAppContext,
+        ) {
+            use crate::session::ArtboardHistoryDirection::{Redo, Undo};
+
+            let (item, workspace, _binding, fixture, png, window) = gesture_workspace(cx).await;
+            let session = item.read_with(window, |item, _| item.session().clone());
+            let (initial, original_network) = session.read_with(window, |session, _| {
+                (
+                    session.document().edit_state(),
+                    session.document().network().clone(),
+                )
+            });
+            let split = item
+                .update_in(window, |item, window, cx| {
+                    item.clone_on_split(None, window, cx)
+                })
+                .await
+                .expect("shared Artboard view");
+            workspace.update_in(window, |workspace, window, cx| {
+                workspace.add_item_to_active_pane(Box::new(split.clone()), None, true, window, cx)
+            });
+            paint(window);
+            click(window, "GRAPHITE-ARTBOARD-BEGIN-EDITS");
+            edit(&split, window, 2, "28");
+            commit(window);
+            edit(&split, window, 4, "0,0,1,1");
+            commit(window);
+            edit(&split, window, 9, "18");
+            commit(window);
+            click(window, "GRAPHITE-ARTBOARD-CLIP");
+            assert!(matches!(
+                session.update(window, |session, cx| session.move_history(Undo, 0, cx)),
+                Err(ArtboardSessionError::GestureAlreadyActive)
+            ));
+            assert_eq!(
+                session.read_with(window, |session, _| session.document().edit_state()),
+                initial
+            );
+            click(window, "GRAPHITE-ARTBOARD-APPLY-EDITS");
+            let edited = session.read_with(window, |session, _| session.document().edit_state());
+            assert_ne!(edited, initial);
+            assert!(matches!(
+                session.update(window, |session, cx| session.move_history(Undo, 0, cx)),
+                Err(ArtboardSessionError::Document(
+                    CpuSvgDocumentError::StaleRevision
+                ))
+            ));
+            let configuration = session.update(window, |session, cx| {
+                let mut configuration = session.configuration();
+                configuration.pointer.x += 15.;
+                assert!(
+                    session
+                        .apply(session.revision(), session.parameters(), configuration, cx)
+                        .expect("update evaluation context")
+                );
+                configuration
+            });
+            let pending = session
+                .update(window, |session, cx| {
+                    session.request_preview(PIXEL_BYTES, cx)
+                })
+                .expect("revision-qualified preview");
+            begin_click(window, "GRAPHITE-ARTBOARD-UNDO");
+            assert!(pending.await.is_err());
+            window.run_until_parked();
+            paint(window);
+            session.read_with(window, |session, _| {
+                assert_eq!(session.revision(), 3);
+                assert_eq!(session.configuration(), configuration);
+                assert_eq!(session.document().edit_state(), initial);
+                assert_eq!(session.document().network(), &original_network);
+                assert!(!session.can_move_history(Undo));
+                assert!(session.can_move_history(Redo));
+            });
+            assert_eq!(
+                item.read_with(window, |item, cx| item.artboard_editors[2]
+                    .read(cx)
+                    .text(cx)),
+                "31"
+            );
+            assert_eq!(
+                split.read_with(window, |item, cx| item.artboard_editors[9]
+                    .read(cx)
+                    .text(cx)),
+                "2"
+            );
+            click(window, "GRAPHITE-ARTBOARD-REDO");
+            session.read_with(window, |session, _| {
+                assert_eq!(session.revision(), 4);
+                assert_eq!(session.document().edit_state(), edited);
+                assert_eq!(session.configuration(), configuration);
+            });
+            assert_eq!(
+                item.read_with(window, |item, cx| item.artboard_editors[2]
+                    .read(cx)
+                    .text(cx)),
+                "28"
+            );
+            assert_eq!(
+                split.read_with(window, |item, cx| item.artboard_editors[9]
+                    .read(cx)
+                    .text(cx)),
+                "18"
+            );
+            click(window, "GRAPHITE-ARTBOARD-UNDO");
+            click(window, "GRAPHITE-ARTBOARD-CLIP");
+            session.read_with(window, |session, _| {
+                assert_eq!(session.revision(), 6);
+                assert!(session.can_move_history(Undo));
+                assert!(!session.can_move_history(Redo));
+            });
+            unchanged_input(&fixture, &png);
+        }
+
+        #[gpui::test]
         async fn at_r05_1_native_apply_staged_properties_commits_once_and_updates_shared_views(
             cx: &mut TestAppContext,
         ) {
