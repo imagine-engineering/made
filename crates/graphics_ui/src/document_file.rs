@@ -1,16 +1,16 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context as _, anyhow, ensure};
 use gpui::{
     App, AppContext as _, Context, Entity, EntityId, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Task, Window,
+    SharedString, Task, WeakEntity, Window,
 };
 use graphics_core::formats::{
     gdd::{GddArchiveBudget, PreservedGddV1, open_gdd_archive},
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use project::{Project, ProjectEntryId, ProjectPath};
-use ui::{Label, LabelSize, prelude::*};
+use ui::{Button, Color, Label, LabelSize, prelude::*};
 use workspace::{Item, Pane, item::ItemBufferKind};
 
 const ARCHIVE_BUDGET: GddArchiveBudget = GddArchiveBudget {
@@ -33,6 +33,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     name: SharedString,
     path: ProjectPath,
     entry_id: Option<ProjectEntryId>,
+    original: Arc<[u8]>,
     document: InspectedDocument,
 }
 
@@ -87,19 +88,22 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 if legacy {
                     let document =
                         inspect_legacy_document(&bytes, ARCHIVE_BUDGET.max_archive_bytes)?;
-                    return Ok::<_, anyhow::Error>(InspectedDocument::Legacy(document));
+                    return Ok::<_, anyhow::Error>((bytes, InspectedDocument::Legacy(document)));
                 }
                 let archive =
                     futures::executor::block_on(open_gdd_archive(&bytes, ARCHIVE_BUDGET))?;
-                Ok(InspectedDocument::Archive {
-                    history_len: archive.history_len(),
-                    hot_log_len: archive.hot_log_len(),
-                    archive: Box::new(archive),
-                })
+                Ok((
+                    bytes,
+                    InspectedDocument::Archive {
+                        history_len: archive.history_len(),
+                        hot_log_len: archive.hot_log_len(),
+                        archive: Box::new(archive),
+                    },
+                ))
             }
         });
         Some(cx.spawn(async move |cx| {
-            let document = load
+            let (original, document) = load
                 .await
                 .with_context(|| format!("Opening Graphite document {name}"))?;
             project.read_with(cx, |project, cx| {
@@ -118,6 +122,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 name,
                 path,
                 entry_id,
+                original,
                 document,
             }))
         }))
@@ -138,14 +143,89 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
 
 pub(crate) struct GraphiteDocumentItem {
     model: Entity<GraphiteDocumentProjectItem>,
+    project: WeakEntity<Project>,
     focus_handle: FocusHandle,
+    copy_task: Option<Task<()>>,
+    copy_feedback: Option<(SharedString, Color)>,
+}
+
+impl GraphiteDocumentItem {
+    fn save_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let model = self.model.read(cx);
+        let original = model.original.clone();
+        let suggested_name = format!("Copy of {}", model.name);
+        let selection = self
+            .project
+            .read_with(cx, |project, cx| {
+                ensure!(
+                    project.is_local(),
+                    "Save a Graphite copy from a local workspace."
+                );
+                let source_path = project
+                    .absolute_path(&model.path, cx)
+                    .context("The Graphite worktree was closed.")?;
+                let directory = source_path
+                    .parent()
+                    .context("The Graphite file has no parent directory.")?;
+                Ok::<_, anyhow::Error>((
+                    project.fs().clone(),
+                    cx.prompt_for_new_path(directory, Some(&suggested_name)),
+                ))
+            })
+            .and_then(|selection| selection);
+        let (filesystem, prompt) = match selection {
+            Ok(selection) => selection,
+            Err(error) => {
+                self.copy_feedback = Some((format!("{error:#}").into(), Color::Error));
+                cx.notify();
+                return;
+            }
+        };
+        self.copy_feedback = None;
+        self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result: anyhow::Result<Option<PathBuf>> = async {
+                let Some(path) = prompt.await?? else {
+                    return Ok(None);
+                };
+                item.read_with(cx, |_, _| ())?;
+                ensure!(
+                    path.is_absolute(),
+                    "Choose an absolute path for the Graphite copy."
+                );
+                filesystem
+                    .create_new_file_atomically(path.clone(), original)
+                    .await
+                    .with_context(|| format!("Could not save a copy at {}", path.display()))?;
+                Ok(Some(path))
+            }
+            .await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.copy_task = None;
+                item.copy_feedback = match result {
+                    Ok(Some(path)) => Some((
+                        format!("Copy saved to {}", path.display()).into(),
+                        Color::Default,
+                    )),
+                    Ok(None) => None,
+                    Err(error) => Some((format!("{error:#}").into(), Color::Error)),
+                };
+                cx.notify();
+            }) {
+                log::debug!("Graphite copy view closed: {error:#}");
+            }
+        }));
+        cx.notify();
+    }
 }
 
 impl workspace::ProjectItem for GraphiteDocumentItem {
     type Item = GraphiteDocumentProjectItem;
 
     fn for_project_item(
-        _project: Entity<Project>,
+        project: Entity<Project>,
         _pane: Option<&Pane>,
         item: Entity<Self::Item>,
         _window: &mut Window,
@@ -153,7 +233,10 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
     ) -> Self {
         Self {
             model: item,
+            project: project.downgrade(),
             focus_handle: cx.focus_handle(),
+            copy_task: None,
+            copy_feedback: None,
         }
     }
 }
@@ -196,9 +279,13 @@ impl Item for GraphiteDocumentItem {
         cx: &mut Context<Self>,
     ) -> Task<Option<Entity<Self>>> {
         let model = self.model.clone();
+        let project = self.project.clone();
         Task::ready(Some(cx.new(|cx| Self {
             model,
+            project,
             focus_handle: cx.focus_handle(),
+            copy_task: None,
+            copy_feedback: None,
         })))
     }
 }
@@ -213,7 +300,17 @@ impl Render for GraphiteDocumentItem {
             .p_6()
             .gap_2()
             .overflow_y_scroll()
-            .child(Label::new(model.name.clone()).size(LabelSize::Large));
+            .child(Label::new(model.name.clone()).size(LabelSize::Large))
+            .child(
+                div().debug_selector(|| "GRAPHITE-SAVE-COPY".into()).child(
+                    Button::new("graphite-save-copy", "Save a Copy")
+                        .disabled(self.copy_task.is_some())
+                        .on_click(cx.listener(|item, _, window, cx| item.save_copy(window, cx))),
+                ),
+            )
+            .when_some(self.copy_feedback.clone(), |view, (message, color)| {
+                view.child(Label::new(message).color(color))
+            });
         match &model.document {
             InspectedDocument::Archive {
                 archive,
@@ -269,7 +366,7 @@ impl Render for GraphiteDocumentItem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::png_workflow::tests::native_workspace;
+    use crate::png_workflow::tests::{click, native_workspace, paint};
     use gpui::TestAppContext;
     use graphite_document_container::{AnyContainer, backends::memory::MemoryBackend};
     use graphite_document_format::{ExportFormat, ExportOptions, GddV1, GddV1Layout};
@@ -406,6 +503,92 @@ mod tests {
                 .expect("source file is intact"),
             bytes
         );
+    }
+
+    #[gpui::test]
+    async fn at_r06_1_workspace_save_copy_preserves_source_and_existing_destination(
+        cx: &mut TestAppContext,
+    ) {
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/source.gdd.tar.xz");
+        let existing = PathBuf::from("/project/existing.gdd.tar.xz");
+        let destination = PathBuf::from("/project/new.gdd.tar.xz");
+        let original = archive_bytes(1, ExportFormat::Xz).await;
+        filesystem.write(&source, &original).await.expect("source");
+        filesystem
+            .write(&existing, b"existing")
+            .await
+            .expect("existing destination");
+        window.run_until_parked();
+        let handle = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source through Workspace File Open");
+        let item = handle
+            .downcast::<GraphiteDocumentItem>()
+            .expect("Graphite inspector");
+        paint(window);
+        click(window, "GRAPHITE-SAVE-COPY");
+        window.simulate_new_path_selection(|directory| {
+            assert_eq!(directory, source.parent().expect("source directory"));
+            None
+        });
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            assert!(item.copy_task.is_none());
+            assert!(item.copy_feedback.is_none());
+        });
+
+        click(window, "GRAPHITE-SAVE-COPY");
+        window.simulate_new_path_selection(|_| Some(existing.clone()));
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            assert!(matches!(item.copy_feedback, Some((_, Color::Error))));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&existing)
+                .await
+                .expect("existing file"),
+            b"existing"
+        );
+
+        click(window, "GRAPHITE-SAVE-COPY");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        item.read_with(window, |item, cx| {
+            assert!(matches!(item.copy_feedback, Some((_, Color::Default))));
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("original source"),
+            original
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&destination)
+                .await
+                .expect("exact copy"),
+            original
+        );
+        window.run_until_parked();
+        let copy = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(destination, Default::default(), window, cx)
+            })
+            .await
+            .expect("reopen the saved copy");
+        assert!(copy.downcast::<GraphiteDocumentItem>().is_some());
     }
 
     #[gpui::test]

@@ -114,6 +114,7 @@ pub trait Fs: Send + Sync {
         path: &Path,
         content: Pin<&mut (dyn AsyncRead + Send)>,
     ) -> Result<()>;
+    async fn create_new_file_atomically(&self, path: PathBuf, content: Arc<[u8]>) -> Result<()>;
     async fn extract_tar_file(
         &self,
         path: &Path,
@@ -1772,6 +1773,24 @@ impl Fs for RealFs {
             .with_context(|| format!("Failed to create file at {:?}", path))?;
         futures::io::copy(content, &mut file).await?;
         Ok(())
+    }
+
+    async fn create_new_file_atomically(&self, path: PathBuf, content: Arc<[u8]>) -> Result<()> {
+        smol::unblock(move || {
+            let directory = path
+                .parent()
+                .context("destination file has no parent directory")?;
+            let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
+            temporary.write_all(&content)?;
+            temporary.as_file().sync_all()?;
+            temporary
+                .persist_noclobber(&path)
+                .map_err(|error| error.error)?;
+            #[cfg(unix)]
+            std::fs::File::open(directory)?.sync_all()?;
+            anyhow::Ok(())
+        })
+        .await
     }
 
     async fn extract_tar_file(
@@ -4446,6 +4465,29 @@ impl Fs for FakeFs {
         let mut bytes = Vec::new();
         content.read_to_end(&mut bytes).await?;
         self.write_file_internal(path, bytes, true)?;
+        Ok(())
+    }
+
+    async fn create_new_file_atomically(&self, path: PathBuf, content: Arc<[u8]>) -> Result<()> {
+        self.simulate_random_delay().await;
+        let mut state = self.state.lock();
+        let inode = state.get_and_increment_inode();
+        let mtime = state.get_and_increment_mtime();
+        state.write_path(&path, |entry| {
+            let btree_map::Entry::Vacant(entry) = entry else {
+                return Err(io::Error::from(io::ErrorKind::AlreadyExists).into());
+            };
+            entry.insert(FakeFsEntry::File {
+                inode,
+                mtime,
+                len: content.len() as u64,
+                content: content.to_vec(),
+                git_dir_path: None,
+            });
+            Ok(())
+        })?;
+        *state.path_write_counts.entry(path.clone()).or_insert(0) += 1;
+        state.emit_event([(path, Some(PathEventKind::Created))]);
         Ok(())
     }
 

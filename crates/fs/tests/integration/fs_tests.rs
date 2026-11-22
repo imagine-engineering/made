@@ -832,6 +832,38 @@ async fn test_realfs_atomic_write_non_existing_file(executor: BackgroundExecutor
 }
 
 #[gpui::test]
+async fn test_realfs_create_new_file_atomically_preserves_existing_binary(cx: &mut TestAppContext) {
+    cx.executor().allow_parking();
+    let fs = RealFs::new(None, cx.executor());
+    let directory = TempDir::new().expect("test directory");
+    let destination = directory.path().join("archive.gdd");
+    let contents = std::sync::Arc::<[u8]>::from([0, 127, 255]);
+    fs.create_new_file_atomically(destination.clone(), contents.clone())
+        .await
+        .expect("publish complete binary bytes");
+    let error = fs
+        .create_new_file_atomically(destination.clone(), std::sync::Arc::from([4, 2]))
+        .await
+        .expect_err("an existing destination is never replaced");
+    assert_eq!(
+        error
+            .downcast_ref::<std::io::Error>()
+            .map(std::io::Error::kind),
+        Some(std::io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(
+        std::fs::read(destination).expect("retained original copy"),
+        contents.as_ref()
+    );
+    assert_eq!(
+        std::fs::read_dir(directory.path())
+            .expect("staging directory")
+            .count(),
+        1
+    );
+}
+
+#[gpui::test]
 #[cfg(target_os = "windows")]
 async fn test_realfs_canonicalize(executor: BackgroundExecutor) {
     use util::paths::SanitizedPath;
