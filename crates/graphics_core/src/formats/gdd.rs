@@ -139,6 +139,8 @@ pub enum GddArchiveError {
     UnsupportedGraphExportAppend,
     #[error("Select a standalone nested Graphite network to append an import.")]
     UnsupportedGraphImportAppend,
+    #[error("Select an eligible import in a standalone nested Graphite network.")]
+    UnsupportedGraphImportRemoval,
     #[error("Select an ordinary numeric output in the same Graphite network and an empty export.")]
     UnsupportedGraphExportConnection,
     #[error("Graphite could not resolve the selected export type. {0}")]
@@ -1005,6 +1007,177 @@ impl InspectedGddV1 {
                 .zip(original_slots)
                 .all(|(current, original)| {
                     current.input == original.input && current.attributes == original.attributes
+                })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn remove_nested_network_import_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        import_index: usize,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        let unsupported = || GddArchiveError::UnsupportedGraphImportRemoval;
+        if !network.can_extend_ports_in_copy() || import_index >= network.import_count {
+            return Err(unsupported());
+        }
+        let path = &network.path;
+        let (&owner_id, parent_path) = path.split_last().ok_or_else(unsupported)?;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let mut owner_inputs = interface
+            .document_node(&owner_id, parent_path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?
+            .inputs
+            .clone();
+        let owner_metadata = &interface
+            .node_metadata(&owner_id, parent_path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?
+            .persistent_metadata;
+        let owner_storage = owner_metadata
+            .storage_id
+            .map(StorageNodeId)
+            .ok_or(GddArchiveError::MissingGraphNetwork)?;
+        let mut input_metadata = owner_metadata.input_metadata.clone();
+        if owner_inputs.len() != network.import_count || input_metadata.len() != owner_inputs.len()
+        {
+            return Err(unsupported());
+        }
+        owner_inputs.remove(import_index);
+        input_metadata.remove(import_index);
+        let original_slots = self
+            .document
+            .registry()
+            .node_instances
+            .get(&owner_storage)
+            .ok_or(GddArchiveError::MissingGraphNetwork)?
+            .inputs();
+        if original_slots.len() != network.import_count {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let surviving_slots = original_slots
+            .iter()
+            .enumerate()
+            .filter_map(|(index, slot)| (index != import_index).then_some(slot));
+
+        let nested = interface
+            .nested_network(path)
+            .ok_or(GddArchiveError::StaleGraphNetwork)?;
+        let mut affected = Vec::new();
+        for (&node_id, node) in &nested.nodes {
+            for (input_index, input) in node.inputs.iter().enumerate() {
+                if let NodeInput::Import {
+                    import_index: previous,
+                    import_type,
+                } = input
+                    && *previous >= import_index
+                {
+                    if *previous >= network.import_count
+                        || interface.is_layer(&node_id, path)
+                        || interface.is_chain(&node_id, path)
+                    {
+                        return Err(unsupported());
+                    }
+                    affected.push((node_id, input_index, *previous, import_type.clone()));
+                }
+            }
+        }
+        if nested.exports.iter().any(|input| {
+            matches!(input, NodeInput::Import { import_index: previous, .. } if *previous >= import_index)
+        }) {
+            return Err(unsupported());
+        }
+        affected.sort_unstable_by_key(|&(node_id, input_index, ..)| (node_id, input_index));
+        let exports = nested.exports.clone();
+        interface.remove_import(import_index, path);
+        let has_expected_signature = |interface: &NodeNetworkInterface| {
+            interface
+                .document_node(&owner_id, parent_path)
+                .is_some_and(|node| node.inputs == owner_inputs)
+                && interface
+                    .node_metadata(&owner_id, parent_path)
+                    .is_some_and(|metadata| {
+                        metadata.persistent_metadata.input_metadata == input_metadata
+                    })
+                && interface
+                    .nested_network(path)
+                    .is_some_and(|nested| nested.exports == exports)
+        };
+        if !has_expected_signature(&interface) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let mut edits = vec![EditorDelta::Graph(RuntimeDelta::SetInputs {
+            network_path: parent_path.to_vec(),
+            node_id: owner_id,
+            inputs: owner_inputs.clone(),
+        })];
+        let mut rewired_inputs = Vec::with_capacity(affected.len());
+        for (node_id, input_index, previous, import_type) in affected {
+            let connector = InputConnector::Node {
+                node_id,
+                input_index,
+            };
+            let input = interface
+                .input_from_connector(&connector, path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let persisted_input = if previous == import_index {
+                matches!(input, NodeInput::Value { exposed: true, .. }).then(|| input.clone())
+            } else {
+                let current = previous - 1;
+                // The pinned single-slot delta carries the connection index and retains its stored type.
+                matches!(input, NodeInput::Import { import_index, .. } if *import_index == current)
+                    .then_some(NodeInput::Import {
+                        import_type,
+                        import_index: current,
+                    })
+            };
+            let persisted_input =
+                persisted_input.ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            edits.push(EditorDelta::Graph(RuntimeDelta::SetInput {
+                network_path: path.clone(),
+                node_id,
+                input_index,
+                input: input.clone(),
+            }));
+            rewired_inputs.push((connector, persisted_input));
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let [RegistryDelta::SetNodeInputs { id, inputs }, ..] = batch.ops.as_mut_slice() else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        if *id != owner_storage || inputs.len() != owner_inputs.len() {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        for (input, original) in inputs.iter_mut().zip(surviving_slots.clone()) {
+            if input.input != original.input {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+            // Source metadata excludes attributes this version does not recognize.
+            input.clone_from(original);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        let retained = copy
+            .document
+            .registry()
+            .node_instances
+            .get(&owner_storage)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
+            .inputs();
+        if !has_expected_signature(&actual)
+            || rewired_inputs.iter().any(|(connector, input)| {
+                actual.input_from_connector(connector, path) != Some(input)
+            })
+            || retained.len() != owner_inputs.len()
+            || retained
+                .iter()
+                .zip(surviving_slots)
+                .any(|(current, original)| {
+                    current.input != original.input || current.attributes != original.attributes
                 })
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
@@ -3554,6 +3727,188 @@ mod tests {
                 .expect("one redo restores that import");
             assert!(redo.document.registry().value_equal(registry));
             assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_023_1_removes_an_import_and_repairs_its_scoped_wires() {
+        use graphite_document_graph_storage::{AttributeDelta, NoMetadata, Value};
+        use graphite_graph_craft::concrete;
+        use graphite_math_nodes::absolute_value;
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let nested_path = [NodeId(24)];
+            let nested = NodeNetwork {
+                nodes: [(NodeId(7), 0), (NodeId(9), 1), (NodeId(11), 1)]
+                    .into_iter()
+                    .map(|(node_id, index)| {
+                        (
+                            node_id,
+                            DocumentNode {
+                                implementation: DocumentNodeImplementation::ProtoNode(
+                                    absolute_value::IDENTIFIER,
+                                ),
+                                inputs: vec![NodeInput::import(concrete!(f64), index)],
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect(),
+                exports: vec![NodeInput::node(NodeId(9), 0)],
+                ..Default::default()
+            };
+            let root = NodeNetwork {
+                nodes: [(
+                    NodeId(24),
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(nested),
+                        inputs: vec![
+                            NodeInput::value(TaggedValue::Number(-2.), true),
+                            NodeInput::value(TaggedValue::Number(7.), true),
+                        ],
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                exports: vec![NodeInput::node(NodeId(24), 0)],
+                ..Default::default()
+            };
+            let mut owner = document();
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(&root, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("write source bindings");
+            let bytes: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source ZIP")
+                .into();
+            let source = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original graph");
+            let graph = source.graph_inspection().await.expect("source projection");
+            let [_, nested] = graph.networks.as_slice() else {
+                panic!("expected the root and its nested network");
+            };
+            let owner_id = graph
+                .nodes
+                .iter()
+                .find(|node| node.nested_network() == Some(nested.id))
+                .expect("encapsulating node")
+                .storage_id;
+            let (mut owner, staged) = source
+                .fork_working_copy(&budget())
+                .await
+                .expect("fixture fork");
+            commit_graph_node_edit(
+                &mut owner,
+                ConstructedOps {
+                    ops: vec![RegistryDelta::ChangeNodeInputAttribute {
+                        id: owner_id,
+                        index: 1,
+                        delta: AttributeDelta {
+                            key: "fixture::opaque-import".into(),
+                            value: Some(Value::Str("surviving input".into())),
+                        },
+                    }],
+                    declarations: Default::default(),
+                },
+            )
+            .expect("fixture adds an opaque input attribute");
+            let original = staged
+                .reopen_after_edit(&budget())
+                .await
+                .expect("named input fixture");
+            let graph = original.graph_inspection().await.expect("bound networks");
+            let [root, nested] = graph.networks.as_slice() else {
+                panic!("expected the source networks after reopening");
+            };
+            for (network, index) in [(root, 0), (nested, nested.import_count)] {
+                assert!(matches!(
+                    original
+                        .remove_nested_network_import_in_copy(network, index, budget())
+                        .await,
+                    Err(GddArchiveError::UnsupportedGraphImportRemoval)
+                ));
+            }
+            let mut pinned = original
+                .runtime_graph()
+                .await
+                .expect("pinned runtime")
+                .into_interface()
+                .expect("pinned interface");
+            pinned.remove_import(0, &nested_path);
+            let disconnected = InputConnector::Node {
+                node_id: NodeId(7),
+                input_index: 0,
+            };
+            let expected_default = pinned
+                .input_from_connector(&disconnected, &nested_path)
+                .expect("pinned disconnected input");
+            assert!(matches!(
+                expected_default,
+                NodeInput::Value { exposed: true, .. }
+            ));
+
+            let copy = original
+                .remove_nested_network_import_in_copy(nested, 0, budget())
+                .await
+                .expect("remove the addressed primary import");
+            assert!(matches!(
+                copy.remove_nested_network_import_in_copy(nested, 0, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNetwork)
+            ));
+            let interface = copy
+                .runtime_graph()
+                .await
+                .expect("saved graph")
+                .into_interface()
+                .expect("saved interface");
+            assert_eq!(
+                interface.input_from_connector(&disconnected, &nested_path),
+                Some(expected_default)
+            );
+            for node_id in [NodeId(9), NodeId(11)] {
+                let shifted = InputConnector::Node {
+                    node_id,
+                    input_index: 0,
+                };
+                assert_eq!(
+                    interface.input_from_connector(&shifted, &nested_path),
+                    Some(&NodeInput::import(concrete!(f64), 0))
+                );
+            }
+            let registry = copy.document.registry();
+            let original_registry = original.document.registry();
+            let [_, survivor] = original_registry.node_instances[&owner_id].inputs() else {
+                panic!("expected both source inputs");
+            };
+            let [retained] = registry.node_instances[&owner_id].inputs() else {
+                panic!("expected just the shifted input");
+            };
+            assert_eq!(retained.input, survivor.input);
+            assert_eq!(retained.attributes, survivor.attributes);
+            assert_eq!(registry.networks, original_registry.networks);
+            assert_eq!(copy.history_len(), original.history_len() + 4);
+            let undo = copy
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one undo");
+            assert!(undo.document.registry().value_equal(original_registry));
+            let redo = undo
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("one redo");
+            assert!(redo.document.registry().value_equal(registry));
+            assert_eq!(source.original_bytes(), bytes.as_ref());
         });
     }
 
