@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 
 PINNED_SOURCES = {
-    "projects/sim/ComfyUI/sim_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce",
-    "projects/sim/ComfyUI/sim/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
-    "projects/sim/ComfyUI/sim/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
-    "projects/sim/ComfyUI/sim/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
-    "projects/sim/ComfyUI/sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
-    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
-    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce",
+    "projects/comfy/ComfyUI/comfy/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
+    "projects/comfy/ComfyUI/comfy/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+    "projects/comfy/ComfyUI/comfy/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
+    "projects/comfy/ComfyUI/comfy/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "projects/comfy/ComfyUI/comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/comfy/ComfyUI/comfy/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
 }
 
 INPUT_RGBA = [
@@ -25,8 +25,8 @@ INPUT_RGBA = [
     0.35, 0.45, 0.55, 0.65, 0.65, 0.55, 0.45, 0.35, 0.95, 0.85, 0.75, 0.65,
     0.125, 0.375, 0.625, 0.875,
 ]
-ORACLE_PLATFORM = "macOS-26.6.1-arm64-arm-64bit-Mach-O"
-ORACLE_PYTHON = "3.14.5"
+ORACLE_PLATFORM = "macOS-27.2.1-arm64-arm-64bit-Mach-O"
+ORACLE_PYTHON = "3.13.12"
 STATE_MUTATION = None
 RELATIVE_INDEX_MUTATION = None
 

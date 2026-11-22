@@ -369,35 +369,35 @@
   "schema_version": 1,
   "sources": [
     {
-      "path": "projects/sim/ComfyUI/sim_extras/nodes_hunyuan.py",
+      "path": "projects/comfy/ComfyUI/comfy_extras/nodes_hunyuan.py",
       "sha256": "028abde8d150dfe890ae987d8f87b0df439a3e9d068d7c63400d7f442dc4b7d7"
     },
     {
-      "path": "projects/sim/ComfyUI/sim_extras/nodes_lt_upsampler.py",
+      "path": "projects/comfy/ComfyUI/comfy_extras/nodes_lt_upsampler.py",
       "sha256": "3ba74f44d0e68c1d07bb71ccbaa596932b9ff5a7b9d9828c578f42048cdc0318"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/upsampler.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/hunyuan_video/upsampler.py",
       "sha256": "f667649504185a70023cd6f51033d904d08da6455bc198d613a7e1faa802ce75"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/lightricks/latent_upsampler.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/lightricks/latent_upsampler.py",
       "sha256": "04d36045252d475daf4dfa058e77b5327616595e66012da8c81fce254e962207"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/model.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/modules/diffusionmodules/model.py",
       "sha256": "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/hunyuan_video/vae_refiner.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/hunyuan_video/vae_refiner.py",
       "sha256": "8fd6c7dc5878e68037192d824fa2185e4e95be89772fb95a309f87ff3a591302"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/ldm/lightricks/vae/causal_video_autoencoder.py",
+      "path": "projects/comfy/ComfyUI/comfy/ldm/lightricks/vae/causal_video_autoencoder.py",
       "sha256": "83a2809b224f0b11ad120e6e2ad357050e3236bbfca2387156da833e7184cde9"
     },
     {
-      "path": "projects/sim/ComfyUI/sim/utils.py",
+      "path": "projects/comfy/ComfyUI/comfy/utils.py",
       "sha256": "8b8805ca837e20c922a846854156d10e214654f69df96be90969522f9def2bdb"
     }
   ],
@@ -410,5 +410,5 @@
   ],
   "oracle_domain": "zed.sim.latent-upscale-independent-source-equations.v1",
   "oracle_outputs_sha256": "ea23c5a9aaca4da0748e8cb7ebcbd6451b23bf4dddf7518882b6af8c642e2d42",
-  "oracle_generator_sha256": "08513f301b4c291edaf6f6ab714e81a9ac675824145256d1f22737c3fa393d4c"
+  "oracle_generator_sha256": "3ae5b50b3aaceb7c9b54ca226d65032e316a412188a8fbe7abee055eee340d79"
 }

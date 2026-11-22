@@ -2,7 +2,7 @@
   "f32_rule": "Every source f32 primitive is rounded with IEEE-754 little-endian pack/unpack; convolution, linear, interpolation, and deform accumulation use fused f32 multiply-add where the canonical source owner does. Transcendental results are bit-pinned to the recorded CPython/libm platform.",
   "format": "zed.sim.background-removal-reduced-oracle.v1",
   "generator_command": "PYTHONDONTWRITEBYTECODE=1 python3 crates/sim_test_support/fixtures/models/background-removal-resource-foundation/generate_oracle.py",
-  "generator_sha256": "097a5411d3c79e8b996fc058c113cc16ce27696839c006d66b4f75d260794921",
+  "generator_sha256": "66fb3a8e12216035a87f2f13bf75b3df2f0725894e855fbb40417a7c4fe19b25",
   "input_shape": [
     1,
     3,
@@ -195,21 +195,21 @@
     5
   ],
   "pinned_sources": {
-    "projects/sim/ComfyUI/sim/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
-    "projects/sim/ComfyUI/sim/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
-    "projects/sim/ComfyUI/sim/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
-    "projects/sim/ComfyUI/sim/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
-    "projects/sim/ComfyUI/sim/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
-    "projects/sim/ComfyUI/sim/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
-    "projects/sim/ComfyUI/sim_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce"
+    "projects/comfy/ComfyUI/comfy/background_removal/birefnet.json": "50dd9639fa207a823437370b46d32a56b3f00eb1bef3bd225fe87eeeb8f255d2",
+    "projects/comfy/ComfyUI/comfy/background_removal/birefnet.py": "00a083bd9a619943a7fdd1d8f827dae7734a5031ced3c37893f25ee925c670b1",
+    "projects/comfy/ComfyUI/comfy/bg_removal_model.py": "c4f6f7beea512c759849efa07f03f09044ea76fe5c71fb7afff31e4886e4daa7",
+    "projects/comfy/ComfyUI/comfy/clip_model.py": "08be993d86c3b494b58305fb868638b4b525bbe40abead89e9c94da021716845",
+    "projects/comfy/ComfyUI/comfy/model_management.py": "c2ca243c80a5262ecafe19feb15cec22d4003c16e523b5376f543f0f75acabaa",
+    "projects/comfy/ComfyUI/comfy/ops.py": "9d8a4ec8357a9bfcd98dddbf06fcc2a0244643a392aacbe0970d945462c86a42",
+    "projects/comfy/ComfyUI/comfy_extras/nodes_bg_removal.py": "c2cf4b42f10cfb1bb057b60a8745fb96a2462e1f1a2bd275e00795bb3f758cce"
   },
-  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "preprocessed_shape": [
     1,
     3,
     8,
     8
   ],
-  "python": "3.14.5",
+  "python": "3.13.12",
   "raw_f32_sha256": "10a250f2cab0a9b19470113e4bfc00f7c73a0669a3272ed960e4c3b8ada53653"
 }
