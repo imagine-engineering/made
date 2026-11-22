@@ -422,5 +422,11 @@ and every owned JVM/build worker in the resource evidence.
 
 Agent structured-result sharing is unadvertised in the first release; actual
 agent acceptance remains open. Production identity remains provisional and
-production packaging remains blocked. CI is unavailable and its gates remain
-open. VoiceOver verification is deferred at the user's request.
+production packaging remains blocked. VoiceOver verification is deferred at the
+user's request.
+
+The November 20, 2026 dev test run passed all 16 jobs at
+`b6c7f505ad008efaba12a8ca8eee2aa5c3744ca3`, including `windows_jvm_validation`.
+The workflow runs on pull requests, pushes to `main`, and manual dispatch.
+A direct push to `dev` leaves current-source CI qualification open until a run
+covers that revision. [GitHub Actions run 44824772699](https://github.com/imagine-engineering/made/actions/runs/44824772699)
