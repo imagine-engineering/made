@@ -271,6 +271,8 @@ pub enum GddArchiveError {
     GraphLayerPreviewEvaluation(String),
     #[error("Choose a supported root Artboard and an empty document output.")]
     UnsupportedDocumentArtboard,
+    #[error("Choose a supported Merge layer and an empty Artboard Content input.")]
+    UnsupportedArtboardContent,
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -695,6 +697,8 @@ pub enum GddGraphLayerPreview {
     Artboard { origin: DVec2, size: DVec2 },
 }
 
+const ARTBOARD_CONTENT_INPUT: usize = 1;
+
 #[derive(Clone)]
 pub struct GddGraphNode {
     snapshot: Arc<()>,
@@ -714,6 +718,7 @@ pub struct GddGraphNode {
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
     layer_preview: Option<GddGraphLayerPreview>,
+    is_document_output: bool,
     can_set_document_artboard: bool,
     can_supply_numeric_export: bool,
     can_copy_graph_node: bool,
@@ -960,11 +965,24 @@ impl GddGraphNode {
     }
 
     pub fn layer_preview(&self) -> Option<GddGraphLayerPreview> {
-        self.layer_preview
+        self.layer_preview.filter(|_| self.is_document_output)
     }
 
     pub fn can_set_document_artboard(&self) -> bool {
         self.can_set_document_artboard
+    }
+
+    pub fn can_attach_artboard_content_from(&self, source: &Self) -> bool {
+        self.same_network_as(source)
+            && matches!(
+                self.layer_preview(),
+                Some(GddGraphLayerPreview::Artboard { .. })
+            )
+            && matches!(source.layer_preview, Some(GddGraphLayerPreview::Merge))
+            && self
+                .input_ports
+                .get(ARTBOARD_CONTENT_INPUT)
+                .is_some_and(|port| port.exposed && port.source.is_none())
     }
 
     pub fn can_copy_graph_node(&self) -> bool {
@@ -1331,6 +1349,7 @@ impl InspectedGddV1 {
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
                     layer_preview: None,
+                    is_document_output: false,
                     can_set_document_artboard: false,
                     can_supply_numeric_export: false,
                     can_copy_graph_node: false,
@@ -1538,18 +1557,17 @@ impl InspectedGddV1 {
                     .document_node(&node.local_id, path)
                     .and_then(graph_boolean_literal);
             }
-            if path.is_empty() && node.nested_network.is_some() {
-                let is_document_output = document_output_node == Some(node.local_id);
-                if (is_document_output || empty_document_output)
-                    && let Some((_, Some(preview))) = interface
-                        .document_node(&node.local_id, path)
-                        .and_then(checked_layer_preview_node)
-                {
-                    node.layer_preview = is_document_output.then_some(preview);
-                    node.can_set_document_artboard = empty_document_output
-                        && matches!(preview, GddGraphLayerPreview::Artboard { .. })
-                        && interface.is_layer(&node.local_id, path);
-                }
+            if path.is_empty()
+                && node.nested_network.is_some()
+                && let Some((_, Some(preview))) = interface
+                    .document_node(&node.local_id, path)
+                    .and_then(checked_layer_preview_node)
+            {
+                node.layer_preview = Some(preview);
+                node.is_document_output = document_output_node == Some(node.local_id);
+                node.can_set_document_artboard = empty_document_output
+                    && matches!(preview, GddGraphLayerPreview::Artboard { .. })
+                    && interface.is_layer(&node.local_id, path);
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
@@ -3376,6 +3394,60 @@ impl InspectedGddV1 {
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
         if actual.document_network().exports != [wire]
+            || graph_port_edit_layout(&actual, [path])? != layout
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn attach_artboard_content_in_copy(
+        &self,
+        node: &GddGraphNode,
+        source: &GddGraphNode,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        self.check_node_edit_target(source)?;
+        if !node.can_attach_artboard_content_from(source) {
+            return Err(GddArchiveError::UnsupportedArtboardContent);
+        }
+        let path = node.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let export = NodeInput::node(node.local_id, 0);
+        let connector = InputConnector::node_at_index(node.local_id, ARTBOARD_CONTENT_INPUT);
+        if interface.document_network().exports != [export.clone()]
+            || !matches!(
+                interface.input_from_connector(&connector, path),
+                Some(NodeInput::Value { exposed: true, .. })
+            )
+        {
+            return Err(GddArchiveError::UnsupportedArtboardContent);
+        }
+        let layout = graph_port_edit_layout(&interface, [path])?;
+        let wire = NodeInput::node(source.local_id, 0);
+        interface.create_wire(
+            &OutputConnector::primary_output(source.local_id),
+            &connector,
+            path,
+        );
+        if interface.input_from_connector(&connector, path) != Some(&wire)
+            || graph_port_edit_layout(&interface, [path])? != layout
+        {
+            return Err(GddArchiveError::UnsupportedArtboardContent);
+        }
+        collect_layer_preview_node(
+            interface.document_network(),
+            node.local_id,
+            &mut NodeNetwork::default(),
+            &mut BTreeSet::new(),
+        )?;
+        let copy = self
+            .finish_graph_input(node, interface, ARTBOARD_CONTENT_INPUT, None, budget)
+            .await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.document_network().exports != [export]
+            || actual.input_from_connector(&connector, path) != Some(&wire)
             || graph_port_edit_layout(&actual, [path])? != layout
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
@@ -9309,6 +9381,94 @@ mod tests {
                     .document
                     .registry()
                     .value_equal(bound.document.registry())
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_282_2_attaches_only_admitted_graphic_content() {
+        futures::executor::block_on(async {
+            let initial = create_gdd_folder(621, 992, "Artboard Content".into(), budget())
+                .await
+                .expect("source folder");
+            let artboard = initial
+                .insert_root_catalog_node_in_copy(ARTBOARD_NODE_IDENTIFIER, [5, 0], budget())
+                .await
+                .expect("place Artboard");
+            let working = artboard
+                .insert_root_catalog_node_in_copy(MERGE_NODE_IDENTIFIER, [-3, 1], budget())
+                .await
+                .expect("place Merge");
+            let nodes = working.graph_nodes().await.expect("working graph");
+            let board = nodes
+                .iter()
+                .find(|node| node.can_set_document_artboard())
+                .expect("catalog Artboard");
+            let working = working
+                .set_document_artboard_in_copy(board, budget())
+                .await
+                .expect("Artboard document output");
+            let nodes = working.graph_nodes().await.expect("current root");
+            let board = nodes
+                .iter()
+                .find(|node| node.storage_id == board.storage_id)
+                .expect("current Artboard");
+            let merge = nodes
+                .iter()
+                .find(|node| matches!(node.layer_preview, Some(GddGraphLayerPreview::Merge)))
+                .expect("current Merge");
+            assert!(matches!(
+                working
+                    .attach_artboard_content_in_copy(board, board, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedArtboardContent)
+            ));
+            assert!(board.can_attach_artboard_content_from(merge));
+            let attached = working
+                .attach_artboard_content_in_copy(board, merge, budget())
+                .await
+                .expect("attach Merge Content");
+            assert_eq!(attached.history_len(), working.history_len() + 1);
+            let graph = attached.graph_inspection().await.expect("attached graph");
+            let target = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == board.storage_id)
+                .expect("same Artboard address");
+            let source = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id == merge.storage_id)
+                .expect("same Merge address");
+            assert!(matches!(
+                target.input_ports.get(ARTBOARD_CONTENT_INPUT).and_then(|port| port.source.as_ref()),
+                Some(GddGraphPortSource::Node { storage_id, output_index: 0 }) if *storage_id == merge.storage_id
+            ));
+            assert!(matches!(
+                attached
+                    .attach_artboard_content_in_copy(target, source, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedArtboardContent)
+            ));
+            let root = graph
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("document root");
+            let geometry = attached
+                .graph_geometry(root)
+                .await
+                .expect("saved layer graph");
+            let layers = geometry.root_layers.expect("saved layer hierarchy");
+            assert_eq!(
+                layers
+                    .iter()
+                    .map(|layer| (layer.storage_id, layer.parent))
+                    .collect::<Vec<_>>(),
+                [
+                    (board.storage_id, None),
+                    (merge.storage_id, Some(board.storage_id)),
+                ]
             );
         });
     }
