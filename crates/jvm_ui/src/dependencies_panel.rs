@@ -707,6 +707,7 @@ struct DependencyNavigation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DependencyNavigationKind {
     File,
+    MavenProfilePom,
     Directory,
 }
 
@@ -716,6 +717,7 @@ enum DependencyNavigationTarget {
         root: ProjectPath,
         build_system: Option<KotlinBuildSystem>,
     },
+    MavenProfilePom(ProjectPath),
     SourceDirectory {
         path: ProjectPath,
         navigable: bool,
@@ -771,6 +773,26 @@ fn source_directory_status(
         Some(_) if !navigable => SourceDirectoryStatus::RefreshRequired,
         Some(_) => SourceDirectoryStatus::Available,
     }
+}
+
+fn visible_build_file(
+    worktree: &project::Worktree,
+    path: &ProjectPath,
+) -> Option<project::ProjectEntryId> {
+    if path.worktree_id != worktree.id()
+        || !worktree.is_visible()
+        || path.path.ancestors().any(|ancestor| {
+            worktree
+                .entry_for_path(ancestor)
+                .is_some_and(|entry| entry.is_private || entry.is_external || entry.is_fifo)
+        })
+    {
+        return None;
+    }
+    worktree
+        .entry_for_path(path.path.as_ref())
+        .filter(|entry| entry.is_file())
+        .map(|entry| entry.id)
 }
 
 fn apply_source_directory_status(
@@ -4485,6 +4507,9 @@ impl DependenciesPanel {
                             })
                             .map(|path| (path, DependencyNavigationKind::File))
                         }
+                        DependencyNavigationTarget::MavenProfilePom(path) => (current
+                            && visible_build_file(worktree, &path).is_some())
+                        .then_some((path, DependencyNavigationKind::MavenProfilePom)),
                         DependencyNavigationTarget::SourceDirectory { path, navigable } => {
                             let status =
                                 source_directory_status(worktree, &path, navigable, current);
@@ -4528,6 +4553,9 @@ impl DependenciesPanel {
                         dependency_diagram_legend(snapshot, current, self.view, selection);
                 }
                 mark_manifest_navigation(&mut rows, &navigation);
+                if self.view == BuildToolView::Maven {
+                    mark_maven_profile_navigation(&mut rows, &navigation);
+                }
                 roots.append(&mut rows);
             }
         }
@@ -5649,24 +5677,20 @@ impl DependenciesPanel {
             .worktree_for_id(path.worktree_id, cx)
             .and_then(|worktree| {
                 let worktree = worktree.read(cx);
-                if kind == DependencyNavigationKind::Directory
-                    && source_directory_status(worktree, &path, true, current)
-                        != SourceDirectoryStatus::Available
-                {
-                    return None;
+                match kind {
+                    DependencyNavigationKind::File | DependencyNavigationKind::MavenProfilePom => {
+                        visible_build_file(worktree, &path)
+                    }
+                    DependencyNavigationKind::Directory
+                        if source_directory_status(worktree, &path, true, current)
+                            == SourceDirectoryStatus::Available =>
+                    {
+                        worktree
+                            .entry_for_path(path.path.as_ref())
+                            .map(|entry| entry.id)
+                    }
+                    DependencyNavigationKind::Directory => None,
                 }
-                worktree
-                    .entry_for_path(path.path.as_ref())
-                    .filter(|entry| {
-                        !entry.is_private
-                            && !entry.is_external
-                            && !entry.is_fifo
-                            && match kind {
-                                DependencyNavigationKind::File => entry.is_file(),
-                                DependencyNavigationKind::Directory => entry.is_dir(),
-                            }
-                    })
-                    .map(|entry| entry.id)
             });
         let Some(entry_id) = entry_id.filter(|_| current) else {
             self.rebuild(cx);
@@ -6164,6 +6188,7 @@ fn project_rows_for_view(
                 &module_id,
                 maven,
                 preferences.show_basic_maven_phases,
+                &mut navigation,
             ));
             children.push(LanguageToolNode {
                 id: LanguageToolNodeId(format!("{}:maven-source-roots", module_id.0)),
@@ -7411,6 +7436,7 @@ fn maven_metadata_rows(
     module_id: &LanguageToolNodeId,
     maven: &project::jvm_project::MavenProject,
     basic_only: bool,
+    navigation: &mut HashMap<LanguageToolNodeId, DependencyNavigationTarget>,
 ) -> Vec<LanguageToolNode> {
     let identity = maven_metadata_identity;
     let row = |suffix: String, label: String, detail: String, children: Vec<LanguageToolNode>| {
@@ -7556,10 +7582,14 @@ fn maven_metadata_rows(
         // Preserve saved tree selection when an origin path is unavailable.
         let identity_source = source.unwrap_or("external parent; path hidden");
         let source = source.unwrap_or("origin path unavailable");
-        row(format!("profile:{}", identity(&[&definition.id, &definition.source_group_id, &definition.source_artifact_id, &definition.source_version, identity_source, if definition.inherited { "inherited" } else { "local" }])),
+        let row = row(format!("profile:{}", identity(&[&definition.id, &definition.source_group_id, &definition.source_artifact_id, &definition.source_version, identity_source, if definition.inherited { "inherited" } else { "local" }])),
             definition.id.clone(), format!("{}; source {}:{}:{} ({source}); {} at source; changing activation unavailable in this view",
                 if definition.inherited { "Parent definition" } else { "Local definition" }, definition.source_group_id,
-                definition.source_artifact_id, definition.source_version, if definition.active_at_source { "active" } else { "inactive" }), Vec::new())
+                definition.source_artifact_id, definition.source_version, if definition.active_at_source { "active" } else { "inactive" }), Vec::new());
+        if let Some(path) = &definition.source_pom {
+            navigation.insert(row.id.clone(), DependencyNavigationTarget::MavenProfilePom(path.clone()));
+        }
+        row
     }).collect::<Vec<_>>();
     let activity = maven.profiles.iter().map(|(id, active)| row(
         format!("profile-activity:{}", identity(&[id])), id.clone(),
@@ -7777,6 +7807,23 @@ fn mark_manifest_navigation(
             row.accessibility_label
                 .push_str("; no unambiguous visible build manifest");
         }
+    }
+}
+
+fn mark_maven_profile_navigation(
+    rows: &mut [LanguageToolNode],
+    navigation: &HashMap<LanguageToolNodeId, DependencyNavigation>,
+) {
+    for row in rows {
+        if navigation
+            .get(&row.id)
+            .is_some_and(|target| target.kind == DependencyNavigationKind::MavenProfilePom)
+        {
+            row.enabled = true;
+            row.activation_label = Some("Open profile POM".into());
+            row.accessibility_label.push_str("; opens profile POM");
+        }
+        mark_maven_profile_navigation(&mut row.children, navigation);
     }
 }
 
@@ -11903,6 +11950,7 @@ mod tests {
         assert!(
             after_navigation.values().all(|target| match target {
                 DependencyNavigationTarget::ModuleManifest { root, .. }
+                | DependencyNavigationTarget::MavenProfilePom(root)
                 | DependencyNavigationTarget::SourceDirectory { path: root, .. } => {
                     root.worktree_id == worktree_id && !root.path.as_unix_str().starts_with('/')
                 }
@@ -11986,6 +12034,7 @@ mod tests {
         assert!(!remote_navigation.is_empty());
         assert!(remote_navigation.values().all(|target| match target {
             DependencyNavigationTarget::ModuleManifest { root, .. }
+            | DependencyNavigationTarget::MavenProfilePom(root)
             | DependencyNavigationTarget::SourceDirectory { path: root, .. } => {
                 root.worktree_id == remote_worktree
             }
@@ -12080,8 +12129,8 @@ mod tests {
                 },
             ],
         };
-        let full = maven_metadata_rows(&module_id, &provider, false);
-        let basic = maven_metadata_rows(&module_id, &provider, true);
+        let full = maven_metadata_rows(&module_id, &provider, false, &mut HashMap::new());
+        let basic = maven_metadata_rows(&module_id, &provider, true, &mut HashMap::new());
         let lifecycles = |rows: &Vec<LanguageToolNode>| {
             rows.iter()
                 .find(|row| row.label == "Lifecycle")
@@ -12169,8 +12218,8 @@ mod tests {
         empty_goal.name = "compile".into();
         empty_goal.parameters.clear();
         provider.plugins[0].goals.push(empty_goal);
-        let full = maven_metadata_rows(&module_id, &provider, false);
-        let basic = maven_metadata_rows(&module_id, &provider, true);
+        let full = maven_metadata_rows(&module_id, &provider, false, &mut HashMap::new());
+        let basic = maven_metadata_rows(&module_id, &provider, true, &mut HashMap::new());
         let full_plugins = full
             .iter()
             .find(|row| row.label == "Plugins")
@@ -12230,7 +12279,7 @@ mod tests {
         let mut other_goal = provider.plugins[0].goals[0].clone();
         other_goal.name = "compile".into();
         provider.plugins[0].goals[1] = other_goal;
-        let updated = maven_metadata_rows(&module_id, &provider, false);
+        let updated = maven_metadata_rows(&module_id, &provider, false, &mut HashMap::new());
         let plugins = updated
             .iter()
             .find(|row| row.label == "Plugins")
@@ -24478,6 +24527,10 @@ mod tests {
                                                     "profileDefinitions": [
                                                         {"id": "parity", "sourceGroupId": "evidence", "sourceArtifactId": "application", "sourceVersion": "1.0",
                                                             "sourcePomUri": "file:///groovy-panel/application/pom.xml", "inherited": false, "activeAtSource": false},
+                                                        {"id": "parent-profile", "sourceGroupId": "evidence", "sourceArtifactId": "parent", "sourceVersion": "1.0",
+                                                            "sourcePomUri": "file:///groovy-panel/pom.xml", "inherited": true, "activeAtSource": true},
+                                                        {"id": "cached-parent-profile", "sourceGroupId": "evidence", "sourceArtifactId": "cached-parent", "sourceVersion": "1.0",
+                                                            "inherited": true, "activeAtSource": false},
                                                         {"id": "private", "sourceGroupId": "evidence", "sourceArtifactId": "parent", "sourceVersion": "1.0",
                                                             "sourcePomUri": "file:///groovy-panel/application/.env/missing-parent/pom.xml", "inherited": true, "activeAtSource": false}
                                                     ],
@@ -24581,7 +24634,7 @@ mod tests {
                 assert_eq!(maven.reactor_position, Some(0));
                 assert_eq!(
                     maven.profile_definitions.len(),
-                    1,
+                    3,
                     "private profile origin omitted"
                 );
                 assert!(
@@ -24749,6 +24802,26 @@ mod tests {
                         assert!(!labels.contains(&"Gradle tasks"));
                         assert!(!labels.contains(&"private"));
                         assert_eq!(navigation.path.path.as_unix_str(), "application/pom.xml");
+                        let rows = panel.host.visible_rows();
+                        let cached = rows
+                            .iter()
+                            .find(|row| row.label == "cached-parent-profile")
+                            .expect("cached declaration");
+                        assert!(!panel.navigation.contains_key(&cached.id));
+                        let local = rows
+                            .iter()
+                            .find(|row| row.label == "parity" && row.id.0.contains(":profile:"))
+                            .expect("local definition");
+                        assert_eq!(
+                            panel
+                                .navigation
+                                .get(&local.id)
+                                .expect("local definition POM")
+                                .path
+                                .path
+                                .as_unix_str(),
+                            "application/pom.xml"
+                        );
                         assert!(
                             panel
                                 .host
@@ -24762,6 +24835,45 @@ mod tests {
                     BuildToolView::Dependencies => unreachable!("build view fixture"),
                 }
             });
+            if view == BuildToolView::Maven {
+                let reads_before_navigation = project_queries.load(Ordering::SeqCst);
+                panel.update(cx, |panel, cx| {
+                    let parent = panel
+                        .host
+                        .visible_rows()
+                        .iter()
+                        .find(|row| row.label == "parent-profile")
+                        .expect("visible parent declaration");
+                    assert!(parent.accessibility_label.contains("opens profile POM"));
+                    let id = parent.id.clone();
+                    panel.host.select(id);
+                    panel.host.reveal_selection(ScrollStrategy::Center);
+                    cx.notify();
+                });
+                cx.simulate_keystrokes("enter");
+                cx.run_until_parked();
+                workspace.read_with(cx, |workspace, cx| {
+                    use project::ProjectItem as _;
+                    let active = workspace
+                        .active_item_as::<Editor>(cx)
+                        .expect("profile declaration opens the editor");
+                    let path = active
+                        .read(cx)
+                        .buffer()
+                        .read(cx)
+                        .as_singleton()
+                        .expect("POM buffer")
+                        .read(cx)
+                        .project_path(cx)
+                        .expect("parent POM");
+                    assert_eq!(path.worktree_id, worktree_id);
+                    assert_eq!(path.path.as_unix_str(), "pom.xml");
+                });
+                assert_eq!(
+                    project_queries.load(Ordering::SeqCst),
+                    reads_before_navigation
+                );
+            }
             if view == BuildToolView::Gradle {
                 let configuration_id = panel.read_with(cx, |panel, _| {
                     let row = panel
@@ -25851,6 +25963,18 @@ mod tests {
             directory_reveals.read_with(cx, |reveals, _| reveals.len()),
             reveals_before_stale
         );
+        panel.update_in(cx, |panel, window, cx| {
+            panel.set_view(BuildToolView::Maven, window, cx);
+            panel.host.expand_all();
+            let parent = panel
+                .host
+                .visible_rows()
+                .iter()
+                .find(|row| row.label == "parent-profile")
+                .expect("stale profile remains readable");
+            assert!(!panel.navigation.contains_key(&parent.id));
+            panel.set_view(BuildToolView::Gradle, window, cx);
+        });
         fail_queries.store(true, Ordering::SeqCst);
         panel.update(cx, |panel, cx| panel.refresh(cx));
         cx.executor()

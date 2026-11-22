@@ -235,6 +235,16 @@ establish module membership. **Options** changes the view's presentation.
 Ordinary refresh requests current metadata; it does not certify a complete
 reimport.
 
+In the Maven view, expand **Profiles → Definitions** and press Enter on a
+definition with **Open profile POM** available. The editor opens the visible
+POM that declares the profile, including a parent POM when the provider reports
+it. Definitions from the cache can still show their source coordinates when
+the POM is unavailable to the project.
+
+Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
+ignores standalone `profiles.xml` files beside a POM.
+[Maven 3.9.16 project builder](https://maven.apache.org/ref/3.9.16/maven-core/xref/org/apache/maven/project/DefaultProjectBuilder.html#L698)
+
 Explicit selection import, saved Maven selection and Gradle metadata
 synchronization require the relevant provider capabilities and a trusted local
 project. These actions can execute build configuration scripts and write
