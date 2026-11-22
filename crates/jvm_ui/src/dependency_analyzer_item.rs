@@ -864,7 +864,7 @@ impl DependencyAnalyzerItem {
             let panel = source.panel.upgrade()?;
             Some(cx.observe(&panel, |item, _, cx| item.refresh_receipt(cx)))
         });
-        let focus_handle = cx.focus_handle();
+        let focus_handle = cx.focus_handle().tab_stop(true);
         let mut item = Self {
             host: LanguageToolTreeHost::with_focus_handle(focus_handle.clone()),
             derivation,
@@ -1670,10 +1670,13 @@ impl Render for DependencyAnalyzerItem {
             .id("groovy-dependency-analyzer-item")
             .key_context("DependencyAnalyzer")
             .track_focus(&self.focus_handle)
+            .tab_group()
             .size_full()
             .flex()
             .flex_col()
             .text_color(theme.text)
+            .on_action(|_: &crate::FocusNextGroovyControl, window, cx| window.focus_next(cx))
+            .on_action(|_: &crate::FocusPreviousGroovyControl, window, cx| window.focus_prev(cx))
             .on_action(cx.listener(|item, _: &SelectNext, _, cx| {
                 item.navigate_rows(LanguageToolTreeHost::select_next, cx)
             }))
@@ -1836,6 +1839,7 @@ impl Render for DependencyAnalyzerItem {
                     .when_some(hidden_key, |this, key| {
                         this.child(
                             h_flex().gap_2().items_center()
+                                .key_context("DependencyAnalyzerControls")
                                 .child(Label::new("This dependency is outside the current list.").size(LabelSize::Small))
                                 .child(
                                     Button::new("show-hidden-dependency-in-diagram", "Show in Diagram")

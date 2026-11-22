@@ -314,6 +314,9 @@ Graph search and fact filters read admitted data without resolving it again.
 scope filter uses the reported edge scopes. Gradle diagram scopes come from
 resolvable configurations reported by the provider.
 
+Use Tab and Shift-Tab to move between the tree and controls in the build-tool
+panel and Dependency Analyzer. Use the arrow keys to navigate tree rows.
+
 ### Dependency diagram and analyzer {#dependency-diagram-and-analyzer}
 
 Open **Show Dependency Diagram** from the module or configuration menu. Use

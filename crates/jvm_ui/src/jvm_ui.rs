@@ -16,6 +16,16 @@ use language_tools::language_tool_tree::{
 };
 use workspace::Workspace;
 
+gpui::actions!(
+    groovy_dependencies_panel,
+    [
+        /// Focus the next control in the current Groovy view.
+        FocusNextGroovyControl,
+        /// Focus the previous control in the current Groovy view.
+        FocusPreviousGroovyControl,
+    ]
+);
+
 pub fn init(cx: &mut App) {
     init_for_product(product_flavor::ID, cx);
 }
@@ -47,18 +57,13 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
 
 pub fn bind_keys(cx: &mut App) {
     const DEPENDENCY_TREE: &str = "(GroovyDependenciesPanel && !GroovyDependenciesPanelControls) || (DependencyAnalyzer && !DependencyAnalyzerControls)";
-    const DIAGRAM_CONTROLS: &str =
-        "(DependencyDiagram || DependencyDiagramPopup) && !menu && !Picker";
+    const GROOVY_CONTROLS: &str = "(GroovyDependenciesPanel || DependencyAnalyzer || DependencyDiagram || DependencyDiagramPopup) && !menu && !Picker";
     cx.bind_keys([
-        KeyBinding::new(
-            "tab",
-            dependency_diagram_item::FocusNextDependencyDiagramControl,
-            Some(DIAGRAM_CONTROLS),
-        ),
+        KeyBinding::new("tab", FocusNextGroovyControl, Some(GROOVY_CONTROLS)),
         KeyBinding::new(
             "shift-tab",
-            dependency_diagram_item::FocusPreviousDependencyDiagramControl,
-            Some(DIAGRAM_CONTROLS),
+            FocusPreviousGroovyControl,
+            Some(GROOVY_CONTROLS),
         ),
         KeyBinding::new(
             "escape",

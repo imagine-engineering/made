@@ -16,6 +16,7 @@ use crate::dependency_diagram_menu::{
     dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
 use crate::dependency_graph_canvas::{CanvasGraph, CanvasNode, CanvasState};
+use crate::{FocusNextGroovyControl, FocusPreviousGroovyControl};
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
     Render, SharedString, Task, Window, actions,
@@ -43,10 +44,6 @@ actions!(
         ToggleDependencyDiagramStructure,
         UseHorizontalDependencyLayout,
         UseVerticalDependencyLayout,
-        /// Focus the next dependency diagram control or node.
-        FocusNextDependencyDiagramControl,
-        /// Focus the previous dependency diagram control or node.
-        FocusPreviousDependencyDiagramControl,
         ShowDependencyDiagramContextMenu,
         DismissDependencyDiagramMenu
     ]
@@ -1269,10 +1266,8 @@ impl Render for DependencyDiagramItem {
             .flex()
             .flex_col()
             .bg(theme.background)
-            .on_action(|_: &FocusNextDependencyDiagramControl, window, cx| window.focus_next(cx))
-            .on_action(|_: &FocusPreviousDependencyDiagramControl, window, cx| {
-                window.focus_prev(cx)
-            })
+            .on_action(|_: &FocusNextGroovyControl, window, cx| window.focus_next(cx))
+            .on_action(|_: &FocusPreviousGroovyControl, window, cx| window.focus_prev(cx))
             .on_action(cx.listener(|item, _: &FitDependencyDiagram, _, cx| item.fit_canvas(cx)))
             .on_action(
                 cx.listener(|item, _: &ZoomDependencyDiagramIn, _, cx| item.zoom_canvas(1.25, cx)),
@@ -1792,15 +1787,15 @@ impl Render for DependencyDiagramPopup {
             .track_focus(&self.focus_handle)
             .tab_group()
             .on_action(
-                cx.listener(|popup, _: &FocusNextDependencyDiagramControl, window, cx| {
+                cx.listener(|popup, _: &FocusNextGroovyControl, window, cx| {
                     popup.move_focus(true, window, cx);
                 }),
             )
-            .on_action(cx.listener(
-                |popup, _: &FocusPreviousDependencyDiagramControl, window, cx| {
+            .on_action(
+                cx.listener(|popup, _: &FocusPreviousGroovyControl, window, cx| {
                     popup.move_focus(false, window, cx);
-                },
-            ))
+                }),
+            )
             .on_action(
                 cx.listener(|popup, _: &DismissDependencyDiagramPopup, _, cx| {
                     if popup.search_handle.is_deployed() {

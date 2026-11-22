@@ -3107,7 +3107,7 @@ impl DependenciesPanel {
                         panel.invalidate(cx);
                     }));
                 }
-                let focus_handle = cx.focus_handle();
+                let focus_handle = cx.focus_handle().tab_stop(true);
                 let provider_servers = Self::provider_servers_for_project(&project, cx);
                 Self {
                     project,
@@ -8510,6 +8510,7 @@ impl Render for DependenciesPanel {
             .aria_label(format!("{} panel", self.view.label()))
             .key_context(PANEL_KEY)
             .track_focus(&self.focus_handle)
+            .tab_group()
             .children(self.graph_context_menu.as_ref().map(|(menu, position, _)| {
                 deferred(
                     anchored()
@@ -8521,6 +8522,8 @@ impl Render for DependenciesPanel {
                 .with_priority(3)
             }))
             .size_full()
+            .on_action(|_: &crate::FocusNextGroovyControl, window, cx| window.focus_next(cx))
+            .on_action(|_: &crate::FocusPreviousGroovyControl, window, cx| window.focus_prev(cx))
             .on_action(cx.listener(|panel, _: &workspace::ToggleZoom, window, cx| panel.toggle_panel_zoom(window, cx)))
             .on_action(cx.listener(|panel, _: &RunSelectedOfflineOperation, window, cx| panel.run_selected_offline_operation(window,cx)))
             .on_action(cx.listener(
@@ -9033,8 +9036,7 @@ impl Render for DependenciesPanel {
                                     }
                                 }
                             })
-                            .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx))
-                            .tab_index(0_isize)
+                            .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx).tab_stop(true))
                             .child(self.operation_option_editor.clone())))
                     .child(
                         v_flex().gap_1().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
@@ -9092,6 +9094,7 @@ impl Render for DependenciesPanel {
                                 )
                                 .shape(ui::IconButtonShape::Square)
                                 .aria_label("Expand All")
+                                .tab_index(0_isize)
                                 .tooltip(Tooltip::text("Expand All"))
                                 .disabled(!can_expand_all)
                                 .on_click(cx.listener(
@@ -9107,6 +9110,7 @@ impl Render for DependenciesPanel {
                                 )
                                 .shape(ui::IconButtonShape::Square)
                                 .aria_label("Collapse All")
+                                .tab_index(0_isize)
                                 .tooltip(Tooltip::text("Collapse All"))
                                 .disabled(!can_collapse_all)
                                 .on_click(cx.listener(
@@ -9122,6 +9126,8 @@ impl Render for DependenciesPanel {
                                 )
                                 .shape(ui::IconButtonShape::Square)
                                 .aria_label("Refresh Dependencies")
+                                .tooltip(Tooltip::text("Refresh Dependencies"))
+                                .tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
                             ),
                     )),
@@ -9172,8 +9178,7 @@ impl Render for DependenciesPanel {
                                     }
                                 }
                             })
-                            .track_focus(&self.graph_search.read(cx).focus_handle(cx))
-                            .tab_index(0_isize)
+                            .track_focus(&self.graph_search.read(cx).focus_handle(cx).tab_stop(true))
                             .flex_1().min_w_0()
                             .child(self.graph_search.clone())
                     )
@@ -14246,32 +14251,28 @@ mod tests {
         });
         cx.update(|window, _| window.activate_a11y_for_test());
         let label = "Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts";
+        let focused_label = |cx: &mut gpui::VisualTestContext| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
+                        .expect("AX JSON");
+                let id = tree["gpui_focus"].as_str()?;
+                tree["nodes"][id]["aria"]["label"]
+                    .as_str()
+                    .map(str::to_owned)
+            })
+        };
         let focus = |cx: &mut gpui::VisualTestContext, label: &str| {
-            let mut found = false;
-            for _ in 0..96 {
-                found = cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value =
-                        serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
-                            .expect("AX JSON");
-                    if tree["gpui_focus"]
-                        .as_str()
-                        .is_some_and(|id| tree["nodes"][id]["aria"]["label"] == label)
-                    {
-                        true
-                    } else {
-                        window.focus_next(cx);
-                        false
-                    }
-                });
-                if found {
-                    break;
-                }
-            }
-            assert!(
-                found,
-                "shared Run control receives focus with toolbar hidden"
-            );
+            cx.update(|window, cx| {
+                let focus_handle = panel.read(cx).focus_handle.clone();
+                window.focus(&focus_handle, cx);
+            });
+            let found = (0..96).any(|_| {
+                cx.simulate_keystrokes("tab");
+                focused_label(cx).as_deref() == Some(label)
+            });
+            assert!(found, "Tab reaches {label}");
         };
         let press = |cx: &mut gpui::VisualTestContext| {
             cx.update(|window, cx| {
@@ -14290,6 +14291,32 @@ mod tests {
             cx.run_until_parked();
         };
         if ordered_only {
+            let set_toolbar = |cx: &mut gpui::VisualTestContext, shown| {
+                panel.update(cx, |panel, cx| {
+                    if view == BuildToolView::Maven {
+                        panel.preferences.show_maven_toolbar = shown;
+                    } else {
+                        panel.preferences.show_gradle_toolbar = shown;
+                    }
+                    cx.notify();
+                });
+            };
+            set_toolbar(cx, true);
+            focus(cx, "Refresh Dependencies");
+            set_toolbar(cx, false);
+            focus(cx, "Maven view");
+            cx.simulate_keystrokes("tab");
+            assert!(cx.update(|window, cx| {
+                panel
+                    .read(cx)
+                    .graph_search
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+            }));
+            cx.simulate_keystrokes("shift-tab");
+            assert_eq!(focused_label(cx).as_deref(), Some("Maven view"));
+
             let disclosure_label = "Ordered operations";
             let add_label = "Add selected current operation to the ordered offline run";
             let run_label =

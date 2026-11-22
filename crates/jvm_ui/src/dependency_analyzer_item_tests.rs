@@ -12,7 +12,7 @@ use crate::dependency_analyzer_item::{
 use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
 };
-use gpui::{AppContext as _, InputEvent as _, TestAppContext};
+use gpui::{AppContext as _, Focusable as _, InputEvent as _, TestAppContext};
 use language_tools::language_tool_tree::{LanguageToolNode, LanguageToolNodeId};
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencyKind,
@@ -776,10 +776,13 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
             entry.id == late_row.0 && entry.label == "org.example:late-search:4.0 — test"
         }));
     });
-    cx.update(|window, _| window.activate_a11y_for_test());
-    assert!(
-        (0..32).any(|_| cx.update(|window, cx| {
-            window.focus_next(cx);
+    let analyzer_focus = second.read_with(cx, |item, cx| item.focus_handle(cx));
+    cx.update(|window, cx| {
+        window.activate_a11y_for_test();
+        window.focus(&analyzer_focus, cx);
+    });
+    let search_is_focused = |cx: &mut gpui::VisualTestContext| {
+        cx.update(|window, cx| {
             window.draw(cx).clear(cx);
             let tree: serde_json::Value =
                 serde_json::from_str(&window.debug_a11y_tree_json().expect("analyzer toolbar"))
@@ -787,9 +790,17 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
             tree["gpui_focus"].as_str().is_some_and(|focus| {
                 tree["nodes"][focus]["aria"]["label"] == "Search dependency analyzer rows"
             })
-        })),
-        "keyboard focus reaches analyzer search"
+        })
+    };
+    cx.simulate_keystrokes("tab");
+    assert!(
+        search_is_focused(cx),
+        "Tab from the analyzer tree reaches search"
     );
+    cx.simulate_keystrokes("shift-tab");
+    assert!(cx.update(|window, _| analyzer_focus.is_focused(window)));
+    cx.simulate_keystrokes("tab");
+    assert!(search_is_focused(cx));
     let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
     cx.update(|window, cx| {
         window.dispatch_event(
