@@ -41,10 +41,12 @@ pub struct DependencyDiagramContextInvocation {
 /// when the menu opens.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DependencyDiagramMenuSnapshot {
-    pub selection_len: usize,
     pub selection_set_len: usize,
     pub has_inspection: bool,
     pub has_source: bool,
+    pub has_admitted_node: bool,
+    pub has_matching_pin: bool,
+    pub can_add_to_set: bool,
 }
 
 /// The commands the diagram menus can dispatch. Panel-level commands route
@@ -79,6 +81,8 @@ impl DependencyDiagramMenuCommand {
             Self::InspectRootPaths => Some(GraphInspectionMode::ShortestRootPaths),
             Self::InspectAllRootPaths => Some(GraphInspectionMode::AllRootPaths),
             Self::InspectConflictOrigins => Some(GraphInspectionMode::ConflictOrigins),
+            Self::PathsBetween => Some(GraphInspectionMode::PathsBetween),
+            Self::InspectSelectionSet => Some(GraphInspectionMode::SelectionSetRelations),
             _ => None,
         }
     }
@@ -117,7 +121,7 @@ pub fn dependency_diagram_menu_available(
     target: &DependencyDiagramContextTarget,
     snapshot: &DependencyDiagramMenuSnapshot,
 ) -> bool {
-    let node_or_selection = target.node().is_some();
+    let node_or_selection = target.node().is_some() && snapshot.has_admitted_node;
     match command {
         DependencyDiagramMenuCommand::InspectNeighbours
         | DependencyDiagramMenuCommand::InspectRootPaths
@@ -127,16 +131,18 @@ pub fn dependency_diagram_menu_available(
         }
         DependencyDiagramMenuCommand::AllUsages => node_or_selection,
         DependencyDiagramMenuCommand::PathsBetween => {
-            node_or_selection && snapshot.selection_set_len >= 2
+            node_or_selection && snapshot.has_matching_pin
         }
-        DependencyDiagramMenuCommand::PinSelection => {
-            node_or_selection && snapshot.selection_len >= 1
+        DependencyDiagramMenuCommand::PinSelection => node_or_selection && snapshot.has_source,
+        DependencyDiagramMenuCommand::AddToSelectionSet => {
+            node_or_selection && snapshot.can_add_to_set
         }
-        DependencyDiagramMenuCommand::AddToSelectionSet => node_or_selection,
         DependencyDiagramMenuCommand::InspectSelectionSet => {
-            snapshot.selection_set_len >= 1 && node_or_selection
+            snapshot.selection_set_len >= 2 && node_or_selection
         }
-        DependencyDiagramMenuCommand::ClearSelectionSet => snapshot.selection_set_len >= 1,
+        DependencyDiagramMenuCommand::ClearSelectionSet => {
+            node_or_selection && snapshot.selection_set_len >= 1
+        }
         DependencyDiagramMenuCommand::ClearInspection => snapshot.has_inspection,
         DependencyDiagramMenuCommand::ShowPopup => true,
         DependencyDiagramMenuCommand::CopyDiagramSource => snapshot.has_source,
@@ -250,7 +256,6 @@ pub fn dependency_diagram_menu_action(
 #[derive(Default)]
 pub struct DependencyDiagramContextState {
     pub invocation: Mutex<Option<DependencyDiagramContextInvocation>>,
-    pub snapshot: Mutex<DependencyDiagramMenuSnapshot>,
 }
 
 impl DependencyDiagramContextState {
@@ -262,10 +267,6 @@ impl DependencyDiagramContextState {
     /// Takes the staged invocation so a menu is built once per staging.
     pub fn take_invocation(&self) -> Option<DependencyDiagramContextInvocation> {
         self.invocation.lock().expect("staged invocation").take()
-    }
-
-    pub fn snapshot(&self) -> DependencyDiagramMenuSnapshot {
-        *self.snapshot.lock().expect("menu snapshot")
     }
 }
 
@@ -279,7 +280,11 @@ pub(crate) fn build_dependency_diagram_context_menu(
     cx: &mut gpui::App,
 ) -> Option<gpui::Entity<ui::ContextMenu>> {
     let invocation = state.take_invocation()?;
-    let snapshot = state.snapshot();
+    let snapshot = item
+        .read_with(cx, |item, cx| {
+            item.context_menu_snapshot(&invocation.target, cx)
+        })
+        .ok()?;
     let groups = dependency_diagram_menu_groups(&invocation.target, &snapshot);
     if groups.is_empty() {
         return None;
@@ -295,7 +300,13 @@ pub(crate) fn build_dependency_diagram_context_menu(
                 let label = dependency_diagram_menu_label(command);
                 let action = dependency_diagram_menu_action(command);
                 if command.inspection_mode().is_some()
-                    || command == DependencyDiagramMenuCommand::ClearInspection
+                    || matches!(
+                        command,
+                        DependencyDiagramMenuCommand::ClearInspection
+                            | DependencyDiagramMenuCommand::PinSelection
+                            | DependencyDiagramMenuCommand::AddToSelectionSet
+                            | DependencyDiagramMenuCommand::ClearSelectionSet
+                    )
                 {
                     let target = invocation.target.clone();
                     let item = item.clone();
@@ -356,8 +367,10 @@ mod tests {
         let canvas = DependencyDiagramContextTarget::Canvas;
         // Node target: inspection commands lead, surfaces and view follow.
         let node_snapshot = DependencyDiagramMenuSnapshot {
-            selection_len: 1,
             selection_set_len: 2,
+            has_admitted_node: true,
+            has_matching_pin: true,
+            can_add_to_set: true,
             has_inspection: true,
             has_source: true,
         };
@@ -416,10 +429,11 @@ mod tests {
         let _ = cx;
         let canvas = DependencyDiagramContextTarget::Canvas;
         let snapshot = DependencyDiagramMenuSnapshot {
-            selection_len: 1,
+            has_admitted_node: true,
             selection_set_len: 0,
             has_inspection: false,
             has_source: true,
+            ..Default::default()
         };
         // Wrong-target dispatch is rejected through the same availability
         // logic the menu model filters with.
@@ -452,10 +466,11 @@ mod tests {
         let selection = DependencyDiagramContextTarget::Selection("n1".into());
         let canvas = DependencyDiagramContextTarget::Canvas;
         let snapshot = DependencyDiagramMenuSnapshot {
-            selection_len: 1,
+            has_admitted_node: true,
             selection_set_len: 1,
             has_inspection: false,
             has_source: true,
+            ..Default::default()
         };
         // All usages targets a dependency node or an in-selection click, and
         // rides in the inspection group one level deep.

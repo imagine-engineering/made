@@ -12,7 +12,8 @@ use crate::dependencies_panel::{
     current_dependency_graph_receipt, derive_dependency_diagram,
 };
 use crate::dependency_diagram_menu::{
-    DependencyDiagramContextTarget, DependencyDiagramMenuCommand, stage_dependency_diagram_target,
+    DependencyDiagramContextTarget, DependencyDiagramMenuCommand, DependencyDiagramMenuSnapshot,
+    dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
 use crate::dependency_graph_canvas::{CanvasNodeKind, CanvasState};
 use gpui::{
@@ -584,7 +585,10 @@ impl DependencyDiagramItem {
                 },
             },
         );
-        self.context_handle.show_at(position, window, cx);
+        let handle = self.context_handle.clone();
+        window.defer(cx, move |window, cx| {
+            handle.show_at(position, window, cx);
+        });
     }
 
     /// Dismisses the staged context menu and restores focus to the diagram
@@ -601,78 +605,152 @@ impl DependencyDiagramItem {
         cx.notify();
     }
 
+    pub(crate) fn context_menu_snapshot(
+        &self,
+        target: &DependencyDiagramContextTarget,
+        cx: &App,
+    ) -> DependencyDiagramMenuSnapshot {
+        let canvas = self.canvas.read(cx);
+        let Some(source) = self.source.as_ref().filter(|_| self.receipt_is_current(cx)) else {
+            return DependencyDiagramMenuSnapshot::default();
+        };
+        let Some(panel) = source.panel.upgrade() else {
+            return DependencyDiagramMenuSnapshot::default();
+        };
+        let (selection_set_len, has_matching_pin, accepts_set) = panel
+            .read(cx)
+            .diagram_comparison_availability(&source.selection, target.node());
+        DependencyDiagramMenuSnapshot {
+            selection_set_len,
+            has_inspection: !canvas.inspected.is_empty(),
+            has_source: true,
+            has_admitted_node: target.node().is_some_and(|id| {
+                canvas
+                    .graph
+                    .node(id)
+                    .is_some_and(|node| node.kind != CanvasNodeKind::Unresolved)
+            }),
+            has_matching_pin,
+            can_add_to_set: accepts_set && selection_set_len < 8,
+        }
+    }
+
     pub(crate) fn inspect_canvas_target(
         &mut self,
         command: DependencyDiagramMenuCommand,
         target: &DependencyDiagramContextTarget,
         cx: &mut Context<Self>,
     ) {
-        if command == DependencyDiagramMenuCommand::ClearInspection {
-            self.canvas.update(cx, |canvas, cx| {
-                canvas.inspected.clear();
-                canvas.inspected_edges.clear();
-                cx.notify();
-            });
-            if let Some(panel) = self
-                .source
-                .as_ref()
-                .and_then(|source| source.panel.upgrade())
-            {
-                panel.update(cx, |panel, cx| panel.clear_graph_inspection(cx));
-            }
-            self.notice = None;
-            cx.notify();
+        use DependencyDiagramMenuCommand::*;
+
+        if !dependency_diagram_menu_available(
+            command,
+            target,
+            &self.context_menu_snapshot(target, cx),
+        ) {
             return;
         }
-
-        let (Some(mode), Some(node), Some(source)) = (
-            command.inspection_mode(),
-            target.node(),
-            self.source.as_ref(),
-        ) else {
+        let Some(source) = self.source.as_ref() else {
             return;
         };
-        if !self.receipt_is_current(cx)
-            || self
-                .canvas
-                .read(cx)
-                .graph
-                .node(node)
-                .is_none_or(|node| node.kind == CanvasNodeKind::Unresolved)
-        {
-            return;
-        }
-        let result = source.panel.update(cx, |panel, cx| {
-            panel.inspect_diagram_graph(&source.selection, node, mode, cx)
-        });
-        self.notice = Some(match result {
-            Ok(Ok(inspection)) => {
-                let edges = BTreeSet::from_iter(inspection.edges);
-                let visible = self.canvas.update(cx, |canvas, cx| {
-                    let mut nodes = BTreeSet::from([node.to_owned()]);
+        let result = match command {
+            ClearInspection => {
+                self.canvas.update(cx, |canvas, cx| {
+                    canvas.inspected.clear();
                     canvas.inspected_edges.clear();
-                    for edge in &canvas.graph.edges {
-                        if edges.contains(&edge.provider_index) {
-                            nodes.insert(edge.from.clone());
-                            nodes.insert(edge.to.clone());
-                            canvas.inspected_edges.insert(edge.provider_index);
-                        }
-                    }
-                    canvas.inspected = nodes.into_iter().collect();
                     cx.notify();
-                    canvas.inspected_edges.len()
                 });
-                format!(
-                    "{}: {} {} of {} retained edges visible.",
-                    mode.label(),
-                    inspection.status,
-                    visible,
-                    edges.len()
-                )
+                source
+                    .panel
+                    .update(cx, |panel, cx| panel.clear_graph_inspection(cx))
+                    .map(|_| None)
             }
-            Ok(Err(error)) | Err(error) => error.to_string(),
-        });
+            ClearSelectionSet => source.panel.update(cx, |panel, cx| {
+                panel.clear_graph_selection_set(cx);
+                Some("Dependency comparison set cleared.".into())
+            }),
+            _ => {
+                let Some(node) = target.node() else {
+                    return;
+                };
+                self.inspect_or_compare_node(command, target, node, cx)
+            }
+        };
+        self.notice = match result {
+            Ok(notice) => notice,
+            Err(error) => Some(error.to_string()),
+        };
         cx.notify();
+    }
+
+    fn inspect_or_compare_node(
+        &self,
+        command: DependencyDiagramMenuCommand,
+        target: &DependencyDiagramContextTarget,
+        node: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Option<String>> {
+        let source = self
+            .source
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("The diagram's Dependencies panel is unavailable."))?;
+        match command {
+            DependencyDiagramMenuCommand::PinSelection => {
+                let pinned = source.panel.update(cx, |panel, cx| {
+                    panel.pin_graph_node(&source.selection, node, cx)
+                })??;
+                return Ok(Some(
+                    if pinned {
+                        "Dependency pinned."
+                    } else {
+                        "Dependency pin cleared."
+                    }
+                    .into(),
+                ));
+            }
+            DependencyDiagramMenuCommand::AddToSelectionSet => {
+                let nodes = if matches!(target, DependencyDiagramContextTarget::Selection(_)) {
+                    self.canvas.read(cx).selection.iter().cloned().collect()
+                } else {
+                    vec![node.to_owned()]
+                };
+                source.panel.update(cx, |panel, cx| {
+                    panel.add_graph_nodes_to_set(&source.selection, nodes, cx)
+                })??;
+                return Ok(Some(
+                    "Selected dependencies added to the comparison set.".into(),
+                ));
+            }
+            _ => {}
+        }
+        let Some(mode) = command.inspection_mode() else {
+            return Ok(None);
+        };
+        let inspection = source.panel.update(cx, |panel, cx| {
+            panel.inspect_diagram_graph(&source.selection, node, mode, cx)
+        })??;
+        let edges = BTreeSet::from_iter(inspection.edges);
+        let visible = self.canvas.update(cx, |canvas, cx| {
+            let mut nodes = BTreeSet::from_iter(inspection.nodes);
+            canvas.inspected_edges.clear();
+            for edge in &canvas.graph.edges {
+                if edges.contains(&edge.provider_index) {
+                    nodes.insert(edge.from.clone());
+                    nodes.insert(edge.to.clone());
+                    canvas.inspected_edges.insert(edge.provider_index);
+                }
+            }
+            canvas.inspected = nodes.into_iter().collect();
+            cx.notify();
+            canvas.inspected_edges.len()
+        });
+        Ok(Some(format!(
+            "{}: {} {} of {} retained edges visible.",
+            mode.label(),
+            inspection.status,
+            visible,
+            edges.len()
+        )))
     }
 
     fn inspect_canvas_focus(
@@ -687,25 +765,6 @@ impl DependencyDiagramItem {
             .or_else(|| canvas.selection.iter().next());
         let target = stage_dependency_diagram_target(focus.map(String::as_str), &canvas.selection);
         self.inspect_canvas_target(command, &target, cx);
-    }
-
-    /// Routes a panel-level command through the opening panel's own action
-    /// scope, so menu invocations share the panel's enablement logic.
-    fn forward_to_panel<A: gpui::Action>(
-        &mut self,
-        event: &A,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
-        let focus = self.source.as_ref().and_then(|source| {
-            source
-                .panel
-                .upgrade()
-                .map(|panel| panel.read(cx).routing_focus_handle())
-        });
-        if let Some(focus) = focus {
-            focus.dispatch_action(event, window, cx);
-        }
     }
 
     /// Opens the analyzer on the diagram's current dependency and
@@ -909,25 +968,6 @@ impl Render for DependencyDiagramItem {
                     .on_click(cx.listener(|item, _, _, cx| item.export_diagram_image(cx))),
             );
 
-        // Keep the menu availability snapshot fresh: the canvas stages the
-        // invocation and the menu builder reads this state.
-        let snapshot = {
-            let panel = self
-                .source
-                .as_ref()
-                .and_then(|source| source.panel.upgrade());
-            let (selection_set_len, has_inspection) = panel
-                .as_ref()
-                .map(|panel| panel.read(cx).context_menu_availability())
-                .unwrap_or((0, false));
-            crate::dependency_diagram_menu::DependencyDiagramMenuSnapshot {
-                selection_len: self.canvas.read(cx).selection.len(),
-                selection_set_len,
-                has_inspection,
-                has_source: self.source.is_some() && admitted,
-            }
-        };
-        *self.context_state.snapshot.lock().expect("menu snapshot") = snapshot;
         let context_state = self.context_state.clone();
         let context_item = cx.weak_entity();
         let context_handle = self.context_handle.clone();
@@ -1001,29 +1041,21 @@ impl Render for DependencyDiagramItem {
             .on_action(cx.listener(|item, _: &InspectGraphAllUsages, window, cx| {
                 item.open_analyzer_for_selection(window, cx)
             }))
-            .on_action(
-                cx.listener(|item, event: &InspectGraphPathsBetween, window, cx| {
-                    item.forward_to_panel(event, window, cx)
-                }),
-            )
-            .on_action(cx.listener(|item, event: &PinGraphSelection, window, cx| {
-                item.forward_to_panel(event, window, cx)
+            .on_action(cx.listener(|item, _: &InspectGraphPathsBetween, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::PathsBetween, cx);
             }))
-            .on_action(
-                cx.listener(|item, event: &AddGraphSelectionToSet, window, cx| {
-                    item.forward_to_panel(event, window, cx)
-                }),
-            )
-            .on_action(
-                cx.listener(|item, event: &InspectGraphSelectionSet, window, cx| {
-                    item.forward_to_panel(event, window, cx)
-                }),
-            )
-            .on_action(
-                cx.listener(|item, event: &ClearGraphSelectionSet, window, cx| {
-                    item.forward_to_panel(event, window, cx)
-                }),
-            )
+            .on_action(cx.listener(|item, _: &PinGraphSelection, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::PinSelection, cx);
+            }))
+            .on_action(cx.listener(|item, _: &AddGraphSelectionToSet, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::AddToSelectionSet, cx);
+            }))
+            .on_action(cx.listener(|item, _: &InspectGraphSelectionSet, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::InspectSelectionSet, cx);
+            }))
+            .on_action(cx.listener(|item, _: &ClearGraphSelectionSet, _, cx| {
+                item.inspect_canvas_focus(DependencyDiagramMenuCommand::ClearSelectionSet, cx);
+            }))
             .on_action(cx.listener(|item, _: &ClearGraphInspection, _, cx| {
                 item.inspect_canvas_target(
                     DependencyDiagramMenuCommand::ClearInspection,

@@ -959,7 +959,10 @@ impl gpui::Render for CanvasState {
                                 },
                             );
                             if let Some(handle) = state.context_handle.clone() {
-                                handle.show_at(event.position, window, cx);
+                                let position = event.position;
+                                window.defer(cx, move |window, cx| {
+                                    handle.show_at(position, window, cx);
+                                });
                             }
                         }
                         cx.notify();

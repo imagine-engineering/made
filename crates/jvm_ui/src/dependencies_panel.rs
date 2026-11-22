@@ -1097,6 +1097,33 @@ fn admitted_dependency_snapshot<'a>(
     current.then_some(snapshot)
 }
 
+impl DependencyGraphReceipt {
+    fn contains_nodes<'a>(&self, nodes: impl IntoIterator<Item = &'a str>) -> bool {
+        match &self.graph {
+            DependencyGraphRevision::Maven(graph) => graph.upgrade().is_some_and(|graph| {
+                nodes
+                    .into_iter()
+                    .all(|id| graph.nodes.iter().any(|node| node.id == id))
+            }),
+            DependencyGraphRevision::Gradle(graph) => graph.upgrade().is_some_and(|graph| {
+                nodes
+                    .into_iter()
+                    .all(|id| graph.resolution.components.iter().any(|node| node.id == id))
+            }),
+        }
+    }
+}
+
+fn current_dependency_graph_contains<'a>(
+    project: &Project,
+    selection: &GraphSelection,
+    nodes: impl IntoIterator<Item = &'a str>,
+    cx: &App,
+) -> bool {
+    current_dependency_graph_receipt(project, selection, cx)
+        .is_some_and(|receipt| receipt.selection == *selection && receipt.contains_nodes(nodes))
+}
+
 pub(crate) fn current_dependency_graph_receipt(
     project: &Project,
     selection: &GraphSelection,
@@ -1719,11 +1746,11 @@ fn graph_selection_set_analysis(
     (induced, reachability)
 }
 
-fn graph_selection_set_row(
+fn graph_selection_set_projection(
     snapshot: &JdtlsProjectSnapshot,
     view: BuildToolView,
     inspection: &GraphInspection,
-) -> Option<(LanguageToolNodeId, LanguageToolNode)> {
+) -> Option<GraphInspectionProjection> {
     if inspection.mode != GraphInspectionMode::SelectionSetRelations
         || inspection.set_members.len() < 2
     {
@@ -1780,7 +1807,7 @@ fn graph_selection_set_row(
                         .unwrap_or_else(|| "Unavailable occurrence".into())
                 };
                 let (induced, reachability) = graph_selection_set_analysis(&members, &edges);
-                return Some(build_selection_set_row(
+                let row = build_selection_set_row(
                     &module_id,
                     inspection,
                     &members,
@@ -1788,9 +1815,21 @@ fn graph_selection_set_row(
                     &induced,
                     &reachability,
                     &edges,
-                ));
+                );
+                return Some(GraphInspectionProjection {
+                    id: graph_fact_id(&module_id, "maven", &[]),
+                    row,
+                    overlay: DiagramInspection {
+                        nodes: inspection.set_members.clone(),
+                        edges: induced,
+                        status: format!("{} dependencies in the comparison set.", members.len()),
+                    },
+                });
             }
-            GraphQueryTarget::Gradle { configuration, .. } if view != BuildToolView::Maven => {
+            GraphQueryTarget::Gradle {
+                module: root,
+                configuration,
+            } if view != BuildToolView::Maven && module.module_root == *root => {
                 let Some(gradle) = module.gradle.as_ref() else {
                     continue;
                 };
@@ -1838,7 +1877,7 @@ fn graph_selection_set_row(
                     .collect::<Vec<_>>();
                 let (induced, reachability) =
                     graph_selection_set_analysis(&members, &borrowed_edges);
-                return Some(build_selection_set_row(
+                let row = build_selection_set_row(
                     &module_id,
                     inspection,
                     &members,
@@ -1846,7 +1885,16 @@ fn graph_selection_set_row(
                     &induced,
                     &reachability,
                     &borrowed_edges,
-                ));
+                );
+                return Some(GraphInspectionProjection {
+                    id: graph_fact_id(&module_id, "gradle", &[]),
+                    row,
+                    overlay: DiagramInspection {
+                        nodes: inspection.set_members.clone(),
+                        edges: induced,
+                        status: format!("{} dependencies in the comparison set.", members.len()),
+                    },
+                });
             }
             _ => continue,
         }
@@ -1863,7 +1911,7 @@ fn build_selection_set_row(
     induced: &[usize],
     reachability: &[Vec<Option<usize>>],
     edges: &[(&str, Option<&str>)],
-) -> (LanguageToolNodeId, LanguageToolNode) {
+) -> LanguageToolNode {
     let member_rows = members
         .iter()
         .enumerate()
@@ -1934,7 +1982,7 @@ fn build_selection_set_row(
         .count();
     let pairs = members.len() * (members.len().saturating_sub(1));
     let induced_count = induced.len();
-    let row = graph_fact_row(
+    graph_fact_row(
         graph_fact_id(module_id, "inspection-set", &[&inspection.mode.label()]),
         inspection.mode.label().into(),
         format!(
@@ -1961,11 +2009,11 @@ fn build_selection_set_row(
                 reach_rows,
             ),
         ],
-    );
-    (row.id.clone(), row)
+    )
 }
 
 pub(crate) struct DiagramInspection {
+    pub nodes: Vec<String>,
     pub edges: Vec<usize>,
     pub status: String,
 }
@@ -1992,15 +2040,7 @@ fn graph_inspection_projection(
 ) -> Option<GraphInspectionProjection> {
     use project::jvm_project::GradleDependencySelector;
     if inspection.mode == GraphInspectionMode::SelectionSetRelations {
-        let (id, row) = graph_selection_set_row(snapshot, view, inspection)?;
-        return Some(GraphInspectionProjection {
-            id,
-            row,
-            overlay: DiagramInspection {
-                edges: Vec::new(),
-                status: String::new(),
-            },
-        });
+        return graph_selection_set_projection(snapshot, view, inspection);
     }
     for module in &snapshot.projects {
         let module_id = jdtls_module_node_id(snapshot, &module.module_root, view);
@@ -2303,6 +2343,7 @@ fn graph_inspection_projection(
                 ],
             ),
             overlay: DiagramInspection {
+                nodes: vec![inspection.node.clone()],
                 edges: indices,
                 status: path_status,
             },
@@ -3099,19 +3140,25 @@ impl DependenciesPanel {
         None
     }
 
-    /// Availability inputs the diagram context menus share with the panel's
-    /// enablement logic.
-    pub(crate) fn context_menu_availability(&self) -> (usize, bool) {
+    pub(crate) fn diagram_comparison_availability(
+        &self,
+        selection: &GraphSelection,
+        node: Option<&str>,
+    ) -> (usize, bool, bool) {
+        let selection_set = self.graph_selection_set.first();
+        let owns_selection_set = selection_set.is_some_and(|member| member.selection == *selection);
+        let matching_pin = self.graph_pin.as_ref().is_some_and(|pin| {
+            pin.selection == *selection && node.is_some_and(|node| node != pin.node)
+        });
         (
-            self.graph_selection_set.len(),
-            self.graph_inspection.is_some(),
+            if owns_selection_set {
+                self.graph_selection_set.len()
+            } else {
+                0
+            },
+            matching_pin,
+            selection_set.is_none() || owns_selection_set,
         )
-    }
-
-    /// The focus handle menu routing dispatches through, so menu invocations
-    /// run inside the panel's own action scope.
-    pub(crate) fn routing_focus_handle(&self) -> gpui::FocusHandle {
-        self.focus_handle.clone()
     }
 
     fn selected_graph_inspection(
@@ -3141,22 +3188,25 @@ impl DependenciesPanel {
                 return;
             }
         };
-        if mode == GraphInspectionMode::PathsBetween {
-            let Some(pin) = self.graph_pin.clone() else {
-                self.show_graph_error(anyhow::anyhow!("Pin a dependency first: select a dependency row, activate Pin dependency, then select the second dependency and retry Paths to pinned dependency"), cx);
-                return;
-            };
-            let same_graph = pin.selection.server_id == inspection.selection.server_id
-                && pin.selection.generation == inspection.selection.generation
-                && pin.selection.worktree_id() == inspection.selection.worktree_id()
-                && pin.selection.target == inspection.selection.target;
-            if !same_graph || pin.node == inspection.node {
-                self.show_graph_error(anyhow::anyhow!("The pinned dependency no longer matches the current admitted graph facts or equals the selection; re-pin and retry Paths to pinned dependency"), cx);
-                return;
-            }
-            inspection.anchor = Some(pin.node);
+        if let Err(error) = self.prepare_pair_inspection(&mut inspection) {
+            self.show_graph_error(error, cx);
+            return;
         }
         self.display_graph_inspection(inspection, cx);
+    }
+
+    fn prepare_pair_inspection(&self, inspection: &mut GraphInspection) -> anyhow::Result<()> {
+        if inspection.mode == GraphInspectionMode::PathsBetween {
+            let pin = self.graph_pin.as_ref().context(
+                "Pin a dependency first, then inspect paths from it to another dependency.",
+            )?;
+            anyhow::ensure!(
+                pin.selection == inspection.selection && pin.node != inspection.node,
+                "The pinned dependency must be a different dependency in the same current graph. Re-pin and retry."
+            );
+            inspection.anchor = Some(pin.node.clone());
+        }
+        Ok(())
     }
 
     pub(crate) fn inspect_diagram_graph(
@@ -3170,13 +3220,22 @@ impl DependenciesPanel {
         let snapshot = admitted_dependency_snapshot(project, selection.worktree_id(), cx)
             .filter(|snapshot| selection.matches(snapshot, true))
             .context("The diagram no longer has current dependency facts. Refresh and collect the graph before inspecting.")?;
-        let inspection = GraphInspection {
+        let mut inspection = GraphInspection {
             selection: selection.clone(),
             node: node.into(),
             anchor: None,
             set_members: Vec::new(),
             mode,
         };
+        if mode == GraphInspectionMode::SelectionSetRelations {
+            inspection = self
+                .selected_graph_set_inspection(cx)
+                .filter(|inspection| inspection.selection == *selection)
+                .context(
+                    "Add at least two dependencies from this graph to the comparison set first.",
+                )?;
+        }
+        self.prepare_pair_inspection(&mut inspection)?;
         let projection = graph_inspection_projection(snapshot, self.view, &inspection)
             .context("The target has no current provider dependency facts to inspect.")?;
         self.display_graph_inspection(inspection, cx);
@@ -3204,162 +3263,129 @@ impl DependenciesPanel {
             self.show_graph_error(anyhow::anyhow!("The selection set no longer matches current admitted graph facts; refresh, re-add the dependencies and retry Selected set relations"), cx);
             return;
         };
-        self.graph_notice = None;
-        self.graph_inspection = Some(inspection);
-        self.rebuild(cx);
-        self.host.expand_all();
-        cx.notify();
+        self.display_graph_inspection(inspection, cx);
     }
 
     fn selected_graph_set_inspection(&self, cx: &App) -> Option<GraphInspection> {
         let first = self.graph_selection_set.first()?;
-        if self.host_unavailable(cx) {
+        let project = self.project.read(cx);
+        if self.graph_selection_set.len() < 2
+            || !self
+                .graph_selection_set
+                .iter()
+                .all(|member| member.selection == first.selection)
+            || !current_dependency_graph_contains(
+                project,
+                &first.selection,
+                self.graph_selection_set
+                    .iter()
+                    .map(|member| member.node.as_str()),
+                cx,
+            )
+        {
             return None;
         }
-        let project = self.project.read(cx);
-        let worktrees = project.worktree_store();
-        let trusted = TrustedWorktrees::try_get_global(cx)?;
-        let restricted = trusted
-            .read(cx)
-            .restricted_worktrees(&worktrees, cx)
-            .into_iter()
-            .map(|(id, _)| id)
-            .collect::<HashSet<_>>();
-        let store = project.lsp_store();
-        let store = store.read(cx);
-        for worktree in worktrees.read(cx).worktrees() {
-            let worktree = worktree.read(cx);
-            if !worktree.is_visible() || restricted.contains(&worktree.id()) {
-                continue;
-            }
-            let Some((snapshot, true)) = store.jdtls_project_snapshot(worktree.id()) else {
-                continue;
-            };
-            for module in &snapshot.projects {
-                if self.view != BuildToolView::Gradle
-                    && let Some(maven) = &module.maven
-                    && let Some(graph) = &maven.dependency_graph
-                    && (first.selection
-                        == GraphSelection {
-                            server_id: snapshot.server_id,
-                            generation: snapshot.generation,
-                            target: GraphQueryTarget::Maven(maven.pom.clone()),
-                        })
-                {
-                    let mut members = Vec::new();
-                    for member in &self.graph_selection_set {
-                        let node = graph
-                            .nodes
-                            .iter()
-                            .find(|node| node.id == member.node)
-                            .map(|node| node.id.clone())?;
-                        members.push(node);
-                    }
-                    return Some(GraphInspection {
-                        selection: first.selection.clone(),
-                        node: members[0].clone(),
-                        anchor: None,
-                        set_members: members,
-                        mode: GraphInspectionMode::SelectionSetRelations,
-                    });
-                }
-                if self.view != BuildToolView::Maven
-                    && let Some(gradle) = &module.gradle
-                    && let Some(graph) = &gradle.dependency_graph
-                    && (first.selection
-                        == GraphSelection {
-                            server_id: snapshot.server_id,
-                            generation: snapshot.generation,
-                            target: GraphQueryTarget::Gradle {
-                                module: module.module_root.clone(),
-                                configuration: graph.resolution.configuration.clone(),
-                            },
-                        })
-                {
-                    let mut members = Vec::new();
-                    for member in &self.graph_selection_set {
-                        let component = graph
-                            .resolution
-                            .components
-                            .iter()
-                            .find(|component| component.id == member.node)
-                            .map(|component| component.id.clone())?;
-                        members.push(component);
-                    }
-                    return Some(GraphInspection {
-                        selection: first.selection.clone(),
-                        node: members[0].clone(),
-                        anchor: None,
-                        set_members: members,
-                        mode: GraphInspectionMode::SelectionSetRelations,
-                    });
-                }
-            }
-        }
-        None
+        Some(GraphInspection {
+            selection: first.selection.clone(),
+            node: first.node.clone(),
+            anchor: None,
+            set_members: self
+                .graph_selection_set
+                .iter()
+                .map(|member| member.node.clone())
+                .collect(),
+            mode: GraphInspectionMode::SelectionSetRelations,
+        })
     }
 
     fn add_graph_selection_to_set(&mut self, cx: &mut Context<Self>) {
-        const MAX_SET_MEMBERS: usize = 8;
         let Some((selection, node)) = self.resolve_selected_graph(cx) else {
-            self.show_graph_error(anyhow::anyhow!("Adding to the selection set requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
+            self.show_graph_error(anyhow::anyhow!("Adding to the selection set requires a current Gradle component or Maven occurrence. Refresh and select a dependency row."), cx);
             return;
         };
-        if let Some(first) = self.graph_selection_set.first()
-            && first.selection != selection
-        {
-            self.show_graph_error(anyhow::anyhow!("The selection set holds dependencies from one admitted graph; clear the selection set before adding dependencies from other graph facts"), cx);
-            return;
+        if let Err(error) = self.add_graph_nodes_to_set(&selection, vec![node], cx) {
+            self.show_graph_error(error, cx);
         }
-        if self
-            .graph_selection_set
-            .iter()
-            .any(|member| member.node == node)
-        {
-            return;
-        }
-        if self.graph_selection_set.len() >= MAX_SET_MEMBERS {
-            self.show_graph_error(anyhow::anyhow!("The selection set holds at most {MAX_SET_MEMBERS} dependencies; clear the selection set before adding more"), cx);
-            return;
-        }
-        self.graph_notice = None;
-        self.graph_selection_set.push(GraphPin { selection, node });
-        self.rebuild(cx);
-        cx.notify();
     }
 
-    fn clear_graph_selection_set(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn add_graph_nodes_to_set(
+        &mut self,
+        selection: &GraphSelection,
+        nodes: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        const MAX_SET_MEMBERS: usize = 8;
+        anyhow::ensure!(
+            current_dependency_graph_contains(
+                self.project.read(cx),
+                selection,
+                nodes.iter().map(String::as_str),
+                cx
+            ),
+            "Adding to the selection set requires current dependency facts. Refresh and retry."
+        );
+        anyhow::ensure!(
+            self.graph_selection_set
+                .first()
+                .is_none_or(|first| first.selection == *selection),
+            "The selection set holds dependencies from one graph. Clear the set before adding from another graph."
+        );
+        let mut retained = self
+            .graph_selection_set
+            .iter()
+            .map(|member| member.node.clone())
+            .collect::<HashSet<_>>();
+        let additions = nodes
+            .into_iter()
+            .filter(|node| retained.insert(node.clone()))
+            .collect::<Vec<_>>();
+        anyhow::ensure!(
+            retained.len() <= MAX_SET_MEMBERS,
+            "The selection set holds at most {MAX_SET_MEMBERS} dependencies. Remove the selection or clear the set before adding more."
+        );
+        self.graph_notice = None;
+        self.graph_selection_set
+            .extend(additions.into_iter().map(|node| GraphPin {
+                selection: selection.clone(),
+                node,
+            }));
+        self.rebuild(cx);
+        Ok(())
+    }
+
+    pub(crate) fn clear_graph_selection_set(&mut self, cx: &mut Context<Self>) {
         self.graph_selection_set.clear();
         self.rebuild(cx);
-        cx.notify();
     }
 
     fn pin_selected_graph(&mut self, cx: &mut Context<Self>) {
-        if let Some(pin) = self.graph_pin.clone()
-            && let Some((selection, node)) = self.resolve_selected_graph(cx)
-            && pin.selection.server_id == selection.server_id
-            && pin.selection.generation == selection.generation
-            && pin.selection.worktree_id() == selection.worktree_id()
-            && pin.selection.target == selection.target
-            && pin.node == node
-        {
-            self.graph_pin = None;
-            self.rebuild(cx);
-            cx.notify();
+        let Some((selection, node)) = self.resolve_selected_graph(cx) else {
+            self.show_graph_error(anyhow::anyhow!("Pinning requires current Gradle or Maven graph facts. Refresh and select a dependency row."), cx);
             return;
+        };
+        if let Err(error) = self.pin_graph_node(&selection, &node, cx) {
+            self.show_graph_error(error, cx);
         }
-        match self.resolve_selected_graph(cx) {
-            Some((selection, node)) => {
-                self.graph_notice = None;
-                self.graph_pin = Some(GraphPin { selection, node });
-            }
-            None => {
-                self.show_graph_error(anyhow::anyhow!("Pinning requires a current Gradle component or Maven occurrence; refresh and expand admitted graph facts, then select a dependency row"), cx);
-                return;
-            }
-        }
+    }
+
+    pub(crate) fn pin_graph_node(
+        &mut self,
+        selection: &GraphSelection,
+        node: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<bool> {
+        anyhow::ensure!(
+            current_dependency_graph_contains(self.project.read(cx), selection, [node], cx),
+            "Pinning requires current dependency facts. Refresh and retry."
+        );
+        let pin = GraphPin {
+            selection: selection.clone(),
+            node: node.to_owned(),
+        };
+        self.graph_pin = (self.graph_pin.as_ref() != Some(&pin)).then_some(pin);
+        self.graph_notice = None;
         self.rebuild(cx);
-        cx.notify();
+        Ok(self.graph_pin.is_some())
     }
 
     pub(crate) fn clear_graph_inspection(&mut self, cx: &mut Context<Self>) {
@@ -4273,7 +4299,23 @@ impl DependenciesPanel {
         }
         if !inspection_current {
             self.graph_inspection = None;
+        }
+        let project = self.project.read(cx);
+        if self.graph_pin.as_ref().is_some_and(|pin| {
+            !current_dependency_graph_contains(project, &pin.selection, [pin.node.as_str()], cx)
+        }) {
             self.graph_pin = None;
+        }
+        if let Some(first) = self.graph_selection_set.first()
+            && !current_dependency_graph_contains(
+                project,
+                &first.selection,
+                self.graph_selection_set
+                    .iter()
+                    .map(|member| member.node.as_str()),
+                cx,
+            )
+        {
             self.graph_selection_set.clear();
         }
         match diagram_source {
@@ -9620,7 +9662,7 @@ mod tests {
                 server_id: lsp::LanguageServerId(1),
                 generation: 2,
                 target: GraphQueryTarget::Gradle {
-                    module: module_root,
+                    module: module_root.clone(),
                     configuration: "parityGraph".into(),
                 },
             },
@@ -9642,7 +9684,8 @@ mod tests {
             "coverage names the induced-subgraph scope: {}",
             row.accessibility_label
         );
-        assert_eq!(id, row.id);
+        let module_id = jdtls_module_node_id(&snapshot, &module_root, BuildToolView::Gradle);
+        assert_eq!(id, graph_fact_id(&module_id, "gradle", &[]));
         let group = |label: &str| {
             row.children
                 .iter()
@@ -14756,28 +14799,36 @@ mod tests {
             use crate::dependency_diagram_menu::{
                 DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
             };
-            let (node, original_selection, viewport) = diagram_item.read_with(cx, |item, cx| {
-                let canvas = item.canvas().read(cx);
-                let root = canvas
-                    .graph
-                    .nodes
-                    .iter()
-                    .find(|node| node.kind == crate::dependency_graph_canvas::CanvasNodeKind::Root)
-                    .expect("provider root");
-                let node = canvas
-                    .graph
-                    .edges
-                    .iter()
-                    .find(|edge| {
-                        edge.from == root.id
-                            && edge.variant
-                                == crate::dependency_graph_canvas::CanvasEdgeVariant::Dependency
-                    })
-                    .expect("admitted direct dependency")
-                    .to
-                    .clone();
-                (node, canvas.selection.clone(), canvas.viewport.clone())
-            });
+            let (root, node, original_selection, viewport) =
+                diagram_item.read_with(cx, |item, cx| {
+                    let canvas = item.canvas().read(cx);
+                    let root = canvas
+                        .graph
+                        .nodes
+                        .iter()
+                        .find(|node| {
+                            node.kind == crate::dependency_graph_canvas::CanvasNodeKind::Root
+                        })
+                        .expect("provider root");
+                    let node = canvas
+                        .graph
+                        .edges
+                        .iter()
+                        .find(|edge| {
+                            edge.from == root.id
+                                && edge.variant
+                                    == crate::dependency_graph_canvas::CanvasEdgeVariant::Dependency
+                        })
+                        .expect("admitted direct dependency")
+                        .to
+                        .clone();
+                    (
+                        root.id.clone(),
+                        node,
+                        canvas.selection.clone(),
+                        canvas.viewport.clone(),
+                    )
+                });
             panel.update(cx, |panel, cx| {
                 panel.host.select_first();
                 assert!(panel.resolve_selected_graph(cx).is_none());
@@ -14826,6 +14877,87 @@ mod tests {
             });
             diagram_item.read_with(cx, |item, cx| {
                 assert!(item.canvas().read(cx).inspected_edges.is_empty());
+            });
+            let root_target = DependencyDiagramContextTarget::Node(root.clone());
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::PinSelection,
+                    &root_target,
+                    cx,
+                );
+                item.inspect_canvas_target(DependencyDiagramMenuCommand::PathsBetween, &target, cx);
+            });
+            panel.read_with(cx, |panel, _| {
+                let inspection = panel
+                    .graph_inspection
+                    .as_ref()
+                    .expect("paths from the pinned dependency");
+                assert_eq!(inspection.anchor.as_ref(), Some(&root));
+                assert_eq!(inspection.node, node);
+            });
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::ClearInspection,
+                    &DependencyDiagramContextTarget::Canvas,
+                    cx,
+                );
+                item.canvas().update(cx, |canvas, cx| {
+                    canvas.selection = BTreeSet::from([root.clone(), node.clone()]);
+                    cx.notify();
+                });
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::AddToSelectionSet,
+                    &DependencyDiagramContextTarget::Selection(root.clone()),
+                    cx,
+                );
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::InspectSelectionSet,
+                    &target,
+                    cx,
+                );
+            });
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.graph_pin.as_ref().map(|pin| &pin.node), Some(&root));
+                let inspection = panel
+                    .graph_inspection
+                    .as_ref()
+                    .expect("comparison set relations");
+                assert_eq!(inspection.mode, GraphInspectionMode::SelectionSetRelations);
+                assert_eq!(inspection.set_members.len(), 2);
+                assert!(inspection.set_members.contains(&node));
+                assert!(inspection.set_members.contains(&root));
+            });
+            diagram_item.update(cx, |item, cx| {
+                assert!(!item.canvas().read(cx).inspected_edges.is_empty());
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::ClearSelectionSet,
+                    &target,
+                    cx,
+                );
+            });
+            panel.read_with(cx, |panel, _| {
+                assert!(panel.graph_selection_set.is_empty());
+                assert!(
+                    panel.graph_inspection.is_some(),
+                    "clearing comparison preserves inspection"
+                );
+                assert_eq!(panel.graph_pin.as_ref().map(|pin| &pin.node), Some(&root));
+            });
+            diagram_item.update(cx, |item, cx| {
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::ClearInspection,
+                    &DependencyDiagramContextTarget::Canvas,
+                    cx,
+                );
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::PinSelection,
+                    &root_target,
+                    cx,
+                );
+                item.canvas().update(cx, |canvas, cx| {
+                    canvas.selection = original_selection.clone();
+                    cx.notify();
+                });
             });
             panel.update(cx, |panel, cx| {
                 assert!(panel.graph_inspection.is_none());
