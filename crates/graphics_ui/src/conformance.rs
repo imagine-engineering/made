@@ -1340,6 +1340,117 @@ fn at_gra_node_101_103_113_native_rounding_exposes_all_modes_and_recovers(cx: &m
 }
 
 #[gpui::test]
+fn at_gra_node_099_114_native_absolute_value_and_sign_expose_all_source_modes(
+    cx: &mut TestAppContext,
+) {
+    use workspace::item::Item as _;
+
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let (value, value_y) = item.read_with(cx, |item, _| {
+        (item.augend_editor.clone(), item.augend_y_editor.clone())
+    });
+    for (selector, inputs, expected, title) in [
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-SCALAR",
+            ["-1.5", ""],
+            "1.5",
+            "Graphite Absolute Value",
+        ),
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-INTEGER",
+            ["-9007199254740993", ""],
+            "9007199254740993",
+            "Graphite Absolute Value",
+        ),
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-VECTOR",
+            ["-1.5", "2.5"],
+            "[1.5, 2.5]",
+            "Graphite Absolute Value",
+        ),
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-LIST",
+            ["-1.5, 2.5, -1.5", ""],
+            "[1.5, 2.5, 1.5]",
+            "Graphite Absolute Value",
+        ),
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-VECTOR-LIST",
+            ["-1.5, 2.5", "2.5, -1.5"],
+            "[[1.5, 2.5], [2.5, 1.5]]",
+            "Graphite Absolute Value",
+        ),
+        (
+            "GRAPHITE-MODE-SIGN-SCALAR",
+            ["-0", ""],
+            "0",
+            "Graphite Sign",
+        ),
+        (
+            "GRAPHITE-MODE-SIGN-VECTOR",
+            ["-5", "3"],
+            "[-1.0, 1.0]",
+            "Graphite Sign",
+        ),
+        (
+            "GRAPHITE-MODE-SIGN-LIST",
+            ["-5, 0, 3", ""],
+            "[-1.0, 0.0, 1.0]",
+            "Graphite Sign",
+        ),
+        (
+            "GRAPHITE-MODE-SIGN-VECTOR-LIST",
+            ["-5, 3", "3, -5"],
+            "[[-1.0, 1.0], [1.0, -1.0]]",
+            "Graphite Sign",
+        ),
+        (
+            "GRAPHITE-MODE-ABSOLUTE-VALUE-INTEGER-LIST",
+            ["-9007199254740993, 0, -3", ""],
+            "[9007199254740993, 0, 3]",
+            "Graphite Absolute Value",
+        ),
+    ] {
+        let button = cx.debug_bounds(selector).expect("admitted typed mode");
+        cx.simulate_click(button.center(), gpui::Modifiers::default());
+        for (editor, input) in [&value, &value_y].into_iter().zip(inputs) {
+            editor.update_in(cx, |editor, window, cx| editor.set_text(input, window, cx));
+        }
+        cx.run_until_parked();
+        item.read_with(cx, |item, cx| {
+            let session = item.session.read(cx);
+            assert!(
+                session.diagnostic().is_none(),
+                "{selector}: {:?}",
+                session.diagnostic()
+            );
+            assert_eq!(session.result_text(), expected, "{selector}");
+            assert_eq!(item.tab_content_text(0, cx).as_ref(), title);
+        });
+    }
+
+    let revision = item.read_with(cx, |item, cx| item.session.read(cx).revision());
+    value.update_in(cx, |editor, window, cx| {
+        editor.set_text("1.5, 0, -3", window, cx)
+    });
+    cx.run_until_parked();
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert!(session.diagnostic().is_some());
+        assert_eq!(session.revision(), revision);
+        assert_eq!(session.result_text(), "[9007199254740993, 0, 3]");
+    });
+    value.update_in(cx, |editor, window, cx| editor.set_text("", window, cx));
+    cx.run_until_parked();
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert!(session.diagnostic().is_none());
+        assert_eq!(session.result_text(), "[]");
+    });
+}
+
+#[gpui::test]
 fn at_gra_node_078_native_divide_matches_each_typed_mode_and_recovers(cx: &mut TestAppContext) {
     use workspace::item::Item as _;
 

@@ -72,7 +72,9 @@ mod tests {
         registry::{RegistryValueSource, RegistryWidgetOverride},
     };
     use graphite_glam::DVec2;
-    use graphite_math_nodes::{ceiling, divide, floor, reciprocal, root, round, subtract};
+    use graphite_math_nodes::{
+        absolute_value, ceiling, divide, floor, reciprocal, root, round, sign, subtract,
+    };
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
@@ -135,34 +137,65 @@ mod tests {
             assert_eq!(id.as_str(), expected_id);
             assert_eq!(input_owner, id);
             assert_eq!(input_index, 0);
-            let registered = registered_node(id.as_str()).expect("pinned rounding node");
-            assert_eq!(registered.metadata.display_name, name);
-            assert_eq!(registered.metadata.category, "Math: Numeric");
-            assert_eq!(registered.metadata.properties, None);
-            assert!(registered.metadata.context_features.is_empty());
-            let [input] = registered.metadata.fields.as_slice() else {
-                panic!("expected the original Value port");
-            };
-            assert_eq!(input.name, "Value");
-            assert_eq!(input.default_type, Some(list!(f64)));
-            assert!(matches!(input.value_source, RegistryValueSource::None));
-            assert!(matches!(
-                input.widget_override,
-                RegistryWidgetOverride::None
-            ));
-            assert!(!input.hidden && !input.exposed);
-            let expected = HashSet::from([
-                item_signature::<f64>(),
-                item_signature::<DVec2>(),
-                list_signature::<f64>(),
-                list_signature::<DVec2>(),
-            ]);
-            assert_eq!(registered.signatures.len(), expected.len());
-            assert_eq!(
-                registered.signatures.into_iter().collect::<HashSet<_>>(),
-                expected
-            );
+            assert_unary_numeric_schema(expected_id, name, []);
         }
+    }
+
+    fn assert_unary_numeric_schema(
+        identifier: &str,
+        name: &str,
+        extra_signatures: impl IntoIterator<Item = NodeIOTypes>,
+    ) {
+        let registered = registered_node(identifier).expect("pinned numeric node");
+        assert_eq!(registered.metadata.display_name, name);
+        assert_eq!(registered.metadata.category, "Math: Numeric");
+        assert_eq!(registered.metadata.properties, None);
+        assert!(registered.metadata.context_features.is_empty());
+        let [input] = registered.metadata.fields.as_slice() else {
+            panic!("expected the original Value port");
+        };
+        assert_eq!(input.name, "Value");
+        assert_eq!(input.default_type, Some(list!(f64)));
+        assert!(matches!(input.value_source, RegistryValueSource::None));
+        assert!(matches!(
+            input.widget_override,
+            RegistryWidgetOverride::None
+        ));
+        assert!(!input.hidden && !input.exposed);
+        let mut expected = HashSet::from([
+            item_signature::<f64>(),
+            item_signature::<DVec2>(),
+            list_signature::<f64>(),
+            list_signature::<DVec2>(),
+        ]);
+        expected.extend(extra_signatures);
+        assert_eq!(registered.signatures.len(), expected.len());
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn at_gra_node_099_1_absolute_value_registers_exactly_six_source_signatures() {
+        let identifier = absolute_value::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "math_nodes::AbsoluteValueNode");
+        assert_eq!(absolute_value::ValueInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(absolute_value::ValueInput::INDEX, 0);
+        assert_unary_numeric_schema(
+            identifier.as_str(),
+            "Absolute Value",
+            [item_signature::<i64>(), list_signature::<i64>()],
+        );
+    }
+
+    #[test]
+    fn at_gra_node_114_1_sign_registers_exactly_four_source_signatures() {
+        let identifier = sign::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "math_nodes::SignNode");
+        assert_eq!(sign::ValueInput::NODE_IDENTIFIER, identifier);
+        assert_eq!(sign::ValueInput::INDEX, 0);
+        assert_unary_numeric_schema(identifier.as_str(), "Sign", []);
     }
 
     #[test]

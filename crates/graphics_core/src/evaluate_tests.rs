@@ -10,7 +10,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
 fn at_gra_node_101_103_113_2_rounding_keeps_pinned_values_types_and_attributes() -> TestResult {
-    use RoundingOperation::{Ceiling, Floor, Round};
+    use UnaryNumericOperation::{Ceiling, Floor, Round};
 
     for (operation, negative, positive) in [(Ceiling, -1., 2.), (Floor, -2., 1.), (Round, -2., 2.)]
     {
@@ -46,12 +46,14 @@ fn at_gra_node_101_103_113_2_rounding_keeps_pinned_values_types_and_attributes()
         ]
         .into_iter()
         .collect();
-        let rounded = evaluate_rounding!(
+        let rounded = evaluate_unary_numeric!(
             operation,
             values,
             CeilingNodeMapped,
             FloorNodeMapped,
-            RoundNodeMapped
+            RoundNodeMapped,
+            AbsoluteValueNodeMapped,
+            SignNodeMapped
         )?;
         assert_eq!(rounded.attribute::<i64>("index", 0), Some(&4));
         assert_eq!(rounded.attribute::<i64>("index", 1), Some(&9));
@@ -60,6 +62,99 @@ fn at_gra_node_101_103_113_2_rounding_keeps_pinned_values_types_and_attributes()
             [[negative, positive], [positive, negative]]
         );
     }
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_099_2_absolute_value_keeps_source_types_order_and_attributes() -> TestResult {
+    let operation = UnaryNumericOperation::AbsoluteValue;
+    assert_eq!(operation.evaluate_scalar(-1.5)?, 1.5);
+    assert_eq!(operation.evaluate_scalar(-0.)?.to_bits(), 0_f64.to_bits());
+    assert!(operation.evaluate_scalar(f64::NAN)?.is_nan());
+    assert_eq!(operation.evaluate_vector([-2.5, 4.])?, [2.5, 4.]);
+    assert!(operation.evaluate_list(&[])?.is_empty());
+    assert_eq!(operation.evaluate_list(&[-2.5])?, [2.5]);
+    assert_eq!(operation.evaluate_list(&[-2.5, 4., -2.5])?, [2.5, 4., 2.5]);
+    assert!(operation.evaluate_vector_list(&[])?.is_empty());
+    assert_eq!(
+        operation.evaluate_vector_list(&[[-2.5, 4.], [2.5, -4.]])?,
+        [[2.5, 4.], [2.5, 4.]]
+    );
+
+    assert_eq!(
+        evaluate_absolute_value_i64(-9_007_199_254_740_993)?,
+        9_007_199_254_740_993
+    );
+    assert!(evaluate_absolute_value_i64_list(&[])?.is_empty());
+    assert_eq!(evaluate_absolute_value_i64_list(&[-3])?, [3]);
+    assert_eq!(
+        evaluate_absolute_value_i64_list(&[-3, -i64::MAX, -3])?,
+        [3, i64::MAX, 3]
+    );
+    let minimum = std::panic::catch_unwind(|| std::hint::black_box(i64::MIN).abs());
+    match minimum {
+        Ok(wrapped) => {
+            assert_eq!(evaluate_absolute_value_i64(i64::MIN)?, wrapped);
+            assert_eq!(
+                evaluate_absolute_value_i64_list(&[1, i64::MIN])?,
+                [1, wrapped]
+            );
+        }
+        Err(_) => {
+            assert!(evaluate_absolute_value_i64(i64::MIN).is_err());
+            assert!(evaluate_absolute_value_i64_list(&[1, i64::MIN]).is_err());
+        }
+    }
+    let values = [
+        Item::new_from_element(-3_i64).with_attribute("source", 4_i64),
+        Item::new_from_element(-3_i64).with_attribute("source", 9_i64),
+    ]
+    .into_iter()
+    .collect::<List<_>>();
+    let node = graphite_math_nodes::AbsoluteValueNodeMapped::new(Input(values));
+    let output = evaluate_source_node(&node)?;
+    assert_eq!(output.attribute::<i64>("source", 0), Some(&4));
+    assert_eq!(output.attribute::<i64>("source", 1), Some(&9));
+    assert_eq!(
+        output
+            .into_iter()
+            .map(Item::into_element)
+            .collect::<Vec<_>>(),
+        [3, 3]
+    );
+    Ok(())
+}
+
+#[test]
+fn at_gra_node_114_2_sign_keeps_source_components_zero_and_attributes() -> TestResult {
+    let operation = UnaryNumericOperation::Sign;
+    assert_eq!(operation.evaluate_scalar(-1.5)?, -1.);
+    assert_eq!(operation.evaluate_scalar(-0.)?.to_bits(), 0_f64.to_bits());
+    assert_eq!(
+        operation.evaluate_scalar(f64::NAN)?.to_bits(),
+        0_f64.to_bits()
+    );
+    assert_eq!(operation.evaluate_scalar(f64::INFINITY)?, 1.);
+    assert_eq!(operation.evaluate_vector([-2.5, 4.])?, [-1., 1.]);
+    assert!(operation.evaluate_list(&[])?.is_empty());
+    assert_eq!(operation.evaluate_list(&[-2.5])?, [-1.]);
+    assert_eq!(operation.evaluate_list(&[-2.5, 4., -2.5])?, [-1., 1., -1.]);
+    assert!(operation.evaluate_vector_list(&[])?.is_empty());
+    assert_eq!(
+        operation.evaluate_vector_list(&[[-2.5, 4.], [2.5, -4.]])?,
+        [[-1., 1.], [1., -1.]]
+    );
+    let values = [
+        Item::new_from_element(DVec2::new(-2.5, 4.)).with_attribute("source", 11_i64),
+        Item::new_from_element(DVec2::new(2.5, -0.)).with_attribute("source", 19_i64),
+    ]
+    .into_iter()
+    .collect::<List<_>>();
+    let node = graphite_math_nodes::SignNodeMapped::new(Input(values));
+    let output = evaluate_source_node(&node)?;
+    assert_eq!(output.attribute::<i64>("source", 0), Some(&11));
+    assert_eq!(output.attribute::<i64>("source", 1), Some(&19));
+    assert_eq!(vector_elements(output), [[-1., 1.], [1., 0.]]);
     Ok(())
 }
 

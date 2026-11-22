@@ -3,7 +3,7 @@ use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Render,
     Subscription, Window, actions,
 };
-use graphics_core::evaluate::RoundingOperation;
+use graphics_core::evaluate::UnaryNumericOperation;
 use ui::{ContextMenu, DropdownMenu, TintColor, prelude::*};
 use workspace::{
     Workspace,
@@ -519,11 +519,13 @@ impl Render for GraphicsWorkspaceItem {
                 "Each zero denominator produces zero."
             } else if mode.is_reciprocal() {
                 "Each zero input produces zero."
-            } else if let Some(operation) = mode.rounding_operation() {
+            } else if let Some(operation) = mode.unary_numeric_operation() {
                 match operation {
-                    RoundingOperation::Ceiling => "Rounds up to a whole number.",
-                    RoundingOperation::Floor => "Rounds down to a whole number.",
-                    RoundingOperation::Round => "Rounds halfway values away from zero.",
+                    UnaryNumericOperation::Ceiling => "Rounds up to a whole number.",
+                    UnaryNumericOperation::Floor => "Rounds down to a whole number.",
+                    UnaryNumericOperation::Round => "Rounds halfway values away from zero.",
+                    UnaryNumericOperation::AbsoluteValue => "Removes the negative sign from each value or component.",
+                    UnaryNumericOperation::Sign => "Returns −1 for negative values, 0 for zero, and 1 for positive values.",
                 }
             } else if mode.is_root() {
                 "Degrees of zero or less produce zero."
@@ -616,18 +618,28 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::RootVectorLists, "Root Vector Lists", "GRAPHITE-MODE-ROOT-VECTOR-LISTS"),
                         (AddMode::RootScalarVectorLists, "Root Scalar List with Vector Degrees", "GRAPHITE-MODE-ROOT-SCALAR-VECTOR-LISTS"),
                         (AddMode::RootVectorScalarLists, "Root Vector List with Scalar Degrees", "GRAPHITE-MODE-ROOT-VECTOR-SCALAR-LISTS"),
-                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::Scalar), "Ceiling Scalar", "GRAPHITE-MODE-CEILING-SCALAR"),
-                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::Vector), "Ceiling Vector", "GRAPHITE-MODE-CEILING-VECTOR"),
-                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::List), "Ceiling List", "GRAPHITE-MODE-CEILING-LIST"),
-                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::VectorList), "Ceiling Vector List", "GRAPHITE-MODE-CEILING-VECTOR-LIST"),
-                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::Scalar), "Floor Scalar", "GRAPHITE-MODE-FLOOR-SCALAR"),
-                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::Vector), "Floor Vector", "GRAPHITE-MODE-FLOOR-VECTOR"),
-                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::List), "Floor List", "GRAPHITE-MODE-FLOOR-LIST"),
-                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::VectorList), "Floor Vector List", "GRAPHITE-MODE-FLOOR-VECTOR-LIST"),
-                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::Scalar), "Round Scalar", "GRAPHITE-MODE-ROUND-SCALAR"),
-                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::Vector), "Round Vector", "GRAPHITE-MODE-ROUND-VECTOR"),
-                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::List), "Round List", "GRAPHITE-MODE-ROUND-LIST"),
-                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::VectorList), "Round Vector List", "GRAPHITE-MODE-ROUND-VECTOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Ceiling, UnaryNumericMode::Scalar), "Ceiling Scalar", "GRAPHITE-MODE-CEILING-SCALAR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Ceiling, UnaryNumericMode::Vector), "Ceiling Vector", "GRAPHITE-MODE-CEILING-VECTOR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Ceiling, UnaryNumericMode::List), "Ceiling List", "GRAPHITE-MODE-CEILING-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Ceiling, UnaryNumericMode::VectorList), "Ceiling Vector List", "GRAPHITE-MODE-CEILING-VECTOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Floor, UnaryNumericMode::Scalar), "Floor Scalar", "GRAPHITE-MODE-FLOOR-SCALAR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Floor, UnaryNumericMode::Vector), "Floor Vector", "GRAPHITE-MODE-FLOOR-VECTOR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Floor, UnaryNumericMode::List), "Floor List", "GRAPHITE-MODE-FLOOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Floor, UnaryNumericMode::VectorList), "Floor Vector List", "GRAPHITE-MODE-FLOOR-VECTOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Round, UnaryNumericMode::Scalar), "Round Scalar", "GRAPHITE-MODE-ROUND-SCALAR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Round, UnaryNumericMode::Vector), "Round Vector", "GRAPHITE-MODE-ROUND-VECTOR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Round, UnaryNumericMode::List), "Round List", "GRAPHITE-MODE-ROUND-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Round, UnaryNumericMode::VectorList), "Round Vector List", "GRAPHITE-MODE-ROUND-VECTOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::AbsoluteValue, UnaryNumericMode::Scalar), "Absolute Value Scalar", "GRAPHITE-MODE-ABSOLUTE-VALUE-SCALAR"),
+                        (AddMode::AbsoluteValueInteger, "Absolute Value Integer", "GRAPHITE-MODE-ABSOLUTE-VALUE-INTEGER"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::AbsoluteValue, UnaryNumericMode::Vector), "Absolute Value Vector", "GRAPHITE-MODE-ABSOLUTE-VALUE-VECTOR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::AbsoluteValue, UnaryNumericMode::List), "Absolute Value List", "GRAPHITE-MODE-ABSOLUTE-VALUE-LIST"),
+                        (AddMode::AbsoluteValueIntegerList, "Absolute Value Integer List", "GRAPHITE-MODE-ABSOLUTE-VALUE-INTEGER-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::AbsoluteValue, UnaryNumericMode::VectorList), "Absolute Value Vector List", "GRAPHITE-MODE-ABSOLUTE-VALUE-VECTOR-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Sign, UnaryNumericMode::Scalar), "Sign Scalar", "GRAPHITE-MODE-SIGN-SCALAR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Sign, UnaryNumericMode::Vector), "Sign Vector", "GRAPHITE-MODE-SIGN-VECTOR"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Sign, UnaryNumericMode::List), "Sign List", "GRAPHITE-MODE-SIGN-LIST"),
+                        (AddMode::UnaryNumeric(UnaryNumericOperation::Sign, UnaryNumericMode::VectorList), "Sign Vector List", "GRAPHITE-MODE-SIGN-VECTOR-LIST"),
 
                     ]
                     .into_iter()
@@ -730,7 +742,7 @@ impl Render for GraphicsWorkspaceItem {
                 .child(Label::new("Component order: m11, m12, m21, m22, tx, ty (column-major)."))
             })
             .when(
-                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists | AddMode::SubtractInteger | AddMode::SubtractIntegerLists | AddMode::Divide(DivideMode::Integer | DivideMode::IntegerLists)),
+                matches!(mode, AddMode::Integer | AddMode::IntegerLists | AddMode::MultiplyInteger | AddMode::MultiplyIntegerLists | AddMode::SubtractInteger | AddMode::SubtractIntegerLists | AddMode::Divide(DivideMode::Integer | DivideMode::IntegerLists) | AddMode::AbsoluteValueInteger | AddMode::AbsoluteValueIntegerList),
                 |view| {
                     view.child(Label::new(
                         "Enter whole numbers in the 64-bit integer range.",
@@ -935,11 +947,13 @@ fn arithmetic_title(mode: AddMode) -> &'static str {
         "Graphite Divide"
     } else if mode.is_reciprocal() {
         "Graphite Reciprocal"
-    } else if let Some(operation) = mode.rounding_operation() {
+    } else if let Some(operation) = mode.unary_numeric_operation() {
         match operation {
-            RoundingOperation::Ceiling => "Graphite Ceiling",
-            RoundingOperation::Floor => "Graphite Floor",
-            RoundingOperation::Round => "Graphite Round",
+            UnaryNumericOperation::Ceiling => "Graphite Ceiling",
+            UnaryNumericOperation::Floor => "Graphite Floor",
+            UnaryNumericOperation::Round => "Graphite Round",
+            UnaryNumericOperation::AbsoluteValue => "Graphite Absolute Value",
+            UnaryNumericOperation::Sign => "Graphite Sign",
         }
     } else if mode.is_root() {
         "Graphite Root"

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use graphics_core::evaluate::RoundingOperation;
+use graphics_core::evaluate::UnaryNumericOperation;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AddMode {
@@ -29,7 +29,9 @@ pub(crate) enum AddMode {
     ReciprocalVector,
     ReciprocalList,
     ReciprocalVectorList,
-    Rounding(RoundingOperation, UnaryNumericMode),
+    UnaryNumeric(UnaryNumericOperation, UnaryNumericMode),
+    AbsoluteValueInteger,
+    AbsoluteValueIntegerList,
     RootScalar,
     RootLists,
     RootVector,
@@ -78,15 +80,18 @@ pub(crate) enum UnaryNumericMode {
 }
 
 impl AddMode {
-    pub(crate) fn rounding_operation(self) -> Option<RoundingOperation> {
+    pub(crate) fn unary_numeric_operation(self) -> Option<UnaryNumericOperation> {
         match self {
-            Self::Rounding(operation, _) => Some(operation),
+            Self::UnaryNumeric(operation, _) => Some(operation),
+            Self::AbsoluteValueInteger | Self::AbsoluteValueIntegerList => {
+                Some(UnaryNumericOperation::AbsoluteValue)
+            }
             _ => None,
         }
     }
 
     pub(crate) fn has_single_input(self) -> bool {
-        self.is_reciprocal() || self.rounding_operation().is_some()
+        self.is_reciprocal() || self.unary_numeric_operation().is_some()
     }
 
     pub(crate) fn is_divide(self) -> bool {
@@ -177,7 +182,8 @@ impl AddMode {
                 )
                 | Self::ReciprocalList
                 | Self::ReciprocalVectorList
-                | Self::Rounding(_, UnaryNumericMode::List | UnaryNumericMode::VectorList)
+                | Self::UnaryNumeric(_, UnaryNumericMode::List | UnaryNumericMode::VectorList)
+                | Self::AbsoluteValueIntegerList
                 | Self::RootLists
                 | Self::RootVectorLists
                 | Self::RootScalarVectorLists
@@ -210,7 +216,7 @@ impl AddMode {
                 )
                 | Self::ReciprocalVector
                 | Self::ReciprocalVectorList
-                | Self::Rounding(_, UnaryNumericMode::Vector | UnaryNumericMode::VectorList)
+                | Self::UnaryNumeric(_, UnaryNumericMode::Vector | UnaryNumericMode::VectorList)
                 | Self::RootVector
                 | Self::RootVectorScalar
                 | Self::RootVectorLists
@@ -265,7 +271,9 @@ enum Inputs {
     Subtract(NumericPairInputs),
     Divide(NumericPairInputs),
     Reciprocal(UnaryNumericInputs),
-    Rounding(RoundingOperation, UnaryNumericInputs),
+    UnaryNumeric(UnaryNumericOperation, UnaryNumericInputs),
+    AbsoluteValueInteger(i64),
+    AbsoluteValueIntegerList(Vec<i64>),
     Root(RootInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
@@ -536,7 +544,10 @@ impl UnaryNumericInputs {
         })
     }
 
-    fn evaluate_rounding(&self, operation: RoundingOperation) -> Result<Output, EvaluationError> {
+    fn evaluate_unary_numeric(
+        &self,
+        operation: UnaryNumericOperation,
+    ) -> Result<Output, EvaluationError> {
         Ok(match self {
             Self::Scalar(value) => Output::Scalar(operation.evaluate_scalar(*value)?),
             Self::Vector(value) => Output::Vector(operation.evaluate_vector(*value)?),
@@ -895,6 +906,17 @@ struct Evaluation {
 }
 
 impl Inputs {
+    fn unary_numeric_mode(&self) -> Option<AddMode> {
+        match self {
+            Self::UnaryNumeric(operation, inputs) => {
+                Some(AddMode::UnaryNumeric(*operation, inputs.mode()))
+            }
+            Self::AbsoluteValueInteger(_) => Some(AddMode::AbsoluteValueInteger),
+            Self::AbsoluteValueIntegerList(_) => Some(AddMode::AbsoluteValueIntegerList),
+            _ => None,
+        }
+    }
+
     fn same_values(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -933,8 +955,15 @@ impl Inputs {
             (Self::Reciprocal(inputs), Self::Reciprocal(other_inputs)) => {
                 inputs.same_values(other_inputs)
             }
-            (Self::Rounding(operation, inputs), Self::Rounding(other_operation, other_inputs)) => {
-                operation == other_operation && inputs.same_values(other_inputs)
+            (
+                Self::UnaryNumeric(operation, inputs),
+                Self::UnaryNumeric(other_operation, other_inputs),
+            ) => operation == other_operation && inputs.same_values(other_inputs),
+            (Self::AbsoluteValueInteger(first), Self::AbsoluteValueInteger(second)) => {
+                first == second
+            }
+            (Self::AbsoluteValueIntegerList(first), Self::AbsoluteValueIntegerList(second)) => {
+                first == second
             }
             (Self::Root(inputs), Self::Root(other_inputs)) => inputs.same_values(other_inputs),
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
@@ -1005,7 +1034,13 @@ impl Inputs {
             Self::Subtract(inputs) => inputs.evaluate_subtract()?,
             Self::Divide(inputs) => inputs.evaluate_divide()?,
             Self::Reciprocal(inputs) => inputs.evaluate_reciprocal()?,
-            Self::Rounding(operation, inputs) => inputs.evaluate_rounding(*operation)?,
+            Self::UnaryNumeric(operation, inputs) => inputs.evaluate_unary_numeric(*operation)?,
+            Self::AbsoluteValueInteger(value) => Output::Integer(
+                graphics_core::evaluate::evaluate_absolute_value_i64(*value)?,
+            ),
+            Self::AbsoluteValueIntegerList(values) => Output::IntegerLists(
+                graphics_core::evaluate::evaluate_absolute_value_i64_list(values)?,
+            ),
             Self::Root(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
@@ -1062,7 +1097,9 @@ impl Inputs {
             Self::Subtract(inputs) => inputs.expression('−'),
             Self::Divide(inputs) => inputs.expression('÷'),
             Self::Reciprocal(inputs) => inputs.expression("Reciprocal"),
-            Self::Rounding(operation, inputs) => inputs.expression(operation.name()),
+            Self::UnaryNumeric(operation, inputs) => inputs.expression(operation.name()),
+            Self::AbsoluteValueInteger(value) => format!("Absolute Value of {value}"),
+            Self::AbsoluteValueIntegerList(values) => format!("Absolute Value of {values:?}"),
             Self::Root(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
@@ -1698,10 +1735,16 @@ impl GraphicsSession {
                 augend,
                 augend_y,
             )?),
-            AddMode::Rounding(operation, mode) => Inputs::Rounding(
+            AddMode::UnaryNumeric(operation, mode) => Inputs::UnaryNumeric(
                 operation,
                 UnaryNumericInputs::parse(mode, augend, augend_y)?,
             ),
+            AddMode::AbsoluteValueInteger => {
+                Inputs::AbsoluteValueInteger(parse_integer(augend, "value")?)
+            }
+            AddMode::AbsoluteValueIntegerList => {
+                Inputs::AbsoluteValueIntegerList(parse_integer_list(augend, "values")?)
+            }
             AddMode::RootScalar => Inputs::Root(RootInputs::Scalar(
                 parse_number(augend, "radicand")?,
                 parse_number(addend, "degree")?,
@@ -1831,6 +1874,7 @@ impl GraphicsSession {
                 _ => format!("Last valid result: {}", self.result_text()),
             };
         }
+        let evaluated_unary_mode = self.evaluation.inputs.unary_numeric_mode();
         if (self.mode == AddMode::MixColor)
             != matches!(self.evaluation.inputs, Inputs::MixColor { .. })
             || (self.mode == AddMode::InvertColor)
@@ -1844,9 +1888,8 @@ impl GraphicsSession {
             || (self.mode.is_reciprocal()
                 || matches!(&self.evaluation.inputs, Inputs::Reciprocal(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Reciprocal(inputs) if inputs.reciprocal_mode() == self.mode)
-            || (self.mode.rounding_operation().is_some()
-                || matches!(&self.evaluation.inputs, Inputs::Rounding(..)))
-                && !matches!(&self.evaluation.inputs, Inputs::Rounding(operation, inputs) if AddMode::Rounding(*operation, inputs.mode()) == self.mode)
+            || (self.mode.unary_numeric_operation().is_some() || evaluated_unary_mode.is_some())
+                && evaluated_unary_mode != Some(self.mode)
             || (self.mode.is_root() || matches!(&self.evaluation.inputs, Inputs::Root(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Root(inputs) if inputs.mode() == self.mode)
         {

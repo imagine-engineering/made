@@ -274,67 +274,83 @@ fn evaluate_source_node<'node, Output, Evaluation: Future<Output = Output>>(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RoundingOperation {
+pub enum UnaryNumericOperation {
     Ceiling,
     Floor,
     Round,
+    AbsoluteValue,
+    Sign,
 }
 
-macro_rules! evaluate_rounding {
-    ($operation:expr, $input:expr, $ceiling:ident, $floor:ident, $round:ident) => {{
+macro_rules! evaluate_unary_numeric {
+    ($operation:expr, $input:expr, $ceiling:ident, $floor:ident, $round:ident, $absolute_value:ident, $sign:ident) => {{
         let input = Input($input);
         match $operation {
-            RoundingOperation::Ceiling => {
+            UnaryNumericOperation::Ceiling => {
                 evaluate_source_node(&graphite_math_nodes::$ceiling::new(input))
             }
-            RoundingOperation::Floor => {
+            UnaryNumericOperation::Floor => {
                 evaluate_source_node(&graphite_math_nodes::$floor::new(input))
             }
-            RoundingOperation::Round => {
+            UnaryNumericOperation::Round => {
                 evaluate_source_node(&graphite_math_nodes::$round::new(input))
+            }
+            UnaryNumericOperation::AbsoluteValue => {
+                evaluate_source_node(&graphite_math_nodes::$absolute_value::new(input))
+            }
+            UnaryNumericOperation::Sign => {
+                evaluate_source_node(&graphite_math_nodes::$sign::new(input))
             }
         }
     }};
 }
 
-impl RoundingOperation {
+impl UnaryNumericOperation {
     pub fn name(self) -> &'static str {
         match self {
             Self::Ceiling => "Ceiling",
             Self::Floor => "Floor",
             Self::Round => "Round",
+            Self::AbsoluteValue => "Absolute Value",
+            Self::Sign => "Sign",
         }
     }
 
     pub fn evaluate_scalar(self, value: f64) -> Result<f64, AddEvaluationError> {
-        evaluate_rounding!(
+        evaluate_unary_numeric!(
             self,
             Item::new_from_element(value),
             CeilingNode,
             FloorNode,
-            RoundNode
+            RoundNode,
+            AbsoluteValueNode,
+            SignNode
         )
         .map(Item::into_element)
     }
 
     pub fn evaluate_vector(self, value: [f64; 2]) -> Result<[f64; 2], AddEvaluationError> {
-        evaluate_rounding!(
+        evaluate_unary_numeric!(
             self,
             Item::new_from_element(DVec2::from_array(value)),
             CeilingNode,
             FloorNode,
-            RoundNode
+            RoundNode,
+            AbsoluteValueNode,
+            SignNode
         )
         .map(|item| item.into_element().to_array())
     }
 
     pub fn evaluate_list(self, values: &[f64]) -> Result<Vec<f64>, AddEvaluationError> {
-        evaluate_rounding!(
+        evaluate_unary_numeric!(
             self,
             numeric_items(values),
             CeilingNodeMapped,
             FloorNodeMapped,
-            RoundNodeMapped
+            RoundNodeMapped,
+            AbsoluteValueNodeMapped,
+            SignNodeMapped
         )
         .map(|items| items.into_iter().map(Item::into_element).collect())
     }
@@ -343,15 +359,27 @@ impl RoundingOperation {
         self,
         values: &[[f64; 2]],
     ) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
-        evaluate_rounding!(
+        evaluate_unary_numeric!(
             self,
             vector_items(values),
             CeilingNodeMapped,
             FloorNodeMapped,
-            RoundNodeMapped
+            RoundNodeMapped,
+            AbsoluteValueNodeMapped,
+            SignNodeMapped
         )
         .map(vector_elements)
     }
+}
+
+pub fn evaluate_absolute_value_i64(value: i64) -> Result<i64, AddEvaluationError> {
+    let node = graphite_math_nodes::AbsoluteValueNode::new(Input(Item::new_from_element(value)));
+    evaluate_source_node(&node).map(Item::into_element)
+}
+
+pub fn evaluate_absolute_value_i64_list(values: &[i64]) -> Result<Vec<i64>, AddEvaluationError> {
+    let node = graphite_math_nodes::AbsoluteValueNodeMapped::new(Input(numeric_items(values)));
+    evaluate_source_node(&node).map(|items| items.into_iter().map(Item::into_element).collect())
 }
 
 pub fn evaluate_root(radicand: f64, degree: f64) -> Result<f64, AddEvaluationError> {
