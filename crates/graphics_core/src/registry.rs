@@ -72,7 +72,7 @@ mod tests {
         registry::{RegistryValueSource, RegistryWidgetOverride},
     };
     use graphite_glam::DVec2;
-    use graphite_math_nodes::{divide, reciprocal, root, subtract};
+    use graphite_math_nodes::{ceiling, divide, floor, reciprocal, root, round, subtract};
     use graphite_raster_nodes::adjustments::{invert, make_opaque};
     use graphite_raster_types::{CPU, Raster};
     use graphite_vector_types::Gradient;
@@ -105,6 +105,64 @@ mod tests {
             Type::Future(Box::new(output)),
             vec![input(left), input(right)],
         )
+    }
+
+    #[test]
+    fn at_gra_node_101_103_113_1_rounding_keeps_exact_source_ports_and_signatures() {
+        for (id, input_owner, input_index, name, expected_id) in [
+            (
+                ceiling::IDENTIFIER,
+                ceiling::ValueInput::NODE_IDENTIFIER,
+                ceiling::ValueInput::INDEX,
+                "Ceiling",
+                "math_nodes::CeilingNode",
+            ),
+            (
+                floor::IDENTIFIER,
+                floor::ValueInput::NODE_IDENTIFIER,
+                floor::ValueInput::INDEX,
+                "Floor",
+                "math_nodes::FloorNode",
+            ),
+            (
+                round::IDENTIFIER,
+                round::ValueInput::NODE_IDENTIFIER,
+                round::ValueInput::INDEX,
+                "Round",
+                "math_nodes::RoundNode",
+            ),
+        ] {
+            assert_eq!(id.as_str(), expected_id);
+            assert_eq!(input_owner, id);
+            assert_eq!(input_index, 0);
+            let registered = registered_node(id.as_str()).expect("pinned rounding node");
+            assert_eq!(registered.metadata.display_name, name);
+            assert_eq!(registered.metadata.category, "Math: Numeric");
+            assert_eq!(registered.metadata.properties, None);
+            assert!(registered.metadata.context_features.is_empty());
+            let [input] = registered.metadata.fields.as_slice() else {
+                panic!("expected the original Value port");
+            };
+            assert_eq!(input.name, "Value");
+            assert_eq!(input.default_type, Some(list!(f64)));
+            assert!(matches!(input.value_source, RegistryValueSource::None));
+            assert!(matches!(
+                input.widget_override,
+                RegistryWidgetOverride::None
+            ));
+            assert!(!input.hidden && !input.exposed);
+            let expected = HashSet::from([
+                item_signature::<f64>(),
+                item_signature::<DVec2>(),
+                list_signature::<f64>(),
+                list_signature::<DVec2>(),
+            ]);
+            assert_eq!(registered.signatures.len(), expected.len());
+            assert_eq!(
+                registered.signatures.into_iter().collect::<HashSet<_>>(),
+                expected
+            );
+        }
     }
 
     #[test]

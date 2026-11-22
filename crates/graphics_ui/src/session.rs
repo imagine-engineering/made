@@ -1,3 +1,5 @@
+use graphics_core::evaluate::RoundingOperation;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AddMode {
     Scalar,
@@ -25,6 +27,7 @@ pub(crate) enum AddMode {
     ReciprocalVector,
     ReciprocalList,
     ReciprocalVectorList,
+    Rounding(RoundingOperation, UnaryNumericMode),
     RootScalar,
     RootLists,
     RootVector,
@@ -64,7 +67,26 @@ pub(crate) enum DivideMode {
     VectorScalarLists,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UnaryNumericMode {
+    Scalar,
+    Vector,
+    List,
+    VectorList,
+}
+
 impl AddMode {
+    pub(crate) fn rounding_operation(self) -> Option<RoundingOperation> {
+        match self {
+            Self::Rounding(operation, _) => Some(operation),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn has_single_input(self) -> bool {
+        self.is_reciprocal() || self.rounding_operation().is_some()
+    }
+
     pub(crate) fn is_divide(self) -> bool {
         matches!(self, Self::Divide(_))
     }
@@ -153,6 +175,7 @@ impl AddMode {
                 )
                 | Self::ReciprocalList
                 | Self::ReciprocalVectorList
+                | Self::Rounding(_, UnaryNumericMode::List | UnaryNumericMode::VectorList)
                 | Self::RootLists
                 | Self::RootVectorLists
                 | Self::RootScalarVectorLists
@@ -185,6 +208,7 @@ impl AddMode {
                 )
                 | Self::ReciprocalVector
                 | Self::ReciprocalVectorList
+                | Self::Rounding(_, UnaryNumericMode::Vector | UnaryNumericMode::VectorList)
                 | Self::RootVector
                 | Self::RootVectorScalar
                 | Self::RootVectorLists
@@ -238,7 +262,8 @@ enum Inputs {
     VectorScalarLists(Vec<[f64; 2]>, Vec<f64>),
     Subtract(NumericPairInputs),
     Divide(NumericPairInputs),
-    Reciprocal(ReciprocalInputs),
+    Reciprocal(UnaryNumericInputs),
+    Rounding(RoundingOperation, UnaryNumericInputs),
     Root(RootInputs),
     Sort(Vec<f64>, Vec<f64>, bool),
     Multiply(MultiplyInputs),
@@ -450,20 +475,40 @@ impl Output {
     }
 }
 
-enum ReciprocalInputs {
+enum UnaryNumericInputs {
     Scalar(f64),
     Vector([f64; 2]),
     List(Vec<f64>),
     VectorList(Vec<[f64; 2]>),
 }
 
-impl ReciprocalInputs {
-    fn mode(&self) -> AddMode {
+impl UnaryNumericInputs {
+    fn parse(mode: UnaryNumericMode, value: &str, value_y: &str) -> Result<Self, String> {
+        Ok(match mode {
+            UnaryNumericMode::Scalar => Self::Scalar(parse_number(value, "value")?),
+            UnaryNumericMode::Vector => Self::Vector(parse_vector(value, value_y, "value")?),
+            UnaryNumericMode::List => Self::List(parse_number_list(value, "values")?),
+            UnaryNumericMode::VectorList => {
+                Self::VectorList(parse_vector_list(value, value_y, "value")?)
+            }
+        })
+    }
+
+    fn reciprocal_mode(&self) -> AddMode {
         match self {
             Self::Scalar(_) => AddMode::ReciprocalScalar,
             Self::Vector(_) => AddMode::ReciprocalVector,
             Self::List(_) => AddMode::ReciprocalList,
             Self::VectorList(_) => AddMode::ReciprocalVectorList,
+        }
+    }
+
+    fn mode(&self) -> UnaryNumericMode {
+        match self {
+            Self::Scalar(_) => UnaryNumericMode::Scalar,
+            Self::Vector(_) => UnaryNumericMode::Vector,
+            Self::List(_) => UnaryNumericMode::List,
+            Self::VectorList(_) => UnaryNumericMode::VectorList,
         }
     }
 
@@ -477,7 +522,7 @@ impl ReciprocalInputs {
         }
     }
 
-    fn evaluate(&self) -> Result<Output, EvaluationError> {
+    fn evaluate_reciprocal(&self) -> Result<Output, EvaluationError> {
         use graphics_core::evaluate;
         Ok(match self {
             Self::Scalar(value) => Output::Scalar(evaluate::evaluate_reciprocal(*value)?),
@@ -489,12 +534,23 @@ impl ReciprocalInputs {
         })
     }
 
-    fn expression(&self) -> String {
+    fn evaluate_rounding(&self, operation: RoundingOperation) -> Result<Output, EvaluationError> {
+        Ok(match self {
+            Self::Scalar(value) => Output::Scalar(operation.evaluate_scalar(*value)?),
+            Self::Vector(value) => Output::Vector(operation.evaluate_vector(*value)?),
+            Self::List(values) => Output::Lists(operation.evaluate_list(values)?),
+            Self::VectorList(values) => {
+                Output::VectorLists(operation.evaluate_vector_list(values)?)
+            }
+        })
+    }
+
+    fn expression(&self, operation: &str) -> String {
         match self {
-            Self::Scalar(value) => format!("Reciprocal of {value}"),
-            Self::Vector(value) => format!("Reciprocal of {value:?}"),
-            Self::List(values) => format!("Reciprocal of {values:?}"),
-            Self::VectorList(values) => format!("Reciprocal of {values:?}"),
+            Self::Scalar(value) => format!("{operation} of {value}"),
+            Self::Vector(value) => format!("{operation} of {value:?}"),
+            Self::List(values) => format!("{operation} of {values:?}"),
+            Self::VectorList(values) => format!("{operation} of {values:?}"),
         }
     }
 }
@@ -875,6 +931,9 @@ impl Inputs {
             (Self::Reciprocal(inputs), Self::Reciprocal(other_inputs)) => {
                 inputs.same_values(other_inputs)
             }
+            (Self::Rounding(operation, inputs), Self::Rounding(other_operation, other_inputs)) => {
+                operation == other_operation && inputs.same_values(other_inputs)
+            }
             (Self::Root(inputs), Self::Root(other_inputs)) => inputs.same_values(other_inputs),
             (Self::Lists(augend, addend), Self::Lists(other_augend, other_addend)) => {
                 same_values(augend, other_augend) && same_values(addend, other_addend)
@@ -943,7 +1002,8 @@ impl Inputs {
             Self::Multiply(inputs) => inputs.evaluate()?,
             Self::Subtract(inputs) => inputs.evaluate_subtract()?,
             Self::Divide(inputs) => inputs.evaluate_divide()?,
-            Self::Reciprocal(inputs) => inputs.evaluate()?,
+            Self::Reciprocal(inputs) => inputs.evaluate_reciprocal()?,
+            Self::Rounding(operation, inputs) => inputs.evaluate_rounding(*operation)?,
             Self::Root(inputs) => inputs.evaluate()?,
             Self::Scalar(augend, addend) => {
                 Output::Scalar(graphics_core::evaluate_add(*augend, *addend))
@@ -999,7 +1059,8 @@ impl Inputs {
             Self::Multiply(inputs) => inputs.expression(),
             Self::Subtract(inputs) => inputs.expression('−'),
             Self::Divide(inputs) => inputs.expression('÷'),
-            Self::Reciprocal(inputs) => inputs.expression(),
+            Self::Reciprocal(inputs) => inputs.expression("Reciprocal"),
+            Self::Rounding(operation, inputs) => inputs.expression(operation.name()),
             Self::Root(inputs) => inputs.expression(),
             Self::Scalar(augend, addend) => format!("{augend} + {addend}"),
             Self::Lists(augend, addend) => format!("{augend:?} + {addend:?}"),
@@ -1615,18 +1676,30 @@ impl GraphicsSession {
                     parse_number_list(addend, "denominators")?,
                 ),
             }),
-            AddMode::ReciprocalScalar => {
-                Inputs::Reciprocal(ReciprocalInputs::Scalar(parse_number(augend, "value")?))
-            }
-            AddMode::ReciprocalVector => Inputs::Reciprocal(ReciprocalInputs::Vector(
-                parse_vector(augend, augend_y, "value")?,
-            )),
-            AddMode::ReciprocalList => {
-                Inputs::Reciprocal(ReciprocalInputs::List(parse_number_list(augend, "values")?))
-            }
-            AddMode::ReciprocalVectorList => Inputs::Reciprocal(ReciprocalInputs::VectorList(
-                parse_vector_list(augend, augend_y, "value")?,
-            )),
+            AddMode::ReciprocalScalar => Inputs::Reciprocal(UnaryNumericInputs::parse(
+                UnaryNumericMode::Scalar,
+                augend,
+                augend_y,
+            )?),
+            AddMode::ReciprocalVector => Inputs::Reciprocal(UnaryNumericInputs::parse(
+                UnaryNumericMode::Vector,
+                augend,
+                augend_y,
+            )?),
+            AddMode::ReciprocalList => Inputs::Reciprocal(UnaryNumericInputs::parse(
+                UnaryNumericMode::List,
+                augend,
+                augend_y,
+            )?),
+            AddMode::ReciprocalVectorList => Inputs::Reciprocal(UnaryNumericInputs::parse(
+                UnaryNumericMode::VectorList,
+                augend,
+                augend_y,
+            )?),
+            AddMode::Rounding(operation, mode) => Inputs::Rounding(
+                operation,
+                UnaryNumericInputs::parse(mode, augend, augend_y)?,
+            ),
             AddMode::RootScalar => Inputs::Root(RootInputs::Scalar(
                 parse_number(augend, "radicand")?,
                 parse_number(addend, "degree")?,
@@ -1768,7 +1841,10 @@ impl GraphicsSession {
                 && !matches!(&self.evaluation.inputs, Inputs::Divide(inputs) if inputs.divide_mode() == self.mode)
             || (self.mode.is_reciprocal()
                 || matches!(&self.evaluation.inputs, Inputs::Reciprocal(_)))
-                && !matches!(&self.evaluation.inputs, Inputs::Reciprocal(inputs) if inputs.mode() == self.mode)
+                && !matches!(&self.evaluation.inputs, Inputs::Reciprocal(inputs) if inputs.reciprocal_mode() == self.mode)
+            || (self.mode.rounding_operation().is_some()
+                || matches!(&self.evaluation.inputs, Inputs::Rounding(..)))
+                && !matches!(&self.evaluation.inputs, Inputs::Rounding(operation, inputs) if AddMode::Rounding(*operation, inputs.mode()) == self.mode)
             || (self.mode.is_root() || matches!(&self.evaluation.inputs, Inputs::Root(_)))
                 && !matches!(&self.evaluation.inputs, Inputs::Root(inputs) if inputs.mode() == self.mode)
         {

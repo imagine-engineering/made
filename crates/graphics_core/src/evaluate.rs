@@ -273,6 +273,87 @@ fn evaluate_source_node<'node, Output, Evaluation: Future<Output = Output>>(
         .map_err(|_| AddEvaluationError)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RoundingOperation {
+    Ceiling,
+    Floor,
+    Round,
+}
+
+macro_rules! evaluate_rounding {
+    ($operation:expr, $input:expr, $ceiling:ident, $floor:ident, $round:ident) => {{
+        let input = Input($input);
+        match $operation {
+            RoundingOperation::Ceiling => {
+                evaluate_source_node(&graphite_math_nodes::$ceiling::new(input))
+            }
+            RoundingOperation::Floor => {
+                evaluate_source_node(&graphite_math_nodes::$floor::new(input))
+            }
+            RoundingOperation::Round => {
+                evaluate_source_node(&graphite_math_nodes::$round::new(input))
+            }
+        }
+    }};
+}
+
+impl RoundingOperation {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Ceiling => "Ceiling",
+            Self::Floor => "Floor",
+            Self::Round => "Round",
+        }
+    }
+
+    pub fn evaluate_scalar(self, value: f64) -> Result<f64, AddEvaluationError> {
+        evaluate_rounding!(
+            self,
+            Item::new_from_element(value),
+            CeilingNode,
+            FloorNode,
+            RoundNode
+        )
+        .map(Item::into_element)
+    }
+
+    pub fn evaluate_vector(self, value: [f64; 2]) -> Result<[f64; 2], AddEvaluationError> {
+        evaluate_rounding!(
+            self,
+            Item::new_from_element(DVec2::from_array(value)),
+            CeilingNode,
+            FloorNode,
+            RoundNode
+        )
+        .map(|item| item.into_element().to_array())
+    }
+
+    pub fn evaluate_list(self, values: &[f64]) -> Result<Vec<f64>, AddEvaluationError> {
+        evaluate_rounding!(
+            self,
+            numeric_items(values),
+            CeilingNodeMapped,
+            FloorNodeMapped,
+            RoundNodeMapped
+        )
+        .map(|items| items.into_iter().map(Item::into_element).collect())
+    }
+
+    pub fn evaluate_vector_list(
+        self,
+        values: &[[f64; 2]],
+    ) -> Result<Vec<[f64; 2]>, AddEvaluationError> {
+        evaluate_rounding!(
+            self,
+            vector_items(values),
+            CeilingNodeMapped,
+            FloorNodeMapped,
+            RoundNodeMapped
+        )
+        .map(vector_elements)
+    }
+}
+
 pub fn evaluate_root(radicand: f64, degree: f64) -> Result<f64, AddEvaluationError> {
     root_value(radicand, degree)
 }

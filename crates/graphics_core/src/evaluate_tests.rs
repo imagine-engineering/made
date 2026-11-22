@@ -9,6 +9,61 @@ use std::{collections::HashSet, error::Error, time::Duration};
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn at_gra_node_101_103_113_2_rounding_keeps_pinned_values_types_and_attributes() -> TestResult {
+    use RoundingOperation::{Ceiling, Floor, Round};
+
+    for (operation, negative, positive) in [(Ceiling, -1., 2.), (Floor, -2., 1.), (Round, -2., 2.)]
+    {
+        assert_eq!(operation.evaluate_scalar(-1.5)?, negative);
+        assert_eq!(
+            operation.evaluate_vector([-1.5, 1.5])?,
+            [negative, positive]
+        );
+        assert!(operation.evaluate_list(&[])?.is_empty());
+        assert!(operation.evaluate_vector_list(&[])?.is_empty());
+        assert_eq!(operation.evaluate_list(&[1.5])?, [positive]);
+        assert_eq!(
+            operation.evaluate_list(&[-1.5, 1.5, 1.5])?,
+            [negative, positive, positive]
+        );
+        assert_eq!(
+            operation.evaluate_vector_list(&[[-1.5, 1.5], [1.5, -1.5]])?,
+            [[negative, positive], [positive, negative]]
+        );
+        assert_eq!(
+            operation.evaluate_scalar(-0.)?.to_bits(),
+            (-0_f64).to_bits()
+        );
+        assert_eq!(
+            operation.evaluate_scalar(f64::NEG_INFINITY)?,
+            f64::NEG_INFINITY
+        );
+        assert!(operation.evaluate_scalar(f64::NAN)?.is_nan());
+
+        let values: List<DVec2> = [
+            Item::new_from_element(DVec2::new(-1.5, 1.5)).with_attribute("index", 4_i64),
+            Item::new_from_element(DVec2::new(1.5, -1.5)).with_attribute("index", 9_i64),
+        ]
+        .into_iter()
+        .collect();
+        let rounded = evaluate_rounding!(
+            operation,
+            values,
+            CeilingNodeMapped,
+            FloorNodeMapped,
+            RoundNodeMapped
+        )?;
+        assert_eq!(rounded.attribute::<i64>("index", 0), Some(&4));
+        assert_eq!(rounded.attribute::<i64>("index", 1), Some(&9));
+        assert_eq!(
+            vector_elements(rounded),
+            [[negative, positive], [positive, negative]]
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn at_gra_node_078_2_divide_preserves_pinned_numeric_types_zeros_and_overflow() -> TestResult {
     assert_eq!(evaluate_divide(9., -3.)?, -3.);
     assert_eq!(evaluate_divide(9., -0.)?.to_bits(), 0_f64.to_bits());

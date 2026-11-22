@@ -1245,6 +1245,101 @@ fn at_gra_node_085_native_reciprocal_preserves_typed_outputs_and_invalid_drafts(
 }
 
 #[gpui::test]
+fn at_gra_node_101_103_113_native_rounding_exposes_all_modes_and_recovers(cx: &mut TestAppContext) {
+    use workspace::item::Item as _;
+
+    init(cx);
+    let (item, cx) = cx.add_window_view(GraphicsWorkspaceItem::new);
+    let (value, value_y) = item.read_with(cx, |item, _| {
+        (item.augend_editor.clone(), item.augend_y_editor.clone())
+    });
+    for (label, selectors, negative, positive) in [
+        (
+            "Ceiling",
+            [
+                "GRAPHITE-MODE-CEILING-SCALAR",
+                "GRAPHITE-MODE-CEILING-VECTOR",
+                "GRAPHITE-MODE-CEILING-LIST",
+                "GRAPHITE-MODE-CEILING-VECTOR-LIST",
+            ],
+            -1.,
+            2.,
+        ),
+        (
+            "Floor",
+            [
+                "GRAPHITE-MODE-FLOOR-SCALAR",
+                "GRAPHITE-MODE-FLOOR-VECTOR",
+                "GRAPHITE-MODE-FLOOR-LIST",
+                "GRAPHITE-MODE-FLOOR-VECTOR-LIST",
+            ],
+            -2.,
+            1.,
+        ),
+        (
+            "Round",
+            [
+                "GRAPHITE-MODE-ROUND-SCALAR",
+                "GRAPHITE-MODE-ROUND-VECTOR",
+                "GRAPHITE-MODE-ROUND-LIST",
+                "GRAPHITE-MODE-ROUND-VECTOR-LIST",
+            ],
+            -2.,
+            2.,
+        ),
+    ] {
+        let title = format!("Graphite {label}");
+        for (selector, (values, expected)) in selectors.into_iter().zip([
+            (["-1.5", ""], format!("{negative}")),
+            (["-1.5", "1.5"], format!("{:?}", [negative, positive])),
+            (
+                ["-1.5, 1.5, 1.5", ""],
+                format!("{:?}", [negative, positive, positive]),
+            ),
+            (
+                ["-1.5, 1.5", "1.5, -1.5"],
+                format!("{:?}", [[negative, positive], [positive, negative]]),
+            ),
+        ]) {
+            let button = cx.debug_bounds(selector).expect("original rounding mode");
+            cx.simulate_click(button.center(), gpui::Modifiers::default());
+            for (editor, input) in [&value, &value_y].into_iter().zip(values) {
+                editor.update_in(cx, |editor, window, cx| editor.set_text(input, window, cx));
+            }
+            cx.run_until_parked();
+            item.read_with(cx, |item, cx| {
+                let session = item.session.read(cx);
+                assert!(
+                    session.diagnostic().is_none(),
+                    "{selector}: {:?}",
+                    session.diagnostic()
+                );
+                assert_eq!(session.result_text(), expected, "{selector}");
+                assert_eq!(item.tab_content_text(0, cx).as_ref(), title);
+            });
+        }
+    }
+    let revision = item.read_with(cx, |item, cx| item.session.read(cx).revision());
+    value_y.update_in(cx, |editor, window, cx| editor.set_text("1.5", window, cx));
+    cx.run_until_parked();
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert!(session.diagnostic().is_some());
+        assert_eq!(session.revision(), revision);
+        assert_eq!(session.result_text(), "[[-2.0, 2.0], [2.0, -2.0]]");
+    });
+    value_y.update_in(cx, |editor, window, cx| {
+        editor.set_text("0, 4.5", window, cx)
+    });
+    cx.run_until_parked();
+    item.read_with(cx, |item, cx| {
+        let session = item.session.read(cx);
+        assert!(session.diagnostic().is_none());
+        assert_eq!(session.result_text(), "[[-2.0, 0.0], [2.0, 5.0]]");
+    });
+}
+
+#[gpui::test]
 fn at_gra_node_078_native_divide_matches_each_typed_mode_and_recovers(cx: &mut TestAppContext) {
     use workspace::item::Item as _;
 

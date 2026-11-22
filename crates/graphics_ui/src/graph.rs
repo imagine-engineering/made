@@ -3,13 +3,14 @@ use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, Render,
     Subscription, Window, actions,
 };
+use graphics_core::evaluate::RoundingOperation;
 use ui::{ContextMenu, DropdownMenu, TintColor, prelude::*};
 use workspace::{
     Workspace,
     item::{Item, ItemEvent, SaveOptions},
 };
 
-use crate::session::{AddMode, DivideMode, GraphicsSession};
+use crate::session::{AddMode, DivideMode, GraphicsSession, UnaryNumericMode};
 
 actions!(
     graphite,
@@ -453,7 +454,7 @@ impl Render for GraphicsWorkspaceItem {
         } else {
             "degree"
         };
-        let reciprocal_label = if mode.augend_is_vector() {
+        let single_input_label = if mode.augend_is_vector() {
             "value.x"
         } else if mode.is_list() {
             "values"
@@ -468,7 +469,7 @@ impl Render for GraphicsWorkspaceItem {
             "minuend.y"
         } else if mode.is_divide() {
             "numerator.y"
-        } else if mode.is_reciprocal() {
+        } else if mode.has_single_input() {
             "value.y"
         } else if mode.is_root() {
             "radicand.y"
@@ -501,25 +502,7 @@ impl Render for GraphicsWorkspaceItem {
             .p_4()
             .gap_3()
             .bg(cx.theme().colors().editor_background)
-            .child(Label::new(if mode == AddMode::MixColor {
-                "Graphite Color Mix"
-            } else if mode == AddMode::InvertColor {
-                "Graphite Invert"
-            } else if mode == AddMode::Sort {
-                "Graphite Sort"
-            } else if mode.is_subtract() {
-                "Graphite Subtract"
-            } else if mode.is_divide() {
-                "Graphite Divide"
-            } else if mode.is_reciprocal() {
-                "Graphite Reciprocal"
-            } else if mode.is_root() {
-                "Graphite Root"
-            } else if mode.is_multiply() {
-                "Graphite Multiply"
-            } else {
-                "Graphite Add"
-            }))
+            .child(Label::new(arithmetic_title(mode)))
             .child(Label::new(if mode == AddMode::MixColor {
                 "Edit four comma-separated gamma sRGB channels with straight alpha for Over and Under."
             } else if mode == AddMode::InvertColor {
@@ -534,6 +517,12 @@ impl Render for GraphicsWorkspaceItem {
                 "Each zero denominator produces zero."
             } else if mode.is_reciprocal() {
                 "Each zero input produces zero."
+            } else if let Some(operation) = mode.rounding_operation() {
+                match operation {
+                    RoundingOperation::Ceiling => "Rounds up to a whole number.",
+                    RoundingOperation::Floor => "Rounds down to a whole number.",
+                    RoundingOperation::Round => "Rounds halfway values away from zero.",
+                }
             } else if mode.is_root() {
                 "Degrees of zero or less produce zero."
             } else if mode.is_multiply() {
@@ -625,6 +614,18 @@ impl Render for GraphicsWorkspaceItem {
                         (AddMode::RootVectorLists, "Root Vector Lists", "GRAPHITE-MODE-ROOT-VECTOR-LISTS"),
                         (AddMode::RootScalarVectorLists, "Root Scalar List with Vector Degrees", "GRAPHITE-MODE-ROOT-SCALAR-VECTOR-LISTS"),
                         (AddMode::RootVectorScalarLists, "Root Vector List with Scalar Degrees", "GRAPHITE-MODE-ROOT-VECTOR-SCALAR-LISTS"),
+                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::Scalar), "Ceiling Scalar", "GRAPHITE-MODE-CEILING-SCALAR"),
+                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::Vector), "Ceiling Vector", "GRAPHITE-MODE-CEILING-VECTOR"),
+                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::List), "Ceiling List", "GRAPHITE-MODE-CEILING-LIST"),
+                        (AddMode::Rounding(RoundingOperation::Ceiling, UnaryNumericMode::VectorList), "Ceiling Vector List", "GRAPHITE-MODE-CEILING-VECTOR-LIST"),
+                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::Scalar), "Floor Scalar", "GRAPHITE-MODE-FLOOR-SCALAR"),
+                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::Vector), "Floor Vector", "GRAPHITE-MODE-FLOOR-VECTOR"),
+                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::List), "Floor List", "GRAPHITE-MODE-FLOOR-LIST"),
+                        (AddMode::Rounding(RoundingOperation::Floor, UnaryNumericMode::VectorList), "Floor Vector List", "GRAPHITE-MODE-FLOOR-VECTOR-LIST"),
+                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::Scalar), "Round Scalar", "GRAPHITE-MODE-ROUND-SCALAR"),
+                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::Vector), "Round Vector", "GRAPHITE-MODE-ROUND-VECTOR"),
+                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::List), "Round List", "GRAPHITE-MODE-ROUND-LIST"),
+                        (AddMode::Rounding(RoundingOperation::Round, UnaryNumericMode::VectorList), "Round Vector List", "GRAPHITE-MODE-ROUND-VECTOR-LIST"),
 
                     ]
                     .into_iter()
@@ -755,8 +756,8 @@ impl Render for GraphicsWorkspaceItem {
                         minuend_label
                     } else if mode.is_divide() {
                         numerator_label
-                    } else if mode.is_reciprocal() {
-                        reciprocal_label
+                    } else if mode.has_single_input() {
+                        single_input_label
                     } else if mode.is_root() {
                         radicand_label
                     } else if mode.is_multiply() {
@@ -779,8 +780,8 @@ impl Render for GraphicsWorkspaceItem {
                                 minuend_label
                             } else if mode.is_divide() {
                                 numerator_label
-                            } else if mode.is_reciprocal() {
-                                reciprocal_label
+                            } else if mode.has_single_input() {
+                                single_input_label
                             } else if mode.is_root() {
                                 radicand_label
                             } else if mode.is_multiply() {
@@ -801,7 +802,7 @@ impl Render for GraphicsWorkspaceItem {
                     ),
                 )
             })
-            .when(!mode.is_reciprocal(), |view| view.child(
+            .when(!mode.has_single_input(), |view| view.child(
                 v_flex()
                     .gap_1()
                     .child(Label::new(if mode == AddMode::MixColor {
@@ -915,25 +916,35 @@ impl Item for GraphicsWorkspaceItem {
     }
 
     fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
-        if self.session.read(cx).mode() == AddMode::MixColor {
-            "Graphite Color Mix".into()
-        } else if self.session.read(cx).mode() == AddMode::InvertColor {
-            "Graphite Invert".into()
-        } else if self.session.read(cx).mode() == AddMode::Sort {
-            "Graphite Sort".into()
-        } else if self.session.read(cx).mode().is_subtract() {
-            "Graphite Subtract".into()
-        } else if self.session.read(cx).mode().is_divide() {
-            "Graphite Divide".into()
-        } else if self.session.read(cx).mode().is_reciprocal() {
-            "Graphite Reciprocal".into()
-        } else if self.session.read(cx).mode().is_root() {
-            "Graphite Root".into()
-        } else if self.session.read(cx).mode().is_multiply() {
-            "Graphite Multiply".into()
-        } else {
-            "Graphite Add".into()
+        arithmetic_title(self.session.read(cx).mode()).into()
+    }
+}
+
+fn arithmetic_title(mode: AddMode) -> &'static str {
+    if mode == AddMode::MixColor {
+        "Graphite Color Mix"
+    } else if mode == AddMode::InvertColor {
+        "Graphite Invert"
+    } else if mode == AddMode::Sort {
+        "Graphite Sort"
+    } else if mode.is_subtract() {
+        "Graphite Subtract"
+    } else if mode.is_divide() {
+        "Graphite Divide"
+    } else if mode.is_reciprocal() {
+        "Graphite Reciprocal"
+    } else if let Some(operation) = mode.rounding_operation() {
+        match operation {
+            RoundingOperation::Ceiling => "Graphite Ceiling",
+            RoundingOperation::Floor => "Graphite Floor",
+            RoundingOperation::Round => "Graphite Round",
         }
+    } else if mode.is_root() {
+        "Graphite Root"
+    } else if mode.is_multiply() {
+        "Graphite Multiply"
+    } else {
+        "Graphite Add"
     }
 }
 
