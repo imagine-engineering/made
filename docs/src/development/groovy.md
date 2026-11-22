@@ -483,6 +483,8 @@ For SSH actions, trust must be available on the project host at authorization
 and lifecycle updates. If the host reports that trust is unavailable, reconnect
 and refresh Tests; restoring host trust does not revive an expired action
 grant. A denied remote terminal stops the Task before its wrapper runs. The
+connection must stay current while the Task prepares its environment. If it
+changes during preparation, run the Task again once connected. The
 same-machine PTY-enabled fixture verifies Tests cancellation with a matching
 Task summary and no late report, while separate-host and disconnect cases
 remain open. Java run Debug also needs the host's adapter and TCP forwarding;

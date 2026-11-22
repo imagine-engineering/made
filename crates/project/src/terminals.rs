@@ -558,7 +558,18 @@ impl Project {
                 "The structured Task was cancelled before environment or terminal preparation"
             )));
         }
-        let is_via_remote = self.remote_client.is_some();
+        let remote_session = match self.remote_connection_state(cx) {
+            Some(remote::ConnectionState::Connected) => {
+                Some(self.environment.read(cx).remote_session_generation())
+            }
+            Some(_) => {
+                return Task::ready(Err(anyhow::anyhow!(
+                    "Reconnect to the project host before running this Task"
+                )));
+            }
+            None => None,
+        };
+        let is_via_remote = remote_session.is_some();
 
         if spawn_task.windows_direct_program && (!cfg!(windows) || is_via_remote) {
             return Task::ready(Err(anyhow::anyhow!(
@@ -707,7 +718,17 @@ impl Project {
 
             let preparation_handle = structured_task.clone();
             let builder = project
-                .update(cx, move |_, cx| {
+                .update(cx, move |project, cx| {
+                    anyhow::ensure!(
+                        project.remote_client == remote_client
+                            && remote_session.is_none_or(|generation| {
+                                project.remote_connection_state(cx)
+                                    == Some(remote::ConnectionState::Connected)
+                                    && project.environment.read(cx).remote_session_generation()
+                                        == generation
+                            }),
+                        "The remote connection changed while preparing this Task. Run it again once connected."
+                    );
                     crate::task_store::validate_experimental_task_requirements(&spawn_task, cx)?;
                     if let Some(pending_launch) = pending_launch.as_ref() {
                         pending_launch.check(&spawn_task, cx)?;
@@ -1852,6 +1873,97 @@ mod tests {
     #[cfg(all(target_os = "macos", feature = "test-support"))]
     use gpui::BorrowAppContext as _;
     use pretty_assertions::assert_eq;
+
+    #[gpui::test]
+    async fn remote_task_rejects_environment_from_an_earlier_connection(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use futures::channel::oneshot;
+        use remote::{ConnectionState, RemoteClientEvent};
+
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            cx.set_global(terminal::HeadlessTerminal(true));
+        });
+        let fs = crate::FakeFs::new(cx.executor());
+        let project = Project::test(fs, std::iter::empty::<&Path>(), cx).await;
+        let server_cx = &mut cx.new_app();
+        let (options, server, connection_guard) = RemoteClient::fake_server(cx, server_cx);
+        let server_context = server_cx.new(|_| ());
+        server.add_request_handler::<rpc::proto::Ping, _, _, _>(
+            server_context.downgrade(),
+            |_, _, _| async { Ok(rpc::proto::Ack {}) },
+        );
+        drop(connection_guard);
+        let remote_client = RemoteClient::connect_mock(options, cx).await;
+        let directory = PathBuf::from(util::path!("/remote-task"));
+        let (entered, waiting) = oneshot::channel();
+        let (release, held_environment) = oneshot::channel();
+        let pending = project.update(cx, |project, cx| {
+            project.remote_client = Some(remote_client.clone());
+            let shell = remote_client.read(cx).shell().expect("remote shell");
+            project.environment.update(cx, |environment, cx| {
+                let held = cx.spawn(async move |_, _| {
+                    entered.send(()).expect("Task is awaiting the environment");
+                    held_environment.await.expect("held environment reply")
+                });
+                environment.cache_remote_directory_environment_for_test(
+                    Shell::Program(shell),
+                    Arc::from(directory.as_path()),
+                    held,
+                );
+            });
+            project.create_terminal_task(
+                SpawnInTerminal {
+                    command: Some("printf".into()),
+                    args: vec!["remote task fixture".into()],
+                    cwd: Some(directory.clone()),
+                    ..Default::default()
+                },
+                cx,
+            )
+        });
+        waiting.await.expect("preparation is waiting for its host");
+        project.update(cx, |project, cx| {
+            for state in [ConnectionState::Reconnecting, ConnectionState::Connected] {
+                project.on_remote_client_event(
+                    remote_client.clone(),
+                    &RemoteClientEvent::ConnectionStateChanged(state),
+                    cx,
+                );
+            }
+        });
+        release
+            .send(Some(
+                [("JAVA_HOME".to_owned(), "/previous-session/jdk".to_owned())]
+                    .into_iter()
+                    .collect(),
+            ))
+            .expect("complete the earlier environment request");
+
+        let result = pending.await;
+        assert!(
+            result.as_ref().is_err_and(|error| error
+                .to_string()
+                .contains("remote connection changed while preparing this Task")),
+            "a Task must reject an environment from an earlier remote connection: {result:?}"
+        );
+        let current_environment = project.update(cx, |project, cx| {
+            let shell = remote_client
+                .read(cx)
+                .shell()
+                .expect("current remote shell");
+            project.resolve_directory_environment(
+                &shell,
+                Some(Arc::from(directory.as_path())),
+                Some(remote_client),
+                cx,
+            )
+        });
+        assert_eq!(current_environment.await, Some(HashMap::default()));
+    }
 
     #[test]
     fn terminal_task_working_directory_keeps_explicit_host_paths() {

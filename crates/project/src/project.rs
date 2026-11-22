@@ -4701,10 +4701,15 @@ impl Project {
 
     fn on_remote_client_event(
         &mut self,
-        _: Entity<RemoteClient>,
+        remote_client: Entity<RemoteClient>,
         event: &remote::RemoteClientEvent,
         cx: &mut Context<Self>,
     ) {
+        if self.remote_client.as_ref() == Some(&remote_client) {
+            self.environment.update(cx, |environment, _| {
+                environment.invalidate_remote_session();
+            });
+        }
         if matches!(
             event,
             remote::RemoteClientEvent::ConnectionStateChanged(

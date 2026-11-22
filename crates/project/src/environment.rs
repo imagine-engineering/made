@@ -28,6 +28,7 @@ pub struct ProjectEnvironment {
     cli_environment: Option<HashMap<String, String>>,
     local_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
     remote_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
+    remote_session_generation: u64,
     environment_error_messages: VecDeque<String>,
     environment_error_messages_tx: mpsc::UnboundedSender<String>,
     worktree_store: WeakEntity<WorktreeStore>,
@@ -74,6 +75,7 @@ impl ProjectEnvironment {
             cli_environment,
             local_environments: Default::default(),
             remote_environments: Default::default(),
+            remote_session_generation: 0,
             environment_error_messages: Default::default(),
             environment_error_messages_tx: tx,
             worktree_store,
@@ -327,6 +329,10 @@ impl ProjectEnvironment {
         cx: &mut App,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
         if self.isolated_recipe_test || cfg!(any(test, feature = "test-support")) {
+            #[cfg(test)]
+            if let Some(environment) = self.remote_environments.get(&(shell.clone(), abs_path)) {
+                return environment.clone();
+            }
             return Task::ready(Some(HashMap::default())).shared();
         }
 
@@ -349,6 +355,26 @@ impl ProjectEnvironment {
                 .shared()
             })
             .clone()
+    }
+
+    pub(crate) fn remote_session_generation(&self) -> u64 {
+        self.remote_session_generation
+    }
+
+    pub(crate) fn invalidate_remote_session(&mut self) {
+        self.remote_session_generation = self.remote_session_generation.wrapping_add(1);
+        self.remote_environments.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cache_remote_directory_environment_for_test(
+        &mut self,
+        shell: Shell,
+        path: Arc<Path>,
+        environment: Task<Option<HashMap<String, String>>>,
+    ) {
+        self.remote_environments
+            .insert((shell, path), environment.shared());
     }
 
     pub fn observed_java_home(&self, shell: &Shell, directory: &Path) -> ObservedJavaHome {
