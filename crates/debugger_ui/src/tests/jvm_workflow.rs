@@ -1,7 +1,9 @@
 use gpui::AppContext as _;
+#[cfg(unix)]
 use project::jvm_test_provider::JvmTestBuildTool;
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::{
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -11,6 +13,7 @@ use tasks_ui::jvm_workflow::{
 
 enum CachedJavaDebugAdapter {
     JavaMain,
+    #[cfg(unix)]
     SelectedTest {
         server: Arc<lsp::LanguageServer>,
         source_root: PathBuf,
@@ -40,6 +43,7 @@ impl dap::adapters::DebugAdapter for CachedJavaDebugAdapter {
         environment: Option<collections::HashMap<String, String>>,
         cx: &mut gpui::AsyncApp,
     ) -> anyhow::Result<dap::adapters::DebugAdapterBinary> {
+        #[cfg(unix)]
         if let Self::SelectedTest {
             server,
             source_root,
