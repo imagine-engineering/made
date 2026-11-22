@@ -835,7 +835,7 @@ impl GraphSelection {
         view == BuildToolView::Dependencies || view == self.build_tool_view()
     }
 
-    fn worktree_id(&self) -> settings::WorktreeId {
+    pub(crate) fn worktree_id(&self) -> settings::WorktreeId {
         match &self.target {
             GraphQueryTarget::Maven(pom) => pom.worktree_id,
             GraphQueryTarget::Gradle { module, .. } => module.worktree_id,
@@ -14752,9 +14752,11 @@ mod tests {
                 panel.resolve_selected_canvas_graph(cx).is_some()
             }));
             if outcome == MavenGraphOutcome::LargeGraphSearch {
+                use crate::dependency_diagram_item::SaveDependencyDiagramImage;
                 use crate::dependency_diagram_menu::{
                     DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
                 };
+                use project::Fs as _;
 
                 let target = r#"["module","evidence","growth-dependency-279","1.0"]"#;
                 let parent = r#"["module","evidence","growth-dependency-278","1.0"]"#;
@@ -14939,6 +14941,54 @@ mod tests {
                         Some(target)
                     );
                 });
+                let export_image = |cx: &mut gpui::VisualTestContext| {
+                    cx.dispatch_action(SaveDependencyDiagramImage);
+                    assert!(cx.did_prompt_for_new_path());
+                };
+                let existing_image = std::path::PathBuf::from("/groovy-graph/existing.svg");
+                let saved_image = std::path::PathBuf::from("/groovy-graph/dependency-diagram.svg");
+                let unsupported_image =
+                    std::path::PathBuf::from("/groovy-graph/dependency-diagram.txt");
+                fs.insert_file(&existing_image, b"existing image".to_vec())
+                    .await;
+                for (destination, feedback) in [
+                    (None, None),
+                    (Some(unsupported_image.clone()), Some(".svg extension")),
+                    (Some(existing_image.clone()), Some("Could not export")),
+                    (Some(saved_image.clone()), Some("Saved the diagram image")),
+                ] {
+                    export_image(cx);
+                    cx.simulate_new_path_selection(|_| destination);
+                    cx.run_until_parked();
+                    diagram.read_with(cx, |item, _| match feedback {
+                        Some(text) => assert!(
+                            item.notice
+                                .as_ref()
+                                .is_some_and(|notice| notice.contains(text))
+                        ),
+                        None => assert!(item.notice.is_none()),
+                    });
+                }
+                assert!(
+                    fs.metadata(&unsupported_image)
+                        .await
+                        .expect("unsupported destination")
+                        .is_none()
+                );
+                assert_eq!(
+                    fs.load_bytes(&existing_image)
+                        .await
+                        .expect("existing image"),
+                    b"existing image"
+                );
+                let expected_svg = diagram.read_with(cx, |item, cx| {
+                    crate::dependency_graph_canvas::canvas_graph_svg(&item.canvas().read(cx).graph)
+                });
+                assert_eq!(
+                    fs.load_bytes(&saved_image).await.expect("saved image"),
+                    expected_svg.as_bytes()
+                );
+                export_image(cx);
                 trust.update(cx, |trusted, cx| {
                     trusted.restrict(
                         worktree_store.downgrade(),
@@ -14947,6 +14997,15 @@ mod tests {
                     )
                 });
                 cx.run_until_parked();
+                let revoked_image = std::path::PathBuf::from("/groovy-graph/revoked.svg");
+                cx.simulate_new_path_selection(|_| Some(revoked_image.clone()));
+                cx.run_until_parked();
+                assert!(
+                    fs.metadata(&revoked_image)
+                        .await
+                        .expect("revoked destination")
+                        .is_none()
+                );
                 analyzer.read_with(cx, |item, _| {
                     assert_eq!(item.selected_key(), None);
                     assert!(item.usages().is_empty());

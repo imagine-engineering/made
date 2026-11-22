@@ -276,7 +276,7 @@ as Mermaid source and identifies the limited coverage in the copied text.
 | Inspect all root paths or conflict origins                           | Use **More inspections** in the dependency menu. **Conflict origins** appears when the current provider data records mediation for that dependency. A bounded path result reports truncation.                        |
 | Inspect usages                                                       | **All usages** in the diagram opens the analyzer on the same dependency and scope. **Usages in the tree** shows reverse relationships in the Dependencies panel.                                                     |
 | Pin a dependency, trace paths between dependencies, or compare a set | Use **Compare** in the dependency menu. **Clear inspection** removes the active result independently of the pin and set.                                                                                             |
-| Copy source or export an image                                       | **Copy Diagram Source** copies Mermaid source. **Export Image** copies an SVG of the canvas to the clipboard.                                                                                                        |
+| Copy source or export an image                                       | **Copy Diagram Source** copies Mermaid. **Copy Diagram Image** copies SVG. **Export Image to File** saves a new SVG.                                                                                                 |
 
 Open the diagram context menu with {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu}.
 In the analyzer and Dependencies tree, use {#kb groovy_dependencies_panel::ShowDependencyRowMenu}

@@ -14,9 +14,9 @@ use crate::dependencies_panel::{
     InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
 };
 use crate::dependency_diagram_item::{
-    ExportDependencyDiagramImage, FitDependencyDiagram, ToggleDependencyDiagramStructure,
-    UseHorizontalDependencyLayout, UseVerticalDependencyLayout, ZoomDependencyDiagramIn,
-    ZoomDependencyDiagramOut,
+    ExportDependencyDiagramImage, FitDependencyDiagram, SaveDependencyDiagramImage,
+    ToggleDependencyDiagramStructure, UseHorizontalDependencyLayout, UseVerticalDependencyLayout,
+    ZoomDependencyDiagramIn, ZoomDependencyDiagramOut,
 };
 use sim_runtime::graph::GraphPoint;
 
@@ -68,6 +68,7 @@ pub enum DependencyDiagramMenuCommand {
     ClearSelectionSet,
     ClearInspection,
     CopyDiagramSource,
+    CopyImage,
     ExportImage,
     Fit,
     ZoomIn,
@@ -150,7 +151,9 @@ pub fn dependency_diagram_menu_available(
         }
         DependencyDiagramMenuCommand::ClearInspection => snapshot.has_inspection,
         DependencyDiagramMenuCommand::CopyDiagramSource => snapshot.has_source,
-        DependencyDiagramMenuCommand::ExportImage => true,
+        DependencyDiagramMenuCommand::CopyImage | DependencyDiagramMenuCommand::ExportImage => {
+            snapshot.has_source
+        }
         DependencyDiagramMenuCommand::LayoutLeftToRight
         | DependencyDiagramMenuCommand::LayoutTopToBottom => {
             target == &DependencyDiagramContextTarget::Canvas
@@ -177,7 +180,8 @@ pub fn dependency_diagram_menu_label(command: DependencyDiagramMenuCommand) -> &
         DependencyDiagramMenuCommand::ClearSelectionSet => "Clear selection set",
         DependencyDiagramMenuCommand::ClearInspection => "Clear inspection",
         DependencyDiagramMenuCommand::CopyDiagramSource => "Copy Diagram Source",
-        DependencyDiagramMenuCommand::ExportImage => "Export Image",
+        DependencyDiagramMenuCommand::CopyImage => "Copy Diagram Image",
+        DependencyDiagramMenuCommand::ExportImage => "Export Image to File",
         DependencyDiagramMenuCommand::Fit => "Fit Diagram",
         DependencyDiagramMenuCommand::ZoomIn => "Zoom In",
         DependencyDiagramMenuCommand::ZoomOut => "Zoom Out",
@@ -208,6 +212,7 @@ pub fn dependency_diagram_menu_groups(
     ];
     let surfaces = [
         DependencyDiagramMenuCommand::CopyDiagramSource,
+        DependencyDiagramMenuCommand::CopyImage,
         DependencyDiagramMenuCommand::ExportImage,
     ];
     let view = [
@@ -252,7 +257,8 @@ pub fn dependency_diagram_menu_action(
         DependencyDiagramMenuCommand::ClearSelectionSet => Box::new(ClearGraphSelectionSet),
         DependencyDiagramMenuCommand::ClearInspection => Box::new(ClearGraphInspection),
         DependencyDiagramMenuCommand::CopyDiagramSource => Box::new(CopyDependencyDiagramSource),
-        DependencyDiagramMenuCommand::ExportImage => Box::new(ExportDependencyDiagramImage),
+        DependencyDiagramMenuCommand::CopyImage => Box::new(ExportDependencyDiagramImage),
+        DependencyDiagramMenuCommand::ExportImage => Box::new(SaveDependencyDiagramImage),
         DependencyDiagramMenuCommand::Fit => Box::new(FitDependencyDiagram),
         DependencyDiagramMenuCommand::ZoomIn => Box::new(ZoomDependencyDiagramIn),
         DependencyDiagramMenuCommand::ZoomOut => Box::new(ZoomDependencyDiagramOut),
@@ -445,6 +451,8 @@ mod tests {
         );
         assert!(groups[0].contains(&DependencyDiagramMenuCommand::PathsBetween));
         assert!(groups[0].contains(&DependencyDiagramMenuCommand::InspectConflictOrigins));
+        assert!(groups[1].contains(&DependencyDiagramMenuCommand::CopyImage));
+        assert!(groups[1].contains(&DependencyDiagramMenuCommand::ExportImage));
         let without_conflict = DependencyDiagramMenuSnapshot {
             has_conflict_origins: false,
             ..node_snapshot
@@ -461,11 +469,13 @@ mod tests {
         };
         let groups = dependency_diagram_menu_groups(&node, &without_source);
         assert!(
-            !groups
-                .iter()
-                .flatten()
-                .any(|command| *command == DependencyDiagramMenuCommand::CopyDiagramSource),
-            "Copy Diagram Source is filtered without a provider source"
+            !groups.iter().flatten().any(|command| matches!(
+                command,
+                DependencyDiagramMenuCommand::CopyDiagramSource
+                    | DependencyDiagramMenuCommand::CopyImage
+                    | DependencyDiagramMenuCommand::ExportImage
+            )),
+            "Diagram export commands require current provider facts"
         );
         // Blank canvas: inspection commands are rejected as wrong-target.
         let groups = dependency_diagram_menu_groups(&canvas, &node_snapshot);

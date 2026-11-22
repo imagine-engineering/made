@@ -33,6 +33,7 @@ actions!(
         ZoomDependencyDiagramIn,
         ZoomDependencyDiagramOut,
         ExportDependencyDiagramImage,
+        SaveDependencyDiagramImage,
         ToggleDependencyDiagramStructure,
         UseHorizontalDependencyLayout,
         UseVerticalDependencyLayout,
@@ -277,6 +278,7 @@ pub struct DependencyDiagramItem {
     overview_origin: std::sync::Arc<std::sync::Mutex<sim_runtime::graph::GraphPoint>>,
     context_state: std::sync::Arc<crate::dependency_diagram_menu::DependencyDiagramContextState>,
     context_handle: ui::RightClickMenuHandle<ui::ContextMenu>,
+    save_image_task: Option<Task<()>>,
     pub(crate) notice: Option<String>,
     focus_handle: FocusHandle,
 }
@@ -336,6 +338,7 @@ impl DependencyDiagramItem {
             )),
             context_state,
             context_handle,
+            save_image_task: None,
             notice: None,
             focus_handle: cx.focus_handle(),
         }
@@ -918,18 +921,90 @@ impl DependencyDiagramItem {
         true
     }
 
-    /// Exports the current canvas as a deterministic SVG image and copies it
-    /// to the clipboard; distinct from the Mermaid Copy Diagram Source payload.
+    /// Copies the current diagram image as SVG.
     pub fn export_diagram_image(&mut self, cx: &mut Context<Self>) {
         if !self.receipt_is_current(cx) {
             return;
         }
         let svg = crate::dependency_graph_canvas::canvas_graph_svg(&self.canvas.read(cx).graph);
-        let bytes = svg.chars().count();
         cx.write_to_clipboard(gpui::ClipboardItem::new_string(svg));
-        self.notice = Some(format!(
-            "Diagram image exported as SVG and copied to the clipboard; {bytes} characters"
-        ));
+        self.notice = Some("Copied the diagram image as SVG.".into());
+        cx.notify();
+    }
+
+    pub(crate) fn save_diagram_image(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.save_image_task.is_some() {
+            return;
+        }
+        let Some(source) = &self.source else {
+            return;
+        };
+        let project = source.project.read(cx);
+        let graph = &self.canvas.read(cx).graph;
+        let Some(receipt) = current_dependency_graph_receipt(project, &source.selection, cx)
+            .filter(|receipt| self.receipt.as_ref() == Some(receipt) && !graph.nodes.is_empty())
+        else {
+            self.notice = Some(
+                "Refresh and collect current dependency facts before exporting an image.".into(),
+            );
+            cx.notify();
+            return;
+        };
+
+        let filesystem = project.fs().clone();
+        let directory = project
+            .worktree_for_id(source.selection.worktree_id(), cx)
+            .and_then(|worktree| {
+                worktree
+                    .read(cx)
+                    .as_local()
+                    .map(|worktree| worktree.abs_path().to_path_buf())
+            })
+            .or_else(std::env::home_dir)
+            .unwrap_or_default();
+        let svg = crate::dependency_graph_canvas::canvas_graph_svg(graph);
+        let prompt = cx.prompt_for_new_path(&directory, Some("dependency-diagram.svg"));
+        self.notice = None;
+        self.save_image_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result = async {
+                let Some(destination) = prompt.await?? else {
+                    return Ok(None);
+                };
+                anyhow::ensure!(
+                    destination.is_absolute()
+                        && destination
+                            .extension()
+                            .and_then(std::ffi::OsStr::to_str)
+                            .is_some_and(|extension| extension.eq_ignore_ascii_case("svg")),
+                    "Choose an absolute path with an .svg extension."
+                );
+                anyhow::ensure!(
+                    item.read_with(cx, |item, cx| {
+                        item.receipt.as_ref() == Some(&receipt) && item.receipt_is_current(cx)
+                    })?,
+                    "The dependency graph changed. Refresh it and export the image again."
+                );
+                filesystem
+                    .create_new_file_atomically(destination.clone(), svg.into_bytes().into())
+                    .await?;
+                Ok::<_, anyhow::Error>(Some(destination))
+            }
+            .await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.save_image_task = None;
+                item.notice = match result {
+                    Ok(Some(destination)) => Some(format!(
+                        "Saved the diagram image to {}.",
+                        destination.display()
+                    )),
+                    Ok(None) => None,
+                    Err(error) => Some(format!("Could not export the diagram image. {error}")),
+                };
+                cx.notify();
+            }) {
+                log::debug!("Dependency diagram closed during image export: {error:#}");
+            }
+        }));
         cx.notify();
     }
 }
@@ -1113,10 +1188,12 @@ impl Render for DependencyDiagramItem {
                 IconButton::new("dependency-diagram-export-icon", ui::IconName::Image)
                     .shape(ui::IconButtonShape::Square)
                     .tab_index(0_isize)
-                    .aria_label("Export dependency diagram image")
-                    .disabled(!admitted)
-                    .tooltip(ui::Tooltip::text("Export Image"))
-                    .on_click(cx.listener(|item, _, _, cx| item.export_diagram_image(cx))),
+                    .aria_label("Export dependency diagram image to file")
+                    .disabled(!admitted || self.save_image_task.is_some())
+                    .tooltip(ui::Tooltip::text("Export Image to File"))
+                    .on_click(
+                        cx.listener(|item, _, window, cx| item.save_diagram_image(window, cx)),
+                    ),
             )
             .child(crate::DependenciesPanel::ordered_operations_button());
 
@@ -1166,6 +1243,11 @@ impl Render for DependencyDiagramItem {
             .on_action(
                 cx.listener(|item, _: &ExportDependencyDiagramImage, _, cx| {
                     item.export_diagram_image(cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|item, _: &SaveDependencyDiagramImage, window, cx| {
+                    item.save_diagram_image(window, cx)
                 }),
             )
             .on_action(
