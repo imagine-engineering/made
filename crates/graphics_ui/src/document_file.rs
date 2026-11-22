@@ -429,20 +429,26 @@ pub(crate) struct GraphiteDocumentItem {
     embed_linked_resources: bool,
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
-    rename: RenamePanel,
+    node_copy: NodeCopyPanel,
 }
 
-enum RenamePanel {
+enum NodeCopyPanel {
     Closed,
     Loading { _task: Task<()> },
-    Ready(RenameForm),
+    Ready(NodeCopyForm),
     Failed(SharedString),
 }
 
-struct RenameForm {
+struct NodeCopyForm {
     nodes: Vec<GddGraphNode>,
     selected: Option<usize>,
     name: Entity<Editor>,
+}
+
+impl NodeCopyForm {
+    fn selected_node(&self) -> Option<&GddGraphNode> {
+        self.selected.and_then(|index| self.nodes.get(index))
+    }
 }
 
 enum SavedViewPanel {
@@ -462,7 +468,15 @@ enum GraphiteCopy {
     Original,
     Export(GddCopyFormat),
     RecoverFolder,
-    RenameNode { node: GddGraphNode, name: String },
+    EditNode {
+        node: GddGraphNode,
+        change: NodeCopyChange,
+    },
+}
+
+enum NodeCopyChange {
+    Rename(String),
+    Pin(bool),
 }
 
 enum PreparedCopy {
@@ -471,34 +485,34 @@ enum PreparedCopy {
 }
 
 impl GraphiteDocumentItem {
-    fn toggle_rename_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        match &self.rename {
-            RenamePanel::Loading { .. } => return,
-            RenamePanel::Ready(_) => self.rename = RenamePanel::Closed,
-            RenamePanel::Closed | RenamePanel::Failed(_) => {
+    fn toggle_node_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match &self.node_copy {
+            NodeCopyPanel::Loading { .. } => return,
+            NodeCopyPanel::Ready(_) => self.node_copy = NodeCopyPanel::Closed,
+            NodeCopyPanel::Closed | NodeCopyPanel::Failed(_) => {
                 let InspectedDocument::Gdd { contents } = &self.model.read(cx).document else {
                     return;
                 };
                 let contents = contents.clone();
                 let load = cx.background_spawn(async move { contents.graph_nodes().await });
-                self.rename = RenamePanel::Loading {
+                self.node_copy = NodeCopyPanel::Loading {
                     _task: cx.spawn_in(window, async move |item, cx| {
                         let loaded = load.await;
                         if let Err(error) = item.update_in(cx, |item, window, cx| {
-                            item.rename = match loaded {
+                            item.node_copy = match loaded {
                                 Ok(nodes) if nodes.is_empty() => {
-                                    RenamePanel::Failed("This graph has no nodes.".into())
+                                    NodeCopyPanel::Failed("This graph has no nodes.".into())
                                 }
-                                Ok(nodes) => RenamePanel::Ready(RenameForm {
+                                Ok(nodes) => NodeCopyPanel::Ready(NodeCopyForm {
                                     nodes,
                                     selected: None,
                                     name: cx.new(|cx| Editor::single_line(window, cx)),
                                 }),
-                                Err(error) => RenamePanel::Failed(error.to_string().into()),
+                                Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
                             cx.notify();
                         }) {
-                            log::debug!("Graphite rename panel closed: {error:#}");
+                            log::debug!("Graphite node edit panel closed: {error:#}");
                         }
                     }),
                 };
@@ -507,8 +521,8 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
-    fn select_rename_node(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let RenamePanel::Ready(form) = &mut self.rename else {
+    fn select_copy_node(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
         if let Some(node) = form.nodes.get(index) {
@@ -519,27 +533,29 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn render_rename_panel(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let label = match self.rename {
-            RenamePanel::Closed => "Rename Node in a Copy",
-            RenamePanel::Loading { .. } => "Loading Graph Nodes",
-            RenamePanel::Ready(_) => "Close Rename",
-            RenamePanel::Failed(_) => "Retry Graph Load",
+    fn render_node_copy(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = match self.node_copy {
+            NodeCopyPanel::Closed => "Edit Node in a Copy",
+            NodeCopyPanel::Loading { .. } => "Loading Graph Nodes",
+            NodeCopyPanel::Ready(_) => "Close Node Edit",
+            NodeCopyPanel::Failed(_) => "Retry Graph Load",
         };
         let panel = v_flex().gap_2().child(
-            div().debug_selector(|| "GRAPHITE-GDD-RENAME".into()).child(
-                Button::new("graphite-gdd-rename", label)
-                    .disabled(
-                        self.copy_task.is_some()
-                            || matches!(self.rename, RenamePanel::Loading { .. }),
-                    )
-                    .on_click(
-                        cx.listener(|item, _, window, cx| item.toggle_rename_panel(window, cx)),
-                    ),
-            ),
+            div()
+                .debug_selector(|| "GRAPHITE-GDD-NODE-COPY".into())
+                .child(
+                    Button::new("graphite-gdd-node-copy", label)
+                        .disabled(
+                            self.copy_task.is_some()
+                                || matches!(self.node_copy, NodeCopyPanel::Loading { .. }),
+                        )
+                        .on_click(
+                            cx.listener(|item, _, window, cx| item.toggle_node_copy(window, cx)),
+                        ),
+                ),
         );
-        match &self.rename {
-            RenamePanel::Ready(form) => {
+        match &self.node_copy {
+            NodeCopyPanel::Ready(form) => {
                 let item = cx.entity().downgrade();
                 let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
                     for (index, node) in form.nodes.iter().enumerate() {
@@ -549,7 +565,7 @@ impl GraphiteDocumentItem {
                             move |_, _| {
                                 div()
                                     .debug_selector(move || {
-                                        format!("GRAPHITE-GDD-RENAME-NODE-{index}")
+                                        format!("GRAPHITE-GDD-NODE-COPY-ITEM-{index}")
                                     })
                                     .p_2()
                                     .child(Label::new(label.clone()))
@@ -558,7 +574,7 @@ impl GraphiteDocumentItem {
                             move |window, cx| {
                                 if let Some(item) = item.upgrade() {
                                     item.update(cx, |item, cx| {
-                                        item.select_rename_node(index, window, cx)
+                                        item.select_copy_node(index, window, cx)
                                     });
                                 }
                             },
@@ -566,13 +582,13 @@ impl GraphiteDocumentItem {
                     }
                     menu
                 });
-                let selected = form.selected.and_then(|index| form.nodes.get(index));
+                let selected = form.selected_node();
                 panel
                     .child(
                         div()
-                            .debug_selector(|| "GRAPHITE-GDD-RENAME-CHOOSE".into())
+                            .debug_selector(|| "GRAPHITE-GDD-NODE-COPY-CHOOSE".into())
                             .child(DropdownMenu::new(
-                                "graphite-gdd-rename-choose",
+                                "graphite-gdd-node-copy-choose",
                                 selected.map_or_else(
                                     || "Choose a graph node".to_owned(),
                                     |node| node.label().to_owned(),
@@ -580,12 +596,17 @@ impl GraphiteDocumentItem {
                                 menu,
                             )),
                     )
-                    .when_some(selected, |panel, _| {
+                    .when_some(selected, |panel, selected| {
+                        let pin_label = if selected.is_pinned() {
+                            "Save Unpinned Folder"
+                        } else {
+                            "Save Pinned Folder"
+                        };
                         panel
                             .child(Label::new("Node name"))
                             .child(
                                 div()
-                                    .id("graphite-gdd-rename-name")
+                                    .id("graphite-gdd-node-copy-name")
                                     .aria_label("Node name")
                                     .child(form.name.clone()),
                             )
@@ -600,16 +621,16 @@ impl GraphiteDocumentItem {
                                         .disabled(self.copy_task.is_some())
                                         .on_click(
                                             cx.listener(|item, _, window, cx| {
-                                                let RenamePanel::Ready(form) = &item.rename else {
+                                                let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                else {
                                                     return;
                                                 };
-                                                if let Some(node) = form
-                                                    .selected
-                                                    .and_then(|index| form.nodes.get(index))
-                                                {
-                                                    let request = GraphiteCopy::RenameNode {
+                                                if let Some(node) = form.selected_node() {
+                                                    let request = GraphiteCopy::EditNode {
                                                         node: node.clone(),
-                                                        name: form.name.read(cx).text(cx),
+                                                        change: NodeCopyChange::Rename(
+                                                            form.name.read(cx).text(cx),
+                                                        ),
                                                     };
                                                     item.save_copy(request, window, cx);
                                                 }
@@ -617,12 +638,35 @@ impl GraphiteDocumentItem {
                                         ),
                                     ),
                             )
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-SAVE-PIN".into())
+                                    .child(
+                                        Button::new("graphite-gdd-save-pin", pin_label)
+                                            .disabled(self.copy_task.is_some())
+                                            .on_click(cx.listener(|item, _, window, cx| {
+                                                let NodeCopyPanel::Ready(form) = &item.node_copy
+                                                else {
+                                                    return;
+                                                };
+                                                if let Some(node) = form.selected_node() {
+                                                    let request = GraphiteCopy::EditNode {
+                                                        node: node.clone(),
+                                                        change: NodeCopyChange::Pin(
+                                                            !node.is_pinned(),
+                                                        ),
+                                                    };
+                                                    item.save_copy(request, window, cx);
+                                                }
+                                            })),
+                                    ),
+                            )
                     })
             }
-            RenamePanel::Failed(error) => {
+            NodeCopyPanel::Failed(error) => {
                 panel.child(Label::new(error.clone()).color(Color::Error))
             }
-            RenamePanel::Closed | RenamePanel::Loading { .. } => panel,
+            NodeCopyPanel::Closed | NodeCopyPanel::Loading { .. } => panel,
         }
     }
 
@@ -715,11 +759,11 @@ impl GraphiteDocumentItem {
         if self.copy_task.is_some() {
             return;
         }
-        let (format, recover_pending, rename) = match request {
+        let (format, recover_pending, node_edit) = match request {
             GraphiteCopy::Original => (None, false, None),
             GraphiteCopy::Export(format) => (Some(format), false, None),
             GraphiteCopy::RecoverFolder => (None, true, None),
-            GraphiteCopy::RenameNode { node, name } => (None, false, Some((node, name))),
+            GraphiteCopy::EditNode { node, change } => (None, false, Some((node, change))),
         };
         let content = if format.is_some() {
             self.export_content
@@ -739,7 +783,7 @@ impl GraphiteDocumentItem {
         let source = model.path.clone();
         let project = self.project.clone();
         let format = format.or_else(|| {
-            (recover_pending || rename.is_some() || model.original.is_none())
+            (recover_pending || node_edit.is_some() || model.original.is_none())
                 .then_some(GddCopyFormat::Folder)
         });
         let export = match (&model.document, format) {
@@ -766,8 +810,13 @@ impl GraphiteDocumentItem {
                 };
                 if recover_pending {
                     format!("Recovered {stem}{suffix}")
-                } else if rename.is_some() {
-                    format!("Renamed {stem}{suffix}")
+                } else if let Some((_, change)) = &node_edit {
+                    let prefix = match change {
+                        NodeCopyChange::Rename(_) => "Renamed",
+                        NodeCopyChange::Pin(true) => "Pinned",
+                        NodeCopyChange::Pin(false) => "Unpinned",
+                    };
+                    format!("{prefix} {stem}{suffix}")
                 } else {
                     format!("Copy of {stem}{suffix}")
                 }
@@ -873,11 +922,24 @@ impl GraphiteDocumentItem {
                             let recovered = archive.recover_pending_edits(ARCHIVE_BUDGET).await?;
                             return Ok(PreparedCopy::Folder(recovered.folder_files()?));
                         }
-                        if let Some((node, name)) = rename {
-                            let renamed = archive
-                                .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
-                                .await?;
-                            return Ok(PreparedCopy::Folder(renamed.folder_files()?));
+                        if let Some((node, change)) = node_edit {
+                            let copy = match change {
+                                NodeCopyChange::Rename(name) => {
+                                    archive
+                                        .rename_graph_node_in_copy(&node, name, ARCHIVE_BUDGET)
+                                        .await?
+                                }
+                                NodeCopyChange::Pin(pinned) => {
+                                    archive
+                                        .set_graph_node_pinned_in_copy(
+                                            &node,
+                                            pinned,
+                                            ARCHIVE_BUDGET,
+                                        )
+                                        .await?
+                                }
+                            };
+                            return Ok(PreparedCopy::Folder(copy.folder_files()?));
                         }
                         let enriched = if embed_linked_resources || legacy_document.is_some() {
                             Some(
@@ -981,7 +1043,7 @@ impl workspace::ProjectItem for GraphiteDocumentItem {
             embed_linked_resources: false,
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
-            rename: RenamePanel::Closed,
+            node_copy: NodeCopyPanel::Closed,
         }
     }
 }
@@ -1035,7 +1097,7 @@ impl Item for GraphiteDocumentItem {
             embed_linked_resources: self.embed_linked_resources,
             embed_legacy_document: self.embed_legacy_document,
             saved_view: SavedViewPanel::Closed,
-            rename: RenamePanel::Closed,
+            node_copy: NodeCopyPanel::Closed,
         })))
     }
 }
@@ -1127,7 +1189,7 @@ impl Render for GraphiteDocumentItem {
                         })
                         .when(
                             recovery.node_count > 0 && recovery.hot_log_len == 0,
-                            |view| view.child(self.render_rename_panel(window, cx)),
+                            |view| view.child(self.render_node_copy(window, cx)),
                         )
                         .when(recovery.hot_log_len > 0, |view| {
                             view.child(
@@ -1306,10 +1368,7 @@ mod tests {
             .expect("export actual Graphite storage")
     }
 
-    #[gpui::test]
-    async fn at_gra_graph_032_2_workspace_renames_a_selected_nested_node_in_a_folder_copy(
-        cx: &mut TestAppContext,
-    ) {
+    async fn nested_graph_archive() -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::NoMetadata;
         use graphite_graph_craft::document::{
             DocumentNode, DocumentNodeImplementation, NodeId, NodeNetwork,
@@ -1355,6 +1414,25 @@ mod tests {
             .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &storage, None)
             .await
             .expect("original ZIP payload");
+        (original, owner.session().history().count())
+    }
+
+    fn choose_nested_copy_node(window: &mut gpui::VisualTestContext) {
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        paint(window);
+        click(window, "GRAPHITE-GDD-NODE-COPY-ITEM-2");
+        paint(window);
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_032_2_workspace_renames_a_selected_nested_node_in_a_folder_copy(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, saved_history_len) = nested_graph_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
@@ -1374,16 +1452,9 @@ mod tests {
             .expect("open source archive")
             .downcast::<GraphiteDocumentItem>()
             .expect("native Inspector");
-        paint(window);
-        click(window, "GRAPHITE-GDD-RENAME");
-        window.run_until_parked();
-        paint(window);
-        click(window, "GRAPHITE-GDD-RENAME-CHOOSE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-RENAME-NODE-2");
-        paint(window);
+        choose_nested_copy_node(window);
         let editor = item.read_with(window, |item, _| {
-            let RenamePanel::Ready(form) = &item.rename else {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
                 panic!("expected the rename form");
             };
             assert_eq!(form.selected, Some(2));
@@ -1432,15 +1503,88 @@ mod tests {
         };
         assert_eq!(root.name(), "");
         assert_eq!(nested.name(), "Nested label");
-        assert_eq!(
-            contents.history_len(),
-            owner.session().history().count() + 1
-        );
+        assert_eq!(contents.history_len(), saved_history_len + 1);
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
                 .await
                 .expect("original bytes"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_033_2_workspace_pins_and_unpins_only_the_selected_node_in_copies(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, originally_retired) = nested_graph_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/graph.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("original archive");
+        window.run_until_parked();
+        let mut current = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        for (path, pinned, added_history) in [
+            ("/project/pinned.gdd", true, 2),
+            ("/project/unpinned.gdd", false, 4),
+        ] {
+            let destination = PathBuf::from(path);
+            choose_nested_copy_node(window);
+            click(window, "GRAPHITE-GDD-SAVE-PIN");
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            assert!(
+                filesystem
+                    .metadata(&destination)
+                    .await
+                    .expect("published folder")
+                    .is_some()
+            );
+            window.dispatch_action(OpenGraphiteFolder);
+            window.simulate_path_prompt_response(|_| Some(vec![destination]));
+            window.run_until_parked();
+            let reopened = workspace
+                .read_with(window, |workspace, cx| {
+                    workspace.active_item_as::<GraphiteDocumentItem>(cx)
+                })
+                .expect("open the new pinned state");
+            assert_ne!(reopened, current);
+            let contents = reopened.read_with(window, |item, cx| {
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected the native GDD model");
+                };
+                assert!(!item.is_dirty(cx));
+                contents.clone()
+            });
+            let nodes = contents
+                .graph_nodes()
+                .await
+                .expect("original node identities");
+            let [root, parent, nested] = nodes.as_slice() else {
+                panic!("expected the three original nodes");
+            };
+            assert!(!root.is_pinned() && !parent.is_pinned());
+            assert_eq!(nested.is_pinned(), pinned);
+            assert_eq!(contents.history_len(), originally_retired + added_history);
+            current = reopened;
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained source"),
             original
         );
     }

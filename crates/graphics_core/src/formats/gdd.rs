@@ -28,7 +28,10 @@ use graphite_editor::messages::portfolio::document::{
         misc::PTZ,
         network_interface::{
             NavigationMetadata, NodeNetworkInterface, Previewing,
-            editor_delta::{EditorDelta, NodeMetadataChange, construct_batch},
+            editor_delta::{
+                ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
+                construct_batch,
+            },
             storage_metadata::{
                 InterfaceRebuildError, StorageMetadataView, apply_network_view_settings,
                 build_interface_from_storage, network_ids_from_entries,
@@ -105,14 +108,16 @@ pub enum GddArchiveError {
     NoPendingEdits,
     #[error("The recovered Graphite folder did not retain the replayed edits.")]
     IncompleteRecovery,
-    #[error("Recover the pending Graphite edits before renaming a node.")]
+    #[error("Recover the pending Graphite edits before editing a node.")]
     PendingGraphEdits,
     #[error("The selected node belongs to an earlier Graphite snapshot. Select the node again.")]
     StaleGraphNode,
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
-    #[error("The Graphite copy could not save the addressed node's new name.")]
-    IncompleteGraphNodeRename,
+    #[error("The Graphite node already has the requested pin state.")]
+    UnchangedGraphNodePin,
+    #[error("The Graphite copy could not save the addressed node's change.")]
+    IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
     ConflictingLegacyDocument,
     #[error("{0}")]
@@ -141,8 +146,8 @@ pub enum GddArchiveError {
     RuntimeRegistry(#[source] ConversionError),
     #[error("The saved Graphite graph could not restore its network metadata: {0}")]
     RuntimeInterface(#[source] InterfaceRebuildError),
-    #[error("The pinned Graphite editor could not prepare the node rename: {0}")]
-    RenamePreparation(#[source] from_runtime::ConversionError),
+    #[error("The pinned Graphite editor could not prepare the node change: {0}")]
+    GraphNodePreparation(#[source] from_runtime::ConversionError),
     #[error("The pinned Graphite writer could not export the archive: {0}")]
     Export(#[source] ContainerError),
 }
@@ -201,6 +206,7 @@ pub struct GddGraphNode {
     network_path: Vec<NodeId>,
     label: String,
     name: String,
+    pinned: bool,
 }
 
 impl GddGraphNode {
@@ -210,6 +216,10 @@ impl GddGraphNode {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
     }
 }
 
@@ -284,6 +294,7 @@ impl InspectedGddV1 {
                 network_path: node.network_path.clone(),
                 label: String::new(),
                 name: node.display_name.clone().unwrap_or_default(),
+                pinned: node.pinned,
             })
             .collect();
         let interface = graph.into_interface()?;
@@ -317,12 +328,7 @@ impl InspectedGddV1 {
     ) -> Result<Self, GddArchiveError> {
         use graphite_document_graph_storage::attr::node::ui::DISPLAY_NAME;
 
-        if !Arc::ptr_eq(&self.snapshot, &node.snapshot) {
-            return Err(GddArchiveError::StaleGraphNode);
-        }
-        if self.hot_log_len() != 0 {
-            return Err(GddArchiveError::PendingGraphEdits);
-        }
+        self.check_node_edit_target(node)?;
         if node.name == name {
             return Err(GddArchiveError::UnchangedGraphNodeName);
         }
@@ -330,24 +336,13 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::BudgetExceeded);
         }
         let interface = self.runtime_graph().await?.into_interface()?;
-        let (mut owner, working) = self.fork_working_copy(&budget).await?;
-        let resources = owner
-            .registry()
-            .to_resource_registry()
-            .map_err(GddArchiveError::RuntimeRegistry)?;
+        let (owner, working) = self.fork_working_copy(&budget).await?;
         let edit = EditorDelta::NodeMetadata {
             network_path: node.network_path.clone(),
             node_id: node.local_id,
             change: NodeMetadataChange::DisplayName(name.clone()),
         };
-        let batch = construct_batch(
-            &[edit],
-            owner.registry(),
-            &resources,
-            &StorageMetadataView::new(&interface),
-            owner.session().peer(),
-        )
-        .map_err(GddArchiveError::RenamePreparation)?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
         if !matches!(
             batch.ops.as_slice(),
             [RegistryDelta::ChangeNodeAttribute { id, delta }]
@@ -355,19 +350,7 @@ impl InspectedGddV1 {
         ) {
             return Err(GddArchiveError::StaleGraphNode);
         }
-        owner.stage_constructed_ops(
-            batch.ops,
-            &batch.declarations.bytes,
-            &HashMapResourceStorage::new(),
-        )?;
-        if owner.retire_pending_interaction()?.len() != 1 {
-            return Err(GddArchiveError::IncompleteGraphNodeRename);
-        }
-        let copy = inspect_working_copy(&working, &budget).await?;
-        copy.document
-            .session()
-            .verify_history()
-            .map_err(graphite_document_format::Error::from)?;
+        let copy = finish_graph_node_edit(owner, &working, batch, &budget).await?;
         let updated_name = copy
             .document
             .registry()
@@ -379,9 +362,101 @@ impl InspectedGddV1 {
                     .unwrap_or_default()
             });
         if updated_name.as_deref() != Some(name.as_str()) {
-            return Err(GddArchiveError::IncompleteGraphNodeRename);
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
+    }
+
+    pub async fn set_graph_node_pinned_in_copy(
+        &self,
+        node: &GddGraphNode,
+        pinned: bool,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::{network::PINNED_ORDER, node::ui::PINNED};
+
+        self.check_node_edit_target(node)?;
+        if node.pinned == pinned {
+            return Err(GddArchiveError::UnchangedGraphNodePin);
+        }
+        let path = &node.network_path;
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let original_order = interface
+            .network_metadata(path)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .persistent_metadata
+            .pinned_node_order
+            .clone();
+        interface.set_pinned(&node.local_id, path, pinned);
+        let new_order = &interface
+            .network_metadata(path)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .persistent_metadata
+            .pinned_node_order;
+        let mut edits = vec![EditorDelta::NodeMetadata {
+            network_path: path.clone(),
+            node_id: node.local_id,
+            change: NodeMetadataChange::Pinned(pinned),
+        }];
+        let order_changed = original_order != *new_order;
+        if order_changed {
+            edits.push(EditorDelta::NetworkMetadata {
+                network_path: path.clone(),
+                change: NetworkMetadataChange::PinnedOrder(new_order.clone()),
+            });
+        }
+        let (owner, working) = self.fork_working_copy(&budget).await?;
+        let network = owner
+            .registry()
+            .node_instances
+            .get(&node.storage_id)
+            .ok_or(GddArchiveError::StaleGraphNode)?
+            .network();
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let [RegistryDelta::ChangeNodeAttribute { id, delta }, rest @ ..] = batch.ops.as_slice()
+        else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        let valid_order = match (order_changed, rest) {
+            (false, []) => true,
+            (true, [RegistryDelta::ChangeNetworkAttribute { id, delta }]) => {
+                *id == network && delta.key == PINNED_ORDER
+            }
+            _ => false,
+        };
+        if *id != node.storage_id || delta.key != PINNED || !valid_order {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let expected_order = interface.ordered_pinned_nodes(path);
+        let copy = finish_graph_node_edit(owner, &working, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.ordered_pinned_nodes(path) != expected_order
+            || copy
+                .document
+                .registry()
+                .node_instances
+                .get(&node.storage_id)
+                .map(|stored| {
+                    stored
+                        .attributes()
+                        .get_typed::<bool>(PINNED)
+                        .unwrap_or_default()
+                })
+                != Some(pinned)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    fn check_node_edit_target(&self, node: &GddGraphNode) -> Result<(), GddArchiveError> {
+        if !Arc::ptr_eq(&self.snapshot, &node.snapshot) {
+            return Err(GddArchiveError::StaleGraphNode);
+        }
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        Ok(())
     }
 
     async fn runtime_graph(&self) -> Result<GddRuntimeGraph, GddArchiveError> {
@@ -752,6 +827,48 @@ impl InspectedGddV1 {
         }
         Ok(archive.finish_into()?.bytes.into_inner())
     }
+}
+
+fn prepare_graph_node_edit(
+    owner: &GddV1,
+    interface: &NodeNetworkInterface,
+    edits: &[EditorDelta],
+) -> Result<ConstructedOps, GddArchiveError> {
+    let resources = owner
+        .registry()
+        .to_resource_registry()
+        .map_err(GddArchiveError::RuntimeRegistry)?;
+    construct_batch(
+        edits,
+        owner.registry(),
+        &resources,
+        &StorageMetadataView::new(interface),
+        owner.session().peer(),
+    )
+    .map_err(GddArchiveError::GraphNodePreparation)
+}
+
+async fn finish_graph_node_edit(
+    mut owner: GddV1,
+    working: &MemoryBackend,
+    batch: ConstructedOps,
+    budget: &GddArchiveBudget,
+) -> Result<InspectedGddV1, GddArchiveError> {
+    let expected = batch.ops.len();
+    owner.stage_constructed_ops(
+        batch.ops,
+        &batch.declarations.bytes,
+        &HashMapResourceStorage::new(),
+    )?;
+    if owner.retire_pending_interaction()?.len() != expected {
+        return Err(GddArchiveError::IncompleteGraphNodeEdit);
+    }
+    let copy = inspect_working_copy(working, budget).await?;
+    copy.document
+        .session()
+        .verify_history()
+        .map_err(graphite_document_format::Error::from)?;
+    Ok(copy)
 }
 
 fn approved_resource_storage(
@@ -1165,46 +1282,57 @@ mod tests {
             .into()
     }
 
-    #[test]
-    fn at_gra_graph_032_1_renames_only_the_explicit_nested_node_in_a_reopened_copy() {
-        use graphite_document_graph_storage::{NoMetadata, attr::node::ui::DISPLAY_NAME};
+    fn document_with_nested_graph_nodes() -> GddV1 {
+        use graphite_document_graph_storage::NoMetadata;
         use graphite_graph_craft::document::{DocumentNode, DocumentNodeImplementation};
         use graphite_resource::ResourceRegistry;
+
+        let repeated = NodeId(7);
+        let owner_node = NodeId(24);
+        let leaf = || DocumentNode {
+            implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
+            ..Default::default()
+        };
+        let network = NodeNetwork {
+            nodes: [
+                (repeated, leaf()),
+                (
+                    owner_node,
+                    DocumentNode {
+                        implementation: DocumentNodeImplementation::Network(NodeNetwork {
+                            nodes: [(repeated, leaf()), (NodeId(9), leaf())]
+                                .into_iter()
+                                .collect(),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+        let mut owner = document();
+        owner
+            .commit_from_runtime(
+                &network,
+                &NoMetadata,
+                &ResourceRegistry::new(),
+                &HashMapResourceStorage::new(),
+            )
+            .expect("save an actual nested source graph");
+        owner
+    }
+
+    #[test]
+    fn at_gra_graph_032_1_renames_only_the_explicit_nested_node_in_a_reopened_copy() {
+        use graphite_document_graph_storage::attr::node::ui::DISPLAY_NAME;
 
         futures::executor::block_on(async {
             let repeated = NodeId(7);
             let owner_node = NodeId(24);
-            let leaf = || DocumentNode {
-                implementation: DocumentNodeImplementation::Network(NodeNetwork::default()),
-                ..Default::default()
-            };
-            let network = NodeNetwork {
-                nodes: [
-                    (repeated, leaf()),
-                    (
-                        owner_node,
-                        DocumentNode {
-                            implementation: DocumentNodeImplementation::Network(NodeNetwork {
-                                nodes: [(repeated, leaf())].into_iter().collect(),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                ..Default::default()
-            };
-            let mut owner = document();
-            owner
-                .commit_from_runtime(
-                    &network,
-                    &NoMetadata,
-                    &ResourceRegistry::new(),
-                    &HashMapResourceStorage::new(),
-                )
-                .expect("save an actual nested source graph");
+            let owner = document_with_nested_graph_nodes();
             let bytes = export(&owner, Some(b"retain exact legacy entry")).await;
             let original = open_gdd_zip(&bytes, budget())
                 .await
@@ -1294,6 +1422,103 @@ mod tests {
             );
             reopened.redo().expect("redo one rename");
             assert!(reopened.registry().value_equal(renamed.document.registry()));
+            assert_eq!(original.original_bytes(), bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_033_1_preserves_pinned_property_order_in_the_addressed_network() {
+        futures::executor::block_on(async {
+            let owner = document_with_nested_graph_nodes();
+            let bytes = export(&owner, None).await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("original nested graph");
+            let path = [NodeId(24)];
+            let nodes = original.graph_nodes().await.expect("source nodes");
+            let first = nodes
+                .iter()
+                .find(|node| node.network_path == path && node.local_id == NodeId(9))
+                .expect("first pin target");
+            let first_copy = original
+                .set_graph_node_pinned_in_copy(first, true, budget())
+                .await
+                .expect("pin first nested node");
+            assert!(matches!(
+                first_copy
+                    .set_graph_node_pinned_in_copy(first, false, budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let targets = first_copy
+                .graph_nodes()
+                .await
+                .expect("fresh snapshot targets");
+            let second = targets
+                .iter()
+                .find(|node| node.network_path == path && node.local_id == NodeId(7))
+                .expect("second pin target");
+            let both = first_copy
+                .set_graph_node_pinned_in_copy(second, true, budget())
+                .await
+                .expect("pin second nested node");
+            let interface = both
+                .runtime_graph()
+                .await
+                .expect("rebuild source graph")
+                .into_interface()
+                .expect("pinned properties metadata");
+            assert_eq!(
+                interface.ordered_pinned_nodes(&path),
+                [NodeId(9), NodeId(7)]
+            );
+            assert!(interface.ordered_pinned_nodes(&[]).is_empty());
+            assert_eq!(both.history_len(), first_copy.history_len() + 2);
+
+            let working = both
+                .copy_entries(&budget())
+                .expect("reopen copy")
+                .finish()
+                .expect("valid layout")
+                .working;
+            let mut editor = GddV1::open_in(AnyContainer::Memory(working), GddV1Layout)
+                .await
+                .expect("original editor");
+            editor
+                .undo()
+                .expect("one-step undo for both stored attributes");
+            assert!(
+                editor
+                    .registry()
+                    .value_equal(first_copy.document.registry())
+            );
+            editor
+                .redo()
+                .expect("one-step redo for both stored attributes");
+            assert!(editor.registry().value_equal(both.document.registry()));
+
+            let nodes = both.graph_nodes().await.expect("both pinned nodes");
+            let remove = nodes
+                .iter()
+                .find(|node| node.network_path == path && node.local_id == NodeId(9))
+                .expect("unpin the first node");
+            assert!(remove.is_pinned());
+            assert!(matches!(
+                both.set_graph_node_pinned_in_copy(remove, true, budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphNodePin)
+            ));
+            let unpinned = both
+                .set_graph_node_pinned_in_copy(remove, false, budget())
+                .await
+                .expect("unpin without moving the other node");
+            let interface = unpinned
+                .runtime_graph()
+                .await
+                .expect("rebuild unpinned graph")
+                .into_interface()
+                .expect("unpinned properties metadata");
+            assert_eq!(interface.ordered_pinned_nodes(&path), [NodeId(7)]);
             assert_eq!(original.original_bytes(), bytes.as_ref());
         });
     }
