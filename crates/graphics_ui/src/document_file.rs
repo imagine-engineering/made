@@ -484,6 +484,7 @@ struct NodeCopyForm {
     node_selection: BTreeSet<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
+    saved_graph_focus: FocusHandle,
     pending_canvas_source: Option<SavedGraphConnectionSource>,
 }
 
@@ -972,6 +973,7 @@ impl GraphiteDocumentItem {
                                     node_selection: BTreeSet::new(),
                                     show_saved_ports: false,
                                     saved_graph: SavedGraphPanel::Closed,
+                                    saved_graph_focus: cx.focus_handle(),
                                     pending_canvas_source: None,
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
@@ -1026,6 +1028,9 @@ impl GraphiteDocumentItem {
         ) {
             form.saved_graph = SavedGraphPanel::Closed;
             form.pending_canvas_source = None;
+            if form.saved_graph_focus.contains_focused(window, cx) {
+                self.focus_handle.focus(window, cx);
+            }
             cx.notify();
             return;
         }
@@ -1132,6 +1137,9 @@ impl GraphiteDocumentItem {
                 form.pending_canvas_source = None;
                 cx.notify();
             }
+            SavedGraphAction::CopySelection => self.copy_graph_clipboard(window, cx),
+            SavedGraphAction::CutSelection => self.cut_graph_selection(window, cx),
+            SavedGraphAction::PasteNodes => self.paste_graph_clipboard(window, cx),
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -1629,6 +1637,24 @@ impl GraphiteDocumentItem {
             window,
             cx,
         );
+    }
+
+    fn cut_graph_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let nodes = form.selected_graph_nodes();
+        match nodes.as_slice() {
+            [] => {}
+            [node] if !node.can_delete_in_copy() => {
+                self.copy_feedback = Some((
+                    "Select an isolated node or a complete connected numeric group to cut.".into(),
+                    Color::Error,
+                ));
+                cx.notify();
+            }
+            _ => self.save_copy(GraphiteCopy::CutNodeGroup { nodes }, window, cx),
+        }
     }
 
     fn duplicate_graph_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2191,6 +2217,7 @@ impl GraphiteDocumentItem {
                                     geometry, &form.nodes,
                                     SavedGraphView {
                                         network,
+                                        focus: &form.saved_graph_focus,
                                         selected: form.selected,
                                         selection: &form.node_selection,
                                         pending_source: form.pending_canvas_source,
@@ -2270,13 +2297,7 @@ impl GraphiteDocumentItem {
                             Button::new("graphite-gdd-cut-nodes", format!("Cut {selected_count} Nodes in a Copy"))
                                 .disabled(self.copy_task.is_some())
                                 .on_click(cx.listener(|item, _, window, cx| {
-                                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
-                                        return;
-                                    };
-                                    let nodes = form.selected_graph_nodes();
-                                    if nodes.len() > 1 {
-                                        item.save_copy(GraphiteCopy::CutNodeGroup { nodes }, window, cx);
-                                    }
+                                    item.cut_graph_selection(window, cx);
                                 })),
                         ),
                     ).child(
@@ -3933,6 +3954,17 @@ mod tests {
         paint(window);
     }
 
+    fn saved_graph_shortcut(window: &mut gpui::VisualTestContext, key: &str) {
+        let modifier = if cfg!(target_os = "macos") {
+            "cmd"
+        } else {
+            "ctrl"
+        };
+        window.simulate_keystrokes(&format!("{modifier}-{key}"));
+        window.run_until_parked();
+        paint(window);
+    }
+
     fn open_saved_boundary_menu(
         window: &mut gpui::VisualTestContext,
         kind: NetworkPortKind,
@@ -5070,6 +5102,17 @@ mod tests {
     async fn at_gra_graph_011_2_workspace_cuts_a_node_only_after_saving_its_folder_copy(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_cuts_numeric_node(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_cut_shortcut_waits_for_folder_publication(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_cuts_numeric_node(cx, true).await;
+    }
+
+    async fn verify_workspace_cuts_numeric_node(cx: &mut TestAppContext, keyboard: bool) {
         let (original, original_history) =
             numeric_graph_archive(NumericGraphFixture::SingleNode).await;
         let (workspace, window) = native_workspace(cx).await;
@@ -5097,10 +5140,23 @@ mod tests {
             .downcast::<GraphiteDocumentItem>()
             .expect("native Graphite Inspector");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        if keyboard {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+        }
+        let cut = |window: &mut gpui::VisualTestContext| {
+            if keyboard {
+                saved_graph_shortcut(window, "x");
+            } else {
+                click(window, "GRAPHITE-GDD-CUT-NODE");
+            }
+        };
         window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
         for path in [None, Some(blocked.clone())] {
             paint(window);
-            click(window, "GRAPHITE-GDD-CUT-NODE");
+            cut(window);
             window.simulate_new_path_selection(|_| path);
             window.run_until_parked();
             assert_eq!(
@@ -5120,7 +5176,7 @@ mod tests {
             b"existing destination"
         );
         paint(window);
-        click(window, "GRAPHITE-GDD-CUT-NODE");
+        cut(window);
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
         let clipboard = window
@@ -5279,28 +5335,55 @@ mod tests {
     async fn at_gra_graph_011_2_workspace_copies_and_pastes_a_connected_graph_node_group(
         cx: &mut TestAppContext,
     ) {
-        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", false).await;
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", GraphGroupRoute::Picker)
+            .await;
     }
 
     #[gpui::test]
     async fn at_gra_graph_012_2_workspace_duplicates_the_selected_graph_group(
         cx: &mut TestAppContext,
     ) {
-        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-DUPLICATE-NODES", false).await;
+        verify_workspace_graph_group_copy(
+            cx,
+            "GRAPHITE-GDD-DUPLICATE-NODES",
+            GraphGroupRoute::Picker,
+        )
+        .await;
     }
 
     #[gpui::test]
     async fn at_gra_graph_011_2_workspace_copies_a_canvas_modifier_selection(
         cx: &mut TestAppContext,
     ) {
-        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", true).await;
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES", GraphGroupRoute::Canvas)
+            .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_011_2_workspace_copies_and_pastes_with_canvas_shortcuts(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_graph_group_copy(
+            cx,
+            "GRAPHITE-GDD-PASTE-NODES",
+            GraphGroupRoute::Keyboard,
+        )
+        .await;
+    }
+
+    enum GraphGroupRoute {
+        Picker,
+        Canvas,
+        Keyboard,
     }
 
     async fn verify_workspace_graph_group_copy(
         cx: &mut TestAppContext,
         action: &'static str,
-        canvas: bool,
+        route: GraphGroupRoute,
     ) {
+        let canvas = !matches!(route, GraphGroupRoute::Picker);
+        let keyboard = matches!(route, GraphGroupRoute::Keyboard);
         let (original, original_history) =
             numeric_graph_archive_with_layout(NumericGraphFixture::Connection, canvas).await;
         let (workspace, window) = native_workspace(cx).await;
@@ -5331,6 +5414,17 @@ mod tests {
                 .map(|node| node.label().to_owned())
                 .collect::<BTreeSet<_>>()
         });
+        window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
+        if keyboard {
+            saved_graph_shortcut(window, "c");
+            assert_eq!(
+                window
+                    .read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .as_deref(),
+                Some("previous clipboard")
+            );
+        }
         if canvas {
             click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
             window.run_until_parked();
@@ -5366,7 +5460,9 @@ mod tests {
                 gpui::MouseButton::Left,
                 accelerator,
             );
-            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            if !keyboard {
+                click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            }
         } else {
             click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
             paint(window);
@@ -5377,10 +5473,13 @@ mod tests {
             click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
             paint(window);
         }
-        window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
         let paste = action == "GRAPHITE-GDD-PASTE-NODES";
         if paste {
-            click(window, "GRAPHITE-GDD-COPY-NODES");
+            if keyboard {
+                saved_graph_shortcut(window, "c");
+            } else {
+                click(window, "GRAPHITE-GDD-COPY-NODES");
+            }
             window.run_until_parked();
         }
         let clipboard = window
@@ -5394,11 +5493,18 @@ mod tests {
         }
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
         paint(window);
-        click(window, action);
+        let publish = |window: &mut gpui::VisualTestContext| {
+            if keyboard {
+                saved_graph_shortcut(window, "v");
+            } else {
+                click(window, action);
+            }
+        };
+        publish(window);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
-        click(window, action);
+        publish(window);
         let destination = PathBuf::from("/project/graph-group-copy.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();

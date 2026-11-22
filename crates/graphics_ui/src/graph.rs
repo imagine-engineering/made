@@ -1,7 +1,7 @@
 use editor::Editor;
 use gpui::{
     App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Modifiers,
-    Render, Role, Stateful, Subscription, Window, actions, point, rgb,
+    MouseButton, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -114,6 +114,9 @@ pub(crate) enum SavedGraphAction {
     ConnectExport(usize),
     DisconnectInput(usize),
     CancelConnection,
+    CopySelection,
+    CutSelection,
+    PasteNodes,
 }
 
 impl SavedGraphAction {
@@ -142,6 +145,7 @@ pub(crate) enum SavedGraphMenuTarget {
 
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
+    pub focus: &'a FocusHandle,
     pub selected: Option<usize>,
     pub selection: &'a BTreeSet<usize>,
     pub pending_source: Option<SavedGraphConnectionSource>,
@@ -196,7 +200,12 @@ pub(crate) fn render_saved_graph(
             .and_then(|index| nodes.get(index))
             .is_some_and(|node| view.network.can_connect_export_from(node));
     let colors = cx.theme().colors();
+    let graph_focus = view.focus.clone();
+    let dispatch_clipboard = dispatch.clone();
     let graph = div()
+        .id("graphite-saved-graph")
+        .track_focus(view.focus)
+        .key_context("GraphiteSavedGraph")
         .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
         .relative()
         .overflow_hidden()
@@ -206,6 +215,25 @@ pub(crate) fn render_saved_graph(
         .w(px(width as f32))
         .flex_none()
         .h(px(height as f32))
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            graph_focus.focus(window, cx);
+        })
+        .on_key_down(move |event, window, cx| {
+            let modifiers = event.keystroke.modifiers;
+            if !modifiers.secondary() || modifiers.shift || modifiers.alt {
+                return;
+            }
+            let action = match event.keystroke.key.as_str() {
+                "c" => SavedGraphAction::CopySelection,
+                "x" => SavedGraphAction::CutSelection,
+                "v" => SavedGraphAction::PasteNodes,
+                _ => return,
+            };
+            cx.stop_propagation();
+            if !event.is_held {
+                dispatch_clipboard(action, window, cx);
+            }
+        })
         .child(graph_wire_layer(
             geometry
                 .wires
