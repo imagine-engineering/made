@@ -1,7 +1,8 @@
 use editor::Editor;
 use gpui::{
     App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Modifiers,
-    MouseButton, Pixels, Point, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
+    MouseButton, Pixels, Point, Render, Role, ScrollHandle, Stateful, Subscription, Window,
+    actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -264,6 +265,7 @@ pub(crate) enum SavedGraphMenuTarget {
 
 pub(crate) struct SavedGraphView<'a> {
     pub network: &'a GddGraphNetwork,
+    pub viewport: &'a ScrollHandle,
     pub focus: &'a FocusHandle,
     pub layer_focus: &'a FocusHandle,
     pub selected: Option<usize>,
@@ -319,6 +321,33 @@ pub(crate) fn render_saved_graph(
             (f64::from(f32::from(local.y)) - padding) / scale + min[1],
         ]
     };
+    let measured_width = view.viewport.bounds().size.width;
+    let viewport_width = if measured_width > px(0.) {
+        measured_width.min(px(width as f32))
+    } else {
+        px(width as f32)
+    };
+    let scroll = -view
+        .viewport
+        .offset()
+        .x
+        .clamp(-view.viewport.max_offset().x, px(0.));
+    let [left, _] = unproject(point(scroll, px(0.)));
+    let [right, _] = unproject(point(scroll + viewport_width, px(0.)));
+    // The pinned margin keeps connectors hit-testable while their node leaves the viewport.
+    let intersects_viewport = |start: f64, end: f64| {
+        let margin = 24.;
+        start.min(end) - margin <= right && start.max(end) + margin >= left
+    };
+    let visible_nodes = geometry
+        .nodes
+        .iter()
+        .filter(|node| intersects_viewport(node.bounds[0][0], node.bounds[1][0]))
+        .collect::<Vec<_>>();
+    let visible_boundary_ports = geometry
+        .boundary_ports
+        .iter()
+        .filter(|(_, position)| intersects_viewport(position[0], position[0]));
     let nodes_by_id = nodes
         .iter()
         .enumerate()
@@ -353,6 +382,7 @@ pub(crate) fn render_saved_graph(
     });
     let origin = Rc::new(Cell::new(None));
     let canvas_origin = origin.clone();
+    let canvas_viewport = view.viewport.clone();
     let node_bounds = geometry
         .nodes
         .iter()
@@ -501,7 +531,12 @@ pub(crate) fn render_saved_graph(
         })
         .child(
             gpui::canvas(
-                move |bounds, _, _| canvas_origin.set(Some(bounds.origin)),
+                move |bounds, window, _| {
+                    canvas_origin.set(Some(bounds.origin));
+                    if canvas_viewport.bounds().size.width != measured_width {
+                        window.request_animation_frame();
+                    }
+                },
                 |_, (), _, _| {},
             )
             .absolute()
@@ -557,6 +592,7 @@ pub(crate) fn render_saved_graph(
             geometry
                 .wires
                 .iter()
+                .filter(|wire| intersects_viewport(wire[0][0], wire[1][0]))
                 .map(|wire| GraphWireStroke {
                     points: wire.iter().copied().map(project).collect(),
                     width: px(2.),
@@ -564,7 +600,7 @@ pub(crate) fn render_saved_graph(
                 })
                 .collect(),
         ))
-        .children(geometry.boundary_ports.iter().map(|(port, position)| {
+        .children(visible_boundary_ports.map(|(port, position)| {
             let position = project(*position);
             let (label, element_id, index) = match port {
                 ImportOrExport::Import(index) => ("Import", "graphite-saved-graph-import", index),
@@ -637,7 +673,7 @@ pub(crate) fn render_saved_graph(
                 position.child(socket)
             }
         }))
-        .children(geometry.nodes.iter().filter_map(|geometry| {
+        .children(visible_nodes.iter().copied().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
             let hidden = layers_by_id
                 .get(&geometry.storage_id)
@@ -719,7 +755,7 @@ pub(crate) fn render_saved_graph(
                 },
             ))
         }))
-        .children(geometry.nodes.iter().filter_map(|geometry| {
+        .children(visible_nodes.iter().copied().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
             let position = project(geometry.primary_output?);
             if !view.can_start_connection || !node.can_start_numeric_output() {
@@ -736,7 +772,7 @@ pub(crate) fn render_saved_graph(
                 dispatch.clone(),
             ))
         }))
-        .children(geometry.nodes.iter().filter_map(|geometry| {
+        .children(visible_nodes.iter().copied().filter_map(|geometry| {
             let &(index, node) = nodes_by_id.get(&geometry.storage_id)?;
             let position = project(geometry.primary_input?);
             if !view.can_start_connection
@@ -928,8 +964,10 @@ pub(crate) fn render_saved_graph(
         .child(
             div()
                 .id("graphite-saved-graph-viewport")
+                .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH-VIEWPORT".into())
                 .w_full()
                 .overflow_x_scroll()
+                .track_scroll(view.viewport)
                 .child(graph),
         )
         .children(root_layers)

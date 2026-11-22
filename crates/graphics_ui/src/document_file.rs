@@ -9,8 +9,8 @@ use anyhow::{Context as _, anyhow, ensure};
 use editor::Editor;
 use gpui::{
     App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EntityId,
-    EventEmitter, FocusHandle, Focusable, PathPromptOptions, Render, SharedString, Subscription,
-    Task, WeakEntity, Window, actions,
+    EventEmitter, FocusHandle, Focusable, PathPromptOptions, Render, ScrollHandle, SharedString,
+    Subscription, Task, WeakEntity, Window, actions,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
@@ -607,6 +607,7 @@ struct NodeCopyForm {
     collapsed_layers: BTreeSet<usize>,
     show_saved_ports: bool,
     saved_graph: SavedGraphPanel,
+    saved_graph_viewport: ScrollHandle,
     saved_graph_focus: FocusHandle,
     saved_layers_focus: FocusHandle,
     saved_graph_drag_start: SavedGraphDragStart,
@@ -648,6 +649,7 @@ impl NodeCopyForm {
             collapsed_layers: BTreeSet::new(),
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
+            saved_graph_viewport: ScrollHandle::new(),
             saved_graph_focus: cx.focus_handle(),
             saved_layers_focus: cx.focus_handle(),
             saved_graph_drag_start: Default::default(),
@@ -778,6 +780,9 @@ impl NodeCopyForm {
     }
 
     fn select_network(&mut self, index: Option<usize>) {
+        if self.active_network != index {
+            self.saved_graph_viewport = ScrollHandle::new();
+        }
         self.active_network = index;
         self.selected = None;
         self.output_preview = NodeOutputPreview::Hidden;
@@ -3574,6 +3579,7 @@ impl GraphiteDocumentItem {
                                     geometry, &form.nodes,
                                     SavedGraphView {
                                         network,
+                                        viewport: &form.saved_graph_viewport,
                                         focus: &form.saved_graph_focus,
                                         layer_focus: &form.saved_layers_focus,
                                         selected: form.selected,
@@ -5587,6 +5593,7 @@ mod tests {
         Reconnection,
         NestedConnection,
         RootExport,
+        WideRootExport,
     }
 
     async fn numeric_graph_archive(fixture: NumericGraphFixture) -> (Vec<u8>, usize) {
@@ -5605,15 +5612,19 @@ mod tests {
         use graphite_resource::ResourceRegistry;
         use graphite_std::math_nodes::absolute_value;
 
-        struct NumericPositions(bool);
+        struct NumericPositions {
+            positioned: bool,
+            wide: bool,
+        }
 
         impl NodeMetadataSource for NumericPositions {
             fn position(&self, _: &[NodeId], node: NodeId) -> Option<Position> {
-                if !self.0 {
+                if !self.positioned {
                     return None;
                 }
                 let grid = match node {
                     NodeId(7) => [0, 0],
+                    NodeId(8) if self.wide => [42, 2],
                     NodeId(8) => [8, 2],
                     NodeId(9) => [0, 4],
                     _ => return None,
@@ -5640,7 +5651,8 @@ mod tests {
             NumericGraphFixture::Connection
             | NumericGraphFixture::Reconnection
             | NumericGraphFixture::NestedConnection
-            | NumericGraphFixture::RootExport => Some(NodeInput::node(NodeId(7), 0)),
+            | NumericGraphFixture::RootExport
+            | NumericGraphFixture::WideRootExport => Some(NodeInput::node(NodeId(7), 0)),
         };
         if let Some(second_input) = second_input {
             graph.nodes.insert(
@@ -5673,7 +5685,9 @@ mod tests {
         }
         if matches!(
             fixture,
-            NumericGraphFixture::NestedConnection | NumericGraphFixture::RootExport
+            NumericGraphFixture::NestedConnection
+                | NumericGraphFixture::RootExport
+                | NumericGraphFixture::WideRootExport
         ) {
             graph.exports = vec![NodeInput::node(NodeId(8), 0)];
         }
@@ -5704,7 +5718,10 @@ mod tests {
         owner
             .commit_from_runtime(
                 &graph,
-                &NumericPositions(positioned),
+                &NumericPositions {
+                    positioned,
+                    wide: matches!(fixture, NumericGraphFixture::WideRootExport),
+                },
                 &ResourceRegistry::new(),
                 &resources,
             )
@@ -10105,6 +10122,121 @@ mod tests {
         assert_eq!(
             filesystem
                 .load_bytes(&path)
+                .await
+                .expect("unchanged source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_040_2_workspace_culls_scrolled_graph_targets(cx: &mut TestAppContext) {
+        let (original, history) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::WideRootExport, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let graph_path = PathBuf::from("/project/wide-graph.gdd.zip");
+        let adjacent_path = PathBuf::from("/project/adjacent.txt");
+        filesystem
+            .write(&graph_path, &original)
+            .await
+            .expect("source ZIP");
+        filesystem
+            .write(&adjacent_path, b"Adjacent pane")
+            .await
+            .expect("adjacent file");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(graph_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("wide saved graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        paint(window);
+        let initial = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                panic!("projected graph")
+            };
+            assert_eq!(graph.nodes.len(), 2);
+            assert!(!graph.wires.is_empty());
+            (
+                form.selected_node().expect("selected source").storage_id(),
+                graph.wires.clone(),
+                item.model.read(cx).revision.clone(),
+            )
+        });
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_some());
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-1").is_some());
+        workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_abs_path(adjacent_path, true, window, cx)
+            })
+            .await
+            .expect("narrow adjacent pane");
+        window.simulate_resize(gpui::size(gpui::px(1160.), gpui::px(1400.)));
+        window.run_until_parked();
+        paint(window);
+        window.update(|window, cx| window.simulate_next_frame(cx));
+        paint(window);
+
+        let viewport = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH-VIEWPORT")
+            .expect("measured graph viewport");
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_some());
+        let right_target = window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-1");
+        assert!(
+            right_target.is_none(),
+            "right target {right_target:?} in {viewport:?}"
+        );
+        let scroll = |window: &mut gpui::VisualTestContext, delta| {
+            window.simulate_event(gpui::ScrollWheelEvent {
+                position: viewport.center(),
+                delta: gpui::ScrollDelta::Pixels(gpui::point(gpui::px(delta), gpui::px(0.))),
+                ..Default::default()
+            });
+            paint(window);
+        };
+        scroll(window, -800.);
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_none());
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-1").is_some());
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready graph")
+            };
+            let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                panic!("projected graph")
+            };
+            assert_eq!(graph.nodes.len(), 2);
+            assert_eq!(graph.wires, initial.1);
+            assert_eq!(
+                form.selected_node().expect("same selection").storage_id(),
+                initial.0
+            );
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &initial.2));
+            assert!(!item.is_dirty(cx));
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("GDD")
+                    .history_len(),
+                history
+            );
+        });
+        scroll(window, 800.);
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0").is_some());
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRAPH-NODE-1").is_none());
+        assert_eq!(
+            filesystem
+                .load_bytes(&graph_path)
                 .await
                 .expect("unchanged source ZIP"),
             original
