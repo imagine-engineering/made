@@ -655,6 +655,12 @@ impl NestedPortEdit {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum GddNumericImportKind {
+    Number,
+    NumberList,
+}
+
 #[derive(Clone)]
 pub struct GddGraphNode {
     snapshot: Arc<()>,
@@ -1525,7 +1531,8 @@ impl InspectedGddV1 {
         network: &GddGraphNetwork,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
-        self.append_network_import(network, false, budget).await
+        self.append_network_import(network, false, TaggedValue::None, budget)
+            .await
     }
 
     pub async fn append_secondary_nested_network_import_in_copy(
@@ -1533,13 +1540,29 @@ impl InspectedGddV1 {
         network: &GddGraphNetwork,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
-        self.append_network_import(network, true, budget).await
+        self.append_network_import(network, true, TaggedValue::None, budget)
+            .await
+    }
+
+    pub async fn append_nested_numeric_import_in_copy(
+        &self,
+        network: &GddGraphNetwork,
+        kind: GddNumericImportKind,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        let default_value = match kind {
+            GddNumericImportKind::Number => TaggedValue::Number(0.),
+            GddNumericImportKind::NumberList => TaggedValue::Numbers(Vec::new()),
+        };
+        self.append_network_import(network, false, default_value, budget)
+            .await
     }
 
     async fn append_network_import(
         &self,
         network: &GddGraphNetwork,
         secondary: bool,
+        default_value: TaggedValue,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_network_edit_target(network)?;
@@ -1590,8 +1613,8 @@ impl InspectedGddV1 {
             );
             expected_inputs.push(hidden);
         }
-        expected_inputs.push(NodeInput::value(TaggedValue::None, true));
-        interface.add_import(TaggedValue::None, true, -1, "", "", path);
+        expected_inputs.push(NodeInput::value(default_value.clone(), true));
+        interface.add_import(default_value, true, -1, "", "", path);
         if !interface
             .document_node(&owner_id, parent_path)
             .is_some_and(|node| node.inputs == expected_inputs)
@@ -8532,6 +8555,111 @@ mod tests {
                         .value_equal(edited.document.registry())
                 );
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_node_280_3_custom_number_list_import_drives_a_saved_export() {
+        async fn inspect_custom(copy: &InspectedGddV1) -> (GddGraphNetwork, Option<GddGraphNode>) {
+            let GddGraphInspection { nodes, networks } =
+                copy.graph_inspection().await.expect("saved custom network");
+            let Ok([_, custom]) = <[GddGraphNetwork; 2]>::try_from(networks) else {
+                panic!("root and custom network")
+            };
+            let internal = nodes
+                .into_iter()
+                .find(|node| node.network_id() == custom.id);
+            (custom, internal)
+        }
+
+        futures::executor::block_on(async {
+            let blank = create_gdd_folder(827, 411, "Numeric Custom Node".into(), budget())
+                .await
+                .expect("empty saved graph");
+            let original = blank
+                .insert_root_catalog_node_in_copy(CUSTOM_NODE_IDENTIFIER, [0, 0], budget())
+                .await
+                .expect("pinned Custom Node");
+            let (empty, _) = inspect_custom(&original).await;
+            let imported = original
+                .append_nested_numeric_import_in_copy(
+                    &empty,
+                    GddNumericImportKind::NumberList,
+                    budget(),
+                )
+                .await
+                .expect("first typed import");
+            let (custom, _) = inspect_custom(&imported).await;
+            assert_eq!(custom.id, empty.id);
+            assert!(custom.can_start_numeric_import(0));
+            assert_eq!(
+                custom
+                    .imports()
+                    .first()
+                    .and_then(|port| port.stored_type.as_ref()),
+                Some(&TaggedValue::Numbers(Vec::new()).ty())
+            );
+            let exported = imported
+                .append_nested_network_export_in_copy(&custom, budget())
+                .await
+                .expect("primary export");
+            let (with_ports, _) = inspect_custom(&exported).await;
+            let inserted = exported
+                .insert_numeric_node_in_network_copy(
+                    &with_ports,
+                    UnaryNumericOperation::AbsoluteValue,
+                    [3, 0],
+                    budget(),
+                )
+                .await
+                .expect("pinned internal numeric node");
+            let (with_node, internal) = inspect_custom(&inserted).await;
+            let internal = internal.expect("created numeric node");
+            assert_eq!(internal.numeric_input_exposed(), Some(true));
+            let wired = inserted
+                .connect_numeric_network_import_in_copy(&with_node, 0, &internal, budget())
+                .await
+                .expect("typed import wire");
+            let (wired_network, internal) = inspect_custom(&wired).await;
+            let internal = internal.expect("wired numeric node");
+            let connected = wired
+                .connect_numeric_network_export_in_copy(&wired_network, &internal, 0, budget())
+                .await
+                .expect("typed internal export wire");
+            let bytes: Arc<[u8]> = connected
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("publish typed graph")
+                .into();
+            let reopened = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("round-tripped typed graph");
+            let (reopened_network, reopened_node) = inspect_custom(&reopened).await;
+            let reopened_node = reopened_node.expect("round-tripped numeric node");
+            assert_eq!(reopened_network.id, empty.id);
+            assert_eq!(reopened_node.storage_id(), internal.storage_id());
+            assert_eq!(
+                reopened_node
+                    .input_ports()
+                    .first()
+                    .and_then(|port| port.source.as_ref()),
+                Some(&GddGraphPortSource::Import(0))
+            );
+            assert_eq!(
+                reopened_network
+                    .exports()
+                    .first()
+                    .and_then(|port| port.source.as_ref()),
+                Some(&GddGraphPortSource::Node {
+                    storage_id: internal.storage_id(),
+                    output_index: 0
+                })
+            );
+            assert!(
+                matches!(reopened.preview_graph_numeric_output(&reopened_node).await,
+                Ok(GddNumericValue::NumberList(values)) if values.is_empty())
+            );
+            let (unchanged, _) = inspect_custom(&original).await;
+            assert_eq!((unchanged.import_count, unchanged.export_count), (0, 0));
         });
     }
 

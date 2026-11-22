@@ -17,9 +17,9 @@ use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphNetwork, GddGraphNode, GddHistoryDirection,
-        GddNumericGraphEvaluator, GddNumericValue, GddPinnedNodeMove, GddRecoverySource,
-        GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport, InspectedGddV1,
-        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
+        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
+        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -890,6 +890,10 @@ enum GraphiteCopy {
         network: Box<GddGraphNetwork>,
         kind: NetworkPortKind,
         with_hidden_primary: bool,
+    },
+    AppendNumericImport {
+        network: Box<GddGraphNetwork>,
+        kind: GddNumericImportKind,
     },
     SetPrimaryNetworkPortExposure {
         network: Box<GddGraphNetwork>,
@@ -2370,6 +2374,31 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn append_numeric_import(
+        &mut self,
+        kind: GddNumericImportKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(network) = form
+            .active_network()
+            .filter(|network| network.can_append_ports_in_copy())
+        else {
+            return;
+        };
+        self.save_copy(
+            GraphiteCopy::AppendNumericImport {
+                network: Box::new(network.clone()),
+                kind,
+            },
+            window,
+            cx,
+        );
+    }
+
     fn connect_network_export(
         &mut self,
         export_index: usize,
@@ -3384,6 +3413,16 @@ impl GraphiteDocumentItem {
                                     )
                                     .when(network.can_append_ports_in_copy(), |bar| {
                                         bar.children([
+                                            (GddNumericImportKind::Number, "GRAPHITE-GDD-ADD-NUMBER-IMPORT", "Add Number Import in a Copy"),
+                                            (GddNumericImportKind::NumberList, "GRAPHITE-GDD-ADD-NUMBER-LIST-IMPORT", "Add Number List Import in a Copy"),
+                                        ].map(|(kind, selector, label)| {
+                                            div().debug_selector(move || selector.into())
+                                                .child(Button::new(selector, label)
+                                                    .disabled(self.copy_task.is_some())
+                                                    .on_click(cx.listener(move |item, _, window, cx| {
+                                                        item.append_numeric_import(kind, window, cx);
+                                                    })))
+                                        })).children([
                                             (
                                                 NetworkPortKind::Import,
                                                 "GRAPHITE-GDD-ADD-NETWORK-IMPORT",
@@ -4326,7 +4365,8 @@ impl GraphiteDocumentItem {
                     GraphiteCopy::AppendNetworkPort {
                         kind: NetworkPortKind::Import,
                         ..
-                    } => "Added import in",
+                    }
+                    | GraphiteCopy::AppendNumericImport { .. } => "Added import in",
                     GraphiteCopy::AppendNetworkPort {
                         kind: NetworkPortKind::Export,
                         ..
@@ -4570,6 +4610,15 @@ impl GraphiteDocumentItem {
                             GraphiteCopy::MoveHistory(direction) => Some(
                                 archive
                                     .move_history_in_copy(direction, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
+                            GraphiteCopy::AppendNumericImport { network, kind } => Some(
+                                archive
+                                    .append_nested_numeric_import_in_copy(
+                                        &network,
+                                        kind,
+                                        ARCHIVE_BUDGET,
+                                    )
                                     .await?,
                             ),
                             GraphiteCopy::AppendNetworkPort {
@@ -10560,6 +10609,16 @@ mod tests {
                 "/project/custom-export.gdd",
                 (1, 1),
             ),
+            (
+                "GRAPHITE-GDD-ADD-NUMBER-IMPORT",
+                "/project/custom-number-import.gdd",
+                (2, 1),
+            ),
+            (
+                "GRAPHITE-GDD-ADD-NUMBER-LIST-IMPORT",
+                "/project/custom-number-list-import.gdd",
+                (3, 1),
+            ),
         ] {
             click(window, selector);
             window.simulate_new_path_selection(|_| Some(PathBuf::from(destination)));
@@ -10582,6 +10641,8 @@ mod tests {
                 assert_eq!(network.id, nested.id);
                 assert_eq!((network.import_count, network.export_count), counts);
                 assert!(network.can_extend_ports_in_copy());
+                assert_eq!(network.can_start_numeric_import(1), counts.0 >= 2);
+                assert_eq!(network.can_start_numeric_import(2), counts.0 == 3);
                 assert!(!item.is_dirty(cx));
             });
         }
