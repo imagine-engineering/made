@@ -478,7 +478,7 @@ struct NodeCopyForm {
     position: Entity<Editor>,
     output_preview: NodeOutputPreview,
     port_rename: Option<PortRenameForm>,
-    clipboard_selection: BTreeSet<usize>,
+    node_selection: BTreeSet<usize>,
 }
 
 impl NodeCopyForm {
@@ -499,8 +499,8 @@ impl NodeCopyForm {
         })
     }
 
-    fn selected_clipboard_nodes(&self) -> Vec<GddGraphNode> {
-        if self.clipboard_selection.is_empty() {
+    fn selected_graph_nodes(&self) -> Vec<GddGraphNode> {
+        if self.node_selection.is_empty() {
             return self
                 .selected_node()
                 .filter(|node| node.can_copy_graph_node())
@@ -508,7 +508,7 @@ impl NodeCopyForm {
                 .into_iter()
                 .collect();
         }
-        self.clipboard_selection
+        self.node_selection
             .iter()
             .filter_map(|index| self.nodes.get(*index))
             .cloned()
@@ -525,7 +525,7 @@ impl NodeCopyForm {
         self.selected = None;
         self.output_preview = NodeOutputPreview::Hidden;
         self.port_rename = None;
-        self.clipboard_selection.clear();
+        self.node_selection.clear();
     }
 }
 
@@ -592,6 +592,10 @@ enum GraphiteCopy {
         clipboard: String,
     },
     CutNodeGroup {
+        nodes: Vec<GddGraphNode>,
+    },
+    DuplicateNodeGroup {
+        network: Box<GddGraphNetwork>,
         nodes: Vec<GddGraphNode>,
     },
     ConnectNetworkExport {
@@ -920,7 +924,7 @@ impl GraphiteDocumentItem {
                                     position: cx.new(|cx| Editor::single_line(window, cx)),
                                     output_preview: NodeOutputPreview::Hidden,
                                     port_rename: None,
-                                    clipboard_selection: BTreeSet::new(),
+                                    node_selection: BTreeSet::new(),
                                 })),
                                 Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                             };
@@ -1238,7 +1242,7 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
-    fn toggle_clipboard_node(&mut self, cx: &mut Context<Self>) {
+    fn toggle_graph_selection(&mut self, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
             return;
         };
@@ -1252,19 +1256,19 @@ impl GraphiteDocumentItem {
         else {
             return;
         };
-        if form.clipboard_selection.remove(&index) {
+        if form.node_selection.remove(&index) {
             cx.notify();
             return;
         }
         if form
-            .clipboard_selection
+            .node_selection
             .iter()
             .filter_map(|index| form.nodes.get(*index))
             .any(|selected| selected.network_id() != node.network_id())
         {
             self.copy_feedback = Some(("Select nodes in the same network.".into(), Color::Error));
         } else {
-            form.clipboard_selection.insert(index);
+            form.node_selection.insert(index);
             self.copy_feedback = None;
         }
         cx.notify();
@@ -1274,7 +1278,7 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
-        let targets = form.selected_clipboard_nodes();
+        let targets = form.selected_graph_nodes();
         if targets.is_empty() || self.copy_task.is_some() {
             return;
         }
@@ -1327,6 +1331,31 @@ impl GraphiteDocumentItem {
             GraphiteCopy::PasteNodeGroup {
                 network: Box::new(network.clone()),
                 clipboard,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn duplicate_graph_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let nodes = form.selected_graph_nodes();
+        let Some(first) = nodes.first().filter(|_| nodes.len() > 1) else {
+            return;
+        };
+        let Some(network) = form
+            .networks
+            .iter()
+            .find(|network| network.id == first.network_id())
+        else {
+            return;
+        };
+        self.save_copy(
+            GraphiteCopy::DuplicateNodeGroup {
+                network: Box::new(network.clone()),
+                nodes,
             },
             window,
             cx,
@@ -1628,10 +1657,10 @@ impl GraphiteDocumentItem {
                     menu
                 });
                 let selected = form.selected_node();
-                let copied_count = if form.clipboard_selection.is_empty() {
+                let selected_count = if form.node_selection.is_empty() {
                     usize::from(selected.is_some_and(|node| node.can_copy_graph_node()))
                 } else {
-                    form.clipboard_selection.len()
+                    form.node_selection.len()
                 };
                 let has_nodes = form.nodes.iter().any(|node| form.includes_node(node));
                 let empty_exports = selected
@@ -1871,12 +1900,12 @@ impl GraphiteDocumentItem {
                     ))
                     .child(h_flex().gap_2().flex_wrap().children([
                         div().debug_selector(|| "GRAPHITE-GDD-COPY-NODES".into()).child(
-                            Button::new("graphite-gdd-copy-nodes", match copied_count {
+                            Button::new("graphite-gdd-copy-nodes", match selected_count {
                                 0 => "Copy Nodes".into(),
                                 1 => "Copy Node".into(),
                                 count => format!("Copy {count} Nodes"),
                             })
-                            .disabled(copied_count == 0 || self.copy_task.is_some())
+                            .disabled(selected_count == 0 || self.copy_task.is_some())
                             .on_click(cx.listener(|item, _, window, cx| item.copy_graph_clipboard(window, cx))),
                         ),
                         div().debug_selector(|| "GRAPHITE-GDD-PASTE-NODES".into()).child(
@@ -1884,19 +1913,25 @@ impl GraphiteDocumentItem {
                                 .disabled(form.clipboard_scope().is_none() || self.copy_task.is_some())
                                 .on_click(cx.listener(|item, _, window, cx| item.paste_graph_clipboard(window, cx))),
                         ),
-                    ]).when(copied_count > 1, |controls| controls.child(
+                    ]).when(selected_count > 1, |controls| controls.child(
                         div().debug_selector(|| "GRAPHITE-GDD-CUT-NODES".into()).child(
-                            Button::new("graphite-gdd-cut-nodes", format!("Cut {copied_count} Nodes in a Copy"))
+                            Button::new("graphite-gdd-cut-nodes", format!("Cut {selected_count} Nodes in a Copy"))
                                 .disabled(self.copy_task.is_some())
                                 .on_click(cx.listener(|item, _, window, cx| {
                                     let NodeCopyPanel::Ready(form) = &item.node_copy else {
                                         return;
                                     };
-                                    let nodes = form.selected_clipboard_nodes();
+                                    let nodes = form.selected_graph_nodes();
                                     if nodes.len() > 1 {
                                         item.save_copy(GraphiteCopy::CutNodeGroup { nodes }, window, cx);
                                     }
                                 })),
+                        ),
+                    ).child(
+                        div().debug_selector(|| "GRAPHITE-GDD-DUPLICATE-NODES".into()).child(
+                            Button::new("graphite-gdd-duplicate-nodes", format!("Duplicate {selected_count} Nodes in a Copy"))
+                                .disabled(self.copy_task.is_some())
+                                .on_click(cx.listener(|item, _, window, cx| item.duplicate_graph_selection(window, cx))),
                         ),
                     )))
                     .when(!has_nodes, |panel| panel.child(Label::new("This network has no nodes.")))
@@ -1933,16 +1968,16 @@ impl GraphiteDocumentItem {
                         };
                         panel
                             .when(selected.can_copy_graph_node(), |panel| {
-                                let included = form.selected.is_some_and(|index| form.clipboard_selection.contains(&index));
+                                let included = form.selected.is_some_and(|index| form.node_selection.contains(&index));
                                 panel.child(
                                     div().debug_selector(|| "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE".into()).child(
                                         Button::new("graphite-gdd-clipboard-select-node", if included {
-                                            "Remove from Copy Selection"
+                                            "Remove from Selection"
                                         } else {
-                                            "Add to Copy Selection"
+                                            "Add to Selection"
                                         })
                                         .disabled(self.copy_task.is_some())
-                                        .on_click(cx.listener(|item, _, _, cx| item.toggle_clipboard_node(cx))),
+                                        .on_click(cx.listener(|item, _, _, cx| item.toggle_graph_selection(cx))),
                                     ),
                                 )
                             })
@@ -2458,6 +2493,7 @@ impl GraphiteDocumentItem {
                     GraphiteCopy::PasteNodeGroup { .. } => "Pasted nodes in",
                     GraphiteCopy::CutNodeGroup { nodes } if nodes.len() == 1 => "Cut node from",
                     GraphiteCopy::CutNodeGroup { .. } => "Cut nodes from",
+                    GraphiteCopy::DuplicateNodeGroup { .. } => "Duplicated nodes in",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
                     GraphiteCopy::InsertNumericNode { .. }
@@ -2815,6 +2851,11 @@ impl GraphiteDocumentItem {
                                     clipboard: Some(clipboard),
                                 });
                             }
+                            GraphiteCopy::DuplicateNodeGroup { network, nodes } => Some(
+                                archive
+                                    .duplicate_graph_nodes_in_copy(&network, &nodes, ARCHIVE_BUDGET)
+                                    .await?,
+                            ),
                             GraphiteCopy::InsertNumericNode {
                                 operation,
                                 position,
@@ -4545,6 +4586,17 @@ mod tests {
     async fn at_gra_graph_011_2_workspace_copies_and_pastes_a_connected_graph_node_group(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-PASTE-NODES").await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_012_2_workspace_duplicates_the_selected_graph_group(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_graph_group_copy(cx, "GRAPHITE-GDD-DUPLICATE-NODES").await;
+    }
+
+    async fn verify_workspace_graph_group_copy(cx: &mut TestAppContext, action: &'static str) {
         let (original, original_history) =
             numeric_graph_archive(NumericGraphFixture::Connection).await;
         let (workspace, window) = native_workspace(cx).await;
@@ -4583,23 +4635,38 @@ mod tests {
         paint(window);
         click(window, "GRAPHITE-GDD-CLIPBOARD-SELECT-NODE");
         paint(window);
-        click(window, "GRAPHITE-GDD-COPY-NODES");
-        window.run_until_parked();
+        window.write_to_clipboard(ClipboardItem::new_string("previous clipboard".into()));
+        let paste = action == "GRAPHITE-GDD-PASTE-NODES";
+        if paste {
+            click(window, "GRAPHITE-GDD-COPY-NODES");
+            window.run_until_parked();
+        }
         let clipboard = window
             .read_from_clipboard()
             .and_then(|item| item.text())
-            .expect("native clipboard received a source payload");
-        assert!(clipboard.starts_with("graphite: "));
+            .expect("native clipboard text");
+        if paste {
+            assert!(clipboard.starts_with("graphite: "));
+        } else {
+            assert_eq!(clipboard, "previous clipboard");
+        }
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
         paint(window);
-        click(window, "GRAPHITE-GDD-PASTE-NODES");
+        click(window, action);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         paint(window);
-        click(window, "GRAPHITE-GDD-PASTE-NODES");
-        let destination = PathBuf::from("/project/graph-paste.gdd");
+        click(window, action);
+        let destination = PathBuf::from("/project/graph-group-copy.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
+        assert_eq!(
+            window
+                .read_from_clipboard()
+                .and_then(|item| item.text())
+                .as_deref(),
+            Some(clipboard.as_str())
+        );
         window.dispatch_action(OpenGraphiteFolder);
         window.simulate_path_prompt_response(|_| Some(vec![destination]));
         window.run_until_parked();
@@ -4607,7 +4674,7 @@ mod tests {
             .read_with(window, |workspace, cx| {
                 workspace.active_item_as::<GraphiteDocumentItem>(cx)
             })
-            .expect("reopen the pasted node group");
+            .expect("reopen the copied node group");
         assert_ne!(reopened, source);
         let contents = reopened.read_with(window, |item, cx| {
             let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
