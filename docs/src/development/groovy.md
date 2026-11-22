@@ -289,6 +289,9 @@ and changed provider ownership invalidate the derived presentation.
 **All Usages** shows the exact linked dependency in the Usages pane while
 keeping the current list filter. If the dependency is outside the list,
 the pane offers **Show in Diagram** to return to it.
+For large Maven graphs, search covers the entire admitted scope under the
+current filter, including occurrences beyond the displayed rows. Choosing
+one of those results opens its Usages pane.
 
 ### Ordered offline operations {#ordered-offline-operations}
 

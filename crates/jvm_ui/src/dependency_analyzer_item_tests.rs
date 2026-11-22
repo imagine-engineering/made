@@ -11,7 +11,7 @@ use crate::dependency_analyzer_item::{
 use crate::dependency_diagram_item::{
     DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
 };
-use gpui::TestAppContext;
+use gpui::{InputEvent as _, TestAppContext};
 use language_tools::language_tool_tree::{LanguageToolNode, LanguageToolNodeId};
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencyKind,
@@ -669,12 +669,38 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
     // Tab switch: opening a second analyzer tab and coming back preserves
     // the first item's state.
     let mut large_maven = maven_graph();
-    let DependencyAnalyzerGraph::Maven { nodes, edges, .. } = &mut large_maven else {
+    let DependencyAnalyzerGraph::Maven {
+        nodes,
+        components,
+        edges,
+        unavailable_descriptors,
+    } = &mut large_maven
+    else {
         panic!("Maven fixture");
     };
     nodes.extend((0..270).map(|index| maven_node(&format!("n-extra-{index}"), "c-leaf")));
-    nodes.push(maven_node("n-late", "c-leaf"));
+    nodes.push(maven_node("n-late", "c-late"));
+    components.push(maven_component(
+        "c-late",
+        "org.example",
+        "late-search",
+        "4.0",
+    ));
     edges.push(maven_edge("n-root", "n-late", "n-late", "test", false, 3));
+    unavailable_descriptors.push(MavenUnavailableDescriptor {
+        component: "c-late".into(),
+        problem: "Descriptor unavailable".into(),
+    });
+    let rows = analyzer_rows(
+        &large_maven,
+        DependencyAnalyzerFilter::All,
+        DependencyAnalyzerPresentation::Flat,
+        true,
+    );
+    let late_row = analyzer_row_id_for_node("n-late");
+    assert_eq!(rows.len(), 256);
+    assert!(rows.iter().all(|row| row.id != late_row));
+
     let second = DependencyAnalyzerDerivation {
         target: DependencyDiagramTarget {
             module_label: "other".into(),
@@ -688,18 +714,78 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
     let second = workspace.update_in(cx, |workspace, window, cx| {
         DependencyAnalyzerItem::open(second, None, workspace, window, cx)
     });
-    second.update(cx, |item, cx| item.preselect_node("n-late", cx));
-    second.read_with(cx, |item, cx| {
+    second.update(cx, |item, cx| {
+        item.apply_filter(DependencyAnalyzerFilter::Conflicts, cx);
+        assert!(
+            item.search_entries(cx)
+                .iter()
+                .all(|entry| entry.id != late_row.0)
+        );
+        item.apply_filter(DependencyAnalyzerFilter::Unresolved, cx);
+        assert!(item.search_entries(cx).iter().any(|entry| {
+            entry.id == late_row.0 && entry.label == "org.example:late-search:4.0 — test"
+        }));
+    });
+    cx.update(|window, _| window.activate_a11y_for_test());
+    assert!(
+        (0..32).any(|_| cx.update(|window, cx| {
+            window.focus_next(cx);
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value =
+                serde_json::from_str(&window.debug_a11y_tree_json().expect("analyzer toolbar"))
+                    .expect("accessibility JSON");
+            tree["gpui_focus"].as_str().is_some_and(|focus| {
+                tree["nodes"][focus]["aria"]["label"] == "Search dependency analyzer rows"
+            })
+        })),
+        "keyboard focus reaches analyzer search"
+    );
+    let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
+    cx.update(|window, cx| {
+        window.dispatch_event(
+            gpui::KeyDownEvent {
+                keystroke: keystroke.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+        window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
+    });
+    cx.run_until_parked();
+    for _ in 0..2 {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.simulate_next_frame(cx);
+        });
+    }
+    cx.simulate_input("late-search");
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let tree: serde_json::Value =
+            serde_json::from_str(&window.debug_a11y_tree_json().expect("analyzer search"))
+                .expect("accessibility JSON");
+        assert!(
+            tree["nodes"]
+                .as_object()
+                .expect("a11y nodes")
+                .values()
+                .any(|node| { node["aria"]["label"] == "org.example:late-search:4.0 — test" }),
+            "search shows the late occurrence with its admitted scope"
+        );
+        let confirm = cx
+            .build_action("menu::Confirm", None)
+            .expect("picker confirm action");
+        window.dispatch_action(confirm, cx);
+    });
+    cx.run_until_parked();
+    second.read_with(cx, |item, _| {
+        assert_eq!(item.filter(), DependencyAnalyzerFilter::Unresolved);
         assert_eq!(item.selected_key(), Some("n-late"));
         assert_eq!(
             item.usages().first().map(|usage| usage.user_node.as_str()),
             Some("n-root")
-        );
-        assert!(
-            !item
-                .search_entries(cx)
-                .iter()
-                .any(|entry| entry.id.ends_with("n-late"))
         );
     });
     workspace.update_in(cx, |workspace, window, cx| {

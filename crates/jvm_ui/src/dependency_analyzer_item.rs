@@ -26,7 +26,7 @@ use project::jvm_project::{
     JdtlsProjectSnapshot, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyGraph,
     MavenDependencyNode, MavenUnavailableDescriptor,
 };
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use ui::prelude::FluentBuilder as _;
 use workspace::Workspace;
 
@@ -318,19 +318,10 @@ fn maven_unavailable_components(
         .collect()
 }
 
-/// The scope of the first admitted edge targeting the occurrence; occurrence
-/// rows report it because one artifact can be admitted at several scopes.
-fn maven_occurrence_scope(edges: &[MavenDependencyEdge], occurrence: &str) -> Option<String> {
-    edges
-        .iter()
-        .find(|edge| edge.target_node == occurrence)
-        .map(|edge| edge.scope.clone())
-}
-
 struct MavenOccurrence<'a> {
     key: &'a str,
     component: &'a MavenDependencyComponent,
-    scope: Option<String>,
+    scope: Option<&'a str>,
     conflict: bool,
     unresolved: bool,
 }
@@ -338,25 +329,43 @@ struct MavenOccurrence<'a> {
 fn maven_occurrences<'a>(
     nodes: &'a [MavenDependencyNode],
     components: &'a [MavenDependencyComponent],
-    edges: &[MavenDependencyEdge],
+    edges: &'a [MavenDependencyEdge],
     unavailable_descriptors: &[MavenUnavailableDescriptor],
+    filter: DependencyAnalyzerFilter,
 ) -> Vec<MavenOccurrence<'a>> {
+    let mut components_by_id = HashMap::new();
+    for component in components {
+        components_by_id
+            .entry(component.id.as_str())
+            .or_insert(component);
+    }
+    let mut scopes_by_node = HashMap::new();
+    for edge in edges {
+        scopes_by_node
+            .entry(edge.target_node.as_str())
+            .or_insert(edge.scope.as_str());
+    }
     let conflicts = maven_conflict_occurrences(edges);
     let unavailable = maven_unavailable_components(unavailable_descriptors);
-    let mut occurrences = Vec::new();
-    for node in nodes.iter().take(MAX_ANALYZER_OCCURRENCES) {
-        let Some(component) = maven_component(components, &node.component) else {
-            continue;
-        };
-        occurrences.push(MavenOccurrence {
-            key: node.id.as_str(),
-            component,
-            scope: maven_occurrence_scope(edges, &node.id),
-            conflict: conflicts.contains(node.id.as_str()),
-            unresolved: unavailable.contains(node.component.as_str()),
-        });
-    }
-    occurrences
+    nodes
+        .iter()
+        .filter_map(|node| {
+            let component = components_by_id.get(node.component.as_str()).copied()?;
+            let key = node.id.as_str();
+            let occurrence = MavenOccurrence {
+                key,
+                component,
+                scope: scopes_by_node.get(key).copied(),
+                conflict: conflicts.contains(key),
+                unresolved: unavailable.contains(node.component.as_str()),
+            };
+            match filter {
+                DependencyAnalyzerFilter::All => Some(occurrence),
+                DependencyAnalyzerFilter::Conflicts => occurrence.conflict.then_some(occurrence),
+                DependencyAnalyzerFilter::Unresolved => occurrence.unresolved.then_some(occurrence),
+            }
+        })
+        .collect()
 }
 
 fn maven_occurrence_label(
@@ -393,23 +402,10 @@ fn maven_occurrence_accessibility(occurrence: &MavenOccurrence, show_group_ids: 
 }
 
 fn maven_analyzer_rows(
-    nodes: &[MavenDependencyNode],
-    components: &[MavenDependencyComponent],
-    edges: &[MavenDependencyEdge],
-    unavailable_descriptors: &[MavenUnavailableDescriptor],
-    filter: DependencyAnalyzerFilter,
+    kept: &[MavenOccurrence<'_>],
     presentation: DependencyAnalyzerPresentation,
     show_group_ids: bool,
 ) -> Vec<LanguageToolNode> {
-    let kept: Vec<MavenOccurrence> =
-        maven_occurrences(nodes, components, edges, unavailable_descriptors)
-            .into_iter()
-            .filter(|occurrence| match filter {
-                DependencyAnalyzerFilter::All => true,
-                DependencyAnalyzerFilter::Conflicts => occurrence.conflict,
-                DependencyAnalyzerFilter::Unresolved => occurrence.unresolved,
-            })
-            .collect();
     match presentation {
         DependencyAnalyzerPresentation::Flat => kept
             .iter()
@@ -425,7 +421,7 @@ fn maven_analyzer_rows(
         DependencyAnalyzerPresentation::Tree => {
             let mut groups: BTreeMap<String, BTreeMap<String, Vec<&MavenOccurrence>>> =
                 BTreeMap::new();
-            for occurrence in &kept {
+            for occurrence in kept {
                 groups
                     .entry(occurrence.component.group_id.clone())
                     .or_default()
@@ -819,11 +815,13 @@ pub(crate) fn analyzer_rows(
             unavailable_descriptors,
             ..
         } => maven_analyzer_rows(
-            nodes,
-            components,
-            edges,
-            unavailable_descriptors,
-            filter,
+            &maven_occurrences(
+                nodes.get(..MAX_ANALYZER_OCCURRENCES).unwrap_or(nodes),
+                components,
+                edges,
+                unavailable_descriptors,
+                filter,
+            ),
             presentation,
             show_group_ids,
         ),
@@ -1012,6 +1010,28 @@ impl DependencyAnalyzerItem {
     pub(crate) fn search_entries(&self, cx: &App) -> Vec<DependencySearchEntry> {
         if !self.receipt_is_current(cx) {
             return Vec::new();
+        }
+        if let DependencyAnalyzerGraph::Maven {
+            nodes,
+            components,
+            edges,
+            unavailable_descriptors,
+            ..
+        } = &self.derivation.graph
+        {
+            return maven_occurrences(
+                nodes,
+                components,
+                edges,
+                unavailable_descriptors,
+                self.filter,
+            )
+            .iter()
+            .map(|occurrence| DependencySearchEntry {
+                id: analyzer_row_id_for_node(occurrence.key).0,
+                label: maven_occurrence_label(occurrence, true, self.show_group_ids),
+            })
+            .collect();
         }
         analyzer_rows(
             &self.derivation.graph,
