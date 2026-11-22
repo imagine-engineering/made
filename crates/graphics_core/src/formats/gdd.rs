@@ -3199,43 +3199,96 @@ impl InspectedGddV1 {
         destination: [i32; 2],
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.move_graph_nodes_to_positions(&[(node, destination)], budget)
+            .await
+    }
+
+    pub async fn move_graph_nodes_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        offset: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        let positions = nodes
+            .iter()
+            .map(|node| {
+                self.check_node_edit_target(node)?;
+                let [x, y] = node
+                    .grid_position()
+                    .ok_or(GddArchiveError::UnsupportedGraphGridMove)?;
+                let destination = [
+                    x.checked_add(offset[0])
+                        .ok_or(GddArchiveError::GraphGridMoveOutOfRange)?,
+                    y.checked_add(offset[1])
+                        .ok_or(GddArchiveError::GraphGridMoveOutOfRange)?,
+                ];
+                Ok((node, destination))
+            })
+            .collect::<Result<Vec<_>, GddArchiveError>>()?;
+        self.move_graph_nodes_to_positions(&positions, budget).await
+    }
+
+    async fn move_graph_nodes_to_positions(
+        &self,
+        positions: &[(&GddGraphNode, [i32; 2])],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         use graphite_document_graph_storage::attr::node::ui::{IS_LAYER, POSITION};
 
-        self.check_node_edit_target(node)?;
-        let shift = node.grid_move_offset(destination)?;
-        let path = &node.network_path;
-        let mut interface = self.runtime_graph().await?.into_interface()?;
-        interface.shift_absolute_node_position(&node.local_id, shift, path);
-        let expected = Some(IVec2::from_array(destination));
-        if interface.position(&node.local_id, path) != expected {
-            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        let (first, _) = positions
+            .first()
+            .ok_or(GddArchiveError::UnsupportedGraphGridMove)?;
+        let path = &first.network_path;
+        let mut ids = BTreeSet::new();
+        let mut shifts = Vec::with_capacity(positions.len());
+        for &(node, destination) in positions {
+            self.check_node_edit_target(node)?;
+            if node.network_path != *path || !ids.insert(node.storage_id) {
+                return Err(GddArchiveError::UnsupportedGraphGridMove);
+            }
+            shifts.push(node.grid_move_offset(destination)?);
         }
-        let metadata = interface
-            .node_metadata(&node.local_id, path)
-            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
-        let edit = EditorDelta::NodeMetadata {
-            network_path: path.clone(),
-            node_id: node.local_id,
-            change: NodeMetadataChange::NodeType(
-                metadata.persistent_metadata.node_type_metadata.clone(),
-            ),
-        };
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let mut edits = Vec::with_capacity(positions.len());
+        for (&(node, destination), shift) in positions.iter().zip(shifts) {
+            interface.shift_absolute_node_position(&node.local_id, shift, path);
+            if interface.position(&node.local_id, path) != Some(IVec2::from_array(destination)) {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+            let metadata = interface
+                .node_metadata(&node.local_id, path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            edits.push(EditorDelta::NodeMetadata {
+                network_path: path.clone(),
+                node_id: node.local_id,
+                change: NodeMetadataChange::NodeType(
+                    metadata.persistent_metadata.node_type_metadata.clone(),
+                ),
+            });
+        }
         let (owner, staged) = self.fork_working_copy(&budget).await?;
-        let mut batch = prepare_graph_node_edit(&owner, &interface, &[edit])?;
-        if !matches!(
-            batch.ops.as_slice(),
-            [RegistryDelta::ChangeNodeAttribute { id, delta },
-             RegistryDelta::ChangeNodeAttribute { id: mode_id, delta: mode }]
-                if *id == node.storage_id && *mode_id == *id
-                    && delta.key == POSITION && mode.key == IS_LAYER && mode.value.is_none()
-        ) {
+        let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let (pairs, remainder) = batch.ops.as_chunks::<2>();
+        if !remainder.is_empty()
+            || pairs.len() != positions.len()
+            || !positions.iter().zip(pairs).all(|((node, _), operations)| {
+                matches!(operations,
+                    [RegistryDelta::ChangeNodeAttribute { id, delta },
+                     RegistryDelta::ChangeNodeAttribute { id: mode_id, delta: mode }]
+                        if *id == node.storage_id && *mode_id == *id
+                            && delta.key == POSITION && mode.key == IS_LAYER && mode.value.is_none()
+                )
+            })
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         // The layer mode is an independent stored attribute and a grid move leaves it intact.
-        batch.ops.truncate(1);
+        batch.ops.retain(|operation| matches!(operation, RegistryDelta::ChangeNodeAttribute { delta, .. } if delta.key == POSITION));
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if actual.position(&node.local_id, path) != expected {
+        if !positions.iter().all(|(node, destination)| {
+            actual.position(&node.local_id, path) == Some(IVec2::from_array(*destination))
+        }) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -8115,6 +8168,78 @@ mod tests {
                 preview_numeric_value(&TaggedValue::Numbers(vec![0.; 1025])),
                 Err(GddArchiveError::GraphNumericPreviewBudget)
             ));
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_014_1_moves_a_scoped_group_in_one_interaction() {
+        use graphite_document_graph_storage::attr::node::ui::POSITION;
+
+        futures::executor::block_on(async {
+            let bytes = numeric_graph_fixture().await;
+            let original = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("pinned numeric graph");
+            let nodes = original.graph_nodes().await.expect("scoped graph nodes");
+            let [root, _, first, second, _, _] = nodes.as_slice() else {
+                panic!("group with repeated local IDs")
+            };
+            let offset = [4, -5];
+            assert!(matches!(
+                original
+                    .move_graph_nodes_in_copy(&[root.clone(), first.clone()], offset, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphGridMove)
+            ));
+            assert!(matches!(
+                original
+                    .move_graph_nodes_in_copy(&[first.clone(), first.clone()], offset, budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphGridMove)
+            ));
+            assert!(matches!(
+                original
+                    .move_graph_nodes_in_copy(&[first.clone(), second.clone()], [0, 0], budget())
+                    .await,
+                Err(GddArchiveError::UnchangedGraphGridPosition)
+            ));
+            let moved = original
+                .move_graph_nodes_in_copy(&[first.clone(), second.clone()], offset, budget())
+                .await
+                .expect("move the whole group");
+            let changes = moved
+                .document
+                .session()
+                .history()
+                .skip(original.history_len())
+                .collect::<Vec<_>>();
+            assert_eq!(changes.len(), 2);
+            assert!(changes.iter().all(|change| matches!(&change.kind, RegistryDelta::ChangeNodeAttribute { id, delta } if [first.storage_id(), second.storage_id()].contains(id) && delta.key == POSITION)));
+            let moved_nodes = moved.graph_nodes().await.expect("reopened group positions");
+            for original in &nodes {
+                let current = moved_nodes
+                    .iter()
+                    .find(|node| node.storage_id() == original.storage_id())
+                    .expect("stable node ID");
+                let expected = original.grid_position().map(|[x, y]| {
+                    if [first.storage_id(), second.storage_id()].contains(&original.storage_id()) {
+                        [x + offset[0], y + offset[1]]
+                    } else {
+                        [x, y]
+                    }
+                });
+                assert_eq!(current.grid_position(), expected);
+            }
+            let undone = moved
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one Undo for the group");
+            assert!(
+                undone
+                    .document
+                    .registry()
+                    .value_equal(original.document.registry())
+            );
         });
     }
 

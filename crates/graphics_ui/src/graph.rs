@@ -134,6 +134,7 @@ struct SavedGraphNodeDrag {
     position: [i32; 2],
     scale: f64,
     start: SavedGraphDragStart,
+    selection: Arc<BTreeSet<usize>>,
 }
 
 impl SavedGraphNodeDrag {
@@ -266,8 +267,15 @@ pub(crate) fn render_saved_graph(
     let colors = cx.theme().colors();
     let graph_focus = view.focus.clone();
     let dispatch_clipboard = dispatch.clone();
-    let movement = view.drag_start.filter(|_| {
-        view.can_start_connection && view.pending_source.is_none() && view.selection.len() < 2
+    let movement = view
+        .drag_start
+        .filter(|_| view.can_start_connection && view.pending_source.is_none());
+    let selection = Arc::new(view.selection.clone());
+    let selection_movable = selection.iter().all(|&index| {
+        nodes
+            .get(index)
+            .and_then(GddGraphNode::grid_position)
+            .is_some()
     });
     let graph = div()
         .id("graphite-saved-graph")
@@ -289,9 +297,11 @@ pub(crate) fn render_saved_graph(
             let canvas = view.focus.clone();
             let revision = view.revision.clone();
             let dispatch = dispatch.clone();
+            let selection = selection.clone();
             graph.on_drop(move |drag: &SavedGraphNodeDrag, window, cx| {
                 if drag.canvas == canvas
                     && Arc::ptr_eq(&drag.revision, &revision)
+                    && drag.selection == selection
                     && let Some(position) = drag.destination(window.mouse_position())
                 {
                     dispatch(
@@ -518,11 +528,17 @@ pub(crate) fn render_saved_graph(
                 },
                 dispatch.clone(),
             );
+            let group_member = selection.len() > 1 && selection.contains(&index);
+            let movement = movement.filter(|_| !group_member || selection_movable);
             Some(button.when_some(
                 movement.zip(node.grid_position()),
                 |button, (start, position)| {
                     let pointer_start = start.clone();
-                    let name = SharedString::from(node.display_name());
+                    let name = if group_member {
+                        SharedString::from(format!("{} nodes", selection.len()))
+                    } else {
+                        SharedString::from(node.display_name())
+                    };
                     let width = bottom_right.x - top_left.x;
                     let height = bottom_right.y - top_left.y;
                     button
@@ -539,6 +555,7 @@ pub(crate) fn render_saved_graph(
                                 position,
                                 scale,
                                 start: start.clone(),
+                                selection: selection.clone(),
                             },
                             move |_, _, _, cx| {
                                 cx.new(|_| SavedGraphDragPreview {

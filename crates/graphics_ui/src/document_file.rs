@@ -1676,23 +1676,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::CutSelection => self.cut_graph_selection(window, cx),
             SavedGraphAction::PasteNodes => self.paste_graph_clipboard(window, cx),
             SavedGraphAction::MoveNode { index, position } => {
-                if self.model.read(cx).working.is_some()
-                    && form.pending_canvas_source.is_none()
-                    && let Some(node) = form
-                        .nodes
-                        .get(index)
-                        .filter(|node| form.includes_node(node))
-                        .cloned()
-                {
-                    self.apply_graph_edit(
-                        GraphiteCopy::EditNode {
-                            node: Box::new(node),
-                            change: NodeCopyChange::GridPosition(position),
-                        },
-                        window,
-                        cx,
-                    );
-                }
+                self.move_canvas_nodes(index, position, window, cx);
             }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
@@ -1733,6 +1717,78 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn move_canvas_nodes(
+        &mut self,
+        index: usize,
+        position: [i32; 2],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if form.pending_canvas_source.is_some() {
+            return;
+        }
+        let Some(node) = form
+            .nodes
+            .get(index)
+            .filter(|node| form.includes_node(node))
+        else {
+            return;
+        };
+        if form.node_selection.len() < 2 || !form.node_selection.contains(&index) {
+            let node = Box::new(node.clone());
+            form.node_selection.clear();
+            self.apply_graph_edit(
+                GraphiteCopy::EditNode {
+                    node,
+                    change: NodeCopyChange::GridPosition(position),
+                },
+                window,
+                cx,
+            );
+            return;
+        }
+        let (Some([x, y]), [destination_x, destination_y]) = (node.grid_position(), position)
+        else {
+            return;
+        };
+        let (Some(horizontal), Some(vertical)) =
+            (destination_x.checked_sub(x), destination_y.checked_sub(y))
+        else {
+            return;
+        };
+        let Some(nodes) = form
+            .node_selection
+            .iter()
+            .map(|&index| {
+                form.nodes
+                    .get(index)
+                    .filter(|node| form.includes_node(node))
+                    .cloned()
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            return;
+        };
+        let contents = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                contents
+                    .move_graph_nodes_in_copy(&nodes, [horizontal, vertical], ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
     }
 
     fn apply_graph_edit(
@@ -4822,6 +4878,62 @@ mod tests {
                 }),
                 cx,
             );
+        });
+        window.run_until_parked();
+        paint(window);
+    }
+
+    fn drag_graph_point(
+        window: &mut gpui::VisualTestContext,
+        start: gpui::Point<gpui::Pixels>,
+        end: gpui::Point<gpui::Pixels>,
+        during_drag: impl FnOnce(&gpui::VisualTestContext),
+    ) {
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    position: start,
+                    button: gpui::MouseButton::Left,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            )
+        });
+        paint(window);
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                    position: start + gpui::point(px(7.), px(0.)),
+                    pressed_button: Some(gpui::MouseButton::Left),
+                    modifiers: gpui::Modifiers::default(),
+                }),
+                cx,
+            );
+            assert!(cx.has_active_drag());
+        });
+        during_drag(window);
+        paint(window);
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                    position: end,
+                    pressed_button: Some(gpui::MouseButton::Left),
+                    modifiers: gpui::Modifiers::default(),
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    position: end,
+                    button: gpui::MouseButton::Left,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+            assert!(!cx.has_active_drag());
         });
         window.run_until_parked();
         paint(window);
@@ -8344,56 +8456,11 @@ mod tests {
                 .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0")
                 .expect("visible source node")
                 .center();
-            window.update(|window, cx| {
-                window.dispatch_event(
-                    gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
-                        position: start,
-                        button: gpui::MouseButton::Left,
-                        modifiers: gpui::Modifiers::default(),
-                        click_count: 1,
-                        first_mouse: false,
-                    }),
-                    cx,
-                )
+            drag_graph_point(window, start, end, |window| {
+                item.read_with(window, |item, cx| {
+                    assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before))
+                });
             });
-            paint(window);
-            window.update(|window, cx| {
-                window.dispatch_event(
-                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
-                        position: start + gpui::point(px(7.), px(0.)),
-                        pressed_button: Some(gpui::MouseButton::Left),
-                        modifiers: gpui::Modifiers::default(),
-                    }),
-                    cx,
-                );
-                assert!(cx.has_active_drag());
-            });
-            item.read_with(window, |item, cx| {
-                assert!(Arc::ptr_eq(&item.model.read(cx).revision, &before))
-            });
-            paint(window);
-            window.update(|window, cx| {
-                window.dispatch_event(
-                    gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
-                        position: end,
-                        pressed_button: Some(gpui::MouseButton::Left),
-                        modifiers: gpui::Modifiers::default(),
-                    }),
-                    cx,
-                );
-                window.dispatch_event(
-                    gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
-                        position: end,
-                        button: gpui::MouseButton::Left,
-                        modifiers: gpui::Modifiers::default(),
-                        click_count: 1,
-                    }),
-                    cx,
-                );
-                assert!(!cx.has_active_drag());
-            });
-            window.run_until_parked();
-            paint(window);
         };
         let canvas = window
             .debug_bounds("GRAPHITE-GDD-SAVED-GRAPH")
@@ -8463,6 +8530,142 @@ mod tests {
                 .load_bytes(&path)
                 .await
                 .expect("original source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_014_2_workspace_drags_selected_nodes_as_one_step(
+        cx: &mut TestAppContext,
+    ) {
+        let (original, history) =
+            numeric_graph_archive_with_layout(NumericGraphFixture::Reconnection, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/selected-working-drag.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("root source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source graph")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        window.run_until_parked();
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-GRAPH-NODE-0");
+        paint(window);
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-GRAPH-NODE-2",
+            gpui::MouseButton::Left,
+            gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+        );
+        let (source_id, target_id, alternate_id, revision) = item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("working graph")
+            };
+            assert_eq!(form.node_selection.len(), 2);
+            assert!(!item.is_dirty(cx));
+            let [source, target, alternate] = form.nodes.as_slice() else {
+                panic!("two source nodes and a connected target")
+            };
+            assert!(form.pending_canvas_source.is_none());
+            assert_eq!(source.grid_position(), Some([0, 0]));
+            assert_eq!(target.grid_position(), None);
+            assert_eq!(alternate.grid_position(), Some([0, 4]));
+            (
+                source.storage_id(),
+                target.storage_id(),
+                alternate.storage_id(),
+                form.revision.clone(),
+            )
+        });
+        let start = window
+            .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-0")
+            .expect("dragging the first selected node")
+            .center();
+        drag_graph_point(
+            window,
+            start,
+            start + gpui::point(px(72.), px(48.)),
+            |window| {
+                item.read_with(window, |item, cx| {
+                    assert!(!item.is_dirty(cx));
+                    assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+                });
+            },
+        );
+        let check_group = |window: &gpui::VisualTestContext,
+                           source_position,
+                           alternate_position| {
+            item.read_with(window, |item, cx| {
+                assert!(item.is_dirty(cx));
+                let NodeCopyPanel::Ready(form) = &item.node_copy else { panic!("working graph") };
+                assert_eq!(form.node_selection.len(), 2);
+                let [source, target, alternate] = form.nodes.as_slice() else { panic!("same node group") };
+                assert_eq!(source.storage_id(), source_id);
+                assert_eq!(target.storage_id(), target_id);
+                assert_eq!(alternate.storage_id(), alternate_id);
+                assert_eq!(source.grid_position(), Some(source_position));
+                assert_eq!(target.grid_position(), None);
+                assert_eq!(alternate.grid_position(), Some(alternate_position));
+                assert_eq!(target.numeric_connection_source(&form.nodes).map(GddGraphNode::storage_id), Some(source_id));
+                assert!(matches!(&form.saved_graph, SavedGraphPanel::Ready(graph) if graph.wires.len() == 1));
+            });
+        };
+        check_group(window, [3, 2], [3, 6]);
+        for (action, source_position, alternate_position) in [
+            ("GRAPHITE-GDD-UNDO", [0, 0], [0, 4]),
+            ("GRAPHITE-GDD-REDO", [3, 2], [3, 6]),
+        ] {
+            click(window, action);
+            window.run_until_parked();
+            paint(window);
+            check_group(window, source_position, alternate_position);
+        }
+        let destination = PathBuf::from("/project/saved-working-group-drag.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopen the moved group");
+        let nodes = saved.graph_nodes().await.expect("reopened scope");
+        let [source, target, alternate] = nodes.as_slice() else {
+            panic!("saved node group")
+        };
+        assert_eq!(source.storage_id(), source_id);
+        assert_eq!(target.storage_id(), target_id);
+        assert_eq!(alternate.storage_id(), alternate_id);
+        assert_eq!(source.grid_position(), Some([3, 2]));
+        assert_eq!(target.grid_position(), None);
+        assert_eq!(alternate.grid_position(), Some([3, 6]));
+        assert_eq!(saved.history_len(), history + 2);
+        assert!(matches!(
+            saved.preview_graph_numeric_output(target).await,
+            Ok(GddNumericValue::Integer(17))
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }
