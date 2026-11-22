@@ -2722,7 +2722,7 @@ pub(crate) fn node_has_execution_failure(
         && failed_node_id
             .0
             .strip_prefix(&node_id)
-            .is_some_and(|suffix| suffix.starts_with("::"))
+            .is_some_and(|suffix| suffix.starts_with(':'))
 }
 
 fn node_background_color(

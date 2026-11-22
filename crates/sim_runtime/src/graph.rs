@@ -4089,6 +4089,317 @@ fn subgraph_port_identifier(
     Uuid::new_v5(&namespace, format!("{direction}:{index}:{name}").as_bytes()).to_string()
 }
 
+#[derive(Clone, Copy)]
+struct ExecutionSubgraph<'a> {
+    scope: usize,
+    instance: &'a GraphNode,
+    definition: &'a SubgraphDefinition,
+}
+
+struct ExecutionGraphScope<'a> {
+    level: &'a GraphLevel,
+    namespace: String,
+    parent: Option<ExecutionSubgraph<'a>>,
+    input_boundary: Option<GraphIdentifier>,
+    incoming: BTreeMap<(&'a GraphIdentifier, usize), &'a GraphLink>,
+    children: BTreeMap<&'a GraphIdentifier, usize>,
+}
+
+impl ExecutionGraphScope<'_> {
+    fn execution_id(&self, node: &GraphIdentifier) -> String {
+        format!("{}{}", self.namespace, node.text())
+    }
+}
+
+fn collect_execution_scopes<'a>(
+    scopes: &mut Vec<ExecutionGraphScope<'a>>,
+    level: &'a GraphLevel,
+    parent: Option<ExecutionSubgraph<'a>>,
+    depth: usize,
+    remaining_nodes: &mut usize,
+    remaining_bytes: &mut usize,
+) -> Result<usize, GraphError> {
+    if depth > MAX_GRAPH_DEPTH {
+        return Err(GraphError::InvalidWorkflow {
+            path: "$.definitions".to_owned(),
+            reason: "subgraph execution exceeded the graph nesting limit".to_owned(),
+        });
+    }
+    *remaining_nodes = remaining_nodes
+        .checked_sub(level.nodes.len())
+        .ok_or_else(|| GraphError::InvalidWorkflow {
+            path: "$.definitions".to_owned(),
+            reason: "subgraph execution exceeded the workflow node limit".to_owned(),
+        })?;
+    let namespace = parent.map_or_else(String::new, |parent| {
+        format!(
+            "{}:",
+            scopes[parent.scope].execution_id(&parent.instance.identifier)
+        )
+    });
+    let indexed_link_bytes =
+        level
+            .links
+            .len()
+            .saturating_mul(std::mem::size_of::<(&GraphIdentifier, usize, &GraphLink)>());
+    debit_execution_bytes(
+        namespace.len().saturating_add(indexed_link_bytes),
+        remaining_bytes,
+    )?;
+    let mut incoming = BTreeMap::new();
+    for link in level.links.values() {
+        incoming
+            .entry((&link.target_node, link.target_slot))
+            .or_insert(link);
+    }
+    let scope_index = scopes.len();
+    scopes.push(ExecutionGraphScope {
+        level,
+        namespace,
+        parent,
+        input_boundary: subgraph_boundary_identifier(level, "inputNode"),
+        incoming,
+        children: BTreeMap::new(),
+    });
+    for node in level.nodes.values() {
+        if matches!(
+            node.mode,
+            GraphNodeMode::OnEvent | GraphNodeMode::Never | GraphNodeMode::Bypass
+        ) {
+            continue;
+        }
+        let definition_id = node
+            .subgraph_definition
+            .clone()
+            .unwrap_or_else(|| GraphIdentifier::String(node.type_identifier.clone()));
+        let Some(definition) = level
+            .definitions
+            .get(&definition_id)
+            .or_else(|| scopes[0].level.definitions.get(&definition_id))
+        else {
+            continue;
+        };
+        let child = collect_execution_scopes(
+            scopes,
+            &definition.graph,
+            Some(ExecutionSubgraph {
+                scope: scope_index,
+                instance: node,
+                definition,
+            }),
+            depth + 1,
+            remaining_nodes,
+            remaining_bytes,
+        )?;
+        scopes[scope_index].children.insert(&node.identifier, child);
+    }
+    Ok(scope_index)
+}
+
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+enum ExecutionGraphPort<'a> {
+    Input(&'a GraphIdentifier, usize),
+    Output(&'a GraphIdentifier, usize),
+}
+
+fn resolve_execution_input<'a>(
+    scopes: &[ExecutionGraphScope<'a>],
+    mut scope_index: usize,
+    node: &'a GraphIdentifier,
+    slot: usize,
+) -> Result<Option<(String, usize)>, GraphError> {
+    let mut port = ExecutionGraphPort::Input(node, slot);
+    let mut visited = BTreeSet::new();
+    loop {
+        if !visited.insert((scope_index, port)) {
+            return Err(GraphError::InvalidWorkflow {
+                path: "$.links".to_owned(),
+                reason: format!(
+                    "circular subgraph connection at {} input {slot}",
+                    node.text()
+                ),
+            });
+        }
+        let scope = &scopes[scope_index];
+        match port {
+            ExecutionGraphPort::Input(node, slot) => {
+                if let Some(link) = scope.incoming.get(&(node, slot)) {
+                    port = ExecutionGraphPort::Output(&link.origin_node, link.origin_slot);
+                    continue;
+                }
+                let Some(parent) = scope.parent else {
+                    return Ok(None);
+                };
+                let Some(parent_slot) = parent.definition.inputs.iter().position(|input| {
+                    input.internal_node.as_ref() == Some(node) && input.internal_slot == slot
+                }) else {
+                    return Ok(None);
+                };
+                scope_index = parent.scope;
+                port = ExecutionGraphPort::Input(&parent.instance.identifier, parent_slot);
+            }
+            ExecutionGraphPort::Output(node, slot) => {
+                if scope.input_boundary.as_ref() == Some(node) {
+                    let Some(parent) = scope.parent else {
+                        return Ok(None);
+                    };
+                    scope_index = parent.scope;
+                    port = ExecutionGraphPort::Input(&parent.instance.identifier, slot);
+                } else if let Some(child) = scope.children.get(node).copied() {
+                    let definition = scopes[child]
+                        .parent
+                        .ok_or_else(|| GraphError::UnknownNode(node.clone()))?
+                        .definition;
+                    let output = definition.outputs.get(slot).ok_or_else(|| {
+                        GraphError::InvalidSubgraphBoundary {
+                            instance: node.clone(),
+                            slot,
+                        }
+                    })?;
+                    let Some(origin) = output.internal_node.as_ref() else {
+                        return Ok(None);
+                    };
+                    scope_index = child;
+                    port = ExecutionGraphPort::Output(origin, output.internal_slot);
+                } else {
+                    return Ok(Some((scope.execution_id(node), slot)));
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn project_workflow_subgraphs(
+    workflow: &WorkflowFormatDocument,
+) -> Result<Option<Value>, GraphError> {
+    let Some(definitions) = workflow.value().get("definitions") else {
+        return Ok(None);
+    };
+    if definitions.as_array().is_some_and(Vec::is_empty)
+        || definitions.as_object().is_some_and(Map::is_empty)
+        || definitions
+            .get("subgraphs")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty)
+    {
+        return Ok(None);
+    }
+    let document = GraphDocument::from_workflow(workflow)?;
+    let mut scopes = Vec::new();
+    let mut remaining_nodes = crate::workflow_formats::MAX_WORKFLOW_NODES;
+    let mut available_bytes = crate::workflow_formats::MAX_WORKFLOW_BYTES;
+    collect_execution_scopes(
+        &mut scopes,
+        &document.root,
+        None,
+        0,
+        &mut remaining_nodes,
+        &mut available_bytes,
+    )?;
+    if scopes.len() == 1 {
+        return Ok(None);
+    }
+    let mut nodes = Vec::new();
+    let mut links = Vec::new();
+    let mut identifiers = BTreeSet::new();
+    let empty_graph = GraphLevel::default();
+    for (scope_index, scope) in scopes.iter().enumerate() {
+        for node in scope.level.nodes.values() {
+            if scope.children.contains_key(&node.identifier) {
+                continue;
+            }
+            let original_id = &node.identifier;
+            let execution_id = scope.execution_id(original_id);
+            if !identifiers.insert(execution_id.clone()) {
+                return Err(GraphError::DuplicateEntity(GraphIdentifier::String(
+                    execution_id,
+                )));
+            }
+            let mut node = node.clone();
+            if let Some(parent) = scope.parent {
+                if node.source_fields.get("virtual_prompt").is_some() {
+                    return Err(GraphError::InvalidWorkflow {
+                        path: "$.definitions".to_owned(),
+                        reason: format!(
+                            "virtual prompt inside subgraph node {execution_id} is unsupported"
+                        ),
+                    });
+                }
+                for exposure in &parent.definition.exposed_widgets {
+                    if exposure.internal_node == node.identifier
+                        && let Some(widget) = node
+                            .widgets
+                            .iter_mut()
+                            .find(|widget| widget.identifier == exposure.internal_widget)
+                        && let Some(value) = parent
+                            .instance
+                            .widgets
+                            .iter()
+                            .find(|widget| widget.identifier == exposure.identifier)
+                    {
+                        widget.value = widget.normalize(value.value.clone())?;
+                        widget.prompt_value = value.prompt_value.clone();
+                    }
+                }
+            }
+            let mut projected = serialize_node(&node, &empty_graph, nodes.len(), None, None)?;
+            let object = projected.as_object_mut().ok_or_else(|| {
+                GraphError::Serialization("projected node must be an object".to_owned())
+            })?;
+            if !node.source_fields.contains_key(NATIVE_WIDGETS_FIELD) {
+                object.remove(NATIVE_WIDGETS_FIELD);
+                if let Some(value) = node
+                    .source_fields
+                    .get("widgets_values")
+                    .filter(|value| value.is_object())
+                {
+                    object.insert("widgets_values".to_owned(), value.clone());
+                }
+            }
+            object.insert("id".to_owned(), json!(execution_id));
+            if let Some(inputs) = object.get_mut("inputs").and_then(Value::as_array_mut) {
+                for (slot, (input, port)) in inputs.iter_mut().zip(&node.inputs).enumerate() {
+                    if let Some((origin, origin_slot)) =
+                        resolve_execution_input(&scopes, scope_index, original_id, slot)?
+                    {
+                        let identifier = links.len();
+                        input["link"] = json!(identifier);
+                        let link = json!([
+                            identifier,
+                            origin,
+                            origin_slot,
+                            execution_id,
+                            slot,
+                            port.port_type.display_name()
+                        ]);
+                        debit_execution_projection(&link, &mut available_bytes)?;
+                        links.push(link);
+                    }
+                }
+            }
+            debit_execution_projection(&projected, &mut available_bytes)?;
+            nodes.push(projected);
+        }
+    }
+    Ok(Some(json!({ "nodes": nodes, "links": links })))
+}
+
+fn debit_execution_projection(value: &Value, remaining: &mut usize) -> Result<(), GraphError> {
+    let bytes =
+        serde_json::to_vec(value).map_err(|error| GraphError::Serialization(error.to_string()))?;
+    debit_execution_bytes(bytes.len(), remaining)
+}
+
+fn debit_execution_bytes(size: usize, remaining: &mut usize) -> Result<(), GraphError> {
+    *remaining = remaining
+        .checked_sub(size)
+        .ok_or_else(|| GraphError::InvalidWorkflow {
+            path: "$.definitions".to_owned(),
+            reason: "subgraph execution exceeded the workflow byte limit".to_owned(),
+        })?;
+    Ok(())
+}
+
 fn unpack_subgraph(
     document: &mut GraphDocument,
     instance_identifier: &GraphIdentifier,
@@ -8149,6 +8460,76 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn schema_one_subgraph_projects_one_boundary_input_to_multiple_nodes()
+    -> Result<(), Box<dyn Error>> {
+        let mut document = GraphDocument::from_workflow_bytes(&exercise_recursive_schema_one()?)?;
+        let (definition_id, definition) = document
+            .root
+            .definitions
+            .iter_mut()
+            .next()
+            .ok_or("definition")?;
+        let mut second = definition
+            .graph
+            .nodes
+            .get(&GraphIdentifier::Integer(1))
+            .ok_or("preview")?
+            .clone();
+        second.identifier = GraphIdentifier::Integer(2);
+        definition
+            .graph
+            .nodes
+            .insert(second.identifier.clone(), second);
+        let mut second_link = definition
+            .graph
+            .links
+            .get(&GraphIdentifier::Integer(1))
+            .ok_or("boundary link")?
+            .clone();
+        second_link.identifier = GraphIdentifier::Integer(2);
+        second_link.target_node = GraphIdentifier::Integer(2);
+        definition
+            .graph
+            .links
+            .insert(second_link.identifier.clone(), second_link);
+
+        let image = GraphPortType::from_name("IMAGE");
+        let mut source = node("source", None, Some(image.clone()));
+        source.type_identifier = "LoadImage".to_owned();
+        source.widgets = vec![GraphWidget::preserved("image", json!("fixture.png"))];
+        let mut instance = node("imported", Some(image), None);
+        instance.type_identifier = definition_id.text();
+        instance.subgraph_definition = Some(definition_id.clone());
+        document
+            .root
+            .nodes
+            .insert(source.identifier.clone(), source);
+        document
+            .root
+            .nodes
+            .insert(instance.identifier.clone(), instance);
+        let source_link = link("source-link", "source", "imported");
+        document
+            .root
+            .links
+            .insert(source_link.identifier.clone(), source_link);
+
+        let workflow = WorkflowFormatDocument::parse(document.to_workflow_bytes()?)?;
+        let submission = crate::graph_to_prompt(&workflow, &BTreeMap::new(), "test")?;
+        assert_eq!(submission.prompt.0.len(), 3);
+        for identifier in ["imported:1", "imported:2"] {
+            let preview = submission
+                .prompt
+                .0
+                .get(&sim_types::NodeId(identifier.to_owned()))
+                .ok_or("preview prompt")?;
+            assert_eq!(preview.class_type, "PreviewImage");
+            assert_eq!(preview.inputs["images"], json!(["source", 0]));
+        }
+        Ok(())
+    }
+
     fn exercise_schema_zero_four_reroutes() -> Result<Vec<u8>, Box<dyn Error>> {
         let mut document = fixture_engine()?.document;
         document.workflow_format = Some(WorkflowFormat::Schema04);
@@ -9910,6 +10291,90 @@ mod tests {
     }
 
     #[test]
+    fn converted_image_subgraphs_compile_with_namespaced_links_and_original_metadata()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = WorkflowFormatDocument::parse(include_bytes!(
+            "../../sim_test_support/fixtures/native_image/workflow.json"
+        ))?;
+        let mut engine = GraphCommandEngine::new(GraphDocument::from_workflow(&workflow)?)?;
+        engine.apply(GraphCommand::SetSelection {
+            selection: GraphSelection {
+                nodes: BTreeSet::from([GraphIdentifier::from("2"), GraphIdentifier::from("3")]),
+                ..GraphSelection::default()
+            },
+            mode: SelectionMode::Replace,
+        })?;
+        engine.apply(GraphCommand::ConvertSelectionToSubgraph {
+            definition_identifier: GraphIdentifier::from("processing-definition"),
+            instance_identifier: GraphIdentifier::from("processing"),
+            name: "Processing".to_owned(),
+        })?;
+        let workflow_bytes = engine.document.to_workflow_bytes()?;
+        let workflow = WorkflowFormatDocument::parse(&workflow_bytes)?;
+        let submission = crate::graph_to_prompt(&workflow, &BTreeMap::new(), "test")?;
+        let prompt = submission.prompt.0;
+        let node_id = |identifier: &str| sim_types::NodeId(identifier.to_owned());
+        assert_eq!(prompt.len(), 5);
+        assert!(!prompt.contains_key(&node_id("processing")));
+        assert_eq!(
+            prompt[&node_id("processing:2")].inputs["image"],
+            json!(["1", 0])
+        );
+        assert_eq!(prompt[&node_id("processing:2")].inputs["width"], 4);
+        assert_eq!(
+            prompt[&node_id("processing:3")].inputs["image"],
+            json!(["processing:2", 0])
+        );
+        for output in ["4", "5"] {
+            assert_eq!(
+                prompt[&node_id(output)].inputs["images"],
+                json!(["processing:3", 0])
+            );
+        }
+        assert_eq!(
+            &submission.extra_data["extra_pnginfo"]["workflow"],
+            workflow.value()
+        );
+        let plan = crate::native_execution_controller::compile_native_image_workflow(
+            &workflow_bytes,
+            &BTreeSet::from([node_id("4")]),
+        )?;
+        assert_eq!(plan.output_nodes, [node_id("4")]);
+        assert!(plan.nodes.contains_key(&node_id("processing:2")));
+        assert_eq!(workflow_bytes, engine.document.to_workflow_bytes()?);
+
+        engine.apply(GraphCommand::SetSelection {
+            selection: GraphSelection {
+                nodes: BTreeSet::from([
+                    GraphIdentifier::from("processing"),
+                    GraphIdentifier::from("4"),
+                ]),
+                ..GraphSelection::default()
+            },
+            mode: SelectionMode::Replace,
+        })?;
+        engine.apply(GraphCommand::ConvertSelectionToSubgraph {
+            definition_identifier: GraphIdentifier::from("outer-definition"),
+            instance_identifier: GraphIdentifier::from("outer"),
+            name: "Outer".to_owned(),
+        })?;
+        let nested_workflow = WorkflowFormatDocument::parse(engine.document.to_workflow_bytes()?)?;
+        let nested = crate::graph_to_prompt(&nested_workflow, &BTreeMap::new(), "test")?;
+        assert_eq!(nested.prompt.0.len(), 5);
+        assert_eq!(
+            nested.prompt.0[&node_id("outer:processing:2")].inputs["image"],
+            json!(["1", 0])
+        );
+        for output in ["outer:4", "5"] {
+            assert_eq!(
+                nested.prompt.0[&node_id(output)].inputs["images"],
+                json!(["outer:processing:3", 0])
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn subgraph_widget_exposure_preserves_typed_instance_state_and_reports_dynamic_inputs()
     -> Result<(), Box<dyn Error>> {
         let mut engine = fixture_engine()?;
@@ -10002,6 +10467,14 @@ mod tests {
             .ok_or("restored instance widget")?;
         assert_eq!(restored_instance_widget.value, json!(7));
         assert_eq!(restored_instance_widget.prompt_value, json!(9));
+        let workflow = WorkflowFormatDocument::parse(restored.to_workflow_bytes()?)?;
+        let submission = crate::graph_to_prompt(&workflow, &BTreeMap::new(), "test")?;
+        assert_eq!(
+            submission.prompt.0
+                [&sim_types::NodeId("widget-instance:widget-definition-internal".to_owned())]
+                .inputs["seed"],
+            9,
+        );
 
         engine
             .document

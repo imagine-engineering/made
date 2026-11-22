@@ -114,7 +114,7 @@ WorkflowFormatDocument is the authoritative immutable source document and retain
 
 ### D7: Make graph mutations serializable commands
 
-The graph workspace item applies typed commands for nodes, links, widgets, selection, groups, layout, subgraphs, clipboard, undo, and redo. Commands own focus and accessibility consequences and are separately serializable from prompts.
+The graph workspace item applies typed commands for nodes, links, widgets, selection, groups, layout, subgraphs, clipboard, undo, and redo. Commands own focus and accessibility consequences and are separately serializable from prompts. Native execution resolves declarative subgraph boundaries into leaf-node connections with colon-delimited instance paths. Exposed widget values and typed boundary links follow those instance paths. The workflow embedded in the prompt metadata retains the original subgraph definitions and edit state.
 
 ### D8: Make compiled and signed manifests authoritative
 

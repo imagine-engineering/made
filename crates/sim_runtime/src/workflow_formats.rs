@@ -1,4 +1,4 @@
-use crate::graph::NATIVE_WIDGETS_FIELD;
+use crate::graph::{NATIVE_WIDGETS_FIELD, project_workflow_subgraphs};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value, json};
@@ -1508,8 +1508,15 @@ pub fn graph_to_prompt(
     descriptors: &BTreeMap<String, NodeDescriptor>,
     frontend_version: &str,
 ) -> Result<PromptSubmission, WorkflowFormatError> {
-    let root = workflow
-        .value()
+    let projection = project_workflow_subgraphs(workflow).map_err(|error| {
+        WorkflowFormatError::PromptProjection {
+            path: "$.definitions".to_owned(),
+            reason: error.to_string(),
+        }
+    })?;
+    let root = projection
+        .as_ref()
+        .unwrap_or_else(|| workflow.value())
         .as_object()
         .ok_or(WorkflowFormatError::RootNotObject)?;
     let nodes = root.get("nodes").and_then(Value::as_array).ok_or_else(|| {

@@ -2545,9 +2545,9 @@ fn parent_subgraph_error_projection_case() -> Result<Value, String> {
     parent.subgraph_definition = Some(GraphIdentifier::from("validation-subgraph"));
     let interior_failure =
         ExecutionFailure::new("interior_failure", "an interior subgraph node failed")
-            .at_node(NodeId("parent-subgraph::interior-node".to_owned()));
+            .at_node(NodeId("parent-subgraph:interior-node".to_owned()));
     let unrelated_failure = ExecutionFailure::new("unrelated_failure", "different node")
-        .at_node(NodeId("different-parent::interior-node".to_owned()));
+        .at_node(NodeId("different-parent:interior-node".to_owned()));
     let root_node_failure = ExecutionFailure::new("root_failure", "the root node failed")
         .at_node(NodeId("parent-subgraph".to_owned()));
     if !node_has_execution_failure(&parent, &interior_failure)
