@@ -1,7 +1,7 @@
 use editor::Editor;
 use gpui::{
-    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Pixels,
-    Point, Render, Role, Stateful, Subscription, Window, actions, point, rgb,
+    App, AppContext as _, Context, Div, Entity, EventEmitter, FocusHandle, Focusable, Render, Role,
+    Stateful, Subscription, Window, actions, point, rgb,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
@@ -136,6 +136,7 @@ pub(crate) fn render_saved_graph(
     window: &Window,
     cx: &App,
     dispatch: impl Fn(SavedGraphAction, &mut Window, &mut App) + Clone + 'static,
+    wire_menu: impl Fn(usize, &mut Window, &mut App) -> Option<Entity<ContextMenu>> + Clone + 'static,
 ) -> impl IntoElement {
     let padding = 24.;
     let height = 256.;
@@ -285,13 +286,10 @@ pub(crate) fn render_saved_graph(
             }
             let source = SavedGraphConnectionSource::NodeOutput(index);
             Some(saved_graph_button(
-                saved_graph_node_socket(
-                    "output",
-                    index,
-                    position,
-                    view.pending_source == Some(source),
-                    cx,
-                ),
+                saved_graph_node_socket("output", index, view.pending_source == Some(source), cx)
+                    .absolute()
+                    .left(position.x - px(6.))
+                    .top(position.y - px(6.)),
                 format!("Connect output from {}", node.label()),
                 SavedGraphAction::ToggleSource(source),
                 dispatch.clone(),
@@ -306,12 +304,24 @@ pub(crate) fn render_saved_graph(
             {
                 return None;
             }
-            Some(saved_graph_button(
-                saved_graph_node_socket("input", index, position, false, cx),
+            let socket = saved_graph_button(
+                saved_graph_node_socket("input", index, false, cx),
                 format!("Disconnect saved input on {}", node.label()),
                 SavedGraphAction::DisconnectInput(index),
                 dispatch.clone(),
-            ))
+            );
+            let wire_menu = wire_menu.clone();
+            Some(
+                div()
+                    .absolute()
+                    .left(position.x - px(6.))
+                    .top(position.y - px(6.))
+                    .child(
+                        ui::right_click_menu(("graphite-saved-graph-input-menu", index))
+                            .trigger(move |_, _, _| socket)
+                            .maybe_menu(move |window, cx| wire_menu(index, window, cx)),
+                    ),
+            )
         }));
     v_flex()
         .gap_1()
@@ -348,7 +358,6 @@ pub(crate) fn render_saved_graph(
 fn saved_graph_node_socket(
     kind: &'static str,
     index: usize,
-    position: Point<Pixels>,
     active: bool,
     cx: &App,
 ) -> Stateful<Div> {
@@ -361,9 +370,6 @@ fn saved_graph_node_socket(
             let kind = kind.to_ascii_uppercase();
             format!("GRAPHITE-GDD-GRAPH-NODE-{kind}-{index}")
         })
-        .absolute()
-        .left(position.x - px(6.))
-        .top(position.y - px(6.))
         .size(px(12.))
         .rounded_full()
         .border_1()

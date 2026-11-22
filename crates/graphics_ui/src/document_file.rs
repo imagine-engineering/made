@@ -1639,15 +1639,16 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn render_numeric_wire_insertion(
-        &self,
+    fn numeric_wire_insertion_menu(
+        item: WeakEntity<Self>,
+        target: &GddGraphNode,
         window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let item = cx.entity().downgrade();
-        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+        cx: &mut App,
+    ) -> Entity<ContextMenu> {
+        ContextMenu::build(window, cx, |mut menu, _, _| {
             for operation in GRAPHITE_NUMERIC_OPERATIONS {
                 let item = item.clone();
+                let target = target.clone();
                 menu = menu.custom_entry(
                     move |_, _| {
                         div()
@@ -1664,10 +1665,7 @@ impl GraphiteDocumentItem {
                                 let NodeCopyPanel::Ready(form) = &item.node_copy else {
                                     return;
                                 };
-                                if let Some(target) = form.selected_node().filter(|target| {
-                                    target.has_numeric_connection()
-                                        && target.can_preview_numeric_output()
-                                }) {
+                                if form.includes_node(&target) {
                                     item.save_copy(
                                         GraphiteCopy::EditNode {
                                             node: Box::new(target.clone()),
@@ -1683,7 +1681,16 @@ impl GraphiteDocumentItem {
                 );
             }
             menu
-        });
+        })
+    }
+
+    fn render_numeric_wire_insertion(
+        &self,
+        target: &GddGraphNode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let menu = Self::numeric_wire_insertion_menu(cx.entity().downgrade(), target, window, cx);
         div()
             .debug_selector(|| "GRAPHITE-GDD-INSERT-ON-WIRE".into())
             .child(DropdownMenu::new(
@@ -2102,6 +2109,7 @@ impl GraphiteDocumentItem {
                         match &form.saved_graph {
                             SavedGraphPanel::Ready(geometry) => {
                                 let item = cx.entity().downgrade();
+                                let wire_item = item.clone();
                                 let scope = network.id;
                                 panel.child(crate::graph::render_saved_graph(
                                     geometry, &form.nodes,
@@ -2122,6 +2130,26 @@ impl GraphiteDocumentItem {
                                         }) {
                                             log::debug!("Graphite saved graph selection closed: {error:#}");
                                         }
+                                    },
+                                    move |index, window, cx| {
+                                        let item = wire_item.upgrade()?;
+                                        let item_state = item.read(cx);
+                                        let NodeCopyPanel::Ready(form) = &item_state.node_copy else {
+                                            return None;
+                                        };
+                                        let target = form.nodes.get(index)?;
+                                        if item_state.copy_task.is_some()
+                                            || form.pending_canvas_source.is_some()
+                                            || !matches!(form.saved_graph, SavedGraphPanel::Ready(_))
+                                            || !form.clipboard_scope().is_some_and(|network| network.id == scope)
+                                            || target.network_id() != scope
+                                            || !target.has_numeric_connection()
+                                            || !target.can_preview_numeric_output()
+                                        {
+                                            return None;
+                                        }
+                                        let target = target.clone();
+                                        Some(Self::numeric_wire_insertion_menu(wire_item.clone(), &target, window, cx))
                                     },
                                 ))
                             }
@@ -2475,7 +2503,7 @@ impl GraphiteDocumentItem {
                                 selected.has_numeric_connection()
                                     && selected.can_preview_numeric_output()
                                     && self.copy_task.is_none(),
-                                |panel| panel.child(self.render_numeric_wire_insertion(window, cx)),
+                                |panel| panel.child(self.render_numeric_wire_insertion(selected, window, cx)),
                             )
                             .children(self.render_numeric_connection_menu(form, selected, window, cx))
                             .when(selected.can_preview_numeric_output(), |panel| {
@@ -4525,6 +4553,17 @@ mod tests {
     async fn at_gra_graph_010_2_workspace_inserts_a_numeric_node_on_the_selected_wire(
         cx: &mut TestAppContext,
     ) {
+        verify_workspace_inserts_numeric_node_on_wire(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_010_2_workspace_inserts_a_numeric_node_from_the_canvas_wire_menu(
+        cx: &mut TestAppContext,
+    ) {
+        verify_workspace_inserts_numeric_node_on_wire(cx, true).await;
+    }
+
+    async fn verify_workspace_inserts_numeric_node_on_wire(cx: &mut TestAppContext, canvas: bool) {
         let (original, original_history) = graph_navigation_archive().await;
         let (workspace, window) = native_workspace(cx).await;
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -4553,16 +4592,62 @@ mod tests {
             assert_eq!(node.numeric_import_source(), Some(1));
             node.label().to_owned()
         });
-        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        if canvas {
+            click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+            window.run_until_parked();
+            paint(window);
+            click(window, "GRAPHITE-GDD-GRAPH-NODE-2");
+            source.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected the saved graph");
+                };
+                assert_eq!(
+                    form.selected_node()
+                        .and_then(GddGraphNode::numeric_import_source),
+                    Some(0)
+                );
+            });
+        }
+        let insert = |window: &mut gpui::VisualTestContext| {
+            if canvas {
+                let position = window
+                    .debug_bounds("GRAPHITE-GDD-GRAPH-NODE-INPUT-3")
+                    .expect("visible connected input")
+                    .center();
+                window.update(|window, cx| {
+                    window.dispatch_event(
+                        gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                            position,
+                            button: gpui::MouseButton::Right,
+                            modifiers: gpui::Modifiers::default(),
+                            click_count: 1,
+                            first_mouse: false,
+                        }),
+                        cx,
+                    );
+                    window.dispatch_event(
+                        gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                            position,
+                            button: gpui::MouseButton::Right,
+                            modifiers: gpui::Modifiers::default(),
+                            click_count: 1,
+                        }),
+                        cx,
+                    );
+                });
+                window.run_until_parked();
+            } else {
+                click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
+            }
+            paint(window);
+            click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        };
+        insert(window);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
         assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
         paint(window);
-        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE");
-        paint(window);
-        click(window, "GRAPHITE-GDD-INSERT-ON-WIRE-Sign");
+        insert(window);
         let destination = PathBuf::from("/project/inserted-on-wire.gdd");
         window.simulate_new_path_selection(|_| Some(destination.clone()));
         window.run_until_parked();
