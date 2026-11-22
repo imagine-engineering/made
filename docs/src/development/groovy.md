@@ -322,6 +322,8 @@ dependency, or open the Structure overview. Drag blank space to pan. Use
 Command-click or Control-click to toggle nodes in the selection. Shift-drag
 from blank space to extend the selection with a rectangle. Use **Layout** in
 the blank-canvas menu to switch between left-to-right and top-to-bottom ranks.
+In the Structure overview, tab to a selected dependency and press Enter or
+Space to center the view on it while keeping the current selection and zoom.
 Search includes dependencies beyond the initial canvas view, including
 Gradle requests that failed to resolve. Choosing one brings the occurrence
 and its immediate connections into the bounded view of the graph.

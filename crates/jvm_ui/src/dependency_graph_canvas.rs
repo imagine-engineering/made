@@ -991,14 +991,24 @@ impl CanvasState {
         self.selection.clear();
         self.selection.insert(id.to_owned());
         self.focus = Some(id.to_owned());
-        let size = *self.canvas_size.lock().expect("canvas size");
+        self.center_viewport_on(position);
+        true
+    }
+
+    pub(crate) fn center_viewport_on(&mut self, position: GraphPoint) {
+        let size = match self.canvas_size.lock() {
+            Ok(size) => *size,
+            Err(error) => {
+                log::error!("Could not read the dependency diagram canvas size: {error}");
+                return;
+            }
+        };
         if size.width > 0.0 && size.height > 0.0 {
             self.viewport.offset = GraphPoint {
                 x: size.width / 2.0 - position.x * self.viewport.scale,
                 y: size.height / 2.0 - position.y * self.viewport.scale,
             };
         }
-        true
     }
 
     /// Extends the selection to every node inside the current box selection.

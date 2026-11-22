@@ -21,8 +21,14 @@ use gpui::{
     Render, SharedString, Task, Window, actions,
 };
 use picker::{Picker, PickerDelegate};
+use sim_runtime::graph::{GraphPoint, GraphSize};
 use std::{collections::BTreeSet, sync::Arc};
 use workspace::Workspace;
+
+const STRUCTURE_OVERVIEW_SIZE: GraphSize = GraphSize {
+    width: 180.0,
+    height: 120.0,
+};
 
 actions!(
     groovy_dependencies_panel,
@@ -1234,6 +1240,7 @@ impl Render for DependencyDiagramItem {
             .child(
                 ui::right_click_menu("dependency-diagram-context-menu")
                     .with_handle(context_handle)
+                    .full_height(true)
                     .maybe_menu(move |window, cx| {
                         crate::dependency_diagram_menu::build_dependency_diagram_context_menu(
                             &context_state,
@@ -1416,25 +1423,17 @@ impl DependencyDiagramItem {
     fn render_structure_overview(&self, cx: &Context<Self>) -> impl gpui::IntoElement {
         use ui::prelude::*;
 
-        const OVERVIEW_WIDTH: f32 = 180.0;
-        const OVERVIEW_HEIGHT: f32 = 120.0;
         let theme = cx.theme().colors().clone();
         let graph = &self.canvas.read(cx).graph;
         let bounds = graph.bounds;
-        let scale = if bounds.size.width > 0.0 && bounds.size.height > 0.0 {
-            (OVERVIEW_WIDTH / bounds.size.width)
-                .min(OVERVIEW_HEIGHT / bounds.size.height)
-                .min(1.0)
-        } else {
-            0.0
-        };
+        let scale = self.overview_scale(cx);
         let overview_origin = self.overview_origin.clone();
         let mut overview = div()
             .absolute()
             .right_2()
             .bottom_2()
-            .w(px(OVERVIEW_WIDTH))
-            .h(px(OVERVIEW_HEIGHT))
+            .w(px(STRUCTURE_OVERVIEW_SIZE.width))
+            .h(px(STRUCTURE_OVERVIEW_SIZE.height))
             .border_1()
             .border_color(theme.border)
             .bg(theme.background.opacity(0.9))
@@ -1493,14 +1492,21 @@ impl DependencyDiagramItem {
                     .w(px(3.0_f32.max(graph.node_size().width * scale)))
                     .h(px(2.0_f32.max(graph.node_size().height * scale)));
                 if selected {
+                    let node_id = node.id.clone();
+                    let focus_color = theme.text;
                     overview = overview.child(
                         rect.id(format!("structure-overview-{}", node.id))
                             .bg(theme.border_selected)
+                            .tab_index(0_isize)
+                            .focus_visible(move |style| style.border_1().border_color(focus_color))
                             .role(gpui::Role::Button)
                             .aria_label(format!(
                                 "Structure overview selected node {}; activate to centre the viewport",
                                 node.label
-                            )),
+                            ))
+                            .on_click(cx.listener(move |item, _, _, cx| {
+                                item.center_overview_node(&node_id, cx);
+                            })),
                     );
                 } else {
                     overview = overview.child(rect.bg(theme.border));
@@ -1518,15 +1524,9 @@ impl DependencyDiagramItem {
         cx: &mut Context<Self>,
     ) {
         let overview_origin = *self.overview_origin.lock().expect("overview origin");
-        let (bounds, canvas_size, scale) = {
-            let canvas = self.canvas.read(cx);
-            (
-                canvas.graph.bounds,
-                *canvas.canvas_size.lock().expect("canvas size"),
-                self.overview_scale(cx),
-            )
-        };
-        if scale <= 0.0 || bounds.size.width <= 0.0 || bounds.size.height <= 0.0 {
+        let bounds = self.canvas.read(cx).graph.bounds;
+        let scale = self.overview_scale(cx);
+        if scale <= 0.0 {
             return;
         }
         let local = sim_runtime::graph::GraphPoint {
@@ -1538,21 +1538,34 @@ impl DependencyDiagramItem {
             y: bounds.origin.y + local.y / scale,
         };
         self.canvas.update(cx, |canvas, cx| {
-            canvas.viewport.offset = sim_runtime::graph::GraphPoint {
-                x: canvas_size.width / 2.0 - graph_position.x * canvas.viewport.scale,
-                y: canvas_size.height / 2.0 - graph_position.y * canvas.viewport.scale,
-            };
+            canvas.center_viewport_on(graph_position);
             cx.notify();
         });
     }
 
+    fn center_overview_node(&mut self, id: &str, cx: &mut Context<Self>) {
+        if !self.receipt_is_current(cx) {
+            return;
+        }
+        self.canvas.update(cx, |canvas, cx| {
+            if canvas.selection.contains(id)
+                && let Some(origin) = canvas.graph.positions.get(id)
+            {
+                let size = canvas.graph.node_size();
+                canvas.center_viewport_on(GraphPoint {
+                    x: origin.x + size.width / 2.0,
+                    y: origin.y + size.height / 2.0,
+                });
+                cx.notify();
+            }
+        });
+    }
+
     fn overview_scale(&self, cx: &App) -> f32 {
-        const OVERVIEW_WIDTH: f32 = 180.0;
-        const OVERVIEW_HEIGHT: f32 = 120.0;
         let bounds = self.canvas.read(cx).graph.bounds;
         if bounds.size.width > 0.0 && bounds.size.height > 0.0 {
-            (OVERVIEW_WIDTH / bounds.size.width)
-                .min(OVERVIEW_HEIGHT / bounds.size.height)
+            (STRUCTURE_OVERVIEW_SIZE.width / bounds.size.width)
+                .min(STRUCTURE_OVERVIEW_SIZE.height / bounds.size.height)
                 .min(1.0)
         } else {
             0.0
@@ -1810,7 +1823,7 @@ mod tests {
     use crate::dependency_graph_canvas::{
         CanvasEdge, CanvasEdgeVariant, CanvasNode, CanvasNodeKind, layout_canvas_graph,
     };
-    use gpui::TestAppContext;
+    use gpui::{InputEvent as _, TestAppContext};
     use settings::SettingsStore;
     use theme::LoadThemes;
     use workspace::Item as _;
@@ -2303,6 +2316,10 @@ mod tests {
             )
         });
         assert!(scale > 0.0, "the fixture graph fits the overview");
+        assert!(
+            canvas_size.width > 0.0 && canvas_size.height > 0.0,
+            "the diagram fills the editor body: {canvas_size:?}"
+        );
         let pointer = sim_runtime::graph::GraphPoint {
             x: overview_origin.x + 60.0,
             y: overview_origin.y + 30.0,
@@ -2321,8 +2338,11 @@ mod tests {
         // Selection highlight: the selected block is announced in the
         // overview's accessibility tree.
         item.update(cx, |item, cx| {
-            item.canvas
-                .update(cx, |canvas, _| canvas.select_node("c1", false, false));
+            item.canvas.update(cx, |canvas, cx| {
+                canvas.select_node("c1", false, false);
+                canvas.select_node("c2", true, false);
+                cx.notify();
+            });
         });
         cx.update(|window, _| window.activate_a11y_for_test());
         cx.update(|window, cx| {
@@ -2343,6 +2363,53 @@ mod tests {
                 "the selected block is highlighted and announced: {labels:?}"
             );
         });
+
+        let label =
+            "Structure overview selected node org.example:left; activate to centre the viewport";
+        assert!(
+            (0..32).any(|_| cx.update(|window, cx| {
+                window.focus_next(cx);
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("a11y tree"))
+                        .expect("a11y json");
+                tree["gpui_focus"].as_str().is_some_and(|id| {
+                    tree["nodes"][id]["aria"]["label"] == label
+                        && tree["nodes"][id]["aria"]["role"] == "Button"
+                })
+            })),
+            "keyboard focus reaches the selected overview block"
+        );
+        for activation_key in ["enter", "space"] {
+            item.update(cx, |item, cx| item.move_viewport_to_overview(pointer, cx));
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let keystroke = gpui::Keystroke::parse(activation_key).expect("activation key");
+                window.dispatch_event(
+                    gpui::KeyDownEvent {
+                        keystroke: keystroke.clone(),
+                        is_held: false,
+                        prefer_character_input: false,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+                window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
+            });
+            cx.update(|_, cx| {
+                let canvas = item.read(cx).canvas.read(cx);
+                let origin = canvas.graph.positions.get("c1").expect("selected block");
+                let node_size = canvas.graph.node_size();
+                let screen = canvas.viewport.graph_to_screen(GraphPoint {
+                    x: origin.x + node_size.width / 2.0,
+                    y: origin.y + node_size.height / 2.0,
+                });
+                assert!((screen.x - canvas_size.width / 2.0).abs() < 0.01);
+                assert!((screen.y - canvas_size.height / 2.0).abs() < 0.01);
+                assert_eq!(canvas.selection, BTreeSet::from(["c1".into(), "c2".into()]));
+                assert_eq!(canvas.viewport.scale, viewport_scale);
+            });
+        }
     }
 
     #[gpui::test]
