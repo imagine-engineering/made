@@ -74,8 +74,8 @@ pub fn registered_node(identifier: &str) -> Result<RegisteredNode, RegistryError
     })
 }
 
-pub(crate) const CUSTOM_NODE_NAME: &str = "Custom Node";
-pub(crate) const CUSTOM_NODE_IDENTIFIER: &str = "NETWORK:Custom Node";
+pub const CUSTOM_NODE_NAME: &str = "Custom Node";
+pub const CUSTOM_NODE_IDENTIFIER: &str = "NETWORK:Custom Node";
 
 pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition> {
     let definition = resolve_network_node_type(CUSTOM_NODE_NAME)?;

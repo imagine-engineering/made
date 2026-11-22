@@ -227,6 +227,8 @@ pub enum GddArchiveError {
     MissingGraphNodeDefinition(&'static str),
     #[error("Choose a visible standalone Graphite node with stored literal defaults.")]
     UnsupportedCatalogNodeDefinition,
+    #[error("Choose the document root or an editable nested Graphite network.")]
+    UnsupportedCustomNodeScope,
     #[error(
         "Only an isolated Graphite node outside an active preview can be removed in a folder copy."
     )]
@@ -513,6 +515,10 @@ impl GddGraphNetwork {
 
     pub fn can_append_ports_in_copy(&self) -> bool {
         self.can_extend_ports || self.untouched_custom_node
+    }
+
+    pub fn can_insert_custom_node_in_copy(&self) -> bool {
+        self.parent.is_none() || self.can_extend_ports
     }
 
     fn append_port_deltas(&self, edits: &mut Vec<EditorDelta>) {
@@ -2961,9 +2967,6 @@ impl InspectedGddV1 {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
-        let definition = catalog_copy_node_definition(identifier)
-            .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?;
-        let mut template = definition.default_node_template();
         if identifier == CUSTOM_NODE_IDENTIFIER {
             let inspection = self.graph_inspection().await?;
             let network = inspection
@@ -2971,20 +2974,39 @@ impl InspectedGddV1 {
                 .iter()
                 .find(|network| network.parent.is_none())
                 .ok_or(GddArchiveError::MissingGraphNetwork)?;
-            template.node_type_metadata =
-                NodeTypePersistentMetadata::node(IVec2::from_array(position));
-            let interface = self.runtime_graph().await?.into_interface()?;
             return self
-                .insert_graph_node_templates_in_copy(
-                    network,
-                    interface,
-                    vec![(NodeId(0), template)],
-                    budget,
-                )
+                .insert_custom_node_in_network_copy(network, position, budget)
                 .await;
         }
-        self.insert_node_template_in_copy(&[], template, position, budget)
+        let definition = catalog_copy_node_definition(identifier)
+            .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?;
+        self.insert_node_template_in_copy(&[], definition.default_node_template(), position, budget)
             .await
+    }
+
+    pub async fn insert_custom_node_in_network_copy(
+        &self,
+        network: &GddGraphNetwork,
+        position: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_network_edit_target(network)?;
+        if !network.can_insert_custom_node_in_copy() {
+            return Err(GddArchiveError::UnsupportedCustomNodeScope);
+        }
+        let definition = custom_node_definition().ok_or(
+            GddArchiveError::MissingGraphNodeDefinition(CUSTOM_NODE_NAME),
+        )?;
+        let mut template = definition.default_node_template();
+        template.node_type_metadata = NodeTypePersistentMetadata::node(IVec2::from_array(position));
+        let interface = self.runtime_graph().await?.into_interface()?;
+        self.insert_graph_node_templates_in_copy(
+            network,
+            interface,
+            vec![(NodeId(0), template)],
+            budget,
+        )
+        .await
     }
 
     async fn insert_node_template_in_copy(
