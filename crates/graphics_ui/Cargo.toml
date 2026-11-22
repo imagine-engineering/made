@@ -48,6 +48,7 @@ project = { workspace = true, features = ["test-support"] }
 db = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 sim_media.workspace = true
+sim_ui.workspace = true
 
 graphite-glam.workspace = true
 graphite-vector-types.workspace = true

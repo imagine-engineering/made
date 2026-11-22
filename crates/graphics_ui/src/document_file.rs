@@ -4018,17 +4018,34 @@ mod tests {
     async fn at_gra_graph_007_2_workspace_connects_and_previews_a_typed_network_import(
         cx: &mut TestAppContext,
     ) {
-        verify_scoped_numeric_import_wire(cx, false).await;
+        verify_scoped_numeric_import_wire(cx, ScopedImportScenario::Connect).await;
     }
 
     #[gpui::test]
     async fn at_gra_graph_008_2_workspace_reconnects_and_previews_a_typed_network_import(
         cx: &mut TestAppContext,
     ) {
-        verify_scoped_numeric_import_wire(cx, true).await;
+        verify_scoped_numeric_import_wire(cx, ScopedImportScenario::Reconnect).await;
     }
 
-    async fn verify_scoped_numeric_import_wire(cx: &mut TestAppContext, reconnect: bool) {
+    #[gpui::test]
+    async fn at_r17_3_graphite_wire_publication_preserves_the_open_sim_workflow(
+        cx: &mut TestAppContext,
+    ) {
+        verify_scoped_numeric_import_wire(cx, ScopedImportScenario::ConnectBesideSim).await;
+    }
+
+    enum ScopedImportScenario {
+        Connect,
+        Reconnect,
+        ConnectBesideSim,
+    }
+
+    async fn verify_scoped_numeric_import_wire(
+        cx: &mut TestAppContext,
+        scenario: ScopedImportScenario,
+    ) {
+        let reconnect = matches!(scenario, ScopedImportScenario::Reconnect);
         let (target, selector, import, expected, added_history) = if reconnect {
             (
                 "GRAPHITE-GDD-NODE-COPY-ITEM-3",
@@ -4052,6 +4069,47 @@ mod tests {
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()
         });
+        let sim_workflow = if matches!(scenario, ScopedImportScenario::ConnectBesideSim) {
+            let bytes = br#"{"version":0.4,"last_node_id":1,"last_link_id":0,"nodes":[{"id":"workflow-source","type":"Source","pos":[20,30],"size":[140,80],"flags":{},"order":0,"mode":0,"inputs":[],"outputs":[{"name":"image","type":"IMAGE","links":[]}],"properties":{},"widgets_values":[]}],"links":[],"groups":[],"config":{},"extra":{}}"#;
+            let path = PathBuf::from("/project/independent.workflow.json");
+            window.update(|_, cx| sim_ui::register_native_workflow_project_item(cx));
+            filesystem
+                .write(&path, bytes)
+                .await
+                .expect("native Sim workflow fixture");
+            window.run_until_parked();
+            let item = workspace
+                .update_in(window, |workspace, window, cx| {
+                    workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+                })
+                .await
+                .expect("open the independent native Sim workflow")
+                .downcast::<sim_ui::GraphWorkspaceItem>()
+                .expect("Sim owns the native workflow");
+            window.run_until_parked();
+            paint(window);
+            let (saved, exported) = item.read_with(window, |item, cx| {
+                let model = item.model();
+                let graph = model.document().unwrap_or_else(|| {
+                    panic!(
+                        "expected an editable Sim graph, got {:?}",
+                        model.read_only_diagnostic()
+                    )
+                });
+                assert_eq!(graph.root.nodes.len(), 1);
+                assert_eq!(model.original_bytes(), bytes);
+                assert!(!item.is_dirty(cx));
+                (
+                    model.encode().expect("serialize the open Sim workflow"),
+                    graph
+                        .to_workflow_bytes()
+                        .expect("serialize the Sim workflow format"),
+                )
+            });
+            Some((item, path, bytes, saved, exported))
+        } else {
+            None
+        };
         let source_path = PathBuf::from("/project/typed-import-wire.gdd.zip");
         filesystem
             .write(&source_path, &original)
@@ -4066,7 +4124,29 @@ mod tests {
             .expect("open source network")
             .downcast::<GraphiteDocumentItem>()
             .expect("native Graphite Inspector");
-        choose_scoped_copy_node(window, target);
+        if sim_workflow.is_some() {
+            choose_scoped_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-5");
+            click(window, "GRAPHITE-GDD-PREVIEW-NUMERIC");
+            window.run_until_parked();
+            source.read_with(window, |item, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("expected the nested Graphite graph");
+                };
+                assert!(matches!(form.output_preview, NodeOutputPreview::Failed(_)));
+                let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                    panic!("expected the unchanged GDD");
+                };
+                assert_eq!(contents.history_len(), original_history);
+                assert!(!item.is_dirty(cx));
+            });
+            paint(window);
+            click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+            paint(window);
+            click(window, target);
+            paint(window);
+        } else {
+            choose_scoped_copy_node(window, target);
+        }
         click(window, selector);
         window.simulate_new_path_selection(|_| None);
         window.run_until_parked();
@@ -4111,6 +4191,31 @@ mod tests {
                 .expect("original archive"),
             original
         );
+        if let Some((item, path, original_sim, before, exported)) = sim_workflow {
+            assert!(workspace.read_with(window, |workspace, cx| {
+                workspace
+                    .items_of_type::<sim_ui::GraphWorkspaceItem>(cx)
+                    .any(|open_item| open_item == item)
+            }));
+            item.read_with(window, |item, cx| {
+                assert_eq!(item.model().encode().expect("serialize Sim again"), before);
+                let graph = item.model().document().expect("Sim stayed editable");
+                assert_eq!(
+                    graph
+                        .to_workflow_bytes()
+                        .expect("serialize the Sim workflow again"),
+                    exported
+                );
+                assert!(!item.is_dirty(cx));
+            });
+            assert_eq!(
+                filesystem
+                    .load_bytes(&path)
+                    .await
+                    .expect("Sim source bytes"),
+                original_sim
+            );
+        }
     }
 
     #[gpui::test]

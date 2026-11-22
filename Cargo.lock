@@ -9409,6 +9409,7 @@ dependencies = [
  "sim_media",
  "sim_runtime",
  "sim_tensor",
+ "sim_ui",
  "tempfile",
  "theme",
  "theme_settings",
