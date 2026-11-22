@@ -27,7 +27,7 @@ use graphite_document_graph_storage::{
 };
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
-    node_graph::document_node_definitions::resolve_proto_node_type,
+    node_graph::document_node_definitions::{DocumentNodeDefinition, resolve_proto_node_type},
     utility_types::{
         misc::PTZ,
         network_interface::{
@@ -160,6 +160,8 @@ pub enum GddArchiveError {
     UnsupportedGraphConnectionLayout,
     #[error("The pinned Graphite definition for {0} is unavailable.")]
     MissingGraphNodeDefinition(&'static str),
+    #[error("Choose a visible standalone Graphite node with stored literal defaults.")]
+    UnsupportedCatalogNodeDefinition,
     #[error(
         "Only an isolated Graphite node outside an active preview can be removed in a folder copy."
     )]
@@ -741,7 +743,7 @@ impl InspectedGddV1 {
         let definition = resolve_proto_node_type(identifier.clone()).ok_or(
             GddArchiveError::MissingGraphNodeDefinition(operation.name()),
         )?;
-        let mut template = definition.default_node_template();
+        let template = definition.default_node_template();
         if !matches!(
             &template.implementation,
             NodeTemplateImplementation::ProtoNode(actual) if actual == &identifier
@@ -751,9 +753,32 @@ impl InspectedGddV1 {
                 operation.name(),
             ));
         }
-        let position = IVec2::from_array(position);
-        template.node_type_metadata = NodeTypePersistentMetadata::node(position);
+        self.insert_root_node_template_in_copy(template, position, budget)
+            .await
+    }
 
+    pub async fn insert_root_catalog_node_in_copy(
+        &self,
+        identifier: &str,
+        position: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        let definition = catalog_copy_node_definition(identifier)
+            .ok_or(GddArchiveError::UnsupportedCatalogNodeDefinition)?;
+        self.insert_root_node_template_in_copy(definition.default_node_template(), position, budget)
+            .await
+    }
+
+    async fn insert_root_node_template_in_copy(
+        &self,
+        mut template: NodeTemplate,
+        position: [i32; 2],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        template.node_type_metadata = NodeTypePersistentMetadata::node(IVec2::from_array(position));
         let path = &[];
         let mut interface = self.runtime_graph().await?.into_interface()?;
         let node_id = NodeId::new();
@@ -1908,6 +1933,22 @@ impl InspectedGddV1 {
     }
 }
 
+pub fn can_insert_graphite_catalog_node(identifier: &str) -> bool {
+    catalog_copy_node_definition(identifier).is_some()
+}
+
+fn catalog_copy_node_definition(identifier: &str) -> Option<&'static DocumentNodeDefinition> {
+    let identifier = identifier.strip_prefix("PROTONODE:")?;
+    let identifier = ProtoNodeIdentifier::with_owned_string(identifier.to_owned());
+    let definition = resolve_proto_node_type(identifier.clone())?;
+    let template = &definition.node_template;
+    (!definition.category.is_empty()
+        && matches!(&template.implementation, NodeTemplateImplementation::ProtoNode(actual) if actual == &identifier)
+        && matches!(template.node_type_metadata, NodeTypePersistentMetadata::Node(_))
+        && template.inputs.iter().all(|input| matches!(input, NodeInput::Value { .. })))
+    .then_some(definition)
+}
+
 fn numeric_node_identifier(operation: UnaryNumericOperation) -> ProtoNodeIdentifier {
     use graphite_math_nodes::{absolute_value, ceiling, floor, round, sign};
 
@@ -2931,6 +2972,49 @@ mod tests {
                 };
                 assert!(node.label().contains(operation.name()));
             }
+        });
+    }
+
+    #[test]
+    fn at_gra_graph_005_1_round_trips_eligible_catalog_proto_defaults() {
+        use crate::registry::GraphiteNodeCatalog;
+
+        futures::executor::block_on(async {
+            let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
+            let blank = create_gdd_folder(922, 271, "Pinned catalog".into(), budget())
+                .await
+                .expect("source folder");
+            let position = [7, -8];
+            let mut count = 0;
+            let mut failures = Vec::new();
+            for node in catalog.search("").iter().flat_map(|group| &group.nodes) {
+                if can_insert_graphite_catalog_node(&node.identifier) {
+                    count += 1;
+                    if let Err(error) = blank
+                        .insert_root_catalog_node_in_copy(&node.identifier, position, budget())
+                        .await
+                    {
+                        failures.push(format!("{}: {error}", node.identifier));
+                    }
+                }
+            }
+            assert!(count > 5);
+            assert!(failures.is_empty(), "{}", failures.join("\n"));
+            for invalid in ["NETWORK:Custom Node", "PROTONODE:unknown-node", "Add"] {
+                assert!(matches!(
+                    blank
+                        .insert_root_catalog_node_in_copy(invalid, position, budget())
+                        .await,
+                    Err(GddArchiveError::UnsupportedCatalogNodeDefinition)
+                ));
+            }
+            assert!(
+                blank
+                    .graph_nodes()
+                    .await
+                    .expect("original graph")
+                    .is_empty()
+            );
         });
     }
 

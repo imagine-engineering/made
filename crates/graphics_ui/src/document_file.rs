@@ -7,7 +7,8 @@ use anyhow::{Context as _, anyhow, ensure};
 use editor::Editor;
 use gpui::{
     App, AppContext as _, AsyncWindowContext, Context, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, PathPromptOptions, Render, SharedString, Task, WeakEntity, Window, actions,
+    Focusable, PathPromptOptions, Render, SharedString, Subscription, Task, WeakEntity, Window,
+    actions,
 };
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::{
@@ -27,7 +28,7 @@ use workspace::{
     Item, Pane, Workspace, item::ItemBufferKind, notifications::DetachAndPromptErr as _,
 };
 
-use crate::node_catalog::NodeCatalog;
+use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
 actions!(
     graphite,
@@ -440,8 +441,13 @@ pub(crate) struct GraphiteDocumentItem {
 
 enum NodeCatalogPanel {
     Closed,
-    Loading { _task: Task<()> },
-    Ready(Entity<NodeCatalog>),
+    Loading {
+        _task: Task<()>,
+    },
+    Ready {
+        catalog: Entity<NodeCatalog>,
+        _insert_subscription: Subscription,
+    },
     Failed(SharedString),
 }
 
@@ -496,6 +502,10 @@ enum GraphiteCopy {
         operation: UnaryNumericOperation,
         position: [i32; 2],
     },
+    InsertCatalogNode {
+        identifier: &'static str,
+        position: [i32; 2],
+    },
     EditNode {
         node: GddGraphNode,
         change: NodeCopyChange,
@@ -536,7 +546,7 @@ impl GraphiteDocumentItem {
     fn toggle_node_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if matches!(
             self.node_catalog,
-            NodeCatalogPanel::Loading { .. } | NodeCatalogPanel::Ready(_)
+            NodeCatalogPanel::Loading { .. } | NodeCatalogPanel::Ready { .. }
         ) {
             self.node_catalog = NodeCatalogPanel::Closed;
             self.focus_handle.focus(window, cx);
@@ -552,9 +562,22 @@ impl GraphiteDocumentItem {
                         return;
                     }
                     item.node_catalog = match loaded {
-                        Ok(source) => NodeCatalogPanel::Ready(
-                            cx.new(|cx| NodeCatalog::new(source, window, cx)),
-                        ),
+                        Ok(source) => {
+                            let admit_insertion = matches!(
+                                &item.model.read(cx).document,
+                                InspectedDocument::Gdd { contents } if contents.hot_log_len() == 0
+                            );
+                            let catalog =
+                                cx.new(|cx| NodeCatalog::new(source, admit_insertion, window, cx));
+                            let insert_subscription =
+                                cx.subscribe_in(&catalog, window, |item, _, event, window, cx| {
+                                    item.save_catalog_node(event, window, cx);
+                                });
+                            NodeCatalogPanel::Ready {
+                                catalog,
+                                _insert_subscription: insert_subscription,
+                            }
+                        }
                         Err(error) => NodeCatalogPanel::Failed(error.to_string().into()),
                     };
                     cx.notify();
@@ -570,7 +593,7 @@ impl GraphiteDocumentItem {
         let label = match &self.node_catalog {
             NodeCatalogPanel::Closed => "Browse Nodes",
             NodeCatalogPanel::Loading { .. } => "Cancel Catalog Load",
-            NodeCatalogPanel::Ready(_) => "Close Node Catalog",
+            NodeCatalogPanel::Ready { .. } => "Close Node Catalog",
             NodeCatalogPanel::Failed(_) => "Retry Node Catalog",
         };
         let panel = v_flex().gap_2().child(
@@ -581,11 +604,33 @@ impl GraphiteDocumentItem {
                 )),
         );
         match &self.node_catalog {
-            NodeCatalogPanel::Ready(catalog) => panel.child(catalog.clone()),
+            NodeCatalogPanel::Ready { catalog, .. } => panel.child(catalog.clone()),
             NodeCatalogPanel::Failed(error) => {
                 panel.child(Label::new(error.clone()).color(Color::Error))
             }
             NodeCatalogPanel::Closed | NodeCatalogPanel::Loading { .. } => panel,
+        }
+    }
+
+    fn save_catalog_node(
+        &mut self,
+        event: &CatalogNodeInsert,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match parse_graph_grid_position(&event.position) {
+            Ok(position) => self.save_copy(
+                GraphiteCopy::InsertCatalogNode {
+                    identifier: event.identifier,
+                    position,
+                },
+                window,
+                cx,
+            ),
+            Err(error) => {
+                self.copy_feedback = Some((error.to_string().into(), Color::Error));
+                cx.notify();
+            }
         }
     }
 
@@ -1482,7 +1527,8 @@ impl GraphiteDocumentItem {
                     GraphiteCopy::RecoverFolder => "Recovered",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Undo) => "Undo of",
                     GraphiteCopy::MoveHistory(GddHistoryDirection::Redo) => "Redo of",
-                    GraphiteCopy::InsertNumericNode { .. } => "Added node in",
+                    GraphiteCopy::InsertNumericNode { .. }
+                    | GraphiteCopy::InsertCatalogNode { .. } => "Added node in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::Rename(_),
                         ..
@@ -1655,6 +1701,18 @@ impl GraphiteDocumentItem {
                                 archive
                                     .insert_root_numeric_node_in_copy(
                                         operation,
+                                        position,
+                                        ARCHIVE_BUDGET,
+                                    )
+                                    .await?,
+                            ),
+                            GraphiteCopy::InsertCatalogNode {
+                                identifier,
+                                position,
+                            } => Some(
+                                archive
+                                    .insert_root_catalog_node_in_copy(
+                                        identifier,
                                         position,
                                         ARCHIVE_BUDGET,
                                     )
@@ -2369,6 +2427,96 @@ mod tests {
             .await
             .expect("source ZIP");
         (original, owner.session().history().count())
+    }
+
+    #[gpui::test]
+    async fn at_gra_graph_005_2_workspace_inserts_the_selected_catalog_template(
+        cx: &mut TestAppContext,
+    ) {
+        let blank = create_gdd_folder(621, 187, "Made".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source folder");
+        let original = blank
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/catalog-insert.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("source archive");
+        window.run_until_parked();
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
+        window.simulate_input("type: Number math Add");
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-POSITION");
+        window.simulate_keystrokes("ctrl-a");
+        window.simulate_input("bad");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Add");
+        item.read_with(window, |item, _| {
+            assert!(item.copy_task.is_none());
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error))
+                if message.contains("two whole grid coordinates")));
+        });
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-POSITION");
+        window.simulate_keystrokes("ctrl-a");
+        window.simulate_input("6, -9");
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Add");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-NODE-CATALOG-ADD-Add");
+        let destination = PathBuf::from("/project/catalog-node.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        window.dispatch_action(OpenGraphiteFolder);
+        window.simulate_path_prompt_response(|_| Some(vec![destination]));
+        window.run_until_parked();
+        let reopened = workspace
+            .read_with(window, |workspace, cx| {
+                workspace.active_item_as::<GraphiteDocumentItem>(cx)
+            })
+            .expect("reopened catalog copy");
+        assert_ne!(reopened, item);
+        let contents = reopened.read_with(window, |item, cx| {
+            let InspectedDocument::Gdd { contents } = &item.model.read(cx).document else {
+                panic!("expected the new GDD folder");
+            };
+            assert!(!item.is_dirty(cx));
+            contents.clone()
+        });
+        let nodes = contents.graph_nodes().await.expect("saved catalog nodes");
+        let [added] = nodes.as_slice() else {
+            panic!("expected one added node");
+        };
+        assert!(added.label().contains("Add"));
+        assert_eq!(added.grid_position(), Some([6, -9]));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("retained original archive"),
+            original
+        );
     }
 
     #[gpui::test]
