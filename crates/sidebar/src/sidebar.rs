@@ -7366,7 +7366,9 @@ impl Sidebar {
     }
 
     fn render_sidebar_toggle_button(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let on_right = AgentSettings::get_global(_cx).sidebar_side() == SidebarSide::Right;
+        let collaborative = self.collaborative_rail_width(_cx).is_some();
+        let on_right =
+            !collaborative && AgentSettings::get_global(_cx).sidebar_side() == SidebarSide::Right;
 
         sidebar_side_context_menu("sidebar-toggle-menu", _cx)
             .anchor(if on_right {
@@ -7387,6 +7389,11 @@ impl Sidebar {
                 };
                 IconButton::new("sidebar-close-toggle", icon)
                     .icon_size(IconSize::Small)
+                    .when(collaborative, |button| {
+                        button
+                            .tab_index(0isize)
+                            .aria_label("Hide Multiplayer sidebar")
+                    })
                     .tooltip(Tooltip::element(move |_window, cx| {
                         v_flex()
                             .gap_1()
@@ -7394,7 +7401,11 @@ impl Sidebar {
                                 h_flex()
                                     .gap_2()
                                     .justify_between()
-                                    .child(Label::new("Toggle Sidebar"))
+                                    .child(Label::new(if collaborative {
+                                        "Hide Multiplayer sidebar"
+                                    } else {
+                                        "Toggle Sidebar"
+                                    }))
                                     .child(KeyBinding::for_action(&ToggleWorkspaceSidebar, cx)),
                             )
                             .child(

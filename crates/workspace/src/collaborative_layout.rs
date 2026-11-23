@@ -399,6 +399,14 @@ impl CollaborativeLayout {
         self.geometry_for_current_state(self.available_width(window))
     }
 
+    pub(crate) fn trailing_space(&self, window: &Window) -> Pixels {
+        if self.bounds.size.width > px(0.) {
+            (window.viewport_size().width - self.bounds.right()).max(px(0.))
+        } else {
+            px(0.)
+        }
+    }
+
     fn geometry_for_current_state(&self, available_width: Pixels) -> CollaborativeLayoutGeometry {
         Self::geometry_for_state(available_width, &self.state)
     }
@@ -416,7 +424,7 @@ impl CollaborativeLayout {
         Self::geometry_for(available_width, review_requested, requested_width)
     }
 
-    pub(crate) fn render_review_header(&self) -> impl IntoElement + use<> {
+    pub(crate) fn render_review_header(&self, compact: bool) -> impl IntoElement + use<> {
         let selected_slot = self.selected_review_slot;
         let agent_available = self.agent_review_available;
         let project_available = self.project_review_available;
@@ -424,6 +432,49 @@ impl CollaborativeLayout {
             Some(CollaborativeReviewSlot::AgentChanges) => "Agent changes",
             Some(CollaborativeReviewSlot::ProjectChanges) => "Project changes",
             None => "Review source",
+        };
+        let source_menu =
+            ui::PopoverMenu::new("collaborative-review-provider").menu(move |window, cx| {
+                Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
+                    menu.toggleable_entry_disabled_when(
+                        "Agent changes",
+                        selected_slot == Some(CollaborativeReviewSlot::AgentChanges),
+                        !agent_available,
+                        ui::IconPosition::Start,
+                        Some(SelectAgentReview.boxed_clone()),
+                        |window, cx| window.dispatch_action(SelectAgentReview.boxed_clone(), cx),
+                    )
+                    .toggleable_entry_disabled_when(
+                        "Project changes",
+                        selected_slot == Some(CollaborativeReviewSlot::ProjectChanges),
+                        !project_available,
+                        ui::IconPosition::Start,
+                        Some(SelectProjectReview.boxed_clone()),
+                        |window, cx| window.dispatch_action(SelectProjectReview.boxed_clone(), cx),
+                    )
+                }))
+            });
+        let source_menu = if compact {
+            let label = format!("Choose review source · {source_label}");
+            source_menu.trigger(
+                IconButton::new("collaborative-review-provider-menu", IconName::ChevronDown)
+                    .size(ButtonSize::Compact)
+                    .style(ButtonStyle::Subtle)
+                    .icon_size(IconSize::Small)
+                    .tab_index(0isize)
+                    .aria_label(label.clone())
+                    .tooltip(ui::Tooltip::text(label)),
+            )
+        } else {
+            source_menu.trigger(
+                Button::new("collaborative-review-provider-menu", source_label)
+                    .size(ButtonSize::Compact)
+                    .style(ButtonStyle::Subtle)
+                    .label_size(LabelSize::Small)
+                    .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall))
+                    .tab_index(0isize)
+                    .tooltip(ui::Tooltip::text("Choose review source")),
+            )
         };
         h_flex()
             .debug_selector(|| "COLLABORATIVE-REVIEW-TABS".to_owned())
@@ -434,50 +485,19 @@ impl CollaborativeLayout {
             .gap_1()
             .child(
                 div().flex_none().child(
-                    Button::new("collaborative-review-tab", "Review Changes")
-                        .style(ButtonStyle::Subtle)
-                        .toggle_state(!self.state.native_editor_active())
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(ShowCollaborativeReview.boxed_clone(), cx);
-                        }),
+                    Button::new(
+                        "collaborative-review-tab",
+                        if compact { "Changes" } else { "Review Changes" },
+                    )
+                    .aria_label("Review Changes")
+                    .style(ButtonStyle::Subtle)
+                    .toggle_state(!self.state.native_editor_active())
+                    .on_click(|_, window, cx| {
+                        window.dispatch_action(ShowCollaborativeReview.boxed_clone(), cx);
+                    }),
                 ),
             )
-            .child(
-                ui::PopoverMenu::new("collaborative-review-provider")
-                    .trigger(
-                        Button::new("collaborative-review-provider-menu", source_label)
-                            .size(ButtonSize::Compact)
-                            .style(ButtonStyle::Subtle)
-                            .label_size(LabelSize::Small)
-                            .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall))
-                            .tab_index(0isize)
-                            .tooltip(ui::Tooltip::text("Choose review source")),
-                    )
-                    .menu(move |window, cx| {
-                        Some(ui::ContextMenu::build(window, cx, |menu, _, _| {
-                            menu.toggleable_entry_disabled_when(
-                                "Agent changes",
-                                selected_slot == Some(CollaborativeReviewSlot::AgentChanges),
-                                !agent_available,
-                                ui::IconPosition::Start,
-                                Some(SelectAgentReview.boxed_clone()),
-                                |window, cx| {
-                                    window.dispatch_action(SelectAgentReview.boxed_clone(), cx)
-                                },
-                            )
-                            .toggleable_entry_disabled_when(
-                                "Project changes",
-                                selected_slot == Some(CollaborativeReviewSlot::ProjectChanges),
-                                !project_available,
-                                ui::IconPosition::Start,
-                                Some(SelectProjectReview.boxed_clone()),
-                                |window, cx| {
-                                    window.dispatch_action(SelectProjectReview.boxed_clone(), cx)
-                                },
-                            )
-                        }))
-                    }),
-            )
+            .child(source_menu)
             .child(
                 div()
                     .min_w_0()

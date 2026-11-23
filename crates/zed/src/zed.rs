@@ -4163,7 +4163,13 @@ fn builtin_keymap_assets(
         assets.push((VIM_KEYMAP_PATH, KeybindSource::Vim));
     }
     #[cfg(feature = "sim")]
-    assets.push((sim_ui::DEFAULT_SIM_KEYMAP_PATH, KeybindSource::Default));
+    assets.extend([
+        (
+            graphics_ui::DEFAULT_GRAPHITE_KEYMAP_PATH,
+            KeybindSource::Default,
+        ),
+        (sim_ui::DEFAULT_SIM_KEYMAP_PATH, KeybindSource::Default),
+    ]);
     assets.push((SPECIFIC_OVERRIDES_KEYMAP_PATH, KeybindSource::Default));
     assets
 }
@@ -10573,6 +10579,28 @@ mod tests {
             onboarding::init(cx);
             app_state
         })
+    }
+
+    #[cfg(all(feature = "multiplayer-tools", not(feature = "sim")))]
+    #[gpui::test]
+    fn multiplayer_default_keymap_loads_without_sim(cx: &mut TestAppContext) {
+        init_keymap_test(cx);
+        cx.update(|cx| {
+            let bindings =
+                load_builtin_keymap_asset(DEFAULT_KEYMAP_PATH, KeybindSource::Default, cx)
+                    .expect("Multiplayer must load the default keymap without Sim actions");
+            for action in [
+                "menu::Cancel",
+                "command_palette::Toggle",
+                "multi_workspace::ToggleWorkspaceSidebar",
+            ] {
+                assert!(
+                    bindings
+                        .iter()
+                        .any(|binding| binding.action().name() == action)
+                );
+            }
+        });
     }
 
     #[cfg(any(feature = "rust-tools", feature = "jvm-tools"))]

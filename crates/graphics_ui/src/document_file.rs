@@ -9660,43 +9660,10 @@ mod tests {
         let (original, history) = graph_layer_archive_with_grandchild(true).await;
         let (workspace, window) = native_workspace(cx).await;
         window.update(|_, cx| {
-            use settings::{KeymapFile, KeymapFileLoadResult};
-
-            for (platform, contents) in [
-                (
-                    "macos",
-                    include_str!("../../../assets/keymaps/default-macos.json"),
-                ),
-                (
-                    "linux",
-                    include_str!("../../../assets/keymaps/default-linux.json"),
-                ),
-                (
-                    "windows",
-                    include_str!("../../../assets/keymaps/default-windows.json"),
-                ),
-            ] {
-                let bindings = match KeymapFile::load(contents, cx) {
-                    KeymapFileLoadResult::Success { key_bindings }
-                    | KeymapFileLoadResult::SomeFailedToLoad { key_bindings, .. } => key_bindings,
-                    KeymapFileLoadResult::JsonParseFailure { error } => {
-                        panic!("{platform} keymap: {error:#}")
-                    }
-                };
-                assert_eq!(
-                    bindings
-                        .iter()
-                        .filter(|binding| {
-                            binding.action().name() == "graphite::SelectParentSavedLayers"
-                                && binding.predicate().is_some_and(|predicate| {
-                                    predicate.to_string() == "GraphiteSavedLayers"
-                                })
-                        })
-                        .count(),
-                    1,
-                    "{platform} Select Parent binding"
-                );
-            }
+            let bindings =
+                settings::KeymapFile::load_asset(crate::DEFAULT_GRAPHITE_KEYMAP_PATH, None, cx)
+                    .expect("Graphite keymap");
+            cx.bind_keys(bindings);
         });
         let filesystem = workspace.read_with(window, |workspace, cx| {
             workspace.project().read(cx).fs().clone()

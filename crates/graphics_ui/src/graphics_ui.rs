@@ -26,6 +26,8 @@ pub use session::{
 #[cfg(test)]
 mod conformance;
 
+pub const DEFAULT_GRAPHITE_KEYMAP_PATH: &str = "keymaps/default-graphite.json";
+
 struct AssetBindingRegistration(gpui::Entity<interop::GraphiteAssetBinding>);
 
 impl gpui::Global for AssetBindingRegistration {}

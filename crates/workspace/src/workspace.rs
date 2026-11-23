@@ -16608,6 +16608,17 @@ mod tests {
     async fn collaborative_dock_close_restores_conversation_without_window_resize(
         cx: &mut gpui::TestAppContext,
     ) {
+        struct ReviewTitleBar(WeakEntity<Workspace>);
+        impl Render for ReviewTitleBar {
+            fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+                h_flex().w_full().children(
+                    self.0
+                        .upgrade()
+                        .and_then(|workspace| workspace.read(cx).collaborative_title_bar(cx)),
+                )
+            }
+        }
+
         init_test(cx);
         let project = Project::test(FakeFs::new(cx.executor()), [], cx).await;
         let (multi_workspace, cx) =
@@ -16617,7 +16628,11 @@ mod tests {
         let panel = cx.new(|cx| TestPanel::new(DockPosition::Right, 0, cx));
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.add_panel(panel, window, cx);
+            let workspace_handle = cx.weak_entity();
+            let title_bar = cx.new(|_| ReviewTitleBar(workspace_handle));
+            workspace.set_titlebar_item(title_bar.into(), window, cx);
         });
+        cx.simulate_resize(gpui::size(px(1200.), px(800.)));
         cx.dispatch_action(SwitchToCollaborativeWorkspace);
         cx.run_until_parked();
         workspace.update(cx, |workspace, cx| {
@@ -16644,6 +16659,14 @@ mod tests {
             window.simulate_next_frame(cx);
         });
         cx.run_until_parked();
+        let review = cx
+            .debug_bounds("COLLABORATIVE-REVIEW-REGION")
+            .expect("review remains visible beside the dock");
+        let header = cx
+            .debug_bounds("COLLABORATIVE-REVIEW-HEADER")
+            .expect("review header remains visible beside the dock");
+        assert_eq!(header.left(), review.left());
+        assert_eq!(header.right(), review.right());
         cx.dispatch_action(ToggleRightDock);
         cx.run_until_parked();
         cx.update(|window, cx| {
@@ -16657,6 +16680,26 @@ mod tests {
                 .width,
             original_width
         );
+
+        let item = cx.new(TestItem::new);
+        let pane = workspace.read_with(cx, |workspace, _| workspace.active_pane().clone());
+        pane.update_in(cx, |pane, window, cx| {
+            pane.add_item(Box::new(item), true, true, None, window, cx);
+        });
+        cx.simulate_resize(gpui::size(px(760.), px(800.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        let tabs = cx
+            .debug_bounds("COLLABORATIVE-NATIVE-TABS")
+            .expect("native tabs remain visible beside the compact Changes controls");
+        let active_tab = cx
+            .debug_bounds("PANE-ACTIVE-TAB")
+            .expect("the open file retains its tab in the narrow review header");
+        assert!(active_tab.left() >= tabs.left() && active_tab.right() <= tabs.right());
     }
 
     #[cfg(feature = "multiplayer-tools")]

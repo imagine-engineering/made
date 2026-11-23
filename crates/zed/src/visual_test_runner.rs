@@ -2448,7 +2448,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                 "footer-workspace-tools-menu",
             ),
             (
-                "NATIVE-PROJECT-PICKER",
+                "COLLABORATIVE-ADD-PROJECT",
                 "NATIVE-RECENT-PROJECTS-MENU",
                 "footer-project-menu",
             ),
@@ -3366,7 +3366,7 @@ fn capture_collaborative_accessibility_state(
         "{name}: native status bar must stay below the composer within the conversation column: status={footer:?}, composer={composer:?}, controls={composer_footer:?}, timeline={timeline:?}"
     );
     for selector in [
-        "NATIVE-PROJECT-PICKER",
+        "NATIVE-PROJECT-LABEL",
         "NATIVE-WORKTREE-PICKER",
         "NATIVE-BRANCH-PICKER",
         "NATIVE-PROJECT-DIFF-STATUS",

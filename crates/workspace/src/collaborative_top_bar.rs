@@ -3,14 +3,13 @@ use project::Project;
 use ui::{Avatar, ButtonStyle, Tooltip, Window, prelude::*};
 
 use crate::{
-    CopyRoomId, OpenCollaborators, ShareProject, SwitchToEditorWorkspace,
+    CopyRoomId, MultiWorkspace, OpenCollaborators, ShareProject, SwitchToEditorWorkspace,
     collaborative_accessibility::{
         TOP_BAR_LABEL, participant_label as accessibility_participant_label,
     },
     collaborative_layout::{CollaborativeLayout, RESIZE_HANDLE_WIDTH},
     collaborative_participants::{
-        CollaborativeConnectionState, CollaborativeParticipantIdentity,
-        CollaborativeParticipantProviderState,
+        CollaborativeParticipantIdentity, CollaborativeParticipantProviderState,
     },
     collaborative_review::ToggleCollaborativeReview,
 };
@@ -168,20 +167,21 @@ pub(crate) struct CollaborativeTopBarTestSnapshot {
 impl RenderOnce for CollaborativeTopBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let action_availability = self.action_availability();
-        let review_requested = self.layout.read(cx).review_requested();
+        let layout = self.layout.read(cx);
+        let review_requested = layout.review_requested();
+        let geometry = layout.geometry(window);
+        let trailing_space = layout.trailing_space(window);
         let task_title = self.task_title();
         let connection_label = self.connection_label();
-        let connection_icon = match &self.participant_state {
-            CollaborativeParticipantProviderState::Ready(view_data) => match view_data.connection {
-                CollaborativeConnectionState::Connected => IconName::UserGroup,
-                CollaborativeConnectionState::Connecting => IconName::ArrowCircle,
-                CollaborativeConnectionState::Disconnected
-                | CollaborativeConnectionState::Failed => IconName::Disconnected,
-            },
-            CollaborativeParticipantProviderState::Failed(_)
-            | CollaborativeParticipantProviderState::Unavailable => IconName::Disconnected,
-        };
-        let geometry = self.layout.read(cx).geometry(window);
+        let sidebar_closed = window
+            .root::<MultiWorkspace>()
+            .flatten()
+            .is_some_and(|workspace| {
+                let workspace = workspace.read(cx);
+                workspace.sidebar().is_some()
+                    && workspace.multi_workspace_enabled(cx)
+                    && !workspace.sidebar_render_state(window, cx).open
+            });
         let mut layout_actions = Some(
             h_flex()
                 .flex_none()
@@ -255,6 +255,32 @@ impl RenderOnce for CollaborativeTopBar {
             .bg(cx.theme().colors().title_bar_background)
             .role(Role::Group)
             .aria_label(format!("{TOP_BAR_LABEL}: {}", project_title))
+            .when(sidebar_closed, |this| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .debug_selector(|| "COLLABORATIVE-OPEN-SIDEBAR".to_owned())
+                        .child(
+                            IconButton::new(
+                                "collaborative-open-sidebar",
+                                IconName::ThreadsSidebarLeftClosed,
+                            )
+                            .style(ButtonStyle::Subtle)
+                            .size(ButtonSize::Compact)
+                            .icon_size(IconSize::Small)
+                            .tab_index(0isize)
+                            .aria_label("Show Multiplayer sidebar")
+                            .tooltip(Tooltip::text("Show Multiplayer sidebar"))
+                            .on_click(|_, window, cx| {
+                                if let Some(workspace) = window.root::<MultiWorkspace>().flatten() {
+                                    workspace.update(cx, |workspace, cx| {
+                                        workspace.toggle_sidebar(window, cx);
+                                    });
+                                }
+                            }),
+                        ),
+                )
+            })
             .child(
                 h_flex()
                     .id("collaborative-top-bar-title")
@@ -347,22 +373,23 @@ impl RenderOnce for CollaborativeTopBar {
                     })),
             )
             .child(div().flex_1())
-            .child(
-                div()
-                    .debug_selector(|| "COLLABORATIVE-TOP-BAR-SHARE".to_owned())
-                    .child(
-                        IconButton::new("collaborative-share", IconName::Share)
-                            .style(ButtonStyle::Subtle)
-                            .size(ButtonSize::Compact)
-                            .icon_size(IconSize::Small)
-                            .aria_label("Share Multiplayer Workspace")
-                            .disabled(!action_availability.share)
-                            .tooltip(Tooltip::text("Share or unshare the current project"))
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(ShareProject.boxed_clone(), cx);
-                            }),
-                    ),
-            )
+            .when(action_availability.share, |this| {
+                this.child(
+                    div()
+                        .debug_selector(|| "COLLABORATIVE-TOP-BAR-SHARE".to_owned())
+                        .child(
+                            IconButton::new("collaborative-share", IconName::Share)
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .icon_size(IconSize::Small)
+                                .aria_label("Share Multiplayer Workspace")
+                                .tooltip(Tooltip::text("Share or unshare the current project"))
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(ShareProject.boxed_clone(), cx);
+                                }),
+                        ),
+                )
+            })
             .child(
                 div()
                     .debug_selector(|| "COLLABORATIVE-TOP-BAR-INVITE".to_owned())
@@ -371,30 +398,33 @@ impl RenderOnce for CollaborativeTopBar {
                             .style(ButtonStyle::Subtle)
                             .size(ButtonSize::Compact)
                             .icon_size(IconSize::Small)
-                            .aria_label("Invite participants")
+                            .aria_label("Open collaborators")
                             .disabled(!action_availability.invite)
-                            .tooltip(Tooltip::text("Open collaborators and invitations"))
+                            .tooltip(Tooltip::text("Open collaborators"))
                             .on_click(|_, window, cx| {
                                 window.dispatch_action(OpenCollaborators.boxed_clone(), cx);
                             }),
                     ),
             )
-            .child(
-                div()
-                    .debug_selector(|| "COLLABORATIVE-TOP-BAR-CONNECTION".to_owned())
-                    .child(
-                        IconButton::new("collaborative-connection", connection_icon)
-                            .style(ButtonStyle::Subtle)
-                            .size(ButtonSize::Compact)
-                            .icon_size(IconSize::Small)
-                            .aria_label(connection_label.clone())
-                            .disabled(!action_availability.connection_details)
-                            .tooltip(Tooltip::text(connection_label))
-                            .on_click(|_, window, cx| {
-                                window.dispatch_action(CopyRoomId.boxed_clone(), cx);
-                            }),
-                    ),
-            )
+            .when(action_availability.connection_details, |this| {
+                this.child(
+                    div()
+                        .debug_selector(|| "COLLABORATIVE-TOP-BAR-CONNECTION".to_owned())
+                        .child(
+                            IconButton::new("collaborative-connection", IconName::Copy)
+                                .style(ButtonStyle::Subtle)
+                                .size(ButtonSize::Compact)
+                                .icon_size(IconSize::Small)
+                                .aria_label("Copy room ID")
+                                .tooltip(Tooltip::text(format!(
+                                    "Copy room ID · {connection_label}"
+                                )))
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(CopyRoomId.boxed_clone(), cx);
+                                }),
+                        ),
+                )
+            })
             .when(!geometry.review_visible, |this| {
                 this.children(layout_actions.take())
             });
@@ -425,9 +455,14 @@ impl RenderOnce for CollaborativeTopBar {
                         .debug_selector(|| "COLLABORATIVE-REVIEW-HEADER".to_owned())
                         .w(geometry.review_width)
                         .flex_none()
-                        .child(self.layout.read(cx).render_review_header())
+                        .child(layout.render_review_header(
+                            geometry.review_width < rems(26.).to_pixels(window.rem_size()),
+                        ))
                         .children(layout_actions),
                 )
+            })
+            .when(trailing_space > px(0.), |this| {
+                this.child(div().w(trailing_space).flex_none())
             })
     }
 }

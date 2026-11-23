@@ -655,6 +655,36 @@ async fn standard_sidebar_excludes_collaborative_rail(cx: &mut TestAppContext) {
 
 #[cfg(feature = "multiplayer-tools")]
 #[gpui::test]
+async fn collaborative_sidebar_shows_the_project_on_first_open(cx: &mut TestAppContext) {
+    use gpui::UpdateGlobal;
+
+    let project = init_test_project("/my-project", cx).await;
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.workspace.workspace_presentation =
+                    Some(workspace::WorkspacePresentation::Collaborative);
+            });
+        });
+    });
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    setup_sidebar_closed(&multi_workspace, cx);
+
+    assert!(multi_workspace.read_with(cx, |workspace, cx| {
+        workspace.sidebar_requested_state(cx).open
+            && !workspace.sidebar_open()
+            && workspace.project_groups(cx).len() == 1
+    }));
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-PROJECT-ROW")
+            .is_some()
+    );
+    assert!(cx.debug_bounds("COLLABORATIVE-PROJECTS-EMPTY").is_none());
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
 async fn collaborative_sidebar_toggle_preserves_editor_preference_and_layout(
     cx: &mut TestAppContext,
 ) {
@@ -704,6 +734,10 @@ async fn collaborative_sidebar_toggle_preserves_editor_preference_and_layout(
     workspace.update(cx, |workspace, _| workspace.set_random_database_id());
     cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
     cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-PROJECT-ROW")
+            .is_some()
+    );
     let rail_width = cx
         .debug_bounds("COLLABORATIVE-RAIL")
         .expect("Multiplayer starts with its requested navigation visible")
@@ -931,6 +965,17 @@ async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
     populated: bool,
     cx: &mut TestAppContext,
 ) {
+    struct CollaborativeTitleBar(WeakEntity<Workspace>);
+    impl Render for CollaborativeTitleBar {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            h_flex().w_full().children(
+                self.0
+                    .upgrade()
+                    .and_then(|workspace| workspace.read(cx).collaborative_title_bar(cx)),
+            )
+        }
+    }
+
     let project = init_test_project_with_agent_panel("/painted-rail-project", cx).await;
     let (multi_workspace, cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
@@ -963,13 +1008,16 @@ async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
         )
         .expect("canonical timeline")
     });
-    workspace.update(cx, |workspace, cx| {
+    workspace.update_in(cx, |workspace, window, cx| {
         composer
             .register_in_workspace(workspace, cx)
             .expect("composer registration");
         timeline
             .register_in_workspace(workspace, cx)
             .expect("timeline registration");
+        let workspace_handle = cx.weak_entity();
+        let title_bar = cx.new(|_| CollaborativeTitleBar(workspace_handle));
+        workspace.set_titlebar_item(title_bar.into(), window, cx);
     });
     cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
     cx.run_until_parked();
@@ -984,6 +1032,7 @@ async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
         .expect("initial painted navigation")
         .size
         .width;
+    assert!(cx.debug_bounds("COLLABORATIVE-OPEN-SIDEBAR").is_none());
     assert_eq!(
         painted_rail_width + px(1.),
         workspace.read_with(cx, |workspace, cx| workspace.collaborative_rail_width(cx)),
@@ -1005,7 +1054,10 @@ async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
         assert!(multi_workspace.read_with(cx, |workspace, cx| {
             workspace.sidebar_requested_state(cx).open
         }));
-        cx.dispatch_action(workspace::ToggleWorkspaceSidebar);
+        let reopen = cx
+            .debug_bounds("COLLABORATIVE-OPEN-SIDEBAR")
+            .expect("hidden navigation must leave a visible reopen button");
+        cx.simulate_click(reopen.center(), gpui::Modifiers::default());
         cx.run_until_parked();
         let resized = cx.update(|window, _| window.bounds().size);
         assert!(
@@ -1028,6 +1080,7 @@ async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
                 .width,
             painted_rail_width,
         );
+        assert!(cx.debug_bounds("COLLABORATIVE-OPEN-SIDEBAR").is_none());
         assert!(cx.debug_bounds("COLLABORATIVE-COMPOSER").is_none());
         let input = cx
             .debug_bounds("COLLABORATIVE-NATIVE-ACP-COMPOSER")

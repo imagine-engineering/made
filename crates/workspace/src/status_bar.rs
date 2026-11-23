@@ -172,6 +172,8 @@ pub struct StatusBar {
     collaborative_workspace_active: bool,
     #[cfg(feature = "multiplayer-tools")]
     collaborative_composer_footer: Option<AnyView>,
+    #[cfg(feature = "multiplayer-tools")]
+    collaborative_add_project_button: Option<AnyView>,
     focus_handle: FocusHandle,
     _observe_active_pane: Subscription,
     _observe_git_store: Subscription,
@@ -303,30 +305,7 @@ impl StatusBar {
                         render_hideable_item("collaborative-footer", index, item.as_ref(), cx)
                     })),
             )
-            .when(has_project, |row| {
-                row.child(
-                    div()
-                        .debug_selector(|| "COLLABORATIVE-ADD-PROJECT".to_owned())
-                        .flex_none()
-                        .child(
-                            IconButton::new("collaborative-add-project", IconName::FolderAdd)
-                                .icon_size(IconSize::Small)
-                                .size(ButtonSize::Compact)
-                                .tab_index(0isize)
-                                .aria_label("Add Project")
-                                .tooltip(ui::Tooltip::text("Add Project"))
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(
-                                        crate::Open {
-                                            create_new_window: Some(false),
-                                        }
-                                        .boxed_clone(),
-                                        cx,
-                                    );
-                                }),
-                        ),
-                )
-            });
+            .children(self.collaborative_add_project_button.clone());
         let workspace_tools = div()
             .debug_selector(|| "COLLABORATIVE-STATUS-OVERFLOW".to_owned())
             .flex_none()
@@ -778,6 +757,8 @@ impl StatusBar {
             collaborative_workspace_active: false,
             #[cfg(feature = "multiplayer-tools")]
             collaborative_composer_footer: None,
+            #[cfg(feature = "multiplayer-tools")]
+            collaborative_add_project_button: None,
             focus_handle: cx.focus_handle(),
             _observe_active_pane: cx.observe_in(active_pane, window, |this, _, window, cx| {
                 this.update_active_pane_item(window, cx)
@@ -794,6 +775,16 @@ impl StatusBar {
         cx: &mut Context<Self>,
     ) {
         self.multi_workspace = Some(multi_workspace);
+        cx.notify();
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub fn set_collaborative_add_project_button(
+        &mut self,
+        button: AnyView,
+        cx: &mut Context<Self>,
+    ) {
+        self.collaborative_add_project_button = Some(button);
         cx.notify();
     }
 

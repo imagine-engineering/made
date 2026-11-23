@@ -422,6 +422,8 @@ impl MultiWorkspace {
                 }
             }));
         self.sidebar = Some(Box::new(sidebar));
+        #[cfg(feature = "multiplayer-tools")]
+        self.retain_active_workspace_for_collaborative_sidebar(cx);
     }
 
     pub fn sidebar(&self) -> Option<&dyn SidebarHandle> {
@@ -715,6 +717,10 @@ impl MultiWorkspace {
                         let old_key =
                             ProjectGroupKey::from_worktree_paths(old_worktree_paths, host);
                         this.handle_project_group_key_change(&workspace, &old_key, cx);
+                        #[cfg(feature = "multiplayer-tools")]
+                        if this.workspace() == &workspace {
+                            this.retain_active_workspace_for_collaborative_sidebar(cx);
+                        }
                     }
                 }
                 _ => {}
@@ -722,11 +728,18 @@ impl MultiWorkspace {
         })
         .detach();
 
-        cx.subscribe_in(workspace, window, |this, workspace, event, window, cx| {
-            if let WorkspaceEvent::Activate = event {
-                this.activate(workspace.clone(), None, window, cx);
-            }
-        })
+        cx.subscribe_in(
+            workspace,
+            window,
+            |this, workspace, event, window, cx| match event {
+                WorkspaceEvent::Activate => this.activate(workspace.clone(), None, window, cx),
+                #[cfg(feature = "multiplayer-tools")]
+                WorkspaceEvent::PresentationChanged if this.workspace() == workspace => {
+                    this.retain_active_workspace_for_collaborative_sidebar(cx);
+                }
+                _ => {}
+            },
+        )
         .detach();
     }
 
@@ -1495,6 +1508,19 @@ impl MultiWorkspace {
         self.pin(index, key, cx);
         self.serialize(cx);
         cx.notify();
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn retain_active_workspace_for_collaborative_sidebar(&mut self, cx: &mut Context<Self>) {
+        let workspace = self.workspace().read(cx);
+        if self.sidebar.is_some()
+            && self.multi_workspace_enabled(cx)
+            && workspace.workspace_presentation() == WorkspacePresentation::Collaborative
+            && workspace.collaborative_rail_requested(cx)
+            && !workspace.project_group_key(cx).path_list().is_empty()
+        {
+            self.retain_active_workspace(cx);
+        }
     }
 
     /// Collapses to a single workspace, discarding all groups.

@@ -87,8 +87,11 @@ pub fn init(cx: &mut App) {
         #[cfg(feature = "multiplayer-tools")]
         {
             let project_status = cx.new(|cx| ProjectStatus::new(&item, cx));
+            let workspace_handle = cx.weak_entity();
+            let project_picker = cx.new(|_| CollaborativeProjectPicker(workspace_handle));
             workspace.status_bar().update(cx, |status_bar, cx| {
                 status_bar.add_left_item(project_status, window, cx);
+                status_bar.set_collaborative_add_project_button(project_picker.into(), cx);
             });
         }
         workspace.set_titlebar_item(item.into(), window, cx);
@@ -231,11 +234,9 @@ impl Render for ProjectStatus {
                 linked_worktree_name,
             } = title_bar.project_title_context(cx);
             let timeline_width = workspace.read(cx).collaborative_timeline_width(window, cx);
-            // Reserve the narrow footer budget for model, diff and Send controls before
-            // allowing project and branch labels to use the wider conversation column.
             let extra_label_width =
-                ((f32::from(timeline_width) / f32::from(window.rem_size()) - 32.) / 2.).max(0.);
-            let project_width = rems(3. + extra_label_width.min(5.));
+                ((f32::from(timeline_width) / f32::from(window.rem_size()) - 24.) / 2.).max(0.);
+            let project_width = rems(5. + extra_label_width.min(5.));
             let branch_width = rems(3.5 + extra_label_width.min(6.5));
             let settings = TitleBarSettings::get_global(cx);
             let show_project = settings.show_project_items;
@@ -244,19 +245,20 @@ impl Render for ProjectStatus {
                 .debug_selector(|| "NATIVE-PROJECT-STATUS".to_owned())
                 .gap_0p5()
                 .flex_shrink_0()
-                .when(show_project, |this| {
-                    this.child(
-                        div()
-                            .debug_selector(|| "NATIVE-PROJECT-PICKER".to_owned())
-                            .child(title_bar.render_project_name(
-                                project_name,
-                                Anchor::BottomLeft,
-                                Some(project_width),
-                                window,
-                                cx,
-                            )),
-                    )
-                })
+                .when_some(
+                    project_name.filter(|_| show_project),
+                    |this, project_name| {
+                        this.child(
+                            div()
+                                .debug_selector(|| "NATIVE-PROJECT-LABEL".to_owned())
+                                .id("collaborative-project-name")
+                                .px_1()
+                                .max_w(project_width)
+                                .tooltip(Tooltip::text(project_name.clone()))
+                                .child(Label::new(project_name).size(LabelSize::Small).truncate()),
+                        )
+                    },
+                )
                 .when_some(repository.filter(|_| show_git), |this, repository| {
                     this.children(title_bar.render_worktree_and_branch(
                         repository,
@@ -268,6 +270,71 @@ impl Render for ProjectStatus {
                 })
                 .into_any_element()
         })
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+struct CollaborativeProjectPicker(WeakEntity<Workspace>);
+
+#[cfg(feature = "multiplayer-tools")]
+impl Render for CollaborativeProjectPicker {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(workspace) = self.0.upgrade() else {
+            return gpui::Empty.into_any_element();
+        };
+        let workspace = workspace.read(cx);
+        let has_project = workspace
+            .project()
+            .read(cx)
+            .visible_worktrees(cx)
+            .next()
+            .is_some();
+        let workspace_handle = self.0.clone();
+        let menu = PopoverMenu::new("collaborative-add-project")
+            .anchor(Anchor::BottomLeft)
+            .menu(move |window, cx| {
+                let workspace = workspace_handle.upgrade()?;
+                let workspace = workspace.read(cx);
+                let project_groups = workspace
+                    .multi_workspace()
+                    .and_then(WeakEntity::upgrade)
+                    .map(|multi_workspace| multi_workspace.read(cx).project_group_keys())
+                    .unwrap_or_default();
+                let focus_handle = workspace.focus_handle(cx);
+                Some(recent_projects::RecentProjects::popover(
+                    workspace_handle.clone(),
+                    project_groups,
+                    Some(false),
+                    focus_handle,
+                    window,
+                    cx,
+                ))
+            });
+        let tooltip = Tooltip::text("Add Project");
+        let picker = if has_project {
+            menu.trigger_with_tooltip(
+                IconButton::new("collaborative-add-project-icon", IconName::FolderAdd)
+                    .size(ButtonSize::Compact)
+                    .icon_size(IconSize::Small)
+                    .tab_index(0isize)
+                    .aria_label("Add Project"),
+                tooltip,
+            )
+        } else {
+            menu.trigger_with_tooltip(
+                Button::new("collaborative-add-project-label", "Add Project")
+                    .size(ButtonSize::Compact)
+                    .label_size(LabelSize::Small)
+                    .start_icon(Icon::new(IconName::FolderAdd).size(IconSize::Small))
+                    .tab_index(0isize),
+                tooltip,
+            )
+        };
+        div()
+            .debug_selector(|| "COLLABORATIVE-ADD-PROJECT".to_owned())
+            .flex_none()
+            .child(picker)
+            .into_any_element()
     }
 }
 
@@ -355,13 +422,7 @@ impl Render for TitleBar {
                             title_bar
                                 .when(title_bar_settings.show_project_items, |title_bar| {
                                     title_bar.children(self.render_project_host(cx)).child(
-                                        self.render_project_name(
-                                            project_name,
-                                            Anchor::TopLeft,
-                                            None,
-                                            window,
-                                            cx,
-                                        ),
+                                        self.render_project_name(project_name, Anchor::TopLeft, cx),
                                     )
                                 })
                                 .when_some(
@@ -894,19 +955,14 @@ impl TitleBar {
         &self,
         name: Option<SharedString>,
         anchor: Anchor,
-        compact_width: Option<gpui::Rems>,
-        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let workspace = self.workspace.clone();
 
         let is_project_selected = name.is_some();
-        let add_project = !is_project_selected && compact_width.is_some();
 
         let display_name = if let Some(ref name) = name {
             util::truncate_and_trailoff(name, MAX_PROJECT_NAME_LENGTH)
-        } else if add_project {
-            "Add Project".to_owned()
         } else {
             "Open Recent Project".to_string()
         };
@@ -926,7 +982,7 @@ impl TitleBar {
             .map(|mw| mw.read(cx).is_threads_list_view_active(cx))
             .unwrap_or(false);
 
-        if is_sidebar_open && is_threads_list_view_active && compact_width.is_none() {
+        if is_sidebar_open && is_threads_list_view_active {
             return self
                 .render_recent_projects_popover(display_name, is_project_selected, anchor, cx)
                 .into_any_element();
@@ -958,13 +1014,6 @@ impl TitleBar {
             .trigger_with_tooltip(
                 Button::new("project_name_trigger", display_name)
                     .label_size(LabelSize::Small)
-                    .when_some(compact_width, |this, width| {
-                        this.size(ButtonSize::Compact)
-                            .when(!add_project, |this| this.max_width(width).truncate(true))
-                    })
-                    .when(add_project, |this| {
-                        this.start_icon(Icon::new(IconName::FolderAdd).size(IconSize::Small))
-                    })
                     .tab_index(0isize)
                     .when(self.worktree_count(cx) > 1, |this| {
                         this.end_icon(
@@ -975,16 +1024,8 @@ impl TitleBar {
                     })
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     .when(!is_project_selected, |s| s.color(Color::Muted)),
-                move |_window, cx| {
-                    Tooltip::for_action(
-                        if add_project {
-                            "Add Project"
-                        } else {
-                            "Recent Projects"
-                        },
-                        &zed_actions::OpenRecent::default(),
-                        cx,
-                    )
+                |_window, cx| {
+                    Tooltip::for_action("Recent Projects", &zed_actions::OpenRecent::default(), cx)
                 },
             )
             .anchor(anchor)
