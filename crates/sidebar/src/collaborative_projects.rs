@@ -99,6 +99,7 @@ pub(crate) struct CollaborativeProjects {
     multi_workspace: WeakEntity<MultiWorkspace>,
     activation_error: Option<SharedString>,
     task_views: HashMap<ProjectGroupKey, Entity<CollaborativeTasks>>,
+    expanded_locations: HashSet<ProjectGroupKey>,
 }
 
 impl CollaborativeProjects {
@@ -114,6 +115,7 @@ impl CollaborativeProjects {
             multi_workspace,
             activation_error: None,
             task_views: HashMap::new(),
+            expanded_locations: HashSet::new(),
         }
     }
 
@@ -185,19 +187,14 @@ impl CollaborativeProjects {
         }
     }
 
-    pub(crate) fn render_channels(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_channels(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let selected_target = self.selected_target(cx);
-        match self.channel_rows(cx) {
-            None => v_flex()
-                .debug_selector(|| "COLLABORATIVE-COMMUNITIES-UNAVAILABLE".to_owned())
-                .child(
-                    Label::new("Communities require a signed-in collaboration service")
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
-                .into_any_element(),
-            Some(rows) if rows.is_empty() => div().into_any_element(),
-            Some(rows) => v_flex()
+        let rows = self.channel_rows(cx)?;
+        if rows.is_empty() {
+            return None;
+        }
+        Some(
+            v_flex()
                 .debug_selector(|| "COLLABORATIVE-COMMUNITIES".to_owned())
                 .gap(DynamicSpacing::Base02.rems(cx))
                 .id("collaborative-channels-scroll")
@@ -262,7 +259,7 @@ impl CollaborativeProjects {
                     .into_any_element()
                 }))
                 .into_any_element(),
-        }
+        )
     }
 
     fn channel_rows(&self, cx: &gpui::App) -> Option<Vec<(usize, CollaborativeNavigationRow)>> {
@@ -483,15 +480,19 @@ impl Render for CollaborativeProjects {
                 Ok(groups) if groups.is_empty() => v_flex()
                     .debug_selector(|| "COLLABORATIVE-PROJECTS-EMPTY".to_owned())
                     .child(
-                        Label::new("No communities or projects")
+                        Label::new("No projects open")
                             .size(LabelSize::Small)
                             .color(Color::Muted),
                     )
                     .into_any_element(),
                 Ok(groups) => {
-                    self.task_views.retain(|key, _| groups.iter().any(|group| {
+                    let has_group = |key: &ProjectGroupKey| {
+                        groups.iter().any(|group| {
                         matches!(group.project.source_id(), CollaborativeNavigationSourceId::Project(group_key) if group_key == key)
-                    }));
+                    })
+                    };
+                    self.task_views.retain(|key, _| has_group(key));
+                    self.expanded_locations.retain(has_group);
                     let groups = groups
                         .into_iter()
                         .map(|group| {
@@ -518,7 +519,12 @@ impl Render for CollaborativeProjects {
                                 }
                                 _ => None,
                             };
-                            (group, is_pinned, task_view)
+                            let locations_expanded = matches!(
+                                group.project.source_id(),
+                                CollaborativeNavigationSourceId::Project(key)
+                                    if self.expanded_locations.contains(key)
+                            );
+                            (group, is_pinned, task_view, locations_expanded)
                         })
                         .collect::<Vec<_>>();
                     v_flex()
@@ -526,15 +532,18 @@ impl Render for CollaborativeProjects {
                         .when_some(self.activation_error.clone(), |this, error| {
                             this.child(Label::new(error).size(LabelSize::Small).color(Color::Error))
                         })
-                        .children(groups.into_iter().map(|(group, is_pinned, task_view)| {
-                            render_project_group(
-                                group,
-                                task_view,
-                                is_pinned,
-                                selected_target.as_ref(),
-                                cx,
-                            )
-                        }))
+                        .children(groups.into_iter().map(
+                            |(group, is_pinned, task_view, locations_expanded)| {
+                                render_project_group(
+                                    group,
+                                    task_view,
+                                    is_pinned,
+                                    locations_expanded,
+                                    selected_target.as_ref(),
+                                    cx,
+                                )
+                            },
+                        ))
                         .into_any_element()
                 }
                 Err(error) => unavailable_projects(error),
@@ -562,6 +571,7 @@ fn render_project_group(
     group: CollaborativeProjectGroupProjection,
     tasks: Option<Entity<CollaborativeTasks>>,
     is_pinned: bool,
+    locations_expanded: bool,
     selected_target: Option<&CollaborativeNavigationTarget>,
     cx: &mut Context<CollaborativeProjects>,
 ) -> AnyElement {
@@ -574,6 +584,7 @@ fn render_project_group(
     };
     let expansion_key = key.clone();
     let keyboard_expansion_key = key.clone();
+    let locations_key = key.clone();
     let expanded = group.expanded;
     let selected = selected_target == Some(&project_target);
     let keyboard_target = project_target.clone();
@@ -618,6 +629,7 @@ fn render_project_group(
                     },
                     if is_pinned { "Unpin" } else { "Pin" },
                 )
+                .icon_color(Color::Muted)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     cx.stop_propagation();
                     this.toggle_pin(pin_target.clone(), window, cx);
@@ -639,18 +651,59 @@ fn render_project_group(
         )
         .when(expanded, |this| {
             this.children(tasks)
-                .children(
-                    group
-                        .repositories
-                        .into_iter()
-                        .map(|row| render_project_child("Repository", row, selected_target, cx)),
+                .when(
+                    !group.repositories.is_empty() || !group.worktrees.is_empty(),
+                    |this| {
+                        this.child(
+                            div()
+                                .debug_selector(|| "COLLABORATIVE-PROJECT-LOCATIONS".to_owned())
+                                .child(
+                                    Button::new(
+                                        SharedString::from(format!(
+                                            "project-locations-{locations_key:?}"
+                                        )),
+                                        "Project locations",
+                                    )
+                                    .size(ButtonSize::Compact)
+                                    .style(ButtonStyle::Subtle)
+                                    .label_size(LabelSize::Small)
+                                    .start_icon(
+                                        Icon::new(if locations_expanded {
+                                            IconName::ChevronDown
+                                        } else {
+                                            IconName::ChevronRight
+                                        })
+                                        .size(IconSize::XSmall),
+                                    )
+                                    .tab_index(0isize)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            if locations_expanded {
+                                                this.expanded_locations.remove(&locations_key);
+                                            } else {
+                                                this.expanded_locations
+                                                    .insert(locations_key.clone());
+                                            }
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        )
+                    },
                 )
-                .children(
-                    group
-                        .worktrees
-                        .into_iter()
-                        .map(|row| render_project_child("Worktree", row, selected_target, cx)),
-                )
+                .when(locations_expanded, |this| {
+                    this.children(
+                        group.repositories.into_iter().map(|row| {
+                            render_project_child("Repository", row, selected_target, cx)
+                        }),
+                    )
+                    .children(
+                        group
+                            .worktrees
+                            .into_iter()
+                            .map(|row| render_project_child("Worktree", row, selected_target, cx)),
+                    )
+                })
         })
         .into_any_element()
 }

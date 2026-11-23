@@ -687,14 +687,16 @@ impl ProjectDiff {
 
     fn render_collaborative_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let source = self.diff.read(cx).branch_diff().clone();
-        let label = match source.read(cx).diff_base() {
-            DiffBase::Head => "Uncommitted",
-            DiffBase::Index => "Unstaged",
-            DiffBase::Staged => "Staged",
-            DiffBase::Merge { .. } => "Branch changes",
+        let base = source.read(cx).diff_base().clone();
+        let (label, selected_branch) = match &base {
+            DiffBase::Head => ("Uncommitted", None),
+            DiffBase::Index => ("Unstaged", None),
+            DiffBase::Staged => ("Staged", None),
+            DiffBase::Merge { base_ref } => ("Branch changes", Some(base_ref.clone())),
         };
         let (additions, deletions) = self.calculate_changed_lines(cx);
         let focus_handle = self.focus_handle(cx);
+        let workspace = self.workspace.clone();
         h_flex()
             .flex_none()
             .min_h(rems_from_px(ui::fractal::CONTROL_MEDIUM))
@@ -703,16 +705,26 @@ impl ProjectDiff {
             .border_b_1()
             .border_color(cx.theme().colors().border)
             .child(
-                PopoverMenu::new("collaborative-diff-revision")
+                div()
+                    .debug_selector(|| "COLLABORATIVE-DIFF-BASE".to_owned())
+                    .child(PopoverMenu::new("collaborative-diff-revision")
                     .trigger(
                         Button::new("collaborative-diff-base", label)
                             .size(ButtonSize::Compact)
+                            .tab_index(0isize)
+                            .when_some(selected_branch.clone(), |button, branch| {
+                                button.tooltip(Tooltip::text(format!("Changes since {branch}")))
+                            })
                             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small)),
                     )
                     .menu(move |window, cx| {
                         let head_source = source.clone();
                         let index_source = source.clone();
                         let staged_source = source.clone();
+                        let branch_source = source.clone();
+                        let can_compare = source.read(cx).repo().is_some();
+                        let workspace = workspace.clone();
+                        let selected_branch = selected_branch.clone();
                         Some(ContextMenu::build(window, cx, |menu, _, _| {
                             menu.entry("Uncommitted", None, move |_, cx| {
                                 head_source.update(cx, |source, cx| {
@@ -729,8 +741,43 @@ impl ProjectDiff {
                                     source.set_diff_base(DiffBase::Staged, cx)
                                 });
                             })
+                            .separator()
+                            .item(
+                                ui::ContextMenuEntry::new("Compare with branch…")
+                                    .disabled(!can_compare)
+                                    .handler(move |window, cx| {
+                                        let Some(repository) = branch_source.read(cx).repo().cloned() else {
+                                            return;
+                                        };
+                                        let on_select = Arc::new({
+                                            let repository = repository.clone();
+                                            let branch_source = branch_source.clone();
+                                            move |branch: git::repository::Branch, _: &mut Window, cx: &mut App| {
+                                                branch_source.update(cx, |source, cx| {
+                                                    if source.repo() == Some(&repository) {
+                                                        source.set_diff_base(DiffBase::Merge {
+                                                            base_ref: branch.name().to_owned().into(),
+                                                        }, cx);
+                                                    }
+                                                });
+                                            }
+                                        });
+                                        workspace.update(cx, |view, cx| {
+                                            view.toggle_modal(window, cx, |window, cx| {
+                                                crate::branch_picker::select_modal(
+                                                    workspace.clone(),
+                                                    Some(repository),
+                                                    selected_branch.clone(),
+                                                    on_select,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        }).log_err();
+                                    }),
+                            )
                         }))
-                    }),
+                    })),
             )
             .child(DiffStat::new(
                 "collaborative-diff-stat",

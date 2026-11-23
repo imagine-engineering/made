@@ -25,9 +25,23 @@ struct RightClickMenuHandleState<M> {
     menu_builder: Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>>>,
     menu: Rc<RefCell<Option<Entity<M>>>>,
     position: Rc<RefCell<Point<Pixels>>>,
+    attachment_position: Rc<RefCell<Option<Point<Pixels>>>>,
 }
 
 impl<M: ManagedView> RightClickMenuHandle<M> {
+    pub fn show(&self, window: &mut Window, cx: &mut App) -> bool {
+        let position = self
+            .0
+            .borrow()
+            .as_ref()
+            .and_then(|state| *state.attachment_position.borrow());
+        self.show_at(
+            position.unwrap_or_else(|| window.mouse_position()),
+            window,
+            cx,
+        )
+    }
+
     pub fn show_at(&self, position: Point<Pixels>, window: &mut Window, cx: &mut App) -> bool {
         let state = self.0.borrow();
         let Some(state) = state.as_ref() else {
@@ -219,6 +233,7 @@ fn show_menu<M: ManagedView>(
 pub struct MenuHandleElementState<M> {
     menu: Rc<RefCell<Option<Entity<M>>>>,
     position: Rc<RefCell<Point<Pixels>>>,
+    attachment_position: Rc<RefCell<Option<Point<Pixels>>>>,
 }
 
 impl<M> Clone for MenuHandleElementState<M> {
@@ -226,6 +241,7 @@ impl<M> Clone for MenuHandleElementState<M> {
         Self {
             menu: Rc::clone(&self.menu),
             position: Rc::clone(&self.position),
+            attachment_position: Rc::clone(&self.attachment_position),
         }
     }
 }
@@ -235,6 +251,7 @@ impl<M> Default for MenuHandleElementState<M> {
         Self {
             menu: Rc::default(),
             position: Rc::default(),
+            attachment_position: Rc::default(),
         }
     }
 }
@@ -306,6 +323,7 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
                         menu_builder,
                         menu: element_state.menu.clone(),
                         position: element_state.position.clone(),
+                        attachment_position: element_state.attachment_position.clone(),
                     });
                 }
 
@@ -392,6 +410,9 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
                 let menu = element_state.menu.clone();
                 let position = element_state.position.clone();
                 let child_bounds = prepaint_state.child_bounds;
+                *element_state.attachment_position.borrow_mut() = child_bounds
+                    .zip(attach)
+                    .map(|(bounds, anchor)| bounds.corner(anchor));
 
                 let hitbox_id = prepaint_state.hitbox.id;
                 window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {

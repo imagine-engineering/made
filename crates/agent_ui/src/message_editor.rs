@@ -230,6 +230,7 @@ pub struct MessageEditor {
     inline_terminal_revision: u64,
     #[cfg(feature = "multiplayer-tools")]
     inline_terminal_scope: Option<(crate::thread_metadata_store::ThreadId, acp::SessionId)>,
+    blend_background: bool,
     workspace: WeakEntity<Workspace>,
     session_capabilities: SharedSessionCapabilities,
     local_commands: SharedLocalCommands,
@@ -640,6 +641,7 @@ impl MessageEditor {
             inline_terminal_revision: 0,
             #[cfg(feature = "multiplayer-tools")]
             inline_terminal_scope: None,
+            blend_background: false,
             workspace,
             session_capabilities,
             local_commands,
@@ -647,6 +649,13 @@ impl MessageEditor {
             thread_store,
             _subscriptions: subscriptions,
             _parse_slash_command_task: Task::ready(()),
+        }
+    }
+
+    pub(crate) fn set_blend_background(&mut self, blend: bool, cx: &mut Context<Self>) {
+        if self.blend_background != blend {
+            self.blend_background = blend;
+            cx.notify();
         }
     }
 
@@ -2651,7 +2660,11 @@ impl Render for MessageEditor {
                 EditorElement::new(
                     &self.editor,
                     EditorStyle {
-                        background: cx.theme().colors().editor_background,
+                        background: if self.blend_background {
+                            gpui::transparent_black()
+                        } else {
+                            cx.theme().colors().editor_background
+                        },
                         local_player: cx.theme().players().local(),
                         text: text_style,
                         syntax: cx.theme().syntax().clone(),

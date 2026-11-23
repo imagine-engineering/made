@@ -523,17 +523,7 @@ impl Render for CollaborativeTasks {
                         .color(Color::Muted),
                 )
                 .into_any_element(),
-            Some(rows) if rows.is_empty() && self.project_group.is_some() => {
-                div().into_any_element()
-            }
-            Some(rows) if rows.is_empty() => v_flex()
-                .debug_selector(|| "COLLABORATIVE-TASKS-EMPTY".to_owned())
-                .child(
-                    Label::new("No tasks or threads")
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
-                .into_any_element(),
+            Some(rows) if rows.is_empty() => div().into_any_element(),
             Some(rows) => v_flex()
                 .when_some(self.activation_error.clone(), |this, error| {
                     this.child(
@@ -559,17 +549,6 @@ impl Render for CollaborativeTasks {
                         .as_ref()
                         .is_some_and(|thread_id| *thread_id == metadata.thread_id.to_key_string());
                     let badges = render_collaborative_navigation_badges(&row.navigation);
-                    let state_color = match row.state {
-                        CollaborativeTaskState::Running => Color::Info,
-                        CollaborativeTaskState::WaitingForUser => Color::Warning,
-                        CollaborativeTaskState::Failed => Color::Error,
-                        CollaborativeTaskState::Draft
-                        | CollaborativeTaskState::Completed
-                        | CollaborativeTaskState::Unknown
-                        | CollaborativeTaskState::Cancelled
-                        | CollaborativeTaskState::Interrupted
-                        | CollaborativeTaskState::Archived => Color::Muted,
-                    };
                     let thread_id = metadata.thread_id;
                     let row = navigation_row(
                         SharedString::from(format!(
@@ -608,9 +587,6 @@ impl Render for CollaborativeTasks {
                             )),
                         )
                     })
-                    .when(!has_subtasks, |row| {
-                        row.child(navigation_icon(IconName::Thread, state_color))
-                    })
                     .child(navigation_label(row.navigation.label().clone()))
                     .when_some(badges, |this, badges| this.child(badges))
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -633,6 +609,7 @@ impl Render for CollaborativeTasks {
                     let parent = crate::collaborative_task_menu::task_row_menu(
                         row,
                         thread_id,
+                        selected,
                         self.multi_workspace.clone(),
                         cx,
                     );

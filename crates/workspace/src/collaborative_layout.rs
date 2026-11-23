@@ -420,6 +420,11 @@ impl CollaborativeLayout {
         let selected_slot = self.selected_review_slot;
         let agent_available = self.agent_review_available;
         let project_available = self.project_review_available;
+        let source_label = match selected_slot {
+            Some(CollaborativeReviewSlot::AgentChanges) => "Agent changes",
+            Some(CollaborativeReviewSlot::ProjectChanges) => "Project changes",
+            None => "Review source",
+        };
         h_flex()
             .debug_selector(|| "COLLABORATIVE-REVIEW-TABS".to_owned())
             .h_full()
@@ -440,13 +445,13 @@ impl CollaborativeLayout {
             .child(
                 ui::PopoverMenu::new("collaborative-review-provider")
                     .trigger(
-                        IconButton::new(
-                            "collaborative-review-provider-menu",
-                            IconName::ChevronDown,
-                        )
-                        .size(ButtonSize::Compact)
-                        .aria_label("Choose review provider")
-                        .tooltip(ui::Tooltip::text("Choose review provider")),
+                        Button::new("collaborative-review-provider-menu", source_label)
+                            .size(ButtonSize::Compact)
+                            .style(ButtonStyle::Subtle)
+                            .label_size(LabelSize::Small)
+                            .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall))
+                            .tab_index(0isize)
+                            .tooltip(ui::Tooltip::text("Choose review source")),
                     )
                     .menu(move |window, cx| {
                         Some(ui::ContextMenu::build(window, cx, |menu, _, _| {

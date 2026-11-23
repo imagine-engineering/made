@@ -4,7 +4,7 @@ use agent_ui::thread_metadata_store::{ThreadMetadata, ThreadMetadataStore};
 use channel::{Channel, ChannelStore};
 use chrono::{DateTime, Utc};
 use gpui::{
-    Action, Context, InteractiveElement, KeyDownEvent, Render, SharedString, Task, WeakEntity,
+    Action, App, Context, InteractiveElement, KeyDownEvent, Render, SharedString, Task, WeakEntity,
 };
 use ui::{Window, prelude::*};
 use workspace::{
@@ -133,6 +133,15 @@ pub(crate) struct CollaborativePinned {
 }
 
 impl CollaborativePinned {
+    pub(crate) fn show_section(&self, cx: &App) -> bool {
+        match &self.state {
+            CollaborativePinnedState::Ready => self.projection(cx).map_or(true, |projection| {
+                !projection.navigation.rows().is_empty() || !projection.missing_targets.is_empty()
+            }),
+            CollaborativePinnedState::Loading | CollaborativePinnedState::Unavailable(_) => true,
+        }
+    }
+
     pub(crate) fn new(multi_workspace: WeakEntity<MultiWorkspace>, cx: &mut Context<Self>) -> Self {
         if let Some(thread_store) = ThreadMetadataStore::try_global(cx) {
             cx.observe(&thread_store, |_, _, cx| cx.notify()).detach();
@@ -409,18 +418,7 @@ impl Render for CollaborativePinned {
                     if projection.navigation.rows().is_empty()
                         && projection.missing_targets.is_empty() =>
                 {
-                    v_flex()
-                        .debug_selector(|| "COLLABORATIVE-PINNED-EMPTY".to_owned())
-                        .child(
-                            Label::new("Pin a task from its actions menu, or use a project pin or channel star.")
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .child(Button::new("pinned-open-project", "Open a project")
-                            .size(ButtonSize::Compact)
-                            .disabled(self.multi_workspace.as_ref().and_then(WeakEntity::upgrade).is_none())
-                            .on_click(|_, window, cx| window.dispatch_action(zed_actions::OpenRecent::default().boxed_clone(), cx)))
-                        .into_any_element()
+                    div().into_any_element()
                 }
                 Ok(projection) => {
                     let missing_target_count = projection.missing_targets.len();
@@ -532,6 +530,7 @@ impl Render for CollaborativePinned {
                                 crate::collaborative_task_menu::task_row_menu(
                                     navigation_row,
                                     thread_id,
+                                    selected,
                                     multi_workspace,
                                     cx,
                                 )
@@ -725,7 +724,7 @@ mod tests {
             _load_task: Task::ready(()),
         });
         cx.run_until_parked();
-        assert!(cx.debug_bounds("COLLABORATIVE-PINNED-EMPTY").is_some());
+        assert!(!view.read_with(cx, |view, cx| view.show_section(cx)));
 
         view.update(cx, |view, cx| {
             view.state = CollaborativePinnedState::Unavailable("Recent work unavailable".into());
@@ -736,6 +735,6 @@ mod tests {
             cx.debug_bounds("COLLABORATIVE-PINNED-UNAVAILABLE")
                 .is_some()
         );
-        assert!(cx.debug_bounds("COLLABORATIVE-PINNED-EMPTY").is_none());
+        assert!(view.read_with(cx, |view, cx| view.show_section(cx)));
     }
 }

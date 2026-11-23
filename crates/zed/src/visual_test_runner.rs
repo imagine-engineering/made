@@ -909,6 +909,18 @@ fn prepare_collaborative_visual_git_repository(project_path: &Path) -> Result<()
     )?;
     run_git(project_path, &["add", "."])?;
     run_git(project_path, &["commit", "-m", "Initial visual fixture"])?;
+    run_git(project_path, &["branch", "visual-review-base"])?;
+    std::fs::write(
+        project_path.join("review-history.txt"),
+        "Committed review history\n",
+    )?;
+    run_git(project_path, &["add", "review-history.txt"])?;
+    run_git(project_path, &["commit", "-m", "Add review history"])?;
+    Ok(())
+}
+
+#[cfg(all(target_os = "macos", feature = "multiplayer-tools"))]
+fn apply_collaborative_visual_changes(project_path: &Path) -> Result<()> {
     std::fs::write(
         project_path.join("src/sum_tree.rs"),
         visual_sum_tree_source(true),
@@ -953,6 +965,9 @@ fn run_collaborative_workspace_visual_tests(
     use agent_ui::AgentPanel;
     use gpui::Focusable as _;
     use theme::ActiveTheme as _;
+    if !matches!(variant, CollaborativeVisualVariant::Expanded) {
+        apply_collaborative_visual_changes(&project_path)?;
+    }
     cx.update(|cx| {
         if let Some(store) = agent_ui::thread_metadata_store::ThreadMetadataStore::try_global(cx) {
             store.update(cx, |store, cx| {
@@ -1347,12 +1362,21 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             "empty draft composer has no height"
         );
         if let Some(directory) = std::env::var_os("VISUAL_TEST_OUTPUT_DIR") {
+            let status = std::process::Command::new("git")
+                .args(["status", "--porcelain"])
+                .current_dir(&project_path)
+                .output()?;
+            anyhow::ensure!(
+                status.status.success() && status.stdout.is_empty(),
+                "the reference draft must be captured with a clean worktree"
+            );
             let actual = cx.capture_screenshot(window.into())?;
             anyhow::ensure!(
                 actual.dimensions() == (2000, 1364),
                 "empty draft viewport does not match Image 1"
             );
             actual.save(PathBuf::from(directory).join("user-current-empty-draft.png"))?;
+            println!("Native empty draft: captured with a clean Git worktree");
         }
         window.update(cx, |_, _, cx| {
             workspace.update(cx, |workspace, cx| {
@@ -1374,6 +1398,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             });
         })?;
         cx.resize_native_window(window.into(), bounds.size)?;
+        apply_collaborative_visual_changes(&project_path)?;
     }
     let visual_prompt = "Cache SumTree node summaries across seeks";
     connection.set_next_prompt_updates(initial_updates);
@@ -2485,6 +2510,85 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                 "Native footer: {trigger} opened {menu} above its button and dismissed without changing conversation"
             );
         }
+        let base = cx
+            .debug_bounds(window.into(), "COLLABORATIVE-DIFF-BASE")?
+            .context("project diff base menu trigger")?;
+        cx.simulate_click(window.into(), base.center(), Modifiers::default());
+        cx.run_until_parked();
+        let compare = cx
+            .debug_bounds(window.into(), "MENU_ITEM-Compare with branch…")?
+            .context("compare branch entry in the native review menu")?;
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-base-menu.png"))?;
+        cx.simulate_click(window.into(), compare.center(), Modifiers::default());
+        cx.run_until_parked();
+        anyhow::ensure!(
+            cx.read(|cx| workspace
+                .read(cx)
+                .active_modal::<git_ui::branch_picker::BranchList>(cx)
+                .is_some()),
+            "the review must open the native branch picker"
+        );
+        cx.simulate_input(window.into(), "visual-review-base");
+        cx.run_until_parked();
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-branch-picker.png"))?;
+        cx.simulate_keystrokes(window.into(), "enter");
+        cx.run_until_parked();
+        use project::git_store::diff_buffer_list::DiffBase;
+        anyhow::ensure!(
+            cx.read(|cx| workspace.read(cx).collaborative_project_review_base(cx))
+                == Some(DiffBase::Merge {
+                    base_ref: "visual-review-base".into()
+                }),
+            "the review must retain the selected native Git branch"
+        );
+        let project_diff = cx
+            .read(|cx| workspace.read(cx).collaborative_review_view(cx))
+            .context("project changes should remain visible")?
+            .downcast::<ProjectDiff>()
+            .map_err(|_| anyhow::anyhow!("review is not the native ProjectDiff"))?;
+        let shows_committed_history = |cx: &VisualTestAppContext| {
+            cx.read(|cx| {
+                project_diff
+                    .read(cx)
+                    .editor(cx)
+                    .read(cx)
+                    .rhs_editor()
+                    .read(cx)
+                    .text(cx)
+                    .contains("Committed review history")
+            })
+        };
+        for _ in 0..200 {
+            if shows_committed_history(cx) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+            cx.advance_clock(Duration::from_millis(10));
+            cx.run_until_parked();
+        }
+        anyhow::ensure!(
+            shows_committed_history(cx),
+            "branch comparison did not render the committed-only file"
+        );
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-since-branch.png"))?;
+        cx.simulate_click(window.into(), base.center(), Modifiers::default());
+        cx.run_until_parked();
+        let uncommitted = cx
+            .debug_bounds(window.into(), "MENU_ITEM-Uncommitted")?
+            .context("uncommitted review base entry")?;
+        cx.simulate_click(window.into(), uncommitted.center(), Modifiers::default());
+        cx.run_until_parked();
+        anyhow::ensure!(
+            cx.read(|cx| workspace.read(cx).collaborative_project_review_base(cx))
+                == Some(DiffBase::Head),
+            "the review must switch back to uncommitted changes"
+        );
+        println!(
+            "Native review: the branch picker revealed the committed-only file and returned to Uncommitted"
+        );
         if multi_acp {
             cx.activate_native_window(window.into())?;
             for _ in 0..3 {

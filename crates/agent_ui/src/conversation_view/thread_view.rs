@@ -5253,6 +5253,9 @@ impl ThreadView {
             return div().into_any_element();
         }
 
+        self.message_editor
+            .update(cx, |editor, cx| editor.set_blend_background(embedded, cx));
+
         if embedded && !self.editor_expanded {
             let max_lines = AgentSettings::get_global(cx).set_message_editor_max_lines();
             #[cfg(feature = "multiplayer-tools")]

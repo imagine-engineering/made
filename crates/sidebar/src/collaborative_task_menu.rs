@@ -6,8 +6,8 @@ use agent_ui::{
 };
 use editor::Editor;
 use gpui::{
-    App, Context, DismissEvent, Div, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Stateful, WeakEntity,
+    App, Context, DismissEvent, Div, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement, Render, SharedString, Stateful, WeakEntity,
 };
 use ui::{
     ContextMenu, ContextMenuEntry, Modal, ModalFooter, ModalHeader, Section, prelude::*,
@@ -29,6 +29,7 @@ fn task_menu_entry(label: impl Into<SharedString>, icon: IconName) -> ContextMen
 pub(crate) fn task_row_menu(
     row: Stateful<Div>,
     thread_id: ThreadId,
+    selected: bool,
     multi_workspace: WeakEntity<MultiWorkspace>,
     cx: &App,
 ) -> AnyElement {
@@ -39,6 +40,7 @@ pub(crate) fn task_row_menu(
     let keyboard_handle = handle.clone();
     let overflow_handle = handle.clone();
     let row = row
+        .group("collaborative-task-row-actions")
         .key_context("TaskRow")
         .when(deleting, |row| {
             row.child(
@@ -48,27 +50,41 @@ pub(crate) fn task_row_menu(
             )
         })
         .debug_selector(move || format!("COLLABORATIVE-TASK-ROW-{}", thread_id.to_key_string()))
-        .child(
-            navigation_action(
-                SharedString::from(format!("task-menu-{thread_id:?}")),
-                IconName::Ellipsis,
-                "Task actions",
-            )
-            .disabled(deleting)
-            .on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                overflow_handle.show_at(window.mouse_position(), window, cx);
-            }),
-        )
         .on_action(move |_: &agent_ui::OpenTaskContextMenu, window, cx| {
             cx.stop_propagation();
-            keyboard_handle.show_at(window.mouse_position(), window, cx);
+            keyboard_handle.show(window, cx);
         });
     right_click_menu(SharedString::from(format!("task-context-{thread_id:?}")))
         .with_handle(handle)
         .attach(gpui::Anchor::BottomRight)
-        .anchor(gpui::Anchor::TopLeft)
-        .trigger(move |_, _, _| row)
+        .anchor(gpui::Anchor::TopRight)
+        .trigger(move |menu_open, _, _| {
+            row.child(
+                div()
+                    .id("collaborative-task-overflow")
+                    .flex_none()
+                    .when(!selected && !menu_open, |action| {
+                        action
+                            .invisible()
+                            .w_0()
+                            .group_hover("collaborative-task-row-actions", |style| {
+                                style.visible().w(ButtonSize::Compact.rems())
+                            })
+                    })
+                    .child(
+                        navigation_action(
+                            SharedString::from(format!("task-menu-{thread_id:?}")),
+                            IconName::Ellipsis,
+                            "Task actions",
+                        )
+                        .disabled(deleting)
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            overflow_handle.show(window, cx);
+                        }),
+                    ),
+            )
+        })
         .menu(move |window, cx| build_task_menu(thread_id, multi_workspace.clone(), window, cx))
         .into_any_element()
 }

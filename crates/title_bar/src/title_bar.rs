@@ -901,9 +901,12 @@ impl TitleBar {
         let workspace = self.workspace.clone();
 
         let is_project_selected = name.is_some();
+        let add_project = !is_project_selected && compact_width.is_some();
 
         let display_name = if let Some(ref name) = name {
             util::truncate_and_trailoff(name, MAX_PROJECT_NAME_LENGTH)
+        } else if add_project {
+            "Add Project".to_owned()
         } else {
             "Open Recent Project".to_string()
         };
@@ -923,7 +926,7 @@ impl TitleBar {
             .map(|mw| mw.read(cx).is_threads_list_view_active(cx))
             .unwrap_or(false);
 
-        if is_sidebar_open && is_threads_list_view_active {
+        if is_sidebar_open && is_threads_list_view_active && compact_width.is_none() {
             return self
                 .render_recent_projects_popover(display_name, is_project_selected, anchor, cx)
                 .into_any_element();
@@ -957,8 +960,10 @@ impl TitleBar {
                     .label_size(LabelSize::Small)
                     .when_some(compact_width, |this, width| {
                         this.size(ButtonSize::Compact)
-                            .max_width(width)
-                            .truncate(true)
+                            .when(!add_project, |this| this.max_width(width).truncate(true))
+                    })
+                    .when(add_project, |this| {
+                        this.start_icon(Icon::new(IconName::FolderAdd).size(IconSize::Small))
                     })
                     .tab_index(0isize)
                     .when(self.worktree_count(cx) > 1, |this| {
@@ -971,7 +976,15 @@ impl TitleBar {
                     .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     .when(!is_project_selected, |s| s.color(Color::Muted)),
                 move |_window, cx| {
-                    Tooltip::for_action("Recent Projects", &zed_actions::OpenRecent::default(), cx)
+                    Tooltip::for_action(
+                        if add_project {
+                            "Add Project"
+                        } else {
+                            "Recent Projects"
+                        },
+                        &zed_actions::OpenRecent::default(),
+                        cx,
+                    )
                 },
             )
             .anchor(anchor)

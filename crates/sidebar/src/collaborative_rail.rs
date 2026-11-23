@@ -10,12 +10,6 @@ use crate::collaborative_projects::CollaborativeProjects;
 use crate::collaborative_tasks::CollaborativeTasks;
 
 const SECTION_LABELS: [&str; 3] = ["Pinned", "Projects", "Threads"];
-#[cfg(test)]
-const EMPTY_LABELS: [&str; 3] = [
-    "No pinned work",
-    "No communities or projects",
-    "No tasks or threads",
-];
 
 pub(crate) struct CollaborativeRail {
     multi_workspace: WeakEntity<MultiWorkspace>,
@@ -30,9 +24,11 @@ impl CollaborativeRail {
         if let Some(channel_store) = channel::ChannelStore::try_global(cx) {
             cx.observe(&channel_store, |_, _, cx| cx.notify()).detach();
         }
+        let pinned = cx.new(|cx| CollaborativePinned::new(multi_workspace.clone(), cx));
+        cx.observe(&pinned, |_, _, cx| cx.notify()).detach();
         Self {
             multi_workspace: multi_workspace.clone(),
-            pinned: cx.new(|cx| CollaborativePinned::new(multi_workspace.clone(), cx)),
+            pinned,
             projects: cx.new(|cx| CollaborativeProjects::new(multi_workspace.clone(), cx)),
             tasks: cx.new(|cx| CollaborativeTasks::new(multi_workspace, cx)),
             scroll_handle: ScrollHandle::new(),
@@ -174,11 +170,6 @@ impl CollaborativeRail {
     pub(crate) fn test_scroll_handle(&self) -> ScrollHandle {
         self.scroll_handle.clone()
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_labels(&self) -> ([&'static str; 3], [&'static str; 3]) {
-        (SECTION_LABELS, EMPTY_LABELS)
-    }
 }
 
 impl Render for CollaborativeRail {
@@ -186,6 +177,7 @@ impl Render for CollaborativeRail {
         let channels = self
             .projects
             .update(cx, |projects, cx| projects.render_channels(cx));
+        let show_pinned = self.pinned.read(cx).show_section(cx);
         v_flex()
             .id("collaborative-rail")
             .debug_selector(|| "COLLABORATIVE-RAIL".to_owned())
@@ -202,12 +194,14 @@ impl Render for CollaborativeRail {
                     .track_scroll(&self.scroll_handle)
                     .gap(DynamicSpacing::Base08.rems(cx))
                     .pb(DynamicSpacing::Base08.rems(cx))
-                    .child(self.render_section(
-                        SECTION_LABELS[0],
-                        "COLLABORATIVE-RAIL-PINNED",
-                        self.pinned.clone(),
-                        cx,
-                    ))
+                    .when(show_pinned, |this| {
+                        this.child(self.render_section(
+                            SECTION_LABELS[0],
+                            "COLLABORATIVE-RAIL-PINNED",
+                            self.pinned.clone(),
+                            cx,
+                        ))
+                    })
                     .child(self.render_section(
                         SECTION_LABELS[1],
                         "COLLABORATIVE-RAIL-PROJECTS",
@@ -220,12 +214,14 @@ impl Render for CollaborativeRail {
                         self.tasks.clone(),
                         cx,
                     ))
-                    .child(self.render_section(
-                        "Channels",
-                        "COLLABORATIVE-RAIL-CHANNELS",
-                        channels,
-                        cx,
-                    )),
+                    .when_some(channels, |this, channels| {
+                        this.child(self.render_section(
+                            "Channels",
+                            "COLLABORATIVE-RAIL-CHANNELS",
+                            channels,
+                            cx,
+                        ))
+                    }),
             )
             .child(self.render_account_surface(cx))
     }

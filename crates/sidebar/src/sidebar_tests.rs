@@ -1256,37 +1256,23 @@ async fn collaborative_rail_layout(cx: &mut TestAppContext) {
         "collaborative resizing must not change the Editor sidebar width"
     );
 
-    let section_bounds = [
-        "COLLABORATIVE-RAIL-PINNED",
-        "COLLABORATIVE-RAIL-PROJECTS",
-        "COLLABORATIVE-RAIL-TASKS",
-    ]
-    .map(|selector| {
-        cx.debug_bounds(selector)
-            .unwrap_or_else(|| panic!("missing collaborative rail section {selector}"))
-    });
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL-PINNED").is_none());
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL-CHANNELS").is_none());
+    let section_bounds =
+        ["COLLABORATIVE-RAIL-PROJECTS", "COLLABORATIVE-RAIL-TASKS"].map(|selector| {
+            cx.debug_bounds(selector)
+                .unwrap_or_else(|| panic!("missing collaborative rail section {selector}"))
+        });
     assert!(section_bounds[0].bottom() <= section_bounds[1].top());
-    assert!(section_bounds[1].bottom() <= section_bounds[2].top());
     for bounds in section_bounds {
         assert!(bounds.size.height > px(0.));
         assert!(bounds.top() >= resized_rail_bounds.top());
         assert!(bounds.bottom() <= resized_rail_bounds.bottom());
     }
 
-    let (labels, empty_labels, scroll_handle) = sidebar.read_with(cx, |sidebar, cx| {
-        let rail = sidebar.collaborative_rail.read(cx);
-        let (labels, empty_labels) = rail.test_labels();
-        (labels, empty_labels, rail.test_scroll_handle())
+    let scroll_handle = sidebar.read_with(cx, |sidebar, cx| {
+        sidebar.collaborative_rail.read(cx).test_scroll_handle()
     });
-    assert_eq!(labels, ["Pinned", "Projects", "Threads"]);
-    assert_eq!(
-        empty_labels,
-        [
-            "No pinned work",
-            "No communities or projects",
-            "No tasks or threads"
-        ]
-    );
 
     scroll_handle.set_offset(gpui::point(px(0.), px(-12.)));
     assert_eq!(scroll_handle.offset().y, px(-12.));
@@ -1304,6 +1290,18 @@ async fn collaborative_project_expansion_uses_the_canonical_group_state(cx: &mut
     });
     let _sidebar = setup_sidebar_closed(&multi_workspace, cx);
     cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+            .is_none()
+    );
+    let locations = cx
+        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
+        .expect("project locations disclosure is visible");
+    cx.simulate_click(
+        gpui::point(locations.left() + px(30.), locations.center().y),
+        gpui::Modifiers::default(),
+    );
     cx.run_until_parked();
     assert!(
         cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
@@ -1328,6 +1326,18 @@ async fn collaborative_project_expansion_uses_the_canonical_group_state(cx: &mut
             expected
         );
     }
+    let locations = cx
+        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
+        .expect("locations disclosure visible after reopening the project");
+    cx.simulate_click(
+        gpui::point(locations.left() + px(30.), locations.center().y),
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+            .is_none()
+    );
 }
 
 #[gpui::test]

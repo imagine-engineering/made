@@ -7339,7 +7339,9 @@ impl Sidebar {
                             )),
                         )
                         .child(div().flex_1())
-                        .child(self.render_recent_projects_button(cx))
+                        .when(!workspace::StatusBarSettings::get_global(cx).show, |this| {
+                            this.child(self.render_recent_projects_button(cx))
+                        })
                 },
             )
             .when(right_window_controls, |this| {
@@ -7875,7 +7877,13 @@ impl Render for Sidebar {
             .on_action(cx.listener(Self::on_next_thread))
             .on_action(cx.listener(Self::on_previous_thread))
             .on_action(cx.listener(|this, _: &OpenRecent, window, cx| {
-                this.recent_projects_popover_handle.toggle(window, cx);
+                if this.collaborative_rail_width(cx).is_some()
+                    && workspace::StatusBarSettings::get_global(cx).show
+                {
+                    cx.propagate();
+                } else {
+                    this.recent_projects_popover_handle.toggle(window, cx);
+                }
             }))
             .font(ui_font)
             .map(|el| {
