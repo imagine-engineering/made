@@ -21,7 +21,7 @@ agentic = [
     "zed_actions/agentic",
     "editor/agentic",
 ]
-multiplayer-tools = ["dep:collaboration_domain", "workspace/multiplayer-tools"]
+multiplayer-tools = ["dep:collaboration_domain", "dep:search", "workspace/multiplayer-tools"]
 test-support = [
     "multi_buffer/test-support",
     "remote_connection/test-support",
@@ -66,6 +66,7 @@ rand.workspace = true
 release_channel.workspace = true
 remote_connection.workspace = true
 schemars.workspace = true
+search = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true

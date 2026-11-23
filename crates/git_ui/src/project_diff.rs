@@ -29,6 +29,8 @@ use project::{
     },
 };
 use schemars::JsonSchema;
+#[cfg(feature = "multiplayer-tools")]
+use search::buffer_search::{BufferSearchBar, Deploy as DeploySearch, DivRegistrar};
 use serde::Deserialize;
 use settings::GitDiffBaseSetting;
 use std::any::{Any, TypeId};
@@ -86,6 +88,8 @@ pub struct ProjectDiff {
     _revision_subscription: Subscription,
     #[cfg(feature = "multiplayer-tools")]
     collaborative: bool,
+    #[cfg(feature = "multiplayer-tools")]
+    collaborative_search: Option<Entity<BufferSearchBar>>,
 }
 
 impl ProjectDiff {
@@ -295,6 +299,8 @@ impl ProjectDiff {
             _revision_subscription: revision_subscription,
             #[cfg(feature = "multiplayer-tools")]
             collaborative: false,
+            #[cfg(feature = "multiplayer-tools")]
+            collaborative_search: None,
         };
         view.update_revision_presentation(cx);
         view
@@ -657,21 +663,60 @@ impl Render for ProjectDiff {
                 editor.set_compact_diff_presentation(collaborative, cx);
             });
         });
-        v_flex()
-            .size_full()
-            .when(cfg!(feature = "multiplayer-tools"), |this| {
-                #[cfg(feature = "multiplayer-tools")]
-                if collaborative {
-                    return this.child(self.render_collaborative_header(_cx));
-                }
-                this
-            })
-            .child(div().flex_1().min_h_0().child(self.diff.clone()))
+        let content = v_flex().size_full();
+        #[cfg(feature = "multiplayer-tools")]
+        let content = if collaborative {
+            self.ensure_collaborative_search(_window, _cx);
+            let mut registrar = DivRegistrar::new(Self::collaborative_search_bar, _cx);
+            BufferSearchBar::register(&mut registrar);
+            registrar
+                .into_div()
+                .flex()
+                .flex_col()
+                .size_full()
+                .child(self.render_collaborative_header(_cx))
+                .when_some(
+                    self.collaborative_search
+                        .as_ref()
+                        .filter(|search| !search.read(_cx).is_dismissed()),
+                    |content, search| {
+                        content.child(
+                            div()
+                                .debug_selector(|| "COLLABORATIVE-DIFF-SEARCH".to_owned())
+                                .child(search.clone()),
+                        )
+                    },
+                )
+        } else {
+            content
+        };
+        content.child(div().flex_1().min_h_0().child(self.diff.clone()))
     }
 }
 
 #[cfg(feature = "multiplayer-tools")]
 impl ProjectDiff {
+    fn collaborative_search_bar(
+        &self,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> Option<Entity<BufferSearchBar>> {
+        self.collaborative_search.clone()
+    }
+
+    fn ensure_collaborative_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.collaborative_search.is_none() {
+            let editor = self.editor(cx);
+            let search = cx.new(|cx| {
+                let mut search = BufferSearchBar::new(None, window, cx).compact_find(cx);
+                search.set_active_pane_item(Some(&editor), window, cx);
+                search
+            });
+            cx.observe(&search, |_, _, cx| cx.notify()).detach();
+            self.collaborative_search = Some(search);
+        }
+    }
+
     pub(crate) fn use_collaborative_presentation(
         &mut self,
         base: Option<DiffBase>,
@@ -696,6 +741,7 @@ impl ProjectDiff {
         };
         let (additions, deletions) = self.calculate_changed_lines(cx);
         let focus_handle = self.focus_handle(cx);
+        let menu_focus = focus_handle.clone();
         let workspace = self.workspace.clone();
         h_flex()
             .flex_none()
@@ -786,10 +832,31 @@ impl ProjectDiff {
             ))
             .child(div().flex_1())
             .child(
+                div()
+                    .debug_selector(|| "COLLABORATIVE-DIFF-SEARCH-TRIGGER".to_owned())
+                    .child(
+                        IconButton::new("find-in-changes", IconName::MagnifyingGlass)
+                            .size(ButtonSize::Compact)
+                            .icon_size(IconSize::Small)
+                            .tab_index(0isize)
+                            .aria_label("Find in Changes")
+                            .tooltip(Tooltip::text("Find in Changes"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if let Some(search) = &this.collaborative_search {
+                                    search.update(cx, |search, cx| {
+                                        search.deploy(&DeploySearch::find(), None, window, cx);
+                                    });
+                                }
+                            })),
+                    ),
+            )
+            .child(
                 IconButton::new("collaborative-previous-hunk", IconName::ArrowUp)
                     .size(ButtonSize::Compact)
                     .icon_size(IconSize::Small)
+                    .tab_index(0isize)
                     .aria_label("Previous change")
+                    .tooltip(Tooltip::text("Previous change"))
                     .disabled(additions + deletions == 0)
                     .on_click({
                         let focus = focus_handle.clone();
@@ -802,11 +869,41 @@ impl ProjectDiff {
                 IconButton::new("collaborative-next-hunk", IconName::ArrowDown)
                     .size(ButtonSize::Compact)
                     .icon_size(IconSize::Small)
+                    .tab_index(0isize)
                     .aria_label("Next change")
+                    .tooltip(Tooltip::text("Next change"))
                     .disabled(additions + deletions == 0)
                     .on_click(move |_, window, cx| {
                         focus_handle.dispatch_action(&GoToHunk, window, cx);
                     }),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "COLLABORATIVE-DIFF-OPTIONS-TRIGGER".to_owned())
+                    .child(
+                        PopoverMenu::new("collaborative-diff-options")
+                            .anchor(gpui::Anchor::TopRight)
+                            .trigger(
+                                IconButton::new("changes-options", IconName::Ellipsis)
+                                    .size(ButtonSize::Compact)
+                                    .icon_size(IconSize::Small)
+                                    .tab_index(0isize)
+                                    .aria_label("Changes options")
+                                    .tooltip(Tooltip::text("Changes options")),
+                            )
+                            .menu(move |window, cx| {
+                                let fold_focus = menu_focus.clone();
+                                let unfold_focus = menu_focus.clone();
+                                Some(ContextMenu::build(window, cx, |menu, _, _| {
+                                    menu.entry("Collapse All Files", None, move |window, cx| {
+                                        fold_focus.dispatch_action(&editor::actions::FoldAll, window, cx);
+                                    })
+                                    .entry("Expand All Files", None, move |window, cx| {
+                                        unfold_focus.dispatch_action(&editor::actions::UnfoldAll, window, cx);
+                                    })
+                                }))
+                            }),
+                    ),
             )
     }
 }

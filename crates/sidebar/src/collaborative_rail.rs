@@ -145,6 +145,7 @@ impl CollaborativeRail {
                                 IconName::Plus,
                                 "New thread",
                             )
+                            .tab_index(0isize)
                             .disabled(!available)
                             .on_click(move |_, window, cx| {
                                 if let Some(workspace) = &workspace {

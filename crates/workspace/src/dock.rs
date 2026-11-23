@@ -1736,41 +1736,54 @@ impl PanelButtons {
                         .anchor(menu_anchor)
                         .attach(menu_attach)
                         .trigger(move |is_active, _window, _cx| {
-                            // Include active state in element ID to invalidate the cached
-                            // tooltip when panel state changes (e.g., via keyboard shortcut)
-                            let button = IconButton::new((name, is_active_button as u64), icon)
-                                .icon_size(IconSize::Small)
-                                .toggle_state(is_active_button)
-                                .tab_index(0isize)
-                                .aria_label(icon_tooltip)
-                                .on_click({
-                                    let action = action.boxed_clone();
+                            let on_click = {
+                                let action = action.boxed_clone();
+                                #[cfg(feature = "multiplayer-tools")]
+                                let workspace = workspace_for_button.clone();
+                                move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
                                     #[cfg(feature = "multiplayer-tools")]
-                                    let workspace = workspace_for_button.clone();
-                                    move |_, window, cx| {
-                                        #[cfg(feature = "multiplayer-tools")]
-                                        if in_status_menu {
-                                            workspace
-                                                .update(cx, |workspace, cx| {
-                                                    workspace.dispatch_collaborative_panel_action(
-                                                        dock_position,
-                                                        action.boxed_clone(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                })
-                                                .log_err();
-                                            return;
-                                        }
-                                        window.focus(&focus_handle, cx);
-                                        window.dispatch_action(action.boxed_clone(), cx)
+                                    if in_status_menu {
+                                        workspace
+                                            .update(cx, |workspace, cx| {
+                                                workspace.dispatch_collaborative_panel_action(
+                                                    dock_position,
+                                                    action.boxed_clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })
+                                            .log_err();
+                                        return;
                                     }
-                                })
-                                .when(!is_active, |this| {
-                                    this.tooltip(move |_window, cx| {
-                                        Tooltip::for_action(tooltip.clone(), &*action, cx)
-                                    })
-                                });
+                                    window.focus(&focus_handle, cx);
+                                    window.dispatch_action(action.boxed_clone(), cx);
+                                }
+                            };
+                            let tooltip = move |_: &mut Window, cx: &mut App| {
+                                Tooltip::for_action(tooltip.clone(), &*action, cx)
+                            };
+                            // The active-state ID invalidates the cached shortcut tooltip.
+                            let button_id = (name, is_active_button as u64);
+                            let button = if in_status_menu {
+                                Button::new(button_id, icon_tooltip)
+                                    .size(ButtonSize::Compact)
+                                    .label_size(LabelSize::Small)
+                                    .start_icon(Icon::new(icon).size(IconSize::Small))
+                                    .toggle_state(is_active_button)
+                                    .tab_index(0isize)
+                                    .on_click(on_click)
+                                    .when(!is_active, |button| button.tooltip(tooltip))
+                                    .into_any_element()
+                            } else {
+                                IconButton::new(button_id, icon)
+                                    .icon_size(IconSize::Small)
+                                    .toggle_state(is_active_button)
+                                    .tab_index(0isize)
+                                    .aria_label(icon_tooltip)
+                                    .on_click(on_click)
+                                    .when(!is_active, |button| button.tooltip(tooltip))
+                                    .into_any_element()
+                            };
 
                             div().relative().child(button).when_some(
                                 icon_label
@@ -1792,6 +1805,7 @@ impl PanelButtons {
 
         h_flex()
             .gap_1()
+            .when(in_status_menu, |strip| strip.flex_wrap().max_w_full())
             .when(
                 has_buttons && !in_status_menu && dock.position != DockPosition::Left,
                 |this| this.child(Divider::vertical().color(DividerColor::Border)),

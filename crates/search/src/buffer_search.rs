@@ -14,7 +14,7 @@ use crate::{
 use any_vec::AnyVec;
 use collections::HashMap;
 use editor::{
-    DiffStyleControls, Editor, EditorSettings, MultiBufferOffset, SplittableEditor,
+    DiffStyleControls, Editor, EditorMode, EditorSettings, MultiBufferOffset, SplittableEditor,
     actions::{Backtab, FoldAll, Tab, ToggleFoldAll, ToggleSoftWrap, UnfoldAll},
     scroll::Autoscroll,
 };
@@ -65,6 +65,7 @@ pub fn init(cx: &mut App) {
 }
 
 pub struct BufferSearchBar {
+    compact_find: bool,
     query_editor: Entity<Editor>,
     query_editor_focused: bool,
     replacement_editor: Entity<Editor>,
@@ -108,7 +109,8 @@ impl Render for BufferSearchBar {
             .and_then(|weak| weak.upgrade())
             .map(DiffStyleControls::new);
 
-        let collapse_expand_button = if self.needs_expand_collapse_option(cx) {
+        let collapse_expand_button = if !self.compact_find && self.needs_expand_collapse_option(cx)
+        {
             let query_editor_focus = self.query_editor.focus_handle(cx);
 
             let is_collapsed = self
@@ -220,8 +222,15 @@ impl Render for BufferSearchBar {
         let container_width = window.viewport_size().width;
         let input_width = SearchInputWidth::calc_width(container_width);
 
-        let input_base_styles =
-            |border_color| input_base_styles(border_color, |div| div.w(input_width));
+        let input_base_styles = |border_color| {
+            input_base_styles(border_color, |div| {
+                if self.compact_find {
+                    div.flex_1().min_w_0()
+                } else {
+                    div.w(input_width)
+                }
+            })
+        };
 
         let input_style = if find_in_results {
             filter_search_results_input(query_border, |div| div.w(input_width), cx)
@@ -235,36 +244,39 @@ impl Render for BufferSearchBar {
                 color_override,
                 cx,
             )))
-            .child(
-                h_flex()
-                    .flex_none()
-                    .gap_1()
-                    .when(case, |div| {
-                        div.child(SearchOption::CaseSensitive.as_button(
-                            self.search_options,
-                            SearchSource::Buffer,
-                            focus_handle.clone(),
-                        ))
-                    })
-                    .when(word, |div| {
-                        div.child(SearchOption::WholeWord.as_button(
-                            self.search_options,
-                            SearchSource::Buffer,
-                            focus_handle.clone(),
-                        ))
-                    })
-                    .when(regex, |div| {
-                        div.child(SearchOption::Regex.as_button(
-                            self.search_options,
-                            SearchSource::Buffer,
-                            focus_handle.clone(),
-                        ))
-                    }),
-            );
+            .when(!self.compact_find, |column| {
+                column.child(
+                    h_flex()
+                        .flex_none()
+                        .gap_1()
+                        .when(case, |div| {
+                            div.child(SearchOption::CaseSensitive.as_button(
+                                self.search_options,
+                                SearchSource::Buffer,
+                                focus_handle.clone(),
+                            ))
+                        })
+                        .when(word, |div| {
+                            div.child(SearchOption::WholeWord.as_button(
+                                self.search_options,
+                                SearchSource::Buffer,
+                                focus_handle.clone(),
+                            ))
+                        })
+                        .when(regex, |div| {
+                            div.child(SearchOption::Regex.as_button(
+                                self.search_options,
+                                SearchSource::Buffer,
+                                focus_handle.clone(),
+                            ))
+                        }),
+                )
+            });
 
         let mode_column = h_flex()
             .gap_1()
-            .min_w_64()
+            .when(self.compact_find, |this| this.flex_none())
+            .when(!self.compact_find, |this| this.min_w_64())
             .when(replacement, |this| {
                 this.child(render_action_button(
                     "buffer-search-bar-toggle",
@@ -342,7 +354,7 @@ impl Render for BufferSearchBar {
                         ))
                     });
 
-                el.when(select_all, |el| {
+                el.when(select_all && !self.compact_find, |el| {
                     el.child(render_action_button(
                         "buffer-search-nav-button",
                         IconName::SelectAll,
@@ -354,7 +366,7 @@ impl Render for BufferSearchBar {
                 })
                 .child(matches_column)
             })
-            .when(find_in_results, |el| {
+            .when(find_in_results || self.compact_find, |el| {
                 el.child(render_action_button(
                     "buffer-search",
                     IconName::Close,
@@ -428,30 +440,29 @@ impl Render for BufferSearchBar {
                 .ml_2()
         });
 
-        let search_line =
-            h_flex()
-                .relative()
-                .child(search_line)
-                .when(!narrow_mode && !find_in_results, |this| {
-                    this.child(
-                        h_flex()
-                            .absolute()
-                            .right_0()
-                            .when(has_collapse_button, |this| {
-                                this.pr_2()
-                                    .border_r_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                            })
-                            .child(render_action_button(
-                                "buffer-search",
-                                IconName::Close,
-                                Default::default(),
-                                "Close Search Bar",
-                                &Dismiss,
-                                focus_handle.clone(),
-                            )),
-                    )
-                });
+        let search_line = h_flex().relative().child(search_line).when(
+            !self.compact_find && !narrow_mode && !find_in_results,
+            |this| {
+                this.child(
+                    h_flex()
+                        .absolute()
+                        .right_0()
+                        .when(has_collapse_button, |this| {
+                            this.pr_2()
+                                .border_r_1()
+                                .border_color(cx.theme().colors().border_variant)
+                        })
+                        .child(render_action_button(
+                            "buffer-search",
+                            IconName::Close,
+                            Default::default(),
+                            "Close Search Bar",
+                            &Dismiss,
+                            focus_handle.clone(),
+                        )),
+                )
+            },
+        );
 
         v_flex()
             .id("buffer_search")
@@ -784,6 +795,7 @@ impl BufferSearchBar {
         }
 
         Self {
+            compact_find: false,
             query_editor,
             query_editor_focused: false,
             replacement_editor,
@@ -813,6 +825,14 @@ impl BufferSearchBar {
             splittable_editor: None,
             _splittable_editor_subscription: None,
         }
+    }
+
+    pub fn compact_find(mut self, cx: &mut Context<Self>) -> Self {
+        self.compact_find = true;
+        self.query_editor.update(cx, |editor, _| {
+            editor.set_mode(EditorMode::SingleLine);
+        });
+        self
     }
 
     pub fn is_dismissed(&self) -> bool {
@@ -866,7 +886,7 @@ impl BufferSearchBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let filtered_search_range = if deploy.selection_search_enabled {
+        let filtered_search_range = if !self.compact_find && deploy.selection_search_enabled {
             Some(FilteredSearchRange::Default)
         } else {
             None
@@ -878,7 +898,7 @@ impl BufferSearchBar {
             self.search_suggested(seed_query_override, window, cx);
             self.smartcase(window, cx);
             self.sync_select_next_case_sensitivity(cx);
-            self.replace_enabled |= deploy.replace_enabled;
+            self.replace_enabled |= !self.compact_find && deploy.replace_enabled;
             self.selection_search_enabled =
                 self.selection_search_enabled
                     .or(if deploy.selection_search_enabled {
@@ -967,10 +987,16 @@ impl BufferSearchBar {
     }
 
     fn supported_options(&self, cx: &mut Context<Self>) -> workspace::searchable::SearchOptions {
-        self.active_searchable_item
+        let mut options = self
+            .active_searchable_item
             .as_ref()
             .map(|item| item.supported_options(cx))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if self.compact_find {
+            options.replacement = false;
+            options.selection = false;
+        }
+        options
     }
 
     // We provide an expand/collapse button if we are in a multibuffer

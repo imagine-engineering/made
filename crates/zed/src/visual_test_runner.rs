@@ -2443,6 +2443,11 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             .save(PathBuf::from(&output_directory).join("footer-diff-reopened.png"))?;
         for (trigger, menu, name) in [
             (
+                "COLLABORATIVE-STATUS-OVERFLOW",
+                "COLLABORATIVE-STATUS-MENU",
+                "footer-workspace-tools-menu",
+            ),
+            (
                 "NATIVE-PROJECT-PICKER",
                 "NATIVE-RECENT-PROJECTS-MENU",
                 "footer-project-menu",
@@ -2574,6 +2579,84 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
         );
         cx.capture_screenshot(window.into())?
             .save(PathBuf::from(&output_directory).join("review-since-branch.png"))?;
+        let search = cx
+            .debug_bounds(window.into(), "COLLABORATIVE-DIFF-SEARCH-TRIGGER")?
+            .context("find in Changes trigger")?;
+        cx.simulate_click(window.into(), search.center(), Modifiers::default());
+        cx.run_until_parked();
+        anyhow::ensure!(
+            cx.debug_bounds(window.into(), "COLLABORATIVE-DIFF-SEARCH")?
+                .is_some(),
+            "Changes search must open in the review"
+        );
+        cx.simulate_input(window.into(), "Committed review history");
+        cx.run_until_parked();
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-find-in-changes.png"))?;
+        cx.simulate_keystrokes(window.into(), "escape");
+        cx.run_until_parked();
+        anyhow::ensure!(
+            cx.debug_bounds(window.into(), "COLLABORATIVE-DIFF-SEARCH")?
+                .is_none(),
+            "Escape must dismiss Changes search"
+        );
+        let options = cx
+            .debug_bounds(window.into(), "COLLABORATIVE-DIFF-OPTIONS-TRIGGER")?
+            .context("Changes options trigger")?;
+        cx.simulate_click(window.into(), options.center(), Modifiers::default());
+        cx.run_until_parked();
+        for _ in 0..3 {
+            window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
+            cx.run_until_parked();
+        }
+        anyhow::ensure!(
+            cx.debug_bounds(window.into(), "MENU_ITEM-Collapse All Files")?
+                .is_some()
+                && cx
+                    .debug_bounds(window.into(), "MENU_ITEM-Expand All Files")?
+                    .is_some(),
+            "Changes options must expose the review's file-folding controls"
+        );
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-options-menu.png"))?;
+        cx.simulate_keystrokes(window.into(), "escape");
+        cx.run_until_parked();
+        for _ in 0..3 {
+            window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
+            cx.run_until_parked();
+        }
+        anyhow::ensure!(
+            cx.debug_bounds(window.into(), "MENU_ITEM-Collapse All Files")?
+                .is_none(),
+            "Escape must dismiss Changes options"
+        );
+        for (label, folded) in [("Collapse All Files", true), ("Expand All Files", false)] {
+            cx.simulate_click(window.into(), options.center(), Modifiers::default());
+            cx.run_until_parked();
+            for _ in 0..3 {
+                window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
+                cx.run_until_parked();
+            }
+            let entry = cx
+                .debug_bounds(window.into(), &format!("MENU_ITEM-{label}"))?
+                .with_context(|| format!("Changes options should offer {label}"))?;
+            cx.simulate_click(window.into(), entry.center(), Modifiers::default());
+            cx.run_until_parked();
+            anyhow::ensure!(
+                cx.read(|cx| project_diff
+                    .read(cx)
+                    .editor(cx)
+                    .read(cx)
+                    .rhs_editor()
+                    .read(cx)
+                    .has_any_buffer_folded(cx))
+                    == folded,
+                "Changes options must execute {label} in the review"
+            );
+        }
+        println!(
+            "Native review: Find in Changes accepted a query, Escape dismissed search and options, and both file-folding actions updated the review"
+        );
         cx.simulate_click(window.into(), base.center(), Modifiers::default());
         cx.run_until_parked();
         let uncommitted = cx
@@ -3228,11 +3311,25 @@ fn capture_collaborative_accessibility_state(
     let status_overflow = cx
         .debug_bounds(window, "COLLABORATIVE-STATUS-OVERFLOW")?
         .context("native status overflow should remain visible")?;
+    let composer_controls = cx
+        .debug_bounds(window, "COLLABORATIVE-COMPOSER-CONTROLS")?
+        .context("native composer controls should remain visible")?;
+    let add_project = cx
+        .debug_bounds(window, "COLLABORATIVE-ADD-PROJECT")?
+        .context("a populated project row should show Add Project")?;
     anyhow::ensure!(
-        project_controls.contains(&status_overflow.origin)
-            && status_overflow.right() <= project_controls.right()
-            && status_overflow.bottom() <= project_controls.bottom(),
-        "{name}: status overflow is clipped by project controls: {status_overflow:?} / {project_controls:?}"
+        composer_controls.contains(&status_overflow.origin)
+            && status_overflow.right() <= composer_controls.right()
+            && status_overflow.bottom() <= composer_controls.bottom(),
+        "{name}: status overflow must be reachable in the lower composer row: {status_overflow:?} / {composer_controls:?}"
+    );
+    anyhow::ensure!(
+        project_controls.left() == composer_controls.left()
+            && project_controls.bottom() <= composer_controls.top()
+            && project_controls.contains(&add_project.origin)
+            && add_project.right() <= project_controls.right()
+            && add_project.bottom() <= project_controls.bottom(),
+        "{name}: Add Project must stay with the Git context above the composer row: {add_project:?} / {project_controls:?} / {composer_controls:?}"
     );
     let footer = cx
         .debug_bounds(window, "WORKSPACE-STATUS-BAR")?

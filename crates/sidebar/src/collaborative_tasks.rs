@@ -556,9 +556,14 @@ impl Render for CollaborativeTasks {
                             metadata.thread_id.to_key_string()
                         )),
                         selected,
-                        usize::from(self.project_group.is_some()),
+                        1,
                         cx,
                     )
+                    .mx(-DynamicSpacing::Base08.rems(cx))
+                    .pl(DynamicSpacing::Base08.rems(cx) * 2. + DynamicSpacing::Base12.rems(cx))
+                    .pr(DynamicSpacing::Base08.rems(cx) * 2.)
+                    .rounded_none()
+                    .relative()
                     .aria_label(format!(
                         "{} · {}",
                         row.navigation.label(),
@@ -566,28 +571,43 @@ impl Render for CollaborativeTasks {
                     ))
                     .when(has_subtasks, |row| {
                         row.child(
-                            navigation_action(
-                                SharedString::from(format!("subtask-disclosure-{thread_id:?}")),
-                                if collapsed {
-                                    IconName::ChevronRight
-                                } else {
-                                    IconName::ChevronDown
-                                },
-                                if collapsed {
-                                    "Expand subtasks"
-                                } else {
-                                    "Collapse subtasks"
-                                },
-                            )
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.toggle_subtasks(thread_id, cx);
-                                },
-                            )),
+                            div()
+                                .absolute()
+                                .left(DynamicSpacing::Base08.rems(cx))
+                                .child(
+                                    navigation_action(
+                                        SharedString::from(format!(
+                                            "subtask-disclosure-{thread_id:?}"
+                                        )),
+                                        if collapsed {
+                                            IconName::ChevronRight
+                                        } else {
+                                            IconName::ChevronDown
+                                        },
+                                        if collapsed {
+                                            "Expand subtasks"
+                                        } else {
+                                            "Collapse subtasks"
+                                        },
+                                    )
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.toggle_subtasks(thread_id, cx);
+                                        },
+                                    )),
+                                ),
                         )
                     })
-                    .child(navigation_label(row.navigation.label().clone()))
+                    .child(
+                        div()
+                            .debug_selector(move || {
+                                format!("COLLABORATIVE-THREAD-TITLE-{}", thread_id.to_key_string())
+                            })
+                            .flex_1()
+                            .min_w_0()
+                            .child(navigation_label(row.navigation.label().clone())),
+                    )
                     .when_some(badges, |this, badges| this.child(badges))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.activate(metadata.clone(), window, cx);
@@ -640,7 +660,7 @@ impl Render for CollaborativeTasks {
                                         subtask.session_id
                                     )),
                                     selected,
-                                    usize::from(self.project_group.is_some()) + subtask.depth + 1,
+                                    subtask.depth + 2,
                                     cx,
                                 )
                                 .debug_selector(move || {

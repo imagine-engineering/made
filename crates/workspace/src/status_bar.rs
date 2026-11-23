@@ -269,6 +269,19 @@ impl StatusBar {
     fn render_collaborative_tools(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let items = self.left_items.iter().chain(self.right_items.iter().rev());
         let primary = items.filter(|item| item.is_collaborative_primary(cx));
+        let has_project = self
+            .multi_workspace
+            .as_ref()
+            .and_then(WeakEntity::upgrade)
+            .is_some_and(|multi_workspace| {
+                let workspace = multi_workspace.read(cx).workspace().read(cx);
+                workspace
+                    .project()
+                    .read(cx)
+                    .visible_worktrees(cx)
+                    .next()
+                    .is_some()
+            });
         let status_bar = cx.entity().downgrade();
         let state = self
             .collaborative_participants
@@ -290,53 +303,89 @@ impl StatusBar {
                         render_hideable_item("collaborative-footer", index, item.as_ref(), cx)
                     })),
             )
-            .child(
-                div()
-                    .debug_selector(|| "COLLABORATIVE-STATUS-OVERFLOW".to_owned())
-                    .flex_none()
-                    .child(
-                        ui::PopoverMenu::new("collaborative-status-overflow")
-                            .anchor(gpui::Anchor::BottomLeft)
-                            .trigger(
-                                IconButton::new(
-                                    "collaborative-status-overflow-trigger",
-                                    IconName::Ellipsis,
-                                )
+            .when(has_project, |row| {
+                row.child(
+                    div()
+                        .debug_selector(|| "COLLABORATIVE-ADD-PROJECT".to_owned())
+                        .flex_none()
+                        .child(
+                            IconButton::new("collaborative-add-project", IconName::FolderAdd)
                                 .icon_size(IconSize::Small)
                                 .size(ButtonSize::Compact)
-                                .aria_label("Workspace status and agent execution")
-                                .tooltip(ui::Tooltip::text("Workspace status and agent execution")),
-                            )
-                            .menu(move |window, cx| {
-                                let status_bar = status_bar.upgrade()?;
-                                Some(cx.new(|cx| {
-                                    let observation =
-                                        cx.observe(&status_bar, |_, _, cx| cx.notify());
-                                    let focus_handle = cx.focus_handle();
-                                    let focus_out =
-                                        cx.on_focus_out(&focus_handle, window, |_, _, _, cx| {
-                                            cx.emit(gpui::DismissEvent)
-                                        });
-                                    CollaborativeStatusMenu {
-                                        items: Default::default(),
-                                        status_bar: status_bar.downgrade(),
-                                        focus_handle,
-                                        _observation: observation,
-                                        _focus_out: focus_out,
-                                    }
-                                }))
-                            }),
-                    ),
+                                .tab_index(0isize)
+                                .aria_label("Add Project")
+                                .tooltip(ui::Tooltip::text("Add Project"))
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(
+                                        crate::Open {
+                                            create_new_window: Some(false),
+                                        }
+                                        .boxed_clone(),
+                                        cx,
+                                    );
+                                }),
+                        ),
+                )
+            });
+        let workspace_tools = div()
+            .debug_selector(|| "COLLABORATIVE-STATUS-OVERFLOW".to_owned())
+            .flex_none()
+            .child(
+                ui::PopoverMenu::new("collaborative-status-overflow")
+                    .anchor(gpui::Anchor::BottomLeft)
+                    .trigger(
+                        IconButton::new(
+                            "collaborative-status-overflow-trigger",
+                            IconName::Ellipsis,
+                        )
+                        .icon_size(IconSize::Small)
+                        .size(ButtonSize::Compact)
+                        .tab_index(0isize)
+                        .aria_label("Workspace tools")
+                        .tooltip(ui::Tooltip::text("Workspace tools")),
+                    )
+                    .menu(move |window, cx| {
+                        let status_bar = status_bar.upgrade()?;
+                        Some(cx.new(|cx| {
+                            let observation = cx.observe(&status_bar, |_, _, cx| cx.notify());
+                            let focus_handle = cx.focus_handle();
+                            let focus_out =
+                                cx.on_focus_out(&focus_handle, window, |_, _, _, cx| {
+                                    cx.emit(gpui::DismissEvent)
+                                });
+                            CollaborativeStatusMenu {
+                                items: Default::default(),
+                                status_bar: status_bar.downgrade(),
+                                focus_handle,
+                                _observation: observation,
+                                _focus_out: focus_out,
+                            }
+                        }))
+                    }),
             );
-        h_flex()
+        let (project_row, inline_project) = if has_project {
+            (Some(primary_controls), None)
+        } else {
+            (None, Some(primary_controls))
+        };
+        v_flex()
             .id("collaborative-footer-controls")
             .debug_selector(|| "COLLABORATIVE-FOOTER-CONTROLS".to_owned())
             .w_full()
             .min_w_0()
-            .gap_0p5()
-            .child(primary_controls)
-            .child(CollaborativeParticipantStatus::new(state).compact())
-            .children(self.collaborative_composer_footer.clone())
+            .children(project_row)
+            .child(
+                h_flex()
+                    .id("collaborative-composer-controls")
+                    .debug_selector(|| "COLLABORATIVE-COMPOSER-CONTROLS".to_owned())
+                    .w_full()
+                    .min_w_0()
+                    .gap_0p5()
+                    .children(inline_project)
+                    .child(workspace_tools)
+                    .child(CollaborativeParticipantStatus::new(state).compact())
+                    .children(self.collaborative_composer_footer.clone()),
+            )
     }
 
     #[cfg(feature = "multiplayer-tools")]
@@ -571,7 +620,7 @@ impl CollaborativeStatusMenu {
 
 #[cfg(feature = "multiplayer-tools")]
 impl Render for CollaborativeStatusMenu {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(status_bar) = self.status_bar.upgrade() else {
             return gpui::Empty.into_any_element();
         };
@@ -602,7 +651,7 @@ impl Render for CollaborativeStatusMenu {
         let mut tools = Vec::new();
         let mut panels = Vec::new();
         for (index, (group, view, hide)) in items.into_iter().enumerate() {
-            let element = div().flex_none().max_w_full().child(render_hideable_view(
+            let element = div().max_w_full().child(render_hideable_view(
                 "collaborative-status-overflow",
                 index,
                 view,
@@ -650,8 +699,10 @@ impl Render for CollaborativeStatusMenu {
             .elevation_2(cx)
             .p_2()
             .gap_2()
-            .w(px(320.))
-            .max_w(_window.viewport_size().width - px(16.))
+            .w(px(350.))
+            .max_w(window.viewport_size().width - px(16.))
+            .max_h(window.viewport_size().height - px(16.))
+            .overflow_y_scroll()
             .child(
                 v_flex()
                     .debug_selector(|| "COLLABORATIVE-STATUS-TOOLS".to_owned())
@@ -661,7 +712,7 @@ impl Render for CollaborativeStatusMenu {
                             .size(LabelSize::XSmall)
                             .color(Color::Muted),
                     )
-                    .child(h_flex().flex_wrap().items_center().gap_1().children(tools)),
+                    .child(h_flex().flex_wrap().items_center().children(tools)),
             )
             .child(Divider::horizontal())
             .child(
@@ -673,7 +724,7 @@ impl Render for CollaborativeStatusMenu {
                             .size(LabelSize::XSmall)
                             .color(Color::Muted),
                     )
-                    .child(h_flex().flex_wrap().items_center().gap_1().children(panels)),
+                    .child(v_flex().children(panels)),
             )
             .child(Divider::horizontal())
             .child(
