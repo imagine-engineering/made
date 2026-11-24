@@ -569,7 +569,8 @@ message Envelope {
     CollaborationFilePolicyInvalidated collaboration_file_policy_invalidated = 534;
     GitRestoreIndexFiles git_restore_index_files = 535;
     ResolveJvmBuildOperation resolve_jvm_build_operation = 536;
-    JvmBuildOperationResponse jvm_build_operation_response = 537; // current max
+    JvmBuildOperationResponse jvm_build_operation_response = 537;
+    SynchronizeRemoteGradleMetadata synchronize_remote_gradle_metadata = 538; // current max
   }
 
   reserved 87 to 88;

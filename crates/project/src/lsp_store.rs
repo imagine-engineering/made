@@ -5331,6 +5331,8 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_get_jdtls_project_snapshot);
         #[cfg(feature = "jvm-tools")]
+        client.add_entity_request_handler(Self::handle_synchronize_remote_gradle_metadata);
+        #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_resolve_jvm_build_operation);
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_get_kotlin_workspace_snapshot);
@@ -8340,6 +8342,91 @@ impl LspStore {
         cx: &App,
     ) -> bool {
         self.remote_jvm_operation_scope(receipt, cx).is_ok()
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn remote_gradle_metadata_scope(
+        &self,
+        selected: Option<WorktreeId>,
+        cx: &App,
+    ) -> Result<(&AnyProtoClient, u64, WorktreeId)> {
+        let remote = self
+            .as_remote()
+            .filter(|remote| {
+                remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                    && remote.jvm_consumers.connected
+            })
+            .context(
+                "Connect directly to the Groovy project host to synchronize Gradle metadata",
+            )?;
+        let client = remote
+            .upstream_client
+            .as_ref()
+            .filter(|client| !client.is_via_collab())
+            .context("Gradle metadata synchronization requires a direct project host connection")?;
+        let worktrees = remote
+            .jvm_consumers
+            .accepted_roots
+            .iter()
+            .map(|root| root.worktree_id)
+            .filter(|id| selected.is_none_or(|selected| selected == *id))
+            .collect::<BTreeSet<_>>();
+        let worktree_id = worktrees
+            .first()
+            .copied()
+            .filter(|_| worktrees.len() == 1)
+            .context("Select a Gradle worktree admitted by the current host")?;
+        ensure!(
+            TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+                let trusted = trusted.read(cx);
+                trusted.observed_worktree_trust(&self.worktree_store, worktree_id, cx) == Some(true)
+                    && !trusted.has_restricted_worktrees(&self.worktree_store, cx)
+            }),
+            "Trust the current Gradle worktree before synchronizing metadata"
+        );
+        Ok((client, remote.jvm_consumers.generation, worktree_id))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn can_synchronize_remote_gradle_metadata(
+        &self,
+        selected: Option<WorktreeId>,
+        cx: &App,
+    ) -> bool {
+        self.remote_gradle_metadata_scope(selected, cx).is_ok()
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn synchronize_remote_gradle_metadata(
+        &self,
+        selected: Option<WorktreeId>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        let (client, session_generation, worktree_id) =
+            self.remote_gradle_metadata_scope(selected, cx)?;
+        let client = client.clone();
+        Ok(cx.spawn(async move |this, cx| {
+            let request = client.request(proto::SynchronizeRemoteGradleMetadata {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                protocol_version: 1,
+                session_generation,
+                worktree_id: worktree_id.to_proto(),
+            });
+            let deadline = cx.background_executor().timer(Duration::from_secs(65));
+            match futures::future::select(Box::pin(request), Box::pin(deadline)).await {
+                Either::Left((result, _)) => { result?; }
+                Either::Right(_) => return Err(anyhow!("Gradle metadata synchronization timed out; check the project host and retry")),
+            }
+            this.update(cx, |store, cx| {
+                let (current_client, current_generation, _) = store.remote_gradle_metadata_scope(Some(worktree_id), cx)?;
+                ensure!(
+                    current_client.is_same_instance(&client) && current_generation == session_generation,
+                    "The Gradle project host changed; reconnect and refresh"
+                );
+                store.refresh_jdtls_project(worktree_id, cx);
+                Ok(())
+            })?
+        }))
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -14371,6 +14458,123 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
+    fn ensure_host_gradle_metadata_scope(
+        &self,
+        worktree_id: WorktreeId,
+        remote_scope: (u64, JvmConsumerStamp),
+        cx: &App,
+    ) -> Result<()> {
+        let (project_id, stamp) = remote_scope;
+        self.ensure_host_jvm_consumer_scope(project_id, stamp.peer)?;
+        let worktree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+            .context("The Gradle worktree is unavailable on the project host")?;
+        let location = SettingsLocation {
+            worktree_id,
+            path: RelPath::empty(),
+        };
+        let settings = ProjectSettings::get(Some(location), cx);
+        settings.jvm_build_selection_intent(SettingsStore::global(cx), location)?;
+        let gradle_only = settings::JvmBuildSettingsContent {
+            maven: Some(settings::MavenBuildSettingsContent {
+                selected_poms: Some(Vec::new()),
+                ..Default::default()
+            }),
+            gradle: settings
+                .jvm_builds
+                .as_ref()
+                .and_then(|builds| builds.gradle.clone()),
+            ..Default::default()
+        };
+        let roots = jvm_project::default_jvm_build_roots(
+            &worktree.read(cx).snapshot(),
+            worktree_id,
+            Some(&gradle_only),
+        )?;
+        ensure!(
+            !roots.is_empty(),
+            "Select a Gradle build on the project host before synchronizing metadata"
+        );
+        for root in roots {
+            self.host_jvm_operation_session(project_id, stamp, &root, cx)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn handle_synchronize_remote_gradle_metadata(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::SynchronizeRemoteGradleMetadata>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        let request = envelope.payload;
+        ensure!(
+            envelope.original_sender_id.is_none() && request.protocol_version == 1,
+            "Gradle metadata synchronization requires a current direct Groovy connection"
+        );
+        let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        let scope = (
+            request.project_id,
+            JvmConsumerStamp {
+                peer: envelope.sender_id,
+                generation: request.session_generation,
+            },
+        );
+        let (token, response, _subscription) = this.update(&mut cx, |store, cx| {
+            store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
+            ensure!(
+                !store.jdtls_project_query_pending(worktree_id)
+                    && store.jdtls_project_import_token(worktree_id).is_none(),
+                "Java project metadata is already refreshing; wait and retry"
+            );
+            store.synchronize_gradle_project_with_scope(Some(worktree_id), Some(scope), cx)?;
+            let token = store
+                .jdtls_project_query_token(worktree_id)
+                .context("Gradle metadata synchronization did not start on the host")?;
+            let (send, response) = oneshot::channel();
+            let mut send = Some(send);
+            let subscription = cx.observe_self(move |store, cx| {
+                if store.jdtls_project_query_token(worktree_id) == Some(token)
+                    && store
+                        .ensure_host_gradle_metadata_scope(worktree_id, scope, cx)
+                        .is_ok()
+                {
+                    return;
+                }
+                if let Some(send) = send.take()
+                    && send.send(()).is_err()
+                {
+                    log::debug!("Remote Gradle metadata requester dropped");
+                }
+            });
+            Ok::<_, anyhow::Error>((token, response, subscription))
+        })?;
+        let deadline = cx.background_executor().timer(Duration::from_secs(60));
+        match futures::future::select(response, Box::pin(deadline)).await {
+            Either::Left((result, _)) => result.context("The Gradle metadata owner disappeared")?,
+            Either::Right(_) => {
+                anyhow::bail!("Gradle metadata did not finish before the host request timed out")
+            }
+        }
+        this.read_with(&cx, |store, cx| {
+            store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
+            ensure!(
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current
+                            && snapshot.server_id == token.server_id()
+                            && snapshot.generation == token.generation()
+                    }),
+                "Gradle metadata synchronization failed or was superseded; check the host and retry"
+            );
+            Ok(proto::Ack {})
+        })
+    }
+
+    #[cfg(feature = "jvm-tools")]
     async fn handle_get_jdtls_project_snapshot(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::GetJdtlsProjectSnapshot>,
@@ -15444,6 +15648,7 @@ impl LspStore {
                     worktree_id,
                     None,
                     true,
+                    None,
                     None,
                     cx,
                 )
@@ -16840,6 +17045,7 @@ impl LspStore {
                     None,
                     false,
                     None,
+                    None,
                     cx,
                 ) {
                     log::warn!(
@@ -17879,7 +18085,7 @@ impl LspStore {
                 }
                 if should_refresh {
                     if let Err(error) = store.schedule_local_jdtls_project_refresh(
-                        server_id, worktree_id, None, false, maven_selection, cx,
+                        server_id, worktree_id, None, false, maven_selection, None, cx,
                     ) {
                         if let Some(state) = store.jdtls_projects.get_mut(&worktree_id) {
                             state.mark_import_failed(server_id).log_err();
@@ -17978,6 +18184,16 @@ impl LspStore {
         selected_worktree_id: Option<WorktreeId>,
         cx: &mut Context<Self>,
     ) -> Result<()> {
+        self.synchronize_gradle_project_with_scope(selected_worktree_id, None, cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn synchronize_gradle_project_with_scope(
+        &mut self,
+        selected_worktree_id: Option<WorktreeId>,
+        remote_scope: Option<(u64, JvmConsumerStamp)>,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
         ensure!(
             self.as_local().is_some(),
             "Gradle metadata synchronization is unavailable for remote projects; use a local project for this action"
@@ -18070,6 +18286,7 @@ impl LspStore {
             Some(gradle_root),
             false,
             None,
+            remote_scope,
             cx,
         )
     }
@@ -18264,8 +18481,16 @@ impl LspStore {
         }) {
             return;
         }
-        self.schedule_local_jdtls_project_refresh(server_id, worktree_id, None, false, None, cx)
-            .log_err();
+        self.schedule_local_jdtls_project_refresh(
+            server_id,
+            worktree_id,
+            None,
+            false,
+            None,
+            None,
+            cx,
+        )
+        .log_err();
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -18276,6 +18501,7 @@ impl LspStore {
         gradle_synchronization_root: Option<PathBuf>,
         preserve_current_gradle_metadata: bool,
         maven_selection: Option<jvm_project::MavenSelectionFacts>,
+        remote_scope: Option<(u64, JvmConsumerStamp)>,
         cx: &mut Context<Self>,
     ) -> Result<()> {
         let server = self
@@ -18420,6 +18646,9 @@ impl LspStore {
                 server.clone(), request_timeout, background_executor, &worktree_root, maven_root, trusted_build_root,
             ).await;
             let authorize_metadata = |plan: Option<&jvm_project::ScopedGradleImports>, store: &Self, cx: &mut Context<Self>| -> Result<()> {
+                if let Some(scope) = remote_scope {
+                    store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
+                }
                 let current_worktree = store.worktree_store.read(cx).worktree_for_id(worktree_id, cx)
                     .context("Gradle project closed; reopen and refresh before synchronizing metadata")?;
                 let current_provider = store.language_server_for_id(server_id)

@@ -1199,6 +1199,13 @@ message GetJdtlsProjectSnapshot {
   uint64 request_id = 4;
 }
 
+message SynchronizeRemoteGradleMetadata {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 session_generation = 3;
+  uint64 worktree_id = 4;
+}
+
 message JdtlsProjectSnapshotResponse {
   uint32 protocol_version = 1;
   uint64 request_id = 2;

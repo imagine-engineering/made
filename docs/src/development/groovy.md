@@ -394,7 +394,9 @@ run offline. Saved run configurations appear in the queue row's context menu
 when available. Cancel a running queue from its Task terminal.
 
 On a direct remote connection, refresh JVM metadata with the matching
-Groovy-enabled host before selecting operations. The host prepares the offline
+Groovy-enabled host before selecting operations. In the Gradle view, use
+**Synchronize metadata** to populate tasks on a trusted project host. This
+explicit action executes the host's Gradle build configuration. The host prepares the offline
 command using its own build tools and settings, and checks the plan again before
 the terminal starts. If the connection, selected module, or provider metadata
 changes, refresh and select the operation again.

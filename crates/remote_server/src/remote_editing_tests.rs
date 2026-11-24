@@ -2756,26 +2756,57 @@ mod jvm_tools_runtime_tests {
                 })
                 .await;
             if !maven {
-                host_store
-                    .update(server_cx, |store, cx| {
-                        store.synchronize_local_gradle_project(Some(worktree_id), cx)
-                    })
-                    .expect("configure the Gradle fixture on its host");
-                server_cx
-                    .condition(&host_store, |store, _| {
-                        store.jdtls_project_snapshot(worktree_id).is_some_and(
-                            |(snapshot, current)| {
-                                current
-                                    && snapshot
-                                        .projects
-                                        .iter()
-                                        .any(|module| module.gradle.is_some())
-                            },
-                        )
+                let host_generation = host_store.read_with(server_cx, |store, _| {
+                    let (snapshot, _) = store
+                        .jdtls_project_snapshot(worktree_id)
+                        .expect("readonly host facts");
+                    assert!(
+                        snapshot
+                            .projects
+                            .iter()
+                            .all(|module| module.gradle.is_none())
+                    );
+                    snapshot.generation
+                });
+                let client = fixture.project.read_with(cx, |project, cx| {
+                    project
+                        .remote_client()
+                        .expect("framed connection")
+                        .read(cx)
+                        .proto_client()
+                });
+                let refused = client
+                    .request(proto::SynchronizeRemoteGradleMetadata {
+                        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                        protocol_version: 1,
+                        session_generation: 0,
+                        worktree_id: worktree_id.to_proto(),
                     })
                     .await;
+                assert!(
+                    refused.is_err(),
+                    "an earlier authorization cannot configure Gradle"
+                );
+                assert_eq!(
+                    host_store.read_with(server_cx, |store, _| {
+                        store
+                            .jdtls_project_snapshot(worktree_id)
+                            .expect("retained snapshot")
+                            .0
+                            .generation
+                    }),
+                    host_generation
+                );
+                client_store
+                    .update(cx, |store, cx| {
+                        store.synchronize_remote_gradle_metadata(Some(worktree_id), cx)
+                    })
+                    .expect("schedule explicit remote metadata synchronization")
+                    .await
+                    .expect("complete the current host metadata synchronization");
+            } else {
+                client_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             }
-            client_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             let operations = if maven {
                 ["compile", "verify"]
                     .map(|phase| JvmBuildOperation::MavenPhase {

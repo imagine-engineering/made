@@ -5284,13 +5284,39 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
-    fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
-        let selected_worktree = self
-            .host
+    fn selected_gradle_worktree(&self) -> Option<settings::WorktreeId> {
+        self.host
             .selected()
             .and_then(|id| self.navigation.get(id))
-            .map(|navigation| navigation.path.worktree_id);
+            .map(|navigation| navigation.path.worktree_id)
+    }
+
+    fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
+        let selected_worktree = self.selected_gradle_worktree();
         let lsp_store = self.project.read(cx).lsp_store();
+        if self.project.read(cx).is_remote() {
+            match lsp_store.update(cx, |store, cx| {
+                store.synchronize_remote_gradle_metadata(selected_worktree, cx)
+            }) {
+                Ok(sync) => {
+                    self.build_phase_notice =
+                        Some("Synchronizing Gradle metadata on the project host.".into());
+                    cx.spawn(async move |panel, cx| {
+                        let result = sync.await;
+                        panel.update(cx, |panel, cx| {
+                            panel.build_phase_notice = Some(match result {
+                                Ok(()) => "Gradle metadata synchronized. Refreshing host project facts.".into(),
+                                Err(error) => error.to_string(),
+                            });
+                            cx.notify();
+                        }).log_err();
+                    }).detach();
+                }
+                Err(error) => self.build_phase_notice = Some(error.to_string()),
+            }
+            cx.notify();
+            return;
+        }
         if let Err(error) = lsp_store.update(cx, |store, cx| {
             store.synchronize_local_gradle_project(selected_worktree, cx)
         }) {
@@ -8512,6 +8538,24 @@ impl Render for DependenciesPanel {
         let can_cancel_graph = self.graph_query_is_pending(cx);
         let can_apply_build_selection =
             self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok();
+        let remote_project = self.project.read(cx).is_remote();
+        let can_synchronize_gradle = !remote_project
+            || (!self.host_unavailable(cx)
+                && self
+                    .project
+                    .read(cx)
+                    .lsp_store()
+                    .read(cx)
+                    .can_synchronize_remote_gradle_metadata(self.selected_gradle_worktree(), cx));
+        let synchronize_gradle_label = match (remote_project, can_synchronize_gradle) {
+            (false, _) => {
+                "Synchronize local Gradle metadata; executes trusted build configuration scripts"
+            }
+            (true, true) => {
+                "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts"
+            }
+            (true, false) => "Gradle metadata synchronization unavailable for remote projects",
+        };
         let can_cancel_import = self.build_phase_is_pending(cx);
         let can_inspect_graph = self
             .selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
@@ -8741,13 +8785,9 @@ impl Render for DependenciesPanel {
                                         )
                                         .shape(ui::IconButtonShape::Square)
                                         .tab_index(0_isize)
-                                        .aria_label(if self.project.read(cx).is_remote() {
-                                            "Gradle metadata synchronization unavailable for remote projects"
-                                        } else {
-                                            "Synchronize local Gradle metadata; executes trusted build configuration scripts"
-                                        })
+                                        .aria_label(synchronize_gradle_label)
                                         .tooltip(Tooltip::text("Synchronize metadata"))
-                                        .disabled(self.project.read(cx).is_remote())
+                                        .disabled(!can_synchronize_gradle)
                                         .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx))),
                                     )
                                     .child(
@@ -8918,12 +8958,8 @@ impl Render for DependenciesPanel {
                     ))
                     .when(self.view == BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-gradle-synchronize-metadata", "Synchronize metadata")
-                            .aria_label(if self.project.read(cx).is_remote() {
-                                "Gradle metadata synchronization unavailable for remote projects"
-                            } else {
-                                "Synchronize local Gradle metadata; executes trusted build configuration scripts"
-                            })
-                            .disabled(self.project.read(cx).is_remote())
+                            .aria_label(synchronize_gradle_label)
+                            .disabled(!can_synchronize_gradle)
                             .tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx)))
                     ))
