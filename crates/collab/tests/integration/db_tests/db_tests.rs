@@ -17,7 +17,7 @@ fn shared_schema_preserves_previously_applied_multiplayer_migrations(
     if std::env::var("CI").is_ok() && !cfg!(target_os = "linux") {
         return;
     }
-    let fixture = crate::db_tests::TestDb::postgres(cx.executor().clone());
+    let fixture = crate::db_tests::TestDb::postgres(cx.executor());
     let db = fixture.db();
     let runtime = &db
         .test_options

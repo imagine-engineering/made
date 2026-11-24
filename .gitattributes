@@ -4,4 +4,7 @@
 # Ensure the WSL script always has LF line endings, even on Windows
 crates/zed/resources/windows/zed.sh text eol=lf
 
+# Tensor operation evidence is checked against hashes of its exact bytes.
+crates/sim_test_support/fixtures/tensor_operations/**/*.json text eol=lf
+
 third_party/alacritty_terminal/tests/ref/**/alacritty.recording binary
