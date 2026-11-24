@@ -6,10 +6,6 @@ pub mod buffer_store;
 pub mod cargo_workspace;
 #[cfg(feature = "cargo-workspace")]
 pub mod cargo_workspace_store;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaboration_navigation;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaboration_repository;
 pub mod color_extractor;
 pub mod connection_manager;
 pub mod context_server_store;

@@ -71,35 +71,17 @@ are never overwritten; publication events do not build or attach packages.
 
 The previous `release.yml` and `release_promotion.yml` placeholders are removed.
 The signing contract and qualification jobs from `release_signing_check.yml`
-now use `release_prepare.yml`. The collaboration candidate requires a public
-compatibility contract before it can package and upload from GitHub Actions.
-Maintainers can exercise the existing contract locally with
-`script/collaboration-release-contract --dry-run` and the compatibility policy
-under `.agents/local/collaboration/`.
+now use `release_prepare.yml`.
 Website refresh is paused, including manual recovery. See
 [Product release operation](../../docs/src/development/product-releases.md)
 for eligibility, setup, retries, and updater selection.
 
-## Multiplayer desktop profile validation
+## Standard desktop profile validation
 
-The independent `multiplayer_tools_standard` and `multiplayer_tools_multiplayer`
-jobs run `./script/check-multiplayer-tools --full --profile standard` and the
-corresponding `multiplayer` command. Both are required by `shared_validation`;
-profile failure cannot be hidden by Copper's Standard product test result.
-The harness checks each application configuration, the closed capability boundary,
-unfiltered Workspace/Git/Sidebar/Agent UI owner suites, warning-denied
-`./script/clippy`, package dry runs and Standard dependency denial. Local and
-remote executions must be reported separately; job presence is not a passing run.
-
-With the private collaboration spec available locally, run
-`python3 script/validate-spec.py .agents/local/collaboration/collaborative-workspace`.
-Run `script/check-collaborative-workspace-inventory --catalog all` in a local
-checkout that also has the Buzz sources. CI runs the inventory checker's
-synthetic tests using tracked inputs.
-
-This validation does not enable `multiplayer-tools` in the shipped Rust product,
-change its product-manifest features, or certify authenticated collaboration.
-The existing Copper baseline test and release boundaries remain intact.
+The `multiplayer_tools_standard` job checks that Standard Copper excludes
+Multiplayer dependencies and payloads. It also runs the application and owner
+library tests and warning-denied `./script/clippy`. The result is required by
+`shared_validation`.
 
 ## Deferred suites
 
@@ -114,7 +96,7 @@ cargo nextest run --package collab --features test-support --test collab_tests \
   --no-fail-fast --no-tests=warn
 ```
 
-This workflow becomes a required product gate if Copper enables `multiplayer-tools`, operates its own Collab service, or otherwise makes hosted collaboration part of the shipped product. It remains a separate PostgreSQL-backed gate rather than being mixed into lightweight desktop product tests.
+This workflow validates the shared Collab server independently of the desktop product checks. It remains a separate PostgreSQL-backed gate rather than being mixed into lightweight desktop product tests.
 
 ### Sim runtime and evidence
 

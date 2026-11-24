@@ -1,11 +1,6 @@
 mod channel_index;
 
 use crate::channel_buffer::ChannelBuffer;
-#[cfg(feature = "multiplayer-tools")]
-use crate::collaboration_store::{
-    CollaborationProjectionError, CollaborationProjectionOutcome, CollaborationSnapshot,
-    CollaborationStore,
-};
 use anyhow::{Context as _, Result, anyhow};
 use channel_index::ChannelIndex;
 use client::{ChannelId, Client, ClientSettings, LegacyUserId, Subscription, User, UserStore};
@@ -40,8 +35,6 @@ struct NotesVersion {
 
 pub struct ChannelStore {
     pub channel_index: ChannelIndex,
-    #[cfg(feature = "multiplayer-tools")]
-    collaboration_store: CollaborationStore,
     channel_invitations: Vec<Arc<Channel>>,
     channel_participants: HashMap<ChannelId, Vec<Arc<User>>>,
     channel_states: HashMap<ChannelId, ChannelState>,
@@ -172,24 +165,6 @@ impl ChannelStore {
         &self.favorite_channel_ids
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    pub fn collaboration_store(&self) -> &CollaborationStore {
-        &self.collaboration_store
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub fn replace_collaboration_snapshot(
-        &mut self,
-        snapshot: CollaborationSnapshot,
-        cx: &mut Context<Self>,
-    ) -> Result<CollaborationProjectionOutcome, CollaborationProjectionError> {
-        let outcome = self.collaboration_store.replace(snapshot)?;
-        if outcome == CollaborationProjectionOutcome::Applied {
-            cx.notify();
-        }
-        Ok(outcome)
-    }
-
     pub fn is_channel_favorited(&self, channel_id: ChannelId) -> bool {
         self.favorite_channel_ids.contains(&channel_id)
     }
@@ -241,8 +216,6 @@ impl ChannelStore {
         });
 
         Self {
-            #[cfg(feature = "multiplayer-tools")]
-            collaboration_store: CollaborationStore::default(),
             channel_invitations: Vec::default(),
             channel_index: ChannelIndex::default(),
             channel_participants: Default::default(),

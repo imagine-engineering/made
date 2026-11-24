@@ -1104,10 +1104,6 @@ pub(crate) fn render_basics_page(
     let page = v_flex()
         .id("basics-page")
         .gap_6()
-        .children(crate::workspace_choice::render_workspace_choice(
-            &mut tab_index,
-            cx,
-        ))
         .when(product_flavor::TOOLCHAIN_ONBOARDING == "rustup", |this| {
             this.child(render_rust_toolchain_section())
         })

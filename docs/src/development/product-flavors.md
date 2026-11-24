@@ -232,10 +232,8 @@ owners, regenerate their outputs with `cargo xtask products` and
 
 ## Optional builds
 
-The default Copper profile contains neither the expanded `multiplayer-tools`
-workspace nor `sim`. The [multiplayer build guide](./multiplayer-tools.md)
-describes its commands, permissions and qualification boundary. External ACP
-agents have separate setup and are optional for Copper's native-agent use.
+The default Copper profile omits `sim`. External ACP agents have separate
+setup and are optional for Copper's native-agent use.
 
 Sim provides native visual-workflow functionality for ComfyUI-compatible
 workflows. It remains opt-in and is not qualified by the ordinary Copper product

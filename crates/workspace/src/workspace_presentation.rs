@@ -1,14 +1,7 @@
-pub use crate::multiplayer_capability::multiplayer_tools_available;
 pub use settings::WorkspacePresentation;
 
-pub const fn effective_workspace_presentation(
-    presentation: WorkspacePresentation,
-) -> WorkspacePresentation {
-    if multiplayer_tools_available() {
-        presentation
-    } else {
-        WorkspacePresentation::Editor
-    }
+pub const fn effective_workspace_presentation(_: WorkspacePresentation) -> WorkspacePresentation {
+    WorkspacePresentation::Editor
 }
 
 pub(crate) fn serialize_workspace_presentation(
@@ -52,14 +45,7 @@ mod tests {
         let preference = WorkspacePresentation::Collaborative;
         let effective = effective_workspace_presentation(preference);
         assert_eq!(preference, WorkspacePresentation::Collaborative);
-        assert_eq!(
-            effective,
-            if cfg!(feature = "multiplayer-tools") {
-                WorkspacePresentation::Collaborative
-            } else {
-                WorkspacePresentation::Editor
-            }
-        );
+        assert_eq!(effective, WorkspacePresentation::Editor);
     }
 
     #[test]

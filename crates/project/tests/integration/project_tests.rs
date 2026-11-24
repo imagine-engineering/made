@@ -5,10 +5,6 @@ mod bookmark_store;
 mod call_hierarchy;
 #[cfg(feature = "cargo-workspace")]
 mod cargo_workspace;
-#[cfg(feature = "multiplayer-tools")]
-mod collaboration_navigation;
-#[cfg(feature = "multiplayer-tools")]
-mod collaboration_repository;
 mod color_extractor;
 mod context_server_store;
 mod debugger;

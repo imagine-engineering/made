@@ -10,11 +10,8 @@ on:
     paths:
     - .github/workflows/hosted_collab_tests.yml
     - crates/collab/**
-    - crates/collaboration_domain/**
-    - crates/collaboration_workflow/**
     - crates/proto/**
     - crates/rpc/**
-    - deploy/collaboration/**
     - tooling/xtask/src/tasks/workflows.rs
     - tooling/xtask/src/tasks/workflows/hosted_collab_tests.rs
   push:
@@ -23,11 +20,8 @@ on:
     paths:
     - .github/workflows/hosted_collab_tests.yml
     - crates/collab/**
-    - crates/collaboration_domain/**
-    - crates/collaboration_workflow/**
     - crates/proto/**
     - crates/rpc/**
-    - deploy/collaboration/**
     - tooling/xtask/src/tasks/workflows.rs
     - tooling/xtask/src/tasks/workflows/hosted_collab_tests.rs
   workflow_dispatch: {}

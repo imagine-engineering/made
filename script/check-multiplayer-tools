@@ -6,12 +6,12 @@ workspace_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$workspace_root"
 
 mode=quick
-profile=both
+profile=standard
 tree_file=""
 tree_only=false
 
 usage() {
-    echo "Usage: ${0##*/} [--quick|--full] [--profile standard|multiplayer|both] [--tree-file PATH] [--tree-only]"
+    echo "Usage: ${0##*/} [--quick|--full] [--profile standard] [--tree-file PATH] [--tree-only]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$profile" in
-    standard|multiplayer|both) ;;
+    standard) ;;
     *)
         echo "Unknown profile: $profile" >&2
         exit 2
@@ -94,7 +94,6 @@ fi
 # a feature the profile does not enable still compiles, and only an unfiltered run of its owning
 # crate reports the failure.
 owner_library_features() {
-    local selected_profile=$1
     local features="gpui_platform/runtime_shaders"
 
     if [[ "$selected_profile" = "multiplayer" ]]; then
@@ -121,11 +120,11 @@ run_quick_profile() {
         --no-default-features \
         --features "$zed_features"
 
-    echo "test $selected_profile capability admission"
+    echo "test $selected_profile workspace presentation compatibility"
     CARGO_INCREMENTAL=0 cargo test \
         -p workspace \
         -p gpui_platform \
-        multiplayer_capability \
+        workspace_presentation \
         --no-default-features \
         --features "$workspace_features"
 
@@ -181,7 +180,7 @@ run_full_profile() {
         return "$test_exit_code"
     fi
 
-    echo "test $selected_profile collaborative owner libraries"
+    echo "test $selected_profile workspace owner libraries"
     CARGO_INCREMENTAL=0 cargo test \
         -p git_ui \
         -p sidebar \
@@ -189,7 +188,7 @@ run_full_profile() {
         -p gpui_platform \
         --lib \
         --no-default-features \
-        --features "$(owner_library_features "$selected_profile")"
+        --features "$(owner_library_features)"
 
     echo "clippy $selected_profile"
     GITHUB_ACTIONS=1 CARGO_INCREMENTAL=0 ./script/clippy \
@@ -200,18 +199,9 @@ run_full_profile() {
         --features "$zed_features"
 }
 
-profiles=()
-if [[ "$profile" = "both" ]]; then
-    profiles=(standard multiplayer)
-else
-    profiles=("$profile")
+run_quick_profile "$profile"
+if [[ "$mode" == "full" ]]; then
+    run_full_profile "$profile"
 fi
 
-for selected_profile in "${profiles[@]}"; do
-    run_quick_profile "$selected_profile"
-    if [[ "$mode" = "full" ]]; then
-        run_full_profile "$selected_profile"
-    fi
-done
-
-echo "multiplayer-tools $mode matrix passed for: ${profiles[*]}"
+echo "standard workspace $mode checks passed"

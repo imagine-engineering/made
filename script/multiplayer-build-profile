@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: ${0##*/} <standard|multiplayer> [--dry-run] [--inspect PATH]"
+    echo "Usage: ${0##*/} standard [--dry-run] [--inspect PATH]"
     echo "Print the canonical Zed feature and artifact policy for a release profile."
 }
 
@@ -49,12 +49,6 @@ case "$profile" in
         cargo_feature_arguments="--no-default-features"
         exclusive_payload_policy="reject"
         migration_profile="shared-only"
-        ;;
-    multiplayer)
-        multiplayer_tools=true
-        cargo_feature_arguments="--no-default-features --features multiplayer-tools"
-        exclusive_payload_policy="allow"
-        migration_profile="multiplayer-enabled"
         ;;
     *)
         echo "Unknown profile: $profile" >&2

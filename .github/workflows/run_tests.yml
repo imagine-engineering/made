@@ -54,12 +54,6 @@ jobs:
       run: cargo fmt --all -- --check
     - name: run_tests::shared_clippy
       run: ./script/clippy
-    - name: run_tests::setup_inventory_python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: '3.12'
-    - name: run_tests::shared_clippy
-      run: python3 script/test-collaborative-workspace-inventory.py
     - name: steps::cleanup_cargo_config
       if: always()
       run: |
@@ -373,61 +367,8 @@ jobs:
         cp ./.cargo/ci-config.toml ./../.cargo/config.toml
     - name: steps::setup_linux
       run: ./script/linux
-    - name: run_tests::setup_inventory_python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: '3.12'
-    - name: run_tests::multiplayer_tools_profile
+    - name: run_tests::standard_workspace_profile
       run: ./script/check-multiplayer-tools --full --profile standard
-    - name: steps::cleanup_cargo_config
-      if: always()
-      run: |
-        rm -rf ./../.cargo
-    timeout-minutes: 120
-  multiplayer_tools_multiplayer:
-    runs-on: ubuntu-22.04
-    env:
-      ZED_PRODUCT_ID: rust
-      CARGO_PROFILE_TEST_DEBUG: '0'
-      CARGO_PROFILE_DEV_DEBUG: '0'
-      CARGO_PROFILE_RELEASE_DEBUG: '0'
-      CC: clang
-      CXX: clang++
-    steps:
-    - name: steps::checkout_repo
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-      with:
-        clean: false
-    - name: steps::free_linux_disk_space
-      run: |
-        sudo swapoff -a
-        sudo rm -rf -- \
-            /usr/local/lib/android \
-            /opt/ghc \
-            /usr/local/.ghcup \
-            /usr/share/dotnet \
-            /usr/local/share/boost \
-            /opt/hostedtoolcache \
-            /usr/share/swift \
-            /opt/az \
-            /opt/microsoft \
-            /usr/share/miniconda \
-            /usr/local/share/powershell \
-            /usr/local/share/chromium
-        sudo rm -f -- /mnt/swapfile
-        df -h /
-    - name: steps::setup_cargo_config
-      run: |
-        mkdir -p ./../.cargo
-        cp ./.cargo/ci-config.toml ./../.cargo/config.toml
-    - name: steps::setup_linux
-      run: ./script/linux
-    - name: run_tests::setup_inventory_python
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: '3.12'
-    - name: run_tests::multiplayer_tools_profile
-      run: ./script/check-multiplayer-tools --full --profile multiplayer
     - name: steps::cleanup_cargo_config
       if: always()
       run: |
@@ -444,7 +385,6 @@ jobs:
     - windows_updater_tests
     - windows_jvm_validation
     - multiplayer_tools_standard
-    - multiplayer_tools_multiplayer
     if: ${{ always() }}
     runs-on: ubuntu-22.04
     steps:
@@ -460,7 +400,6 @@ jobs:
         if [[ "${WINDOWS_UPDATER_TESTS_RESULT}" != "success" ]]; then exit_code=1; fi
         if [[ "${WINDOWS_JVM_VALIDATION_RESULT}" != "success" ]]; then exit_code=1; fi
         if [[ "${MULTIPLAYER_TOOLS_STANDARD_RESULT}" != "success" ]]; then exit_code=1; fi
-        if [[ "${MULTIPLAYER_TOOLS_MULTIPLAYER_RESULT}" != "success" ]]; then exit_code=1; fi
         exit "$exit_code"
       env:
         SHARED_CLIPPY_RESULT: ${{ needs.shared_clippy.result }}
@@ -472,7 +411,6 @@ jobs:
         WINDOWS_UPDATER_TESTS_RESULT: ${{ needs.windows_updater_tests.result }}
         WINDOWS_JVM_VALIDATION_RESULT: ${{ needs.windows_jvm_validation.result }}
         MULTIPLAYER_TOOLS_STANDARD_RESULT: ${{ needs.multiplayer_tools_standard.result }}
-        MULTIPLAYER_TOOLS_MULTIPLAYER_RESULT: ${{ needs.multiplayer_tools_multiplayer.result }}
     timeout-minutes: 5
   windows_updater_tests:
     runs-on: windows-2022

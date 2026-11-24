@@ -9,16 +9,6 @@ pub const CHANNEL_COUNT: ChannelCount = nz!(2);
 mod audio_settings;
 pub use audio_settings::AudioSettings;
 
-#[cfg(feature = "multiplayer-tools")]
-mod collaboration_huddle;
-#[cfg(feature = "multiplayer-tools")]
-pub use collaboration_huddle::*;
-
-#[cfg(feature = "multiplayer-tools")]
-mod collaboration_tts;
-#[cfg(feature = "multiplayer-tools")]
-pub use collaboration_tts::*;
-
 mod audio_pipeline;
 pub use audio_pipeline::Audio;
 pub use audio_pipeline::{AudioDeviceInfo, AvailableAudioDevices};

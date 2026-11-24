@@ -1,9 +1,0 @@
-# Rollback preserves storage and never renders a migration. Operators inject a
-# previous signed digest and the newest schema version accepted by that binary.
-deployment:
-  enabled: true
-  production: true
-rollback:
-  enabled: true
-  targetImageDigest: ""
-  maximumSchemaVersion: "0"

@@ -922,10 +922,6 @@ impl Dock {
 
         workspace
             .update(cx, |workspace, cx| {
-                #[cfg(feature = "multiplayer-tools")]
-                if was_visible {
-                    workspace.request_collaborative_dock(new_position, cx);
-                }
                 workspace.serialize_workspace(window, cx);
             })
             .log_err();
@@ -1586,15 +1582,6 @@ impl PanelButtons {
         let active_index = dock.active_panel_index;
         let is_open = dock.is_open;
         let dock_position = dock.position;
-        #[cfg(feature = "multiplayer-tools")]
-        let is_open = is_open
-            && (!in_status_menu
-                || dock
-                    .workspace
-                    .read_with(cx, |workspace, cx| {
-                        workspace.collaborative_dock_requested(dock_position, cx)
-                    })
-                    .unwrap_or(false));
 
         let (menu_anchor, menu_attach) = match dock.position {
             DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
@@ -1641,8 +1628,6 @@ impl PanelButtons {
 
                 let focus_handle = dock.focus_handle(cx);
                 let icon_label = entry.panel.icon_label(window, cx);
-                #[cfg(feature = "multiplayer-tools")]
-                let workspace_for_button = workspace.clone();
 
                 Some(
                     right_click_menu(name)
@@ -1738,23 +1723,7 @@ impl PanelButtons {
                         .trigger(move |is_active, _window, _cx| {
                             let on_click = {
                                 let action = action.boxed_clone();
-                                #[cfg(feature = "multiplayer-tools")]
-                                let workspace = workspace_for_button.clone();
                                 move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
-                                    #[cfg(feature = "multiplayer-tools")]
-                                    if in_status_menu {
-                                        workspace
-                                            .update(cx, |workspace, cx| {
-                                                workspace.dispatch_collaborative_panel_action(
-                                                    dock_position,
-                                                    action.boxed_clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                            .log_err();
-                                        return;
-                                    }
                                     window.focus(&focus_handle, cx);
                                     window.dispatch_action(action.boxed_clone(), cx);
                                 }
@@ -1819,19 +1788,6 @@ impl PanelButtons {
 }
 
 impl StatusItemView for PanelButtons {
-    #[cfg(feature = "multiplayer-tools")]
-    fn collaborative_menu_group(&self) -> crate::status_bar::CollaborativeStatusItemGroup {
-        crate::status_bar::CollaborativeStatusItemGroup::Panels
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn render_collaborative_menu(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        self.render_buttons(true, window, cx).into_any_element()
-    }
     fn set_active_pane_item(
         &mut self,
         _active_pane_item: Option<&dyn crate::ItemHandle>,

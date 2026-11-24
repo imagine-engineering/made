@@ -1,17 +1,7 @@
 pub mod activity_acp;
 pub mod activity_actions;
-#[cfg(feature = "multiplayer-tools")]
-pub mod activity_collaboration;
 pub mod activity_diff_link;
-#[cfg(feature = "multiplayer-tools")]
-pub mod activity_git;
-#[cfg(feature = "multiplayer-tools")]
-pub mod activity_observer;
-#[cfg(feature = "multiplayer-tools")]
-pub mod activity_platform;
 pub mod activity_projection;
-#[cfg(feature = "multiplayer-tools")]
-pub mod activity_reconciliation;
 pub mod activity_reducer;
 mod agent_configuration;
 pub mod agent_connection_store;
@@ -20,18 +10,6 @@ mod agent_model_selector;
 mod agent_panel;
 mod agent_registry_ui;
 mod buffer_codegen;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_activity_cards;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_agent_settings;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_composer;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_participants;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_review;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaborative_timeline;
 mod completion_provider;
 mod config_options;
 mod context;
@@ -44,8 +22,6 @@ mod external_source_prompt;
 mod favorite_models;
 mod inline_assistant;
 mod inline_prompt_editor;
-#[cfg(feature = "multiplayer-tools")]
-mod inline_terminal_view;
 mod language_model_selector;
 mod mention_set;
 mod message_editor;
@@ -621,53 +597,6 @@ pub(crate) fn humanize_token_count(count: u64) -> String {
 }
 
 pub fn bind_keys(cx: &mut App) {
-    #[cfg(feature = "multiplayer-tools")]
-    if !DisableAiSettings::get_global(cx).disable_ai
-        && AgentSettings::get_global(cx).enabled
-        && *settings::BaseKeymap::get_global(cx) != settings::BaseKeymap::None
-    {
-        let mut shortcut = gpui::KeyBinding::new(
-            "ctrl-`",
-            NewTerminalThread,
-            Some("AcpThread && CollaborativeConversation"),
-        );
-        shortcut.set_meta(settings::KeybindSource::Default.meta());
-        cx.bind_keys([shortcut]);
-        // Embedded PTYs inherit Editor context; route editing keys to the canonical terminal owner.
-        cx.bind_keys(
-            [
-                "backspace",
-                "shift-backspace",
-                "delete",
-                "left",
-                "right",
-                "home",
-                "end",
-                "tab",
-                "shift-tab",
-                "shift-left",
-                "shift-right",
-                "shift-home",
-                "shift-end",
-                "ctrl-h",
-                "ctrl-d",
-                "ctrl-a",
-                "ctrl-e",
-                "alt-backspace",
-            ]
-            .into_iter()
-            .map(|keystroke| {
-                let mut binding = gpui::KeyBinding::new(
-                    keystroke,
-                    terminal_view::SendKeystroke::new(keystroke),
-                    Some("CollaborativeConversation > Terminal"),
-                );
-                binding.set_meta(settings::KeybindSource::Default.meta());
-                binding
-            }),
-        );
-    }
-    #[cfg(not(feature = "multiplayer-tools"))]
     let _ = cx;
 }
 

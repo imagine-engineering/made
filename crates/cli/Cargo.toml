@@ -16,22 +16,8 @@ doctest = false
 name = "cli"
 path = "src/main.rs"
 
-[[test]]
-name = "moderation_administration"
-path = "tests/moderation_administration.rs"
-required-features = ["multiplayer-tools"]
-
 [features]
 no-bundled-uninstall = []
-multiplayer-tools = [
-    "dep:collab",
-    "dep:collaboration_domain",
-    "dep:collaboration_workflow",
-    "dep:nostr_compat",
-    "dep:serde_json",
-    "dep:thiserror",
-    "dep:uuid",
-]
 default = []
 
 [dependencies]
@@ -40,22 +26,15 @@ askpass.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 clap_complete_nushell.workspace = true
-collab = { workspace = true, optional = true }
-collaboration_domain = { workspace = true, optional = true }
-collaboration_workflow = { workspace = true, optional = true }
 collections.workspace = true
 console.workspace = true
 dialoguer.workspace = true
 ipc-channel = "0.19"
-nostr_compat = { workspace = true, optional = true }
 parking_lot.workspace = true
 paths.workspace = true
 product_flavor.workspace = true
 release_channel.workspace = true
 serde.workspace = true
-serde_json = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
-uuid = { workspace = true, optional = true }
 util.workspace = true
 tempfile.workspace = true
 rayon.workspace = true

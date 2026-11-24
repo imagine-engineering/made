@@ -2853,12 +2853,6 @@ impl Pane {
         cx: &mut Context<Pane>,
     ) -> impl IntoElement + use<> {
         let is_active = ix == self.active_item_index;
-        #[cfg(feature = "multiplayer-tools")]
-        let is_active = is_active
-            && (!self.collaborative_tab_bar_in_header(cx)
-                || self.workspace.upgrade().is_some_and(|workspace| {
-                    workspace.read(cx).collaborative_native_editor_active(cx)
-                }));
         let is_preview = self
             .preview_item_id
             .map(|id| id == item.item_id())
@@ -3423,33 +3417,12 @@ impl Pane {
             })
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn collaborative_tab_bar_in_header(&self, cx: &Context<Self>) -> bool {
-        self.workspace.upgrade().is_some_and(|workspace| {
-            let workspace = workspace.read(cx);
-            workspace.workspace_presentation() == crate::WorkspacePresentation::Collaborative
-                && (workspace.collaborative_native_editor_active(cx)
-                    || self
-                        .items
-                        .iter()
-                        .any(|item| item.project_path(cx).is_some()))
-                && workspace.center.panes().len() == 1
-                && workspace.active_pane().entity_id() == cx.entity_id()
-        })
-    }
-
     pub(crate) fn render_tab_bar(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> AnyElement {
         if self.workspace.upgrade().is_none() {
-            return gpui::Empty.into_any();
-        }
-        #[cfg(feature = "multiplayer-tools")]
-        if self.collaborative_tab_bar_in_header(cx)
-            && !(self.should_display_tab_bar.clone())(window, cx)
-        {
             return gpui::Empty.into_any();
         }
 
@@ -3559,10 +3532,6 @@ impl Pane {
         window: &mut Window,
         cx: &mut Context<Pane>,
     ) -> TabBar {
-        #[cfg(feature = "multiplayer-tools")]
-        if self.collaborative_tab_bar_in_header(cx) {
-            return tab_bar;
-        }
         tab_bar
             .when(
                 self.display_nav_history_buttons.unwrap_or_default(),
@@ -4408,8 +4377,6 @@ impl Render for Pane {
 
         let should_display_tab_bar = self.should_display_tab_bar.clone();
         let display_tab_bar = should_display_tab_bar(window, cx);
-        #[cfg(feature = "multiplayer-tools")]
-        let display_tab_bar = display_tab_bar && !self.collaborative_tab_bar_in_header(cx);
         let Some(project) = self.project.upgrade() else {
             return div().track_focus(&self.focus_handle(cx));
         };

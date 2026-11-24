@@ -29,7 +29,6 @@ harness = false
 required-features = ["structured-execution"]
 
 [features]
-multiplayer-tools = ["dep:collaboration_domain"]
 cargo-workspace = ["dep:cargo_metadata"]
 structured-execution = []
 rust-tests = ["cargo-workspace", "structured-execution"]
@@ -63,7 +62,6 @@ circular-buffer.workspace = true
 cargo_metadata = { workspace = true, optional = true }
 client.workspace = true
 clock.workspace = true
-collaboration_domain = { workspace = true, optional = true }
 collections.workspace = true
 context_server.workspace = true
 credentials_provider.workspace = true
@@ -160,8 +158,3 @@ remote = { workspace = true, features = ["test-support"] }
 
 [package.metadata.cargo-machete]
 ignored = ["tracing"]
-
-[[test]]
-name = "project_group_permissions"
-path = "tests/project_group_permissions.rs"
-required-features = ["multiplayer-tools", "test-support"]

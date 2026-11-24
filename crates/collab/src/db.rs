@@ -1,4 +1,3 @@
-pub mod collaboration;
 mod ids;
 pub mod queries;
 mod tables;
@@ -23,6 +22,10 @@ use sea_orm::{
 };
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use sqlx::{
+    Connection as _,
+    migrate::{Migrate as _, MigrateError, Migrator},
+};
 use std::ops::RangeInclusive;
 use std::{
     future::Future,
@@ -58,6 +61,55 @@ pub struct Database {
     notification_kinds_by_name: HashMap<String, NotificationKindId>,
     #[cfg(feature = "test-support")]
     pub test_options: Option<DatabaseTestOptions>,
+}
+
+pub async fn migrate_shared_schema(database_url: &str) -> anyhow::Result<()> {
+    let mut connection = sqlx::PgConnection::connect(database_url)
+        .await
+        .context("failed to connect to PostgreSQL for migrations")?;
+    connection
+        .lock()
+        .await
+        .context("failed to lock database for migrations")?;
+    let result = apply_shared_schema(&mut connection).await;
+    let unlock = connection.unlock().await;
+    result.context("failed to apply shared database migrations")?;
+    unlock.context("failed to unlock database after migrations")?;
+    Ok(())
+}
+
+async fn apply_shared_schema(connection: &mut sqlx::PgConnection) -> Result<(), MigrateError> {
+    static MIGRATIONS: Migrator = sqlx::migrate!("./migrations");
+    connection.ensure_migrations_table().await?;
+    if let Some(version) = connection.dirty_version().await? {
+        return Err(MigrateError::Dirty(version));
+    }
+    let applied = connection.list_applied_migrations().await?;
+    for entry in &applied {
+        let migration = MIGRATIONS
+            .iter()
+            .find(|migration| {
+                migration.version == entry.version && !migration.migration_type.is_down_migration()
+            })
+            .ok_or(MigrateError::VersionMissing(entry.version))?;
+        if migration.checksum != entry.checksum {
+            return Err(MigrateError::VersionMismatch(entry.version));
+        }
+    }
+    // Keep previously applied migration checksums verifiable across editions.
+    // Only the original schema and room authorization generation belong to the shared server.
+    for migration in MIGRATIONS.iter().filter(|migration| {
+        !migration.migration_type.is_down_migration()
+            && matches!(migration.version, 20251208000000 | 20260930000100)
+    }) {
+        if !applied
+            .iter()
+            .any(|entry| entry.version == migration.version)
+        {
+            connection.apply(migration).await?;
+        }
+    }
+    Ok(())
 }
 
 // The `Database` type has so many methods that its impl blocks are split into
@@ -253,25 +305,6 @@ impl Database {
             }
 
             test_options.runtime.block_on(future)
-        }
-
-        #[cfg(not(feature = "test-support"))]
-        {
-            future.await
-        }
-    }
-
-    pub(crate) async fn run_on_database_runtime<F, T>(&self, future: F) -> T
-    where
-        F: Future<Output = T>,
-    {
-        #[cfg(feature = "test-support")]
-        {
-            if let Some(test_options) = &self.test_options {
-                test_options.runtime.block_on(future)
-            } else {
-                future.await
-            }
         }
 
         #[cfg(not(feature = "test-support"))]

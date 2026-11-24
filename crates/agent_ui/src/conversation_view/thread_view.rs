@@ -563,20 +563,7 @@ impl PermissionSelection {
     }
 }
 
-#[cfg(feature = "multiplayer-tools")]
-struct InlineTerminalPlacement {
-    editor: Entity<MessageEditor>,
-    block_id: editor::display_map::CustomBlockId,
-    live_view: Option<Entity<terminal_view::TerminalView>>,
-    history_owner: WeakEntity<crate::terminal_thread_metadata_store::TerminalThreadMetadataStore>,
-}
-
 pub struct ThreadView {
-    #[cfg(feature = "multiplayer-tools")]
-    inline_terminals: HashMap<
-        crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey,
-        InlineTerminalPlacement,
-    >,
     pub(crate) root_thread_id: ThreadId,
     pub session_id: acp::SessionId,
     pub parent_session_id: Option<acp::SessionId>,
@@ -651,12 +638,6 @@ pub struct ThreadView {
     pending_sandbox_status_key: Option<SandboxStatusKey>,
     pub multi_root_callout_dismissed: bool,
     pub generating_indicator_in_list: bool,
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) collaborative_input_in_list: bool,
-    #[cfg(feature = "multiplayer-tools")]
-    collaborative_permission_scroll_target: Option<(usize, IconName)>,
-    #[cfg(feature = "multiplayer-tools")]
-    collaborative_editor_max_lines: Option<usize>,
     pub skill_loading_issues: Vec<SkillLoadingIssue>,
     /// Issues the user has explicitly dismissed. Each entry is matched against
     /// emitted issues by full equality; when an issue no longer appears in the
@@ -841,11 +822,6 @@ impl ThreadView {
         let session_id = thread.read(cx).session_id().clone();
         let parent_session_id = thread.read(cx).parent_session_id().cloned();
 
-        #[cfg(feature = "multiplayer-tools")]
-        entry_view_state.update(cx, |state, cx| {
-            state.set_inline_terminal_scope(root_thread_id, session_id.clone(), cx);
-        });
-
         let has_slash_completions = session_capabilities.read().has_slash_completions();
         let placeholder = placeholder_text(agent_display_name.as_ref(), has_slash_completions);
 
@@ -867,8 +843,6 @@ impl ThreadView {
                 window,
                 cx,
             );
-            #[cfg(feature = "multiplayer-tools")]
-            editor.set_inline_terminal_scope(root_thread_id, session_id.clone());
             if let Some(content) = initial_content {
                 match content {
                     AgentInitialContent::ThreadSummary { session_id, title } => {
@@ -908,17 +882,6 @@ impl ThreadView {
             && agent_id.as_ref() == "Codex";
 
         if let Some(project) = project.upgrade() {
-            #[cfg(feature = "multiplayer-tools")]
-            let user_store = project.read(cx).user_store();
-            #[cfg(feature = "multiplayer-tools")]
-            subscriptions.push(cx.observe(&user_store, |this, _, cx| {
-                if this.collaborative_input_in_list {
-                    let index = this.thread.read(cx).entries().len()
-                        + usize::from(this.generating_indicator_in_list);
-                    this.list_state.remeasure_items(index..index + 1);
-                    cx.notify();
-                }
-            }));
             subscriptions.push(cx.subscribe(&project, {
                 let resolver = code_span_resolver.clone();
                 move |_this: &mut Self, _project, event: &project::Event, cx| {
@@ -1002,31 +965,7 @@ impl ThreadView {
             }
         }
 
-        #[cfg(feature = "multiplayer-tools")]
-        subscriptions.push(cx.on_focus_in(
-            &message_editor.focus_handle(cx),
-            window,
-            |this, _, cx| {
-                if this.collaborative_input_in_list {
-                    this.scroll_to_end(cx);
-                }
-            },
-        ));
         subscriptions.push(cx.observe(&message_editor, |this, editor, cx| {
-            #[cfg(feature = "multiplayer-tools")]
-            if let Err(error) = this.persist_inline_terminal_positions(cx) {
-                this.handle_thread_error(
-                    ThreadError::DraftResolution(error.to_string().into()),
-                    cx,
-                );
-            }
-            #[cfg(feature = "multiplayer-tools")]
-            if this.collaborative_input_in_list {
-                let index = this.thread.read(cx).entries().len()
-                    + usize::from(this.generating_indicator_in_list);
-                this.list_state.remeasure_items(index..index + 1);
-                cx.notify();
-            }
             if !this.is_subagent() && this.thread.read(cx).is_draft_thread() {
                 let server_view = this.server_view.clone();
                 cx.defer(move |cx| {
@@ -1069,50 +1008,7 @@ impl ThreadView {
             }));
         }));
 
-        #[cfg(feature = "multiplayer-tools")]
-        if let Some(store) =
-            crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
-        {
-            subscriptions.push(cx.observe_in(&store, window, |this, _, window, cx| {
-                if let Err(error) = this.sync_inline_terminal_history(window, cx) {
-                    this.handle_thread_error(
-                        ThreadError::DraftResolution(error.to_string().into()),
-                        cx,
-                    );
-                }
-            }));
-            cx.defer_in(window, |this, window, cx| {
-                if let Err(error) = this.sync_inline_terminal_history(window, cx) {
-                    this.handle_thread_error(
-                        ThreadError::DraftResolution(error.to_string().into()),
-                        cx,
-                    );
-                }
-            });
-        }
-
-        #[cfg(feature = "multiplayer-tools")]
-        subscriptions.push(cx.subscribe_in(&thread, window, |_, _, event, window, cx| {
-            if matches!(
-                event,
-                AcpThreadEvent::NewEntry
-                    | AcpThreadEvent::EntryUpdated(_)
-                    | AcpThreadEvent::EntriesRemoved(_)
-            ) {
-                cx.defer_in(window, |this, window, cx| {
-                    if let Err(error) = this.sync_inline_terminal_history(window, cx) {
-                        this.handle_thread_error(
-                            ThreadError::DraftResolution(error.to_string().into()),
-                            cx,
-                        );
-                    }
-                });
-            }
-        }));
-
         let mut this = Self {
-            #[cfg(feature = "multiplayer-tools")]
-            inline_terminals: HashMap::default(),
             root_thread_id,
             session_id,
             parent_session_id,
@@ -1181,12 +1077,6 @@ impl ThreadView {
             pending_sandbox_status_key: None,
             multi_root_callout_dismissed: false,
             generating_indicator_in_list: false,
-            #[cfg(feature = "multiplayer-tools")]
-            collaborative_input_in_list: false,
-            #[cfg(feature = "multiplayer-tools")]
-            collaborative_permission_scroll_target: None,
-            #[cfg(feature = "multiplayer-tools")]
-            collaborative_editor_max_lines: None,
             skill_loading_issues: Vec::new(),
             dismissed_skill_loading_issues: HashSet::default(),
             thread_search_bar: None,
@@ -1225,129 +1115,6 @@ impl ThreadView {
         this
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn inline_terminal_context(
-        &self,
-        cx: &App,
-    ) -> anyhow::Result<crate::terminal_thread_metadata_store::InlineTerminalContext> {
-        anyhow::ensure!(
-            !self.is_subagent(),
-            "Inline terminals belong to the parent conversation"
-        );
-        Ok(
-            crate::terminal_thread_metadata_store::InlineTerminalContext {
-                occurrence_id: None,
-                previous_occurrences: Vec::new(),
-
-                thread_id: self.root_thread_id,
-                session_id: Some(self.session_id.clone()),
-                restored_draft_source_session_id: None,
-                preceding_entry_count: self.thread.read(cx).entries().len(),
-                message_client_id: None,
-                is_draft: true,
-                presentation_order: None,
-                draft_position: Some(
-                    self.message_editor
-                        .read(cx)
-                        .inline_terminal_insertion_position(cx)?,
-                ),
-                collapsed: false,
-                output: String::new(),
-                snapshot: None,
-            },
-        )
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn current_inline_terminal_occurrence(
-        &self,
-        terminal_id: crate::TerminalId,
-        cx: &App,
-    ) -> anyhow::Result<crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey> {
-        let history =
-            crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
-                .ok_or_else(|| anyhow!("The terminal history is unavailable"))?;
-        let context = history
-            .read(cx)
-            .entry(terminal_id)
-            .and_then(|metadata| metadata.inline_context.as_ref())
-            .ok_or_else(|| anyhow!("The terminal conversation is unavailable"))?;
-        anyhow::ensure!(
-            context.thread_id == self.root_thread_id
-                && context.session_id.as_ref() == Some(&self.session_id),
-            "The terminal belongs to a different conversation"
-        );
-        Ok(
-            crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey {
-                terminal_id,
-                occurrence_id: context.occurrence_id,
-            },
-        )
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn attach_inline_terminal(
-        &mut self,
-        terminal_id: crate::TerminalId,
-        terminal: Entity<terminal_view::TerminalView>,
-        reveal: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        self.sync_inline_terminal_history(window, cx)?;
-        let occurrence = self.current_inline_terminal_occurrence(terminal_id, cx)?;
-        let placement = self.inline_terminals.get(&occurrence).ok_or_else(|| {
-            anyhow!("The terminal could not be placed in its original conversation")
-        })?;
-        anyhow::ensure!(
-            placement.live_view.as_ref() == Some(&terminal),
-            "The inline terminal's current live execution does not match its occurrence"
-        );
-        if !reveal {
-            return Ok(());
-        }
-        placement.editor.update(cx, |editor, cx| {
-            editor.scroll_to_inline_terminal(placement.block_id, window, cx)
-        })?;
-        let editor = placement.editor.clone();
-        let block_id = placement.block_id;
-        let terminal_view = terminal.clone();
-        let terminal_focus = terminal.focus_handle(cx);
-        editor.update(cx, |editor, cx| {
-            editor.focus_inline_terminal(block_id, &terminal_focus, window, cx)
-        })?;
-        self.scroll_to_end(cx);
-        // Prepaint measures the inserted block after the provisional one-row scroll was clamped.
-        cx.on_next_frame(window, move |_, window, cx| {
-            cx.on_next_frame(window, move |this, window, cx| {
-                let Some(placement) = this.inline_terminals.get(&occurrence) else {
-                    return;
-                };
-                if placement.editor != editor
-                    || placement.block_id != block_id
-                    || placement.live_view.as_ref() != Some(&terminal_view)
-                    || (!terminal_focus.is_focused(window)
-                        && !terminal_focus.contains_focused(window, cx))
-                {
-                    return;
-                }
-                if let Err(error) = editor.update(cx, |editor, cx| {
-                    editor.scroll_to_inline_terminal(block_id, window, cx)
-                }) {
-                    this.handle_thread_error(
-                        ThreadError::DraftResolution(error.to_string().into()),
-                        cx,
-                    );
-                    return;
-                }
-                this.scroll_to_end(cx);
-                cx.notify();
-            });
-        });
-        cx.notify();
-        Ok(())
-    }
-
     fn consume_editor_input(
         &mut self,
         editor: &Entity<MessageEditor>,
@@ -1357,434 +1124,7 @@ impl ThreadView {
     ) {
         if editor.update(cx, |editor, cx| {
             editor.clear_if_unchanged(revision, window, cx)
-        }) {
-            #[cfg(feature = "multiplayer-tools")]
-            self.inline_terminals
-                .retain(|_, placement| placement.editor != *editor);
-        }
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn focus_after_inline_terminal(
-        &self,
-        terminal_id: crate::TerminalId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        let occurrence = self.current_inline_terminal_occurrence(terminal_id, cx)?;
-        let placement = self
-            .inline_terminals
-            .get(&occurrence)
-            .ok_or_else(|| anyhow!("The terminal conversation position is unavailable"))?;
-        placement.editor.update(cx, |editor, cx| {
-            editor.focus_after_inline_terminal(placement.block_id, window, cx)
-        })
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn persist_inline_terminal_positions(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        let Some(store) =
-            crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
-        else {
-            return Ok(());
-        };
-        anyhow::ensure!(
-            self.inline_terminals.values().all(|placement| {
-                placement
-                    .history_owner
-                    .upgrade()
-                    .is_some_and(|owner| owner.entity_id() == store.entity_id())
-            }),
-            "The inline terminal's history owner has changed"
-        );
-        let editors = self
-            .inline_terminals
-            .values()
-            .map(|placement| (placement.editor.entity_id(), placement.editor.clone()))
-            .collect::<HashMap<_, _>>();
-        let mut updates = Vec::new();
-        let mut errors = Vec::new();
-        for editor in editors.into_values() {
-            let positions = match editor.update(cx, |editor, cx| {
-                editor.inline_terminal_positions_in_display_order(cx)
-            }) {
-                Ok(positions) => positions,
-                Err(error) => {
-                    errors.push(format!("Terminal display order: {error}"));
-                    continue;
-                }
-            };
-            for (presentation_order, (block_id, position)) in positions.into_iter().enumerate() {
-                let Some((terminal_id, placement)) =
-                    self.inline_terminals.iter().find(|(_, placement)| {
-                        placement.editor == editor && placement.block_id == block_id
-                    })
-                else {
-                    continue;
-                };
-                let Some(mut metadata) = store.read(cx).occurrence_entry(*terminal_id) else {
-                    continue;
-                };
-                let Some(context) = metadata.inline_context.as_mut() else {
-                    continue;
-                };
-                if context.thread_id != self.root_thread_id
-                    || context.session_id.as_ref() != Some(&self.session_id)
-                    || !context.is_draft
-                {
-                    continue;
-                }
-                // A legacy snapshot without a validated ordered receipt has no historical tie order.
-                let order = if context.presentation_order.is_some() || placement.live_view.is_some()
-                {
-                    Some(presentation_order)
-                } else {
-                    None
-                };
-                if context.draft_position.as_ref() != Some(&position)
-                    || context.presentation_order != order
-                {
-                    context.draft_position = Some(position);
-                    context.presentation_order = order;
-                    updates.push(metadata);
-                }
-            }
-        }
-        anyhow::ensure!(errors.is_empty(), "{}", errors.join("; "));
-        store.update(cx, |store, cx| {
-            store.save_inline_occurrence_batch(updates, cx)
-        })
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn sync_inline_terminal_history(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        use crate::inline_terminal_view::InlineTerminalView;
-        use crate::terminal_thread_metadata_store::{
-            InlineTerminalPromptReference, TerminalThreadMetadataStore,
-        };
-        use settings::Settings as _;
-        let Some(store) = TerminalThreadMetadataStore::try_global(cx) else {
-            return Ok(());
-        };
-        anyhow::ensure!(
-            self.inline_terminals.values().all(|placement| {
-                placement
-                    .history_owner
-                    .upgrade()
-                    .is_some_and(|owner| owner.entity_id() == store.entity_id())
-            }),
-            "The inline terminal's history owner has changed"
-        );
-        let project = self
-            .project
-            .upgrade()
-            .ok_or_else(|| anyhow!("The inline terminal project is unavailable"))?;
-        let remote = project.read(cx).remote_connection_options(cx);
-        let stale = self
-            .inline_terminals
-            .keys()
-            // Session rebinding must keep old references invalid, rather than silently dropping
-            // them and letting an obsolete view overwrite the newer saved draft without context.
-            .filter(|key| store.read(cx).occurrence_entry(**key).is_none())
-            .copied()
-            .collect::<Vec<_>>();
-        for key in stale {
-            if let Some(placement) = self.inline_terminals.remove(&key) {
-                placement.editor.update(cx, |editor, cx| {
-                    editor.remove_inline_terminal(placement.block_id, cx)
-                });
-            }
-        }
-        let mut entries = store.read(cx).occurrences_for_conversation(
-            self.root_thread_id,
-            Some(&self.session_id),
-            remote.as_ref(),
-        );
-        let mut receipt_orders = Vec::new();
-        for entry in self.thread.read(cx).entries() {
-            if let AgentThreadEntry::UserMessage(message) = entry {
-                for (order, chunk) in message.chunks.iter().enumerate() {
-                    if let Some(reference) = InlineTerminalPromptReference::from_content(chunk)? {
-                        receipt_orders.push((reference, order));
-                    }
-                }
-            }
-        }
-        for entry in self.message_queue.iter() {
-            for (order, chunk) in entry.content.iter().enumerate() {
-                if let Some(reference) = InlineTerminalPromptReference::from_content(chunk)? {
-                    receipt_orders.push((reference, order));
-                }
-            }
-        }
-        entries.sort_by_key(|metadata| {
-            receipt_orders
-                .iter()
-                .find_map(|(reference, order)| {
-                    reference.matches_metadata(metadata).then_some(*order)
-                })
-                .or_else(|| {
-                    metadata
-                        .inline_context
-                        .as_ref()
-                        .and_then(|context| context.presentation_order)
-                })
-                .unwrap_or(usize::MAX)
-        });
-        let workspace = self
-            .workspace
-            .upgrade()
-            .ok_or_else(|| anyhow!("The inline terminal workspace is unavailable"))?;
-        let panel = workspace.read(cx).panel::<AgentPanel>(cx);
-        let mut errors = Vec::new();
-        for mut metadata in entries {
-            let result = (|| -> anyhow::Result<()> {
-                let mut submitted = Vec::new();
-                for (index, entry) in self.thread.read(cx).entries().iter().enumerate() {
-                    let AgentThreadEntry::UserMessage(message) = entry else {
-                        continue;
-                    };
-                    for chunk in &message.chunks {
-                        if let Some(reference) = InlineTerminalPromptReference::from_content(chunk)?
-                        {
-                            if reference.matches_metadata(&metadata) {
-                                submitted.push((
-                                    index,
-                                    message.client_id.clone(),
-                                    reference.position.clone(),
-                                ));
-                                break;
-                            }
-                        }
-                    }
-                }
-                anyhow::ensure!(
-                    submitted.len() <= 1,
-                    "The terminal context belongs to more than one submitted message"
-                );
-                if let Some((index, client_id, position)) = submitted.first() {
-                    if metadata
-                        .inline_context
-                        .as_ref()
-                        .is_some_and(|context| context.is_draft)
-                    {
-                        self.entry_view_state.update(cx, |state, cx| {
-                            state.sync_entry(*index, &self.thread, window, cx);
-                        });
-                        let submitted_editor = self
-                            .entry_view_state
-                            .read(cx)
-                            .entry(*index)
-                            .and_then(|entry| entry.message_editor())
-                            .ok_or_else(|| {
-                                anyhow!("The submitted terminal editor is unavailable")
-                            })?;
-                        position.byte_offset_for_source(&submitted_editor.read(cx).text(cx))?;
-                        if let Some(context) = metadata.inline_context.as_mut() {
-                            context.is_draft = false;
-                            context.preceding_entry_count = *index;
-                            context.message_client_id = client_id.clone();
-                            context.draft_position = Some(position.clone());
-                        }
-                        store.update(cx, |store, cx| {
-                            store.save_inline_occurrence_batch(vec![metadata.clone()], cx)
-                        })?;
-                    }
-                }
-                let Some(context) = metadata.inline_context.as_ref() else {
-                    return Ok(());
-                };
-                let queued_editor = self.message_queue.iter().find_map(|entry| {
-                    entry.content.iter().find_map(|chunk| {
-                        InlineTerminalPromptReference::from_content(chunk)
-                            .log_err()
-                            .flatten()
-                            .filter(|reference| reference.matches_metadata(&metadata))
-                            .map(|_| entry.editor.clone())
-                    })
-                });
-                let editor = if let Some(editor) = queued_editor {
-                    editor
-                } else if context.is_draft {
-                    anyhow::ensure!(
-                        context.message_client_id.is_none(),
-                        "A draft terminal cannot also belong to a submitted message"
-                    );
-                    self.message_editor.clone()
-                } else {
-                    let index = submitted.first().map(|(index, _, _)| *index).or_else(|| {
-                        context.message_client_id.as_ref().and_then(|client_id| {
-                            self.thread.read(cx).entries().iter().position(|entry| {
-                                matches!(entry, AgentThreadEntry::UserMessage(message) if message.client_id.as_ref() == Some(client_id))
-                            })
-                        })
-                    });
-                    let Some(index) = index else {
-                        anyhow::bail!(
-                            "This retained terminal has no verified message identity; its history was preserved"
-                        );
-                    };
-                    self.entry_view_state.update(cx, |state, cx| {
-                        state.sync_entry(index, &self.thread, window, cx);
-                    });
-                    let Some(editor) = self
-                        .entry_view_state
-                        .read(cx)
-                        .entry(index)
-                        .and_then(|entry| entry.message_editor())
-                        .cloned()
-                    else {
-                        return Ok(());
-                    };
-                    editor
-                };
-                let occurrence =
-                    crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey {
-                        terminal_id: metadata.terminal_id,
-                        occurrence_id: context.occurrence_id,
-                    };
-                let is_current = store
-                    .read(cx)
-                    .entry(metadata.terminal_id)
-                    .and_then(|metadata| metadata.inline_context.as_ref())
-                    .is_some_and(|current| current.occurrence_id == occurrence.occurrence_id);
-                let live_view = panel
-                    .as_ref()
-                    .filter(|_| is_current)
-                    .and_then(|panel| panel.read(cx).inline_terminal_view(metadata.terminal_id));
-                if self
-                    .inline_terminals
-                    .get(&occurrence)
-                    .is_some_and(|placement| {
-                        placement.editor == editor
-                            && placement.live_view == live_view
-                            && editor
-                                .read(cx)
-                                .inline_terminal_position(placement.block_id, cx)
-                                .is_ok()
-                    })
-                {
-                    return Ok(());
-                }
-                if let Some(previous) = self.inline_terminals.remove(&occurrence) {
-                    previous.editor.update(cx, |editor, cx| {
-                        editor.remove_inline_terminal(previous.block_id, cx)
-                    });
-                }
-                let position = context.draft_position.as_ref().ok_or_else(|| anyhow!("This retained terminal has no verified character position; its history was preserved"))?;
-                position.byte_offset_for_source(&editor.read(cx).text(cx))?;
-                let terminal_view = match live_view.clone() {
-                    Some(view) => view,
-                    None => {
-                        let settings =
-                            terminal::terminal_settings::TerminalSettings::get_global(cx);
-                        let builder = terminal::TerminalBuilder::new_display_only(
-                            settings.cursor_shape,
-                            settings.alternate_scroll,
-                            settings.max_scroll_history_lines,
-                            window.window_handle().window_id().as_u64(),
-                            cx.background_executor(),
-                            project.read(cx).path_style(cx),
-                        );
-                        let terminal = cx.new(|cx| builder.subscribe(cx));
-                        let snapshot = context.snapshot.as_ref().ok_or_else(|| anyhow!("This retained terminal has no styled snapshot; its history was preserved"))?;
-                        terminal
-                            .update(cx, |terminal, cx| terminal.restore_snapshot(snapshot, cx))?;
-                        cx.new(|cx| {
-                            terminal_view::TerminalView::new(
-                                terminal,
-                                workspace.downgrade(),
-                                None,
-                                project.downgrade(),
-                                window,
-                                cx,
-                            )
-                        })
-                    }
-                };
-                let inline_view = cx.new(|cx| {
-                    InlineTerminalView::new(
-                        metadata.terminal_id,
-                        context.occurrence_id,
-                        terminal_view.clone(),
-                        workspace.downgrade(),
-                        store.downgrade(),
-                        editor.downgrade(),
-                        context.collapsed,
-                        cx,
-                    )
-                });
-                let block_id = editor.update(cx, |editor, cx| {
-                    editor.mount_inline_terminal_view(
-                        terminal_view,
-                        Some(inline_view.clone()),
-                        position,
-                        cx,
-                    )
-                })?;
-                inline_view.update(cx, |view, _| view.set_block_id(block_id));
-                self.inline_terminals.insert(
-                    occurrence,
-                    InlineTerminalPlacement {
-                        editor: editor.clone(),
-                        block_id,
-                        live_view,
-                        history_owner: store.downgrade(),
-                    },
-                );
-                if editor != self.message_editor {
-                    let view = cx.entity().downgrade();
-                    self._subscriptions
-                        .push(cx.observe(&editor, move |this, editor, cx| {
-                            let entry_index = {
-                                let state = this.entry_view_state.read(cx);
-                                (0..this.thread.read(cx).entries().len()).find(|index| {
-                                    state.entry(*index).and_then(|entry| entry.message_editor())
-                                        == Some(&editor)
-                                })
-                            };
-                            if let Some(entry_index) = entry_index {
-                                // Historical editors change height independently of the draft input row.
-                                this.list_state
-                                    .remeasure_items(entry_index..entry_index + 1);
-                                cx.notify();
-                            }
-                            let view = view.clone();
-                            cx.defer(move |cx| {
-                                view.update(cx, |view, cx| {
-                                    if let Err(error) = view.persist_inline_terminal_positions(cx) {
-                                        view.handle_thread_error(
-                                            ThreadError::DraftResolution(error.to_string().into()),
-                                            cx,
-                                        );
-                                    }
-                                })
-                                .log_err();
-                            });
-                        }));
-                }
-                Ok(())
-            })();
-            if let Err(error) = result {
-                errors.push(format!("Terminal {:?}: {error}", metadata.terminal_id));
-            }
-        }
-        let count = self.thread.read(cx).entries().len();
-        self.list_state.remeasure_items(
-            0..count
-                + usize::from(self.collaborative_input_in_list)
-                + usize::from(self.generating_indicator_in_list),
-        );
-        cx.notify();
-        anyhow::ensure!(errors.is_empty(), "{}", errors.join("; "));
-        self.persist_inline_terminal_positions(cx)
+        }) {}
     }
 
     /// Schedule a throttled save of the thread state (draft prompt, scroll position, etc.).
@@ -1852,13 +1192,6 @@ impl ThreadView {
             }
             MessageEditorEvent::InputAttempted { .. } => {}
             MessageEditorEvent::Edited => {}
-            #[cfg(feature = "multiplayer-tools")]
-            MessageEditorEvent::InlineTerminalHistoryExpanded => {
-                if editor == &self.message_editor {
-                    self.list_state.pause_following_tail_until_scroll();
-                    cx.notify();
-                }
-            }
         }
     }
 
@@ -2035,22 +1368,6 @@ impl ThreadView {
             }
             ViewEvent::MessageEditorEvent(_editor, MessageEditorEvent::LocalCommandInvoked(_)) => {}
             ViewEvent::MessageEditorEvent(_editor, MessageEditorEvent::Edited) => {}
-            #[cfg(feature = "multiplayer-tools")]
-            ViewEvent::MessageEditorEvent(
-                editor,
-                MessageEditorEvent::InlineTerminalHistoryExpanded,
-            ) => {
-                if self
-                    .entry_view_state
-                    .read(cx)
-                    .entry(event.entry_index)
-                    .and_then(|entry| entry.message_editor())
-                    == Some(editor)
-                {
-                    self.list_state.pause_following_tail_until_scroll();
-                    cx.notify();
-                }
-            }
             ViewEvent::MessageEditorEvent(_editor, MessageEditorEvent::InputAttempted { .. }) => {}
             ViewEvent::OpenDiffLocation {
                 path,
@@ -2228,11 +1545,6 @@ impl ThreadView {
 
         if is_generating {
             cx.emit(AcpThreadViewEvent::Interacted);
-            #[cfg(feature = "multiplayer-tools")]
-            if self.collaborative_input_in_list {
-                self.stop_current_and_send_new_message(message_editor, window, cx);
-                return;
-            }
             self.queue_message(message_editor, window, cx);
             return;
         }
@@ -2309,8 +1621,6 @@ impl ThreadView {
     ) {
         // Capture before asynchronous resolution so consuming the command cannot clear later edits.
         let submission_revision = message_editor.read(cx).submission_revision(cx);
-        #[cfg(feature = "multiplayer-tools")]
-        let input_source = message_editor.read(cx).text(cx);
         let contents = self.resolve_message_contents(&message_editor, cx);
         self.thread_error.take();
         self.thread_feedback.clear();
@@ -2319,61 +1629,8 @@ impl ThreadView {
         let contents_task = cx.spawn_in(window, async move |this, cx| {
             let (mut content, tracked_buffers) = contents.await?;
 
-            #[cfg(not(feature = "multiplayer-tools"))]
             if let Some(acp::ContentBlock::Text(text_content)) = content.first_mut() {
                 text_content.text = strip_leading_command(&text_content.text, &command_name);
-            }
-            #[cfg(feature = "multiplayer-tools")]
-            {
-                let references =
-                    strip_command_with_inline_context(&mut content, &input_source, &command_name)?;
-                this.update_in(cx, |this, _, cx| -> Result<()> {
-                    use crate::terminal_thread_metadata_store::TerminalThreadMetadataStore;
-                    if references.is_empty() {
-                        return Ok(());
-                    }
-                    let history = TerminalThreadMetadataStore::try_global(cx)
-                        .ok_or_else(|| anyhow!("The terminal history is unavailable"))?;
-                    let project = this
-                        .project
-                        .upgrade()
-                        .ok_or_else(|| anyhow!("The terminal project is unavailable"))?;
-                    let remote = project.read(cx).remote_connection_options(cx);
-                    let mut updates = Vec::new();
-                    for reference in references {
-                        anyhow::ensure!(
-                            reference.thread_id == this.root_thread_id
-                                && reference.session_id == this.session_id,
-                            "The command terminal belongs to a different conversation"
-                        );
-                        let mut metadata = history
-                            .read(cx)
-                            .occurrence_entry(crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey { terminal_id: reference.terminal_id, occurrence_id: reference.occurrence_id })
-                            .filter(|metadata| {
-                                reference.matches_metadata(metadata)
-                                    && remote::same_remote_connection_identity(
-                                        metadata.remote_connection.as_ref(),
-                                        remote.as_ref(),
-                                    )
-                            })
-                            .ok_or_else(|| {
-                                anyhow!(
-                                    "The terminal context has no canonical history in this project"
-                                )
-                            })?;
-                        let context = metadata
-                            .inline_context
-                            .as_mut()
-                            .ok_or_else(|| anyhow!("The terminal conversation is unavailable"))?;
-                        anyhow::ensure!(
-                            context.is_draft,
-                            "The command terminal is already submitted"
-                        );
-                        context.draft_position = Some(reference.position);
-                        updates.push(metadata);
-                    }
-                    history.update(cx, |history, cx| history.save_inline_occurrence_batch(updates, cx))
-                })??;
             }
             if matches!(
                 content.first(),
@@ -2391,13 +1648,6 @@ impl ThreadView {
                 // queue auto-processes when the command turn stops.
                 if !content.is_empty() {
                     this.add_to_queue(content, tracked_buffers, window, cx);
-                }
-                #[cfg(feature = "multiplayer-tools")]
-                if let Err(error) = this.sync_inline_terminal_history(window, cx) {
-                    this.handle_thread_error(
-                        ThreadError::DraftResolution(error.to_string().into()),
-                        cx,
-                    );
                 }
             })?;
             Ok(Some((vec![command_block], Vec::new())))
@@ -2933,13 +2183,6 @@ impl ThreadView {
             this.update_in(cx, |this, window, cx| {
                 this.add_to_queue(content, tracked_buffers, window, cx);
                 this.consume_editor_input(&message_editor, submission_revision, window, cx);
-                #[cfg(feature = "multiplayer-tools")]
-                if let Err(error) = this.sync_inline_terminal_history(window, cx) {
-                    this.handle_thread_error(
-                        ThreadError::DraftResolution(error.to_string().into()),
-                        cx,
-                    );
-                }
                 cx.notify();
             })?;
             Ok(())
@@ -2974,8 +2217,6 @@ impl ThreadView {
                 cx,
             );
             editor.set_read_only(true, cx);
-            #[cfg(feature = "multiplayer-tools")]
-            editor.set_inline_terminal_scope(self.root_thread_id, self.session_id.clone());
             editor.set_message(content.clone(), window, cx);
             editor
         });
@@ -3117,13 +2358,6 @@ impl ThreadView {
         // `/compact` while a turn was generating). Detect that so we run it as a
         // command turn without echoing it as a user message, matching the
         // non-queued path.
-        #[cfg(feature = "multiplayer-tools")]
-        let is_native_command = leading_native_command(
-            &entry.editor.read(cx).text(cx),
-            self.session_capabilities.read().available_commands(),
-        )
-        .is_some();
-        #[cfg(not(feature = "multiplayer-tools"))]
         let is_native_command = content
             .first()
             .and_then(|block| match block {
@@ -3183,11 +2417,6 @@ impl ThreadView {
 
         self.remove_from_queue(id, cx);
         window.focus(&message_editor.focus_handle(cx), cx);
-
-        #[cfg(feature = "multiplayer-tools")]
-        if let Err(error) = self.sync_inline_terminal_history(window, cx) {
-            self.handle_thread_error(ThreadError::DraftResolution(error.to_string().into()), cx);
-        }
 
         message_editor.update(cx, |editor, cx| {
             if let Some(offset) = adjusted_cursor_offset {
@@ -3317,13 +2546,6 @@ impl ThreadView {
             self.entry_view_state.update(cx, |state, cx| {
                 state.sync_entry(index, &self.thread, window, cx);
             });
-            #[cfg(feature = "multiplayer-tools")]
-            if let Err(error) = self.sync_inline_terminal_history(window, cx) {
-                self.handle_thread_error(
-                    ThreadError::DraftResolution(error.to_string().into()),
-                    cx,
-                );
-            }
         }
         cx.notify();
     }
@@ -4427,15 +3649,6 @@ impl ThreadView {
         let thread = self.thread.read(cx);
         let (entry_ix, tool_call) = thread.tool_call(&tool_call_id)?;
 
-        #[cfg(feature = "multiplayer-tools")]
-        let scroll_icon = if self.collaborative_input_in_list {
-            self.collaborative_permission_scroll_target
-                .filter(|(target, _)| *target == entry_ix)
-                .map(|(_, icon)| icon)?
-        } else {
-            self.permission_scroll_icon(entry_ix)?
-        };
-        #[cfg(not(feature = "multiplayer-tools"))]
         let scroll_icon = self.permission_scroll_icon(entry_ix)?;
 
         let focus_handle = self.focus_handle(cx);
@@ -5198,44 +4411,6 @@ impl ThreadView {
         self.render_message_editor_with_layout(false, window, cx)
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    fn render_collaborative_input_author(&self, cx: &App) -> AnyElement {
-        let user = self
-            .project
-            .upgrade()
-            .and_then(|project| project.read(cx).user_store().read(cx).current_user());
-        let label: SharedString = user
-            .as_ref()
-            .map(|user| {
-                let name = user.name.as_deref().unwrap_or(user.username.as_ref());
-                format!("Draft author: {name}").into()
-            })
-            .unwrap_or_else(|| "Draft author: local account unavailable".into());
-        h_flex()
-            .id("collaborative-input-author")
-            .debug_selector(|| "COLLABORATIVE-INPUT-AUTHOR".to_owned())
-            .role(gpui::Role::Group)
-            .aria_label(label.clone())
-            .size(rems(1.5))
-            .flex_none()
-            .mt_1()
-            .rounded_full()
-            .bg(cx.theme().colors().element_disabled)
-            .justify_center()
-            .tooltip(Tooltip::text(label))
-            .child(match user {
-                Some(user) => div()
-                    .debug_selector(|| "COLLABORATIVE-INPUT-AUTHOR-IMAGE".to_owned())
-                    .child(ui::Avatar::new(user.avatar_uri.clone()).size(rems(1.5)))
-                    .into_any_element(),
-                None => Icon::new(IconName::Person)
-                    .size(IconSize::Small)
-                    .color(Color::Muted)
-                    .into_any_element(),
-            })
-            .into_any_element()
-    }
-
     fn render_message_editor_with_layout(
         &mut self,
         embedded: bool,
@@ -5258,8 +4433,6 @@ impl ThreadView {
 
         if embedded && !self.editor_expanded {
             let max_lines = AgentSettings::get_global(cx).set_message_editor_max_lines();
-            #[cfg(feature = "multiplayer-tools")]
-            let max_lines = self.collaborative_editor_max_lines.unwrap_or(max_lines);
             self.message_editor.update(cx, |editor, cx| {
                 editor.set_mode(
                     EditorMode::AutoHeight {
@@ -5361,20 +4534,7 @@ impl ThreadView {
                                         ),
                                 )
                             })
-                            .map(|editor| {
-                                #[cfg(feature = "multiplayer-tools")]
-                                if embedded {
-                                    return h_flex()
-                                        .w_full()
-                                        .min_w_0()
-                                        .items_start()
-                                        .gap_2()
-                                        .child(self.render_collaborative_input_author(cx))
-                                        .child(editor.flex_1().min_w_0())
-                                        .into_any_element();
-                                }
-                                editor.into_any_element()
-                            }),
+                            .map(|editor| editor.into_any_element()),
                     )
                     .when(!embedded, |this| {
                         this.child(self.render_message_editor_controls(cx))
@@ -5415,330 +4575,6 @@ impl ThreadView {
                     })
                     .child(self.render_send_button(ButtonSize::Default, cx)),
             )
-            .into_any_element()
-    }
-
-    #[cfg(all(feature = "multiplayer-tools", feature = "test-support"))]
-    pub fn focused_collaborative_config_option(
-        &self,
-        window: &Window,
-        cx: &App,
-    ) -> Option<acp::SessionConfigId> {
-        self.config_options_view
-            .as_ref()?
-            .read(cx)
-            .focused_single_row_option(window, cx)
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn running_inline_terminals(&self, cx: &App) -> Vec<(crate::TerminalId, SharedString)> {
-        let Some(workspace) = self.workspace.upgrade() else {
-            return Vec::new();
-        };
-        let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx) else {
-            return Vec::new();
-        };
-        let Some(history) =
-            crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
-        else {
-            return Vec::new();
-        };
-        let mut terminals = self
-            .inline_terminals
-            .keys()
-            .filter_map(|occurrence| {
-                let terminal_id = &occurrence.terminal_id;
-                let metadata = history.read(cx).entry(*terminal_id)?;
-                if metadata.inline_context.as_ref()?.occurrence_id != occurrence.occurrence_id {
-                    return None;
-                }
-                let view = panel.read(cx).inline_terminal_view(*terminal_id)?;
-                if !view.read(cx).terminal().read(cx).is_pty() {
-                    return None;
-                }
-                history
-                    .read(cx)
-                    .entry(*terminal_id)
-                    .map(|metadata| (*terminal_id, metadata.display_title()))
-            })
-            .collect::<Vec<_>>();
-        terminals.sort_by(|left, right| left.1.cmp(&right.1));
-        terminals
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn stop_running_inline_terminal(
-        &mut self,
-        terminal_id: crate::TerminalId,
-        cx: &mut Context<Self>,
-    ) {
-        let result = self
-            .workspace
-            .read_with(cx, |workspace, cx| {
-                workspace
-                    .panel::<AgentPanel>(cx)
-                    .ok_or_else(|| anyhow!("The terminal execution owner is unavailable"))
-            })
-            .and_then(|result| result)
-            .and_then(|panel| {
-                panel.update(cx, |panel, cx| {
-                    panel.request_stop_inline_terminal(terminal_id, cx)
-                })
-            });
-        if let Err(error) = result {
-            self.handle_thread_error(ThreadError::DraftResolution(error.to_string().into()), cx);
-        }
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn scroll_to_inline_terminal(
-        &mut self,
-        terminal_id: crate::TerminalId,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let result = (|| -> Result<()> {
-            let occurrence = self.current_inline_terminal_occurrence(terminal_id, cx)?;
-            let placement = self
-                .inline_terminals
-                .get(&occurrence)
-                .ok_or_else(|| anyhow!("The terminal's conversation placement is unavailable"))?;
-            let history =
-                crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
-                    .ok_or_else(|| anyhow!("The terminal history is unavailable"))?;
-            let mut metadata = history
-                .read(cx)
-                .entry(terminal_id)
-                .cloned()
-                .ok_or_else(|| anyhow!("The terminal history is unavailable"))?;
-            let context = metadata
-                .inline_context
-                .as_mut()
-                .ok_or_else(|| anyhow!("The terminal conversation is unavailable"))?;
-            context.collapsed = false;
-            history.update(cx, |history, cx| history.save_inline(metadata, cx))?;
-            placement.editor.update(cx, |editor, cx| {
-                editor.scroll_to_inline_terminal(placement.block_id, window, cx)
-            })?;
-            let entry_index = (0..self.thread.read(cx).entries().len()).find(|index| {
-                self.entry_view_state
-                    .read(cx)
-                    .entry(*index)
-                    .and_then(|entry| entry.message_editor())
-                    == Some(&placement.editor)
-            });
-            if let Some(index) = entry_index {
-                self.list_state.scroll_to(ListOffset {
-                    item_ix: index,
-                    offset_in_item: px(0.),
-                });
-            } else {
-                self.list_state.scroll_to_end();
-            }
-            Ok(())
-        })();
-        if let Err(error) = result {
-            self.handle_thread_error(ThreadError::DraftResolution(error.to_string().into()), cx);
-        }
-        cx.notify();
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn render_running_inline_terminals(
-        &self,
-        cx: &Context<Self>,
-    ) -> Option<ui::PopoverMenu<ContextMenu>> {
-        let terminals = self.running_inline_terminals(cx);
-        if terminals.is_empty() {
-            return None;
-        }
-        let thread = cx.entity().downgrade();
-        Some(
-            ui::PopoverMenu::new("collaborative-running-terminals")
-                .anchor(gpui::Anchor::BottomRight)
-                .trigger(
-                    IconButton::new(
-                        "collaborative-running-terminals-trigger",
-                        IconName::Terminal,
-                    )
-                    .size(ButtonSize::Compact)
-                    .tab_index(0isize)
-                    .aria_label("Running terminals")
-                    .tooltip(Tooltip::text("Running terminals")),
-                )
-                .menu(move |window, cx| {
-                    let thread = thread.upgrade()?;
-                    let terminals = thread.read(cx).running_inline_terminals(cx);
-                    let return_focus = window.focused(cx);
-                    Some(ContextMenu::build(window, cx, move |mut menu, _, _| {
-                        menu = menu.header("Running Terminals");
-                        for (terminal_id, title) in &terminals {
-                            let terminal_id = *terminal_id;
-                            let thread = thread.clone();
-                            let return_focus = return_focus.clone();
-                            menu = menu.submenu(title.clone(), move |menu, _, _| {
-                                let scroll_thread = thread.clone();
-                                let stop_thread = thread.clone();
-                                let scroll_focus = return_focus.clone();
-                                let stop_focus = return_focus.clone();
-                                menu.entry("Scroll to Terminal", None, move |window, cx| {
-                                    scroll_thread.update(cx, |thread, cx| {
-                                        thread.scroll_to_inline_terminal(terminal_id, window, cx)
-                                    });
-                                    if let Some(focus) = &scroll_focus {
-                                        window.focus(focus, cx);
-                                    }
-                                })
-                                .entry(
-                                    "Stop Process",
-                                    None,
-                                    move |window, cx| {
-                                        stop_thread.update(cx, |thread, cx| {
-                                            thread.stop_running_inline_terminal(terminal_id, cx)
-                                        });
-                                        if let Some(focus) = &stop_focus {
-                                            window.focus(focus, cx);
-                                        }
-                                    },
-                                )
-                            });
-                        }
-                        menu.separator().entry("Stop All", None, move |window, cx| {
-                            thread.update(cx, |thread, cx| {
-                                for (terminal_id, _) in thread.running_inline_terminals(cx) {
-                                    thread.stop_running_inline_terminal(terminal_id, cx);
-                                }
-                            });
-                            if let Some(focus) = &return_focus {
-                                window.focus(focus, cx);
-                            }
-                        })
-                    }))
-                }),
-        )
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn render_collaborative_composer_footer(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        if self.is_subagent() {
-            return div().into_any_element();
-        }
-        let thread = cx.entity().downgrade();
-        let mut font = theme_settings::ThemeSettings::get_global(cx)
-            .ui_font
-            .clone();
-        font.weight = gpui::FontWeight::MEDIUM;
-        let ellipsis = window.text_system().shape_line(
-            "…".into(),
-            ui::TextSize::Small.rems(cx).to_pixels(window.rem_size()),
-            &[gpui::TextRun {
-                len: "…".len(),
-                font,
-                ..Default::default()
-            }],
-            None,
-        );
-        // Reserve the native model button's icons, spacing, and an ellipsis while
-        // allowing the footer to shrink with its contents at larger UI font sizes.
-        let model_minimum_width = (IconSize::XSmall.rems() * 2.
-            + DynamicSpacing::Base04.rems(cx) * 2.
-            + DynamicSpacing::Base08.rems(cx) * 2.)
-            .to_pixels(window.rem_size())
-            + ellipsis.width
-            + px(2.);
-        let footer_minimum_width = model_minimum_width
-            + (IconSize::Small.rems()
-                + IconSize::default().rems()
-                + DynamicSpacing::Base08.rems(cx) * 4.
-                + rems(0.5))
-            .to_pixels(window.rem_size())
-            + px(4.);
-        Self::with_thread_actions(h_flex(), cx)
-            .debug_selector(|| "COLLABORATIVE-COMPOSER-FOOTER".to_owned())
-            .flex_1()
-            .min_w(footer_minimum_width)
-            .gap_1()
-            .children(self.render_running_inline_terminals(cx))
-            .child(
-                h_flex()
-                    .id("collaborative-model-controls")
-                    .debug_selector(|| "COLLABORATIVE-MODEL-CONTROLS".to_owned())
-                    .flex_1()
-                    .min_w(model_minimum_width)
-                    .overflow_x_scroll()
-                    .map(|this| match self.config_options_view.clone() {
-                        Some(config_view) => {
-                            let row = config_view.update(cx, |view, cx| view.single_row(cx));
-                            this.child(row)
-                        }
-                        None => this
-                            .children(self.mode_selector.clone())
-                            .children(self.model_selector.clone()),
-                    }),
-            )
-            .child(
-                ui::PopoverMenu::new("collaborative-composer-options")
-                    .anchor(gpui::Anchor::BottomRight)
-                    .trigger(
-                        IconButton::new(
-                            "collaborative-composer-options-trigger",
-                            IconName::Settings,
-                        )
-                        .icon_size(IconSize::Small)
-                        .size(ButtonSize::Compact)
-                        .tooltip(Tooltip::text("Context and agent options")),
-                    )
-                    .menu(move |window, cx| {
-                        let thread = thread.upgrade()?;
-                        Some(ui::ContextMenu::build(window, cx, move |menu, _, _| {
-                            menu.custom_row(move |_, cx| {
-                                thread.update(cx, |thread, cx| {
-                                    h_flex()
-                                        .gap_1()
-                                        .flex_wrap()
-                                        .child(thread.render_add_context_button(cx))
-                                        .child(thread.render_follow_toggle(cx))
-                                        .children(thread.render_fast_mode_control(cx))
-                                        .children(thread.render_thinking_control(cx))
-                                        .children(thread.render_token_usage(cx))
-                                        .children(thread.profile_selector.clone())
-                                        .into_any_element()
-                                })
-                            })
-                        }))
-                    }),
-            )
-            .child(self.render_send_button(ButtonSize::Compact, cx))
-            .into_any_element()
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn render_collaborative_composer(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.sync_local_commands(cx);
-        Self::with_thread_actions(v_flex(), cx)
-            .w_full()
-            .children(self.render_multi_root_callout(cx))
-            .children(self.render_activity_bar(window, cx))
-            .when(self.show_external_source_prompt_warning, |this| {
-                this.child(self.render_external_source_prompt_warning(cx))
-            })
-            .when(self.show_codex_windows_warning, |this| {
-                this.child(self.render_codex_windows_warning(cx))
-            })
-            .children(self.render_skill_loading_issues(cx))
-            .children(self.render_thread_retry_status_callout(cx))
-            .children(self.render_thread_error(window, cx))
-            .children(self.render_token_limit_callout(cx))
-            .children(self.render_request_elicitations(cx))
-            .child(self.render_message_editor_with_layout(true, window, cx))
             .into_any_element()
     }
 
@@ -6684,9 +5520,6 @@ impl ThreadView {
         let focus_handle = message_editor.focus_handle(cx);
 
         let is_generating = self.thread.read(cx).status() != ThreadStatus::Idle;
-        #[cfg(feature = "multiplayer-tools")]
-        let interrupts_on_send = self.collaborative_input_in_list;
-        #[cfg(not(feature = "multiplayer-tools"))]
         let interrupts_on_send = false;
 
         if self.is_loading_contents {
@@ -7380,41 +6213,11 @@ fn sandbox_network_rows(network: &SandboxNetPolicy) -> Vec<SandboxRow> {
 }
 
 impl ThreadView {
-    #[cfg(feature = "multiplayer-tools")]
-    fn set_collaborative_input_in_list(&mut self, inline: bool, cx: &App) {
-        if inline == self.collaborative_input_in_list {
-            return;
-        }
-        let index =
-            self.thread.read(cx).entries().len() + usize::from(self.generating_indicator_in_list);
-        if inline {
-            self.list_state
-                .splice_focusable(index..index, [Some(self.message_editor.focus_handle(cx))]);
-        } else {
-            self.list_state.splice(index..index + 1, 0);
-        }
-        self.collaborative_input_in_list = inline;
-    }
-
     fn has_messages(&self, cx: &App) -> bool {
         !self.thread.read(cx).entries().is_empty() || self.generating_indicator_in_list
     }
 
     fn render_entries(&mut self, cx: &mut Context<Self>) -> List {
-        #[cfg(feature = "multiplayer-tools")]
-        if self.collaborative_input_in_list {
-            // List row rendering holds the list's mutable borrow. Snapshot only
-            // viewport placement here; permission state remains in Conversation.
-            self.collaborative_permission_scroll_target = self
-                .conversation
-                .read(cx)
-                .pending_tool_call_for_session(self.thread.read(cx).session_id(), cx)
-                .and_then(|tool_call_id| self.thread.read(cx).tool_call(&tool_call_id))
-                .and_then(|(entry_index, _)| {
-                    self.permission_scroll_icon(entry_index)
-                        .map(|icon| (entry_index, icon))
-                });
-        }
         let max_content_width = AgentSettings::get_global(cx).max_content_width;
         let centered_container = move |content: AnyElement| {
             h_flex().w_full().min_w_0().justify_center().child(
@@ -7440,83 +6243,12 @@ impl ThreadView {
                     let rendered = this.render_generating(confirmation, cx);
                     centered_container(rendered.into_any_element()).into_any_element()
                 } else {
-                    #[cfg(feature = "multiplayer-tools")]
-                    if this.collaborative_input_in_list
-                        && index == entries.len() + usize::from(this.generating_indicator_in_list)
-                    {
-                        return centered_container(
-                            div()
-                                .id("collaborative-native-acp-composer")
-                                .debug_selector(|| "COLLABORATIVE-NATIVE-ACP-COMPOSER".to_owned())
-                                .role(gpui::Role::Group)
-                                .aria_label(workspace::collaborative_accessibility::COMPOSER_LABEL)
-                                .w_full()
-                                .child(this.render_collaborative_composer(window, cx))
-                                .into_any_element(),
-                        )
-                        .into_any_element();
-                    }
                     Empty.into_any()
                 }
             }),
         )
         .with_sizing_behavior(gpui::ListSizingBehavior::Auto)
         .flex_grow_1()
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn render_collaborative_entries(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.set_collaborative_input_in_list(true, cx);
-        let viewport_height = self.list_state.viewport_bounds().size.height;
-        let vertical_padding = rems(1.25).to_pixels(window.rem_size());
-        let line_height = theme_settings::ThemeSettings::get_global(cx).agent_ui_font_size(cx)
-            * ui::fractal::BODY_LINE_HEIGHT;
-        // Snapshot the list viewport before its row renderer borrows ListState.
-        // Inline terminals need the conversation's available height rather than
-        // the legacy dock composer's line cap, while retaining bounded scrolling.
-        self.collaborative_editor_max_lines =
-            (viewport_height > vertical_padding && line_height > px(0.)).then(|| {
-                ((viewport_height - vertical_padding) / line_height)
-                    .floor()
-                    .max(1.) as usize
-            });
-        let input_index =
-            self.thread.read(cx).entries().len() + usize::from(self.generating_indicator_in_list);
-        self.list_state
-            .remeasure_items(input_index..input_index + 1);
-        let list_state = self.list_state.clone();
-
-        Self::with_thread_actions(v_flex(), cx)
-            .id("collaborative-acp-thread")
-            .debug_selector(|| "COLLABORATIVE-ACP-THREAD".to_owned())
-            .key_context({
-                let mut context = gpui::KeyContext::new_with_defaults();
-                context.add("AcpThread");
-                context.add("CollaborativeConversation");
-                context
-            })
-            .track_focus(&self.focus_handle)
-            .size_full()
-            .min_w_0()
-            .min_h_0()
-            .overflow_hidden()
-            .children(self.render_subagent_titlebar(cx))
-            .when_some(
-                self.thread_search_visible
-                    .then(|| self.thread_search_bar.clone())
-                    .flatten(),
-                |this, bar| this.child(bar),
-            )
-            .when(self.resumed_without_history, |this| {
-                this.child(Self::render_resume_notice(cx))
-            })
-            .child(self.render_entries(cx))
-            .vertical_scrollbar_for(&list_state, window, cx)
-            .into_any_element()
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -8722,16 +7454,6 @@ impl ThreadView {
         let is_generating =
             matches!(thread.status(), ThreadStatus::Generating) && !thread.is_compacting();
         let entries_count = thread.entries().len();
-        #[cfg(feature = "multiplayer-tools")]
-        let entries_count = if self.collaborative_input_in_list {
-            // Queued entry notifications can lag the thread's entries. Use the
-            // mounted rows so a status change never replaces the input's focus handle.
-            self.list_state
-                .item_count()
-                .saturating_sub(1 + usize::from(self.generating_indicator_in_list))
-        } else {
-            entries_count
-        };
 
         if is_generating && !self.generating_indicator_in_list {
             self.list_state.splice(entries_count..entries_count, 1);
@@ -14062,8 +12784,6 @@ impl Render for ThreadView {
         // current availability of feedback/sharing, which can change between
         // renders (settings, connection state, feature flags).
         self.sync_local_commands(cx);
-        #[cfg(feature = "multiplayer-tools")]
-        self.set_collaborative_input_in_list(false, cx);
 
         let has_messages = self.has_messages(cx);
         let list_state = self.list_state.clone();
@@ -14307,59 +13027,6 @@ fn strip_leading_command(text: &str, command_name: &str) -> String {
         .unwrap_or_else(|| trimmed.to_string())
 }
 
-#[cfg(feature = "multiplayer-tools")]
-fn strip_command_with_inline_context(
-    content: &mut Vec<acp::ContentBlock>,
-    source: &str,
-    command_name: &str,
-) -> Result<Vec<crate::terminal_thread_metadata_store::InlineTerminalPromptReference>> {
-    use crate::terminal_thread_metadata_store::{
-        InlineTerminalDraftPosition, InlineTerminalPromptReference,
-    };
-    let remainder = strip_leading_command(source, command_name);
-    let removed = source.len() - remainder.len();
-    let mut prefix_remaining = removed;
-    let mut references = Vec::new();
-    let mut transformed = content.clone();
-    for block in &mut transformed {
-        if let Some(mut reference) = InlineTerminalPromptReference::from_content(block)? {
-            let offset = reference.position.byte_offset_for_source(source)?;
-            // Removing a command token coalesces boundaries inside that token at
-            // the queued remainder's start without dropping any terminal output.
-            reference.position =
-                InlineTerminalDraftPosition::new(&remainder, offset.saturating_sub(removed))?;
-            if let acp::ContentBlock::Resource(resource) = block {
-                resource.meta.get_or_insert_with(Default::default).insert(
-                    "made.inline_terminal".into(),
-                    serde_json::to_value(&reference)?,
-                );
-            }
-            references.push(reference);
-        } else if let acp::ContentBlock::Text(text) = block {
-            let consume = prefix_remaining.min(text.text.len());
-            text.text = text
-                .text
-                .get(consume..)
-                .ok_or_else(|| anyhow!("The command boundary is not a source character boundary"))?
-                .to_owned();
-            prefix_remaining -= consume;
-        } else {
-            anyhow::ensure!(
-                prefix_remaining == 0,
-                "A command token cannot cross a context mention"
-            );
-        }
-    }
-    anyhow::ensure!(
-        prefix_remaining == 0,
-        "The command content does not match its source prefix"
-    );
-    transformed
-        .retain(|block| !matches!(block, acp::ContentBlock::Text(text) if text.text.is_empty()));
-    *content = transformed;
-    Ok(references)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -14368,817 +13035,6 @@ mod tests {
     use std::path::Path;
     use util::path;
     use workspace::MultiWorkspace;
-
-    #[cfg(all(unix, feature = "multiplayer-tools"))]
-    #[gpui::test]
-    async fn test_inline_equal_unicode_boundary_restores_validated_display_order(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        use crate::terminal_thread_metadata_store::{
-            InlineTerminalContext, InlineTerminalDraftPosition, InlineTerminalPromptReference,
-            TerminalThreadMetadata, TerminalThreadMetadataStore,
-        };
-        use crate::thread_metadata_store::{ThreadMetadataStore, WorktreePaths};
-        crate::test_support::init_test(cx);
-        cx.update(|cx| {
-            agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
-            ThreadMetadataStore::init_global(cx);
-        });
-        let project = Project::test(FakeFs::new(cx.executor()), [], cx).await;
-        let (multi_workspace, cx) =
-            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-        let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
-        let panel = workspace.update_in(cx, |workspace, window, cx| {
-            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
-            workspace.add_panel(panel.clone(), window, cx);
-            panel
-        });
-        crate::test_support::open_draft_with_connection(
-            &panel,
-            acp_thread::StubAgentConnection::new(),
-            cx,
-        );
-        let conversation = panel.read_with(cx, |panel, _| {
-            panel
-                .active_conversation_view()
-                .expect("draft conversation")
-                .clone()
-        });
-        let parent = conversation.read_with(cx, |conversation, _| {
-            conversation.root_thread_view().expect("draft view")
-        });
-        let (thread_id, session_id, editor) = parent.read_with(cx, |parent, _| {
-            (
-                parent.root_thread_id,
-                parent.session_id.clone(),
-                parent.message_editor.clone(),
-            )
-        });
-        let store = cx.update(|_, cx| TerminalThreadMetadataStore::global(cx));
-        store.read_with(cx, |store, _| store.reload_task()).await;
-        let source = "Aλ🦀B";
-        let position =
-            InlineTerminalDraftPosition::new(source, "Aλ".len()).expect("equal Unicode boundary");
-        let mut histories = Vec::new();
-        for (index, output) in [
-            "FIRST_STYLED_GRID",
-            "SECOND_STYLED_GRID",
-            "THIRD_STYLED_GRID",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let terminal = cx.new(|cx| {
-                terminal::TerminalBuilder::new_display_only(
-                    terminal::terminal_settings::CursorShape::Block,
-                    settings::AlternateScroll::Off,
-                    Some(128),
-                    cx.entity_id().as_u64(),
-                    cx.background_executor(),
-                    util::paths::PathStyle::local(),
-                )
-                .subscribe(cx)
-            });
-            terminal.update(cx, |terminal, cx| {
-                terminal.write_output(format!("\x1b[31m{output}\x1b[0m\r\n").as_bytes(), cx)
-            });
-            cx.run_until_parked();
-            let (output, snapshot) = terminal.read_with(cx, |terminal, _| {
-                (
-                    terminal.get_content(),
-                    terminal.snapshot().expect("actual styled grid"),
-                )
-            });
-            histories.push(TerminalThreadMetadata {
-                terminal_id: crate::TerminalId::new(),
-                title: format!("Unrelated title {index}").into(),
-                custom_title: None,
-                created_at: chrono::DateTime::from_timestamp(if index == 0 { 100 } else { 1 }, 0)
-                    .expect("opposite chronology"),
-                worktree_paths: WorktreePaths::default(),
-                remote_connection: None,
-                working_directory: None,
-                inline_context: Some(InlineTerminalContext {
-                    occurrence_id: None,
-                    previous_occurrences: Vec::new(),
-
-                    thread_id,
-                    session_id: Some(session_id.clone()),
-                    restored_draft_source_session_id: None,
-                    preceding_entry_count: 0,
-                    message_client_id: None,
-                    is_draft: true,
-                    presentation_order: None,
-                    draft_position: Some(position.clone()),
-                    collapsed: false,
-                    output,
-                    snapshot: Some(snapshot),
-                }),
-            });
-        }
-        let expected = parent.update_in(cx, |parent, window, cx| {
-            editor.update(cx, |editor, cx| editor.set_text(source, window, cx));
-            store
-                .update(cx, |store, cx| {
-                    store.save_inline_batch(histories.iter().rev().cloned().collect(), cx)
-                })
-                .expect("reverse upserts");
-            let mut expected = store
-                .read(cx)
-                .entries_for_conversation(thread_id, Some(&session_id), None)
-                .map(|metadata| metadata.terminal_id)
-                .collect::<Vec<_>>();
-            expected.reverse();
-            for (rank, terminal_id) in expected.iter().enumerate() {
-                let metadata = histories
-                    .iter_mut()
-                    .find(|metadata| metadata.terminal_id == *terminal_id)
-                    .expect("original retained row");
-                let timestamp = match rank {
-                    0 => 200,
-                    1 => 100,
-                    _ => 300,
-                };
-                metadata.created_at = chrono::DateTime::from_timestamp(timestamp, 0)
-                    .expect("nonmonotonic history chronology");
-            }
-            store
-                .update(cx, |store, cx| {
-                    store.save_inline_batch(histories.iter().rev().cloned().collect(), cx)
-                })
-                .expect("reversed nonchronological upserts");
-            let mut blocks = vec![acp::ContentBlock::from("Aλ")];
-            for terminal_id in &expected {
-                let metadata = store.read(cx).entry(*terminal_id).expect("trusted row");
-                let context = metadata.inline_context.as_ref().expect("inline history");
-                assert!(
-                    context.presentation_order.is_none(),
-                    "legacy JSON has no fabricated rank"
-                );
-                let legacy_json = serde_json::to_value(context).expect("legacy-compatible JSON");
-                assert!(legacy_json.get("presentation_order").is_none());
-                assert_eq!(
-                    serde_json::from_value::<InlineTerminalContext>(legacy_json)
-                        .expect("absent order defaults"),
-                    *context,
-                );
-                blocks.push(
-                    InlineTerminalPromptReference {
-                        occurrence_id: None,
-
-                        terminal_id: *terminal_id,
-                        thread_id,
-                        session_id: session_id.clone(),
-                        position: position.clone(),
-                    }
-                    .content(context.output.clone())
-                    .expect("canonical ordered resource"),
-                );
-            }
-            blocks.push(acp::ContentBlock::from("🦀B"));
-            store
-                .update(cx, |store, cx| {
-                    store.restore_draft_session(thread_id, &session_id, None, source, blocks, cx)
-                })
-                .expect("legacy receipt admission");
-            parent
-                .sync_inline_terminal_history(window, cx)
-                .expect("ordered mount");
-            expected
-        });
-        cx.run_until_parked();
-        let assert_order = |parent: &ThreadView, cx: &mut Context<ThreadView>| {
-            let editor = parent.message_editor.clone();
-            let positions = editor
-                .update(cx, |editor, cx| {
-                    editor.inline_terminal_positions_in_display_order(cx)
-                })
-                .expect("actual mounted rows");
-            let actual = positions
-                .iter()
-                .map(|(block_id, position)| {
-                    assert_eq!(
-                        position
-                            .byte_offset_for_source(source)
-                            .expect("strict source"),
-                        "Aλ".len()
-                    );
-                    parent
-                        .inline_terminals
-                        .iter()
-                        .find(|(_, placement)| {
-                            placement.editor == editor && placement.block_id == *block_id
-                        })
-                        .expect("occurrence identity")
-                        .0
-                        .terminal_id
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(
-                actual, expected,
-                "mounted equal-position order follows admitted receipt, not hash buckets or chronology"
-            );
-            let references = editor
-                .read(cx)
-                .draft_content_blocks_snapshot(cx)
-                .expect("ACP snapshot")
-                .iter()
-                .filter_map(|block| {
-                    InlineTerminalPromptReference::from_content(block).expect("strict decoder")
-                })
-                .map(|reference| reference.terminal_id)
-                .collect::<Vec<_>>();
-            assert_eq!(
-                references, expected,
-                "rendered order and persisted content agree"
-            );
-            assert_eq!(editor.read(cx).text(cx), source);
-        };
-        parent.update(cx, |parent, cx| assert_order(parent, cx));
-        conversation
-            .update(cx, |conversation, cx| {
-                conversation
-                    .persist_current_draft_prompt(cx)
-                    .expect("actual draft write")
-            })
-            .await
-            .expect("canonical KVP durable draft");
-        store
-            .update(cx, |store, cx| store.flush(cx))
-            .await
-            .expect("SQLite durable metadata");
-        store.update(cx, |store, cx| store.reload_for_test(cx));
-        store.read_with(cx, |store, _| store.reload_task()).await;
-        cx.run_until_parked();
-        let saved_blocks = cx.update(|_, cx| {
-            crate::draft_prompt_store::read(thread_id, cx).expect("actual durable KVP blocks")
-        });
-        let restored_conversation = cx.update(|window, cx| {
-            let previous = conversation.read(cx);
-            let agent = previous.agent.clone();
-            let connection_store = previous.connection_store.clone();
-            let connection_key = previous.connection_key.clone();
-            let thread_store = previous.thread_store.clone();
-            cx.new(|cx| {
-                ConversationView::new(
-                    agent,
-                    connection_store,
-                    connection_key,
-                    None,
-                    Some(thread_id),
-                    None,
-                    None,
-                    Some(AgentInitialContent::RestoredDraft {
-                        blocks: saved_blocks,
-                    }),
-                    workspace.downgrade(),
-                    project.clone(),
-                    thread_store,
-                    crate::AgentThreadSource::AgentPanel,
-                    window,
-                    cx,
-                )
-            })
-        });
-        cx.condition(&restored_conversation, |conversation, cx| {
-            conversation
-                .root_thread_view()
-                .is_some_and(|view| view.read(cx).session_id != session_id)
-        })
-        .await;
-        cx.run_until_parked();
-        let restored = restored_conversation.read_with(cx, |conversation, _| {
-            conversation.root_thread_view().expect("recreated view")
-        });
-        assert_ne!(restored.entity_id(), parent.entity_id());
-        restored.update(cx, |parent, cx| {
-            assert_order(parent, cx);
-            for terminal_id in &expected {
-                let placement = parent
-                    .inline_terminals
-                    .get(
-                        &crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey::legacy(
-                            *terminal_id,
-                        ),
-                    )
-                    .expect("same occurrence");
-                assert!(
-                    placement.live_view.is_none(),
-                    "reload must never respawn a PTY"
-                );
-                let metadata = store.read(cx).entry(*terminal_id).expect("rebound row");
-                let original = histories
-                    .iter()
-                    .find(|metadata| metadata.terminal_id == *terminal_id)
-                    .expect("original snapshot");
-                assert_eq!(
-                    metadata
-                        .inline_context
-                        .as_ref()
-                        .expect("restored context")
-                        .snapshot,
-                    original
-                        .inline_context
-                        .as_ref()
-                        .expect("original context")
-                        .snapshot
-                );
-            }
-        });
-    }
-
-    #[cfg(all(unix, feature = "multiplayer-tools"))]
-    #[gpui::test]
-    async fn test_contents_same_execution_equal_unicode_boundary_survives_full_conversation_restart(
-        cx: &mut gpui::TestAppContext,
-    ) {
-        use crate::terminal_thread_metadata_store::{
-            InlineTerminalContext, InlineTerminalDraftPosition, InlineTerminalOccurrenceKey,
-            InlineTerminalPromptReference, TerminalThreadMetadata, TerminalThreadMetadataStore,
-        };
-        use crate::thread_metadata_store::{ThreadMetadataStore, WorktreePaths};
-        crate::test_support::init_test(cx);
-        cx.update(|cx| {
-            agent::ThreadStore::init_global(cx);
-            language_model::LanguageModelRegistry::test(cx);
-            ThreadMetadataStore::init_global(cx);
-        });
-        let project = Project::test(FakeFs::new(cx.executor()), [], cx).await;
-        let (multi_workspace, cx) =
-            cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-        let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
-        let panel = workspace.update_in(cx, |workspace, window, cx| {
-            let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
-            workspace.add_panel(panel.clone(), window, cx);
-            panel
-        });
-        crate::test_support::open_draft_with_connection(
-            &panel,
-            acp_thread::StubAgentConnection::new(),
-            cx,
-        );
-        let conversation = panel.read_with(cx, |panel, _| {
-            panel
-                .active_conversation_view()
-                .expect("draft conversation")
-                .clone()
-        });
-        let parent = conversation.read_with(cx, |conversation, _| {
-            conversation.root_thread_view().expect("draft view")
-        });
-        let (thread_id, session_id, editor) = parent.read_with(cx, |parent, _| {
-            (
-                parent.root_thread_id,
-                parent.session_id.clone(),
-                parent.message_editor.clone(),
-            )
-        });
-        let store = cx.update(|_, cx| TerminalThreadMetadataStore::global(cx));
-        store.read_with(cx, |store, _| store.reload_task()).await;
-        let initial_source = "Aλx🦀B";
-        let source = "Aλ🦀B";
-        let terminal_id = crate::TerminalId::new();
-        let occurrence_id = uuid::Uuid::new_v4();
-        let terminal = cx.new(|cx| {
-            terminal::TerminalBuilder::new_display_only(
-                terminal::terminal_settings::CursorShape::Block,
-                settings::AlternateScroll::Off,
-                Some(128),
-                cx.entity_id().as_u64(),
-                cx.background_executor(),
-                util::paths::PathStyle::local(),
-            )
-            .subscribe(cx)
-        });
-        terminal.update(cx, |terminal, cx| {
-            terminal.write_output(b"\x1b[31mFROZEN_RESTART_FIRST\x1b[0m\r\n", cx)
-        });
-        cx.run_until_parked();
-        let (first_output, first_snapshot) = terminal.read_with(cx, |terminal, _| {
-            (
-                terminal.get_content(),
-                terminal.snapshot().expect("first actual styled grid"),
-            )
-        });
-        terminal.update(cx, |terminal, cx| {
-            terminal.write_output(b"\x1b[32mCUMULATIVE_RESTART_SECOND\x1b[0m\r\n", cx)
-        });
-        cx.run_until_parked();
-        let (second_output, second_snapshot) = terminal.read_with(cx, |terminal, _| {
-            (
-                terminal.get_content(),
-                terminal.snapshot().expect("second actual styled grid"),
-            )
-        });
-        let frozen = InlineTerminalContext {
-            occurrence_id: None,
-            previous_occurrences: Vec::new(),
-            thread_id,
-            session_id: Some(session_id.clone()),
-            restored_draft_source_session_id: None,
-            preceding_entry_count: 0,
-            message_client_id: None,
-            is_draft: true,
-            presentation_order: Some(0),
-            draft_position: Some(
-                InlineTerminalDraftPosition::new(initial_source, "Aλx".len())
-                    .expect("first source"),
-            ),
-            collapsed: false,
-            output: first_output.clone(),
-            snapshot: Some(first_snapshot.clone()),
-        };
-        let metadata = TerminalThreadMetadata {
-            terminal_id,
-            title: "same execution".into(),
-            custom_title: None,
-            created_at: chrono::Utc::now(),
-            worktree_paths: WorktreePaths::default(),
-            remote_connection: None,
-            working_directory: None,
-            inline_context: Some(InlineTerminalContext {
-                occurrence_id: Some(occurrence_id),
-                previous_occurrences: vec![frozen.clone()],
-                presentation_order: Some(1),
-                draft_position: Some(
-                    InlineTerminalDraftPosition::new(initial_source, "Aλ".len())
-                        .expect("second source before first"),
-                ),
-                output: second_output.clone(),
-                snapshot: Some(second_snapshot.clone()),
-                ..frozen.clone()
-            }),
-        };
-        parent.update_in(cx, |parent, window, cx| {
-            editor.update(cx, |editor, cx| editor.set_text(initial_source, window, cx));
-            store
-                .update(cx, |store, cx| store.save_inline(metadata.clone(), cx))
-                .expect("canonical single-row aggregate");
-            parent
-                .sync_inline_terminal_history(window, cx)
-                .expect("real styled display-only blocks");
-            editor.update(cx, |editor, cx| {
-                editor.editor().update(cx, |editor, cx| {
-                    editor.edit(
-                        [(
-                            multi_buffer::MultiBufferOffset("Aλ".len())
-                                ..multi_buffer::MultiBufferOffset("Aλx".len()),
-                            "",
-                        )],
-                        cx,
-                    );
-                })
-            });
-            parent
-                .persist_inline_terminal_positions(cx)
-                .expect("actual edit rebases both exact occurrences");
-        });
-        cx.run_until_parked();
-        assert_eq!(editor.read_with(cx, |editor, cx| editor.text(cx)), source);
-        let measured = parent.update(cx, |parent, cx| {
-            editor
-                .update(cx, |editor, cx| {
-                    editor.inline_terminal_positions_in_display_order(cx)
-                })
-                .expect("actual mounted row order")
-                .into_iter()
-                .map(|(block_id, position)| {
-                    assert_eq!(
-                        position
-                            .byte_offset_for_source(source)
-                            .expect("equal final Unicode boundary"),
-                        "Aλ".len()
-                    );
-                    *parent
-                        .inline_terminals
-                        .iter()
-                        .find(|(_, placement)| {
-                            placement.editor == editor && placement.block_id == block_id
-                        })
-                        .expect("mounted occurrence")
-                        .0
-                })
-                .collect::<Vec<_>>()
-        });
-        let expected = vec![
-            InlineTerminalOccurrenceKey {
-                terminal_id,
-                occurrence_id: Some(occurrence_id),
-            },
-            InlineTerminalOccurrenceKey::legacy(terminal_id),
-        ];
-        assert_eq!(
-            measured, expected,
-            "real source edit keeps earlier visual occurrence at the merged boundary"
-        );
-        let allocated = parent.read_with(cx, |parent, _| {
-            let mut entries = parent
-                .inline_terminals
-                .iter()
-                .map(|(key, placement)| (placement.block_id.0, *key))
-                .collect::<Vec<_>>();
-            entries.sort_by_key(|(block_id, _)| *block_id);
-            entries.into_iter().map(|(_, key)| key).collect::<Vec<_>>()
-        });
-        assert_ne!(
-            allocated, measured,
-            "fixture must exercise actual rows differing from allocation order"
-        );
-        let (produced, _) = editor
-            .update(cx, |editor, cx| editor.contents(false, cx))
-            .await
-            .expect("real MessageEditor.contents producer");
-        let produced_references = produced
-            .iter()
-            .filter_map(|block| {
-                InlineTerminalPromptReference::from_content(block).expect("verified reference")
-            })
-            .map(|reference| InlineTerminalOccurrenceKey {
-                terminal_id: reference.terminal_id,
-                occurrence_id: reference.occurrence_id,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            produced_references, measured,
-            "INLINE_CONTENTS_DISPLAY_ORDER: ACP production must follow actual equal-boundary rows"
-        );
-        let outputs = |blocks: &[acp::ContentBlock]| {
-            blocks
-                .iter()
-                .filter_map(|block| {
-                    InlineTerminalPromptReference::from_content(block)
-                        .expect("verified reference")
-                        .map(|_| {
-                            let acp::ContentBlock::Resource(resource) = block else {
-                                panic!("canonical resource")
-                            };
-                            let acp::EmbeddedResourceResource::TextResourceContents(contents) =
-                                &resource.resource
-                            else {
-                                panic!("text resource")
-                            };
-                            contents.text.clone()
-                        })
-                })
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            outputs(&produced),
-            vec![second_output.clone(), first_output.clone()]
-        );
-        assert_eq!(
-            editor.read_with(cx, |editor, cx| editor
-                .draft_content_blocks_snapshot(cx)
-                .expect("live snapshot uses admitted display ranks")),
-            produced
-        );
-        // A late unrelated source error can occur after the new occurrence widget was mounted.
-        parent.update_in(cx, |parent, window, cx| {
-    let before_partial = store.read(cx).entry(terminal_id).expect("canonical preimage").clone();
-    let ghost_id = uuid::Uuid::new_v4();
-    let ghost_key = InlineTerminalOccurrenceKey { terminal_id, occurrence_id: Some(ghost_id) };
-    let mut attempted = before_partial.clone();
-    let context = attempted.inline_context.as_mut().expect("current context");
-    let mut frozen = context.clone(); frozen.previous_occurrences.clear();
-    context.previous_occurrences.push(frozen);
-    context.occurrence_id = Some(ghost_id);
-    context.presentation_order = Some(2);
-    let mut invalid_source = before_partial.clone();
-    invalid_source.terminal_id = crate::TerminalId::new();
-    let invalid_context = invalid_source.inline_context.as_mut().expect("source fixture");
-    invalid_context.previous_occurrences.clear();
-    invalid_context.occurrence_id = None;
-    invalid_context.draft_position = Some(InlineTerminalDraftPosition::new("not this conversation's source", 0).expect("valid other source"));
-    let invalid_id = invalid_source.terminal_id;
-    store.update(cx, |store, cx| store.save_inline_batch(vec![attempted.clone(), invalid_source], cx)).expect("stored genuine grid with mismatched source");
-    assert!(parent.sync_inline_terminal_history(window, cx).is_err(), "late source mismatch must still surface");
-    assert!(parent.inline_terminals.contains_key(&ghost_key), "partial attachment actually mounted the new widget before failing");
-    assert_eq!(store.read(cx).entry(terminal_id), Some(&attempted), "rollback may act only on its exact unchanged aggregate");
-    store.update(cx, |store, cx| store.save_inline(before_partial.clone(), cx)).expect("canonical own-metadata rollback");
-    assert!(parent.sync_inline_terminal_history(window, cx).is_err(), "unrelated source error remains reported after rollback");
-    assert!(!parent.inline_terminals.contains_key(&ghost_key), "INLINE_ROLLBACK_PRUNES_ORPHAN: removed occurrence cannot leave a mounted resource widget");
-    assert_eq!(editor.update(cx, |editor, cx| editor.inline_terminal_positions_in_display_order(cx)).expect("preserved valid widgets").len(), 2);
-    assert_eq!(editor.read(cx).draft_content_blocks_snapshot(cx).expect("valid composition after partial-attach rollback"), produced);
-    assert_eq!(store.read(cx).entry(terminal_id), Some(&before_partial));
-    store.update(cx, |store, cx| store.delete(invalid_id, cx));
-    parent.sync_inline_terminal_history(window, cx).expect("only disposable invalid fixture removed");
-});
-        conversation
-            .update(cx, |conversation, cx| {
-                conversation
-                    .persist_current_draft_prompt(cx)
-                    .expect("live canonical persistence")
-            })
-            .await
-            .expect("actual KVP commit");
-        store
-            .update(cx, |store, cx| store.flush(cx))
-            .await
-            .expect("actual SQLite commit");
-        store.update(cx, |store, cx| store.reload_for_test(cx));
-        store.read_with(cx, |store, _| store.reload_task()).await;
-        cx.run_until_parked();
-        let saved_blocks = cx.update(|_, cx| {
-            crate::draft_prompt_store::read_for_restore(thread_id, cx)
-                .expect("actual saved live KVP")
-        });
-        assert_eq!(saved_blocks, produced);
-        let restored_conversation = cx.update(|window, cx| {
-            let previous = conversation.read(cx);
-            let agent = previous.agent.clone();
-            let connection_store = previous.connection_store.clone();
-            let connection_key = previous.connection_key.clone();
-            let thread_store = previous.thread_store.clone();
-            cx.new(|cx| {
-                ConversationView::new(
-                    agent,
-                    connection_store,
-                    connection_key,
-                    None,
-                    Some(thread_id),
-                    None,
-                    None,
-                    Some(AgentInitialContent::RestoredDraft {
-                        blocks: saved_blocks,
-                    }),
-                    workspace.downgrade(),
-                    project.clone(),
-                    thread_store,
-                    crate::AgentThreadSource::AgentPanel,
-                    window,
-                    cx,
-                )
-            })
-        });
-        cx.condition(&restored_conversation, |conversation, cx| {
-            conversation
-                .root_thread_view()
-                .is_some_and(|view| view.read(cx).session_id != session_id)
-        })
-        .await;
-        cx.run_until_parked();
-        let restored = restored_conversation.read_with(cx, |conversation, _| {
-            conversation.root_thread_view().expect("fresh root view")
-        });
-        assert_ne!(restored.entity_id(), parent.entity_id());
-        restored.update(cx, |restored, cx| {
-            let editor = restored.message_editor.clone();
-            let measured = editor
-                .update(cx, |editor, cx| {
-                    editor.inline_terminal_positions_in_display_order(cx)
-                })
-                .expect("restored measured rows")
-                .into_iter()
-                .map(|(block_id, position)| {
-                    assert_eq!(
-                        position
-                            .byte_offset_for_source(source)
-                            .expect("strict restored source"),
-                        "Aλ".len()
-                    );
-                    *restored
-                        .inline_terminals
-                        .iter()
-                        .find(|(_, placement)| {
-                            placement.editor == editor && placement.block_id == block_id
-                        })
-                        .expect("restored occurrence")
-                        .0
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(
-                measured, expected,
-                "RESTART_DISPLAY_ORDER: same-execution occurrences preserve visible tie order"
-            );
-            assert_eq!(
-                outputs(
-                    &editor
-                        .read(cx)
-                        .draft_content_blocks_snapshot(cx)
-                        .expect("restored real composition")
-                ),
-                vec![second_output.clone(), first_output.clone()]
-            );
-            assert_eq!(editor.read(cx).text(cx), source);
-            assert!(
-                restored
-                    .inline_terminals
-                    .values()
-                    .all(|placement| placement.live_view.is_none()),
-                "restart never attaches a live execution"
-            );
-            let aggregate = store
-                .read(cx)
-                .entry(terminal_id)
-                .expect("same durable execution row")
-                .inline_context
-                .as_ref()
-                .expect("aggregate");
-            assert_eq!(aggregate.snapshot.as_ref(), Some(&second_snapshot));
-            assert_eq!(
-                aggregate
-                    .occurrence(None)
-                    .expect("legacy original")
-                    .snapshot
-                    .as_ref(),
-                Some(&first_snapshot)
-            );
-            assert_ne!(aggregate.session_id.as_ref(), Some(&session_id));
-            assert_eq!(aggregate.previous_occurrences.len(), 1);
-        });
-        assert!(
-            editor
-                .read_with(cx, |editor, cx| editor.draft_content_blocks_snapshot(cx))
-                .is_err(),
-            "obsolete view must retain invalid old-session resources instead of saving text-only over the new draft"
-        );
-        assert!(
-            panel.read_with(cx, |panel, cx| panel.terminals(cx).is_empty()),
-            "full Conversation restart creates no PTY"
-        );
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    #[test]
-    fn test_command_remainder_preserves_inline_context_at_and_inside_prefix() {
-        use crate::terminal_thread_metadata_store::{
-            InlineTerminalDraftPosition, InlineTerminalPromptReference,
-        };
-        let source = "/compact λ🦀";
-        let thread_id = ThreadId::new();
-        let session_id = acp::SessionId::new("command-context");
-        let make_resource = |offset, output: &str| {
-            InlineTerminalPromptReference {
-                occurrence_id: None,
-
-                terminal_id: crate::TerminalId::new(),
-                thread_id,
-                session_id: session_id.clone(),
-                position: InlineTerminalDraftPosition::new(source, offset)
-                    .expect("source boundary"),
-            }
-            .content(output.into())
-            .expect("terminal resource")
-        };
-        let mut content = vec![
-            make_resource(0, "before command"),
-            "/c".into(),
-            make_resource(2, "inside command"),
-            "ompact ".into(),
-            make_resource(9, "after command"),
-            "λ🦀".into(),
-        ];
-        let references = strip_command_with_inline_context(&mut content, source, "compact")
-            .expect("source-aware command stripping");
-        assert_eq!(references.len(), 3);
-        for reference in &references {
-            assert_eq!(
-                reference
-                    .position
-                    .byte_offset_for_source("λ🦀")
-                    .expect("rebased Unicode source"),
-                0
-            );
-        }
-        assert!(
-            matches!(content.last(), Some(acp::ContentBlock::Text(text)) if text.text == "λ🦀")
-        );
-        let outputs = content
-            .iter()
-            .filter_map(|block| match block {
-                acp::ContentBlock::Resource(resource) => match &resource.resource {
-                    acp::EmbeddedResourceResource::TextResourceContents(text) => {
-                        Some(text.text.as_str())
-                    }
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(
-            outputs,
-            ["before command", "inside command", "after command"]
-        );
-        let invalid = InlineTerminalPromptReference {
-            occurrence_id: None,
-
-            terminal_id: crate::TerminalId::new(),
-            thread_id,
-            session_id,
-            position: InlineTerminalDraftPosition::new("different source", 0)
-                .expect("invalid-source fixture"),
-        }
-        .content("retained invalid context".into())
-        .expect("resource");
-        let mut failed = vec!["/compact ".into(), invalid, "λ🦀".into()];
-        let original = failed.clone();
-        assert!(strip_command_with_inline_context(&mut failed, source, "compact").is_err());
-        assert_eq!(
-            failed, original,
-            "failure must preserve the full pending content"
-        );
-    }
 
     fn native_command(name: &str) -> acp::AvailableCommand {
         acp::AvailableCommand::new(name, "").meta(acp_thread::meta_with_command_category(

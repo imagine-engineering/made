@@ -1,17 +1,5 @@
-pub mod buzz_tool_compat;
-#[cfg(feature = "multiplayer-tools")]
-pub mod collaboration_mention;
-pub mod collaboration_session;
 mod db;
-#[cfg(feature = "multiplayer-tools")]
-pub mod job_delegation;
-#[cfg(feature = "multiplayer-tools")]
-pub mod jobs;
 mod legacy_thread;
-#[cfg(feature = "multiplayer-tools")]
-pub mod managed_agents;
-#[cfg(feature = "multiplayer-tools")]
-pub mod memory;
 mod native_agent_server;
 pub mod outline;
 mod pattern_extraction;
@@ -20,12 +8,8 @@ pub mod recipe_scan;
 pub mod recipe_schedule;
 pub mod recipe_workflow;
 pub mod recipes;
-#[cfg(feature = "multiplayer-tools")]
-pub mod remote_execution;
 pub mod remote_provider_config;
 mod sandboxing;
-#[cfg(feature = "multiplayer-tools")]
-pub mod snapshot;
 mod templates;
 #[cfg(test)]
 mod tests;
@@ -33,16 +17,10 @@ mod thread;
 mod thread_store;
 mod tool_permissions;
 mod tools;
-#[cfg(feature = "multiplayer-tools")]
-pub mod usage;
 
 use context_server::ContextServerId;
 pub use db::*;
 use itertools::Itertools;
-#[cfg(feature = "multiplayer-tools")]
-pub use managed_agents::*;
-#[cfg(feature = "multiplayer-tools")]
-pub use memory::*;
 pub use native_agent_server::NativeAgentServer;
 pub use pattern_extraction::*;
 pub use sandboxing::{
@@ -50,15 +28,11 @@ pub use sandboxing::{
     settings_thread_sandbox,
 };
 pub use shell_command_parser::extract_commands;
-#[cfg(feature = "multiplayer-tools")]
-pub use snapshot::*;
 pub use templates::*;
 pub use thread::*;
 pub use thread_store::*;
 pub use tool_permissions::*;
 pub use tools::*;
-#[cfg(feature = "multiplayer-tools")]
-pub use usage::*;
 
 use acp_thread::{
     AcpThread, AcpThreadEvent, AgentModelId, AgentModelSelector, AgentSessionInfo,

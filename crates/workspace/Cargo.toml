@@ -12,21 +12,10 @@ workspace = true
 path = "src/workspace.rs"
 doctest = false
 
-[[test]]
-name = "collaborative_review"
-path = "tests/collaborative_review.rs"
-required-features = ["test-support", "multiplayer-tools"]
-
-[[test]]
-name = "collaborative_workspace"
-path = "tests/collaborative_workspace.rs"
-required-features = ["test-support", "multiplayer-tools"]
-
 [features]
 default = []
 agentic = ["dep:agent_settings", "zed_actions/agentic"]
 jvm-tools = ["project/jvm-tools"]
-multiplayer-tools = ["project/multiplayer-tools"]
 test-support = [
     "client/test-support",
     "http_client/test-support",

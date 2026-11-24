@@ -678,10 +678,6 @@ impl TestServer {
                 // Long-lived Redis sockets require Tokio and cannot run on the
                 // deterministic GPUI executor. The Tokio replay integration
                 // test exercises Redis using COLLAB_TEST_REDIS_URL separately.
-                collaboration_redis_url: None,
-                collaboration_nostr_routes: None,
-                collaboration_nostr_api_calls_per_minute: None,
-                collaboration_nostr_closed_websocket: None,
             },
         })
     }

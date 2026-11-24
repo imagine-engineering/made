@@ -29,8 +29,7 @@ pub(crate) fn run_tests() -> Workflow {
     let release_automation_validation = release_automation_validation();
     let windows_updater_tests = windows_updater_tests();
     let windows_jvm_validation = windows_jvm_validation();
-    let multiplayer_tools_standard = multiplayer_tools_profile("standard");
-    let multiplayer_tools_multiplayer = multiplayer_tools_profile("multiplayer");
+    let multiplayer_tools_standard = standard_workspace_profile();
     let validation = shared_validation(&[
         &shared_clippy,
         &copper_tests,
@@ -41,7 +40,6 @@ pub(crate) fn run_tests() -> Workflow {
         &windows_updater_tests,
         &windows_jvm_validation,
         &multiplayer_tools_standard,
-        &multiplayer_tools_multiplayer,
     ]);
     let sim_backend_validation = sim_backend_validation();
     let product_smoke = product_smoke(&validation);
@@ -72,10 +70,6 @@ pub(crate) fn run_tests() -> Workflow {
             multiplayer_tools_standard.name,
             multiplayer_tools_standard.job,
         )
-        .add_job(
-            multiplayer_tools_multiplayer.name,
-            multiplayer_tools_multiplayer.job,
-        )
         .add_job(validation.name, validation.job)
         .add_job(windows_updater_tests.name, windows_updater_tests.job)
         .add_job(windows_jvm_validation.name, windows_jvm_validation.job)
@@ -83,9 +77,9 @@ pub(crate) fn run_tests() -> Workflow {
         .add_job(product_smoke.name, product_smoke.job)
 }
 
-fn multiplayer_tools_profile(profile: &str) -> NamedJob {
+fn standard_workspace_profile() -> NamedJob {
     NamedJob {
-        name: format!("multiplayer_tools_{profile}"),
+        name: "multiplayer_tools_standard".into(),
         job: Job::default()
             .runs_on("ubuntu-22.04")
             .timeout_minutes(120u32)
@@ -98,10 +92,9 @@ fn multiplayer_tools_profile(profile: &str) -> NamedJob {
             .add_step(steps::free_linux_disk_space())
             .add_step(steps::setup_cargo_config(Platform::Linux))
             .add_step(steps::setup_linux())
-            .add_step(setup_inventory_python())
-            .add_step(named::bash(format!(
-                "./script/check-multiplayer-tools --full --profile {profile}"
-            )))
+            .add_step(named::bash(
+                "./script/check-multiplayer-tools --full --profile standard",
+            ))
             .add_step(steps::cleanup_cargo_config(Platform::Linux)),
     }
 }
@@ -143,10 +136,6 @@ fn shared_clippy() -> NamedJob {
             .add_step(steps::setup_linux())
             .add_step(steps::cargo_fmt())
             .add_step(named::bash("./script/clippy"))
-            .add_step(setup_inventory_python())
-            .add_step(named::bash(
-                "python3 script/test-collaborative-workspace-inventory.py",
-            ))
             .add_step(steps::cleanup_cargo_config(Platform::Linux)),
     )
 }
@@ -934,7 +923,6 @@ mod tests {
             ("copper_tests", 90),
             ("graphics_feature_validation", 120),
             ("multiplayer_tools_standard", 120),
-            ("multiplayer_tools_multiplayer", 120),
         ] {
             let steps = job(&parsed, name)
                 .get("steps")
@@ -1131,7 +1119,6 @@ mod tests {
             "windows_updater_tests",
             "windows_jvm_validation",
             "multiplayer_tools_standard",
-            "multiplayer_tools_multiplayer",
         ];
         for worker_name in worker_names {
             assert!(needs(job(&parsed, worker_name)).is_empty());
@@ -1183,65 +1170,23 @@ mod tests {
         }
 
         assert_eq!(needs(job(&parsed, "product_smoke")), ["shared_validation"]);
-        for profile in ["standard", "multiplayer"] {
-            let profile_job_name = format!("multiplayer_tools_{profile}");
-            let profile_job = job(&parsed, &profile_job_name);
-            let expected_command =
-                format!("./script/check-multiplayer-tools --full --profile {profile}");
-            let commands = run_commands(profile_job);
-            assert_eq!(
-                commands
-                    .iter()
-                    .filter(|command| command.contains("check-multiplayer-tools"))
-                    .copied()
-                    .collect::<Vec<_>>(),
-                [expected_command.as_str()]
-            );
-            assert_eq!(
-                profile_job
-                    .get("env")
-                    .and_then(|environment| environment.get("ZED_PRODUCT_ID"))
-                    .and_then(Value::as_str),
-                Some(RUST_PRODUCT_ID)
-            );
-            assert!(needs(profile_job).is_empty());
-        }
+        let profile_job = job(&parsed, "multiplayer_tools_standard");
+        assert!(
+            run_commands(profile_job)
+                .contains(&"./script/check-multiplayer-tools --full --profile standard")
+        );
+        assert_eq!(
+            profile_job
+                .get("env")
+                .and_then(|environment| environment.get("ZED_PRODUCT_ID"))
+                .and_then(Value::as_str),
+            Some(RUST_PRODUCT_ID)
+        );
+        assert!(needs(profile_job).is_empty());
 
         let shared_clippy_commands = run_commands(job(&parsed, "shared_clippy"));
         assert!(shared_clippy_commands.contains(&"cargo fmt --all -- --check"));
         assert!(shared_clippy_commands.contains(&"./script/clippy"));
-        assert!(
-            shared_clippy_commands
-                .contains(&"python3 script/test-collaborative-workspace-inventory.py")
-        );
-        let shared_clippy_steps = job(&parsed, "shared_clippy")
-            .get("steps")
-            .and_then(Value::as_sequence)
-            .expect("shared validation should have steps");
-        let python_setup_position = shared_clippy_steps
-            .iter()
-            .position(|step| {
-                step.get("uses")
-                    .and_then(Value::as_str)
-                    .is_some_and(|action| action.starts_with("actions/setup-python@"))
-                    && step
-                        .get("with")
-                        .and_then(|inputs| inputs.get("python-version"))
-                        .and_then(Value::as_str)
-                        == Some("3.12")
-            })
-            .expect("inventory validation should use Python 3.12");
-        let inventory_check_position = shared_clippy_steps
-            .iter()
-            .position(|step| {
-                step.get("run")
-                    .and_then(Value::as_str)
-                    .is_some_and(|command| {
-                        command == "python3 script/test-collaborative-workspace-inventory.py"
-                    })
-            })
-            .expect("inventory validation should run");
-        assert!(python_setup_position < inventory_check_position);
         let copper_test_commands = run_commands(job(&parsed, "copper_tests"));
         let copper_disk_cleanup = copper_test_commands
             .iter()
@@ -1453,7 +1398,7 @@ mod tests {
             );
         }
 
-        assert_eq!(workflow.matches("runs-on:").count(), 13);
+        assert_eq!(workflow.matches("runs-on:").count(), 12);
         let updater = job(&parsed, "windows_updater_tests");
         assert_eq!(
             updater.get("runs-on").and_then(Value::as_str),
@@ -1514,7 +1459,7 @@ mod tests {
         assert_eq!(workflow.matches("cargo fmt --all -- --check").count(), 1);
         assert_eq!(workflow.matches("run: ./script/clippy").count(), 1);
         assert_eq!(workflow.matches(&product_nextest_command).count(), 1);
-        assert_eq!(workflow.matches("/opt/hostedtoolcache").count(), 7);
+        assert_eq!(workflow.matches("/opt/hostedtoolcache").count(), 6);
         assert_eq!(
             workflow
                 .matches("--bench cargo_workspace -- --noplot")

@@ -14,12 +14,6 @@ doctest = false
 
 [features]
 doctor-dependency-test = ["test-support", "diagnostics/agentic", "diagnostics/rust-tools", "diagnostics/jvm-tools"]
-multiplayer-tools = [
-    "agent/multiplayer-tools",
-    "dep:collaboration_domain",
-    "dep:nostr_compat",
-    "workspace/multiplayer-tools",
-]
 test-support = [
     "diagnostics/test-support",
     "acp_thread/test-support",
@@ -51,7 +45,6 @@ base64.workspace = true
 buffer_diff.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
-collaboration_domain = { workspace = true, optional = true }
 client.workspace = true
 cloud_api_types.workspace = true
 collections.workspace = true
@@ -87,7 +80,6 @@ markdown.workspace = true
 menu.workspace = true
 multi_buffer.workspace = true
 notifications.workspace = true
-nostr_compat = { workspace = true, optional = true }
 ordered-float.workspace = true
 parking_lot.workspace = true
 paths.workspace = true

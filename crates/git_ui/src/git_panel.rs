@@ -1132,105 +1132,6 @@ pub(crate) fn commit_message_editor(
     commit_editor
 }
 
-#[cfg(feature = "multiplayer-tools")]
-struct ProjectDiffStatus {
-    panel: WeakEntity<GitPanel>,
-    _subscriptions: Vec<Subscription>,
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl ProjectDiffStatus {
-    fn new(panel: &Entity<GitPanel>, cx: &mut Context<Self>) -> Self {
-        let mut subscriptions = vec![cx.observe(panel, |_, _, cx| cx.notify())];
-        if let Some(workspace) = panel.read(cx).workspace.upgrade() {
-            subscriptions.push(cx.observe(&workspace, |_, _, cx| cx.notify()));
-        }
-        Self {
-            panel: panel.downgrade(),
-            _subscriptions: subscriptions,
-        }
-    }
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl workspace::StatusItemView for ProjectDiffStatus {
-    fn is_collaborative_primary(&self) -> bool {
-        true
-    }
-
-    fn set_active_pane_item(
-        &mut self,
-        _active_pane_item: Option<&dyn workspace::ItemHandle>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        cx.notify();
-    }
-
-    fn hide_setting(&self, _cx: &App) -> Option<workspace::HideStatusItem> {
-        Some(workspace::HideStatusItem::new(|settings| {
-            settings.git_panel.get_or_insert_default().diff_stats = Some(false);
-        }))
-    }
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl Render for ProjectDiffStatus {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(panel) = self.panel.upgrade() else {
-            return Empty.into_any_element();
-        };
-        let panel = panel.read(cx);
-        let visible = panel.workspace.upgrade().is_some_and(|workspace| {
-            workspace.read(cx).workspace_presentation()
-                == workspace::WorkspacePresentation::Collaborative
-        }) && panel.active_repository.is_some()
-            && !matches!(panel.git_access, Some(GitAccess::No))
-            && GitPanelSettings::get_global(cx).diff_stats;
-        if !visible {
-            return Empty.into_any_element();
-        }
-        let review_available = panel.workspace.upgrade().is_some_and(|workspace| {
-            workspace
-                .read(cx)
-                .collaborative_review()
-                .provider_available(
-                    workspace::collaborative_review::CollaborativeReviewSlot::ProjectChanges,
-                )
-        });
-        let workspace = panel.workspace.clone();
-        let totals = panel.diff_stat_total;
-        div()
-            .debug_selector(|| "NATIVE-PROJECT-DIFF-STATUS".to_owned())
-            .child(
-                ButtonLike::new("project-diff-status")
-                    .size(ButtonSize::Compact)
-                    .tab_index(0isize)
-                    .disabled(!review_available)
-                    .child(ui::DiffStat::new(
-                        "project-diff-status-total",
-                        totals.added as usize,
-                        totals.deleted as usize,
-                    ))
-                    .tooltip(Tooltip::for_action_title_in(
-                        "Review Project Changes",
-                        &workspace::collaborative_review::SelectProjectReview,
-                        &panel.focus_handle,
-                    ))
-                    .on_click(move |_, window, cx| {
-                        if let Some(workspace) = workspace.upgrade() {
-                            workspace.focus_handle(cx).dispatch_action(
-                                &workspace::collaborative_review::SelectProjectReview,
-                                window,
-                                cx,
-                            );
-                        }
-                    }),
-            )
-            .into_any_element()
-    }
-}
-
 impl GitPanel {
     // Only the test-support constructors call this thin wrapper now; production
     // registration goes through `new_with_serialized_panel` directly. Gate it to
@@ -1483,17 +1384,6 @@ impl GitPanel {
 
             this.schedule_update(window, cx);
             this
-        });
-        #[cfg(feature = "multiplayer-tools")]
-        workspace.status_bar().update(cx, |status_bar, cx| {
-            if let Some(status) = status_bar.item_of_type::<ProjectDiffStatus>() {
-                status.update(cx, |status, cx| {
-                    *status = ProjectDiffStatus::new(&panel, cx)
-                });
-            } else {
-                let status = cx.new(|cx| ProjectDiffStatus::new(&panel, cx));
-                status_bar.add_left_item(status, window, cx);
-            }
         });
         panel
     }
@@ -9460,56 +9350,6 @@ mod tests {
         await_git_panel_entries(&panel, &mut cx).await;
 
         (fs, project, workspace, panel, cx)
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    #[gpui::test]
-    async fn collaborative_diff_status_follows_native_panel_and_access(cx: &mut TestAppContext) {
-        init_test(cx);
-        let (_, _, workspace, panel, mut cx) = setup_git_panel_with_changes(
-            cx,
-            json!({".git": {}, "file": "modified\n"}),
-            &[("file", StatusCode::Modified)],
-        )
-        .await;
-        let status_bar = workspace.read_with(&cx, |workspace, _| workspace.status_bar().clone());
-        let status = status_bar
-            .read_with(&cx, |status_bar, _| {
-                status_bar.item_of_type::<ProjectDiffStatus>()
-            })
-            .expect("native Git panel should install the diff status view");
-        cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("NATIVE-PROJECT-DIFF-STATUS").is_some());
-
-        panel.update(&mut cx, |panel, cx| {
-            panel.git_access = Some(GitAccess::No);
-            cx.notify();
-        });
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("NATIVE-PROJECT-DIFF-STATUS").is_none());
-        panel.update(&mut cx, |panel, cx| {
-            panel.git_access = None;
-            cx.notify();
-        });
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("NATIVE-PROJECT-DIFF-STATUS").is_some());
-
-        let replacement = workspace.update_in(&mut cx, GitPanel::new);
-        await_git_panel_entries(&replacement, &mut cx).await;
-        let retained = status_bar
-            .read_with(&cx, |status_bar, _| {
-                status_bar.item_of_type::<ProjectDiffStatus>()
-            })
-            .expect("replacement should retain the status view");
-        assert_eq!(status, retained);
-        assert_eq!(
-            status.read_with(&cx, |status, _| status.panel.upgrade()),
-            Some(replacement)
-        );
-        cx.dispatch_action(workspace::SwitchToEditorWorkspace);
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("NATIVE-PROJECT-DIFF-STATUS").is_none());
     }
 
     #[gpui::test]

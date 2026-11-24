@@ -14,27 +14,6 @@ doctest = false
 
 [features]
 default = []
-multiplayer-tools = [
-    "audio/multiplayer-tools",
-    "remote/multiplayer-tools",
-    "project/multiplayer-tools",
-    "dep:agent_ui",
-    "dep:audio",
-    "dep:chrono",
-    "dep:collaboration_domain",
-    "dep:git_ui",
-    "dep:hex",
-    "dep:log",
-    "dep:multi_buffer",
-    "dep:nostr_compat",
-    "dep:qrcode",
-    "dep:remote",
-    "dep:zeroize",
-    "dep:zed_credentials_provider",
-    "agent_ui/multiplayer-tools",
-    "git_ui/multiplayer-tools",
-    "zed_credentials_provider/multiplayer-tools",
-]
 test-support = [
     "call/test-support",
     "client/test-support",
@@ -50,13 +29,9 @@ test-support = [
 ]
 
 [dependencies]
-agent_ui = { workspace = true, optional = true }
 anyhow.workspace = true
-audio = { workspace = true, optional = true }
 call.workspace = true
 channel.workspace = true
-chrono = { workspace = true, optional = true }
-collaboration_domain = { workspace = true, optional = true }
 client.workspace = true
 collections.workspace = true
 db.workspace = true
@@ -64,18 +39,11 @@ editor.workspace = true
 futures.workspace = true
 fuzzy.workspace = true
 gpui.workspace = true
-git_ui = { workspace = true, optional = true }
-hex = { workspace = true, optional = true }
 livekit_client.workspace = true
-log = { workspace = true, optional = true }
 menu.workspace = true
-multi_buffer = { workspace = true, optional = true }
-nostr_compat = { workspace = true, optional = true }
 notifications.workspace = true
 picker.workspace = true
 project.workspace = true
-qrcode = { workspace = true, optional = true }
-remote = { workspace = true, optional = true }
 release_channel.workspace = true
 rpc.workspace = true
 serde.workspace = true
@@ -93,8 +61,6 @@ ui.workspace = true
 util.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
-zed_credentials_provider = { workspace = true, optional = true }
-zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
 call = { workspace = true, features = ["test-support"] }

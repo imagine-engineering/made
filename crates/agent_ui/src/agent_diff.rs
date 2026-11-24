@@ -147,10 +147,7 @@ impl AgentDiffPane {
             .composer_panel(cx)
             .ok_or_else(|| anyhow::anyhow!("Reopen this task to restore its composer"))
             .and_then(|panel| {
-                if let Some(workspace) = self.workspace.upgrade()
-                    && workspace.read(cx).workspace_presentation()
-                        != workspace::WorkspacePresentation::Collaborative
-                {
+                if let Some(workspace) = self.workspace.upgrade() {
                     workspace.update(cx, |workspace, cx| {
                         workspace.focus_panel::<crate::AgentPanel>(window, cx);
                     });
@@ -765,16 +762,6 @@ impl Render for AgentDiffPane {
         let focus_handle = &self.focus_handle;
         let (empty_label, action_label) = self.empty_state(cx);
         let composer_available = self.composer_panel(cx).is_some();
-        let quiet_empty = action_label == "Continue Iterating"
-            && self.workspace.upgrade().is_some_and(|workspace| {
-                workspace.read(cx).workspace_presentation()
-                    == workspace::WorkspacePresentation::Collaborative
-            });
-        let action_label = if quiet_empty {
-            "Return to composer"
-        } else {
-            action_label
-        };
 
         div()
             .track_focus(focus_handle)
@@ -806,19 +793,7 @@ impl Render for AgentDiffPane {
                                 .debug_selector(|| "AGENT-REVIEW-EMPTY-MESSAGE".to_owned())
                                 .w_full()
                                 .text_center()
-                                .child(
-                                    Label::new(empty_label)
-                                        .size(if quiet_empty {
-                                            LabelSize::Small
-                                        } else {
-                                            LabelSize::Default
-                                        })
-                                        .color(if quiet_empty {
-                                            Color::Muted
-                                        } else {
-                                            Color::Default
-                                        }),
-                                ),
+                                .child(Label::new(empty_label)),
                         )
                         .when(!composer_available, |this| {
                             this.child(
@@ -835,16 +810,7 @@ impl Render for AgentDiffPane {
                                 .child(
                                     Button::new("continue-iterating", action_label)
                                         .disabled(!composer_available)
-                                        .size(if quiet_empty {
-                                            ButtonSize::Compact
-                                        } else {
-                                            ButtonSize::Default
-                                        })
-                                        .style(if quiet_empty {
-                                            ButtonStyle::Subtle
-                                        } else {
-                                            ButtonStyle::Filled
-                                        })
+                                        .style(ButtonStyle::Filled)
                                         .start_icon(
                                             Icon::new(IconName::ForwardArrow)
                                                 .size(IconSize::Small)
