@@ -745,6 +745,12 @@ impl Project {
             }
 
             if let Some(check) = check_before_spawn {
+                anyhow::ensure!(
+                    !structured_task
+                        .as_ref()
+                        .is_some_and(|handle| handle.state().is_terminal()),
+                    "The structured Task was cancelled before terminal creation"
+                );
                 check(cx).await?;
             }
             let preparation_handle = structured_task.clone();
@@ -1995,61 +2001,77 @@ mod tests {
         });
         assert_eq!(current_environment.await, Some(HashMap::default()));
 
-        let guarded_directory = PathBuf::from(util::path!("/remote-task-renewal"));
-        let (environment_started, waiting_for_environment) = oneshot::channel();
-        let (release_environment, held_environment) = oneshot::channel();
-        let (check_started, mut waiting_for_check) = oneshot::channel();
-        let pending = project.update(cx, |project, cx| {
-            let shell = remote_client.read(cx).shell().expect("remote shell");
-            project.environment.update(cx, |environment, cx| {
-                let held = cx.spawn(async move |_, _| {
-                    environment_started
-                        .send(())
-                        .expect("Task requested host environment");
-                    held_environment.await.expect("release host environment")
+        for cancelled in [false, true] {
+            let guarded_directory = PathBuf::from(util::path!("/remote-task-renewal"));
+            let (environment_started, waiting_for_environment) = oneshot::channel();
+            let (release_environment, held_environment) = oneshot::channel();
+            let (check_started, mut waiting_for_check) = oneshot::channel();
+            let task = SpawnInTerminal {
+                command: Some("printf".into()),
+                cwd: Some(guarded_directory.clone()),
+                ..Default::default()
+            };
+            let handle = StructuredTaskHandle::new(task.id.clone());
+            let pending = project.update(cx, |project, cx| {
+                let shell = remote_client.read(cx).shell().expect("remote shell");
+                project.environment.update(cx, |environment, cx| {
+                    let held = cx.spawn(async move |_, _| {
+                        environment_started
+                            .send(())
+                            .expect("Task requested host environment");
+                        held_environment.await.expect("release host environment")
+                    });
+                    environment.cache_remote_directory_environment_for_test(
+                        Shell::Program(shell),
+                        Arc::from(guarded_directory.as_path()),
+                        held,
+                    );
                 });
-                environment.cache_remote_directory_environment_for_test(
-                    Shell::Program(shell),
-                    Arc::from(guarded_directory.as_path()),
-                    held,
-                );
+                project.create_terminal_task_with_preflight(
+                    task,
+                    Some(handle.clone()),
+                    None,
+                    None,
+                    Some(Box::new(move |_| {
+                        check_started.send(()).expect("observe the late check");
+                        Task::ready(Err(anyhow::anyhow!("held host authorization expired")))
+                    })),
+                    cx,
+                )
             });
-            project.create_terminal_task_with_preflight(
-                SpawnInTerminal {
-                    command: Some("printf".into()),
-                    cwd: Some(guarded_directory),
-                    ..Default::default()
-                },
-                None,
-                None,
-                None,
-                Some(Box::new(move |_| {
-                    check_started.send(()).expect("observe the late check");
-                    Task::ready(Err(anyhow::anyhow!("held host authorization expired")))
-                })),
-                cx,
-            )
-        });
-        waiting_for_environment
-            .await
-            .expect("wait for host environment");
-        assert!(
-            waiting_for_check
-                .try_recv()
-                .expect("late check still pending")
-                .is_none()
-        );
-        release_environment
-            .send(Some(HashMap::default()))
-            .expect("release Task environment");
-        waiting_for_check
-            .await
-            .expect("final check runs after environment");
-        assert!(
-            pending
+            waiting_for_environment
                 .await
-                .is_err_and(|error| error.to_string() == "held host authorization expired")
-        );
+                .expect("wait for host environment");
+            assert!(
+                waiting_for_check
+                    .try_recv()
+                    .expect("late check still pending")
+                    .is_none()
+            );
+            if cancelled {
+                cx.update(|cx| assert!(handle.cancel(cx)));
+            }
+            release_environment
+                .send(Some(HashMap::default()))
+                .expect("release Task environment");
+            let error = pending.await.err().expect("the remote Task did not spawn");
+            if cancelled {
+                assert!(waiting_for_check.await.is_err());
+                assert_eq!(
+                    error.to_string(),
+                    "The structured Task was cancelled before terminal creation"
+                );
+                assert!(matches!(
+                    handle.state(),
+                    task::StructuredTaskState::Cancelled { .. }
+                ));
+            } else {
+                waiting_for_check
+                    .await
+                    .expect("final check runs after environment");
+                assert_eq!(error.to_string(), "held host authorization expired");
+            }
+        }
     }
 
     #[test]
