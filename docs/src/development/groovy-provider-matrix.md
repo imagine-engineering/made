@@ -5,6 +5,31 @@ name; Groovy language support is a separate release decision. An upstream
 manifest or download link establishes an available integration, not a passed
 Groovy workflow or permission to redistribute its binary.
 
+## Kotlin provider status — 2026-11-24
+
+The preferred macOS ARM64 Kotlin LSP pin `263.4702.0` fails to start. A clean
+extraction of the checksum-verified archive reproduced the EAP expiry and
+exited 7. The connected Remote Server trust fixture also received the expiry
+message when it tried to initialize the pinned provider on its host.
+
+The user-selected `kotlin-language-server` fallback `1.3.13` passed standalone
+semantic checks with 500 additional Kotlin sources in each two-module fixture.
+Both Maven launches denied non-local network access after cache alignment and
+an offline install of the reactor library. Gradle warmed its cache on the first
+launch, then made 12 offline wrapper calls during the denied-network restart.
+Both build systems verified completion, definition navigation, diagnostic
+recovery and indexing of `GroovyScale499.kt`.
+
+| Standalone fixture | First launch | Restart | Highest sampled provider-process RSS |
+| ------------------ | -----------: | ------: | -----------------------------------: |
+| Maven              |       24.3 s |  25.4 s |                             7.33 GiB |
+| Gradle             |       54.7 s |  17.7 s |                             6.50 GiB |
+
+These samples exclude the editor and do not account for detached Gradle
+daemons. The 32 GiB reference and 8 GiB combined resident-memory gate require
+the editor and all owned workers. The earlier fallback completion failure
+remains in the record. The fallback stays user-selected and `jvm` stays planned.
+
 ## Current development SDK boundary — 2026-10-18
 
 The latest locally qualified internal development bundle is **0.50.0**, SHA-256
