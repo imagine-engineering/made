@@ -2669,6 +2669,34 @@ mod jvm_tools_runtime_tests {
     }
 
     #[gpui::test]
+    async fn remote_kotlin_release_check_obeys_the_project_host_network_policy(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        let fixture = GroovyRemoteWorkspaceFixture::new(true, true, cx, server_cx).await;
+        let store = fixture
+            .project
+            .read_with(cx, |project, _| project.lsp_store());
+        assert!(
+            store
+                .update(cx, |store, cx| store.check_kotlin_lsp_release(cx))
+                .is_err()
+        );
+        fixture.trust(cx, server_cx);
+        let error = store
+            .update(cx, |store, cx| store.check_kotlin_lsp_release(cx))
+            .expect("trusted direct release check")
+            .await
+            .expect_err("the fixture host forbids HTTP");
+        assert!(
+            error
+                .to_string()
+                .contains("Could not reach the official Kotlin LSP release from the project host"),
+            "{error:#}"
+        );
+    }
+
+    #[gpui::test]
     async fn remote_jvm_workspace_runs_ordered_tasks_only_with_a_current_host_plan(
         cx: &mut TestAppContext,
         server_cx: &mut TestAppContext,

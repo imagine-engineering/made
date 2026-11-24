@@ -1206,6 +1206,14 @@ message SynchronizeRemoteGradleMetadata {
   uint64 worktree_id = 4;
 }
 
+message CheckKotlinLspRelease {
+  uint64 project_id = 1;
+}
+
+message KotlinLspReleaseResponse {
+  optional string version = 1;
+}
+
 message JdtlsProjectSnapshotResponse {
   uint32 protocol_version = 1;
   uint64 request_id = 2;

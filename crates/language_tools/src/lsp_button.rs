@@ -17,8 +17,10 @@ use gpui::{Action as _, Anchor, App, Entity, Subscription, Task, TaskExt, WeakEn
 use language::{BinaryStatus, BufferId, ServerHealth};
 use lsp::{LanguageServerId, LanguageServerName, LanguageServerSelector};
 use project::{
-    LspStore, LspStoreEvent, Worktree, lsp_store::log_store::GlobalLogStore,
-    project_settings::ProjectSettings, trusted_worktrees::TrustedWorktrees,
+    LspStore, LspStoreEvent, Worktree,
+    lsp_store::{kotlin_lsp_expiry, kotlin_lsp_version, log_store::GlobalLogStore},
+    project_settings::ProjectSettings,
+    trusted_worktrees::TrustedWorktrees,
 };
 use settings::{Settings as _, SettingsStore};
 use ui::{
@@ -278,6 +280,10 @@ impl LanguageServerState {
                     .collect::<HashMap<_, _>>()
             })
             .unwrap_or_default();
+
+        if !is_restricted {
+            menu = self.add_kotlin_release_check(menu, cx);
+        }
 
         let process_memory_cache = self.process_memory_cache.clone();
 
@@ -673,6 +679,99 @@ impl LanguageServerState {
         }
         menu
     }
+
+    fn add_kotlin_release_check(
+        &self,
+        mut menu: ContextMenu,
+        cx: &mut Context<Self>,
+    ) -> ContextMenu {
+        let preferred = LanguageServerName::new_static("kotlin-lsp");
+        let expiry = self
+            .language_servers
+            .binary_statuses
+            .get(&preferred)
+            .and_then(|status| {
+                let BinaryStatus::Failed { error } = &status.status else {
+                    return None;
+                };
+                kotlin_lsp_expiry(error)
+            });
+        let Some((running, is_remote)) = self
+            .lsp_store
+            .read_with(cx, |store, _| {
+                store.supports_kotlin_lsp_release_check().then(|| {
+                    let running = store
+                        .language_server_statuses()
+                        .rev()
+                        .find_map(|(_, status)| {
+                            (status.name == preferred)
+                                .then_some(status.server_readable_version.as_deref())
+                        });
+                    (
+                        running.map(|version| version.and_then(kotlin_lsp_version)),
+                        store.as_remote().is_some(),
+                    )
+                })
+            })
+            .ok()
+            .flatten()
+        else {
+            return menu;
+        };
+        let expired = running.is_none() && expiry.is_some();
+        let Some(installed) = running.or(expiry) else {
+            return menu;
+        };
+        if expired {
+            menu = menu.header("Kotlin LSP expired");
+        }
+        let lsp_store = self.lsp_store.clone();
+        menu.entry("Check for Kotlin LSP Update", None, move |window, cx| {
+            let release = lsp_store.update(cx, |store, cx| store.check_kotlin_lsp_release(cx));
+            let installed = installed.clone();
+            window.to_async(cx).spawn(async move |cx| {
+                let release = match release {
+                    Ok(Ok(task)) => task.await,
+                    Ok(Err(error)) | Err(error) => Err(error),
+                };
+                let installed_description = installed.as_ref().map_or_else(|| "Unknown".to_string(), ToString::to_string);
+                let (available_description, release_url) = match release {
+                    Ok(Some(available)) => {
+                        let show_release = installed.as_ref().is_none_or(|installed| available > *installed);
+                        let url = show_release.then(|| format!("https://github.com/Kotlin/kotlin-lsp/releases/tag/kotlin-lsp/v{available}"));
+                        (available.to_string(), url)
+                    }
+                    Ok(None) => ("The latest release lists no standalone archive for this project host.".to_string(), None),
+                    Err(error) => (error.to_string(), None),
+                };
+                let location = if is_remote {
+                    "For SSH, WSL, and containers, install the standalone server on the project host."
+                } else {
+                    "Install a compatible standalone server on this computer."
+                };
+                let reason = if expired {
+                    "Kotlin support could not start because the installed EAP build expired.\n\n"
+                } else {
+                    ""
+                };
+                let details = format!(
+                    "{reason}Installed version: {installed_description}\nAvailable version: {available_description}\n\n{location} Set or update lsp.kotlin-lsp.binary.path to the new executable, then restart the language server."
+                );
+                let actions: &[&str] = if release_url.is_some() { &["Open Kotlin LSP release", "Close"] } else { &["Close"] };
+                let response = cx.update(|window, cx| window.prompt(
+                    if expired { gpui::PromptLevel::Warning } else { gpui::PromptLevel::Info },
+                    "Kotlin LSP Release",
+                    Some(&details),
+                    actions,
+                    cx,
+                ))?;
+                if response.await? == 0 && let Some(url) = release_url {
+                    cx.update(|_, cx| cx.open_url(&url))?;
+                }
+                anyhow::Ok(())
+            }).detach_and_log_err(cx);
+        })
+    }
 }
 
 impl LanguageServers {
@@ -910,7 +1009,9 @@ impl LspButton {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.lsp_menu.is_none() {
+        let kotlin_notice = matches!(e, LspStoreEvent::LanguageServerUpdate { name: Some(name), .. } if name == &LanguageServerName::new_static("kotlin-lsp"))
+            && ProjectSettings::get_global(cx).global_lsp_settings.button;
+        if self.lsp_menu.is_none() && !kotlin_notice {
             return;
         };
         let mut updated = false;
@@ -1015,7 +1116,7 @@ impl LspButton {
         };
 
         if updated {
-            self.refresh_lsp_menu(false, window, cx);
+            self.refresh_lsp_menu(kotlin_notice, window, cx);
         }
     }
 

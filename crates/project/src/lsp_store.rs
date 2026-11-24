@@ -813,6 +813,8 @@ impl LocalLspStore {
             }
         };
         let pending_workspace_folders = Arc::<Mutex<BTreeSet<Uri>>>::default();
+        #[cfg(feature = "jvm-tools")]
+        let kotlin_binary_version = Arc::new(Mutex::new(None));
 
         let pending_server = cx.spawn({
             let adapter = adapter.clone();
@@ -821,8 +823,15 @@ impl LocalLspStore {
             #[cfg(any(test, feature = "test-support"))]
             let lsp_store = self.weak.clone();
             let pending_workspace_folders = pending_workspace_folders.clone();
+            #[cfg(feature = "jvm-tools")]
+            let kotlin_binary_version = kotlin_binary_version.clone();
             async move |cx| {
                 let binary = binary.await?;
+                #[cfg(feature = "jvm-tools")]
+                if server_name == LanguageServerName::new_static("kotlin-lsp") {
+                    *kotlin_binary_version.lock() =
+                        kotlin_lsp_ext::standalone_binary_version(&binary.path);
+                }
                 #[cfg(any(test, feature = "test-support"))]
                 if let Some(server) = lsp_store
                     .update(&mut cx.clone(), |this, cx| {
@@ -1012,6 +1021,17 @@ impl LocalLspStore {
                             &format!("{err:#}"),
                             &log,
                         );
+                        #[cfg(feature = "jvm-tools")]
+                        let status_error = if status_error.starts_with(KOTLIN_LSP_EXPIRED) {
+                            match kotlin_binary_version.lock().as_ref() {
+                                Some(version) => format!(
+                                    "{status_error}\nInstalled Kotlin LSP version: {version}"
+                                ),
+                                None => status_error,
+                            }
+                        } else {
+                            status_error
+                        };
                         delegate.update_status(
                             adapter.name(),
                             BinaryStatus::Failed {
@@ -5043,6 +5063,30 @@ fn jvm_download_capability_error(
     }
 }
 
+const KOTLIN_LSP_EXPIRED: &str = "The Kotlin LSP build on the project host has expired.";
+
+pub fn kotlin_lsp_version(value: &str) -> Option<Version> {
+    let value = value.strip_prefix("ILS-").unwrap_or(value);
+    let value = value.strip_suffix("-EAP").unwrap_or(value);
+    if value.len() > 32
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'.')
+    {
+        return None;
+    }
+    Version::parse(value).ok()
+}
+
+pub fn kotlin_lsp_expiry(message: &str) -> Option<Option<Version>> {
+    let details = message.strip_prefix(KOTLIN_LSP_EXPIRED)?;
+    Some(
+        details.lines().find_map(|line| {
+            kotlin_lsp_version(line.strip_prefix("Installed Kotlin LSP version: ")?)
+        }),
+    )
+}
+
 #[cfg(feature = "jvm-tools")]
 fn kotlin_lsp_startup_error(
     name: &LanguageServerName,
@@ -5053,7 +5097,7 @@ fn kotlin_lsp_startup_error(
     (name == &LanguageServerName::new_static("kotlin-lsp")
         && (error.contains(EXPIRED) || stderr.contains(EXPIRED)))
     .then_some(
-        "The Kotlin LSP build on the project host has expired. Configure a compatible replacement with lsp.kotlin-lsp.binary.path and restart the language server, or explicitly select kotlin-language-server in Kotlin language settings.",
+        "The Kotlin LSP build on the project host has expired. Kotlin support could not start because this EAP build is time-limited. Install a newer standalone server on the project host, update lsp.kotlin-lsp.binary.path if it points to the expired binary, and restart the language server. You can also explicitly select kotlin-language-server in Kotlin language settings.",
     )
 }
 
@@ -5325,6 +5369,23 @@ fn merge_call_hierarchy_calls(responses: Vec<CallHierarchyCalls>) -> CallHierarc
 }
 
 impl LspStore {
+    pub fn supports_kotlin_lsp_release_check(&self) -> bool {
+        cfg!(feature = "jvm-tools") && !self.isolated_recipe_test
+    }
+
+    pub fn check_kotlin_lsp_release(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<Option<Version>>>> {
+        #[cfg(feature = "jvm-tools")]
+        return self.check_kotlin_lsp_release_on_host(cx);
+        #[cfg(not(feature = "jvm-tools"))]
+        {
+            let _ = cx;
+            anyhow::bail!("Kotlin LSP release checks are unavailable in this build")
+        }
+    }
+
     pub fn init(client: &AnyProtoClient) {
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_set_jvm_project_consumers);
@@ -5332,6 +5393,8 @@ impl LspStore {
         client.add_entity_request_handler(Self::handle_get_jdtls_project_snapshot);
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_synchronize_remote_gradle_metadata);
+        #[cfg(feature = "jvm-tools")]
+        client.add_entity_request_handler(Self::handle_check_kotlin_lsp_release);
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_resolve_jvm_build_operation);
         #[cfg(feature = "jvm-tools")]

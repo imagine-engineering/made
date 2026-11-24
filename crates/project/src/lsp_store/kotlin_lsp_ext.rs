@@ -1,13 +1,229 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc, time::Duration};
 
+use anyhow::{Context as _, Result, ensure};
+use futures::AsyncReadExt as _;
+use http_client::{HttpClient, HttpRequestExt as _, RedirectPolicy, Request};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use gpui::{AsyncApp, WeakEntity};
+use gpui::{App, AsyncApp, Context, Entity, Task, WeakEntity};
 use lsp::{LanguageServer, LanguageServerId};
-use rpc::proto;
+use rpc::{TypedEnvelope, proto};
+use semver::Version;
 
 use crate::LspStore;
+
+const LATEST_RELEASE_API: &str = "https://api.github.com/repos/Kotlin/kotlin-lsp/releases/latest";
+const MAX_RELEASE_METADATA: u64 = 128 * 1024;
+const RELEASE_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub(super) fn standalone_binary_version(binary: &Path) -> Option<Version> {
+    if !matches!(
+        binary.file_name()?.to_str()?,
+        "intellij-server" | "intellij-server.exe"
+    ) {
+        return None;
+    }
+    let bin = binary.parent()?;
+    if bin.file_name()?.to_str()? != "bin" {
+        return None;
+    }
+    let directory = bin.parent()?.file_name()?.to_str()?;
+    let version = directory
+        .strip_prefix("kotlin-server-")
+        .or_else(|| directory.strip_prefix("kotlin-lsp-"))?;
+    super::kotlin_lsp_version(version)
+}
+
+#[derive(Deserialize)]
+struct LatestRelease {
+    tag_name: String,
+    body: String,
+}
+
+fn standalone_release(release: LatestRelease, os: &str, arch: &str) -> Option<Version> {
+    let version = super::kotlin_lsp_version(release.tag_name.strip_prefix("kotlin-lsp/v")?)?;
+    let suffix = match arch {
+        "x86_64" => "",
+        "aarch64" => "-aarch64",
+        _ => return None,
+    };
+    let extension = match os {
+        "macos" => "sit",
+        "linux" => "tar.gz",
+        "windows" => "win.zip",
+        _ => return None,
+    };
+    let url = format!(
+        "https://download.jetbrains.com/language-server/kotlin-server/{version}/kotlin-server-{version}{suffix}.{extension}"
+    );
+    let standalone = release
+        .body
+        .split_once("**Standalone Kotlin LSP Archive**")?
+        .1;
+    standalone
+        .lines()
+        .take_while(|line| !line.starts_with('#'))
+        .any(|line| {
+            line.contains(&format!("]({url})")) && line.contains(&format!("]({url}.sha256)"))
+        })
+        .then_some(version)
+}
+
+async fn fetch_standalone_release(http: Arc<dyn HttpClient>) -> Result<Option<Version>> {
+    let request = Request::get(LATEST_RELEASE_API)
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", "Made-Kotlin-LSP")
+        .follow_redirects(RedirectPolicy::NoFollow)
+        .timeout(RELEASE_TIMEOUT)
+        .body(Default::default())?;
+    let mut response = http
+        .send(request)
+        .await
+        .context("Could not reach the official Kotlin LSP release from the project host")?;
+    ensure!(
+        response.status().is_success(),
+        "The Kotlin LSP release check returned HTTP {}",
+        response.status().as_u16()
+    );
+    let mut body = Vec::new();
+    response
+        .body_mut()
+        .take(MAX_RELEASE_METADATA + 1)
+        .read_to_end(&mut body)
+        .await?;
+    ensure!(
+        body.len() as u64 <= MAX_RELEASE_METADATA,
+        "Kotlin LSP release metadata exceeded the permitted size"
+    );
+    let release = serde_json::from_slice(&body)
+        .context("Could not read the official Kotlin LSP release metadata")?;
+    Ok(standalone_release(
+        release,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    ))
+}
+
+impl LspStore {
+    fn ensure_kotlin_release_check_scope(&self, cx: &App) -> Result<()> {
+        ensure!(
+            !self.isolated_recipe_test,
+            "Kotlin LSP release checks are disabled in this execution profile"
+        );
+        ensure!(
+            crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx).is_some()
+                && !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
+                    &self.worktree_store,
+                    cx
+                )
+                && self
+                    .worktree_store
+                    .read(cx)
+                    .visible_worktrees(cx)
+                    .next()
+                    .is_some(),
+            "Trust the project before checking for a Kotlin LSP release"
+        );
+        Ok(())
+    }
+
+    fn remote_kotlin_release_client(&self, cx: &App) -> Result<(&rpc::AnyProtoClient, u64)> {
+        self.ensure_kotlin_release_check_scope(cx)?;
+        let remote = self
+            .as_remote()
+            .filter(|remote| {
+                remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                    && remote.jvm_consumers.connected
+            })
+            .context("Connect directly to the Kotlin project host to check for a release")?;
+        let client = remote
+            .upstream_client
+            .as_ref()
+            .filter(|client| !client.is_via_collab())
+            .context("Kotlin LSP release checks require a direct project host connection")?;
+        Ok((client, remote.jvm_consumers.generation))
+    }
+
+    pub(super) fn check_kotlin_lsp_release_on_host(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<Option<Version>>>> {
+        self.ensure_kotlin_release_check_scope(cx)?;
+        if let Some(local) = self.as_local() {
+            let http = local.http_client.clone();
+            return Ok(cx.spawn(async move |store, cx| {
+                let release = fetch_standalone_release(http).await?;
+                store.read_with(cx, |store, cx| store.ensure_kotlin_release_check_scope(cx))??;
+                Ok(release)
+            }));
+        }
+        let (client, generation) = self.remote_kotlin_release_client(cx)?;
+        let client = client.clone();
+        Ok(cx.spawn(async move |store, cx| {
+            let request = client.request(proto::CheckKotlinLspRelease {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            });
+            let timeout = cx
+                .background_executor()
+                .timer(RELEASE_TIMEOUT + Duration::from_secs(3));
+            let response = match futures::future::select(Box::pin(request), Box::pin(timeout)).await
+            {
+                futures::future::Either::Left((response, _)) => response?,
+                futures::future::Either::Right(_) => {
+                    anyhow::bail!("The project host's Kotlin LSP release check timed out")
+                }
+            };
+            store.read_with(cx, |store, cx| {
+                let (current, current_generation) = store.remote_kotlin_release_client(cx)?;
+                ensure!(
+                    current.is_same_instance(&client) && generation == current_generation,
+                    "The Kotlin project host changed during the release check"
+                );
+                Ok::<_, anyhow::Error>(())
+            })??;
+            response
+                .version
+                .as_deref()
+                .map(|version| {
+                    super::kotlin_lsp_version(version)
+                        .context("The project host returned an invalid Kotlin LSP release version")
+                })
+                .transpose()
+        }))
+    }
+
+    pub(super) async fn handle_check_kotlin_lsp_release(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::CheckKotlinLspRelease>,
+        cx: AsyncApp,
+    ) -> Result<proto::KotlinLspReleaseResponse> {
+        ensure!(
+            envelope.original_sender_id.is_none(),
+            "Kotlin LSP release checks require a direct project host connection"
+        );
+        let scope = |store: &Self, cx: &App| {
+            store
+                .ensure_host_jvm_consumer_scope(envelope.payload.project_id, envelope.sender_id)?;
+            store.ensure_kotlin_release_check_scope(cx)
+        };
+        let http = this.read_with(&cx, |store, cx| {
+            scope(store, cx)?;
+            Ok::<_, anyhow::Error>(
+                store
+                    .as_local()
+                    .context("The Kotlin project host is unavailable")?
+                    .http_client
+                    .clone(),
+            )
+        })?;
+        let version = fetch_standalone_release(http).await?;
+        this.read_with(&cx, scope)?;
+        Ok(proto::KotlinLspReleaseResponse {
+            version: version.map(|version| version.to_string()),
+        })
+    }
+}
 
 #[derive(Debug)]
 struct WorkspaceImportState;
@@ -319,6 +535,73 @@ pub(super) fn register_notifications(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn standalone_release_requires_the_exact_archive_for_the_host() {
+        let tag = "kotlin-lsp/v271.2085.0";
+        let url = "https://download.jetbrains.com/language-server/kotlin-server/271.2085.0/kotlin-server-271.2085.0-aarch64.sit";
+        let links =
+            format!("  * [Download for macOS-arm64]({url}) | [SHA-256 checksum]({url}.sha256)");
+        let release = |body| super::LatestRelease {
+            tag_name: tag.into(),
+            body,
+        };
+        let standalone = || {
+            release(format!(
+                "### v271.2085.0\r\n- **Standalone Kotlin LSP Archive**\r\n{links}"
+            ))
+        };
+        assert_eq!(
+            super::standalone_release(standalone(), "macos", "aarch64")
+                .map(|v| v.to_string())
+                .as_deref(),
+            Some("271.2085.0")
+        );
+        for (os, arch) in [
+            ("macos", "x86_64"),
+            ("linux", "aarch64"),
+            ("windows", "aarch64"),
+        ] {
+            assert!(super::standalone_release(standalone(), os, arch).is_none());
+        }
+        assert!(super::standalone_release(release(links.clone()), "macos", "aarch64").is_none());
+        assert!(
+            super::standalone_release(
+                release(format!(
+                    "**Standalone Kotlin LSP Archive**\n### Changelog\n{links}"
+                )),
+                "macos",
+                "aarch64"
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn expired_binary_version_accepts_a_standard_standalone_layout() {
+        use std::path::Path;
+        for path in [
+            "/local/kotlin-server-263.4702.0/bin/intellij-server",
+            "/local/kotlin-lsp-263.4702.0/bin/intellij-server.exe",
+        ] {
+            assert_eq!(
+                super::standalone_binary_version(Path::new(path))
+                    .map(|v| v.to_string())
+                    .as_deref(),
+                Some("263.4702.0")
+            );
+        }
+        assert!(
+            super::standalone_binary_version(Path::new("/custom/kotlin/bin/intellij-server"))
+                .is_none()
+        );
+        assert!(
+            super::standalone_binary_version(Path::new(
+                "/custom/kotlin-server-263.4702.0/bin/wrapper"
+            ))
+            .is_none()
+        );
+    }
+
     use super::*;
 
     #[test]

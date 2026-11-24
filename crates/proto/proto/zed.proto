@@ -570,7 +570,9 @@ message Envelope {
     GitRestoreIndexFiles git_restore_index_files = 535;
     ResolveJvmBuildOperation resolve_jvm_build_operation = 536;
     JvmBuildOperationResponse jvm_build_operation_response = 537;
-    SynchronizeRemoteGradleMetadata synchronize_remote_gradle_metadata = 538; // current max
+    SynchronizeRemoteGradleMetadata synchronize_remote_gradle_metadata = 538;
+    CheckKotlinLspRelease check_kotlin_lsp_release = 539;
+    KotlinLspReleaseResponse kotlin_lsp_release_response = 540; // current max
   }
 
   reserved 87 to 88;

@@ -62,8 +62,16 @@ download requires network access unless it is already cached. No server binary
 is bundled or certified for release by this development candidate.
 
 The pinned macOS ARM64 Kotlin LSP `263.4702.0` candidate reports an expired
-EAP build and exits at startup. The language-server status points to the
-installed-binary override or deliberate alternate-server selection.
+EAP build and exits before Kotlin support can start. In **Language Servers**,
+choose **Check for Kotlin LSP Update** to compare the installed version with
+the latest official standalone build for the project host. A newer compatible
+archive provides an **Open Kotlin LSP release** action. The check reads release
+metadata. You choose whether to download and install a server.
+
+For SSH, WSL, and container projects, install the standalone server on the
+project host. Set or update `lsp.kotlin-lsp.binary.path` to that executable and
+restart the language server. The check preserves your current provider and
+binary override.
 
 To choose the alternate Kotlin server, use the Settings Editor or add this to
 your project or user settings:
