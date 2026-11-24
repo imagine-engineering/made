@@ -8274,6 +8274,134 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
+    fn remote_jvm_operation_scope(
+        &self,
+        receipt: &jvm_project::JvmBuildOperationReceipt,
+        cx: &App,
+    ) -> Result<(&AnyProtoClient, u64, u64)> {
+        let remote = self
+            .as_remote()
+            .filter(|remote| {
+                remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                    && remote.jvm_consumers.connected
+                    && remote.jvm_consumers.accepted_roots.iter().any(|root| {
+                        root.worktree_id == receipt.worktree_id
+                            && receipt.module_root.path.starts_with(&root.path)
+                    })
+            })
+            .context(
+                "The current remote connection does not own this JVM module; reconnect and refresh",
+            )?;
+        let client = remote
+            .upstream_client
+            .as_ref()
+            .filter(|client| !client.is_via_collab())
+            .context("Discovered JVM operations require a direct project host connection")?;
+        ensure!(
+            receipt.module_root.worktree_id == receipt.worktree_id
+                && TrustedWorktrees::try_get_global(cx).is_some_and(|trusted| {
+                    let trusted = trusted.read(cx);
+                    trusted.observed_worktree_trust(&self.worktree_store, receipt.worktree_id, cx)
+                        == Some(true)
+                        && !trusted.has_restricted_worktrees(&self.worktree_store, cx)
+                })
+                && self
+                    .worktree_store
+                    .read(cx)
+                    .worktree_for_id(receipt.worktree_id, cx)
+                    .is_some_and(|tree| {
+                        let tree = tree.read(cx);
+                        tree.is_visible()
+                            && project_input_is_visible(
+                                &tree.snapshot(),
+                                &receipt.module_root,
+                                receipt.worktree_id,
+                                true,
+                            )
+                    }),
+            "Trust and reopen the current host module before running JVM operations"
+        );
+        let host_generation = self
+            .jdtls_project_snapshot(receipt.worktree_id)
+            .filter(|(snapshot, current)| {
+                *current && snapshot.generation == receipt.generation
+                    && snapshot.server_id == receipt.server_id
+            })
+            .and_then(|_| self.jdtls_projects.get(&receipt.worktree_id))
+            .and_then(|state| state.host_operation_generation(receipt.server_id, receipt.generation))
+            .context("Current host build metadata is unavailable; refresh the module or update the host and retry")?;
+        Ok((client, remote.jvm_consumers.generation, host_generation))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn resolve_remote_jvm_operation(
+        &self,
+        receipt: jvm_project::JvmBuildOperationReceipt,
+        authorization: Option<proto::JvmBuildOperationAuthorization>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<proto::JvmBuildOperationResponse>>> {
+        let (client, session_generation, host_generation) =
+            self.remote_jvm_operation_scope(&receipt, cx)?;
+        let client = client.clone();
+        let request = proto::ResolveJvmBuildOperation {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            protocol_version: 1,
+            session_generation,
+            worktree_id: receipt.worktree_id.to_proto(),
+            server_id: receipt.server_id.to_proto(),
+            snapshot_generation: host_generation,
+            module_path: receipt.module_root.path.as_unix_str().to_owned(),
+            selection_json: receipt.remote_selection_json()?,
+            authorization: authorization.clone(),
+        };
+        ensure!(
+            request.encoded_len() <= 262_144,
+            "The JVM operation exceeds the host size limit"
+        );
+        Ok(cx.spawn(async move |this, cx| {
+            let deadline = cx.background_executor().timer(Duration::from_secs(15));
+            let response = match futures::future::select(
+                Box::pin(client.request(request)),
+                Box::pin(deadline),
+            )
+            .await
+            {
+                Either::Left((result, _)) => result?,
+                Either::Right(_) => {
+                    return Err(anyhow!(
+                        "JVM operation validation timed out; check the host connection and retry"
+                    ));
+                }
+            };
+            this.read_with(cx, |store, cx| {
+                let (current_client, current_session, current_host) =
+                    store.remote_jvm_operation_scope(&receipt, cx)?;
+                ensure!(
+                    current_client.is_same_instance(&client)
+                        && (current_session, current_host) == (session_generation, host_generation),
+                    "The JVM host connection or build metadata changed; refresh and retry"
+                );
+                ensure!(
+                    response.protocol_version == 1
+                        && response.encoded_len() <= 262_144
+                        && usize::try_from(response.literal_prefix_arguments).ok()
+                            == Some(response.arguments.len())
+                        && response.authorization.as_ref().is_some_and(|current| {
+                            !current.task_id.is_empty()
+                                && current.token.len() == 32
+                                && current.token.bytes().all(|byte| byte.is_ascii_hexdigit())
+                                && authorization
+                                    .as_ref()
+                                    .is_none_or(|expected| expected == current)
+                        }),
+                    "The host returned an invalid JVM operation plan; update the host and retry"
+                );
+                Ok(response)
+            })?
+        }))
+    }
+
+    #[cfg(feature = "jvm-tools")]
     pub fn remote_jvm_connection_state_changed(&mut self, connected: bool, cx: &mut Context<Self>) {
         self.invalidate_remote_jvm_consumer_intent();
         if connected {
@@ -14328,6 +14456,19 @@ impl LspStore {
                     .transpose()?
                     .flatten();
                 partial |= had_selection && maven_selection.is_none();
+                let host_operation_generation = (request.protocol_version >= 8
+                    && envelope.original_sender_id.is_none()
+                    && store
+                        .ensure_host_jvm_consumer_scope(request.project_id, envelope.sender_id)
+                        .is_ok()
+                    && store.as_local().is_some_and(|local| {
+                        local
+                            .host_jvm_task_inventory
+                            .as_ref()
+                            .and_then(WeakEntity::upgrade)
+                            .is_some()
+                    }))
+                .then_some(host_generation);
                 let response = proto::JdtlsProjectSnapshotResponse {
                     protocol_version: request.protocol_version,
                     request_id: request.request_id,
@@ -14344,6 +14485,7 @@ impl LspStore {
                         .collect::<Result<Vec<_>>>()?,
                     partial,
                     maven_selection,
+                    host_operation_generation,
                 };
                 ensure!(
                     response.encoded_len() <= response_limit,
@@ -14419,6 +14561,7 @@ impl LspStore {
                     .collect::<Result<Vec<_>>>()?,
                 partial: partial || query.partial,
                 maven_selection: None,
+                host_operation_generation: None,
             };
             ensure!(
                 response.encoded_len() <= response_limit,
@@ -18051,11 +18194,22 @@ impl LspStore {
                         &snapshot,
                         &projects,
                     )?;
-                    Ok((projects, response.partial, metadata))
+                    Ok((
+                        projects,
+                        response.partial,
+                        metadata,
+                        response.host_operation_generation,
+                    ))
                 });
                 match parsed {
-                    Ok((projects, partial, metadata)) => {
-                        if state.finish_with_metadata(token, projects, partial, metadata) {
+                    Ok((projects, partial, metadata, host_operation_generation)) => {
+                        if state.finish_remote(
+                            token,
+                            projects,
+                            partial,
+                            metadata,
+                            host_operation_generation,
+                        ) {
                             cx.notify();
                         }
                     }
@@ -24332,6 +24486,7 @@ mod tests {
                         request_id: request.request_id,
                         worktree_id: request.worktree_id,
                         server_id: server_id.to_proto(),
+                        host_operation_generation: Some(701),
                         ..Default::default()
                     }
                     .into_envelope(message_id + 2000, Some(message_id), None),
@@ -24362,8 +24517,96 @@ mod tests {
                     let (snapshot, current) = snapshot.expect("new snapshot");
                     assert!(current);
                     assert_eq!(snapshot.generation, previous_generation);
+                    assert_eq!(
+                        store.jdtls_projects[&worktree_id]
+                            .host_operation_generation(server_id, snapshot.generation),
+                        Some(701)
+                    );
                 }
             });
+        }
+
+        let receipt = jvm_project::JvmBuildOperationReceipt {
+            server_id,
+            worktree_id,
+            generation: previous_generation,
+            module_root: fixture.root.clone(),
+            operations: vec![jvm_project::JvmBuildOperation::GradleTask {
+                path: ":check".into(),
+            }],
+            maven_options: Default::default(),
+        };
+        fixture.store.update(cx, |store, _| {
+            let LspStoreMode::Remote(remote) = &mut store.mode else {
+                panic!("remote fixture")
+            };
+            remote.upstream_project_id = proto::REMOTE_SERVER_PROJECT_ID;
+            remote.jvm_consumers.connected = true;
+            remote.jvm_consumers.generation = 14;
+            remote.jvm_consumers.accepted_roots = vec![fixture.root.clone()];
+        });
+        for invalidate in [false, true] {
+            let resolve = fixture
+                .store
+                .update(cx, |store, cx| {
+                    store.resolve_remote_jvm_operation(receipt.clone(), None, cx)
+                })
+                .expect("start a request for the current host snapshot");
+            cx.run_until_parked();
+            let (message_id, request) = fixture
+                .take_messages()
+                .into_iter()
+                .find_map(|envelope| {
+                    if let Some(proto::envelope::Payload::ResolveJvmBuildOperation(request)) =
+                        envelope.payload
+                    {
+                        Some((envelope.id, request))
+                    } else {
+                        None
+                    }
+                })
+                .expect("framed operation request");
+            assert_eq!(request.snapshot_generation, 701);
+            assert_eq!(request.session_generation, 14);
+            assert_ne!(request.snapshot_generation, receipt.generation);
+            assert_eq!(
+                jvm_project::JvmBuildOperationReceipt::from_remote_selection(&request)
+                    .expect("typed selection")
+                    .operations,
+                receipt.operations,
+            );
+            if invalidate {
+                fixture
+                    .store
+                    .update(cx, |store, cx| store.invalidate_remote_jvm_projects(cx));
+            }
+            let response = proto::JvmBuildOperationResponse {
+                protocol_version: 1,
+                authorization: Some(proto::JvmBuildOperationAuthorization {
+                    task_id: "host-task".into(),
+                    token: "a".repeat(32),
+                }),
+                arguments: vec!["--offline".into(), ":check".into()],
+                literal_prefix_arguments: 2,
+                ..Default::default()
+            };
+            fixture
+                .input
+                .unbounded_send(response.clone().into_envelope(
+                    message_id + 2000,
+                    Some(message_id),
+                    None,
+                ))
+                .expect("deliver host operation plan");
+            let result = resolve.await;
+            if invalidate {
+                assert!(result.is_err(), "an old operation reply must be discarded");
+            } else {
+                assert_eq!(
+                    result.expect("admit the current host operation plan"),
+                    response
+                );
+            }
         }
     }
 

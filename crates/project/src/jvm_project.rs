@@ -3508,16 +3508,23 @@ pub struct JvmBuildOperationPlan {
     pub build_files: Vec<ProjectPath>,
 }
 
-impl JvmBuildOperationReceipt {
-    pub(crate) fn from_remote_selection(request: &proto::ResolveJvmBuildOperation) -> Result<Self> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Selection {
-            operations: Vec<JvmBuildOperation>,
-            #[serde(default)]
-            maven_options: MavenOperationOptions,
-        }
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct JvmBuildOperationSelection {
+    operations: Vec<JvmBuildOperation>,
+    #[serde(default)]
+    maven_options: MavenOperationOptions,
+}
 
+impl JvmBuildOperationReceipt {
+    pub(crate) fn remote_selection_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(&JvmBuildOperationSelection {
+            operations: self.operations.clone(),
+            maven_options: self.maven_options.clone(),
+        })?)
+    }
+
+    pub(crate) fn from_remote_selection(request: &proto::ResolveJvmBuildOperation) -> Result<Self> {
         let invalid = || anyhow::anyhow!("Invalid JVM operation selection; refresh and retry");
         let module_path = RelPath::from_unix_str(&request.module_path).map_err(|_| invalid())?;
         ensure!(
@@ -3527,7 +3534,7 @@ impl JvmBuildOperationReceipt {
             "{}",
             invalid()
         );
-        let selection: Selection =
+        let selection: JvmBuildOperationSelection =
             serde_json::from_str(&request.selection_json).map_err(|_| invalid())?;
         let worktree_id = WorktreeId::from_proto(request.worktree_id);
         Ok(Self {
@@ -3968,6 +3975,7 @@ pub struct ProviderProjectState<Project, Metadata = ()> {
     pending: Option<ProviderRefreshToken>,
     snapshot: Option<ProviderProjectSnapshot<Project, Metadata>>,
     pending_metadata: Metadata,
+    remote_operation_generation: Option<(ProviderRefreshToken, u64)>,
 }
 
 pub type JdtlsProjectState = ProviderProjectState<JdtlsProject, Option<MavenSelectionFacts>>;
@@ -3985,7 +3993,40 @@ impl<Project, Metadata: Default> Default for ProviderProjectState<Project, Metad
             pending: None,
             snapshot: None,
             pending_metadata: Metadata::default(),
+            remote_operation_generation: None,
         }
+    }
+}
+
+impl JdtlsProjectState {
+    pub(crate) fn finish_remote(
+        &mut self,
+        token: ProviderRefreshToken,
+        projects: Vec<JdtlsProject>,
+        partial: bool,
+        metadata: Option<MavenSelectionFacts>,
+        host_operation_generation: Option<u64>,
+    ) -> bool {
+        if !self.finish_with_metadata(token, projects, partial, metadata) {
+            return false;
+        }
+        self.remote_operation_generation = host_operation_generation
+            .filter(|generation| *generation != 0)
+            .map(|generation| (token, generation));
+        true
+    }
+
+    pub(crate) fn host_operation_generation(
+        &self,
+        server_id: LanguageServerId,
+        snapshot_generation: u64,
+    ) -> Option<u64> {
+        let (token, generation) = self.remote_operation_generation?;
+        (self.snapshot_is_current()
+            && token.server_id == server_id
+            && token.generation == snapshot_generation
+            && self.generation == snapshot_generation)
+            .then_some(generation)
     }
 }
 

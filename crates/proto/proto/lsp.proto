@@ -1207,6 +1207,7 @@ message JdtlsProjectSnapshotResponse {
   repeated JdtlsProjectInfo projects = 5;
   bool partial = 6;
   JdtlsMavenSelectionFacts maven_selection = 7;
+  optional uint64 host_operation_generation = 8;
 }
 
 message JdtlsMavenSelectionFacts {
