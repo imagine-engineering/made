@@ -215,10 +215,42 @@ fn conversation_subtasks(
     rows
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum CollaborativeProjectThreadFilter {
+    #[default]
+    All,
+    Drafts,
+    Unread,
+    Archived,
+}
+
+impl CollaborativeProjectThreadFilter {
+    pub(crate) const ALL: [Self; 4] = [Self::All, Self::Drafts, Self::Unread, Self::Archived];
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::All => "All threads",
+            Self::Drafts => "Drafts",
+            Self::Unread => "Unread",
+            Self::Archived => "Archived",
+        }
+    }
+
+    fn includes(self, state: CollaborativeTaskState, unread: bool) -> bool {
+        match self {
+            Self::All => true,
+            Self::Drafts => state == CollaborativeTaskState::Draft,
+            Self::Unread => unread,
+            Self::Archived => state == CollaborativeTaskState::Archived,
+        }
+    }
+}
+
 pub(crate) struct CollaborativeTasks {
     multi_workspace: WeakEntity<MultiWorkspace>,
     activation_error: Option<SharedString>,
     project_group: Option<ProjectGroupKey>,
+    project_filter: CollaborativeProjectThreadFilter,
     observed_conversations: HashMap<gpui::EntityId, gpui::Subscription>,
 }
 
@@ -235,6 +267,7 @@ impl CollaborativeTasks {
             multi_workspace,
             activation_error: None,
             project_group: None,
+            project_filter: CollaborativeProjectThreadFilter::All,
             observed_conversations: HashMap::new(),
         }
     }
@@ -242,11 +275,22 @@ impl CollaborativeTasks {
     pub(crate) fn for_project(
         multi_workspace: WeakEntity<MultiWorkspace>,
         project_group: ProjectGroupKey,
+        filter: CollaborativeProjectThreadFilter,
         cx: &mut Context<Self>,
     ) -> Self {
         let mut tasks = Self::new(multi_workspace, cx);
         tasks.project_group = Some(project_group);
+        tasks.project_filter = filter;
         tasks
+    }
+
+    pub(crate) fn set_project_filter(
+        &mut self,
+        filter: CollaborativeProjectThreadFilter,
+        cx: &mut Context<Self>,
+    ) {
+        self.project_filter = filter;
+        cx.notify();
     }
 
     fn rows(&self, cx: &gpui::App) -> Option<Vec<CollaborativeTaskRow>> {
@@ -280,17 +324,21 @@ impl CollaborativeTasks {
                 .cloned(),
             &live_statuses,
         );
-        for row in &mut rows {
-            if metadata_store
+        rows.retain_mut(|row| {
+            let unread = metadata_store
                 .read(cx)
                 .task_organization(row.metadata.thread_id)
-                .unread
-            {
+                .unread;
+            if !self.project_filter.includes(row.state, unread) {
+                return false;
+            }
+            if unread {
                 let mut badges = row.navigation.badges().to_vec();
                 badges.push(CollaborativeNavigationBadge::Unread(1));
                 row.navigation = CollaborativeNavigationRow::from_thread(&row.metadata, badges);
             }
-        }
+            true
+        });
         Some(rows)
     }
 
@@ -705,6 +753,19 @@ mod tests {
     use project::AgentId;
 
     use super::*;
+
+    #[test]
+    fn collaborative_project_thread_filters_use_stored_states() {
+        use CollaborativeProjectThreadFilter as Filter;
+        use CollaborativeTaskState as State;
+        assert!(Filter::All.includes(State::Archived, false));
+        assert!(Filter::Drafts.includes(State::Draft, false));
+        assert!(!Filter::Drafts.includes(State::Running, true));
+        assert!(Filter::Unread.includes(State::Completed, true));
+        assert!(!Filter::Unread.includes(State::Completed, false));
+        assert!(Filter::Archived.includes(State::Archived, false));
+        assert!(!Filter::Archived.includes(State::Draft, false));
+    }
 
     fn metadata(
         title: &str,

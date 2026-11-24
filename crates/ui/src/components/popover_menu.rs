@@ -2,9 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use gpui::{
     Anchor, AnyElement, AnyView, App, Bounds, DismissEvent, DispatchPhase, Element, ElementId,
-    Entity, Focusable as _, GlobalElementId, HitboxBehavior, HitboxId, InteractiveElement,
-    IntoElement, LayoutId, Length, ManagedView, MouseDownEvent, ParentElement, Pixels, Point,
-    Style, Window, anchored, deferred, div, point, prelude::FluentBuilder, px, size,
+    Entity, FocusHandle, Focusable as _, GlobalElementId, HitboxBehavior, HitboxId,
+    InteractiveElement, IntoElement, LayoutId, Length, ManagedView, MouseDownEvent, ParentElement,
+    Pixels, Point, Style, Window, anchored, deferred, div, point, prelude::FluentBuilder, px, size,
 };
 
 use crate::prelude::*;
@@ -56,6 +56,7 @@ struct PopoverMenuHandleState<M> {
     menu_builder: Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>>>,
     menu: Rc<RefCell<Option<Entity<M>>>>,
     on_open: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    restore_focus: Option<FocusHandle>,
 }
 
 impl<M: ManagedView> PopoverMenuHandle<M> {
@@ -65,6 +66,7 @@ impl<M: ManagedView> PopoverMenuHandle<M> {
                 &state.menu_builder,
                 &state.menu,
                 state.on_open.clone(),
+                state.restore_focus.as_ref(),
                 window,
                 cx,
             );
@@ -142,6 +144,7 @@ pub struct PopoverMenu<M: ManagedView> {
     offset: Option<Point<Pixels>>,
     trigger_handle: Option<PopoverMenuHandle<M>>,
     on_open: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    restore_focus: Option<FocusHandle>,
     full_width: bool,
     max_width: Option<gpui::DefiniteLength>,
 }
@@ -158,6 +161,7 @@ impl<M: ManagedView> PopoverMenu<M> {
             offset: None,
             trigger_handle: None,
             on_open: None,
+            restore_focus: None,
             full_width: false,
             max_width: None,
         }
@@ -186,14 +190,29 @@ impl<M: ManagedView> PopoverMenu<M> {
         self
     }
 
+    /// Prefer the trigger over the previously focused element when the menu dismisses.
+    /// Call before configuring the trigger.
+    pub fn restore_focus_to(mut self, focus: &FocusHandle) -> Self {
+        self.restore_focus = Some(focus.clone());
+        self
+    }
+
     pub fn trigger<T: PopoverTrigger>(mut self, t: T) -> Self {
         let on_open = self.on_open.clone();
+        let restore_focus = self.restore_focus.clone();
         self.child_builder = Some(Box::new(move |menu, builder| {
             let open = menu.borrow().is_some();
             t.toggle_state(open)
                 .when_some(builder, |el, builder| {
                     el.on_click(move |_event, window, cx| {
-                        show_menu(&builder, &menu, on_open.clone(), window, cx)
+                        show_menu(
+                            &builder,
+                            &menu,
+                            on_open.clone(),
+                            restore_focus.as_ref(),
+                            window,
+                            cx,
+                        )
                     })
                 })
                 .into_any_element()
@@ -208,12 +227,20 @@ impl<M: ManagedView> PopoverMenu<M> {
         tooltip_builder: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
     ) -> Self {
         let on_open = self.on_open.clone();
+        let restore_focus = self.restore_focus.clone();
         self.child_builder = Some(Box::new(move |menu, builder| {
             let open = menu.borrow().is_some();
             t.toggle_state(open)
                 .when_some(builder, |el, builder| {
                     el.on_click(move |_, window, cx| {
-                        show_menu(&builder, &menu, on_open.clone(), window, cx)
+                        show_menu(
+                            &builder,
+                            &menu,
+                            on_open.clone(),
+                            restore_focus.as_ref(),
+                            window,
+                            cx,
+                        )
                     })
                     .when(!open, |t| {
                         t.tooltip(move |window, cx| tooltip_builder(window, cx))
@@ -282,10 +309,11 @@ fn show_menu<M: ManagedView>(
     builder: &Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>>>,
     menu: &Rc<RefCell<Option<Entity<M>>>>,
     on_open: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    restore_focus: Option<&FocusHandle>,
     window: &mut Window,
     cx: &mut App,
 ) {
-    let previous_focus_handle = window.focused(cx);
+    let previous_focus_handle = restore_focus.cloned().or_else(|| window.focused(cx));
     let Some(new_menu) = (builder)(window, cx) else {
         return;
     };
@@ -407,6 +435,7 @@ impl<M: ManagedView> Element for PopoverMenu<M> {
                         menu_builder,
                         menu: element_state.menu.clone(),
                         on_open: self.on_open.clone(),
+                        restore_focus: self.restore_focus.clone(),
                     });
                 }
 

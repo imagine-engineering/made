@@ -2099,6 +2099,7 @@ impl Workspace {
             window,
             |workspace, _, window, cx| {
                 workspace.serialize_workspace(window, cx);
+                workspace.status_bar.update(cx, |_, cx| cx.notify());
                 cx.notify();
             },
         ));
@@ -7856,6 +7857,13 @@ impl Workspace {
         &self.collaborative_review
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn collaborative_status_file_visible(&self, window: &Window, cx: &App) -> bool {
+        self.collaborative_workspace
+            .read(cx)
+            .native_editor_visible(window, cx)
+    }
+
     /// Whether the Collaborative review region currently presents the native pane group rather
     /// than the registered review provider.
     #[cfg(feature = "multiplayer-tools")]
@@ -8861,8 +8869,7 @@ impl Workspace {
             .any(|(region, _)| *region == CollaborativeFocusRegion::Review);
         self.collaborative_focus_order
             .set_review_visible(review_visible);
-        if self.status_bar_visible(cx) && self.collaborative_workspace.read(cx).timeline_visible(cx)
-        {
+        if self.status_bar_visible(cx) {
             regions.push((
                 CollaborativeFocusRegion::Status,
                 self.status_bar.read(cx).collaborative_focus_handle(),
@@ -11192,6 +11199,9 @@ impl Render for Workspace {
                                                 .when(layout_state.dock_requested(DockPosition::Right), |this| this.children(self.render_dock(DockPosition::Right, &self.right_dock, window, cx))),
                                         )
                                         .when(layout_state.dock_requested(DockPosition::Bottom), |this| this.child(div().w_full().children(self.render_dock(DockPosition::Bottom, &self.bottom_dock, window, cx))))
+                                        .when_some(self.collaborative_workspace.read(cx).conversation_footer_below_docks(window, cx), |this, footer| {
+                                            this.child(div().w_full().flex_none().child(footer))
+                                        })
                                         .into_any_element()
                                 }
                                 #[cfg(not(feature = "multiplayer-tools"))]
@@ -11239,7 +11249,7 @@ impl Render for Workspace {
                             }))
                             .children(self.render_notifications(window, cx)),
                     )
-                    .when(self.status_bar_visible(cx) && self.workspace_presentation() == WorkspacePresentation::Editor, |parent| {
+                    .when(self.status_bar_visible(cx), |parent| {
                         parent.child(div().w_full().flex_none().child(self.status_bar.clone()))
                     })
                     .child(self.toast_layer.clone()),
@@ -16195,26 +16205,9 @@ mod tests {
         assert!(workspace.read_with(cx, |workspace, cx| {
             workspace.collaborative_title_bar(cx).is_some()
         }));
-        let status_overflow = cx
-            .debug_bounds("COLLABORATIVE-STATUS-OVERFLOW")
-            .expect("secondary status controls remain accessible");
-        cx.simulate_click(status_overflow.center(), gpui::Modifiers::default());
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("COLLABORATIVE-STATUS-MENU").is_some());
-        let tools = cx
-            .debug_bounds("COLLABORATIVE-STATUS-TOOLS")
-            .expect("grouped workspace tools");
-        let panels = cx
-            .debug_bounds("COLLABORATIVE-STATUS-PANELS")
-            .expect("grouped panel controls");
-        let execution = cx
-            .debug_bounds("COLLABORATIVE-STATUS-EXECUTION")
-            .expect("grouped agent execution state");
-        assert!(tools.bottom() <= panels.top());
-        assert!(panels.bottom() <= execution.top());
         assert!(
-            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS-UNAVAILABLE")
-                .is_some()
+            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS")
+                .is_none()
         );
         let ready = CollaborativeParticipantProviderState::Ready(
             crate::collaborative_participants::CollaborativeParticipantViewData {
@@ -16267,7 +16260,7 @@ mod tests {
             .expect("fake participant provider should register");
         cx.run_until_parked();
         assert!(
-            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS-READY")
+            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS")
                 .is_some()
         );
 
@@ -16275,7 +16268,7 @@ mod tests {
         workspace.update(cx, |_, cx| cx.notify());
         cx.run_until_parked();
         assert!(
-            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS-FAILED")
+            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS")
                 .is_some()
         );
 
@@ -16324,38 +16317,9 @@ mod tests {
             );
         });
         assert!(
-            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS-READY")
-                .is_some()
+            cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS")
+                .is_none()
         );
-
-        cx.update(|window, cx| {
-            window.simulate_next_frame(cx);
-            window.simulate_next_frame(cx);
-        });
-        cx.dispatch_action(menu::Cancel);
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("COLLABORATIVE-STATUS-MENU").is_none());
-        let status_overflow = cx
-            .debug_bounds("COLLABORATIVE-STATUS-OVERFLOW")
-            .expect("overflow remains available after dismissal");
-        cx.simulate_click(status_overflow.center(), gpui::Modifiers::default());
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("COLLABORATIVE-STATUS-MENU").is_some());
-
-        cx.update(|window, cx| {
-            window.simulate_next_frame(cx);
-            window.simulate_next_frame(cx);
-        });
-        let menu_focus = cx.update(|window, cx| window.focused(cx));
-        workspace.update_in(cx, |workspace, window, cx| {
-            workspace
-                .collaborative_workspace
-                .focus_handle(cx)
-                .focus(window, cx);
-        });
-        cx.run_until_parked();
-        assert!(cx.debug_bounds("COLLABORATIVE-STATUS-MENU").is_none());
-        assert_ne!(cx.update(|window, cx| window.focused(cx)), menu_focus);
 
         cx.dispatch_action(SwitchToEditorWorkspace);
         cx.run_until_parked();
@@ -16513,7 +16477,11 @@ mod tests {
             cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
         let workspace =
             multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
-        let panel = cx.new(|cx| TestPanel::new_with_activation_child(DockPosition::Bottom, 0, cx));
+        let panel = cx.new(|cx| {
+            let mut panel = TestPanel::new_with_activation_child(DockPosition::Bottom, 0, cx);
+            panel.show_button = true;
+            panel
+        });
         let activation_was_mounted = std::rc::Rc::new(std::cell::Cell::new(None));
         workspace.update_in(cx, |workspace, window, cx| {
             let panel_focus = panel.focus_handle(cx);
@@ -16536,14 +16504,23 @@ mod tests {
         workspace.read_with(cx, |workspace, cx| {
             assert!(!workspace.collaborative_dock_requested(DockPosition::Bottom, cx));
         });
-        workspace.update_in(cx, |workspace, window, cx| {
-            workspace.dispatch_collaborative_panel_action(
-                DockPosition::Bottom,
-                crate::dock::test::ToggleTestPanel.boxed_clone(),
-                window,
-                cx,
-            );
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
         });
+        cx.run_until_parked();
+        let button = cx
+            .debug_bounds("PANEL-BUTTON-TestPanel")
+            .expect("direct panel button");
+        let status_bar = cx
+            .debug_bounds("WORKSPACE-STATUS-BAR")
+            .expect("native status bar");
+        let conversation = cx
+            .debug_bounds("COLLABORATIVE-TIMELINE-REGION")
+            .expect("conversation");
+        assert!(status_bar.contains(&button.center()));
+        assert!(conversation.bottom() <= status_bar.top());
+        cx.simulate_click(button.center(), gpui::Modifiers::default());
         cx.run_until_parked();
         cx.update(|window, cx| {
             window.simulate_next_frame(cx);
@@ -16769,6 +16746,21 @@ mod tests {
             assert!(bounds.size.width > px(0.) && bounds.size.height > px(0.));
         }
         assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_none());
+        cx.simulate_resize(gpui::size(px(360.), px(900.)));
+        cx.run_until_parked();
+        for _ in 0..3 {
+            cx.update(|window, cx| window.simulate_next_frame(cx));
+            cx.run_until_parked();
+        }
+        let footer = cx.debug_bounds("COLLABORATIVE-FOOTER-CONTROLS").expect(
+            "conversation footer must survive even when a dock consumes the timeline width",
+        );
+        let status_bar = cx
+            .debug_bounds("WORKSPACE-STATUS-BAR")
+            .expect("native status bar");
+        assert_eq!(footer.size.width, status_bar.size.width);
+        assert!(footer.bottom() <= status_bar.top());
+
         assert_eq!(layout.read_with(cx, |layout, _| layout.state()), state);
         workspace.update(cx, |workspace, cx| {
             assert_eq!(

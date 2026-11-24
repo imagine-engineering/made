@@ -2,7 +2,6 @@ use gpui::{
     Action, AnyView, Bounds, Context, DragMoveEvent, Entity, FocusHandle, Hsla, MouseButton, Point,
     Render, Role, canvas, px,
 };
-use settings::Settings;
 use ui::{Window, prelude::*};
 
 use crate::{
@@ -13,7 +12,6 @@ use crate::{
         CollaborativeReviewSlot, SelectAgentReview, SelectProjectReview, ShowCollaborativeReview,
     },
     status_bar::StatusBar,
-    workspace_settings::StatusBarSettings,
 };
 
 const MIN_TIMELINE_WIDTH: Pixels = px(320.);
@@ -36,12 +34,20 @@ impl Render for DraggedCollaborativeReview {
     }
 }
 
+struct ConversationFooter(Entity<StatusBar>);
+
+impl Render for ConversationFooter {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.0.read(cx).render_conversation_footer(cx)
+    }
+}
+
 pub(crate) struct CollaborativeLayout {
     bounds: Bounds<Pixels>,
     state: CollaborativeLayoutState,
     timeline_view: Option<AnyView>,
     composer: Entity<CollaborativeComposerSurface>,
-    status_bar: Entity<StatusBar>,
+    conversation_footer: Entity<ConversationFooter>,
     review_view: Option<AnyView>,
     native_editor: AnyView,
     native_editor_tabs: AnyView,
@@ -61,13 +67,17 @@ impl CollaborativeLayout {
         native_editor_tabs: AnyView,
         cx: &mut Context<Self>,
     ) -> Self {
+        let conversation_footer = cx.new(|cx| {
+            cx.observe(&status_bar, |_, _, cx| cx.notify()).detach();
+            ConversationFooter(status_bar)
+        });
         Self {
             bounds: Bounds::default(),
             selected_review_slot: state.selected_review_slot(),
             state,
             timeline_view: None,
             composer,
-            status_bar,
+            conversation_footer,
             review_view: None,
             native_editor,
             native_editor_tabs,
@@ -269,7 +279,7 @@ impl CollaborativeLayout {
     }
 
     fn available_width(&self, window: &Window) -> Pixels {
-        if self.bounds.size.width > px(0.) {
+        if self.bounds.size.height > px(0.) {
             self.bounds
                 .size
                 .width
@@ -315,8 +325,7 @@ impl CollaborativeLayout {
         focus_border: Hsla,
         timeline_view: Option<AnyView>,
         composer: Entity<CollaborativeComposerSurface>,
-        status_bar: Option<Entity<StatusBar>>,
-        composer_footer: Option<AnyView>,
+        conversation_footer: Option<Entity<ConversationFooter>>,
         focus_handle: &FocusHandle,
         input_in_timeline: bool,
     ) -> impl IntoElement {
@@ -380,19 +389,14 @@ impl CollaborativeLayout {
             .when(!timeline_available || !input_in_timeline, |this| {
                 this.child(composer)
             })
-            .when_some(composer_footer, |this, footer| {
-                this.child(h_flex().w_full().justify_end().p_1().child(footer))
+            .when_some(conversation_footer, |timeline, footer| {
+                timeline.child(div().w_full().flex_none().overflow_hidden().child(footer))
             })
-            .when_some(status_bar, |this, status_bar| {
-                this.child(
-                    div()
-                        .debug_selector(|| "COLLABORATIVE-STATUS-BAR".to_owned())
-                        .w_full()
-                        .flex_none()
-                        .overflow_hidden()
-                        .child(status_bar),
-                )
-            })
+    }
+
+    pub(crate) fn conversation_footer_below_docks(&self, window: &Window) -> Option<AnyView> {
+        (self.geometry(window).timeline_width < MIN_TIMELINE_WIDTH)
+            .then(|| self.conversation_footer.clone().into())
     }
 
     pub(crate) fn geometry(&self, window: &Window) -> CollaborativeLayoutGeometry {
@@ -692,12 +696,8 @@ impl Render for CollaborativeLayout {
                     focus_border,
                     timeline_view,
                     self.composer.clone(),
-                    StatusBarSettings::get_global(cx)
-                        .show
-                        .then(|| self.status_bar.clone()),
-                    (!StatusBarSettings::get_global(cx).show)
-                        .then(|| self.status_bar.read(cx).collaborative_composer_footer())
-                        .flatten(),
+                    (geometry.timeline_width >= MIN_TIMELINE_WIDTH)
+                        .then(|| self.conversation_footer.clone()),
                     &self.timeline_focus_handle,
                     self.composer.read(cx).input_in_timeline(),
                 ))

@@ -1,12 +1,12 @@
 use agent_ui::{
-    AgentPanel, ThreadId,
+    AgentDiffPane, AgentPanel, ThreadId,
     thread_metadata_store::{
         TaskOrganization, TaskProjectAssociation, ThreadMetadata, ThreadMetadataStore,
     },
 };
 use editor::Editor;
 use gpui::{
-    App, Context, DismissEvent, Div, Entity, EventEmitter, FocusHandle, Focusable,
+    Action, App, Context, DismissEvent, Div, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, Render, SharedString, Stateful, WeakEntity,
 };
 use ui::{
@@ -39,6 +39,8 @@ pub(crate) fn task_row_menu(
     let handle = ui::RightClickMenuHandle::<ContextMenu>::default();
     let keyboard_handle = handle.clone();
     let overflow_handle = handle.clone();
+    let rename_workspace = multi_workspace.clone();
+    let archive_workspace = multi_workspace.clone();
     let row = row
         .group("collaborative-task-row-actions")
         .key_context("TaskRow")
@@ -50,6 +52,14 @@ pub(crate) fn task_row_menu(
             )
         })
         .debug_selector(move || format!("COLLABORATIVE-TASK-ROW-{}", thread_id.to_key_string()))
+        .on_action(move |_: &agent_ui::RenameSelectedThread, window, cx| {
+            cx.stop_propagation();
+            rename_task(thread_id, &rename_workspace, window, cx);
+        })
+        .on_action(move |_: &agent_ui::ArchiveSelectedThread, window, cx| {
+            cx.stop_propagation();
+            archive_or_restore_task(thread_id, &archive_workspace, window, cx);
+        })
         .on_action(move |_: &agent_ui::OpenTaskContextMenu, window, cx| {
             cx.stop_propagation();
             keyboard_handle.show(window, cx);
@@ -153,6 +163,41 @@ fn resolve(
     Some((metadata, sidebar, active_workspace, thread_workspace))
 }
 
+fn rename_task(
+    thread_id: ThreadId,
+    multi_workspace: &WeakEntity<MultiWorkspace>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Some((metadata, sidebar, workspace, _)) = resolve_action(thread_id, multi_workspace, cx)
+    {
+        workspace.update(cx, |workspace, cx| {
+            workspace.toggle_modal(window, cx, |window, cx| {
+                TaskRenameModal::new(metadata, sidebar.downgrade(), window, cx)
+            });
+        });
+    }
+}
+
+fn archive_or_restore_task(
+    thread_id: ThreadId,
+    multi_workspace: &WeakEntity<MultiWorkspace>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Some((metadata, sidebar, _, _)) = resolve_action(thread_id, multi_workspace, cx) {
+        if metadata.archived {
+            sidebar.update(cx, |sidebar, cx| {
+                sidebar.open_thread_from_archive(metadata, window, cx)
+            });
+        } else if let Some(session_id) = metadata.session_id.as_ref() {
+            sidebar.update(cx, |sidebar, cx| {
+                sidebar.archive_thread(session_id, window, cx)
+            });
+        }
+    }
+}
+
 pub(crate) fn build_task_menu(
     thread_id: ThreadId,
     multi_workspace: WeakEntity<MultiWorkspace>,
@@ -186,63 +231,47 @@ pub(crate) fn build_task_menu(
             .read(cx)
             .collaborative_navigation()
             .is_pinned(&target);
-        let mut menu = menu.item(
-            task_menu_entry(
-                if pinned { "Unpin" } else { "Pin" },
-                if pinned {
-                    IconName::Unpin
-                } else {
-                    IconName::Pin
-                },
-            )
-            .handler({
-                let multi_workspace = multi_workspace.clone();
-                move |window, cx| {
-                    if let Some((_, _, workspace, _)) =
-                        resolve_action(thread_id, &multi_workspace, cx)
-                    {
-                        workspace.update(cx, |workspace, cx| {
-                            if let Err(error) =
-                                workspace.toggle_collaborative_pin(target.clone(), window, cx)
-                            {
-                                workspace.show_error(error.to_string(), cx);
-                            }
-                        });
-                    }
-                }
-            }),
-        );
         let native = metadata.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref();
-        menu = menu.item(
-            task_menu_entry("Share", IconName::Share)
-                .disabled(!native)
-                .handler({
-                    let multi_workspace = multi_workspace.clone();
-                    move |window, cx| {
-                        copy_transcript(
-                            thread_id,
-                            multi_workspace.clone(),
-                            TranscriptExport::Share,
-                            window,
-                            cx,
-                        )
-                    }
-                }),
-        );
-        menu = menu.item(task_menu_entry("Rename", IconName::Pencil).handler({
-            let multi_workspace = multi_workspace.clone();
-            move |window, cx| {
-                if let Some((metadata, sidebar, workspace, _)) =
-                    resolve_action(thread_id, &multi_workspace, cx)
-                {
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.toggle_modal(window, cx, |window, cx| {
-                            TaskRenameModal::new(metadata, sidebar.downgrade(), window, cx)
-                        });
-                    });
-                }
-            }
-        }));
+        let mut menu = menu
+            .item(
+                task_menu_entry("Review changes", IconName::GitBranch)
+                    .disabled(live.is_none() || thread_workspace.as_ref() != Some(&workspace))
+                    .handler({
+                        let multi_workspace = multi_workspace.clone();
+                        move |window, cx| {
+                            if let Some((_, _, workspace, Some(owner))) =
+                                resolve_action(thread_id, &multi_workspace, cx)
+                                && workspace == owner
+                                && let Some(thread) = owner
+                                    .read(cx)
+                                    .panel::<AgentPanel>(cx)
+                                    .and_then(|panel| {
+                                        panel
+                                            .read(cx)
+                                            .conversation_view_for_id(&thread_id, cx)
+                                            .cloned()
+                                    })
+                                    .and_then(|view| view.read(cx).root_thread_view())
+                                    .map(|view| view.read(cx).thread.clone())
+                            {
+                                owner.update(cx, |workspace, cx| {
+                                    AgentDiffPane::deploy_in_workspace(
+                                        thread, workspace, window, cx,
+                                    );
+                                });
+                            }
+                        }
+                    }),
+            )
+            .separator()
+            .item(
+                task_menu_entry("Rename", IconName::Pencil)
+                    .action(agent_ui::RenameSelectedThread.boxed_clone())
+                    .handler({
+                        let multi_workspace = multi_workspace.clone();
+                        move |window, cx| rename_task(thread_id, &multi_workspace, window, cx)
+                    }),
+            );
         let regenerating = sidebar.read(cx).regenerating_titles.contains(&thread_id)
             || live
                 .as_ref()
@@ -272,6 +301,32 @@ pub(crate) fn build_task_menu(
                                 thread_workspace,
                                 cx,
                             )
+                        });
+                    }
+                }
+            }),
+        );
+        menu = menu.separator().item(
+            task_menu_entry(
+                if pinned { "Unpin" } else { "Pin" },
+                if pinned {
+                    IconName::Unpin
+                } else {
+                    IconName::Pin
+                },
+            )
+            .handler({
+                let multi_workspace = multi_workspace.clone();
+                move |window, cx| {
+                    if let Some((_, _, workspace, _)) =
+                        resolve_action(thread_id, &multi_workspace, cx)
+                    {
+                        workspace.update(cx, |workspace, cx| {
+                            if let Err(error) =
+                                workspace.toggle_collaborative_pin(target.clone(), window, cx)
+                            {
+                                workspace.show_error(error.to_string(), cx);
+                            }
                         });
                     }
                 }
@@ -314,56 +369,60 @@ pub(crate) fn build_task_menu(
                 }
             }),
         );
-        menu = menu.item(task_menu_entry("View details", IconName::Info).handler({
-            let multi_workspace = multi_workspace.clone();
-            move |window, cx| {
-                if let Some((metadata, _, workspace, _)) =
-                    resolve_action(thread_id, &multi_workspace, cx)
-                {
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.toggle_modal(window, cx, |_, cx| TaskDetailsModal {
-                            metadata,
-                            focus: cx.focus_handle(),
+        menu = menu
+            .separator()
+            .item(task_menu_entry("View details", IconName::Info).handler({
+                let multi_workspace = multi_workspace.clone();
+                move |window, cx| {
+                    if let Some((metadata, _, workspace, _)) =
+                        resolve_action(thread_id, &multi_workspace, cx)
+                    {
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.toggle_modal(window, cx, |_, cx| TaskDetailsModal {
+                                metadata,
+                                focus: cx.focus_handle(),
+                            });
                         });
-                    });
-                }
-            }
-        }));
-        let exporting = sidebar.read(cx).exporting_transcripts.contains(&thread_id);
-        for structured in [false, true] {
-            menu = menu.item(
-                ContextMenuEntry::new(if exporting {
-                    "Loading transcript…"
-                } else if structured {
-                    "Copy JSON"
-                } else {
-                    "Copy content"
-                })
-                .icon(if structured {
-                    IconName::Code
-                } else {
-                    IconName::Copy
-                })
-                .icon_size(IconSize::Small)
-                .disabled(exporting || (live.is_none() && metadata.session_id.is_none()))
-                .handler({
-                    let multi_workspace = multi_workspace.clone();
-                    move |window, cx| {
-                        copy_transcript(
-                            thread_id,
-                            multi_workspace.clone(),
-                            if structured {
-                                TranscriptExport::Json
-                            } else {
-                                TranscriptExport::Content
-                            },
-                            window,
-                            cx,
-                        )
                     }
-                }),
-            );
-        }
+                }
+            }));
+        let exporting = sidebar.read(cx).exporting_transcripts.contains(&thread_id);
+        menu = menu.submenu_with_icon("Copy options", IconName::Copy, {
+            let multi_workspace = multi_workspace.clone();
+            let has_transcript = live.is_some() || metadata.session_id.is_some();
+            move |mut menu, _, _| {
+                for (label, icon, export) in [
+                    ("Copy content", IconName::Copy, TranscriptExport::Content),
+                    ("Copy JSON", IconName::Code, TranscriptExport::Json),
+                    (
+                        "Copy shareable thread",
+                        IconName::Share,
+                        TranscriptExport::Share,
+                    ),
+                ] {
+                    if matches!(export, TranscriptExport::Share) && !native {
+                        continue;
+                    }
+                    menu = menu.item(
+                        task_menu_entry(label, icon)
+                            .disabled(exporting || !has_transcript)
+                            .handler({
+                                let multi_workspace = multi_workspace.clone();
+                                move |window, cx| {
+                                    copy_transcript(
+                                        thread_id,
+                                        multi_workspace.clone(),
+                                        export,
+                                        window,
+                                        cx,
+                                    )
+                                }
+                            }),
+                    );
+                }
+                menu
+            }
+        });
         let projects = multi_workspace
             .upgrade()
             .map(|multi_workspace| multi_workspace.read(cx).project_groups(cx))
@@ -467,18 +526,11 @@ pub(crate) fn build_task_menu(
             && !running
             && (metadata.session_id.is_none() || supports_delete != Some(false));
         menu.separator().item(task_menu_entry(if metadata.archived { "Restore task" } else { "Archive task" }, if metadata.archived { IconName::Undo } else { IconName::Archive })
+            .action(agent_ui::ArchiveSelectedThread.boxed_clone())
             .disabled(metadata.session_id.is_none())
             .handler({
                 let multi_workspace = multi_workspace.clone();
-                move |window, cx| {
-                    if let Some((metadata, sidebar, _, _)) = resolve_action(thread_id, &multi_workspace, cx) {
-                        if metadata.archived {
-                            sidebar.update(cx, |sidebar, cx| sidebar.open_thread_from_archive(metadata, window, cx));
-                        } else if let Some(session_id) = metadata.session_id.as_ref() {
-                            sidebar.update(cx, |sidebar, cx| sidebar.archive_thread(session_id, window, cx));
-                        }
-                    }
-                }
+                move |window, cx| archive_or_restore_task(thread_id, &multi_workspace, window, cx)
             }))
             .item(task_menu_entry(if running { "Stop task before deleting" } else if metadata.session_id.is_some() && supports_delete == Some(false) { "Provider does not support deletion" } else { "Delete" }, IconName::Trash).disabled(!delete_available)
                 .handler(move |window, cx| {

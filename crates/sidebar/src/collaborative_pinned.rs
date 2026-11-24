@@ -7,15 +7,16 @@ use gpui::{
     Action, App, Context, InteractiveElement, KeyDownEvent, Render, SharedString, Task, WeakEntity,
 };
 use ui::{Window, prelude::*};
+use util::ResultExt;
 use workspace::{
-    MultiWorkspace, RecentWorkspace, WorkspaceDb,
+    MultiWorkspace, ProjectGroupKey, RecentWorkspace, WorkspaceDb,
     collaborative_navigation::CollaborativeNavigationTarget,
 };
 
 use crate::collaborative_navigation::{
     CollaborativeNavigationBadge, CollaborativeNavigationProjection, CollaborativeNavigationRow,
-    CollaborativeNavigationSourceId, navigation_action, navigation_icon, navigation_label,
-    navigation_row, render_collaborative_navigation_badges,
+    CollaborativeNavigationSourceId, navigation_icon, navigation_label, navigation_row,
+    render_collaborative_navigation_badges,
 };
 use crate::{
     collaborative_projects::activate_project_target, collaborative_tasks::activate_thread_target,
@@ -393,6 +394,19 @@ impl CollaborativePinned {
     }
 }
 
+fn pinned_thread_project_name(thread_id: agent_ui::ThreadId, cx: &App) -> Option<SharedString> {
+    let store = ThreadMetadataStore::try_global(cx)?;
+    let projects = store.read(cx).task_projects(thread_id);
+    let project = projects.into_iter().next()?;
+    Some(
+        ProjectGroupKey::new(
+            project.remote_connection,
+            workspace::PathList::new(&project.paths),
+        )
+        .display_name(&Default::default()),
+    )
+}
+
 impl Render for CollaborativePinned {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let selected_target = self.selected_target(cx);
@@ -477,6 +491,8 @@ impl Render for CollaborativePinned {
                                 }
                                 _ => None,
                             };
+                            let project_name = menu_thread
+                                .and_then(|thread_id| pinned_thread_project_name(thread_id, cx));
                             let navigation_row = navigation_row(
                                 SharedString::from(format!(
                                     "collaborative-pinned-target-{target:?}"
@@ -494,25 +510,30 @@ impl Render for CollaborativePinned {
                                 icon,
                                 if unread { Color::Info } else { Color::Muted },
                             ))
-                            .child(navigation_label(row.label().clone()))
-                            .when_some(badges, |this, badges| this.child(badges))
-                            .when(is_pinned && menu_thread.is_none(), |this| {
-                                this.child(
-                                    navigation_action(
-                                        SharedString::from(format!(
-                                            "unpin-collaborative-target-{unpin_target:?}"
-                                        )),
-                                        IconName::Unpin,
-                                        "Unpin",
-                                    )
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            cx.stop_propagation();
-                                            this.unpin(unpin_target.clone(), window, cx);
-                                        },
-                                    )),
-                                )
+                            .when_some(project_name.clone(), |row, project_name| {
+                                row.aria_description(project_name)
                             })
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(navigation_label(row.label().clone()))
+                                    .when_some(project_name, |row, project_name| {
+                                        row.child(
+                                            div()
+                                                .debug_selector(|| {
+                                                    "COLLABORATIVE-PINNED-PROJECT-NAME".to_owned()
+                                                })
+                                                .child(
+                                                    Label::new(project_name)
+                                                        .size(LabelSize::Small)
+                                                        .color(Color::Muted)
+                                                        .truncate(),
+                                                ),
+                                        )
+                                    }),
+                            )
+                            .when_some(badges, |this, badges| this.child(badges))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.activate(target.clone(), window, cx);
                             }))
@@ -534,6 +555,41 @@ impl Render for CollaborativePinned {
                                     multi_workspace,
                                     cx,
                                 )
+                            } else if is_pinned {
+                                let pinned = cx.entity().downgrade();
+                                let handle = ui::RightClickMenuHandle::<ui::ContextMenu>::default();
+                                ui::right_click_menu(SharedString::from(format!(
+                                    "pinned-target-actions-{unpin_target:?}"
+                                )))
+                                .with_handle(handle.clone())
+                                .trigger(move |_, _, _| {
+                                    navigation_row.on_key_down(move |event, window, cx| {
+                                        if event.keystroke.key == "f10"
+                                            && event.keystroke.modifiers.shift
+                                        {
+                                            handle.show(window, cx);
+                                            cx.stop_propagation();
+                                        }
+                                    })
+                                })
+                                .menu(move |window, cx| {
+                                    ui::ContextMenu::build(window, cx, |menu, _, _| {
+                                        let pinned = pinned.clone();
+                                        let target = unpin_target.clone();
+                                        menu.item(
+                                            ui::ContextMenuEntry::new("Unpin")
+                                                .icon(IconName::Unpin)
+                                                .handler(move |window, cx| {
+                                                    pinned
+                                                        .update(cx, |pinned, cx| {
+                                                            pinned.unpin(target.clone(), window, cx)
+                                                        })
+                                                        .log_err();
+                                                }),
+                                        )
+                                    })
+                                })
+                                .into_any_element()
                             } else {
                                 navigation_row.into_any_element()
                             }

@@ -105,6 +105,19 @@ impl CollaborativeWorkspace {
         self.layout.read(cx).native_editor_active()
     }
 
+    pub(crate) fn conversation_footer_below_docks(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> Option<AnyView> {
+        self.layout.read(cx).conversation_footer_below_docks(window)
+    }
+
+    pub(crate) fn native_editor_visible(&self, window: &Window, cx: &App) -> bool {
+        let layout = self.layout.read(cx);
+        layout.native_editor_active() && layout.geometry(window).review_visible
+    }
+
     pub(crate) fn set_native_editor_active(&mut self, active: bool, cx: &mut Context<Self>) {
         self.layout.update(cx, |layout, cx| {
             layout.set_native_editor_active(active, cx);
@@ -219,10 +232,6 @@ impl CollaborativeWorkspace {
     #[cfg(test)]
     pub(crate) fn layout_entity(&self) -> Entity<CollaborativeLayout> {
         self.layout.clone()
-    }
-
-    pub(crate) fn timeline_visible(&self, cx: &App) -> bool {
-        self.layout.read(cx).timeline_visible()
     }
 
     pub(crate) fn composer_focus_handle(&self, cx: &App) -> FocusHandle {

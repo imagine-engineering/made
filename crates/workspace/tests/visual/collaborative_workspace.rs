@@ -113,6 +113,8 @@ fn collaborative_visual_bounds(
         "COLLABORATIVE-REVIEW-REGION" => cx.debug_bounds("COLLABORATIVE-REVIEW-REGION"),
         "COLLABORATIVE-COMPOSER" => cx.debug_bounds("COLLABORATIVE-COMPOSER"),
         "COLLABORATIVE-PARTICIPANT-STATUS" => cx.debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS"),
+        "COLLABORATIVE-FOOTER-CONTROLS" => cx.debug_bounds("COLLABORATIVE-FOOTER-CONTROLS"),
+        "WORKSPACE-STATUS-BAR" => cx.debug_bounds("WORKSPACE-STATUS-BAR"),
         unknown => panic!("unknown collaborative visual selector {unknown}"),
     }
 }
@@ -164,9 +166,9 @@ fn assert_collaborative_visual_geometry(
     let composer = cx
         .debug_bounds("COLLABORATIVE-COMPOSER")
         .expect("collaborative composer should render");
-    let project_status = cx
-        .debug_bounds("COLLABORATIVE-PARTICIPANT-STATUS")
-        .expect("collaborative status should render");
+    let footer = cx
+        .debug_bounds("COLLABORATIVE-FOOTER-CONTROLS")
+        .expect("project and composer controls should render in the timeline");
     let status_bar = cx
         .debug_bounds("WORKSPACE-STATUS-BAR")
         .expect("the native status toolbar should render below the composer");
@@ -188,13 +190,16 @@ fn assert_collaborative_visual_geometry(
     }
     assert_eq!(layout.right(), px(viewport_width as f32));
     assert_eq!(composer.right(), timeline.right());
-    assert_eq!(composer.bottom(), status_bar.top());
-    assert_eq!(status_bar.bottom(), timeline.bottom());
-    assert_eq!(status_bar.left(), timeline.left());
-    assert_eq!(status_bar.right(), timeline.right());
-    assert!(status_bar.contains(&project_status.center()));
+    assert_eq!(composer.bottom(), footer.top());
+    assert_eq!(footer.bottom(), timeline.bottom());
+    assert_eq!(footer.left(), timeline.left());
+    assert_eq!(footer.right(), timeline.right());
+    let status_gap = status_bar.top() - layout.bottom();
+    assert!((px(0.)..=px(1.)).contains(&status_gap));
+    assert!(status_bar.left() <= timeline.left());
+    assert_eq!(status_bar.right(), layout.right());
+    assert!(status_bar.bottom() <= px(viewport_height as f32));
     assert!(composer.top() > timeline.top());
-    assert!(project_status.bottom() <= px(viewport_height as f32));
     assert_eq!(timeline.left(), layout.left());
     assert_eq!(timeline.top(), layout.top());
     assert_eq!(timeline.bottom(), layout.bottom());

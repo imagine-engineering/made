@@ -1334,63 +1334,162 @@ async fn collaborative_rail_layout(cx: &mut TestAppContext) {
 #[cfg(feature = "multiplayer-tools")]
 #[gpui::test]
 async fn collaborative_project_expansion_uses_the_canonical_group_state(cx: &mut TestAppContext) {
-    let project = init_test_project("/my-project", cx).await;
+    let (fs, project) = init_multi_project_test(&["/my-project", "/other-project"], cx).await;
+    cx.update(|cx| {
+        cx.bind_keys([
+            gpui::KeyBinding::new("left", menu::SelectParent, Some("ThreadsSidebar")),
+            gpui::KeyBinding::new("right", menu::SelectChild, Some("ThreadsSidebar")),
+        ]);
+    });
     let key = project.read_with(cx, |project, cx| project.project_group_key(cx));
     let (multi_workspace, cx) =
-        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
-    multi_workspace.update_in(cx, |multi_workspace, window, cx| {
-        multi_workspace.add(multi_workspace.workspace().clone(), window, cx);
-    });
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
     let _sidebar = setup_sidebar_closed(&multi_workspace, cx);
-    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
-    cx.run_until_parked();
-    assert!(
-        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
-            .is_none()
+    let other_workspace = add_test_project("/other-project", &fs, &multi_workspace, cx).await;
+    let other_key = other_workspace.read_with(cx, |workspace, cx| {
+        workspace.project().read(cx).project_group_key(cx)
+    });
+    let session_id = acp::SessionId::new("project-thread");
+    save_thread_metadata(
+        session_id.clone(),
+        Some("Project Thread".into()),
+        Utc::now(),
+        None,
+        None,
+        &project,
+        cx,
     );
-    let locations = cx
-        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
-        .expect("project locations disclosure is visible");
-    cx.simulate_click(
-        gpui::point(locations.left() + px(30.), locations.center().y),
+    let thread_id = cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx)
+            .read(cx)
+            .entry_by_session(&session_id)
+            .expect("project thread")
+            .thread_id
+    });
+    let thread_selector = format!("COLLABORATIVE-TASK-ROW-{}", thread_id.to_key_string());
+    let thread_selector = Box::leak(thread_selector.into_boxed_str());
+    let active_workspace =
+        multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+    let active_target = workspace::collaborative_navigation::CollaborativeNavigationTarget::thread(
+        thread_id.to_key_string(),
+    );
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    active_workspace.update_in(cx, |workspace, window, cx| {
+        workspace
+            .navigate_collaborative_to(active_target.clone(), |_| true, window, cx)
+            .expect("set active conversation");
+    });
+    cx.run_until_parked();
+
+    let thread = cx
+        .debug_bounds(thread_selector)
+        .expect("thread in expanded group");
+    let row = cx
+        .debug_bounds("COLLABORATIVE-NAVIGATION-PROJECT-ROW")
+        .expect("project row");
+    let row_height = row.size.height;
+    let position = gpui::point(thread.left() + px(100.), thread.top() - row_height / 2.);
+    assert!(cx.debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS").is_none());
+
+    cx.simulate_click(position, gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(cx.debug_bounds(thread_selector).is_none());
+    multi_workspace.read_with(cx, |workspace, _| {
+        assert!(
+            !workspace
+                .group_state_by_key(&key)
+                .expect("project group")
+                .expanded
+        );
+        assert!(
+            workspace
+                .group_state_by_key(&other_key)
+                .expect("other group")
+                .expanded
+        );
+    });
+    assert_eq!(
+        active_workspace.read_with(cx, |workspace, _| workspace
+            .collaborative_navigation()
+            .current()
+            .cloned()),
+        Some(active_target)
+    );
+
+    cx.simulate_keystrokes("right");
+    cx.run_until_parked();
+    assert!(cx.debug_bounds(thread_selector).is_some());
+
+    cx.simulate_mouse_down(
+        position,
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(
+        position,
+        gpui::MouseButton::Right,
         gpui::Modifiers::default(),
     );
     cx.run_until_parked();
-    assert!(
-        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
-            .is_some()
-    );
-    for expected in [false, true] {
-        let disclosure = cx
-            .debug_bounds("COLLABORATIVE-PROJECT-EXPANSION")
-            .expect("project disclosure is visible");
-        cx.simulate_click(disclosure.center(), gpui::Modifiers::default());
+    assert!(cx.debug_bounds("MENU_ITEM-Pin project").is_some());
+    assert!(cx.debug_bounds("MENU_SUBMENU-Worktrees").is_some());
+    assert!(cx.debug_bounds(thread_selector).is_some());
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_projects_header_menus_restore_trigger_focus(cx: &mut TestAppContext) {
+    let project = init_test_project("/menu-project", cx).await;
+    cx.update(|cx| cx.bind_keys([gpui::KeyBinding::new("escape", menu::Cancel, None)]));
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.simulate_resize(gpui::size(px(1200.), px(800.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.simulate_next_frame(cx);
+        window.simulate_next_frame(cx);
+    });
+    cx.run_until_parked();
+    let focuses = sidebar.read_with(cx, |sidebar, cx| {
+        sidebar
+            .collaborative_rail
+            .read(cx)
+            .test_projects()
+            .read(cx)
+            .test_header_focus_handles()
+    });
+    for ((selector, menu_selector), focus) in [
+        ("COLLABORATIVE-PROJECT-FILTER", "MENU_ITEM-All threads"),
+        ("COLLABORATIVE-PROJECTS-ADD", "NATIVE-RECENT-PROJECTS-MENU"),
+    ]
+    .into_iter()
+    .zip(focuses)
+    {
+        let trigger = cx.debug_bounds(selector).expect("projects header trigger");
+        cx.simulate_click(trigger.center(), gpui::Modifiers::default());
+        for _ in 0..3 {
+            cx.update(|window, cx| window.simulate_next_frame(cx));
+            cx.run_until_parked();
+        }
+        let menu = cx
+            .debug_bounds(menu_selector)
+            .expect("trigger opens its menu");
+        let viewport = cx.update(|window, _| window.viewport_size());
+        assert!(menu.left() >= px(0.) && menu.right() <= viewport.width);
+        assert!(!cx.update(|window, _| focus.is_focused(window)));
+        cx.simulate_keystrokes("escape");
         cx.run_until_parked();
-        assert_eq!(
-            multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace
-                .group_state_by_key(&key)
-                .expect("canonical group")
-                .expanded),
-            expected
+        assert!(
+            cx.debug_bounds(menu_selector).is_none(),
+            "{selector} must dismiss"
         );
-        assert_eq!(
-            cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
-                .is_some(),
-            expected
+        assert!(
+            cx.update(|window, _| focus.is_focused(window)),
+            "{selector} must regain focus"
         );
     }
-    let locations = cx
-        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
-        .expect("locations disclosure visible after reopening the project");
-    cx.simulate_click(
-        gpui::point(locations.left() + px(30.), locations.center().y),
-        gpui::Modifiers::default(),
-    );
-    cx.run_until_parked();
-    assert!(
-        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
-            .is_none()
-    );
 }
 
 #[gpui::test]
@@ -16407,6 +16506,11 @@ async fn collaborative_task_menu_targets_non_active_row_and_preserves_selection(
                 .is_pinned(&other_target)),
             label == "Pin"
         );
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-PINNED-PROJECT-NAME")
+                .is_some(),
+            label == "Pin",
+        );
         assert!(!workspace.read_with(cx, |workspace, _| {
             workspace
                 .collaborative_navigation()
@@ -16473,7 +16577,9 @@ async fn collaborative_task_menu_targets_non_active_row_and_preserves_selection(
             keyboard_focus = before;
             break;
         }
-        if cx.debug_bounds("MENU_ITEM-Pin").is_some() {
+        if cx.debug_bounds("MENU_ITEM-Pin").is_some()
+            || cx.debug_bounds("MENU_ITEM-Pin project").is_some()
+        {
             cx.simulate_keystrokes("escape");
             cx.run_until_parked();
         }

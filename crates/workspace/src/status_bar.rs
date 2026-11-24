@@ -6,13 +6,14 @@ use crate::{
         CollaborativeExecutionPhase, CollaborativeParticipantProvider,
         CollaborativeParticipantProviderState,
     },
+    dock::{DockPanelButton, PanelButtons},
 };
 #[cfg(feature = "agentic")]
 use crate::{ToggleWorkspaceSidebar, sidebar_side_context_menu};
-#[cfg(feature = "multiplayer-tools")]
-use gpui::Action;
 #[cfg(feature = "agentic")]
 use gpui::Anchor;
+#[cfg(feature = "multiplayer-tools")]
+use gpui::{Action, EntityId, canvas, px, relative};
 use gpui::{
     AnyView, App, Context, Decorations, Entity, FocusHandle, Focusable, IntoElement, ParentElement,
     Render, Role, SharedString, Styled, Subscription, WeakEntity, Window,
@@ -21,11 +22,13 @@ use project::Project;
 use settings::{SettingsContent, update_settings_file};
 use std::{any::TypeId, sync::Arc};
 use theme::CLIENT_SIDE_DECORATION_ROUNDING;
-#[cfg(any(feature = "agentic", feature = "multiplayer-tools"))]
+#[cfg(feature = "agentic")]
 use ui::Divider;
 use ui::{ContextMenu, IconPosition, prelude::*, right_click_menu};
 #[cfg(feature = "agentic")]
 use ui::{Indicator, Tooltip};
+#[cfg(feature = "multiplayer-tools")]
+use util::ResultExt;
 
 /// Describes how a status-bar item can be hidden by the user.
 ///
@@ -61,20 +64,6 @@ pub trait StatusItemView: Render {
         false
     }
 
-    #[cfg(feature = "multiplayer-tools")]
-    fn collaborative_menu_group(&self) -> CollaborativeStatusItemGroup {
-        CollaborativeStatusItemGroup::Tools
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn render_collaborative_menu(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        self.render(window, cx).into_any_element()
-    }
-
     /// Event callback that is triggered when the active pane item changes.
     fn set_active_pane_item(
         &mut self,
@@ -96,8 +85,6 @@ pub trait StatusItemView: Render {
 trait StatusItemViewHandle: Send {
     #[cfg(feature = "multiplayer-tools")]
     fn is_collaborative_primary(&self, cx: &App) -> bool;
-    #[cfg(feature = "multiplayer-tools")]
-    fn to_collaborative_menu_view(&self, cx: &mut App) -> (CollaborativeStatusItemGroup, AnyView);
     fn to_any(&self) -> AnyView;
     fn set_active_pane_item(
         &self,
@@ -107,27 +94,6 @@ trait StatusItemViewHandle: Send {
     );
     fn item_type(&self) -> TypeId;
     fn hide_setting(&self, cx: &App) -> Option<HideStatusItem>;
-}
-
-#[cfg(feature = "multiplayer-tools")]
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum CollaborativeStatusItemGroup {
-    Tools,
-    Panels,
-}
-
-#[cfg(feature = "multiplayer-tools")]
-struct CollaborativeStatusItem<T: StatusItemView> {
-    item: Entity<T>,
-    _observation: Subscription,
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl<T: StatusItemView> Render for CollaborativeStatusItem<T> {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.item
-            .update(cx, |item, cx| item.render_collaborative_menu(window, cx))
-    }
 }
 
 #[derive(Default)]
@@ -174,6 +140,14 @@ pub struct StatusBar {
     collaborative_composer_footer: Option<AnyView>,
     #[cfg(feature = "multiplayer-tools")]
     collaborative_add_project_button: Option<AnyView>,
+    #[cfg(feature = "multiplayer-tools")]
+    collaborative_file_details: Vec<EntityId>,
+    #[cfg(feature = "multiplayer-tools")]
+    panel_strip_width: Pixels,
+    #[cfg(feature = "multiplayer-tools")]
+    panel_overflow_focus: FocusHandle,
+    #[cfg(feature = "multiplayer-tools")]
+    panel_overflow: ui::PopoverMenuHandle<ContextMenu>,
     focus_handle: FocusHandle,
     _observe_active_pane: Subscription,
     _observe_git_store: Subscription,
@@ -258,7 +232,7 @@ impl Render for StatusBar {
             .map(|this| {
                 #[cfg(feature = "multiplayer-tools")]
                 if self.collaborative_workspace_active {
-                    return this.child(self.render_collaborative_tools(cx));
+                    return this.child(self.render_collaborative_status(window, cx));
                 }
                 this.child(self.render_left_tools(&sidebar, cx))
                     .child(self.render_right_tools(&sidebar, cx))
@@ -268,9 +242,12 @@ impl Render for StatusBar {
 
 impl StatusBar {
     #[cfg(feature = "multiplayer-tools")]
-    fn render_collaborative_tools(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let items = self.left_items.iter().chain(self.right_items.iter().rev());
-        let primary = items.filter(|item| item.is_collaborative_primary(cx));
+    pub(crate) fn render_conversation_footer(&self, cx: &App) -> impl IntoElement + use<> {
+        let primary = self
+            .left_items
+            .iter()
+            .chain(self.right_items.iter().rev())
+            .filter(|item| item.is_collaborative_primary(cx));
         let has_project = self
             .multi_workspace
             .as_ref()
@@ -284,7 +261,6 @@ impl StatusBar {
                     .next()
                     .is_some()
             });
-        let status_bar = cx.entity().downgrade();
         let state = self
             .collaborative_participants
             .as_ref()
@@ -306,42 +282,6 @@ impl StatusBar {
                     })),
             )
             .children(self.collaborative_add_project_button.clone());
-        let workspace_tools = div()
-            .debug_selector(|| "COLLABORATIVE-STATUS-OVERFLOW".to_owned())
-            .flex_none()
-            .child(
-                ui::PopoverMenu::new("collaborative-status-overflow")
-                    .anchor(gpui::Anchor::BottomLeft)
-                    .trigger(
-                        IconButton::new(
-                            "collaborative-status-overflow-trigger",
-                            IconName::Ellipsis,
-                        )
-                        .icon_size(IconSize::Small)
-                        .size(ButtonSize::Compact)
-                        .tab_index(0isize)
-                        .aria_label("Workspace tools")
-                        .tooltip(ui::Tooltip::text("Workspace tools")),
-                    )
-                    .menu(move |window, cx| {
-                        let status_bar = status_bar.upgrade()?;
-                        Some(cx.new(|cx| {
-                            let observation = cx.observe(&status_bar, |_, _, cx| cx.notify());
-                            let focus_handle = cx.focus_handle();
-                            let focus_out =
-                                cx.on_focus_out(&focus_handle, window, |_, _, _, cx| {
-                                    cx.emit(gpui::DismissEvent)
-                                });
-                            CollaborativeStatusMenu {
-                                items: Default::default(),
-                                status_bar: status_bar.downgrade(),
-                                focus_handle,
-                                _observation: observation,
-                                _focus_out: focus_out,
-                            }
-                        }))
-                    }),
-            );
         let (project_row, inline_project) = if has_project {
             (Some(primary_controls), None)
         } else {
@@ -350,6 +290,8 @@ impl StatusBar {
         v_flex()
             .id("collaborative-footer-controls")
             .debug_selector(|| "COLLABORATIVE-FOOTER-CONTROLS".to_owned())
+            .bg(cx.theme().colors().status_bar_background)
+            .p(DynamicSpacing::Base04.rems(cx))
             .w_full()
             .min_w_0()
             .children(project_row)
@@ -361,15 +303,171 @@ impl StatusBar {
                     .min_w_0()
                     .gap_0p5()
                     .children(inline_project)
-                    .child(workspace_tools)
-                    .child(CollaborativeParticipantStatus::new(state).compact())
+                    .child(CollaborativeParticipantStatus { state })
                     .children(self.collaborative_composer_footer.clone()),
             )
     }
 
     #[cfg(feature = "multiplayer-tools")]
-    pub(crate) fn collaborative_composer_footer(&self) -> Option<AnyView> {
-        self.collaborative_composer_footer.clone()
+    fn panel_buttons(&self, window: &mut Window, cx: &App) -> Vec<DockPanelButton> {
+        self.left_items
+            .iter()
+            .chain(self.right_items.iter().rev())
+            .filter_map(|item| item.to_any().downcast::<PanelButtons>().ok())
+            .flat_map(|buttons| buttons.read(cx).buttons(true, window, cx))
+            .collect()
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn render_collaborative_status(
+        &self,
+        window: &mut Window,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let has_active_file = self
+            .active_pane
+            .read(cx)
+            .active_item()
+            .is_some_and(|item| item.project_path(cx).is_some())
+            && self
+                .multi_workspace
+                .as_ref()
+                .and_then(WeakEntity::upgrade)
+                .is_some_and(|multi_workspace| {
+                    multi_workspace
+                        .read(cx)
+                        .workspace()
+                        .read(cx)
+                        .collaborative_status_file_visible(window, cx)
+                });
+        let tools = h_flex()
+            .id("collaborative-status-tools")
+            .min_w_0()
+            .max_w(relative(0.6))
+            .gap_1()
+            .overflow_x_scroll()
+            .children(
+                self.left_items
+                    .iter()
+                    .chain(self.right_items.iter().rev())
+                    .enumerate()
+                    .filter(|(_, item)| {
+                        item.item_type() != TypeId::of::<PanelButtons>()
+                            && !item.is_collaborative_primary(cx)
+                            && (has_active_file
+                                || !self
+                                    .collaborative_file_details
+                                    .contains(&item.to_any().entity_id()))
+                    })
+                    .map(|(index, item)| {
+                        render_hideable_item("collaborative-status-tools", index, item.as_ref(), cx)
+                    }),
+            );
+        let panel_buttons = self.panel_buttons(window, cx);
+        let visible = visible_panel_count(
+            self.panel_strip_width,
+            panel_buttons.len(),
+            window.rem_size(),
+        );
+        let has_overflow = visible < panel_buttons.len();
+        let status_bar = cx.entity().downgrade();
+        let observed_status_bar = status_bar.clone();
+        h_flex()
+            .debug_selector(|| "COLLABORATIVE-STATUS-BAR".to_owned())
+            .min_h(ButtonSize::Default.rems())
+            .w_full()
+            .gap_1()
+            .child(tools)
+            .child(
+                h_flex()
+                    .relative()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_1()
+                    .justify_end()
+                    .child(
+                        canvas(
+                            move |bounds, window, cx| {
+                                let observed_status_bar = observed_status_bar.clone();
+                                if observed_status_bar
+                                    .read_with(cx, |status_bar, _| {
+                                        status_bar.panel_strip_width == bounds.size.width
+                                    })
+                                    .unwrap_or(true)
+                                {
+                                    return;
+                                }
+                                window.on_next_frame(move |window, cx| {
+                                    observed_status_bar
+                                        .update(cx, |status_bar, cx| {
+                                            let count = status_bar.panel_buttons(window, cx).len();
+                                            if visible_panel_count(
+                                                status_bar.panel_strip_width,
+                                                count,
+                                                window.rem_size(),
+                                            ) != visible_panel_count(
+                                                bounds.size.width,
+                                                count,
+                                                window.rem_size(),
+                                            ) {
+                                                status_bar.panel_overflow.hide(cx);
+                                            }
+                                            status_bar.panel_strip_width = bounds.size.width;
+                                            cx.notify();
+                                        })
+                                        .log_err();
+                                });
+                            },
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full(),
+                    )
+                    .children(
+                        panel_buttons
+                            .into_iter()
+                            .take(visible)
+                            .map(|button| button.render(true, window, cx)),
+                    )
+                    .when(has_overflow, |strip| {
+                        strip.child(
+                            div()
+                                .debug_selector(|| "COLLABORATIVE-PANEL-OVERFLOW".to_owned())
+                                .child(
+                                    ui::PopoverMenu::new("collaborative-panel-overflow")
+                                        .anchor(gpui::Anchor::BottomRight)
+                                        .with_handle(self.panel_overflow.clone())
+                                        .restore_focus_to(&self.panel_overflow_focus)
+                                        .menu(move |window, cx| {
+                                            let mut buttons = status_bar
+                                                .read_with(cx, |status_bar, cx| {
+                                                    status_bar.panel_buttons(window, cx)
+                                                })
+                                                .ok()?;
+                                            if visible >= buttons.len() {
+                                                return None;
+                                            }
+                                            let entries = buttons
+                                                .drain(visible..)
+                                                .map(|button| button.overflow_entry(window, cx))
+                                                .collect::<Vec<_>>();
+                                            Some(ContextMenu::build(window, cx, |menu, _, _| {
+                                                entries.into_iter().fold(menu, ContextMenu::item)
+                                            }))
+                                        })
+                                        .trigger(
+                                            IconButton::new("more-panels", IconName::Ellipsis)
+                                                .shape(ui::IconButtonShape::Square)
+                                                .icon_size(IconSize::Small)
+                                                .tab_index(0isize)
+                                                .track_focus(&self.panel_overflow_focus)
+                                                .aria_label("More panels")
+                                                .tooltip(ui::Tooltip::text("More panels")),
+                                        ),
+                                ),
+                        )
+                    }),
+            )
     }
 
     #[cfg(feature = "multiplayer-tools")]
@@ -396,10 +494,6 @@ impl StatusBar {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let tools = h_flex().gap_1().min_w_0().overflow_x_hidden();
-        #[cfg(feature = "multiplayer-tools")]
-        let tools = tools.when(self.collaborative_workspace_active, |this| {
-            this.flex_shrink_0().max_w_full().flex_wrap()
-        });
         #[cfg(feature = "multiplayer-tools")]
         let tools = tools.when(!self.collaborative_workspace_active, |this| {
             this.child(
@@ -448,16 +542,6 @@ impl StatusBar {
                         render_hideable_item("status-bar-right", index, item.as_ref(), cx)
                     }),
             );
-        #[cfg(feature = "multiplayer-tools")]
-        let tools = tools.when(self.collaborative_workspace_active, |this| {
-            let this = this.max_w_full().flex_wrap();
-            let state = self
-                .collaborative_participants
-                .as_ref()
-                .map(|provider| provider.state(cx))
-                .unwrap_or(CollaborativeParticipantProviderState::Unavailable);
-            this.child(CollaborativeParticipantStatus::new(state))
-        });
         #[cfg(feature = "agentic")]
         let tools = tools.when(
             sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Right,
@@ -558,169 +642,6 @@ fn render_hideable_view(
         .into_any_element()
 }
 
-#[cfg(feature = "multiplayer-tools")]
-struct CollaborativeStatusMenu {
-    items: std::collections::HashMap<gpui::EntityId, (CollaborativeStatusItemGroup, AnyView)>,
-    status_bar: WeakEntity<StatusBar>,
-    focus_handle: FocusHandle,
-    _observation: Subscription,
-    _focus_out: Subscription,
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl gpui::EventEmitter<gpui::DismissEvent> for CollaborativeStatusMenu {}
-
-#[cfg(feature = "multiplayer-tools")]
-impl Focusable for CollaborativeStatusMenu {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl CollaborativeStatusMenu {
-    fn move_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let previous = window.focused(cx);
-        if forward {
-            window.focus_next(cx);
-        } else {
-            window.focus_prev(cx);
-        }
-        if !window
-            .focused(cx)
-            .is_some_and(|focus| self.focus_handle.contains(&focus, window))
-            && let Some(previous) = previous
-        {
-            window.focus(&previous, cx);
-        }
-        cx.notify();
-    }
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl Render for CollaborativeStatusMenu {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(status_bar) = self.status_bar.upgrade() else {
-            return gpui::Empty.into_any_element();
-        };
-        let (items, state) = status_bar.update(cx, |status_bar, cx| {
-            let mut items = Vec::new();
-            for item in status_bar
-                .left_items
-                .iter()
-                .chain(status_bar.right_items.iter().rev())
-            {
-                if item.is_collaborative_primary(cx) {
-                    continue;
-                }
-                let hide = item.hide_setting(cx);
-                let (group, view) = self
-                    .items
-                    .entry(item.to_any().entity_id())
-                    .or_insert_with(|| item.to_collaborative_menu_view(cx));
-                items.push((*group, view.clone(), hide));
-            }
-            let state = status_bar
-                .collaborative_participants
-                .as_ref()
-                .map(|provider| provider.state(cx))
-                .unwrap_or(CollaborativeParticipantProviderState::Unavailable);
-            (items, state)
-        });
-        let mut tools = Vec::new();
-        let mut panels = Vec::new();
-        for (index, (group, view, hide)) in items.into_iter().enumerate() {
-            let element = div().max_w_full().child(render_hideable_view(
-                "collaborative-status-overflow",
-                index,
-                view,
-                hide,
-            ));
-            match group {
-                CollaborativeStatusItemGroup::Tools => tools.push(element),
-                CollaborativeStatusItemGroup::Panels => panels.push(element),
-            }
-        }
-        v_flex()
-            .id("collaborative-status-menu")
-            .debug_selector(|| "COLLABORATIVE-STATUS-MENU".to_owned())
-            .track_focus(&self.focus_handle)
-            .tab_group()
-            .role(Role::Toolbar)
-            .aria_label("Workspace status and agent execution")
-            .on_action(cx.listener(|_, _: &menu::Cancel, _, cx| cx.emit(gpui::DismissEvent)))
-            .on_action(cx.listener(|this, _: &menu::SelectNext, window, cx| {
-                this.move_focus(true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &menu::SelectPrevious, window, cx| {
-                this.move_focus(false, window, cx);
-            }))
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
-                if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
-                    cx.emit(gpui::DismissEvent);
-                    cx.stop_propagation();
-                    return;
-                }
-                let mut modifiers = event.keystroke.modifiers;
-                modifiers.shift = false;
-                if modifiers.modified() {
-                    return;
-                }
-                let forward = match event.keystroke.key.as_str() {
-                    "tab" => !event.keystroke.modifiers.shift,
-                    "right" | "down" => true,
-                    "left" | "up" => false,
-                    _ => return,
-                };
-                this.move_focus(forward, window, cx);
-                cx.stop_propagation();
-            }))
-            .elevation_2(cx)
-            .p_2()
-            .gap_2()
-            .w(px(350.))
-            .max_w(window.viewport_size().width - px(16.))
-            .max_h(window.viewport_size().height - px(16.))
-            .overflow_y_scroll()
-            .child(
-                v_flex()
-                    .debug_selector(|| "COLLABORATIVE-STATUS-TOOLS".to_owned())
-                    .gap_1()
-                    .child(
-                        Label::new("Workspace tools")
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .child(h_flex().flex_wrap().items_center().children(tools)),
-            )
-            .child(Divider::horizontal())
-            .child(
-                v_flex()
-                    .debug_selector(|| "COLLABORATIVE-STATUS-PANELS".to_owned())
-                    .gap_1()
-                    .child(
-                        Label::new("Panels")
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .child(v_flex().children(panels)),
-            )
-            .child(Divider::horizontal())
-            .child(
-                v_flex()
-                    .debug_selector(|| "COLLABORATIVE-STATUS-EXECUTION".to_owned())
-                    .gap_1()
-                    .child(
-                        Label::new("Agent execution")
-                            .size(LabelSize::XSmall)
-                            .color(Color::Muted),
-                    )
-                    .child(CollaborativeParticipantStatus::new(state)),
-            )
-            .into_any_element()
-    }
-}
-
 /// Appends a "Hide Button" entry aligned with surrounding toggleable entries.
 pub fn add_hide_button_entry(menu: ContextMenu, hide: HideStatusItem) -> ContextMenu {
     menu.toggleable_entry(
@@ -730,6 +651,18 @@ pub fn add_hide_button_entry(menu: ContextMenu, hide: HideStatusItem) -> Context
         None,
         move |_window, cx| hide.apply(cx),
     )
+}
+
+#[cfg(feature = "multiplayer-tools")]
+fn visible_panel_count(width: Pixels, count: usize, rem_size: Pixels) -> usize {
+    let gap = rems(0.25) * rem_size;
+    let slot = ButtonSize::Default.rems() * rem_size + gap;
+    let capacity = (f32::from(width + gap) / f32::from(slot)).floor() as usize;
+    if count <= capacity {
+        count
+    } else {
+        capacity.saturating_sub(1)
+    }
 }
 
 impl StatusBar {
@@ -759,6 +692,14 @@ impl StatusBar {
             collaborative_composer_footer: None,
             #[cfg(feature = "multiplayer-tools")]
             collaborative_add_project_button: None,
+            #[cfg(feature = "multiplayer-tools")]
+            collaborative_file_details: Vec::new(),
+            #[cfg(feature = "multiplayer-tools")]
+            panel_strip_width: px(0.),
+            #[cfg(feature = "multiplayer-tools")]
+            panel_overflow_focus: cx.focus_handle(),
+            #[cfg(feature = "multiplayer-tools")]
+            panel_overflow: Default::default(),
             focus_handle: cx.focus_handle(),
             _observe_active_pane: cx.observe_in(active_pane, window, |this, _, window, cx| {
                 this.update_active_pane_item(window, cx)
@@ -800,6 +741,12 @@ impl StatusBar {
         cx.notify();
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    pub fn set_collaborative_file_details(&mut self, items: Vec<EntityId>, cx: &mut Context<Self>) {
+        self.collaborative_file_details = items;
+        cx.notify();
+    }
+
     pub fn add_left_item<T>(&mut self, item: Entity<T>, window: &mut Window, cx: &mut Context<Self>)
     where
         T: 'static + StatusItemView,
@@ -807,6 +754,10 @@ impl StatusBar {
         let active_pane_item = self.active_pane.read(cx).active_item();
         item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
 
+        #[cfg(feature = "multiplayer-tools")]
+        if TypeId::of::<T>() == TypeId::of::<PanelButtons>() {
+            cx.observe(&item, |_, _, cx| cx.notify()).detach();
+        }
         self.left_items.push(Box::new(item));
         cx.notify();
     }
@@ -876,6 +827,10 @@ impl StatusBar {
         let active_pane_item = self.active_pane.read(cx).active_item();
         item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
 
+        #[cfg(feature = "multiplayer-tools")]
+        if TypeId::of::<T>() == TypeId::of::<PanelButtons>() {
+            cx.observe(&item, |_, _, cx| cx.notify()).detach();
+        }
         self.right_items.push(Box::new(item));
         cx.notify();
     }
@@ -925,157 +880,72 @@ impl StatusBar {
 #[derive(IntoElement)]
 struct CollaborativeParticipantStatus {
     state: CollaborativeParticipantProviderState,
-    compact: bool,
-}
-
-#[cfg(feature = "multiplayer-tools")]
-impl CollaborativeParticipantStatus {
-    fn new(state: CollaborativeParticipantProviderState) -> Self {
-        Self {
-            state,
-            compact: false,
-        }
-    }
-
-    fn compact(mut self) -> Self {
-        self.compact = true;
-        self
-    }
 }
 
 #[cfg(feature = "multiplayer-tools")]
 impl RenderOnce for CollaborativeParticipantStatus {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        if self.compact {
-            let (label, detail, color) = match self.state {
-                CollaborativeParticipantProviderState::Ready(data) => match data.execution {
-                    Some(execution) => {
-                        let color = if execution.phase == CollaborativeExecutionPhase::Failed {
-                            Color::Error
-                        } else {
-                            Color::Muted
-                        };
-                        (
-                            Some(execution.location_label()),
-                            format!(
-                                "{:?} · {} · {} · {}",
-                                execution.phase,
-                                execution.model_label(),
-                                execution.runtime_label(),
-                                execution.location_label()
-                            ),
-                            color,
-                        )
-                    }
-                    None => (None, "Agent execution unavailable".to_owned(), Color::Muted),
-                },
-                CollaborativeParticipantProviderState::Failed(message) => {
-                    (None, message.to_string(), Color::Error)
-                }
-                CollaborativeParticipantProviderState::Unavailable => {
-                    (None, "Agent unavailable".to_owned(), Color::Muted)
-                }
-            };
-            return h_flex()
-                .id("collaborative-participant-summary")
-                .debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS".to_owned())
-                .gap_0p5()
-                .min_w(IconSize::XSmall.rems())
-                .flex_shrink_1()
-                .overflow_hidden()
-                .aria_label(detail.clone())
-                .tooltip(ui::Tooltip::text(detail))
-                .child(
-                    div()
-                        .flex_none()
-                        .debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS-ICON".to_owned())
-                        .child(
-                            Icon::new(IconName::ZedAgent)
-                                .size(IconSize::XSmall)
-                                .color(color),
-                        ),
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        let (label, description, color) = match self.state {
+            CollaborativeParticipantProviderState::Ready(data) => {
+                let Some(execution) = data.execution else {
+                    return gpui::Empty.into_any_element();
+                };
+                let phase = match execution.phase {
+                    CollaborativeExecutionPhase::Idle => None,
+                    CollaborativeExecutionPhase::Running => Some("Running"),
+                    CollaborativeExecutionPhase::WaitingForUser => Some("Waiting"),
+                    CollaborativeExecutionPhase::Failed => Some("Failed"),
+                    CollaborativeExecutionPhase::Completed => Some("Completed"),
+                    CollaborativeExecutionPhase::Unknown => None,
+                };
+                let location = execution.location_label();
+                let description = phase.map_or_else(
+                    || location.to_string(),
+                    |phase| format!("{phase} · {location}"),
+                );
+                let color = if execution.phase == CollaborativeExecutionPhase::Failed {
+                    Color::Error
+                } else {
+                    Color::Muted
+                };
+                (
+                    phase.map(SharedString::from).unwrap_or(location),
+                    description.into(),
+                    color,
                 )
-                .when_some(label, |this, label| {
-                    this.child(
-                        Label::new(label)
-                            .size(LabelSize::XSmall)
-                            .color(color)
-                            .truncate(),
-                    )
-                })
-                .into_any_element();
-        }
+            }
+            CollaborativeParticipantProviderState::Failed(message) => {
+                ("Failed".into(), message, Color::Error)
+            }
+            CollaborativeParticipantProviderState::Unavailable => {
+                return gpui::Empty.into_any_element();
+            }
+        };
         h_flex()
-            .id("collaborative-participant-status")
-            .debug_selector(|| "COLLABORATIVE-EXECUTION-DETAILS".to_owned())
-            .min_w_0()
-            .max_w_full()
-            .gap_1()
-            .px_1()
-            .child(Icon::new(IconName::ZedAgent).size(IconSize::XSmall))
-            .child(h_flex().min_w_0().flex_wrap().gap_1().map(|this| {
-                match self.state {
-                    CollaborativeParticipantProviderState::Ready(view_data) => {
-                        let execution_available = view_data.execution.is_some();
-                        let execution = view_data.execution;
-                        this.debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS-READY".to_owned())
-                            .when_some(execution, |this, execution| {
-                                let phase = match execution.phase {
-                                    CollaborativeExecutionPhase::Idle => "Idle",
-                                    CollaborativeExecutionPhase::Running => "Running",
-                                    CollaborativeExecutionPhase::WaitingForUser => "Waiting",
-                                    CollaborativeExecutionPhase::Failed => "Failed",
-                                    CollaborativeExecutionPhase::Completed => "Completed",
-                                    CollaborativeExecutionPhase::Unknown => "Unknown",
-                                };
-                                this.child(
-                                    Label::new(phase)
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted),
-                                )
-                                .child(Divider::vertical())
-                                .child(
-                                    Label::new(execution.model_label())
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted),
-                                )
-                                .child(
-                                    Label::new(execution.runtime_label())
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted),
-                                )
-                                .child(
-                                    Label::new(execution.location_label())
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted),
-                                )
-                            })
-                            .when(!execution_available, |this| {
-                                this.child(
-                                    Label::new("No active execution")
-                                        .size(LabelSize::XSmall)
-                                        .color(Color::Muted),
-                                )
-                            })
-                    }
-                    CollaborativeParticipantProviderState::Failed(message) => this
-                        .debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS-FAILED".to_owned())
-                        .child(
-                            Label::new(message)
-                                .size(LabelSize::XSmall)
-                                .color(Color::Error),
-                        ),
-                    CollaborativeParticipantProviderState::Unavailable => this
-                        .debug_selector(|| {
-                            "COLLABORATIVE-PARTICIPANT-STATUS-UNAVAILABLE".to_owned()
-                        })
-                        .child(
-                            Label::new("Agent unavailable")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
-                        ),
-                }
-            }))
+            .id("collaborative-participant-summary")
+            .debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS".to_owned())
+            .gap_0p5()
+            .min_w(IconSize::XSmall.rems())
+            .flex_shrink_1()
+            .overflow_hidden()
+            .aria_label(description.clone())
+            .tooltip(ui::Tooltip::text(description))
+            .child(
+                div()
+                    .flex_none()
+                    .debug_selector(|| "COLLABORATIVE-PARTICIPANT-STATUS-ICON".to_owned())
+                    .child(
+                        Icon::new(IconName::ZedAgent)
+                            .size(IconSize::XSmall)
+                            .color(color),
+                    ),
+            )
+            .child(
+                Label::new(label)
+                    .size(LabelSize::XSmall)
+                    .color(color)
+                    .truncate(),
+            )
             .into_any_element()
     }
 }
@@ -1084,16 +954,6 @@ impl<T: StatusItemView> StatusItemViewHandle for Entity<T> {
     #[cfg(feature = "multiplayer-tools")]
     fn is_collaborative_primary(&self, cx: &App) -> bool {
         self.read(cx).is_collaborative_primary()
-    }
-    #[cfg(feature = "multiplayer-tools")]
-    fn to_collaborative_menu_view(&self, cx: &mut App) -> (CollaborativeStatusItemGroup, AnyView) {
-        let group = self.read(cx).collaborative_menu_group();
-        let item = self.clone();
-        let view = cx.new(|cx| CollaborativeStatusItem {
-            _observation: cx.observe(&item, |_, _, cx| cx.notify()),
-            item,
-        });
-        (group, view.into())
     }
     fn to_any(&self) -> AnyView {
         self.clone().into()
@@ -1122,5 +982,23 @@ impl<T: StatusItemView> StatusItemViewHandle for Entity<T> {
 impl From<&dyn StatusItemViewHandle> for AnyView {
     fn from(val: &dyn StatusItemViewHandle) -> Self {
         val.to_any()
+    }
+}
+
+#[cfg(all(test, feature = "multiplayer-tools"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collaborative_status_bar_reserves_overflow_only_when_panels_do_not_fit() {
+        let rem = px(16.);
+        let button = ButtonSize::Default.rems() * rem;
+        let gap = rems(0.25) * rem;
+        let three_buttons = button * 3. + gap * 2.;
+        assert_eq!(visible_panel_count(three_buttons, 3, rem), 3);
+        assert_eq!(visible_panel_count(three_buttons, 4, rem), 2);
+        assert_eq!(visible_panel_count(three_buttons - px(1.), 3, rem), 1);
+        assert_eq!(visible_panel_count(button, 3, rem), 0);
+        assert_eq!(visible_panel_count(px(0.), 0, rem), 0);
     }
 }

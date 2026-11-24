@@ -1571,267 +1571,283 @@ impl PanelButtons {
 
 impl Render for PanelButtons {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.render_buttons(false, window, cx)
+        let position = self.dock.read(cx).position;
+        let buttons = self.buttons(false, window, cx);
+        let has_buttons = !buttons.is_empty();
+        h_flex()
+            .gap_1()
+            .when(has_buttons && position != DockPosition::Left, |strip| {
+                strip.child(Divider::vertical().color(DividerColor::Border))
+            })
+            .children(
+                buttons
+                    .into_iter()
+                    .map(|button| button.render(false, window, cx)),
+            )
+            .when(has_buttons && position == DockPosition::Left, |strip| {
+                strip.child(Divider::vertical().color(DividerColor::Border))
+            })
     }
 }
 
+pub(crate) struct DockPanelButton {
+    dock: Entity<Dock>,
+    panel: Arc<dyn PanelHandle>,
+    icon: IconName,
+    label: SharedString,
+    selected: bool,
+}
+
 impl PanelButtons {
-    fn render_buttons(
-        &mut self,
-        in_status_menu: bool,
+    pub(crate) fn buttons(
+        &self,
+        #[cfg_attr(not(feature = "multiplayer-tools"), allow(unused_variables))]
+        collaborative: bool,
         window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+        cx: &App,
+    ) -> Vec<DockPanelButton> {
         let dock = self.dock.read(cx);
-        let active_index = dock.active_panel_index;
         let is_open = dock.is_open;
-        let dock_position = dock.position;
         #[cfg(feature = "multiplayer-tools")]
         let is_open = is_open
-            && (!in_status_menu
+            && (!collaborative
                 || dock
                     .workspace
                     .read_with(cx, |workspace, cx| {
-                        workspace.collaborative_dock_requested(dock_position, cx)
+                        workspace.collaborative_dock_requested(dock.position, cx)
                     })
                     .unwrap_or(false));
 
-        let (menu_anchor, menu_attach) = match dock.position {
-            DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
-            DockPosition::Bottom | DockPosition::Right | DockPosition::Top => {
-                (Anchor::BottomRight, Anchor::TopRight)
-            }
-        };
-
-        let dock_entity = self.dock.clone();
-        let workspace = dock.workspace.clone();
-        let mut buttons: Vec<_> = dock
+        let mut buttons = dock
             .panel_entries
             .iter()
             .enumerate()
-            .filter_map(|(i, entry)| {
+            .filter_map(|(index, entry)| {
                 let icon = entry.panel.icon(window, cx)?;
-                let icon_tooltip = entry
+                let label = entry
                     .panel
                     .icon_tooltip(window, cx)
                     .ok_or_else(|| {
                         anyhow::anyhow!("can't render a panel button without an icon tooltip")
                     })
                     .log_err()?;
-                let name = entry.panel.persistent_name();
-                let panel = entry.panel.clone();
-                let supports_flexible = panel.supports_flexible_size(cx);
-                let currently_flexible = panel.has_flexible_size(window, cx);
-                let dock_for_menu = dock_entity.clone();
-                let workspace_for_menu = workspace.clone();
-
-                let is_active_button = Some(i) == active_index && is_open;
-                let (action, tooltip) = if is_active_button {
-                    let action = dock.toggle_action();
-
-                    let tooltip: SharedString =
-                        format!("Close {} Dock", dock.position.label()).into();
-
-                    (action, tooltip)
-                } else {
-                    let action = entry.panel.toggle_action(window, cx);
-
-                    (action, icon_tooltip.into())
-                };
-
-                let focus_handle = dock.focus_handle(cx);
-                let icon_label = entry.panel.icon_label(window, cx);
-                #[cfg(feature = "multiplayer-tools")]
-                let workspace_for_button = workspace.clone();
-
-                Some(
-                    right_click_menu(name)
-                        .menu(move |window, cx| {
-                            let panel_hide = panel.hide_button_setting(cx);
-                            ContextMenu::build(window, cx, |mut menu, _, cx| {
-                                let mut has_position_entries = false;
-                                for position in [
-                                    DockPosition::Left,
-                                    DockPosition::Right,
-                                    DockPosition::Bottom,
-                                    DockPosition::Top,
-                                ] {
-                                    if panel.position_is_valid(position, cx) {
-                                        let is_current = position == dock_position;
-                                        let panel = panel.clone();
-                                        menu = menu.toggleable_entry(
-                                            format!("Dock {}", position.label()),
-                                            is_current,
-                                            IconPosition::Start,
-                                            None,
-                                            move |window, cx| {
-                                                if !is_current {
-                                                    panel.set_position(position, window, cx);
-                                                }
-                                            },
-                                        );
-                                        has_position_entries = true;
-                                    }
-                                }
-                                if supports_flexible {
-                                    if has_position_entries {
-                                        menu = menu.separator();
-                                    }
-                                    let panel_for_flex = panel.clone();
-                                    let dock_for_flex = dock_for_menu.clone();
-                                    let workspace_for_flex = workspace_for_menu.clone();
-                                    menu = menu.toggleable_entry(
-                                        "Flex Width",
-                                        currently_flexible,
-                                        IconPosition::Start,
-                                        None,
-                                        move |window, cx| {
-                                            if !currently_flexible {
-                                                if let Some(ws) = workspace_for_flex.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_flex,
-                                                            panel_for_flex.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
-                                            }
-                                        },
-                                    );
-                                    let panel_for_fixed = panel.clone();
-                                    let dock_for_fixed = dock_for_menu.clone();
-                                    let workspace_for_fixed = workspace_for_menu.clone();
-                                    menu = menu.toggleable_entry(
-                                        "Fixed Width",
-                                        !currently_flexible,
-                                        IconPosition::Start,
-                                        None,
-                                        move |window, cx| {
-                                            if currently_flexible {
-                                                if let Some(ws) = workspace_for_fixed.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_fixed,
-                                                            panel_for_fixed.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
-                                            }
-                                        },
-                                    );
-                                }
-                                if let Some(hide) = panel_hide {
-                                    menu = crate::status_bar::add_hide_button_entry(
-                                        menu.separator(),
-                                        hide,
-                                    );
-                                }
-                                menu
-                            })
-                        })
-                        .anchor(menu_anchor)
-                        .attach(menu_attach)
-                        .trigger(move |is_active, _window, _cx| {
-                            let on_click = {
-                                let action = action.boxed_clone();
-                                #[cfg(feature = "multiplayer-tools")]
-                                let workspace = workspace_for_button.clone();
-                                move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut App| {
-                                    #[cfg(feature = "multiplayer-tools")]
-                                    if in_status_menu {
-                                        workspace
-                                            .update(cx, |workspace, cx| {
-                                                workspace.dispatch_collaborative_panel_action(
-                                                    dock_position,
-                                                    action.boxed_clone(),
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                            .log_err();
-                                        return;
-                                    }
-                                    window.focus(&focus_handle, cx);
-                                    window.dispatch_action(action.boxed_clone(), cx);
-                                }
-                            };
-                            let tooltip = move |_: &mut Window, cx: &mut App| {
-                                Tooltip::for_action(tooltip.clone(), &*action, cx)
-                            };
-                            // The active-state ID invalidates the cached shortcut tooltip.
-                            let button_id = (name, is_active_button as u64);
-                            let button = if in_status_menu {
-                                Button::new(button_id, icon_tooltip)
-                                    .size(ButtonSize::Compact)
-                                    .label_size(LabelSize::Small)
-                                    .start_icon(Icon::new(icon).size(IconSize::Small))
-                                    .toggle_state(is_active_button)
-                                    .tab_index(0isize)
-                                    .on_click(on_click)
-                                    .when(!is_active, |button| button.tooltip(tooltip))
-                                    .into_any_element()
-                            } else {
-                                IconButton::new(button_id, icon)
-                                    .icon_size(IconSize::Small)
-                                    .toggle_state(is_active_button)
-                                    .tab_index(0isize)
-                                    .aria_label(icon_tooltip)
-                                    .on_click(on_click)
-                                    .when(!is_active, |button| button.tooltip(tooltip))
-                                    .into_any_element()
-                            };
-
-                            div().relative().child(button).when_some(
-                                icon_label
-                                    .clone()
-                                    .filter(|_| !is_active_button)
-                                    .and_then(|label| label.parse::<usize>().ok()),
-                                |this, count| this.child(CountBadge::new(count)),
-                            )
-                        }),
-                )
+                Some(DockPanelButton {
+                    dock: self.dock.clone(),
+                    panel: entry.panel.clone(),
+                    icon,
+                    label: label.into(),
+                    selected: is_open && Some(index) == dock.active_panel_index,
+                })
             })
-            .collect();
-
-        if dock_position == DockPosition::Right {
+            .collect::<Vec<_>>();
+        if dock.position == DockPosition::Right {
             buttons.reverse();
         }
+        buttons
+    }
+}
 
-        let has_buttons = !buttons.is_empty();
+impl DockPanelButton {
+    fn action(&self, window: &mut Window, cx: &App) -> Box<dyn Action> {
+        if self.selected {
+            self.dock.read(cx).toggle_action()
+        } else {
+            self.panel.toggle_action(window, cx)
+        }
+    }
 
-        h_flex()
-            .gap_1()
-            .when(in_status_menu, |strip| strip.flex_wrap().max_w_full())
-            .when(
-                has_buttons && !in_status_menu && dock.position != DockPosition::Left,
-                |this| this.child(Divider::vertical().color(DividerColor::Border)),
-            )
-            .children(buttons)
-            .when(
-                has_buttons && !in_status_menu && dock.position == DockPosition::Left,
-                |this| this.child(Divider::vertical().color(DividerColor::Border)),
-            )
+    fn dispatch(
+        dock: &Entity<Dock>,
+        #[cfg_attr(not(feature = "multiplayer-tools"), allow(unused_variables))]
+        collaborative: bool,
+        action: Box<dyn Action>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let dock = dock.read(cx);
+        #[cfg(feature = "multiplayer-tools")]
+        if collaborative {
+            let workspace = dock.workspace.clone();
+            let position = dock.position;
+            workspace
+                .update(cx, |workspace, cx| {
+                    workspace.dispatch_collaborative_panel_action(position, action, window, cx);
+                })
+                .log_err();
+            return;
+        }
+        window.focus(&dock.focus_handle(cx), cx);
+        window.dispatch_action(action, cx);
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn overflow_entry(self, window: &mut Window, cx: &App) -> ui::ContextMenuEntry {
+        let action = self.action(window, cx);
+        ui::ContextMenuEntry::new(self.label)
+            .icon(self.icon)
+            .toggle(IconPosition::Start, self.selected)
+            .action(action.boxed_clone())
+            .handler(move |window, cx| {
+                Self::dispatch(&self.dock, true, action.boxed_clone(), window, cx);
+            })
+    }
+
+    pub(crate) fn render(
+        self,
+        collaborative: bool,
+        window: &mut Window,
+        cx: &App,
+    ) -> gpui::AnyElement {
+        let dock = self.dock.read(cx);
+        let dock_position = dock.position;
+        let name = self.panel.persistent_name();
+        let panel = self.panel.clone();
+        let supports_flexible = panel.supports_flexible_size(cx);
+        let currently_flexible = panel.has_flexible_size(window, cx);
+        let dock_for_menu = self.dock.clone();
+        let workspace_for_menu = dock.workspace.clone();
+        let (menu_anchor, menu_attach) = match dock_position {
+            DockPosition::Left => (Anchor::BottomLeft, Anchor::TopLeft),
+            DockPosition::Bottom | DockPosition::Right | DockPosition::Top => {
+                (Anchor::BottomRight, Anchor::TopRight)
+            }
+        };
+        let action = self.action(window, cx);
+        let tooltip: SharedString = if self.selected {
+            format!("Close {} Dock", dock_position.label()).into()
+        } else {
+            self.label.clone()
+        };
+        let icon_label = panel.icon_label(window, cx);
+        right_click_menu(name)
+            .menu(move |window, cx| {
+                let panel_hide = panel.hide_button_setting(cx);
+                ContextMenu::build(window, cx, |mut menu, _, cx| {
+                    let mut has_position_entries = false;
+                    for position in [
+                        DockPosition::Left,
+                        DockPosition::Right,
+                        DockPosition::Bottom,
+                        DockPosition::Top,
+                    ] {
+                        if panel.position_is_valid(position, cx) {
+                            let is_current = position == dock_position;
+                            let panel = panel.clone();
+                            menu = menu.toggleable_entry(
+                                format!("Dock {}", position.label()),
+                                is_current,
+                                IconPosition::Start,
+                                None,
+                                move |window, cx| {
+                                    if !is_current {
+                                        panel.set_position(position, window, cx);
+                                    }
+                                },
+                            );
+                            has_position_entries = true;
+                        }
+                    }
+                    if supports_flexible {
+                        if has_position_entries {
+                            menu = menu.separator();
+                        }
+                        let panel_for_flex = panel.clone();
+                        let dock_for_flex = dock_for_menu.clone();
+                        let workspace_for_flex = workspace_for_menu.clone();
+                        menu = menu.toggleable_entry(
+                            "Flex Width",
+                            currently_flexible,
+                            IconPosition::Start,
+                            None,
+                            move |window, cx| {
+                                if !currently_flexible {
+                                    if let Some(ws) = workspace_for_flex.upgrade() {
+                                        ws.update(cx, |workspace, cx| {
+                                            workspace.toggle_dock_panel_flexible_size(
+                                                &dock_for_flex,
+                                                panel_for_flex.as_ref(),
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }
+                            },
+                        );
+                        let panel_for_fixed = panel.clone();
+                        let dock_for_fixed = dock_for_menu.clone();
+                        let workspace_for_fixed = workspace_for_menu.clone();
+                        menu = menu.toggleable_entry(
+                            "Fixed Width",
+                            !currently_flexible,
+                            IconPosition::Start,
+                            None,
+                            move |window, cx| {
+                                if currently_flexible {
+                                    if let Some(ws) = workspace_for_fixed.upgrade() {
+                                        ws.update(cx, |workspace, cx| {
+                                            workspace.toggle_dock_panel_flexible_size(
+                                                &dock_for_fixed,
+                                                panel_for_fixed.as_ref(),
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    }
+                                }
+                            },
+                        );
+                    }
+                    if let Some(hide) = panel_hide {
+                        menu = crate::status_bar::add_hide_button_entry(menu.separator(), hide);
+                    }
+                    menu
+                })
+            })
+            .anchor(menu_anchor)
+            .attach(menu_attach)
+            .trigger(move |menu_open, _window, _cx| {
+                let action_for_click = action.boxed_clone();
+                let dock = self.dock.clone();
+                let tooltip = move |_: &mut Window, cx: &mut App| {
+                    Tooltip::for_action(tooltip.clone(), &*action, cx)
+                };
+                let button_id = (name, self.selected as u64);
+                div()
+                    .debug_selector(move || format!("PANEL-BUTTON-{name}"))
+                    .relative()
+                    .child(
+                        IconButton::new(button_id, self.icon)
+                            .icon_size(IconSize::Small)
+                            .when(collaborative, |button| {
+                                button.shape(ui::IconButtonShape::Square)
+                            })
+                            .toggle_state(self.selected)
+                            .tab_index(0isize)
+                            .aria_label(self.label)
+                            .on_click(move |_, window, cx| {
+                                Self::dispatch(
+                                    &dock,
+                                    collaborative,
+                                    action_for_click.boxed_clone(),
+                                    window,
+                                    cx,
+                                );
+                            })
+                            .when(!menu_open, |button| button.tooltip(tooltip)),
+                    )
+                    .when_some(
+                        icon_label
+                            .filter(|_| !self.selected)
+                            .and_then(|label| label.parse::<usize>().ok()),
+                        |this, count| this.child(CountBadge::new(count)),
+                    )
+            })
+            .into_any_element()
     }
 }
 
 impl StatusItemView for PanelButtons {
-    #[cfg(feature = "multiplayer-tools")]
-    fn collaborative_menu_group(&self) -> crate::status_bar::CollaborativeStatusItemGroup {
-        crate::status_bar::CollaborativeStatusItemGroup::Panels
-    }
-
-    #[cfg(feature = "multiplayer-tools")]
-    fn render_collaborative_menu(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        self.render_buttons(true, window, cx).into_any_element()
-    }
     fn set_active_pane_item(
         &mut self,
         _active_pane_item: Option<&dyn crate::ItemHandle>,
@@ -1899,6 +1915,7 @@ pub mod test {
         pub default_size: Pixels,
         pub flexible: bool,
         pub activation_priority: u32,
+        pub show_button: bool,
     }
     actions!(test_only, [ToggleTestPanel]);
 
@@ -1915,6 +1932,7 @@ pub mod test {
                 default_size: px(300.),
                 flexible: false,
                 activation_priority,
+                show_button: false,
             }
         }
 
@@ -2009,11 +2027,11 @@ pub mod test {
         }
 
         fn icon(&self, _window: &Window, _: &App) -> Option<ui::IconName> {
-            None
+            self.show_button.then_some(ui::IconName::Terminal)
         }
 
         fn icon_tooltip(&self, _window: &Window, _cx: &App) -> Option<&'static str> {
-            None
+            self.show_button.then_some("Test Panel")
         }
 
         fn toggle_action(&self) -> Box<dyn Action> {

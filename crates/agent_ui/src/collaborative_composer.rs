@@ -650,8 +650,12 @@ mod tests {
             .debug_bounds("ICON-Send")
             .expect("native send control must be mounted, even for an empty draft");
         let footer = cx
+            .debug_bounds("COLLABORATIVE-COMPOSER-FOOTER")
+            .expect("native composer controls are mounted in the composer footer");
+        let status_bar = cx
             .debug_bounds("WORKSPACE-STATUS-BAR")
-            .expect("native composer controls share the status footer");
+            .expect("workspace status bar is mounted below the composer");
+        assert!(footer.bottom() <= status_bar.top());
         assert!(footer.top() >= composer_bounds.bottom());
         assert!(footer.contains(&send_bounds.origin));
         assert!(send_bounds.right() <= footer.right() && send_bounds.bottom() <= footer.bottom());

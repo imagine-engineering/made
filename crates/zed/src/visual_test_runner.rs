@@ -2059,6 +2059,14 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                     })?;
                     cx.run_until_parked();
                 }
+                let copy_options = cx
+                    .debug_bounds(window.into(), "MENU_SUBMENU-Copy options")?
+                    .context("native Copy options submenu")?;
+                cx.simulate_click(window.into(), copy_options.center(), Modifiers::default());
+                for _ in 0..3 {
+                    window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
+                    cx.run_until_parked();
+                }
                 let operation = cx
                     .debug_bounds(window.into(), &format!("MENU_ITEM-{label}"))?
                     .context("native transcript export action")?;
@@ -2194,11 +2202,9 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                         .select_ranges([language::Point::new(0, 0)..language::Point::new(0, 0)]);
                 });
             });
-            review_editor.focus_handle(cx).dispatch_action(
-                &editor::actions::OpenExcerpts,
-                window,
-                cx,
-            );
+            let review_focus = review_editor.focus_handle(cx);
+            review_focus.focus(window, cx);
+            review_focus.dispatch_action(&editor::actions::OpenExcerpts, window, cx);
         })?;
         cx.run_until_parked();
         let source_editor = cx
@@ -2208,10 +2214,16 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             window.update(cx, |_, window, cx| window.simulate_next_frame(cx))?;
             cx.run_until_parked();
         }
+        window.update(cx, |_, window, _| window.refresh())?;
+        cx.run_until_parked();
+        cx.capture_screenshot(window.into())?
+            .save(PathBuf::from(&output_directory).join("review-source-before-keyboard.png"))?;
         anyhow::ensure!(
             cx.debug_bounds(window.into(), "NATIVE-WORKSPACE-PANE")?
                 .is_some(),
-            "native source pane must be painted before keyboard input"
+            "native source pane must be painted before keyboard input (native editor selected: {}, review: {:?})",
+            cx.read(|cx| workspace.read(cx).collaborative_native_editor_active(cx)),
+            cx.debug_bounds(window.into(), "COLLABORATIVE-REVIEW-REGION")?,
         );
         window.update(cx, |_, window, cx| {
             println!(
@@ -2227,8 +2239,6 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             );
             anyhow::Ok(())
         })??;
-        cx.capture_screenshot(window.into())?
-            .save(PathBuf::from(&output_directory).join("review-source-before-keyboard.png"))?;
         let source_selection = window.update(cx, |_, window, cx| {
             source_editor.update(cx, |editor, cx| {
                 let selection = editor
@@ -2443,11 +2453,6 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
             .save(PathBuf::from(&output_directory).join("footer-diff-reopened.png"))?;
         for (trigger, menu, name) in [
             (
-                "COLLABORATIVE-STATUS-OVERFLOW",
-                "COLLABORATIVE-STATUS-MENU",
-                "footer-workspace-tools-menu",
-            ),
-            (
                 "COLLABORATIVE-ADD-PROJECT",
                 "NATIVE-RECENT-PROJECTS-MENU",
                 "footer-project-menu",
@@ -2480,7 +2485,7 @@ Done — internal nodes now carry a SummaryCache keyed on a generation counter, 
                 .debug_bounds(window.into(), trigger)?
                 .with_context(|| format!("missing {trigger}"))?;
             let footer = cx
-                .debug_bounds(window.into(), "WORKSPACE-STATUS-BAR")?
+                .debug_bounds(window.into(), "COLLABORATIVE-FOOTER-CONTROLS")?
                 .context("footer missing")?;
             anyhow::ensure!(
                 footer.contains(&button.center()),
@@ -3308,21 +3313,12 @@ fn capture_collaborative_accessibility_state(
     let project_controls = cx
         .debug_bounds(window, "COLLABORATIVE-PROJECT-CONTROLS")?
         .context("native project controls should remain visible")?;
-    let status_overflow = cx
-        .debug_bounds(window, "COLLABORATIVE-STATUS-OVERFLOW")?
-        .context("native status overflow should remain visible")?;
     let composer_controls = cx
         .debug_bounds(window, "COLLABORATIVE-COMPOSER-CONTROLS")?
         .context("native composer controls should remain visible")?;
     let add_project = cx
         .debug_bounds(window, "COLLABORATIVE-ADD-PROJECT")?
         .context("a populated project row should show Add Project")?;
-    anyhow::ensure!(
-        composer_controls.contains(&status_overflow.origin)
-            && status_overflow.right() <= composer_controls.right()
-            && status_overflow.bottom() <= composer_controls.bottom(),
-        "{name}: status overflow must be reachable in the lower composer row: {status_overflow:?} / {composer_controls:?}"
-    );
     anyhow::ensure!(
         project_controls.left() == composer_controls.left()
             && project_controls.bottom() <= composer_controls.top()
@@ -3332,6 +3328,9 @@ fn capture_collaborative_accessibility_state(
         "{name}: Add Project must stay with the Git context above the composer row: {add_project:?} / {project_controls:?} / {composer_controls:?}"
     );
     let footer = cx
+        .debug_bounds(window, "COLLABORATIVE-FOOTER-CONTROLS")?
+        .context("conversation footer should remain visible")?;
+    let status_bar = cx
         .debug_bounds(window, "WORKSPACE-STATUS-BAR")?
         .context("native status bar should remain visible")?;
     if let Some(execution) = cx.debug_bounds(window, "COLLABORATIVE-PARTICIPANT-STATUS")? {
@@ -3362,8 +3361,11 @@ fn capture_collaborative_accessibility_state(
             && composer_footer.right() <= timeline.right()
             && composer_footer.bottom() <= timeline.bottom()
             && footer.top() >= composer.bottom()
-            && (footer.bottom() - timeline.bottom()).abs() <= gpui::px(1.),
-        "{name}: native status bar must stay below the composer within the conversation column: status={footer:?}, composer={composer:?}, controls={composer_footer:?}, timeline={timeline:?}"
+            && footer.bottom() <= timeline.bottom()
+            && timeline.bottom() <= status_bar.top()
+            && status_bar.left() <= timeline.left()
+            && status_bar.right() >= timeline.right(),
+        "{name}: conversation controls must stay above the native status bar: status={status_bar:?}, footer={footer:?}, composer={composer:?}, timeline={timeline:?}"
     );
     for selector in [
         "NATIVE-PROJECT-LABEL",

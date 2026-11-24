@@ -60,6 +60,22 @@ pub(crate) fn initialize(
     #[cfg(feature = "agentic-tools")]
     let merge_conflict_indicator = cx.new(|cx| git_ui::MergeConflictIndicator::new(workspace, cx));
     workspace.status_bar().update(cx, |status_bar, cx| {
+        #[cfg(feature = "multiplayer-tools")]
+        status_bar.set_collaborative_file_details(
+            vec![
+                active_file_name.entity_id(),
+                git_blame_status.entity_id(),
+                active_buffer_encoding.entity_id(),
+                active_buffer_language.entity_id(),
+                active_toolchain_language.entity_id(),
+                line_ending_indicator.entity_id(),
+                vim_mode_indicator.entity_id(),
+                cursor_position.entity_id(),
+                image_info.entity_id(),
+            ],
+            cx,
+        );
+
         status_bar.add_left_item(search_button, window, cx);
         status_bar.add_left_item(lsp_button, window, cx);
         status_bar.add_left_item(diagnostic_summary, window, cx);

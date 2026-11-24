@@ -9,8 +9,6 @@ use crate::collaborative_pinned::CollaborativePinned;
 use crate::collaborative_projects::CollaborativeProjects;
 use crate::collaborative_tasks::CollaborativeTasks;
 
-const SECTION_LABELS: [&str; 3] = ["Pinned", "Projects", "Threads"];
-
 pub(crate) struct CollaborativeRail {
     multi_workspace: WeakEntity<MultiWorkspace>,
     pinned: Entity<CollaborativePinned>,
@@ -168,6 +166,11 @@ impl CollaborativeRail {
     }
 
     #[cfg(test)]
+    pub(crate) fn test_projects(&self) -> &Entity<CollaborativeProjects> {
+        &self.projects
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_scroll_handle(&self) -> ScrollHandle {
         self.scroll_handle.clone()
     }
@@ -197,20 +200,15 @@ impl Render for CollaborativeRail {
                     .pb(DynamicSpacing::Base08.rems(cx))
                     .when(show_pinned, |this| {
                         this.child(self.render_section(
-                            SECTION_LABELS[0],
+                            "Pinned",
                             "COLLABORATIVE-RAIL-PINNED",
                             self.pinned.clone(),
                             cx,
                         ))
                     })
+                    .child(self.projects.clone())
                     .child(self.render_section(
-                        SECTION_LABELS[1],
-                        "COLLABORATIVE-RAIL-PROJECTS",
-                        self.projects.clone(),
-                        cx,
-                    ))
-                    .child(self.render_section(
-                        SECTION_LABELS[2],
+                        "Threads",
                         "COLLABORATIVE-RAIL-TASKS",
                         self.tasks.clone(),
                         cx,

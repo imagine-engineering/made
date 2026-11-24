@@ -3,14 +3,19 @@ use std::{
     path::PathBuf,
 };
 
-use crate::collaborative_tasks::CollaborativeTasks;
+use crate::collaborative_tasks::{CollaborativeProjectThreadFilter, CollaborativeTasks};
 
 use channel::ChannelStore;
 use gpui::{
-    Action, Context, Entity, InteractiveElement, KeyDownEvent, Render, SharedString, WeakEntity,
+    Action, Anchor, Context, Entity, FocusHandle, Focusable, InteractiveElement, KeyDownEvent,
+    Render, Role, SharedString, WeakEntity,
 };
 use project::{ProjectGroupKey, WorktreeId};
-use ui::{Window, prelude::*};
+use ui::{
+    ContextMenu, ContextMenuEntry, PopoverMenu, RightClickMenuHandle, Window, prelude::*,
+    right_click_menu,
+};
+use util::ResultExt;
 use workspace::{
     MultiWorkspace,
     collaborative_navigation::{CollaborativeNavigationError, CollaborativeNavigationTarget},
@@ -99,7 +104,10 @@ pub(crate) struct CollaborativeProjects {
     multi_workspace: WeakEntity<MultiWorkspace>,
     activation_error: Option<SharedString>,
     task_views: HashMap<ProjectGroupKey, Entity<CollaborativeTasks>>,
-    expanded_locations: HashSet<ProjectGroupKey>,
+    projects_expanded: bool,
+    thread_filter: CollaborativeProjectThreadFilter,
+    add_project_focus: FocusHandle,
+    filter_focus: FocusHandle,
 }
 
 impl CollaborativeProjects {
@@ -115,8 +123,16 @@ impl CollaborativeProjects {
             multi_workspace,
             activation_error: None,
             task_views: HashMap::new(),
-            expanded_locations: HashSet::new(),
+            projects_expanded: true,
+            thread_filter: CollaborativeProjectThreadFilter::All,
+            add_project_focus: cx.focus_handle(),
+            filter_focus: cx.focus_handle(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_header_focus_handles(&self) -> [FocusHandle; 2] {
+        [self.filter_focus.clone(), self.add_project_focus.clone()]
     }
 
     fn sources(&self, cx: &gpui::App) -> Option<Vec<CollaborativeProjectSource>> {
@@ -287,12 +303,132 @@ impl CollaborativeProjects {
         if let Some(multi_workspace) = self.multi_workspace.upgrade() {
             multi_workspace.update(cx, |multi_workspace, cx| {
                 if let Some(state) = multi_workspace.group_state_by_key_mut(key) {
-                    state.expanded = expanded;
-                    multi_workspace.serialize(cx);
-                    cx.notify();
+                    if state.expanded != expanded {
+                        state.expanded = expanded;
+                        multi_workspace.serialize(cx);
+                        cx.notify();
+                    }
                 }
             });
         }
+    }
+
+    fn set_thread_filter(
+        &mut self,
+        filter: CollaborativeProjectThreadFilter,
+        cx: &mut Context<Self>,
+    ) {
+        self.thread_filter = filter;
+        for tasks in self.task_views.values() {
+            tasks.update(cx, |tasks, cx| tasks.set_project_filter(filter, cx));
+        }
+        cx.notify();
+    }
+
+    fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let expanded = self.projects_expanded;
+        let filter = self.thread_filter;
+        let projects = cx.entity().downgrade();
+        let multi_workspace = self.multi_workspace.clone();
+        h_flex()
+            .debug_selector(|| "COLLABORATIVE-PROJECTS-HEADER".to_owned())
+            .min_h(rems_from_px(ui::fractal::CONTROL_SMALL))
+            .gap_1()
+            .child(
+                Button::new("collaborative-projects-disclosure", "Projects")
+                    .size(ButtonSize::Compact)
+                    .style(ButtonStyle::Subtle)
+                    .label_size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .end_icon(
+                        Icon::new(if expanded {
+                            IconName::ChevronDown
+                        } else {
+                            IconName::ChevronRight
+                        })
+                        .size(IconSize::XSmall),
+                    )
+                    .aria_expanded(expanded)
+                    .tab_index(0isize)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.projects_expanded = !this.projects_expanded;
+                        cx.notify();
+                    })),
+            )
+            .child(div().flex_1().min_w_0())
+            .child(
+                div()
+                    .debug_selector(|| "COLLABORATIVE-PROJECT-FILTER".to_owned())
+                    .child(
+                        PopoverMenu::new("collaborative-project-thread-filter")
+                            .restore_focus_to(&self.filter_focus)
+                            .anchor(Anchor::TopLeft)
+                            .menu(move |window, cx| {
+                                Some(ContextMenu::build(window, cx, |mut menu, _, _| {
+                                    menu = menu.header("Show project threads");
+                                    for option in CollaborativeProjectThreadFilter::ALL {
+                                        let projects = projects.clone();
+                                        menu = menu.item(
+                                            ContextMenuEntry::new(option.label())
+                                                .toggle(ui::IconPosition::Start, filter == option)
+                                                .handler(move |_, cx| {
+                                                    projects
+                                                        .update(cx, |projects, cx| {
+                                                            projects.set_thread_filter(option, cx);
+                                                        })
+                                                        .log_err();
+                                                }),
+                                        );
+                                    }
+                                    menu
+                                }))
+                            })
+                            .trigger(
+                                navigation_action(
+                                    "filter-project-threads",
+                                    IconName::Filter,
+                                    "Filter project threads",
+                                )
+                                .icon_color(if filter == CollaborativeProjectThreadFilter::All {
+                                    Color::Muted
+                                } else {
+                                    Color::Selected
+                                })
+                                .tab_index(0isize)
+                                .track_focus(&self.filter_focus),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "COLLABORATIVE-PROJECTS-ADD".to_owned())
+                    .child(
+                        PopoverMenu::new("collaborative-sidebar-add-project")
+                            .restore_focus_to(&self.add_project_focus)
+                            .anchor(Anchor::TopLeft)
+                            .menu(move |window, cx| {
+                                let multi_workspace = multi_workspace.upgrade()?.read(cx);
+                                let workspace = multi_workspace.workspace();
+                                Some(recent_projects::RecentProjects::popover(
+                                    workspace.downgrade(),
+                                    multi_workspace.project_group_keys(),
+                                    Some(false),
+                                    workspace.focus_handle(cx),
+                                    window,
+                                    cx,
+                                ))
+                            })
+                            .trigger(
+                                navigation_action(
+                                    "add-project",
+                                    IconName::FolderAdd,
+                                    "Add Project",
+                                )
+                                .tab_index(0isize)
+                                .track_focus(&self.add_project_focus),
+                            ),
+                    ),
+            )
     }
 
     fn selected_target(&self, cx: &gpui::App) -> Option<CollaborativeNavigationTarget> {
@@ -492,7 +628,7 @@ impl Render for CollaborativeProjects {
                     })
                     };
                     self.task_views.retain(|key, _| has_group(key));
-                    self.expanded_locations.retain(has_group);
+                    let filter = self.thread_filter;
                     let groups = groups
                         .into_iter()
                         .map(|group| {
@@ -510,6 +646,7 @@ impl Render for CollaborativeProjects {
                                                     CollaborativeTasks::for_project(
                                                         multi_workspace,
                                                         key,
+                                                        filter,
                                                         cx,
                                                     )
                                                 })
@@ -519,12 +656,7 @@ impl Render for CollaborativeProjects {
                                 }
                                 _ => None,
                             };
-                            let locations_expanded = matches!(
-                                group.project.source_id(),
-                                CollaborativeNavigationSourceId::Project(key)
-                                    if self.expanded_locations.contains(key)
-                            );
-                            (group, is_pinned, task_view, locations_expanded)
+                            (group, is_pinned, task_view)
                         })
                         .collect::<Vec<_>>();
                     v_flex()
@@ -532,27 +664,33 @@ impl Render for CollaborativeProjects {
                         .when_some(self.activation_error.clone(), |this, error| {
                             this.child(Label::new(error).size(LabelSize::Small).color(Color::Error))
                         })
-                        .children(groups.into_iter().map(
-                            |(group, is_pinned, task_view, locations_expanded)| {
-                                render_project_group(
-                                    group,
-                                    task_view,
-                                    is_pinned,
-                                    locations_expanded,
-                                    selected_target.as_ref(),
-                                    cx,
-                                )
-                            },
-                        ))
+                        .children(groups.into_iter().map(|(group, is_pinned, tasks)| {
+                            render_project_group(
+                                group,
+                                tasks,
+                                is_pinned,
+                                selected_target.as_ref(),
+                                cx,
+                            )
+                        }))
                         .into_any_element()
                 }
                 Err(error) => unavailable_projects(error),
             },
         };
         v_flex()
-            .debug_selector(|| "COLLABORATIVE-PROJECTS".to_owned())
-            .gap(DynamicSpacing::Base04.rems(cx))
-            .child(contents)
+            .debug_selector(|| "COLLABORATIVE-RAIL-PROJECTS".to_owned())
+            .flex_none()
+            .min_w_0()
+            .px(DynamicSpacing::Base08.rems(cx))
+            .child(self.render_header(cx))
+            .when(self.projects_expanded, |section| {
+                section.child(
+                    div()
+                        .debug_selector(|| "COLLABORATIVE-PROJECTS".to_owned())
+                        .child(contents),
+                )
+            })
     }
 }
 
@@ -571,186 +709,194 @@ fn render_project_group(
     group: CollaborativeProjectGroupProjection,
     tasks: Option<Entity<CollaborativeTasks>>,
     is_pinned: bool,
-    locations_expanded: bool,
     selected_target: Option<&CollaborativeNavigationTarget>,
     cx: &mut Context<CollaborativeProjects>,
 ) -> AnyElement {
-    let badges = render_collaborative_navigation_badges(&group.project);
     let Some(project_target) = CollaborativeProjects::target(&group.project) else {
         return unavailable_projects("Project target is unavailable");
     };
     let CollaborativeNavigationSourceId::Project(key) = group.project.source_id() else {
         return unavailable_projects("Project group is unavailable");
     };
-    let expansion_key = key.clone();
-    let keyboard_expansion_key = key.clone();
-    let locations_key = key.clone();
     let expanded = group.expanded;
     let selected = selected_target == Some(&project_target);
-    let keyboard_target = project_target.clone();
-    let pin_target = project_target.clone();
-    v_flex()
-        .gap(DynamicSpacing::Base02.rems(cx))
-        .child(
-            navigation_row(
-                SharedString::from(format!("collaborative-project-target-{project_target:?}")),
-                selected,
-                0,
-                cx,
-            )
-            .debug_selector(|| "COLLABORATIVE-NAVIGATION-PROJECT-ROW".to_owned())
-            .aria_label(format!("Open project {}", group.project.label()))
-            .child(
-                div()
-                    .id(SharedString::from(format!(
-                        "project-expansion-{expansion_key:?}"
-                    )))
-                    .debug_selector(|| "COLLABORATIVE-PROJECT-EXPANSION".to_owned())
-                    .tooltip(ui::Tooltip::text(if expanded {
-                        "Collapse project"
-                    } else {
-                        "Expand project"
-                    }))
-                    .child(navigation_icon(IconName::Folder, Color::Muted))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.set_expanded(&expansion_key, !expanded, cx);
-                    })),
-            )
-            .child(navigation_label(group.project.label().clone()))
-            .when_some(badges, |this, badges| this.child(badges))
-            .child(
-                navigation_action(
-                    SharedString::from(format!("pin-project-{pin_target:?}")),
-                    if is_pinned {
-                        IconName::Unpin
-                    } else {
-                        IconName::Pin
-                    },
-                    if is_pinned { "Unpin" } else { "Pin" },
-                )
-                .icon_color(Color::Muted)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.toggle_pin(pin_target.clone(), window, cx);
-                })),
-            )
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.activate(project_target.clone(), window, cx);
-            }))
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-                if matches!(event.keystroke.key.as_str(), "left" | "right") {
-                    cx.stop_propagation();
-                    this.set_expanded(&keyboard_expansion_key, event.keystroke.key == "right", cx);
-                }
-                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                    cx.stop_propagation();
-                    this.activate(keyboard_target.clone(), window, cx);
-                }
-            })),
-        )
-        .when(expanded, |this| {
-            this.children(tasks)
-                .when(
-                    !group.repositories.is_empty() || !group.worktrees.is_empty(),
-                    |this| {
-                        this.child(
-                            div()
-                                .debug_selector(|| "COLLABORATIVE-PROJECT-LOCATIONS".to_owned())
-                                .child(
-                                    Button::new(
-                                        SharedString::from(format!(
-                                            "project-locations-{locations_key:?}"
-                                        )),
-                                        "Project locations",
-                                    )
-                                    .size(ButtonSize::Compact)
-                                    .style(ButtonStyle::Subtle)
-                                    .label_size(LabelSize::Small)
-                                    .start_icon(
-                                        Icon::new(if locations_expanded {
-                                            IconName::ChevronDown
-                                        } else {
-                                            IconName::ChevronRight
-                                        })
-                                        .size(IconSize::XSmall),
-                                    )
-                                    .tab_index(0isize)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            if locations_expanded {
-                                                this.expanded_locations.remove(&locations_key);
-                                            } else {
-                                                this.expanded_locations
-                                                    .insert(locations_key.clone());
-                                            }
-                                            cx.notify();
-                                        },
-                                    )),
-                                ),
-                        )
-                    },
-                )
-                .when(locations_expanded, |this| {
-                    this.children(
-                        group.repositories.into_iter().map(|row| {
-                            render_project_child("Repository", row, selected_target, cx)
-                        }),
-                    )
-                    .children(
-                        group
-                            .worktrees
-                            .into_iter()
-                            .map(|row| render_project_child("Worktree", row, selected_target, cx)),
-                    )
-                })
-        })
-        .into_any_element()
-}
-
-fn render_project_child(
-    kind: &'static str,
-    row: CollaborativeNavigationRow,
-    selected_target: Option<&CollaborativeNavigationTarget>,
-    cx: &mut Context<CollaborativeProjects>,
-) -> AnyElement {
-    let badges = render_collaborative_navigation_badges(&row);
-    let Some(target) = CollaborativeProjects::target(&row) else {
-        return unavailable_projects(format!("{kind} target is unavailable"));
-    };
-    let selected = selected_target == Some(&target);
-    let keyboard_target = target.clone();
-    navigation_row(
-        SharedString::from(format!(
-            "collaborative-{}-target-{target:?}",
-            kind.to_lowercase()
-        )),
+    let row_label = group.project.label().clone();
+    let pointer_key = key.clone();
+    let keyboard_key = key.clone();
+    let collapse_key = key.clone();
+    let expand_key = key.clone();
+    let confirm_key = key.clone();
+    let menu_handle = RightClickMenuHandle::<ContextMenu>::default();
+    let keyboard_menu = menu_handle.clone();
+    let overflow_menu = menu_handle.clone();
+    let projects = cx.entity().downgrade();
+    let project_row = navigation_row(
+        SharedString::from(format!("collaborative-project-target-{project_target:?}")),
         selected,
-        1,
+        0,
         cx,
     )
-    .debug_selector(|| "COLLABORATIVE-NAVIGATION-CHILD-ROW".to_owned())
-    .aria_label(format!("Open {kind} {}", row.label()))
-    .child(navigation_icon(
-        if kind == "Repository" {
-            IconName::GitBranch
-        } else {
-            IconName::Folder
-        },
-        Color::Muted,
-    ))
-    .child(navigation_label(format!("{kind} · {}", row.label())))
-    .when_some(badges, |this, badges| this.child(badges))
-    .on_click(cx.listener(move |this, _, window, cx| {
-        this.activate(target.clone(), window, cx);
+    .debug_selector(|| "COLLABORATIVE-NAVIGATION-PROJECT-ROW".to_owned())
+    .group("collaborative-project-row")
+    .role(Role::Button)
+    .aria_label(row_label.clone())
+    .aria_expanded(expanded)
+    .child(
+        div()
+            .debug_selector(|| "COLLABORATIVE-PROJECT-EXPANSION".to_owned())
+            .child(navigation_icon(
+                if expanded {
+                    IconName::FolderOpen
+                } else {
+                    IconName::Folder
+                },
+                Color::Muted,
+            )),
+    )
+    .child(navigation_label(row_label))
+    .on_click(cx.listener(move |this, _, _, cx| {
+        this.set_expanded(&pointer_key, !expanded, cx);
+    }))
+    .on_action(cx.listener(move |this, _: &menu::SelectParent, _, cx| {
+        this.set_expanded(&collapse_key, false, cx);
+    }))
+    .on_action(cx.listener(move |this, _: &menu::SelectChild, _, cx| {
+        this.set_expanded(&expand_key, true, cx);
+    }))
+    .on_action(cx.listener(move |this, _: &menu::Confirm, _, cx| {
+        this.set_expanded(&confirm_key, !expanded, cx);
     }))
     .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-        if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+        let keystroke = &event.keystroke;
+        if keystroke.key == "f10" && keystroke.modifiers.shift {
             cx.stop_propagation();
-            this.activate(keyboard_target.clone(), window, cx);
+            keyboard_menu.show(window, cx);
+            return;
         }
-    }))
-    .into_any_element()
+        let expanded = match keystroke.key.as_str() {
+            "left" => false,
+            "right" => true,
+            "enter" | "space" => !expanded,
+            _ => return,
+        };
+        cx.stop_propagation();
+        this.set_expanded(&keyboard_key, expanded, cx);
+    }));
+
+    v_flex()
+        .child(
+            right_click_menu(SharedString::from(format!("project-context-{key:?}")))
+                .with_handle(menu_handle)
+                .attach(Anchor::BottomRight)
+                .anchor(Anchor::TopLeft)
+                .trigger(move |open, _, _| {
+                    project_row.child(
+                        div()
+                            .flex_none()
+                            .when(!open, |action| {
+                                action
+                                    .invisible()
+                                    .w_0()
+                                    .group_hover("collaborative-project-row", |style| {
+                                        style.visible().w(ButtonSize::Compact.rems())
+                                    })
+                            })
+                            .child(
+                                navigation_action(
+                                    "project-menu",
+                                    IconName::Ellipsis,
+                                    "Project actions",
+                                )
+                                .on_click(move |_, window, cx| {
+                                    cx.stop_propagation();
+                                    overflow_menu.show(window, cx);
+                                }),
+                            ),
+                    )
+                })
+                .menu(move |window, cx| {
+                    ContextMenu::build(window, cx, |menu, _, _| {
+                        let projects_for_open = projects.clone();
+                        let projects_for_pin = projects.clone();
+                        let open_target = project_target.clone();
+                        let pin_target = project_target.clone();
+                        let mut menu = menu
+                            .item(
+                                ContextMenuEntry::new("Open project")
+                                    .icon(IconName::FolderOpen)
+                                    .handler(move |window, cx| {
+                                        projects_for_open
+                                            .update(cx, |projects, cx| {
+                                                projects.activate(open_target.clone(), window, cx);
+                                            })
+                                            .log_err();
+                                    }),
+                            )
+                            .item(
+                                ContextMenuEntry::new(if is_pinned {
+                                    "Unpin project"
+                                } else {
+                                    "Pin project"
+                                })
+                                .icon(if is_pinned {
+                                    IconName::Unpin
+                                } else {
+                                    IconName::Pin
+                                })
+                                .handler(move |window, cx| {
+                                    projects_for_pin
+                                        .update(cx, |projects, cx| {
+                                            projects.toggle_pin(pin_target.clone(), window, cx);
+                                        })
+                                        .log_err();
+                                }),
+                            );
+                        for (label, icon, rows) in [
+                            ("Repositories", IconName::GitBranch, &group.repositories),
+                            ("Worktrees", IconName::Folder, &group.worktrees),
+                        ] {
+                            if !rows.is_empty() {
+                                let entries = rows
+                                    .iter()
+                                    .filter_map(|row| {
+                                        Some((
+                                            row.label().clone(),
+                                            CollaborativeProjects::target(row)?,
+                                        ))
+                                    })
+                                    .collect::<Vec<_>>();
+                                let projects = projects.clone();
+                                menu =
+                                    menu.submenu_with_icon(label, icon, move |mut menu, _, _| {
+                                        for (label, target) in &entries {
+                                            let target = target.clone();
+                                            let projects = projects.clone();
+                                            menu = menu.item(
+                                                ContextMenuEntry::new(label.clone()).handler(
+                                                    move |window, cx| {
+                                                        projects
+                                                            .update(cx, |projects, cx| {
+                                                                projects.activate(
+                                                                    target.clone(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            })
+                                                            .log_err();
+                                                    },
+                                                ),
+                                            );
+                                        }
+                                        menu
+                                    });
+                            }
+                        }
+                        menu
+                    })
+                }),
+        )
+        .when(expanded, |this| this.children(tasks))
+        .into_any_element()
 }
 
 #[cfg(test)]
