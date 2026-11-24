@@ -308,8 +308,9 @@ pub struct LmStudioAvailableModel {
 #[with_fallible_options]
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
 pub struct LlamaCppSettingsContent {
-    /// Explicitly selected Copper-managed model. Manual server settings remain separate.
-    pub managed_model: Option<String>,
+    #[serde(rename = "managed_model")]
+    #[schemars(skip)]
+    pub retired_managed_model: Option<String>,
     pub api_url: Option<String>,
     /// Whether to automatically discover models served by the llama.cpp server.
     /// Defaults to true.
