@@ -17821,7 +17821,7 @@ mod rust_tools_runtime_tests {
 
 #[cfg(not(feature = "rust-tools"))]
 #[gpui::test]
-async fn rust_tools_headless_runtime_disabled_has_no_handlers(
+async fn rust_tools_headless_runtime_disabled_refuses_rust_requests(
     cx: &mut TestAppContext,
     server_cx: &mut TestAppContext,
 ) {
@@ -17907,7 +17907,7 @@ async fn rust_tools_headless_runtime_disabled_has_no_handlers(
             worktree_ids: Vec::new(),
         })
         .await
-        .expect_err("disabled structured-result handler");
+        .expect_err("disabled Rust structured-result provider");
     let profile_import = client
         .request(proto::ImportProfileResults {
             project_id: proto::REMOTE_SERVER_PROJECT_ID,
@@ -17948,7 +17948,6 @@ async fn rust_tools_headless_runtime_disabled_has_no_handlers(
     for error in [
         cargo,
         discovery,
-        results,
         profile_import,
         profile_page,
         profile_cancel,
@@ -17958,6 +17957,12 @@ async fn rust_tools_headless_runtime_disabled_has_no_handlers(
             "{error:#}"
         );
     }
+    let missing_results = if cfg!(feature = "jvm-tools") {
+        "unknown structured execution provider"
+    } else {
+        "no handler registered"
+    };
+    assert!(results.to_string().contains(missing_results), "{results:#}");
     let cargo = project.read_with(cx, |project, _| project.cargo_workspace_store().clone());
     let error = cargo
         .update(cx, |store, cx| store.refresh(cx))
@@ -18012,18 +18017,22 @@ async fn rust_tools_headless_runtime_disabled_has_no_handlers(
     let error = structured
         .update(cx, |store, cx| {
             store.refresh_provider(
-                project::structured_execution::StructuredProviderId("disabled-host".into()),
+                project::structured_execution::StructuredProviderId("rust-tests".into()),
                 cx,
             )
         })
         .await
-        .expect_err("unsupported structured-results host");
-    assert!(
-        error
-            .downcast_ref::<project::structured_execution::StructuredExecutionUnsupportedHost>()
-            .is_some(),
-        "{error:#}"
-    );
+        .expect_err("unavailable Rust structured results");
+    if cfg!(feature = "jvm-tools") {
+        assert!(error.to_string().contains(missing_results), "{error:#}");
+    } else {
+        assert!(
+            error
+                .downcast_ref::<project::structured_execution::StructuredExecutionUnsupportedHost>()
+                .is_some(),
+            "{error:#}"
+        );
+    }
 }
 
 #[cfg(all(feature = "rust-tools-process-test", target_os = "macos"))]
