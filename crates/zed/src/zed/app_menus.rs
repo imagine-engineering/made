@@ -1,4 +1,3 @@
-use collab_ui::collab_panel;
 use gpui::{App, Menu, MenuItem, OsAction};
 use release_channel::ReleaseChannel;
 use terminal_view::terminal_panel;
@@ -46,7 +45,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
         MenuItem::action("Cargo", cargo_ui::ToggleCargoPanel),
         #[cfg(feature = "jvm-tools")]
         MenuItem::action("Dependencies", jvm_ui::ToggleDependenciesPanel),
-        MenuItem::action("Collab Panel", collab_panel::ToggleFocus),
         MenuItem::action("Terminal Panel", terminal_panel::Toggle),
         MenuItem::action("Debugger Panel", debug_panel::ToggleFocus),
         #[cfg(feature = "agentic-tools")]

@@ -614,6 +614,8 @@ See [Terminal settings](./reference/all-settings.md#terminal) for additional non
 
 ## Collaboration Panels
 
+The Collaboration Panel settings apply when using Copper Multiplayer.
+
 ```json [settings]
 {
   // Collaboration Panel

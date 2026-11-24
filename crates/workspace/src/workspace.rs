@@ -10289,9 +10289,6 @@ actions!(
     [
         /// Opens the channel notes for the current call.
         ///
-        /// Use `collab_panel::OpenSelectedChannelNotes` to open the channel notes for the selected
-        /// channel in the collab panel.
-        ///
         /// If you want to open a specific channel, use `zed::OpenZedUrl` with a channel notes URL -
         /// can be copied via "Copy link to section" in the context menu of the channel notes
         /// buffer. These URLs look like `https://zed.dev/channel/channel-name-CHANNEL_ID/notes`.
@@ -10308,8 +10305,6 @@ actions!(
         ScreenShare,
         /// Copies the current room name and session id for debugging purposes.
         CopyRoomId,
-        /// Opens the native collaboration panel for collaborators and invitations.
-        OpenCollaborators,
     ]
 );
 
