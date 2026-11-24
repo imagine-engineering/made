@@ -34,8 +34,6 @@
 //!
 //!   UPDATE_BASELINE - Set to update baseline images instead of comparing
 //!   VISUAL_TEST_OUTPUT_DIR - Directory to save test output (default: target/visual_tests)
-//!   COLLABORATIVE_VISUAL_THEME_OVERRIDES - JSON theme overrides for controlled appearance checks
-//!   COLLABORATIVE_VISUAL_MULTI_ACP - Render native mode/model/boolean configuration controls
 
 // Stub main for non-macOS platforms
 #[cfg(not(target_os = "macos"))]
@@ -73,19 +71,11 @@ fn main() {
     // stateless mode keeps the canonical test databases in memory.
     paths::set_custom_data_dir(&canonical_temp.join("user-data").to_string_lossy());
     std::fs::create_dir_all(paths::config_dir()).expect("Failed to create test settings directory");
-    let project_path = canonical_temp.join(if std::env::var("COLLABORATIVE_VISUAL_ONLY").is_ok() {
-        "gpui"
-    } else {
-        "project"
-    });
+    let project_path = canonical_temp.join("project");
     std::fs::create_dir_all(&project_path).expect("Failed to create project directory");
 
     // Create test files in the real filesystem
     create_test_files(&project_path);
-    if std::env::var("COLLABORATIVE_VISUAL_ONLY").is_ok() {
-        prepare_collaborative_visual_git_repository(&project_path)
-            .expect("Failed to prepare collaborative visual Git repository");
-    }
 
     let test_result = std::panic::catch_unwind(|| run_visual_tests(project_path, update_baseline));
 
@@ -190,72 +180,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     // Initialize all Zed subsystems
     cx.update(|cx| {
         gpui_tokio::init(cx);
-        let themes = if std::env::var("COLLABORATIVE_VISUAL_ONLY").is_ok() {
-            theme::LoadThemes::All(Box::new(Assets))
-        } else {
-            theme::LoadThemes::JustBase
-        };
-        theme_settings::init(themes, cx);
-        if std::env::var("COLLABORATIVE_VISUAL_ONLY").is_ok() {
-            cx.update_global::<settings::SettingsStore, _>(|store, cx| {
-                store
-                    .set_user_settings(
-                        &serde_json::json!({
-                            "theme": collaborative_visual_theme(),
-                            "ui_font_size": 16,
-                            "agent_ui_font_size": 14,
-                            "agent_buffer_font_size": 14,
-                            "buffer_font_size": 14,
-                        })
-                        .to_string(),
-                        cx,
-                    )
-                    .expect("collaborative visual settings should parse");
-            });
-            app_state.user_store.update(cx, |user_store, cx| {
-                user_store.set_current_user_for_tests(
-                    Arc::new(client::User {
-                        legacy_id: 1,
-                        username: "local-developer".into(),
-                        avatar_uri: "https://visual-test.invalid/avatar.png".into(),
-                        name: Some("Local Developer".to_owned()),
-                    }),
-                    cx,
-                );
-            });
-            cx.http_client()
-                .as_fake()
-                .replace_handler(|old_handler, request| async move {
-                    if request.uri() == "https://visual-test.invalid/avatar.png" {
-                        return Ok(http_client::Response::builder()
-                            .status(200)
-                            .body(http_client::AsyncBody::from(
-                                include_bytes!("../test_fixtures/collaborative-avatar.png")
-                                    .to_vec(),
-                            ))
-                            .expect("visual avatar response should build"));
-                    }
-                    let avatar = match request.uri().to_string().as_str() {
-                        "https://visual-test.invalid/maya.png" => Some(
-                            include_bytes!("../test_fixtures/collaborative-avatar-maya.png")
-                                .as_slice(),
-                        ),
-                        "https://visual-test.invalid/theo.png" => Some(
-                            include_bytes!("../test_fixtures/collaborative-avatar-theo.png")
-                                .as_slice(),
-                        ),
-                        _ => None,
-                    };
-                    if let Some(avatar) = avatar {
-                        return Ok(http_client::Response::builder()
-                            .status(200)
-                            .body(http_client::AsyncBody::from(avatar.to_vec()))
-                            .expect("controlled participant avatar response"));
-                    }
-                    old_handler(request).await
-                });
-            channel::init(&app_state.client, app_state.user_store.clone(), cx);
-        }
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
         app_state
             .languages
             .set_theme(theme::ActiveTheme::theme(cx).clone());
@@ -353,19 +278,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
 
     // Run until all initialization tasks complete
     cx.run_until_parked();
-
-    if std::env::var("COLLABORATIVE_VISUAL_ONLY").is_ok() {
-        cx.update(|cx| {
-            let theme = theme::ThemeRegistry::global(cx)
-                .get(collaborative_visual_theme())
-                .expect("Fractal Neutral should be available to visual tests");
-            theme::GlobalTheme::update_theme(cx, theme);
-            let settings = theme_settings::ThemeSettings::get_global(cx);
-            assert_eq!(settings.ui_font.family.as_ref(), "Figtree");
-            assert_eq!(settings.agent_ui_font_family().as_ref(), "Figtree");
-            assert_ne!(settings.agent_buffer_font_family().as_ref(), "Figtree");
-        });
-    }
 
     // Open workspace window
     let window_size = size(px(1280.0), px(800.0));
@@ -791,86 +703,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     } else {
         println!("\n=== All Visual Tests PASSED ===");
         Ok(())
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn visual_sum_tree_source(cached: bool) -> String {
-    let field = if cached {
-        "summary_cache: SummaryCache<T::Summary>"
-    } else {
-        "summary: T::Summary"
-    };
-    let binding = if cached { "summary_cache" } else { "summary" };
-    let update = if cached {
-        "summary_cache.invalidate();"
-    } else {
-        "*summary = compute_summary(children);"
-    };
-    format!(
-        "{}enum Node<T: Item> {{\n    Internal {{\n        height: u8,\n        {field},\n        children: Vec<SumTree<T>>,\n    }},\n    Leaf {{\n        items: Vec<T>,\n    }},\n}}\n{}pub fn push(&mut self, item: T) {{\n    match Arc::make_mut(&mut self.0) {{\n        Node::Internal {{\n            {binding},\n            children,\n            ..\n        }} => {{\n            {update}\n            children\n                .last_mut()\n                .expect(\"internal node has children\")\n                .push(item);\n        }}\n        Node::Leaf {{ items }} => items.push(item),\n    }}\n}}\n",
-        "\n".repeat(20),
-        "\n".repeat(55)
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn visual_cursor_source(cached: bool) -> String {
-    let summary = if cached {
-        "child.cached_summary()"
-    } else {
-        "child.compute_summary()"
-    };
-    format!(
-        "let mut end = self.position.clone();\nend.add_summary(&{summary});\nif end.cmp(target).is_ge() {{\n    self.seek_internal(target);\n}}\n"
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn prepare_collaborative_visual_git_repository(project_path: &Path) -> Result<()> {
-    fn run_git(project_path: &Path, arguments: &[&str]) -> Result<()> {
-        let status = std::process::Command::new("git")
-            .args(arguments)
-            .current_dir(project_path)
-            .status()?;
-        anyhow::ensure!(status.success(), "git {} failed", arguments.join(" "));
-        Ok(())
-    }
-
-    std::fs::write(project_path.join(".gitignore"), "/target\n/Cargo.lock\n")?;
-    std::fs::create_dir_all(project_path.join("src/tree"))?;
-    std::fs::write(
-        project_path.join("src/sum_tree.rs"),
-        visual_sum_tree_source(false),
-    )?;
-    std::fs::write(
-        project_path.join("src/tree/cursor.rs"),
-        visual_cursor_source(false),
-    )?;
-    run_git(project_path, &["init"])?;
-    run_git(project_path, &["config", "user.name", "Visual Test"])?;
-    run_git(
-        project_path,
-        &["config", "user.email", "visual-test@example.invalid"],
-    )?;
-    run_git(project_path, &["add", "."])?;
-    run_git(project_path, &["commit", "-m", "Initial visual fixture"])?;
-    run_git(project_path, &["branch", "visual-review-base"])?;
-    std::fs::write(
-        project_path.join("review-history.txt"),
-        "Committed review history\n",
-    )?;
-    run_git(project_path, &["add", "review-history.txt"])?;
-    run_git(project_path, &["commit", "-m", "Add review history"])?;
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn collaborative_visual_theme() -> &'static str {
-    if std::env::var("COLLABORATIVE_VISUAL_THEME").as_deref() == Ok("dark") {
-        "Fractal Neutral Dark"
-    } else {
-        "Fractal Neutral Light"
     }
 }
 

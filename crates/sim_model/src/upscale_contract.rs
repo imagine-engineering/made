@@ -520,7 +520,8 @@ fn validate_source_snapshot(
 fn validate_source_boundary(
     boundary: &SourceBoundaryWire,
 ) -> Result<(), NativeUpscaleContractError> {
-    let valid = boundary.comfy_source == "projects/comfy/ComfyUI/comfy_extras/nodes_upscale_model.py"
+    let valid = boundary.comfy_source
+        == "projects/comfy/ComfyUI/comfy_extras/nodes_upscale_model.py"
         && boundary.comfy_source_sha256
             == "da11e6f46a473fad3fdfdf068ae07a022802cf122240e4b99e639a380e9772f4"
         && boundary.requirements_source == "projects/comfy/ComfyUI/requirements.txt"
