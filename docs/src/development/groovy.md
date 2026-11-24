@@ -83,6 +83,12 @@ You can also point either server to a binary you installed yourself. See the
 guides. A project setting can override your user default. Keep only one Kotlin
 server enabled for a buffer.
 
+For offline Maven projects using the alternate server, make its host
+`MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
+repository. Cache the Maven Dependency Plugin used by `dependency:list` and
+install any required reactor artifacts before going offline. The alternate
+resolves dependencies for each module POM separately.
+
 If the host extension policy denies a server setup download, review extension
 permissions on the project host. After changing `granted_extension_capabilities`,
 restart the application or remote server on that host before retrying. The

@@ -2324,9 +2324,13 @@ mod jvm_tools_runtime_tests {
             if maven {
                 tree["pom.xml"] = "<project/>".into();
                 tree["application"]["pom.xml"] = "<project/>".into();
+                tree["mvnw"] = "fixture wrapper".into();
+                tree["mvnw.cmd"] = "fixture wrapper".into();
             } else {
                 tree["settings.gradle.kts"] = "include(\":application\")".into();
                 tree["application"]["build.gradle.kts"] = "plugins { kotlin(\"jvm\") }".into();
+                tree["gradlew"] = "fixture wrapper".into();
+                tree["gradlew.bat"] = "fixture wrapper".into();
             }
             fs.insert_tree(root_path, tree).await;
             let transport = server_cx.new(|_| crate::NativeProjectTransport::default());
@@ -2354,7 +2358,7 @@ mod jvm_tools_runtime_tests {
             let java_servers = languages.register_fake_lsp("Java", FakeLspAdapter {
                 name:"jdtls",
                 capabilities:lsp::ServerCapabilities {execute_command_provider:Some(lsp::ExecuteCommandOptions {
-                    commands:vec!["java.project.getAll".into(),"java.project.getSettings".into(),"groovy.maven.importedProjects".into(),"groovy.gradle.importedProjects".into()], ..Default::default()
+                    commands:vec!["java.project.getAll".into(),"java.project.getSettings".into(),"groovy.maven.importedProjects".into(),"groovy.gradle.importedProjects".into(),"groovy.maven.projectDetails".into(),"groovy.gradle.projectDetails".into()], ..Default::default()
                 }), ..Default::default()},
                 initializer:Some(Box::new(move |server| {
                     let root_uri = root_uri.clone(); let module_uri = module_uri.clone(); let source_path = source_path.clone();
@@ -2369,6 +2373,18 @@ mod jvm_tools_runtime_tests {
                                 let selected = (params.command == "groovy.maven.importedProjects") == maven;
                                 Ok(Some(json!({"version":1,"rootUri":root_uri,"projects":if selected {vec![json!({"projectUri":module_uri,"javaNature":true})]} else {Vec::new()},"partial":false,"fullSynchronizationKnown":false})))
                             }
+                            "groovy.maven.projectDetails" if maven => Ok(Some(json!({
+                                "version":1,"rootUri":root_uri,"cachedOnly":true,
+                                "reactorOrderKnown":false,"unavailablePomUris":[],
+                                "lifecycles":[{"id":"default","phases":["compile","verify"]}],
+                                "projects":[{"pomUri":format!("{module_uri}pom.xml"),"groupId":"fixture","artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":[]}]
+                            }))),
+                            "groovy.gradle.projectDetails" if !maven => Ok(Some(json!({
+                                "version":1,"rootUri":root_uri,"sourceSetsKnown":false,
+                                "projects":[{"buildRootUri":root_uri,"moduleUri":module_uri,"projectPath":":application","name":"application",
+                                    "tasks":[{"path":":application:check","name":"check","group":null,"description":null,"optionsKnown":false},
+                                             {"path":":application:assemble","name":"assemble","group":null,"description":null,"optionsKnown":false}]}]
+                            }))),
                             _ => anyhow::bail!("Unexpected mounted fixture provider command"),
                         }}
                     });
@@ -2649,6 +2665,197 @@ mod jvm_tools_runtime_tests {
                 recovered_kotlin.server.server_id()
             );
             self.assert_client_has_no_provider(cx);
+        }
+    }
+
+    #[gpui::test]
+    async fn remote_jvm_workspace_runs_ordered_tasks_only_with_a_current_host_plan(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        use futures::channel::oneshot;
+        use project::jvm_project::{JvmBuildOperation, JvmBuildOperationReceipt};
+
+        struct TaskTerminal {
+            pending: async_channel::Sender<(
+                task::SpawnInTerminal,
+                oneshot::Sender<()>,
+                oneshot::Receiver<bool>,
+            )>,
+        }
+
+        impl workspace::TerminalProvider for TaskTerminal {
+            fn spawn(
+                &self,
+                _: task::SpawnInTerminal,
+                _: &mut gpui::Window,
+                _: &mut gpui::App,
+            ) -> gpui::Task<Option<anyhow::Result<std::process::ExitStatus>>> {
+                panic!("Remote JVM operations must use checked terminal preparation")
+            }
+
+            fn spawn_prepared(
+                &self,
+                task: task::SpawnInTerminal,
+                handle: Option<StructuredTaskHandle>,
+                prepare: workspace::TaskLaunchPreparation,
+                window: &mut gpui::Window,
+                cx: &mut gpui::App,
+            ) -> gpui::Task<Option<anyhow::Result<std::process::ExitStatus>>> {
+                let pending = self.pending.clone();
+                window.to_async(cx).spawn(async move |cx| {
+                    assert!(
+                        handle.is_some(),
+                        "remote build uses a cancellable Task handle"
+                    );
+                    let prepared = prepare(task.clone(), cx).await.expect("prepared Task");
+                    prepared
+                        .validate_task_identity(&task)
+                        .expect("preserve the host plan");
+                    let check = prepared.check_before_spawn.expect("live host renewal");
+                    let (release, held) = oneshot::channel();
+                    let (complete, outcome) = oneshot::channel();
+                    pending
+                        .send((task, release, outcome))
+                        .await
+                        .expect("observe scheduled Task");
+                    held.await.expect("complete fixture preparation");
+                    let result = check(cx).await;
+                    complete
+                        .send(result.is_ok())
+                        .expect("observe validation result");
+                    Some(result.map(|()| std::process::ExitStatus::default()))
+                })
+            }
+        }
+
+        for maven in [true, false] {
+            let fixture = GroovyRemoteWorkspaceFixture::new(maven, true, cx, server_cx).await;
+            fixture.trust(cx, server_cx);
+            let client_store = fixture
+                .project
+                .read_with(cx, |project, _| project.lsp_store());
+            client_store
+                .update(cx, |store, cx| {
+                    store.set_default_jvm_project_languages_enabled(true, cx)
+                })
+                .expect("request direct host ownership");
+            cx.condition(&client_store, |store, _| {
+                store.remote_jvm_consumer_roots() == std::slice::from_ref(&fixture.root)
+            })
+            .await;
+            let worktree_id = fixture.root.worktree_id;
+            let host_store = fixture
+                .headless
+                .read_with(server_cx, |host, _| host.lsp_store.clone());
+            server_cx
+                .condition(&host_store, |store, _| {
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .is_some_and(|(_, current)| current)
+                })
+                .await;
+            if !maven {
+                host_store
+                    .update(server_cx, |store, cx| {
+                        store.synchronize_local_gradle_project(Some(worktree_id), cx)
+                    })
+                    .expect("configure the Gradle fixture on its host");
+                server_cx
+                    .condition(&host_store, |store, _| {
+                        store.jdtls_project_snapshot(worktree_id).is_some_and(
+                            |(snapshot, current)| {
+                                current
+                                    && snapshot
+                                        .projects
+                                        .iter()
+                                        .any(|module| module.gradle.is_some())
+                            },
+                        )
+                    })
+                    .await;
+            }
+            client_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            let operations = if maven {
+                ["compile", "verify"]
+                    .map(|phase| JvmBuildOperation::MavenPhase {
+                        lifecycle: "default".into(),
+                        phase: phase.into(),
+                    })
+                    .to_vec()
+            } else {
+                [":application:check", ":application:assemble"]
+                    .map(|path| JvmBuildOperation::GradleTask { path: path.into() })
+                    .to_vec()
+            };
+            let receipt = |store: &project::lsp_store::LspStore| {
+                let (snapshot, current) = store.jdtls_project_snapshot(worktree_id)?;
+                current.then(|| JvmBuildOperationReceipt {
+                    server_id: snapshot.server_id,
+                    worktree_id,
+                    generation: snapshot.generation,
+                    module_root: ProjectPath {
+                        worktree_id,
+                        path: rel_path("application").into(),
+                    },
+                    operations: operations.clone(),
+                    maven_options: Default::default(),
+                })
+            };
+            cx.condition(&client_store, |store, cx| {
+                receipt(store)
+                    .is_some_and(|receipt| store.can_resolve_remote_jvm_operation(&receipt, cx))
+            })
+            .await;
+            let receipt = client_store.read_with(cx, |store, _| {
+                receipt(store).expect("current provider selection")
+            });
+            let (pending, tasks) = async_channel::unbounded();
+            let (container, view_cx) = cx.add_window_view(|window, cx| {
+                workspace::MultiWorkspace::test_new(fixture.project.clone(), window, cx)
+            });
+            let workspace =
+                container.read_with(view_cx, |container, _| container.workspace().clone());
+            workspace.update(view_cx, |workspace, _| {
+                workspace.set_terminal_provider(TaskTerminal { pending })
+            });
+
+            for invalidate in [false, true] {
+                workspace
+                    .update_in(view_cx, |workspace, window, cx| {
+                        workspace.run_jvm_operation(receipt.clone(), window, cx)
+                    })
+                    .expect("schedule the current remote operations");
+                let (task, release, outcome) = tasks
+                    .recv()
+                    .await
+                    .expect("host plan reached the Task terminal");
+                let ordered = if maven {
+                    ["compile", "verify"]
+                } else {
+                    [":application:check", ":application:assemble"]
+                };
+                assert_eq!(task.args.first().map(String::as_str), Some("--offline"));
+                assert!(task.args.ends_with(&ordered.map(str::to_owned)));
+                assert!(task.literal_command);
+                assert_eq!(task.literal_prefix_args, task.args.len());
+                let wrapper = if maven { "mvnw" } else { "gradlew" };
+                assert!(
+                    task.command
+                        .as_deref()
+                        .is_some_and(|command| command.contains(wrapper))
+                );
+                if invalidate {
+                    host_store
+                        .update(server_cx, |store, cx| store.set_host_jvm_session(None, cx))
+                        .expect("withdraw host ownership while the Task waits");
+                }
+                release.send(()).expect("release terminal preparation");
+                assert_eq!(
+                    outcome.await.expect("host authorization result"),
+                    !invalidate
+                );
+            }
         }
     }
 
