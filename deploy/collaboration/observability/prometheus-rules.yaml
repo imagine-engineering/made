@@ -1,0 +1,148 @@
+groups:
+  - name: zed-collaboration-stop-signals
+    interval: 30s
+    rules:
+      - alert: CollaborationCrossTenant
+        expr: "collab_cross_tenant_results_total > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-CROSS-TENANT
+        annotations:
+          action: halt_tenant_and_rollback
+          summary: "Automatic collaboration stop signal STOP-CROSS-TENANT"
+      - alert: CollaborationReplayOrStale
+        expr: "collab_accepted_stale_or_replay_total > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-REPLAY-OR-STALE
+        annotations:
+          action: halt_deployment_and_rollback
+          summary: "Automatic collaboration stop signal STOP-REPLAY-OR-STALE"
+      - alert: CollaborationDuplicateExecution
+        expr: "agent_duplicate_executors_total > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-DUPLICATE-EXECUTION
+        annotations:
+          action: disable_execution_and_preserve_state
+          summary: "Automatic collaboration stop signal STOP-DUPLICATE-EXECUTION"
+      - alert: CollaborationShadowDivergence
+        expr: "collab_shadow_divergence_total{class=\"unexplained\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-SHADOW-DIVERGENCE
+        annotations:
+          action: halt_cutover_and_preserve_state
+          summary: "Automatic collaboration stop signal STOP-SHADOW-DIVERGENCE"
+      - alert: CollaborationSecretCanary
+        expr: "collab_redaction_canary_matches_total{class=\"secret\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-SECRET-CANARY
+        annotations:
+          action: disable_admissions_and_rollback
+          summary: "Automatic collaboration stop signal STOP-SECRET-CANARY"
+      - alert: CollaborationContentCanary
+        expr: "collab_redaction_canary_matches_total{class=\"content\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-CONTENT-CANARY
+        annotations:
+          action: disable_admissions_and_rollback
+          summary: "Automatic collaboration stop signal STOP-CONTENT-CANARY"
+      - alert: CollaborationReadyAuthority
+        expr: "collab_ready_with_failed_dependency_total{dependency=\"authority\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-READY-AUTHORITY
+        annotations:
+          action: remove_ready_instances_and_rollback
+          summary: "Automatic collaboration stop signal STOP-READY-AUTHORITY"
+      - alert: CollaborationReadySchema
+        expr: "collab_ready_with_failed_dependency_total{dependency=\"schema\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-READY-SCHEMA
+        annotations:
+          action: remove_ready_instances_and_halt_migration
+          summary: "Automatic collaboration stop signal STOP-READY-SCHEMA"
+      - alert: CollaborationReadySecurity
+        expr: "collab_ready_with_failed_dependency_total{dependency=\"security_control\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-READY-SECURITY
+        annotations:
+          action: disable_admissions_and_rollback
+          summary: "Automatic collaboration stop signal STOP-READY-SECURITY"
+      - alert: CollaborationQueueBoundary
+        expr: "collab_outbox_oldest_seconds > 300"
+        for: 5m
+        labels:
+          severity: page
+          stop_signal: STOP-QUEUE-BOUNDARY
+        annotations:
+          action: halt_scoped_admissions_and_reconcile
+          summary: "Automatic collaboration stop signal STOP-QUEUE-BOUNDARY"
+      - alert: CollaborationClaimBoundary
+        expr: "collab_outbox_stuck_claims > 0"
+        for: 5m
+        labels:
+          severity: page
+          stop_signal: STOP-CLAIM-BOUNDARY
+        annotations:
+          action: halt_scoped_admissions_and_reconcile
+          summary: "Automatic collaboration stop signal STOP-CLAIM-BOUNDARY"
+      - alert: CollaborationLeaseBoundary
+        expr: "remote_mesh_lease_age_seconds > 60"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-LEASE-BOUNDARY
+        annotations:
+          action: disable_execution_and_reconcile
+          summary: "Automatic collaboration stop signal STOP-LEASE-BOUNDARY"
+      - alert: CollaborationClientTelemetry
+        expr: "client_telemetry_requests_total{enabled=\"false\"} > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-CLIENT-TELEMETRY
+        annotations:
+          action: halt_release
+          summary: "Automatic collaboration stop signal STOP-CLIENT-TELEMETRY"
+      - alert: CollaborationAdmissionAfterDisable
+        expr: "collab_admissions_after_disable_total > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-ADMISSION-AFTER-DISABLE
+        annotations:
+          action: halt_deployment_and_preserve_state
+          summary: "Automatic collaboration stop signal STOP-ADMISSION-AFTER-DISABLE"
+      - alert: CollaborationKillSwitchAck
+        expr: "collab_kill_switch_age_seconds > 60"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-KILL-SWITCH-ACK
+        annotations:
+          action: halt_deployment_and_preserve_state
+          summary: "Automatic collaboration stop signal STOP-KILL-SWITCH-ACK"
+      - alert: CollaborationRollbackOwnerConflict
+        expr: "collab_rollback_owner_conflicts_total > 0"
+        for: 0m
+        labels:
+          severity: page
+          stop_signal: STOP-ROLLBACK-OWNER-CONFLICT
+        annotations:
+          action: halt_rollback_and_preserve_state
+          summary: "Automatic collaboration stop signal STOP-ROLLBACK-OWNER-CONFLICT"

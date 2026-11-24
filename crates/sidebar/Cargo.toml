@@ -13,6 +13,7 @@ path = "src/sidebar.rs"
 
 [features]
 default = []
+multiplayer-tools = ["agent_ui/multiplayer-tools", "workspace/multiplayer-tools"]
 
 [dependencies]
 acp_thread.workspace = true

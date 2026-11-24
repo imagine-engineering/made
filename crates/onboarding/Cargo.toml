@@ -14,6 +14,7 @@ path = "src/onboarding.rs"
 [features]
 default = []
 agentic = ["zed_actions/agentic"]
+multiplayer-tools = ["workspace/multiplayer-tools"]
 
 [dependencies]
 anyhow.workspace = true

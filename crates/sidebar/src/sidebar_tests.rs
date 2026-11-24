@@ -23,6 +23,11 @@ use std::{
     sync::Arc,
 };
 use util::{path_list::PathList, rel_path::rel_path};
+#[cfg(feature = "multiplayer-tools")]
+use workspace::Panel as _;
+
+#[cfg(feature = "multiplayer-tools")]
+include!("../../workspace/tests/visual/collaborative_workspace.rs");
 
 fn set_test_metadata_database_names(cx: &mut TestAppContext) {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -633,6 +638,7 @@ fn visible_entries_as_strings(
     })
 }
 
+#[cfg(not(feature = "multiplayer-tools"))]
 #[gpui::test]
 async fn standard_sidebar_excludes_collaborative_rail(cx: &mut TestAppContext) {
     let project = init_test_project("/my-project", cx).await;
@@ -645,6 +651,746 @@ async fn standard_sidebar_excludes_collaborative_rail(cx: &mut TestAppContext) {
         sidebar.collaborative_rail_width(cx).is_none() && sidebar.width == DEFAULT_WIDTH
     }));
     assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_sidebar_shows_the_project_on_first_open(cx: &mut TestAppContext) {
+    use gpui::UpdateGlobal;
+
+    let project = init_test_project("/my-project", cx).await;
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.workspace.workspace_presentation =
+                    Some(workspace::WorkspacePresentation::Collaborative);
+            });
+        });
+    });
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    setup_sidebar_closed(&multi_workspace, cx);
+
+    assert!(multi_workspace.read_with(cx, |workspace, cx| {
+        workspace.sidebar_requested_state(cx).open
+            && !workspace.sidebar_open()
+            && workspace.project_groups(cx).len() == 1
+    }));
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-PROJECT-ROW")
+            .is_some()
+    );
+    assert!(cx.debug_bounds("COLLABORATIVE-PROJECTS-EMPTY").is_none());
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_sidebar_toggle_preserves_editor_preference_and_layout(
+    cx: &mut TestAppContext,
+) {
+    let project = init_test_project("/my-project", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+    cx.update(|_, cx| {
+        let content = util::asset_str::<settings::SettingsAssets>("keymaps/default-macos.json");
+        assert!(content.contains("Workspace && CollaborativeWorkspace"));
+        let (bindings, registry_errors) = match settings::KeymapFile::load(&content, cx) {
+            settings::KeymapFileLoadResult::Success { key_bindings } => (key_bindings, None),
+            settings::KeymapFileLoadResult::SomeFailedToLoad {
+                key_bindings,
+                error_message,
+            } => (key_bindings, Some(error_message)),
+            settings::KeymapFileLoadResult::JsonParseFailure { error } => {
+                panic!("production macOS keymap did not parse: {error}")
+            }
+        };
+        let keystroke = gpui::Keystroke::parse("cmd-b").expect("keystroke");
+        // The match flag reports a pending chord, so exact completion is false.
+        let command_bindings = bindings
+            .iter()
+            .filter(|binding| {
+                binding.match_keystrokes(std::slice::from_ref(&keystroke)) == Some(false)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            command_bindings.iter().any(|binding| {
+                binding
+                    .action()
+                    .as_any()
+                    .is::<workspace::ToggleWorkspaceSidebar>()
+            }),
+            "actual Cmd-B bindings: {command_bindings:?}; owner registry errors: {registry_errors:?}"
+        );
+        cx.bind_keys(bindings);
+    });
+    workspace.update_in(cx, |workspace, window, cx| {
+        let panel = cx.new(|cx| {
+            workspace::dock::test::TestPanel::new(workspace::dock::DockPosition::Left, 0, cx)
+        });
+        workspace.add_panel(panel, window, cx);
+    });
+    workspace.update(cx, |workspace, _| workspace.set_random_database_id());
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-PROJECT-ROW")
+            .is_some()
+    );
+    let rail_width = cx
+        .debug_bounds("COLLABORATIVE-RAIL")
+        .expect("Multiplayer starts with its requested navigation visible")
+        .size
+        .width;
+
+    cx.simulate_keystrokes("cmd-b");
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.simulate_next_frame(cx);
+        window.simulate_next_frame(cx);
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-RAIL-RESIZE-HANDLE")
+            .is_none()
+    );
+    assert!(cx.debug_bounds("COLLABORATIVE-COMPOSER").is_some());
+    assert!(!workspace.read_with(cx, |workspace, cx| workspace.left_dock().read(cx).is_open()));
+    multi_workspace.read_with(cx, |workspace, cx| {
+        assert!(!workspace.sidebar_requested_state(cx).open);
+        assert!(
+            !workspace.sidebar_open(),
+            "Editor preference must stay closed"
+        );
+    });
+    workspace
+        .update_in(cx, |workspace, window, cx| {
+            workspace.flush_serialization(window, cx)
+        })
+        .await;
+    cx.run_until_parked();
+    workspace.read_with(cx, |workspace, cx| {
+        let id = workspace.database_id().expect("persisted workspace");
+        let saved = db::kvp::KeyValueStore::global(cx)
+            .scoped("collaborative_workspace_layout")
+            .read(&i64::from(id).to_string())
+            .expect("read scoped layout")
+            .expect("layout was serialized");
+        let saved: serde_json::Value = serde_json::from_str(&saved).expect("serialized layout");
+        assert_eq!(
+            saved.get("rail_requested"),
+            Some(&serde_json::Value::Bool(false))
+        );
+    });
+
+    cx.simulate_keystrokes("cmd-b");
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.simulate_next_frame(cx);
+        window.simulate_next_frame(cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        cx.debug_bounds("COLLABORATIVE-RAIL")
+            .expect("same navigation reopens")
+            .size
+            .width,
+        rail_width
+    );
+    assert!(cx.update(|window, cx| sidebar.focus_handle(cx).contains_focused(window, cx)));
+    assert!(!cx.update(|window, cx| {
+        sidebar
+            .read(cx)
+            .filter_editor
+            .focus_handle(cx)
+            .is_focused(window)
+    }));
+    assert!(!multi_workspace.read_with(cx, |workspace, _| workspace.sidebar_open()));
+
+    cx.dispatch_action(workspace::CloseWorkspaceSidebar);
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+    assert!(!cx.update(|window, cx| sidebar.focus_handle(cx).contains_focused(window, cx)));
+    cx.dispatch_action(workspace::SwitchToEditorWorkspace);
+    cx.run_until_parked();
+    assert!(!multi_workspace.read_with(cx, |workspace, cx| {
+        workspace.sidebar_requested_state(cx).open
+    }));
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+
+    cx.dispatch_action(workspace::SwitchToEditorWorkspace);
+    cx.run_until_parked();
+    multi_workspace.update(cx, |workspace, cx| workspace.open_sidebar(cx));
+    cx.run_until_parked();
+    assert!(multi_workspace.read_with(cx, |workspace, _| workspace.sidebar_open()));
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+    cx.simulate_keystrokes("cmd-alt-j");
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_some());
+    cx.simulate_keystrokes("cmd-alt-j");
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+    assert!(multi_workspace.read_with(cx, |workspace, _| workspace.sidebar_open()));
+    cx.dispatch_action(workspace::SwitchToEditorWorkspace);
+    cx.run_until_parked();
+    assert!(multi_workspace.read_with(cx, |workspace, cx| {
+        workspace.sidebar_requested_state(cx).open
+    }));
+    cx.update(|window, cx| window.focus(&workspace.focus_handle(cx), cx));
+    cx.simulate_keystrokes("cmd-b");
+    cx.run_until_parked();
+    assert!(workspace.read_with(cx, |workspace, cx| workspace.left_dock().read(cx).is_open()));
+    assert!(multi_workspace.read_with(cx, |workspace, cx| {
+        workspace.sidebar_requested_state(cx).open
+    }));
+
+    cx.simulate_resize(gpui::size(px(1600.), px(900.)));
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    cx.simulate_keystrokes("cmd-alt-j");
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_some());
+    assert!(workspace.update(cx, |workspace, cx| {
+        !workspace.is_dock_at_position_open(workspace::dock::DockPosition::Left, cx)
+    }));
+    cx.update(|_, cx| {
+        let settings::KeymapFileLoadResult::Success { key_bindings } = settings::KeymapFile::load(
+            r#"[{"context":"Workspace","bindings":{"cmd-b":"workspace::ToggleLeftDock"}}]"#,
+            cx,
+        ) else {
+            panic!("the user keymap override must load its canonical dock action")
+        };
+        cx.bind_keys(key_bindings);
+    });
+    cx.simulate_keystrokes("cmd-b");
+    cx.run_until_parked();
+    assert!(workspace.update(cx, |workspace, cx| {
+        workspace.is_dock_at_position_open(workspace::dock::DockPosition::Left, cx)
+    }));
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_some());
+    assert!(cx.debug_bounds("COLLABORATIVE-COMPOSER").is_some());
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_default_resize_matches_observed_delta_states(cx: &mut TestAppContext) {
+    let project = init_test_project("/delta-responsive-states", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    let sidebar_id = sidebar.entity_id();
+    for (width, rail_visible, review_visible) in [
+        (1031., true, true),
+        (1000., true, true),
+        (965., false, true),
+        (920., false, true),
+        (650., false, false),
+        (1031., true, true),
+    ] {
+        cx.simulate_resize(gpui::size(px(width), px(602.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-RAIL").is_some(),
+            rail_visible,
+            "rail at {width}"
+        );
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_some(),
+            review_visible,
+            "review at {width}"
+        );
+        if review_visible {
+            let timeline = cx
+                .debug_bounds("COLLABORATIVE-TIMELINE-REGION")
+                .expect("conversation");
+            let review = cx
+                .debug_bounds("COLLABORATIVE-REVIEW-REGION")
+                .expect("review");
+            assert_eq!(timeline.size.width, review.size.width);
+        }
+        assert_eq!(sidebar.entity_id(), sidebar_id);
+        assert!(multi_workspace.read_with(cx, |workspace, cx| {
+            workspace.sidebar_requested_state(cx).open
+        }));
+    }
+    cx.dispatch_action(workspace::ToggleCollaborativeReview);
+    cx.simulate_resize(gpui::size(px(844.), px(602.)));
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.simulate_next_frame(cx);
+        window.simulate_next_frame(cx);
+    });
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+    assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_none());
+    assert_eq!(
+        cx.debug_bounds("COLLABORATIVE-TIMELINE-REGION")
+            .expect("conversation")
+            .size
+            .width,
+        px(844.)
+    );
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_hidden_sidebar_toggle_grows_host_and_retains_conversation(
+    cx: &mut TestAppContext,
+) {
+    assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(false, cx).await;
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_populated_sidebar_toggle_grows_host_and_retains_conversation(
+    cx: &mut TestAppContext,
+) {
+    assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(true, cx).await;
+}
+
+#[cfg(feature = "multiplayer-tools")]
+async fn assert_hidden_sidebar_toggle_grows_host_and_retains_conversation(
+    populated: bool,
+    cx: &mut TestAppContext,
+) {
+    struct CollaborativeTitleBar(WeakEntity<Workspace>);
+    impl Render for CollaborativeTitleBar {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            h_flex().w_full().children(
+                self.0
+                    .upgrade()
+                    .and_then(|workspace| workspace.read(cx).collaborative_title_bar(cx)),
+            )
+        }
+    }
+
+    let project = init_test_project_with_agent_panel("/painted-rail-project", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+    let panel = add_agent_panel(&workspace, cx);
+    agent_ui::test_support::open_draft_with_connection(&panel, StubAgentConnection::new(), cx);
+    cx.run_until_parked();
+    if populated {
+        send_message(&panel, cx);
+    }
+    let thread_view = panel.read_with(cx, |panel, cx| {
+        panel
+            .active_thread_view(cx)
+            .expect("real mounted thread fixture")
+    });
+    let message_editor = thread_view.read_with(cx, |view, _| view.message_editor.clone());
+    message_editor.update_in(cx, |editor, window, cx| {
+        editor.set_text("retained resize draft", window, cx)
+    });
+    let composer = cx.update(|_, cx| {
+        agent_ui::collaborative_composer::CollaborativeComposerAdapter::from_agent_panel(
+            &panel, &workspace, cx,
+        )
+        .expect("canonical composer")
+    });
+    let timeline = cx.update(|_, cx| {
+        agent_ui::collaborative_timeline::CollaborativeTimelineAdapter::from_agent_panel(
+            &panel, &workspace, cx,
+        )
+        .expect("canonical timeline")
+    });
+    workspace.update_in(cx, |workspace, window, cx| {
+        composer
+            .register_in_workspace(workspace, cx)
+            .expect("composer registration");
+        timeline
+            .register_in_workspace(workspace, cx)
+            .expect("timeline registration");
+        let workspace_handle = cx.weak_entity();
+        let title_bar = cx.new(|_| CollaborativeTitleBar(workspace_handle));
+        workspace.set_titlebar_item(title_bar.into(), window, cx);
+    });
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    let sidebar_id = sidebar.entity_id();
+    let native_thread_id = panel.read_with(cx, |panel, cx| {
+        panel.active_thread_id(cx).expect("parent thread identity")
+    });
+    let entry_count = thread_view.read_with(cx, |view, cx| view.thread.read(cx).entries().len());
+    assert_eq!(entry_count > 0, populated);
+    let painted_rail_width = cx
+        .debug_bounds("COLLABORATIVE-RAIL")
+        .expect("initial painted navigation")
+        .size
+        .width;
+    assert!(cx.debug_bounds("COLLABORATIVE-OPEN-SIDEBAR").is_none());
+    assert_eq!(
+        painted_rail_width + px(1.),
+        workspace.read_with(cx, |workspace, cx| workspace.collaborative_rail_width(cx)),
+        "the requested sidebar includes its one-pixel border",
+    );
+    for review_expanded in [true, false] {
+        if !review_expanded {
+            cx.dispatch_action(workspace::ToggleCollaborativeReview);
+            cx.run_until_parked();
+        }
+        cx.simulate_resize(gpui::size(px(700.), px(800.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+        assert!(multi_workspace.read_with(cx, |workspace, cx| {
+            workspace.sidebar_requested_state(cx).open
+        }));
+        let reopen = cx
+            .debug_bounds("COLLABORATIVE-OPEN-SIDEBAR")
+            .expect("hidden navigation must leave a visible reopen button");
+        cx.simulate_click(reopen.center(), gpui::Modifiers::default());
+        cx.run_until_parked();
+        let resized = cx.update(|window, _| window.bounds().size);
+        assert!(
+            resized.width > px(700.),
+            "manual reopen must request actual host growth"
+        );
+        assert_eq!(resized.height, px(800.));
+        // The test platform records resize requests; deliver the native resize acknowledgement.
+        cx.simulate_resize(resized);
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-RAIL")
+                .expect("painted navigation restored")
+                .size
+                .width,
+            painted_rail_width,
+        );
+        assert!(cx.debug_bounds("COLLABORATIVE-OPEN-SIDEBAR").is_none());
+        assert!(cx.debug_bounds("COLLABORATIVE-COMPOSER").is_none());
+        let input = cx
+            .debug_bounds("COLLABORATIVE-NATIVE-ACP-COMPOSER")
+            .expect("retained inline draft");
+        let conversation = cx
+            .debug_bounds("COLLABORATIVE-NATIVE-ACP-TIMELINE")
+            .expect("retained conversation");
+        assert!(conversation.contains(&input.origin));
+        assert!(input.bottom() <= conversation.bottom());
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_some(),
+            review_expanded
+        );
+        assert_eq!(sidebar.entity_id(), sidebar_id);
+        assert!(cx.update(|window, cx| sidebar.focus_handle(cx).contains_focused(window, cx)));
+        assert!(!multi_workspace.read_with(cx, |workspace, _| workspace.sidebar_open()));
+        assert_eq!(
+            panel.read_with(cx, |panel, cx| panel.active_thread_id(cx)),
+            Some(native_thread_id)
+        );
+        assert_eq!(
+            thread_view.read_with(cx, |view, _| view.message_editor.entity_id()),
+            message_editor.entity_id()
+        );
+        assert_eq!(
+            panel
+                .read_with(cx, |panel, cx| panel.editor_text(native_thread_id, cx))
+                .as_deref(),
+            Some("retained resize draft")
+        );
+        assert_eq!(
+            thread_view.read_with(cx, |view, cx| view.thread.read(cx).entries().len()),
+            entry_count
+        );
+        cx.dispatch_action(workspace::ToggleWorkspaceSidebar);
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+        assert!(!multi_workspace.read_with(cx, |workspace, cx| {
+            workspace.sidebar_requested_state(cx).open
+        }));
+        multi_workspace.update(cx, |workspace, cx| workspace.open_sidebar(cx));
+        cx.run_until_parked();
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_responsive_sidebar_preserves_requested_navigation(cx: &mut TestAppContext) {
+    let project = init_test_project("/responsive-project", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    let workspace = multi_workspace.read_with(cx, |workspace, _| workspace.workspace().clone());
+    let panel = cx.new(|cx| {
+        workspace::dock::test::TestPanel::new(workspace::dock::DockPosition::Right, 0, cx)
+    });
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_panel(panel.clone(), window, cx)
+    });
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.dispatch_action(workspace::ToggleRightDock);
+    let sidebar_id = sidebar.entity_id();
+    for flexible in [false, true] {
+        if flexible {
+            panel.update_in(cx, |panel, window, cx| {
+                panel.set_flexible_size(true, window, cx)
+            });
+        }
+        cx.simulate_resize(gpui::size(px(2200.), px(900.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        let wide_rail = cx
+            .debug_bounds("COLLABORATIVE-RAIL")
+            .expect("wide navigation");
+        assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_some());
+        multi_workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_sidebar(window, cx)
+        });
+        cx.run_until_parked();
+        assert!(cx.update(|window, cx| sidebar.focus_handle(cx).contains_focused(window, cx)));
+
+        let intermediate_width = if flexible { 1600. } else { 1050. };
+        cx.simulate_resize(gpui::size(px(intermediate_width), px(900.)));
+        cx.run_until_parked();
+        for _ in 0..4 {
+            cx.update(|window, cx| window.simulate_next_frame(cx));
+            cx.run_until_parked();
+            assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+            assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_some());
+        }
+        assert!(multi_workspace.read_with(cx, |workspace, cx| {
+            workspace.sidebar_requested_state(cx).open
+        }));
+        assert!(!cx.update(|window, cx| sidebar.focus_handle(cx).contains_focused(window, cx)));
+        assert!(!cx.update(|window, cx| {
+            multi_workspace
+                .read(cx)
+                .sidebar_render_state(window, cx)
+                .open
+        }));
+
+        let narrow_width = if flexible { 1300. } else { 850. };
+        cx.simulate_resize(gpui::size(px(narrow_width), px(900.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+        assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_none());
+        for selector in [
+            "COLLABORATIVE-TIMELINE-REGION",
+            "COLLABORATIVE-COMPOSER",
+            "COLLABORATIVE-STATUS-BAR",
+        ] {
+            let bounds = cx
+                .debug_bounds(selector)
+                .expect("retained conversation region");
+            assert!(bounds.size.width > px(0.) && bounds.size.height > px(0.));
+        }
+        assert!(workspace.update(cx, |workspace, cx| {
+            workspace.is_dock_at_position_open(workspace::dock::DockPosition::Right, cx)
+        }));
+        assert_eq!(sidebar.entity_id(), sidebar_id);
+        cx.simulate_resize(gpui::size(px(2200.), px(900.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-RAIL")
+                .expect("same rail restored")
+                .size
+                .width,
+            wide_rail.size.width
+        );
+        assert!(cx.debug_bounds("COLLABORATIVE-REVIEW-REGION").is_some());
+        cx.dispatch_action(workspace::CloseWorkspaceSidebar);
+        cx.run_until_parked();
+        cx.simulate_resize(gpui::size(px(narrow_width), px(900.)));
+        cx.run_until_parked();
+        cx.simulate_resize(gpui::size(px(2200.), px(900.)));
+        cx.run_until_parked();
+        assert!(cx.debug_bounds("COLLABORATIVE-RAIL").is_none());
+        assert!(!multi_workspace.read_with(cx, |workspace, cx| {
+            workspace.sidebar_requested_state(cx).open
+        }));
+        multi_workspace.update(cx, |workspace, cx| workspace.open_sidebar(cx));
+        cx.run_until_parked();
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_rail_layout(cx: &mut TestAppContext) {
+    let project = init_test_project("/my-project", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    let sidebar = setup_sidebar_closed(&multi_workspace, cx);
+
+    assert!(
+        !multi_workspace.read_with(cx, |multi_workspace, _| { multi_workspace.sidebar_open() })
+    );
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+
+    let render_state = multi_workspace.read_with(cx, |multi_workspace, cx| {
+        multi_workspace.sidebar_requested_state(cx)
+    });
+    assert!(render_state.open);
+    assert_eq!(render_state.side, SidebarSide::Left);
+    assert!(
+        !multi_workspace.read_with(cx, |multi_workspace, _| { multi_workspace.sidebar_open() })
+    );
+
+    let rail_bounds = cx
+        .debug_bounds("COLLABORATIVE-RAIL")
+        .expect("collaborative rail should render for a closed Editor sidebar");
+    let native_header_height = cx.update(|window, _| ui::utils::platform_title_bar_height(window));
+    assert!(
+        rail_bounds.top() >= native_header_height,
+        "rail content must clear native titlebar controls"
+    );
+    let editor_sidebar_width = sidebar.read_with(cx, |sidebar, _| sidebar.width);
+    let resize_bounds = cx
+        .debug_bounds("COLLABORATIVE-RAIL-RESIZE-HANDLE")
+        .expect("collaborative rail resize handle should render");
+    let drag_start = resize_bounds.center();
+    let drag_end = gpui::point(drag_start.x + px(48.), drag_start.y);
+    cx.simulate_mouse_down(
+        drag_start,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_move(
+        gpui::point(drag_start.x + px(8.), drag_start.y),
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_move(
+        drag_end,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(
+        drag_end,
+        gpui::MouseButton::Left,
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+
+    let resized_rail_bounds = cx
+        .debug_bounds("COLLABORATIVE-RAIL")
+        .expect("collaborative rail should remain rendered after resize");
+    assert!(resized_rail_bounds.size.width > rail_bounds.size.width);
+    assert_eq!(
+        sidebar.read_with(cx, |sidebar, _| sidebar.width),
+        editor_sidebar_width,
+        "collaborative resizing must not change the Editor sidebar width"
+    );
+
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL-PINNED").is_none());
+    assert!(cx.debug_bounds("COLLABORATIVE-RAIL-CHANNELS").is_none());
+    let section_bounds =
+        ["COLLABORATIVE-RAIL-PROJECTS", "COLLABORATIVE-RAIL-TASKS"].map(|selector| {
+            cx.debug_bounds(selector)
+                .unwrap_or_else(|| panic!("missing collaborative rail section {selector}"))
+        });
+    assert!(section_bounds[0].bottom() <= section_bounds[1].top());
+    for bounds in section_bounds {
+        assert!(bounds.size.height > px(0.));
+        assert!(bounds.top() >= resized_rail_bounds.top());
+        assert!(bounds.bottom() <= resized_rail_bounds.bottom());
+    }
+
+    let scroll_handle = sidebar.read_with(cx, |sidebar, cx| {
+        sidebar.collaborative_rail.read(cx).test_scroll_handle()
+    });
+
+    scroll_handle.set_offset(gpui::point(px(0.), px(-12.)));
+    assert_eq!(scroll_handle.offset().y, px(-12.));
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_project_expansion_uses_the_canonical_group_state(cx: &mut TestAppContext) {
+    let project = init_test_project("/my-project", cx).await;
+    let key = project.read_with(cx, |project, cx| project.project_group_key(cx));
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
+    multi_workspace.update_in(cx, |multi_workspace, window, cx| {
+        multi_workspace.add(multi_workspace.workspace().clone(), window, cx);
+    });
+    let _sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+            .is_none()
+    );
+    let locations = cx
+        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
+        .expect("project locations disclosure is visible");
+    cx.simulate_click(
+        gpui::point(locations.left() + px(30.), locations.center().y),
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+            .is_some()
+    );
+    for expected in [false, true] {
+        let disclosure = cx
+            .debug_bounds("COLLABORATIVE-PROJECT-EXPANSION")
+            .expect("project disclosure is visible");
+        cx.simulate_click(disclosure.center(), gpui::Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(
+            multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace
+                .group_state_by_key(&key)
+                .expect("canonical group")
+                .expanded),
+            expected
+        );
+        assert_eq!(
+            cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+                .is_some(),
+            expected
+        );
+    }
+    let locations = cx
+        .debug_bounds("COLLABORATIVE-PROJECT-LOCATIONS")
+        .expect("locations disclosure visible after reopening the project");
+    cx.simulate_click(
+        gpui::point(locations.left() + px(30.), locations.center().y),
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-NAVIGATION-CHILD-ROW")
+            .is_none()
+    );
 }
 
 #[gpui::test]
@@ -3052,6 +3798,174 @@ async fn test_terminal_close_event_closes_sidebar_terminal(cx: &mut TestAppConte
     });
 }
 
+#[cfg(all(unix, feature = "multiplayer-tools"))]
+#[gpui::test]
+async fn test_inline_real_pty_exit_retains_history_without_archiving_workspace(
+    cx: &mut TestAppContext,
+) {
+    use agent_ui::terminal_thread_metadata_store::InlineTerminalContext;
+    use settings::Settings as _;
+    use std::time::{Duration, Instant};
+
+    let project = init_test_project_with_agent_panel("/my-project", cx).await;
+    let companion_session_id = acp::SessionId::new("sidebar-inline-companion");
+    save_thread_metadata(
+        companion_session_id.clone(),
+        Some("Companion conversation".into()),
+        Utc::now(),
+        None,
+        None,
+        &project,
+        cx,
+    );
+    let companion_thread_id = cx.update(|cx| {
+        ThreadMetadataStore::global(cx)
+            .read(cx)
+            .entries()
+            .find(|entry| entry.session_id.as_ref() == Some(&companion_session_id))
+            .expect("canonical companion conversation metadata")
+            .thread_id
+    });
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let (sidebar, panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
+    cx.executor().allow_parking();
+    agent_ui::test_support::open_draft_with_connection(&panel, StubAgentConnection::new(), cx);
+    agent_ui::test_support::type_draft_prompt(&panel, "Preserved parent draft", cx);
+    let parent_id = active_thread_id(&panel, cx);
+    let context = InlineTerminalContext {
+        occurrence_id: None,
+        previous_occurrences: Vec::new(),
+        thread_id: parent_id,
+        session_id: Some(active_session_id(&panel, cx)),
+        restored_draft_source_session_id: None,
+        preceding_entry_count: 0,
+        message_client_id: None,
+        is_draft: true,
+        presentation_order: None,
+        draft_position: None,
+        collapsed: false,
+        output: String::new(),
+        snapshot: None,
+    };
+    cx.update(|_, cx| {
+        let mut agent_settings = agent_settings::AgentSettings::get_global(cx).clone();
+        agent_settings.terminal_init_command = None;
+        agent_settings::AgentSettings::override_global(agent_settings, cx);
+        let mut terminal_settings =
+            terminal::terminal_settings::TerminalSettings::get_global(cx).clone();
+        terminal_settings.shell = task::Shell::Program("/bin/sh".into());
+        terminal_settings.working_directory = settings::WorkingDirectory::AlwaysHome;
+        terminal::terminal_settings::TerminalSettings::override_global(terminal_settings, cx);
+    });
+    let standalone_row_observed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let _publication_subscription = cx.update(|_, cx| {
+        let sidebar = sidebar.clone();
+        let standalone_row_observed = standalone_row_observed.clone();
+        cx.subscribe(&panel, move |_, event: &AgentPanelEvent, cx| {
+            if matches!(event, AgentPanelEvent::EntryChanged) {
+                sidebar.update(cx, |sidebar, cx| sidebar.update_entries(cx));
+                if sidebar
+                    .read(cx)
+                    .contents
+                    .entries
+                    .iter()
+                    .any(|entry| matches!(entry, ListEntry::Terminal(_)))
+                {
+                    standalone_row_observed.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+        })
+    });
+    let spawn = panel.update_in(cx, |panel, window, cx| {
+        panel.spawn_inline_terminal(context, None, window, cx)
+    });
+    let (terminal_id, view) = spawn.await.expect("real canonical inline PTY");
+    let terminal = view.read_with(cx, |view, _| view.terminal().clone());
+    sidebar.update(cx, |sidebar, cx| sidebar.update_entries(cx));
+    assert!(sidebar.read_with(cx, |sidebar, _| sidebar.contents.entries.iter().all(|entry| {
+        !matches!(entry, ListEntry::Terminal(terminal) if terminal.metadata.terminal_id == terminal_id)
+    })));
+    terminal.update(cx, |terminal, _| {
+        terminal.input(b"printf 'SIDEBAR_INLINE_EXIT_20261005\\n'\nexit\n".as_slice());
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while panel.read_with(cx, |panel, _| panel.has_terminal(terminal_id)) {
+        cx.run_until_parked();
+        assert!(
+            Instant::now() < deadline,
+            "actual inline shell exit must finish"
+        );
+        cx.executor().timer(Duration::from_millis(50)).await;
+    }
+    cx.run_until_parked();
+    assert!(
+        !standalone_row_observed.load(std::sync::atomic::Ordering::SeqCst),
+        "inline creation and natural exit must never publish a standalone Sidebar row"
+    );
+    assert_eq!(active_thread_id(&panel, cx), parent_id);
+    assert_eq!(
+        panel.read_with(cx, |panel, cx| panel.editor_text(parent_id, cx)),
+        Some("Preserved parent draft".into())
+    );
+    assert_eq!(
+        multi_workspace.read_with(cx, |workspace, _| workspace.workspaces().count()),
+        1
+    );
+    assert!(project.read_with(cx, |project, cx| project.worktrees(cx).next().is_some()));
+    let history = cx.update(|_, cx| TerminalThreadMetadataStore::global(cx));
+    let retained = history
+        .read_with(cx, |store, _| store.entry(terminal_id).cloned())
+        .expect("mounted Sidebar must preserve finished inline metadata");
+    let retained_context = retained
+        .inline_context
+        .as_ref()
+        .expect("canonical parent association");
+    assert_eq!(retained_context.thread_id, parent_id);
+    assert!(
+        retained_context
+            .output
+            .contains("SIDEBAR_INLINE_EXIT_20261005")
+    );
+    assert!(retained_context.snapshot.is_some());
+    sidebar.read_with(cx, |sidebar, cx| {
+        let entries = sidebar.mru_entries_for_switcher(cx);
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.thread_id() == Some(parent_id))
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.thread_id() == Some(companion_thread_id))
+        );
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry.terminal_id() != Some(terminal_id))
+        );
+    });
+    focus_sidebar(&sidebar, cx);
+    sidebar.update_in(cx, |sidebar, window, cx| {
+        sidebar.on_toggle_thread_switcher(&ToggleThreadSwitcher::default(), window, cx);
+    });
+    cx.run_until_parked();
+    sidebar.read_with(cx, |sidebar, cx| {
+        assert!(
+            sidebar
+                .thread_switcher
+                .as_ref()
+                .expect("thread switcher")
+                .read(cx)
+                .entries()
+                .iter()
+                .all(|entry| entry.terminal_id() != Some(terminal_id))
+        );
+    });
+}
+
 #[gpui::test]
 async fn test_terminal_close_event_activates_neighbor(cx: &mut TestAppContext) {
     let project = init_test_project_with_agent_panel("/my-project", cx).await;
@@ -4841,6 +5755,12 @@ async fn test_confirm_on_historical_thread_in_new_project_group_opens_real_threa
     assert_historical_thread_reopens_project(cx, false).await;
 }
 
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_historical_thread_reopens_its_canonical_project(cx: &mut TestAppContext) {
+    assert_historical_thread_reopens_project(cx, true).await;
+}
+
 async fn assert_historical_thread_reopens_project(cx: &mut TestAppContext, collaborative: bool) {
     use workspace::ProjectGroup;
 
@@ -4851,6 +5771,15 @@ async fn assert_historical_thread_reopens_project(cx: &mut TestAppContext, colla
         ThreadMetadataStore::init_global(cx);
         language_model::LanguageModelRegistry::test(cx);
         prompt_store::init(cx);
+        #[cfg(feature = "multiplayer-tools")]
+        if collaborative {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.workspace_presentation =
+                        Some(workspace::WorkspacePresentation::Collaborative);
+                });
+            });
+        }
     });
 
     let fs = FakeFs::new(cx.executor());
@@ -4909,6 +5838,21 @@ async fn assert_historical_thread_reopens_project(cx: &mut TestAppContext, colla
     );
 
     if collaborative {
+        #[cfg(feature = "multiplayer-tools")]
+        cx.update(|window, cx| {
+            let metadata = ThreadMetadataStore::global(cx)
+                .read(cx)
+                .entry_by_session(&session_id)
+                .cloned()
+                .expect("canonical historical metadata");
+            crate::collaborative_tasks::activate_thread_target(
+                &multi_workspace,
+                metadata,
+                window,
+                cx,
+            )
+            .expect("closed project should begin opening");
+        });
     } else {
         sidebar.update_in(cx, |sidebar, window, cx| {
             sidebar.selection = Some(2);
@@ -4960,6 +5904,36 @@ async fn assert_historical_thread_reopens_project(cx: &mut TestAppContext, colla
         Some(expected_thread_id),
         "expected the agent panel to activate the real historical thread rather than a draft"
     );
+
+    #[cfg(feature = "multiplayer-tools")]
+    if collaborative {
+        workspace_b.update(cx, |workspace, cx| {
+            assert_eq!(
+                workspace.workspace_presentation(),
+                workspace::WorkspacePresentation::Collaborative
+            );
+            for position in [
+                workspace::dock::DockPosition::Left,
+                workspace::dock::DockPosition::Bottom,
+                workspace::dock::DockPosition::Right,
+            ] {
+                assert!(
+                    !workspace.is_dock_at_position_open(position, cx),
+                    "thread selection must not request a native dock"
+                );
+            }
+        });
+    } else {
+        workspace_b.read_with(cx, |workspace, cx| {
+            assert!(
+                workspace
+                    .all_docks()
+                    .iter()
+                    .any(|dock| dock.read(cx).is_open()),
+                "Standard thread selection must still reveal the canonical Agent panel"
+            );
+        });
+    }
 
     let entries_after = visible_entries_as_strings(&sidebar, cx);
     let matching_rows: Vec<_> = entries_after
@@ -15227,5 +16201,498 @@ async fn test_find_or_create_workspace_returns_the_created_remote_workspace(
         multi_workspace.read_with(cx, |mw, _| mw.workspace().clone()),
         local_workspace,
         "the local workspace should have re-activated during the open"
+    );
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_navigation_rows_reset_inherited_type_and_keep_action_geometry(
+    cx: &mut TestAppContext,
+) {
+    use crate::collaborative_navigation::{
+        navigation_action, navigation_icon, navigation_label, navigation_row,
+    };
+    use std::{cell::RefCell, rc::Rc};
+
+    struct NavigationProbe {
+        styles: Rc<RefCell<Vec<gpui::TextStyle>>>,
+    }
+    impl Render for NavigationProbe {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            self.styles.borrow_mut().clear();
+            v_flex()
+                .w_full()
+                .font_family("Unintended inherited code font")
+                .font_weight(gpui::FontWeight::BOLD)
+                .italic()
+                .text_size(px(32.))
+                .line_height(gpui::relative(3.))
+                .children(
+                    [
+                        ("peer", 0, IconName::Thread, true),
+                        ("repository", 1, IconName::GitBranch, false),
+                        ("worktree", 1, IconName::Folder, false),
+                    ]
+                    .into_iter()
+                    .map(|(id, depth, icon, has_action)| {
+                        let styles = self.styles.clone();
+                        navigation_row(id, false, depth, cx)
+                            .debug_selector(move || id.to_owned())
+                            .child(navigation_icon(icon, Color::Muted))
+                            .child(navigation_label("The same navigation label"))
+                            .child(
+                                gpui::canvas(
+                                    move |_, window, _| {
+                                        styles.borrow_mut().push(window.text_style());
+                                    },
+                                    |_, _, _, _| {},
+                                )
+                                .size_0(),
+                            )
+                            .when(has_action, |this| {
+                                this.child(navigation_action("pin", IconName::Pin, "Pin"))
+                            })
+                    }),
+                )
+                .into_any_element()
+        }
+    }
+
+    init_test(cx);
+    let styles = Rc::new(RefCell::new(Vec::new()));
+    let (probe, cx) = cx.add_window_view(|_, _| NavigationProbe {
+        styles: styles.clone(),
+    });
+    for (font_size, density) in [(16., "default"), (16., "compact"), (20., "compact")] {
+        probe.update_in(cx, |_, window, cx| {
+            cx.update_global::<SettingsStore, _>(|store, cx| {
+                store
+                    .set_user_settings(
+                        &serde_json::json!({ "ui_font_size": font_size, "unstable.ui_density": density })
+                            .to_string(),
+                        cx,
+                    )
+                    .expect("navigation appearance settings");
+            });
+            assert_eq!(
+                theme::theme_settings(cx).ui_density(cx),
+                if density == "compact" { theme::UiDensity::Compact } else { theme::UiDensity::Default }
+            );
+            window.set_rem_size(px(font_size));
+            cx.notify();
+        });
+        cx.run_until_parked();
+        let styles = styles.borrow();
+        assert_eq!(styles.len(), 3);
+        let expected_font = cx.update(|_, cx| theme::theme_settings(cx).ui_font(cx).clone());
+        for style in styles.iter() {
+            assert_eq!(style.font_family, expected_font.family);
+            assert_eq!(style.font_weight, expected_font.weight);
+            assert_eq!(style.font_style, expected_font.style);
+            assert_eq!(
+                style.font_size.to_pixels(px(font_size)),
+                px(font_size * 14. / 16.)
+            );
+            assert_eq!(
+                style.line_height_in_pixels(px(font_size)),
+                px(font_size * 20. / 16.)
+            );
+        }
+        let [peer, repository, worktree] = ["peer", "repository", "worktree"]
+            .map(|selector| cx.debug_bounds(selector).expect("navigation row rendered"));
+        assert_eq!(peer.size.height, repository.size.height);
+        assert_eq!(repository.size.height, worktree.size.height);
+        assert!(peer.bottom() <= repository.top());
+        assert!(repository.bottom() <= worktree.top());
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_task_menu_targets_non_active_row_and_preserves_selection(
+    cx: &mut TestAppContext,
+) {
+    let project = init_test_project("/menu-project", cx).await;
+    cx.update(|cx| {
+        cx.bind_keys([
+            gpui::KeyBinding::new("escape", menu::Cancel, Some("menu")),
+            gpui::KeyBinding::new("shift-f10", agent_ui::OpenTaskContextMenu, Some("TaskRow")),
+            gpui::KeyBinding::new("down", menu::SelectNext, Some("menu")),
+            gpui::KeyBinding::new("up", menu::SelectPrevious, Some("menu")),
+            gpui::KeyBinding::new("end", menu::SelectLast, Some("menu")),
+            gpui::KeyBinding::new("enter", menu::Confirm, Some("menu")),
+        ])
+    });
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    multi_workspace.update_in(cx, |multi_workspace, window, cx| {
+        multi_workspace.add(multi_workspace.workspace().clone(), window, cx)
+    });
+    let _sidebar = setup_sidebar_closed(&multi_workspace, cx);
+    for name in ["active-task", "other-task"] {
+        save_thread_metadata(
+            acp::SessionId::new(Arc::from(name)),
+            Some(name.into()),
+            Utc::now(),
+            None,
+            None,
+            &project,
+            cx,
+        );
+    }
+    let (active, other) = cx.update(|_, cx| {
+        let store = ThreadMetadataStore::global(cx);
+        let store = store.read(cx);
+        (
+            store
+                .entry_by_session(&acp::SessionId::new("active-task"))
+                .unwrap()
+                .thread_id,
+            store
+                .entry_by_session(&acp::SessionId::new("other-task"))
+                .unwrap()
+                .thread_id,
+        )
+    });
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    let workspace =
+        multi_workspace.read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone());
+    let active_target = workspace::collaborative_navigation::CollaborativeNavigationTarget::thread(
+        active.to_key_string(),
+    );
+    let other_target = workspace::collaborative_navigation::CollaborativeNavigationTarget::thread(
+        other.to_key_string(),
+    );
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace
+            .navigate_collaborative_to(active_target.clone(), |_| true, window, cx)
+            .unwrap()
+    });
+    cx.run_until_parked();
+    let row_selector: &'static str =
+        Box::leak(format!("COLLABORATIVE-TASK-ROW-{}", other.to_key_string()).into_boxed_str());
+    for label in ["Pin", "Unpin"] {
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let row = cx.debug_bounds(row_selector).expect("non-active task row");
+        cx.simulate_mouse_down(
+            row.center(),
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        cx.simulate_mouse_up(
+            row.center(),
+            gpui::MouseButton::Right,
+            gpui::Modifiers::default(),
+        );
+        cx.run_until_parked();
+        assert_eq!(
+            workspace.read_with(cx, |workspace, _| workspace
+                .collaborative_navigation()
+                .current()
+                .cloned()),
+            Some(active_target.clone())
+        );
+        let action = cx
+            .debug_bounds(if label == "Pin" {
+                "MENU_ITEM-Pin"
+            } else {
+                "MENU_ITEM-Unpin"
+            })
+            .expect("state-derived menu action");
+        cx.simulate_click(action.center(), gpui::Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(
+            workspace.read_with(cx, |workspace, _| workspace
+                .collaborative_navigation()
+                .is_pinned(&other_target)),
+            label == "Pin"
+        );
+        assert!(!workspace.read_with(cx, |workspace, _| {
+            workspace
+                .collaborative_navigation()
+                .is_pinned(&active_target)
+        }));
+        assert_eq!(
+            workspace.read_with(cx, |workspace, _| workspace
+                .collaborative_navigation()
+                .current()
+                .cloned()),
+            Some(active_target.clone())
+        );
+    }
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let row = cx.debug_bounds(row_selector).unwrap();
+    cx.simulate_mouse_down(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    let unread = cx
+        .debug_bounds("MENU_ITEM-Mark as unread")
+        .unwrap_or_else(|| {
+            panic!("unread operation: row={row:?}, pin={:?}, read={:?}, projects={:?}, organization={:?}",
+                cx.debug_bounds("MENU_ITEM-Pin"), cx.debug_bounds("MENU_ITEM-Mark as read"),
+                cx.debug_bounds("MENU_SUBMENU-Projects"),
+                cx.update(|_, cx| ThreadMetadataStore::global(cx).read(cx).task_organization(other)))
+        });
+    cx.simulate_click(unread.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx)
+            .read(cx)
+            .task_organization(other)
+            .unread
+    }));
+    assert!(!cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx)
+            .read(cx)
+            .task_organization(active)
+            .unread
+    }));
+    cx.update(|window, _| window.blur());
+    let mut keyboard_focus = None;
+    for _ in 0..40 {
+        let before = cx.update(|window, cx| {
+            window.focus_next(cx);
+            window.focused(cx)
+        });
+        cx.simulate_keystrokes("shift-f10");
+        for _ in 0..3 {
+            cx.update(|window, cx| {
+                window.simulate_next_frame(cx);
+            });
+            cx.run_until_parked();
+        }
+        if cx.debug_bounds("MENU_ITEM-Mark as read").is_some() {
+            keyboard_focus = before;
+            break;
+        }
+        if cx.debug_bounds("MENU_ITEM-Pin").is_some() {
+            cx.simulate_keystrokes("escape");
+            cx.run_until_parked();
+        }
+    }
+    let keyboard_focus = keyboard_focus.expect("keyboard opening on the non-active unread task");
+    for key in ["end", "up", "enter"] {
+        cx.simulate_keystrokes(key);
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+    for _ in 0..3 {
+        cx.update(|window, cx| window.simulate_next_frame(cx));
+        cx.run_until_parked();
+    }
+    assert!(
+        cx.debug_bounds("MENU_ITEM-Remove from menu-project")
+            .is_some(),
+        "keyboard traversal must open the association submenu: {:?}",
+        cx.update(|window, _| window.debug_a11y_tree_json())
+    );
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    assert_eq!(
+        cx.update(|window, cx| window.focused(cx)),
+        Some(keyboard_focus)
+    );
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let row = cx.debug_bounds(row_selector).unwrap();
+    cx.simulate_mouse_down(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    for _ in 0..3 {
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+    }
+    let projects_menu = cx
+        .debug_bounds("MENU_SUBMENU-Projects")
+        .expect("project association submenu");
+    cx.simulate_click(projects_menu.center(), gpui::Modifiers::default());
+    for _ in 0..3 {
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+    }
+    let remove = cx
+        .debug_bounds("MENU_ITEM-Remove from menu-project")
+        .unwrap_or_else(|| {
+            panic!(
+                "remove organizational association: {:?}",
+                cx.update(|window, _| window.debug_a11y_tree_json())
+            )
+        });
+    cx.simulate_click(remove.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx)
+            .read(cx)
+            .task_projects(other)
+            .is_empty()
+    }));
+    assert_eq!(
+        cx.update(|_, cx| ThreadMetadataStore::global(cx)
+            .read(cx)
+            .entry(other)
+            .unwrap()
+            .worktree_paths
+            .clone()),
+        project.read_with(cx, |project, cx| project.worktree_paths(cx))
+    );
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let row = cx.debug_bounds(row_selector).unwrap();
+    cx.simulate_mouse_down(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    for _ in 0..3 {
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+        });
+        cx.run_until_parked();
+    }
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    assert!(cx.debug_bounds("MENU_ITEM-Pin").is_none());
+    assert_eq!(
+        workspace.read_with(cx, |workspace, _| workspace
+            .collaborative_navigation()
+            .current()
+            .cloned()),
+        Some(active_target)
+    );
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let row = cx.debug_bounds(row_selector).expect("target still visible");
+    cx.simulate_mouse_down(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.simulate_mouse_up(
+        row.center(),
+        gpui::MouseButton::Right,
+        gpui::Modifiers::default(),
+    );
+    cx.run_until_parked();
+    let pin = cx
+        .debug_bounds("MENU_ITEM-Pin")
+        .expect("menu opened before deletion");
+    cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx).update(cx, |store, cx| {
+            let metadata = store.entry(other).expect("target metadata").clone();
+            store
+                .begin_task_deletion(other, &metadata.session_id, &metadata.agent_id, cx)
+                .expect("begin concurrent deletion");
+        });
+    });
+    cx.simulate_click(pin.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert!(
+        !workspace.read_with(cx, |workspace, _| workspace
+            .collaborative_navigation()
+            .is_pinned(&other_target)),
+        "a previously opened menu cannot mutate a task being deleted"
+    );
+    cx.update(|_, cx| {
+        ThreadMetadataStore::global(cx)
+            .update(cx, |store, cx| store.finish_task_deletion(other, cx))
+    });
+}
+
+#[cfg(feature = "multiplayer-tools")]
+#[gpui::test]
+async fn collaborative_subtasks_navigate_and_restore_disclosure(cx: &mut TestAppContext) {
+    let project = init_test_project_with_agent_panel("/subtask-project", cx).await;
+    let (multi_workspace, cx) =
+        cx.add_window_view(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let (_sidebar, panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
+    let connection = StubAgentConnection::new().with_supports_load_session(true);
+    connection.set_next_prompt_updates(vec![acp::SessionUpdate::AgentMessageChunk(
+        acp::ContentChunk::new("Parent response".into()),
+    )]);
+    open_thread_with_connection(&panel, connection, cx);
+    send_message(&panel, cx);
+    let parent_session = active_session_id(&panel, cx);
+    save_test_thread_metadata(&parent_session, &project, cx).await;
+    let parent_id = active_thread_id(&panel, cx);
+    let child_session = acp::SessionId::new("collaborative-child");
+    cx.update(|_, cx| {
+        let parent = panel.read(cx).active_agent_thread(cx).unwrap();
+        let mut call = acp::ToolCall::new("child-tool", "Check cursor invalidation")
+            .status(acp::ToolCallStatus::InProgress);
+        call.meta = Some(
+            serde_json::from_value(serde_json::json!({
+                "subagent_session_info": {"session_id": child_session, "message_start_index": 0}
+            }))
+            .unwrap(),
+        );
+        parent.update(cx, |thread, cx| {
+            thread
+                .handle_session_update(acp::SessionUpdate::ToolCall(call), cx)
+                .unwrap();
+            thread.subagent_spawned(child_session.clone(), cx);
+        });
+    });
+    cx.run_until_parked();
+    cx.dispatch_action(workspace::SwitchToCollaborativeWorkspace);
+    cx.run_until_parked();
+    let child = cx
+        .debug_bounds("COLLABORATIVE-SUBTASK-collaborative-child")
+        .expect("native ACP child should be visible under its parent");
+    cx.simulate_click(child.center(), gpui::Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(
+        panel.read_with(cx, |panel, cx| {
+            panel
+                .active_conversation_view()
+                .unwrap()
+                .read(cx)
+                .active_thread()
+                .unwrap()
+                .read(cx)
+                .thread
+                .read(cx)
+                .session_id()
+                .clone()
+        }),
+        child_session
+    );
+    let store = cx.update(|_, cx| ThreadMetadataStore::global(cx));
+    let save = store.update(cx, |store, cx| {
+        store.update_task_organization(parent_id, |state| state.subtasks_collapsed = true, cx)
+    });
+    save.await.unwrap();
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-SUBTASK-collaborative-child")
+            .is_none()
+    );
+    let save = store.update(cx, |store, cx| {
+        store.update_task_organization(parent_id, |state| state.subtasks_collapsed = false, cx)
+    });
+    save.await.unwrap();
+    cx.run_until_parked();
+    assert!(
+        cx.debug_bounds("COLLABORATIVE-SUBTASK-collaborative-child")
+            .is_some()
     );
 }

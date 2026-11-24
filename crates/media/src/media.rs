@@ -3,6 +3,9 @@
 
 mod bindings;
 
+#[cfg(feature = "collaboration")]
+pub mod collaboration;
+
 #[cfg(target_os = "macos")]
 pub mod core_media {
     #![allow(non_snake_case)]

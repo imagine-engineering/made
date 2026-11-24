@@ -123,6 +123,8 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
             items: vec![
                 MenuItem::action("New", workspace::NewFile),
                 MenuItem::action("New Window", workspace::NewWindow),
+                #[cfg(all(feature = "multiplayer-tools", feature = "agentic-tools"))]
+                MenuItem::action("Open Terminal", agent_ui::NewTerminalThread),
                 MenuItem::separator(),
                 #[cfg(not(target_os = "macos"))]
                 MenuItem::action("Open File...", workspace::OpenFiles),

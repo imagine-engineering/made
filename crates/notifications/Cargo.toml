@@ -13,6 +13,12 @@ path = "src/notifications.rs"
 doctest = false
 
 [features]
+multiplayer-tools = [
+    "dep:collaboration_domain",
+    "dep:log",
+    "dep:sha2",
+    "workspace/multiplayer-tools",
+]
 test-support = [
     "channel/test-support",
 
@@ -24,10 +30,13 @@ test-support = [
 anyhow.workspace = true
 channel.workspace = true
 client.workspace = true
+collaboration_domain = { workspace = true, optional = true }
 futures-lite.workspace = true
 component.workspace = true
 gpui.workspace = true
+log = { workspace = true, optional = true }
 rpc.workspace = true
+sha2 = { workspace = true, optional = true }
 sum_tree.workspace = true
 time.workspace = true
 ui.workspace = true

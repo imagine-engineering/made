@@ -13,10 +13,12 @@ path = "src/audio.rs"
 doctest = false
 
 [features]
+multiplayer-tools = ["dep:collaboration_domain"]
 
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
+collaboration_domain = { workspace = true, optional = true }
 cpal.workspace = true
 crossbeam.workspace = true
 gpui.workspace = true

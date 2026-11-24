@@ -1,0 +1,122 @@
+{{- if .Values.deployment.enabled }}
+{{- include "collaborationPush.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "collaborationPush.name" . }}
+  labels: {{- include "collaborationPush.runtimeLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.deployment.replicaCount }}
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 120
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector:
+    matchLabels: {{- include "collaborationPush.runtimeLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "collaborationPush.runtimeLabels" . | nindent 8 }}
+      annotations:
+        collaboration.zed.dev/config-checksum: {{ toJson (dict "runtimeSecret" .Values.runtimeSecret "appAttest" .Values.appAttest "profiles" .Values.profiles "limits" .Values.limits "schema" .Values.migration.requiredSchemaVersion) | sha256sum }}
+        collaboration.zed.dev/rollback: {{ .Values.rollback.enabled | quote }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: {{ include "collaborationPush.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports:
+            - { name: public, containerPort: 8080, protocol: TCP }
+            - { name: health, containerPort: 8081, protocol: TCP }
+          env:
+            - { name: ZED_PUSH_BIND_ADDR, value: "0.0.0.0:8080" }
+            - { name: ZED_PUSH_HEALTH_ADDR, value: "0.0.0.0:8081" }
+            - { name: ZED_PUSH_PUBLIC_DELIVERY_URL, value: {{ .Values.publicDeliveryUrl | quote }} }
+            - { name: ZED_PUSH_REQUIRED_SCHEMA_VERSION, value: {{ .Values.migration.requiredSchemaVersion | quote }} }
+            - { name: ZED_PUSH_PUBLIC_BODY_BYTES, value: {{ .Values.limits.publicBodyBytes | quote }} }
+            - { name: ZED_PUSH_PUBLIC_CONCURRENCY, value: {{ .Values.limits.publicConcurrency | quote }} }
+            - { name: ZED_PUSH_PUBLIC_REQUEST_TIMEOUT_SECONDS, value: {{ .Values.limits.publicRequestTimeoutSeconds | quote }} }
+            - { name: ZED_PUSH_CLAIM_BATCH_SIZE, value: {{ .Values.limits.claimBatchSize | quote }} }
+            - { name: ZED_PUSH_CLAIM_TTL_SECONDS, value: {{ .Values.limits.claimTtlSeconds | quote }} }
+            - { name: ZED_PUSH_MAXIMUM_ATTEMPTS, value: {{ .Values.limits.maximumAttempts | quote }} }
+            - { name: ZED_PUSH_APP_ATTEST_APP_ID, value: {{ .Values.appAttest.appIdentifier | quote }} }
+            - { name: ZED_PUSH_APP_ATTEST_ROOT_CERT_PATH, value: /run/zed/app-attest/root.pem }
+            - name: ZED_PUSH_ENABLED_PROFILES
+              value: {{ join "," (compact (list (ternary .Values.profiles.production.identifier "" .Values.profiles.production.enabled) (ternary .Values.profiles.sandbox.identifier "" .Values.profiles.sandbox.enabled))) | quote }}
+            {{- range $name, $key := dict "DATABASE_URL" .Values.runtimeSecret.databaseUrlKey "ZED_PUSH_GRANT_KEYS" .Values.runtimeSecret.grantKeysKey "ZED_PUSH_TOKEN_KEYS" .Values.runtimeSecret.tokenKeysKey }}
+            - name: {{ $name }}
+              valueFrom: { secretKeyRef: { name: {{ $.Values.runtimeSecret.name }}, key: {{ $key }} } }
+            {{- end }}
+            {{- if .Values.profiles.production.enabled }}
+            {{- range $name, $key := dict "ZED_PUSH_APNS_PRODUCTION_KEY_ID" .Values.profiles.production.keyIdSecretKey "ZED_PUSH_APNS_PRODUCTION_TEAM_ID" .Values.profiles.production.teamIdSecretKey "ZED_PUSH_APNS_PRODUCTION_TOPIC" .Values.profiles.production.topicSecretKey }}
+            - name: {{ $name }}
+              valueFrom: { secretKeyRef: { name: {{ $.Values.profiles.production.configurationSecretName }}, key: {{ $key }} } }
+            {{- end }}
+            - { name: ZED_PUSH_APNS_PRODUCTION_KEY_PATH, value: /run/zed/apns-production/provider.p8 }
+            {{- end }}
+            {{- if .Values.profiles.sandbox.enabled }}
+            {{- range $name, $key := dict "ZED_PUSH_APNS_SANDBOX_KEY_ID" .Values.profiles.sandbox.keyIdSecretKey "ZED_PUSH_APNS_SANDBOX_TEAM_ID" .Values.profiles.sandbox.teamIdSecretKey "ZED_PUSH_APNS_SANDBOX_TOPIC" .Values.profiles.sandbox.topicSecretKey }}
+            - name: {{ $name }}
+              valueFrom: { secretKeyRef: { name: {{ $.Values.profiles.sandbox.configurationSecretName }}, key: {{ $key }} } }
+            {{- end }}
+            - { name: ZED_PUSH_APNS_SANDBOX_KEY_PATH, value: /run/zed/apns-sandbox/provider.p8 }
+            {{- end }}
+          volumeMounts:
+            - { name: app-attest-root, mountPath: /run/zed/app-attest, readOnly: true }
+            - { name: temporary, mountPath: /tmp }
+            {{- if .Values.profiles.production.enabled }}
+            - { name: apns-production-key, mountPath: /run/zed/apns-production, readOnly: true }
+            {{- end }}
+            {{- if .Values.profiles.sandbox.enabled }}
+            - { name: apns-sandbox-key, mountPath: /run/zed/apns-sandbox, readOnly: true }
+            {{- end }}
+          livenessProbe:
+            httpGet: { path: /_liveness, port: health }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /_readiness, port: health }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet: { path: /_liveness, port: health }
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 60
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: app-attest-root
+          secret: { secretName: {{ .Values.appAttest.rootCertificateSecretName }}, items: [{ key: {{ .Values.appAttest.rootCertificateSecretKey }}, path: root.pem }] }
+        - name: temporary
+          emptyDir: { sizeLimit: 16Mi }
+        {{- if .Values.profiles.production.enabled }}
+        - name: apns-production-key
+          secret: { secretName: {{ .Values.profiles.production.credentialSecretName }}, items: [{ key: {{ .Values.profiles.production.credentialSecretKey }}, path: provider.p8 }] }
+        {{- end }}
+        {{- if .Values.profiles.sandbox.enabled }}
+        - name: apns-sandbox-key
+          secret: { secretName: {{ .Values.profiles.sandbox.credentialSecretName }}, items: [{ key: {{ .Values.profiles.sandbox.credentialSecretKey }}, path: provider.p8 }] }
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "collaborationPush.runtimeLabels" . | nindent 14 }}
+{{- end }}

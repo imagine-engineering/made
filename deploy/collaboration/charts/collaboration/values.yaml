@@ -1,0 +1,157 @@
+deployment:
+  enabled: false
+  production: false
+  replicaCount: 2
+
+image:
+  repository: ghcr.io/zed-industries/collaboration
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+publicUrl: ""
+environment: development
+
+nostrHttp:
+  enabled: false
+  routes: []
+  callsPerMinute: null
+  closedWebsocket: null
+
+runtimeSecret:
+  name: ""
+  databaseUrlKey: COLLABORATION_DATABASE_URL
+  readDatabaseUrlKey: COLLABORATION_READ_DATABASE_URL
+  redisUrlKey: COLLABORATION_REDIS_URL
+  objectAccessKeyKey: COLLABORATION_OBJECT_ACCESS_KEY
+  objectSecretKeyKey: COLLABORATION_OBJECT_SECRET_KEY
+  gitHookSecretKey: COLLABORATION_GIT_HOOK_SECRET
+  internalApiKeyKey: ZED_CLOUD_INTERNAL_API_KEY
+  pushCredentialKey: COLLABORATION_PUSH_CREDENTIAL
+  meshTrustRootKey: COLLABORATION_RELAY_MESH_TRUST_ROOT
+
+migration:
+  enabled: true
+  image:
+    repository: ghcr.io/zed-industries/collaboration-migrations
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  secretName: ""
+  databaseUrlKey: COLLABORATION_DATABASE_URL
+  requiredSchemaVersion: "20261026000100"
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi, ephemeral-storage: 32Mi }
+    limits: { cpu: "1", memory: 512Mi, ephemeral-storage: 128Mi }
+
+rollback:
+  enabled: false
+  targetImageDigest: ""
+  maximumSchemaVersion: "0"
+
+objectStore:
+  endpoint: ""
+  region: us-east-1
+  bucket: collaboration
+  addressingStyle: virtual-hosted
+
+redis:
+  enabled: true
+
+git:
+  repositoryPath: /var/lib/collaboration/git
+
+push:
+  enabled: false
+  url: ""
+
+pairing:
+  enabled: false
+  url: ""
+
+relayMesh:
+  enabled: false
+  peers: []
+
+service:
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hostname: ""
+  tlsSecretName: ""
+
+httpRoute:
+  enabled: false
+  parentRefs: []
+  hostnames: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  websocketMetric:
+    enabled: false
+    name: collaboration_active_connections
+    averageValue: "500"
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+persistence:
+  git:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessMode: ReadWriteMany
+    size: 20Gi
+
+networkPolicy:
+  enabled: true
+  ingress:
+    namespaceSelector:
+      kubernetes.io/metadata.name: ingress-system
+    podSelector:
+      app.kubernetes.io/component: controller
+  monitoring:
+    enabled: false
+    namespaceSelector: {}
+    podSelector: {}
+  dns:
+    namespaceSelector:
+      kubernetes.io/metadata.name: kube-system
+    podSelector:
+      k8s-app: kube-dns
+  postgresEgressCidrs: []
+  redisEgressCidrs: []
+  objectStoreEgressCidrs: []
+  optionalHttpsEgressCidrs: []
+
+podMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 15s
+  labels: {}
+
+resources:
+  requests: { cpu: 250m, memory: 512Mi, ephemeral-storage: 128Mi }
+  limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi }
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

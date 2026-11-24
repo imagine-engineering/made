@@ -1,9 +1,9 @@
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use axum::headers::HeaderMapExt;
 use axum::{
     Extension, Router,
     extract::MatchedPath,
-    http::{Request, Response},
+    http::{HeaderMap, Request, Response},
     routing::get,
 };
 
@@ -59,6 +59,9 @@ async fn main() -> Result<()> {
             let mut app = Router::new()
                 .route("/", get(handle_root))
                 .route("/healthz", get(handle_liveness_probe))
+                .merge(collab::compatibility::http_router(Arc::new(
+                    collab::compatibility::CompatibilityPolicy::current(),
+                )))
                 .layer(Extension(mode));
 
             let listener = TcpListener::bind(format!("0.0.0.0:{}", config.http_port))
@@ -90,6 +93,38 @@ async fn main() -> Result<()> {
                     app = app
                         .merge(collab::api::events::router())
                         .merge(collab::api::extensions::router())
+                }
+
+                if mode.is_collab()
+                    && (state.config.collaboration_nostr_routes.is_some()
+                        || state
+                            .config
+                            .collaboration_nostr_api_calls_per_minute
+                            .is_some()
+                        || state.config.collaboration_nostr_closed_websocket == Some(true))
+                {
+                    if !matches!(
+                        &state.db.pool,
+                        sea_orm::DatabaseConnection::SqlxPostgresPoolConnection(_)
+                    ) {
+                        return Err(
+                            anyhow!("protected Nostr profile HTTP requires PostgreSQL").into()
+                        );
+                    }
+                    let database = sea_orm::DatabaseConnection::from(
+                        state.db.pool.get_postgres_connection_pool().clone(),
+                    );
+                    if let Some(profile) =
+                        collab::nostr::http::configured_profile_http_state(&state.config, database)
+                            .context("failed to configure protected Nostr profile HTTP service")?
+                    {
+                        let metadata = profile.metadata();
+                        app = app
+                            .merge(collab::nostr::http::profile_http_router(profile.clone()))
+                            .merge(collab::nostr::http::metadata_http_router(metadata.clone()))
+                            .layer(Extension(metadata))
+                            .layer(Extension(profile));
+                    }
                 }
 
                 app = app.layer(Extension(state.clone()));
@@ -183,7 +218,13 @@ async fn main() -> Result<()> {
 }
 
 async fn setup_app_database(config: &Config) -> Result<()> {
-    db::migrate_shared_schema(&config.database_url).await?;
+    let migration_pool = sqlx::PgPool::connect(&config.database_url)
+        .await
+        .context("failed to connect to PostgreSQL for collaboration migrations")?;
+    sqlx::migrate!("./migrations")
+        .run(&migration_pool)
+        .await
+        .context("failed to apply collaboration migrations")?;
 
     let db_options = db::ConnectOptions::new(config.database_url.clone());
     let mut db = Database::new(db_options).await?;
@@ -193,8 +234,28 @@ async fn setup_app_database(config: &Config) -> Result<()> {
     Ok(())
 }
 
-async fn handle_root(Extension(mode): Extension<ServiceMode>) -> String {
-    format!("zed:{mode} v{VERSION} ({})", REVISION.unwrap_or("unknown"))
+async fn handle_root(
+    Extension(mode): Extension<ServiceMode>,
+    metadata: Option<Extension<Arc<collab::nostr::http::NostrPublicMetadataHttpState>>>,
+    profile: Option<Extension<Arc<collab::nostr::http::NostrProfileHttpState>>>,
+    upgrade: Option<axum::extract::ws::WebSocketUpgrade>,
+    headers: HeaderMap,
+) -> axum::response::Response {
+    if let Some(response) = collab::nostr::http::closed_websocket_root_response(
+        profile.as_ref().map(|profile| &profile.0),
+        &headers,
+        upgrade,
+    )
+    .await
+    {
+        return response;
+    }
+    collab::nostr::http::metadata_http_root_response(
+        metadata.as_ref().map(|state| state.0.as_ref()),
+        &headers,
+        format!("zed:{mode} v{VERSION} ({})", REVISION.unwrap_or("unknown")),
+    )
+    .await
 }
 
 async fn handle_liveness_probe(app_state: Option<Extension<Arc<AppState>>>) -> Result<String> {

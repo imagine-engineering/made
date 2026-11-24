@@ -1,0 +1,49 @@
+[package]
+name = "nostr_compat"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "GPL-3.0-or-later"
+
+[package.metadata.collaboration-boundary]
+layer = "protocol-compatibility"
+allowed-normal-dependencies = [
+    "base64",
+    "chrono",
+    "collaboration_domain",
+    "hex",
+    "nostr",
+    "secp256k1",
+    "serde",
+    "serde_json",
+    "sha2",
+    "thiserror",
+    "url",
+    "uuid",
+    "zeroize",
+]
+forbidden-capabilities = ["gpui", "storage", "transport"]
+
+[lib]
+path = "src/nostr_compat.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+collaboration_domain.workspace = true
+hex.workspace = true
+nostr = { workspace = true, features = ["nip44"] }
+serde.workspace = true
+serde_json.workspace = true
+secp256k1.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+url.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

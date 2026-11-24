@@ -5,6 +5,7 @@ use gpui::{Entity, TestAppContext};
 mod auto_watch_tests;
 mod channel_buffer_tests;
 mod channel_guest_tests;
+mod channel_message_tests;
 mod channel_tests;
 mod collab_panel_tests;
 mod db_tests;

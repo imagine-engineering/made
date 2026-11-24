@@ -37,6 +37,22 @@ agentic-tools = [
     "workspace/agentic",
     "zed_actions/agentic",
 ]
+multiplayer-tools = [
+    "agentic-tools",
+    "agent/multiplayer-tools",
+    "dep:nostr_compat",
+    "agent_ui/multiplayer-tools",
+    "channel/multiplayer-tools",
+    "collab_ui/multiplayer-tools",
+    "git_ui/multiplayer-tools",
+    "onboarding/multiplayer-tools",
+    "sidebar/multiplayer-tools",
+    "tasks_ui/multiplayer-tools",
+    "title_bar/multiplayer-tools",
+    "zed_credentials_provider/multiplayer-tools",
+    "workspace/multiplayer-tools",
+]
+multiplayer-test-support = ["multiplayer-tools", "agent_ui/test-support"]
 sim = [
     "dep:graphics_ui",
     "dep:clock",
@@ -191,6 +207,7 @@ gpui_platform = {workspace = true, features=["screen-capture", "font-kit", "wayl
 hdrhistogram.workspace = true
 image = { workspace = true, optional = true }
 itertools.workspace = true
+nostr_compat = { workspace = true, optional = true }
 semver.workspace = true
 tempfile = { workspace = true, optional = true }
 clock = { workspace = true, optional = true }

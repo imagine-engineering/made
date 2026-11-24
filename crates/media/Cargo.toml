@@ -14,9 +14,19 @@ path = "src/media.rs"
 doctest = false
 
 [features]
+collaboration = [
+    "dep:collaboration_domain",
+    "dep:image",
+    "dep:sha2",
+    "dep:url",
+]
 
 [dependencies]
 anyhow.workspace = true
+collaboration_domain = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation.workspace = true

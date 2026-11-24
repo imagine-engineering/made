@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "metrics_listener": {
+    "scope": "private",
+    "path": "/metrics",
+    "scrape_interval_seconds": 30,
+    "scrape_timeout_seconds": 15,
+    "maximum_active_series_per_service": 10000
+  },
+  "logs": {
+    "format": "json",
+    "retention_days": 14,
+    "maximum_record_bytes": 65536,
+    "sample_identical_after_per_minute": 100,
+    "allowed_fields": [
+      "timestamp",
+      "level",
+      "service",
+      "deployment",
+      "region",
+      "event_class",
+      "outcome",
+      "reason",
+      "correlation_hash"
+    ],
+    "forbidden_fields": [
+      "community_id",
+      "user_id",
+      "agent_key",
+      "channel_id",
+      "job_id",
+      "event_id",
+      "request_id",
+      "repository_path",
+      "url",
+      "prompt",
+      "output",
+      "message",
+      "media",
+      "endpoint_token",
+      "secret",
+      "credential"
+    ],
+    "unknown_fields": "drop",
+    "oversized_record": "drop_and_increment_collab_log_dropped_total"
+  },
+  "labels": {
+    "allowed": [
+      "service",
+      "deployment",
+      "region",
+      "cause",
+      "reason",
+      "result",
+      "outcome",
+      "operation",
+      "resource",
+      "scope",
+      "class",
+      "dependency",
+      "enabled"
+    ],
+    "unknown": "reject_and_increment_collab_redaction_failures_total"
+  },
+  "client_telemetry": {
+    "default": "disabled",
+    "disabled_request_count": 0,
+    "server_observability_remains_enabled": true
+  }
+}

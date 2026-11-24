@@ -151,6 +151,8 @@ pub(crate) struct MessageEditorInputRevision {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MessageEditorSubmissionRevision {
     input: MessageEditorInputRevision,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_revision: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -219,6 +221,15 @@ impl PromptCompletionProviderDelegate for MessageEditorCompletionDelegate {
 pub struct MessageEditor {
     mention_set: Entity<MentionSet>,
     editor: Entity<Editor>,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_blocks: collections::HashMap<
+        editor::display_map::CustomBlockId,
+        Option<gpui::WeakEntity<crate::inline_terminal_view::InlineTerminalView>>,
+    >,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_revision: u64,
+    #[cfg(feature = "multiplayer-tools")]
+    inline_terminal_scope: Option<(crate::thread_metadata_store::ThreadId, acp::SessionId)>,
     blend_background: bool,
     workspace: WeakEntity<Workspace>,
     session_capabilities: SharedSessionCapabilities,
@@ -243,6 +254,8 @@ pub enum MessageEditorEvent {
     Focus,
     LostFocus,
     Edited,
+    #[cfg(feature = "multiplayer-tools")]
+    InlineTerminalHistoryExpanded,
     /// Emitted when the user opens slash-command autocomplete in this
     /// editor. Used by `ThreadView` to fire the global-skills scan
     /// trigger; see `NativeAgent::ensure_skills_scan_started`.
@@ -622,6 +635,12 @@ impl MessageEditor {
         Self {
             editor,
             mention_set,
+            #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_blocks: collections::HashMap::default(),
+            #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_revision: 0,
+            #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_scope: None,
             blend_background: false,
             workspace,
             session_capabilities,
@@ -638,6 +657,50 @@ impl MessageEditor {
             self.blend_background = blend;
             cx.notify();
         }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn set_inline_terminal_scope(
+        &mut self,
+        thread_id: crate::thread_metadata_store::ThreadId,
+        session_id: acp::SessionId,
+    ) {
+        self.inline_terminal_scope = Some((thread_id, session_id));
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn admits_inline_terminal_reference(
+        &self,
+        reference: &crate::terminal_thread_metadata_store::InlineTerminalPromptReference,
+        cx: &App,
+    ) -> bool {
+        let Some((thread_id, session_id)) = self.inline_terminal_scope.as_ref() else {
+            return false;
+        };
+        if thread_id != &reference.thread_id || session_id != &reference.session_id {
+            return false;
+        }
+        let Some(workspace) = self.workspace.upgrade() else {
+            return false;
+        };
+        let remote = workspace
+            .read(cx)
+            .project()
+            .read(cx)
+            .remote_connection_options(cx);
+        crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
+            .is_some_and(|store| {
+                store
+                    .read(cx)
+                    .entry(reference.terminal_id)
+                    .is_some_and(|metadata| {
+                        reference.matches_metadata(metadata)
+                            && remote::same_remote_connection_identity(
+                                metadata.remote_connection.as_ref(),
+                                remote.as_ref(),
+                            )
+                    })
+            })
     }
 
     pub fn set_local_commands(&self, commands: Vec<PromptLocalCommand>) {
@@ -756,7 +819,264 @@ impl MessageEditor {
         &self.editor
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn inline_terminal_insertion_position(
+        &self,
+        cx: &App,
+    ) -> Result<crate::terminal_thread_metadata_store::InlineTerminalDraftPosition> {
+        let editor = self.editor.read(cx);
+        let snapshot = editor.buffer().read(cx).snapshot(cx);
+        let offset = editor
+            .selections
+            .newest_anchor()
+            .head()
+            .to_offset(&snapshot)
+            .0;
+        crate::terminal_thread_metadata_store::InlineTerminalDraftPosition::new(
+            &self.text(cx),
+            offset,
+        )
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub fn mount_inline_terminal(
+        &mut self,
+        terminal_view: Entity<terminal_view::TerminalView>,
+        position: &crate::terminal_thread_metadata_store::InlineTerminalDraftPosition,
+        cx: &mut Context<Self>,
+    ) -> Result<editor::display_map::CustomBlockId> {
+        self.mount_inline_terminal_view(terminal_view, None, position, cx)
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn mount_inline_terminal_view(
+        &mut self,
+        terminal_view: Entity<terminal_view::TerminalView>,
+        inline_view: Option<Entity<crate::inline_terminal_view::InlineTerminalView>>,
+        position: &crate::terminal_thread_metadata_store::InlineTerminalDraftPosition,
+        cx: &mut Context<Self>,
+    ) -> Result<editor::display_map::CustomBlockId> {
+        use editor::display_map::{BlockId, BlockPlacement, BlockProperties, BlockStyle};
+
+        let offset = position.byte_offset_for_source(&self.text(cx))?;
+        let editor_handle = self.editor.downgrade();
+        let boundary = self
+            .editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .snapshot(cx)
+            .anchor_after(MultiBufferOffset(offset));
+        let inline_view_handle = inline_view.as_ref().map(Entity::downgrade);
+        let block_id = self.editor.update(cx, |editor, cx| {
+            editor.insert_character_block(
+                BlockProperties {
+                    placement: BlockPlacement::BelowWrappedLine(boundary),
+                    height: Some(1),
+                    style: BlockStyle::Flex,
+                    priority: 0,
+                    render: Arc::new({
+                        let terminal_view = terminal_view.clone();
+                        move |block| {
+                            let terminal_view = terminal_view.clone();
+                            let terminal_element = if let Some(inline_view) = inline_view.clone() {
+                                inline_view.into_any_element()
+                            } else if terminal_view
+                                .read(block.app)
+                                .content_mode(block.window, block.app)
+                                .is_scrollable()
+                            {
+                                div().h_72().child(terminal_view).into_any_element()
+                            } else {
+                                terminal_view.into_any_element()
+                            };
+                            let block_id = match block.block_id {
+                                BlockId::Custom(block_id) => block_id,
+                                _ => return div().into_any_element(),
+                            };
+                            let editor_for_cancel = editor_handle.clone();
+                            let editor_for_keystroke = editor_handle.clone();
+                            div()
+                                .w_full()
+                                .capture_action(
+                                    move |action: &terminal_view::SendKeystroke, window, cx| {
+                                        if action.keystroke() != "escape" {
+                                            cx.propagate();
+                                            return;
+                                        }
+                                        editor_for_keystroke
+                                            .update(cx, |editor, cx| {
+                                                editor.focus_after_character_block(
+                                                    block_id, window, cx,
+                                                )
+                                            })
+                                            .and_then(|result| result)
+                                            .log_err();
+                                        cx.stop_propagation();
+                                    },
+                                )
+                                .on_action({
+                                    let editor_handle = editor_handle.clone();
+                                    move |_: &menu::Cancel, window, cx| {
+                                        editor_handle
+                                            .update(cx, |editor, cx| {
+                                                editor.focus_after_character_block(
+                                                    block_id, window, cx,
+                                                )
+                                            })
+                                            .and_then(|result| result)
+                                            .log_err();
+                                        cx.stop_propagation();
+                                    }
+                                })
+                                .on_action(move |_: &editor::actions::Cancel, window, cx| {
+                                    editor_for_cancel
+                                        .update(cx, |editor, cx| {
+                                            editor.focus_after_character_block(block_id, window, cx)
+                                        })
+                                        .and_then(|result| result)
+                                        .log_err();
+                                    cx.stop_propagation();
+                                })
+                                .child(terminal_element)
+                                .into_any_element()
+                        }
+                    }),
+                },
+                None,
+                cx,
+            )
+        })?;
+        self.inline_terminal_blocks
+            .insert(block_id, inline_view_handle);
+        self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
+        terminal_view.update(cx, |view, cx| {
+            view.set_embedded_mode(Some(1000), cx);
+            view.set_show_workspace_actions(false, cx);
+        });
+        cx.notify();
+        Ok(block_id)
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn remove_inline_terminal(
+        &mut self,
+        block_id: editor::display_map::CustomBlockId,
+        cx: &mut Context<Self>,
+    ) {
+        if self.inline_terminal_blocks.remove(&block_id).is_some() {
+            self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
+        }
+        self.editor.update(cx, |editor, cx| {
+            editor.remove_blocks([block_id].into_iter().collect(), None, cx)
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn focus_after_inline_terminal(
+        &mut self,
+        block_id: editor::display_map::CustomBlockId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        self.editor.update(cx, |editor, cx| {
+            editor.focus_after_character_block(block_id, window, cx)
+        })
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn focus_inline_terminal(
+        &mut self,
+        block_id: editor::display_map::CustomBlockId,
+        focus_handle: &FocusHandle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.inline_terminal_blocks
+                .get(&block_id)
+                .and_then(Option::as_ref)
+                .and_then(WeakEntity::upgrade)
+                .is_some(),
+            "The inline terminal's mounted occurrence is unavailable"
+        );
+        self.inline_terminal_position(block_id, cx)?;
+        self.editor.update(cx, |editor, cx| {
+            editor.focus_character_block(block_id, focus_handle, window, cx)
+        })
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn scroll_to_inline_terminal(
+        &mut self,
+        block_id: editor::display_map::CustomBlockId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        self.editor.update(cx, |editor, cx| {
+            let row = editor
+                .row_for_block(block_id, cx)
+                .ok_or_else(|| anyhow!("The inline terminal's display position is unavailable"))?;
+            let position = editor.scroll_position(cx);
+            editor.set_scroll_position(gpui::Point::new(position.x, f64::from(row.0)), window, cx);
+            Ok(())
+        })
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn inline_terminal_positions_in_display_order(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        Vec<(
+            editor::display_map::CustomBlockId,
+            crate::terminal_thread_metadata_store::InlineTerminalDraftPosition,
+        )>,
+    > {
+        let mut positions = self
+            .inline_terminal_blocks
+            .keys()
+            .map(|block_id| Ok((*block_id, self.inline_terminal_position(*block_id, cx)?)))
+            .collect::<Result<Vec<_>>>()?;
+        let rows = self.editor.update(cx, |editor, cx| {
+            positions
+                .iter()
+                .map(|(block_id, _)| {
+                    editor
+                        .row_for_block(*block_id, cx)
+                        .map(|row| (*block_id, row.0))
+                        .ok_or_else(|| {
+                            anyhow!("The inline terminal's display position is unavailable")
+                        })
+                })
+                .collect::<Result<collections::HashMap<_, _>>>()
+        })?;
+        positions.sort_by_key(|(block_id, _)| rows.get(block_id).copied());
+        Ok(positions)
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub fn inline_terminal_position(
+        &self,
+        block_id: editor::display_map::CustomBlockId,
+        cx: &App,
+    ) -> Result<crate::terminal_thread_metadata_store::InlineTerminalDraftPosition> {
+        let editor = self.editor.read(cx);
+        let anchor = editor
+            .character_block_position(block_id, cx)
+            .ok_or_else(|| anyhow!("The inline terminal's character boundary is unavailable"))?;
+        let snapshot = editor.buffer().read(cx).snapshot(cx);
+        crate::terminal_thread_metadata_store::InlineTerminalDraftPosition::new(
+            &editor.text(cx),
+            anchor.to_offset(&snapshot).0,
+        )
+    }
+
     pub fn is_empty(&self, cx: &App) -> bool {
+        #[cfg(feature = "multiplayer-tools")]
+        if self.inline_terminal_blocks.values().any(Option::is_some) {
+            return false;
+        }
         self.editor.read(cx).text(cx).trim().is_empty()
     }
 
@@ -906,6 +1226,8 @@ impl MessageEditor {
         whitespace: ContentWhitespace,
         cx: &mut Context<Self>,
     ) -> Task<Result<(Vec<acp::ContentBlock>, Vec<Entity<Buffer>>)>> {
+        #[cfg(feature = "multiplayer-tools")]
+        let inline_positions = self.inline_terminal_positions_in_display_order(cx);
         let contents = self
             .mention_set
             .update(cx, |store, cx| store.contents(full_mention_content, cx));
@@ -916,6 +1238,49 @@ impl MessageEditor {
         let supports_embedded_context =
             self.session_capabilities.read().supports_embedded_context();
 
+        #[cfg(feature = "multiplayer-tools")]
+        let inline_contents = (|| -> Result<Vec<(usize, acp::ContentBlock)>> {
+            let mut insertions = Vec::new();
+            let mut history_owner = None;
+            let mut updates = Vec::new();
+            for (order, (block_id, position)) in inline_positions?.into_iter().enumerate() {
+                let Some(Some(view)) = self.inline_terminal_blocks.get(&block_id) else {
+                    continue;
+                };
+                let offset = position.byte_offset_for_source(&text)?;
+                anyhow::ensure!(
+                    !crease_snapshot.creases().any(|(_, crease)| {
+                        let range = crease.range().to_offset(&buffer_snapshot);
+                        range.start.0 < offset && offset < range.end.0
+                    }),
+                    "An inline terminal cannot be submitted from inside a context mention"
+                );
+                let (content, history, mut metadata) =
+                    view.read_with(cx, |view, cx| view.prompt_content(position, cx))??;
+                self.validate_inline_terminal_content(&content, cx)?;
+                if let Some(context) = metadata.inline_context.as_mut() {
+                    context.presentation_order = Some(order);
+                }
+                if let Some(owner) = &history_owner {
+                    anyhow::ensure!(
+                        owner == &history,
+                        "The terminal history owner changed during composition"
+                    );
+                } else {
+                    history_owner = Some(history);
+                }
+                updates.push(metadata);
+                insertions.push((offset, content));
+            }
+            if let Some(history) = history_owner {
+                history.update(cx, |history, cx| {
+                    history.save_inline_occurrence_batch(updates, cx)
+                })?;
+            }
+            insertions.sort_by_key(|(offset, _)| *offset);
+            Ok(insertions)
+        })();
+        #[cfg(not(feature = "multiplayer-tools"))]
         let inline_contents: Result<Vec<(usize, acp::ContentBlock)>> = Ok(Vec::new());
 
         cx.spawn(async move |_, _cx| {
@@ -953,6 +1318,9 @@ impl MessageEditor {
         let mention_set = self.mention_set.read(cx);
         let supports_embedded_context =
             self.session_capabilities.read().supports_embedded_context();
+        #[cfg(feature = "multiplayer-tools")]
+        let inline_contents = self.inline_content_snapshot(cx)?;
+        #[cfg(not(feature = "multiplayer-tools"))]
         let inline_contents = Vec::new();
         let (chunks, _tracked_buffers) = build_chunks_with_inline_context(
             &text,
@@ -966,6 +1334,49 @@ impl MessageEditor {
         Ok(chunks)
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    fn validate_inline_terminal_content(
+        &self,
+        content: &acp::ContentBlock,
+        cx: &App,
+    ) -> Result<()> {
+        let reference =
+            crate::terminal_thread_metadata_store::InlineTerminalPromptReference::from_content(
+                content,
+            )?
+            .ok_or_else(|| anyhow!("The inline terminal context is missing"))?;
+        anyhow::ensure!(
+            self.admits_inline_terminal_reference(&reference, cx),
+            "The inline terminal belongs to a different conversation"
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn inline_content_snapshot(&self, cx: &App) -> Result<Vec<(usize, acp::ContentBlock)>> {
+        let mut insertions = Vec::new();
+        let mut blocks = self.inline_terminal_blocks.iter().collect::<Vec<_>>();
+        blocks.sort_by_key(|(block_id, _)| block_id.0);
+        for (block_id, view) in blocks {
+            let Some(view) = view else { continue };
+            let position = self.inline_terminal_position(*block_id, cx)?;
+            let offset = position.byte_offset_for_source(&self.text(cx))?;
+            let (content, _, metadata) =
+                view.read_with(cx, |view, cx| view.prompt_content(position, cx))??;
+            self.validate_inline_terminal_content(&content, cx)?;
+            let order = metadata
+                .inline_context
+                .as_ref()
+                .and_then(|context| context.presentation_order);
+            insertions.push((offset, order, content));
+        }
+        insertions.sort_by_key(|(offset, order, _)| (*offset, *order));
+        Ok(insertions
+            .into_iter()
+            .map(|(offset, _, content)| (offset, content))
+            .collect())
+    }
+
     pub(crate) fn input_revision(&self, cx: &App) -> MessageEditorInputRevision {
         let buffer = self.editor.read(cx).buffer();
         MessageEditorInputRevision {
@@ -977,6 +1388,8 @@ impl MessageEditor {
     pub(crate) fn submission_revision(&self, cx: &App) -> MessageEditorSubmissionRevision {
         MessageEditorSubmissionRevision {
             input: self.input_revision(cx),
+            #[cfg(feature = "multiplayer-tools")]
+            inline_terminal_revision: self.inline_terminal_revision,
         }
     }
 
@@ -995,7 +1408,15 @@ impl MessageEditor {
     }
 
     pub fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(feature = "multiplayer-tools")]
+        let inline_terminal_blocks = std::mem::take(&mut self.inline_terminal_blocks);
+        #[cfg(feature = "multiplayer-tools")]
+        if !inline_terminal_blocks.is_empty() {
+            self.inline_terminal_revision = self.inline_terminal_revision.wrapping_add(1);
+        }
         self.editor.update(cx, |editor, cx| {
+            #[cfg(feature = "multiplayer-tools")]
+            editor.remove_blocks(inline_terminal_blocks.into_keys().collect(), None, cx);
             editor.clear(window, cx);
             editor.remove_creases(
                 self.mention_set.update(cx, |mention_set, _cx| {
@@ -1770,6 +2191,32 @@ impl MessageEditor {
         if message.is_empty() {
             return Ok(());
         }
+        #[cfg(feature = "multiplayer-tools")]
+        for chunk in &message {
+            if let Some(reference) =
+                crate::terminal_thread_metadata_store::InlineTerminalPromptReference::from_content(
+                    chunk,
+                )?
+                && self.admits_inline_terminal_reference(&reference, cx)
+            {
+                let store =
+                    crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(
+                        cx,
+                    )
+                    .ok_or_else(|| anyhow!("The queued terminal history is unavailable"))?;
+                let context = store
+                    .read(cx)
+                    .entry(reference.terminal_id)
+                    .and_then(|metadata| metadata.inline_context.as_ref())
+                    .and_then(|context| context.occurrence(reference.occurrence_id))
+                    .ok_or_else(|| anyhow!("The queued terminal conversation is unavailable"))?;
+                anyhow::ensure!(
+                    context.is_draft,
+                    "A submitted terminal cannot be moved into a draft"
+                );
+                store.read(cx).validate_inline_context(context)?;
+            }
+        }
 
         // Queued content must preserve a selection in the existing draft;
         // mention ranges are computed relative to that draft's end below.
@@ -1803,12 +2250,28 @@ impl MessageEditor {
         let path_style = workspace.read(cx).project().read(cx).path_style(cx);
         let mut text = String::new();
         let mut mentions = Vec::new();
+        #[cfg(feature = "multiplayer-tools")]
+        let mut inline_references = Vec::new();
         let append_normalized = |text: &mut String, mut segment: String| {
             LineEnding::normalize(&mut segment);
             text.push_str(&segment);
         };
 
         for chunk in message.iter().cloned() {
+            #[cfg(feature = "multiplayer-tools")]
+            match crate::terminal_thread_metadata_store::InlineTerminalPromptReference::from_content(
+                &chunk,
+            ) {
+                Ok(Some(reference))
+                    if project_inline_resources
+                        && self.admits_inline_terminal_reference(&reference, cx) =>
+                {
+                    inline_references.push((text.len(), reference));
+                    continue;
+                }
+                Err(error) => log::error!("Invalid inline terminal context: {error}"),
+                _ => {}
+            }
             match chunk {
                 acp::ContentBlock::Text(text_content) => {
                     append_normalized(&mut text, text_content.text);
@@ -1879,9 +2342,33 @@ impl MessageEditor {
             }
         }
 
+        #[cfg(feature = "multiplayer-tools")]
+        for (offset, reference) in &inline_references {
+            if !reference
+                .position
+                .byte_offset_for_source(&text)
+                .is_ok_and(|position| position == *offset)
+            {
+                log::error!(
+                    "Inline terminal context has no verified position in this message; retaining it as context"
+                );
+                self.insert_message_blocks(message, append_to_existing, false, window, cx);
+                return;
+            }
+        }
+        #[cfg(not(feature = "multiplayer-tools"))]
         let _ = project_inline_resources;
 
         if text.is_empty() && mentions.is_empty() {
+            #[cfg(feature = "multiplayer-tools")]
+            if !inline_references.is_empty() {
+                self.rebase_appended_inline_context(
+                    &inline_references,
+                    append_to_existing,
+                    self.text(cx).len(),
+                    cx,
+                );
+            }
             return;
         }
 
@@ -1902,6 +2389,14 @@ impl MessageEditor {
                 editor.buffer().read(cx).snapshot(cx)
             })
         };
+
+        #[cfg(feature = "multiplayer-tools")]
+        self.rebase_appended_inline_context(
+            &inline_references,
+            append_to_existing,
+            insertion_start,
+            cx,
+        );
 
         for (range, mention_uri, mention) in mentions {
             let adjusted_start = insertion_start + range.start;
@@ -1936,6 +2431,64 @@ impl MessageEditor {
         }
 
         cx.notify();
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn rebase_appended_inline_context(
+        &self,
+        references: &[(
+            usize,
+            crate::terminal_thread_metadata_store::InlineTerminalPromptReference,
+        )],
+        append_to_existing: bool,
+        insertion_start: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if !append_to_existing || references.is_empty() {
+            return;
+        }
+        let Some(store) =
+            crate::terminal_thread_metadata_store::TerminalThreadMetadataStore::try_global(cx)
+        else {
+            return;
+        };
+        let source = self.text(cx);
+        for (offset, reference) in references {
+            let result = (|| -> Result<()> {
+                let mut metadata = store
+                    .read(cx)
+                    .occurrence_entry(
+                        crate::terminal_thread_metadata_store::InlineTerminalOccurrenceKey {
+                            terminal_id: reference.terminal_id,
+                            occurrence_id: reference.occurrence_id,
+                        },
+                    )
+                    .ok_or_else(|| anyhow::anyhow!("The queued terminal history is unavailable"))?;
+                let context = metadata.inline_context.as_mut().ok_or_else(|| {
+                    anyhow::anyhow!("The queued terminal conversation is unavailable")
+                })?;
+                anyhow::ensure!(
+                    context.is_draft,
+                    "A submitted terminal cannot be moved into a draft"
+                );
+                let position = insertion_start
+                    .checked_add(*offset)
+                    .ok_or_else(|| anyhow::anyhow!("The queued terminal position is too large"))?;
+                context.draft_position = Some(
+                    crate::terminal_thread_metadata_store::InlineTerminalDraftPosition::new(
+                        &source, position,
+                    )?,
+                );
+                store.update(cx, |store, cx| {
+                    store.save_inline_occurrence_batch(vec![metadata], cx)
+                })
+            })();
+            if let Err(error) = result {
+                self.workspace
+                    .update(cx, |workspace, cx| workspace.show_error(error, cx))
+                    .log_err();
+            }
+        }
     }
 
     pub fn text(&self, cx: &App) -> String {
@@ -5732,6 +6285,630 @@ mod tests {
 
         cx.run_until_parked();
         (message_editor, cx)
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn inline_terminal_history_view(
+        message_editor: &Entity<MessageEditor>,
+        cx: &mut VisualTestContext,
+    ) -> Entity<terminal_view::TerminalView> {
+        use settings::Settings as _;
+        cx.update(|window, cx| {
+            let workspace = message_editor
+                .read(cx)
+                .workspace
+                .upgrade()
+                .expect("workspace");
+            let project = workspace.read(cx).project().clone();
+            let settings = terminal::terminal_settings::TerminalSettings::get_global(cx);
+            let builder = terminal::TerminalBuilder::new_display_only(
+                settings.cursor_shape,
+                settings.alternate_scroll,
+                settings.max_scroll_history_lines,
+                window.window_handle().window_id().as_u64(),
+                cx.background_executor(),
+                project.read(cx).path_style(cx),
+            );
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+            terminal.update(cx, |terminal, cx| {
+                terminal.write_output(b"\x1b[31mretained output\x1b[0m\r\n", cx)
+            });
+            cx.new(|cx| {
+                terminal_view::TerminalView::new(
+                    terminal,
+                    workspace.downgrade(),
+                    None,
+                    project.downgrade(),
+                    window,
+                    cx,
+                )
+            })
+        })
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_context_projection_is_conversation_bound_and_rebases_queued_append(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::{
+            InlineTerminalContext, InlineTerminalDraftPosition, InlineTerminalPromptReference,
+            TerminalThreadMetadata, TerminalThreadMetadataStore,
+        };
+        use crate::thread_metadata_store::{ThreadId, WorktreePaths};
+        init_test(cx);
+        cx.update(|cx| TerminalThreadMetadataStore::init_global(cx));
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let terminal_id = crate::TerminalId::new();
+        let thread_id = ThreadId::new();
+        let session_id = acp::SessionId::new("inline-context-session");
+        let reference = InlineTerminalPromptReference {
+            occurrence_id: None,
+
+            terminal_id,
+            thread_id,
+            session_id: session_id.clone(),
+            position: InlineTerminalDraftPosition::new("AλB", 3).expect("Unicode source boundary"),
+        };
+        let resource = reference
+            .content("actual retained fixture output".into())
+            .expect("resource");
+        let content = vec!["Aλ".into(), resource.clone(), "B".into()];
+        message_editor.update_in(cx, |editor, window, cx| {
+            let store = TerminalThreadMetadataStore::global(cx);
+            store
+                .update(cx, |store, cx| {
+                    store.save_inline(
+                        TerminalThreadMetadata {
+                            terminal_id,
+                            title: "Fixture terminal".into(),
+                            custom_title: None,
+                            created_at: chrono::Utc::now(),
+                            worktree_paths: WorktreePaths::from_folder_paths(
+                                &workspace::PathList::new(&[PathBuf::from("/project")]),
+                            ),
+                            remote_connection: None,
+                            working_directory: None,
+                            inline_context: Some(InlineTerminalContext {
+                                occurrence_id: None,
+                                previous_occurrences: Vec::new(),
+
+                                thread_id,
+                                session_id: Some(session_id.clone()),
+                                restored_draft_source_session_id: None,
+                                preceding_entry_count: 0,
+                                message_client_id: None,
+                                is_draft: true,
+                                presentation_order: None,
+                                draft_position: Some(reference.position.clone()),
+                                collapsed: false,
+                                output: "actual retained fixture output".into(),
+                                snapshot: None,
+                            }),
+                        },
+                        cx,
+                    )
+                })
+                .expect("canonical history admission");
+            editor.set_inline_terminal_scope(ThreadId::new(), session_id.clone());
+            assert!(
+                editor
+                    .validate_inline_terminal_content(&resource, cx)
+                    .is_err()
+            );
+            editor.set_message(content.clone(), window, cx);
+            assert!(
+                editor.text(cx).contains("zed:///agent/terminal-selection"),
+                "foreign conversation must retain a visible context mention"
+            );
+            editor.set_inline_terminal_scope(thread_id, session_id.clone());
+            assert!(
+                editor
+                    .validate_inline_terminal_content(&resource, cx)
+                    .is_ok()
+            );
+            editor.set_message(content.clone(), window, cx);
+            assert_eq!(editor.text(cx), "AλB");
+            editor.set_text("X", window, cx);
+            editor
+                .append_message(content.clone(), Some("\n\n"), window, cx)
+                .expect("append must preserve pending content");
+            assert_eq!(editor.text(cx), "X\n\nAλB");
+            let metadata = store
+                .read(cx)
+                .entry(terminal_id)
+                .expect("retained metadata");
+            assert_eq!(
+                metadata
+                    .inline_context
+                    .as_ref()
+                    .expect("inline context")
+                    .draft_position
+                    .as_ref()
+                    .expect("rebased position")
+                    .byte_offset_for_source("X\n\nAλB")
+                    .expect("new source identity"),
+                6
+            );
+            editor.set_message(vec!["changed".into(), resource], window, cx);
+            assert!(
+                editor.text(cx).contains("zed:///agent/terminal-selection"),
+                "invalid source identity must preserve context instead of hiding it"
+            );
+            editor.set_text("PRESERVED_DRAFT", window, cx);
+            store.read(cx).close_write_queue_for_test();
+            assert!(
+                editor
+                    .append_message(content, Some("\n\n"), window, cx)
+                    .is_err()
+            );
+            assert_eq!(
+                editor.text(cx),
+                "PRESERVED_DRAFT",
+                "failed history preflight must precede any draft edit"
+            );
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_restored_inline_terminal_output_accepts_pointer_and_keyboard_selection(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::InlineTerminalDraftPosition;
+        use gpui::BorrowAppContext as _;
+
+        init_test(cx);
+        cx.update(|cx| {
+            cx.update_global::<settings::SettingsStore, _>(|store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.workspace.workspace_presentation =
+                        Some(workspace::WorkspacePresentation::Editor);
+                });
+            });
+        });
+        cx.update(|cx| {
+            let mut bindings = settings::KeymapFile::load_asset_allow_partial_failure(
+                "keymaps/default-macos.json",
+                cx,
+            )
+            .expect("canonical macOS bindings");
+            for binding in &mut bindings {
+                binding.set_meta(settings::KeybindSource::Default.meta());
+            }
+            cx.bind_keys(bindings);
+        });
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let source_view = inline_terminal_history_view(&message_editor, cx);
+        let source_terminal = source_view.read_with(cx, |view, _| view.terminal().clone());
+        source_terminal.update(cx, |terminal, cx| {
+            terminal.write_output(b"\x1b[2J\x1b[H\x1b[31m78876\x1b[0m", cx);
+        });
+        cx.run_until_parked();
+        let snapshot = source_terminal.read_with(cx, |terminal, _| {
+            assert!(!terminal.is_pty());
+            terminal.snapshot().expect("canonical frozen grid capture")
+        });
+        let encoded = serde_json::to_vec(&snapshot).expect("persist canonical snapshot");
+        let restored_snapshot: terminal::TerminalSnapshot =
+            serde_json::from_slice(&encoded).expect("reload canonical snapshot");
+        restored_snapshot.validate().expect("valid retained grid");
+        assert_eq!(snapshot, restored_snapshot);
+
+        let view = inline_terminal_history_view(&message_editor, cx);
+        let terminal = view.read_with(cx, |view, _| view.terminal().clone());
+        terminal.update(cx, |terminal, cx| {
+            terminal
+                .restore_snapshot(&restored_snapshot, cx)
+                .expect("restore into fresh display-only terminal");
+            assert!(!terminal.is_pty());
+            assert!(terminal.take_input_log().is_empty());
+            assert!(terminal.take_pty_write_log().is_empty());
+        });
+        let workspace = message_editor.read_with(cx, |editor, _| {
+            editor.workspace.upgrade().expect("workspace")
+        });
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.active_pane().update(cx, |pane, cx| {
+                pane.add_item(
+                    Box::new(cx.new(|_| MessageEditorItem(message_editor.clone()))),
+                    true,
+                    true,
+                    None,
+                    window,
+                    cx,
+                );
+            });
+        });
+        workspace.read_with(cx, |workspace, cx| {
+            assert_eq!(
+                workspace.workspace_presentation(),
+                workspace::WorkspacePresentation::Editor,
+                "component fixture must render its actual center pane"
+            );
+            let active = workspace.active_item(cx).expect("active component item");
+            let item = active
+                .act_as::<MessageEditorItem>(cx)
+                .expect("actual active MessageEditorItem");
+            assert_eq!(item.read(cx).0.entity_id(), message_editor.entity_id());
+        });
+        let draft = "PREFIXλSUFFIX";
+        message_editor.update_in(cx, |editor, window, cx| {
+            editor
+                .session_capabilities
+                .write()
+                .set_prompt_capabilities(acp::PromptCapabilities::new().embedded_context(true));
+            assert!(
+                editor
+                    .session_capabilities
+                    .read()
+                    .supports_embedded_context()
+            );
+            editor.set_text(draft, window, cx);
+            let position = InlineTerminalDraftPosition::new(draft, "PREFIXλ".len())
+                .expect("source-bound Unicode insertion position");
+            editor
+                .mount_inline_terminal(view.clone(), &position, cx)
+                .expect("mount actual terminal in canonical character block");
+        });
+        view.update(cx, |view, cx| view.set_embedded_read_only(true, cx));
+        cx.simulate_resize(gpui::size(gpui::px(900.), gpui::px(600.)));
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx);
+        });
+        message_editor.update(cx, |editor, _cx| {
+            let block_ids = editor
+                .inline_terminal_blocks
+                .keys()
+                .copied()
+                .collect::<Vec<_>>();
+            assert_eq!(block_ids.len(), 1, "one canonical inline block");
+        });
+        let editor_bounds = message_editor.read_with(cx, |editor, cx| {
+            editor
+                .editor
+                .read(cx)
+                .last_bounds()
+                .cloned()
+                .expect("mounted editor viewport")
+        });
+        let (pointer, before_output, before_snapshot) =
+            terminal.update_in(cx, |terminal, window, cx| {
+                terminal.sync(window, cx);
+                assert!(!terminal.is_pty());
+                let content = terminal.last_content();
+                let bounds = content.terminal_bounds;
+                assert!(bounds.cell_width > gpui::px(0.));
+                assert!(bounds.line_height > gpui::px(0.));
+                assert!(bounds.bounds.size.width > gpui::px(0.));
+                assert!(bounds.bounds.size.height > gpui::px(0.));
+                let mut first_line = content
+                    .cells
+                    .iter()
+                    .filter(|cell| cell.point.line == 0 && cell.point.column < 5)
+                    .collect::<Vec<_>>();
+                first_line.sort_by_key(|cell| cell.point.column);
+                let rendered_text = first_line
+                    .iter()
+                    .map(|cell| cell.cell.character())
+                    .collect::<String>();
+                assert_eq!(rendered_text, "78876", "measured retained glyphs");
+                assert_eq!(content.cursor.point.line, 0);
+                assert_eq!(content.cursor.point.column, 5);
+                assert!(content.selection_text.is_none());
+                let pointer = bounds.bounds.origin
+                    + gpui::point(bounds.cell_width * 5., bounds.line_height * 0.5);
+                assert!(bounds.bounds.contains(&pointer));
+                assert!(editor_bounds.contains(&pointer));
+                (
+                    pointer,
+                    terminal.get_content(),
+                    terminal.snapshot().expect("mounted frozen grid baseline"),
+                )
+            });
+        view.read_with(cx, |view, _| assert!(view.is_read_only()));
+        let view_bounds = cx
+            .debug_bounds("terminal-view")
+            .expect("actual rendered terminal subtree");
+        assert!(view_bounds.contains(&pointer));
+
+        cx.write_to_clipboard(ClipboardItem::new_string("BEFORE_OUTPUT_SELECTION".into()));
+        cx.simulate_click(pointer, gpui::Modifiers::default());
+        cx.run_until_parked();
+        let pointer_focus = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.focused(cx)
+        });
+        cx.simulate_keystrokes("shift-left shift-left shift-left");
+        cx.run_until_parked();
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let terminal_selection = terminal.read_with(cx, |terminal, _| {
+            terminal.last_content().selection_text.clone()
+        });
+        cx.simulate_keystrokes("cmd-c");
+        cx.run_until_parked();
+        let clipboard_text =
+            cx.read_from_clipboard()
+                .and_then(|item| match item.entries().first().cloned() {
+                    Some(ClipboardEntry::String(entry)) => Some(entry.text().to_string()),
+                    _ => None,
+                });
+        assert_eq!(
+            clipboard_text.as_deref(),
+            Some("876"),
+            "actual output ShiftLeft selection and Copy; pointer focus {pointer_focus:?}, terminal selection {terminal_selection:?}"
+        );
+        terminal.update_in(cx, |terminal, window, cx| {
+            terminal.sync(window, cx);
+            assert_eq!(terminal.get_content(), before_output);
+            assert_eq!(
+                terminal.snapshot().expect("selected retained grid"),
+                before_snapshot,
+                "selection must not mutate retained terminal cells"
+            );
+            assert!(!terminal.is_pty());
+            assert!(terminal.take_input_log().is_empty());
+            assert!(terminal.take_pty_write_log().is_empty());
+        });
+        view.read_with(cx, |view, _| assert!(view.is_read_only()));
+        message_editor.read_with(cx, |editor, cx| {
+            assert_eq!(
+                editor.text(cx),
+                draft,
+                "output selection preserves the draft"
+            );
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_terminal_mount_rejects_changed_draft_before_mutation(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::InlineTerminalDraftPosition;
+        init_test(cx);
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let view = inline_terminal_history_view(&message_editor, cx);
+        let position = InlineTerminalDraftPosition::new("λ🦀", 2).expect("position");
+        message_editor.update_in(cx, |editor, window, cx| {
+            editor.set_text("later draft", window, cx);
+            let snapshot = editor
+                .editor
+                .update(cx, |editor, cx| editor.display_snapshot(cx));
+            let before = snapshot
+                .blocks_in_range(
+                    editor::display_map::DisplayRow(0)..editor::display_map::DisplayRow(u32::MAX),
+                )
+                .count();
+            assert!(
+                editor
+                    .mount_inline_terminal(view.clone(), &position, cx)
+                    .is_err()
+            );
+            assert_eq!(editor.text(cx), "later draft");
+            let snapshot = editor
+                .editor
+                .update(cx, |editor, cx| editor.display_snapshot(cx));
+            assert_eq!(
+                snapshot
+                    .blocks_in_range(
+                        editor::display_map::DisplayRow(0)
+                            ..editor::display_map::DisplayRow(u32::MAX)
+                    )
+                    .count(),
+                before
+            );
+        });
+        view.read_with(cx, |view, cx| assert!(!view.terminal().read(cx).is_pty()));
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_terminal_escape_returns_suffix_without_forwarding_to_terminal(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::InlineTerminalDraftPosition;
+        init_test(cx);
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let view = inline_terminal_history_view(&message_editor, cx);
+        let terminal = view.read_with(cx, |view, _| view.terminal().clone());
+        let workspace = message_editor.read_with(cx, |editor, _| {
+            editor.workspace.upgrade().expect("workspace")
+        });
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.active_pane().update(cx, |pane, cx| {
+                pane.add_item(
+                    Box::new(cx.new(|_| MessageEditorItem(message_editor.clone()))),
+                    true,
+                    true,
+                    None,
+                    window,
+                    cx,
+                );
+            });
+        });
+        message_editor.update_in(cx, |editor, window, cx| {
+            editor.set_text("AB", window, cx);
+            let position = InlineTerminalDraftPosition::new("AB", 1).expect("position");
+            editor
+                .mount_inline_terminal(view.clone(), &position, cx)
+                .expect("real view mount");
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            view.focus_handle(cx).focus(window, cx);
+            window.draw(cx).clear(cx);
+            assert!(view.focus_handle(cx).is_focused(window));
+        });
+        let arrow: terminal_view::SendKeystroke =
+            serde_json::from_value(json!("up")).expect("canonical terminal action");
+        cx.dispatch_action(arrow);
+        let input = terminal.update(cx, |terminal, _| terminal.take_input_log());
+        assert!(
+            !input.is_empty(),
+            "ordinary terminal keys must reach the existing terminal owner"
+        );
+        let escape: terminal_view::SendKeystroke =
+            serde_json::from_value(json!("escape")).expect("canonical Escape action");
+        cx.dispatch_action(escape);
+        assert!(
+            terminal
+                .update(cx, |terminal, _| terminal.take_input_log())
+                .is_empty(),
+            "inline Escape must return to the draft instead of writing to the terminal"
+        );
+        message_editor.update_in(cx, |editor, window, cx| {
+            assert!(
+                editor.focus_handle(cx).is_focused(window),
+                "Escape focuses the actual editor"
+            );
+            editor
+                .editor
+                .update(cx, |editor, cx| editor.handle_input("X", window, cx));
+            assert_eq!(editor.text(cx), "AXB");
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_terminal_scroll_reentry_after_retained_character_block(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::InlineTerminalDraftPosition;
+        init_test(cx);
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let retained = inline_terminal_history_view(&message_editor, cx);
+        let next = inline_terminal_history_view(&message_editor, cx);
+        message_editor.update_in(cx, |editor, window, cx| {
+            editor.set_text("AB", window, cx);
+            let first = editor
+                .mount_inline_terminal(
+                    retained,
+                    &InlineTerminalDraftPosition::new("AB", 1).expect("first boundary"),
+                    cx,
+                )
+                .expect("retained terminal");
+            let second = editor
+                .mount_inline_terminal(
+                    next,
+                    &InlineTerminalDraftPosition::new("AB", 2).expect("following boundary"),
+                    cx,
+                )
+                .expect("new terminal after retained history");
+            editor.editor.update(cx, |editor, cx| {
+                let first_row = editor.row_for_block(first, cx).expect("first display row");
+                let second_row = editor
+                    .row_for_block(second, cx)
+                    .expect("second display row");
+                assert!(first_row < second_row, "terminal rows follow source order");
+            });
+            for block_id in [first, second] {
+                editor
+                    .scroll_to_inline_terminal(block_id, window, cx)
+                    .expect("every inline block has a reachable display row");
+            }
+            editor
+                .focus_after_inline_terminal(second, window, cx)
+                .expect("following draft focus");
+            editor.editor.update(cx, |editor, cx| {
+                assert!(editor.focus_handle(cx).is_focused(window));
+                editor.handle_input("C", window, cx);
+            });
+            assert_eq!(editor.text(cx), "ABC");
+            assert_eq!(
+                editor
+                    .inline_terminal_position(second, cx)
+                    .expect("second position")
+                    .byte_offset_for_source("ABC")
+                    .expect("moving source"),
+                2
+            );
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_terminal_real_view_keeps_moving_source_and_suffix_focus(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::InlineTerminalDraftPosition;
+        use collections::HashSet;
+        init_test(cx);
+        let (message_editor, cx) = setup_message_editor(cx).await;
+        let view = inline_terminal_history_view(&message_editor, cx);
+        let terminal_id = view.read_with(cx, |view, _| view.terminal().entity_id());
+        for (source, offset, suffix_source) in [("", 0, "X"), ("AB", 1, "AXB"), ("λ🦀", 2, "λX🦀")]
+        {
+            message_editor.update_in(cx, |editor, window, cx| {
+                editor.set_text(source, window, cx);
+                let position = InlineTerminalDraftPosition::new(source, offset).expect("position");
+                let block_id = editor
+                    .mount_inline_terminal(view.clone(), &position, cx)
+                    .expect("real view mount");
+                assert_eq!(
+                    editor.text(cx),
+                    source,
+                    "mounting a terminal cannot insert transcript or sentinel text into the draft"
+                );
+                editor.editor.update(cx, |editor, cx| {
+                    editor
+                        .focus_after_character_block(block_id, window, cx)
+                        .expect("suffix focus");
+                    editor.handle_input("X", window, cx);
+                });
+                assert_eq!(editor.text(cx), suffix_source);
+                assert_eq!(
+                    editor
+                        .inline_terminal_position(block_id, cx)
+                        .expect("current moving position")
+                        .byte_offset_for_source(suffix_source)
+                        .expect("exact source identity"),
+                    offset
+                );
+                editor.editor.update(cx, |editor, cx| {
+                    editor.undo(&editor::actions::Undo, window, cx);
+                    editor.change_selections(Default::default(), window, cx, |selections| {
+                        let prefix =
+                            editor::DisplayPoint::new(editor::display_map::DisplayRow(0), 0);
+                        selections.select_display_ranges([prefix..prefix]);
+                    });
+                    editor.handle_input("P", window, cx);
+                });
+                let prefixed = format!("P{source}");
+                assert_eq!(
+                    editor
+                        .inline_terminal_position(block_id, cx)
+                        .expect("moved position")
+                        .byte_offset_for_source(&prefixed)
+                        .expect("updated source identity"),
+                    offset + 1
+                );
+                editor.editor.update(cx, |editor, cx| {
+                    editor.remove_blocks(HashSet::from_iter([block_id]), None, cx)
+                });
+                assert!(editor.inline_terminal_position(block_id, cx).is_err());
+                assert_eq!(
+                    editor.text(cx),
+                    prefixed,
+                    "unmounting only removes presentation and its virtual boundary"
+                );
+            });
+        }
+        view.read_with(cx, |view, cx| {
+            assert_eq!(
+                view.terminal().entity_id(),
+                terminal_id,
+                "the same canonical terminal is retained through placement and edits"
+            );
+            assert!(
+                !view.terminal().read(cx).is_pty(),
+                "history projection does not create a process"
+            );
+        });
     }
 
     #[gpui::test]

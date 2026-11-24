@@ -1,0 +1,28 @@
+# The release pipeline must inject immutable images, existing Secrets, external
+# service endpoints, ingress attachment and environment-owned network ranges.
+deployment:
+  enabled: true
+  production: true
+  replicaCount: 3
+image:
+  tag: ""
+  digest: ""
+publicUrl: ""
+environment: production
+runtimeSecret:
+  name: ""
+migration:
+  image:
+    tag: ""
+    digest: ""
+  secretName: ""
+objectStore:
+  endpoint: ""
+httpRoute:
+  enabled: true
+  parentRefs: []
+  hostnames: []
+networkPolicy:
+  postgresEgressCidrs: []
+  redisEgressCidrs: []
+  objectStoreEgressCidrs: []

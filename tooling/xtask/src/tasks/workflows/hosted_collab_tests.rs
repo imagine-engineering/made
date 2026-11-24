@@ -9,8 +9,11 @@ use crate::tasks::workflows::{
 const HOSTED_COLLAB_PATHS: &[&str] = &[
     ".github/workflows/hosted_collab_tests.yml",
     "crates/collab/**",
+    "crates/collaboration_domain/**",
+    "crates/collaboration_workflow/**",
     "crates/proto/**",
     "crates/rpc/**",
+    "deploy/collaboration/**",
     "tooling/xtask/src/tasks/workflows.rs",
     "tooling/xtask/src/tasks/workflows/hosted_collab_tests.rs",
 ];
@@ -84,8 +87,11 @@ mod tests {
         assert_eq!(workflow.matches(HOSTED_COLLAB_TEST_COMMAND).count(), 1);
         assert!(workflow.contains("workflow_dispatch: {}"));
         assert!(workflow.contains("crates/collab/**"));
+        assert!(workflow.contains("crates/collaboration_domain/**"));
+        assert!(workflow.contains("crates/collaboration_workflow/**"));
         assert!(workflow.contains("crates/proto/**"));
         assert!(workflow.contains("crates/rpc/**"));
+        assert!(workflow.contains("deploy/collaboration/**"));
         assert!(workflow.contains("POSTGRES_HOST_AUTH_METHOD: trust"));
         assert!(workflow.contains("COLLAB_TEST_DATABASE_URL"));
         assert!(workflow.contains("postgres://postgres@localhost/postgres"));

@@ -15,10 +15,14 @@ use workspace::Workspace;
 mod modal;
 #[cfg(feature = "test-explorer")]
 mod test_explorer;
+#[cfg(feature = "multiplayer-tools")]
+mod workflows;
 
 pub use modal::{Rerun, ShowAttachModal, Spawn, TaskOverrides, TasksModal};
 #[cfg(feature = "test-explorer")]
 pub use test_explorer::*;
+#[cfg(feature = "multiplayer-tools")]
+pub use workflows::*;
 
 /// Inserts `new_task` (pretty-printed JSON object text) at the end of the top-level JSON
 /// array in the editor's buffer, creating the array if the buffer has none, and moves the

@@ -1,7 +1,33 @@
 mod call_stats_modal;
+#[cfg(feature = "multiplayer-tools")]
+pub mod channel_messaging;
 pub mod channel_view;
 pub mod collab_panel;
+#[cfg(feature = "multiplayer-tools")]
+pub mod dm_view;
+#[cfg(feature = "multiplayer-tools")]
+pub mod draft_store;
+#[cfg(feature = "multiplayer-tools")]
+pub mod forum;
+#[cfg(feature = "multiplayer-tools")]
+pub mod git_activity;
+#[cfg(feature = "multiplayer-tools")]
+pub mod huddle;
+#[cfg(feature = "multiplayer-tools")]
+pub mod huddle_controls;
+#[cfg(feature = "multiplayer-tools")]
+pub mod inbox_pulse;
+#[cfg(feature = "multiplayer-tools")]
+pub mod mesh_compute;
+#[cfg(feature = "multiplayer-tools")]
+pub mod message_reconciliation;
+#[cfg(feature = "multiplayer-tools")]
+pub mod message_timeline;
+#[cfg(feature = "multiplayer-tools")]
+pub mod moderation;
 pub mod notifications;
+#[cfg(feature = "multiplayer-tools")]
+pub mod pairing;
 mod panel_settings;
 
 use std::{rc::Rc, sync::Arc};

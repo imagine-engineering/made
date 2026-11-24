@@ -1,0 +1,18 @@
+[package]
+name = "buzz_compat"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "GPL-3.0-or-later"
+
+[workspace]
+
+[lib]
+path = "src/buzz_compat.rs"
+
+[[bin]]
+name = "buzz"
+path = "src/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"

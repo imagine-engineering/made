@@ -2,6 +2,8 @@ pub mod agent_provider_discovery;
 pub mod agent_provider_lifecycle;
 pub mod agent_provider_protocol;
 pub mod json_log;
+#[cfg(feature = "multiplayer-tools")]
+pub mod mesh;
 pub mod protocol;
 pub mod proxy;
 pub mod remote_client;

@@ -58,6 +58,8 @@ members = [
     "crates/codestral",
     "crates/collab",
     "crates/collab_ui",
+    "crates/collaboration_domain",
+    "crates/collaboration_workflow",
     "crates/collections",
     "crates/command_palette",
     "crates/command_palette_hooks",
@@ -167,6 +169,7 @@ members = [
     "crates/multi_buffer",
     "crates/net",
     "crates/node_runtime",
+    "crates/nostr_compat",
     "crates/native_task_helper",
     "crates/notifications",
     "crates/oauth_callback_server",
@@ -275,6 +278,8 @@ members = [
     # Services
     #
 
+    "services/push_gateway",
+    "services/pair_relay",
 
     #
     # Extensions
@@ -289,6 +294,9 @@ members = [
     # Tooling
     #
 
+    "tools/collaboration_migrate",
+    "tools/git_credential_nostr",
+    "tools/git_sign_nostr",
     "tooling/compliance",
     "tooling/perf",
     "tooling/xtask",
@@ -358,6 +366,11 @@ cloud_api_client = { path = "crates/cloud_api_client" }
 cloud_api_types = { path = "crates/cloud_api_types" }
 cloud_llm_client = { path = "crates/cloud_llm_client" }
 collab = { path = "crates/collab" }
+collaboration_domain = { path = "crates/collaboration_domain" }
+collaboration_workflow = { path = "crates/collaboration_workflow" }
+push_gateway = { path = "services/push_gateway" }
+pair_relay = { path = "services/pair_relay" }
+nostr_compat = { path = "crates/nostr_compat" }
 collab_ui = { path = "crates/collab_ui" }
 collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
@@ -782,6 +795,7 @@ notify-rust = "4"
 nucleo = "0.5"
 num-format = "0.4.4"
 objc = "0.2"
+nostr = { version = "=0.44.7", default-features = false, features = ["std", "nip49"] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "NSButton",

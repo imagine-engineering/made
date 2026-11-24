@@ -2,6 +2,7 @@ mod buffer_tests;
 mod channel_tests;
 mod db_tests;
 mod extension_tests;
+mod migrations;
 
 use std::sync::Arc;
 
@@ -11,6 +12,8 @@ use parking_lot::Mutex;
 use rand::prelude::*;
 use sea_orm::ConnectionTrait;
 use sqlx::migrate::MigrateDatabase;
+
+pub use self::migrations::run_database_migrations;
 
 use collab::db::*;
 
@@ -87,7 +90,10 @@ impl TestDb {
             // A zero idle timeout reaps every returned connection and loses prepared statements.
             options.max_connections(5);
             let mut db = Database::new(options).await.unwrap();
-            migrate_shared_schema(db.options().get_url()).await.unwrap();
+            let migrations_path = concat!(env!("CARGO_MANIFEST_DIR"), "/migrations");
+            run_database_migrations(db.options(), migrations_path)
+                .await
+                .unwrap();
             db.initialize_notification_kinds().await.unwrap();
             db
         });

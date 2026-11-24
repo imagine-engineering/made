@@ -13,6 +13,7 @@ path = "src/acp_thread.rs"
 doctest = false
 
 [features]
+multiplayer-tools = ["dep:nostr_compat"]
 test-support = ["gpui/test-support", "project/test-support", "dep:parking_lot"]
 
 [dependencies]
@@ -36,6 +37,7 @@ language_model.workspace = true
 log.workspace = true
 markdown.workspace = true
 mime.workspace = true
+nostr_compat = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
 image.workspace = true
 portable-pty.workspace = true
@@ -65,3 +67,8 @@ rand.workspace = true
 tempfile.workspace = true
 util.workspace = true
 settings.workspace = true
+
+[[test]]
+name = "collaboration_observer"
+path = "tests/collaboration_observer.rs"
+required-features = ["multiplayer-tools", "test-support"]

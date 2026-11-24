@@ -84,6 +84,16 @@ pub fn init(cx: &mut App) {
         };
         let multi_workspace = workspace.multi_workspace().cloned();
         let item = cx.new(|cx| TitleBar::new("title-bar", workspace, multi_workspace, window, cx));
+        #[cfg(feature = "multiplayer-tools")]
+        {
+            let project_status = cx.new(|cx| ProjectStatus::new(&item, cx));
+            let workspace_handle = cx.weak_entity();
+            let project_picker = cx.new(|_| CollaborativeProjectPicker(workspace_handle));
+            workspace.status_bar().update(cx, |status_bar, cx| {
+                status_bar.add_left_item(project_status, window, cx);
+                status_bar.set_collaborative_add_project_button(project_picker.into(), cx);
+            });
+        }
         workspace.set_titlebar_item(item.into(), window, cx);
 
         workspace.register_action(|workspace, _: &SimulateUpdateAvailable, _window, cx| {
@@ -167,6 +177,167 @@ struct ProjectTitleContext {
     linked_worktree_name: Option<SharedString>,
 }
 
+#[cfg(feature = "multiplayer-tools")]
+struct ProjectStatus {
+    title_bar: WeakEntity<TitleBar>,
+    _subscription: Subscription,
+}
+
+#[cfg(feature = "multiplayer-tools")]
+impl ProjectStatus {
+    fn new(title_bar: &Entity<TitleBar>, cx: &mut Context<Self>) -> Self {
+        Self {
+            title_bar: title_bar.downgrade(),
+            _subscription: cx.observe(title_bar, |_, _, cx| cx.notify()),
+        }
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+impl workspace::StatusItemView for ProjectStatus {
+    fn is_collaborative_primary(&self) -> bool {
+        true
+    }
+
+    fn set_active_pane_item(
+        &mut self,
+        _active_pane_item: Option<&dyn workspace::ItemHandle>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        cx.notify();
+    }
+
+    fn hide_setting(&self, _cx: &App) -> Option<workspace::HideStatusItem> {
+        None
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+impl Render for ProjectStatus {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(title_bar) = self.title_bar.upgrade() else {
+            return gpui::Empty.into_any_element();
+        };
+        title_bar.update(cx, |title_bar, cx| {
+            let Some(workspace) = title_bar.workspace.upgrade() else {
+                return gpui::Empty.into_any_element();
+            };
+            if workspace.read(cx).workspace_presentation()
+                != workspace::WorkspacePresentation::Collaborative
+            {
+                return gpui::Empty.into_any_element();
+            }
+            let ProjectTitleContext {
+                project_name,
+                repository,
+                linked_worktree_name,
+            } = title_bar.project_title_context(cx);
+            let timeline_width = workspace.read(cx).collaborative_timeline_width(window, cx);
+            let extra_label_width =
+                ((f32::from(timeline_width) / f32::from(window.rem_size()) - 24.) / 2.).max(0.);
+            let project_width = rems(5. + extra_label_width.min(5.));
+            let branch_width = rems(3.5 + extra_label_width.min(6.5));
+            let settings = TitleBarSettings::get_global(cx);
+            let show_project = settings.show_project_items;
+            let show_git = ProjectSettings::get_global(cx).git.enabled.status;
+            h_flex()
+                .debug_selector(|| "NATIVE-PROJECT-STATUS".to_owned())
+                .gap_0p5()
+                .flex_shrink_0()
+                .when_some(
+                    project_name.filter(|_| show_project),
+                    |this, project_name| {
+                        this.child(
+                            div()
+                                .debug_selector(|| "NATIVE-PROJECT-LABEL".to_owned())
+                                .id("collaborative-project-name")
+                                .px_1()
+                                .max_w(project_width)
+                                .tooltip(Tooltip::text(project_name.clone()))
+                                .child(Label::new(project_name).size(LabelSize::Small).truncate()),
+                        )
+                    },
+                )
+                .when_some(repository.filter(|_| show_git), |this, repository| {
+                    this.children(title_bar.render_worktree_and_branch(
+                        repository,
+                        linked_worktree_name,
+                        Anchor::BottomLeft,
+                        Some(branch_width),
+                        cx,
+                    ))
+                })
+                .into_any_element()
+        })
+    }
+}
+
+#[cfg(feature = "multiplayer-tools")]
+struct CollaborativeProjectPicker(WeakEntity<Workspace>);
+
+#[cfg(feature = "multiplayer-tools")]
+impl Render for CollaborativeProjectPicker {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(workspace) = self.0.upgrade() else {
+            return gpui::Empty.into_any_element();
+        };
+        let workspace = workspace.read(cx);
+        let has_project = workspace
+            .project()
+            .read(cx)
+            .visible_worktrees(cx)
+            .next()
+            .is_some();
+        let workspace_handle = self.0.clone();
+        let menu = PopoverMenu::new("collaborative-add-project")
+            .anchor(Anchor::BottomLeft)
+            .menu(move |window, cx| {
+                let workspace = workspace_handle.upgrade()?;
+                let workspace = workspace.read(cx);
+                let project_groups = workspace
+                    .multi_workspace()
+                    .and_then(WeakEntity::upgrade)
+                    .map(|multi_workspace| multi_workspace.read(cx).project_group_keys())
+                    .unwrap_or_default();
+                let focus_handle = workspace.focus_handle(cx);
+                Some(recent_projects::RecentProjects::popover(
+                    workspace_handle.clone(),
+                    project_groups,
+                    Some(false),
+                    focus_handle,
+                    window,
+                    cx,
+                ))
+            });
+        let tooltip = Tooltip::text("Add Project");
+        let picker = if has_project {
+            menu.trigger_with_tooltip(
+                IconButton::new("collaborative-add-project-icon", IconName::FolderAdd)
+                    .size(ButtonSize::Compact)
+                    .icon_size(IconSize::Small)
+                    .tab_index(0isize)
+                    .aria_label("Add Project"),
+                tooltip,
+            )
+        } else {
+            menu.trigger_with_tooltip(
+                Button::new("collaborative-add-project-label", "Add Project")
+                    .size(ButtonSize::Compact)
+                    .label_size(LabelSize::Small)
+                    .start_icon(Icon::new(IconName::FolderAdd).size(IconSize::Small))
+                    .tab_index(0isize),
+                tooltip,
+            )
+        };
+        div()
+            .debug_selector(|| "COLLABORATIVE-ADD-PROJECT".to_owned())
+            .flex_none()
+            .child(picker)
+            .into_any_element()
+    }
+}
+
 impl Render for TitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.multi_workspace.is_none() {
@@ -187,6 +358,35 @@ impl Render for TitleBar {
         let is_git_enabled = ProjectSettings::get_global(cx).git.enabled.status;
 
         let show_menus = show_menus(cx);
+
+        if let Some(collaborative_title_bar) = self
+            .workspace
+            .upgrade()
+            .and_then(|workspace| workspace.read(cx).collaborative_title_bar(cx))
+        {
+            if show_menus {
+                self.platform_titlebar.update(cx, |this, _| {
+                    this.set_button_layout(button_layout);
+                    this.set_children(
+                        self.application_menu
+                            .clone()
+                            .map(|menu| menu.into_any_element()),
+                    );
+                });
+
+                return v_flex()
+                    .w_full()
+                    .child(self.platform_titlebar.clone().into_any_element())
+                    .child(collaborative_title_bar)
+                    .into_any_element();
+            }
+
+            self.platform_titlebar.update(cx, |this, _| {
+                this.set_button_layout(button_layout);
+                this.set_children(Some(collaborative_title_bar));
+            });
+            return self.platform_titlebar.clone().into_any_element();
+        }
 
         let mut children = <ArrayVec<_, 5>>::new();
 

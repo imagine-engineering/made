@@ -1,0 +1,21 @@
+services:
+  collaboration:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile-collab
+      args:
+        GITHUB_SHA: ${GITHUB_SHA:-local}
+    image: ${COLLABORATION_IMAGE:-zed-collaboration:local}
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  object-store:
+    ports:
+      - "${OBJECT_STORE_PORT:-9000}:9000"
+      - "${OBJECT_STORE_CONSOLE_PORT:-9001}:9001"

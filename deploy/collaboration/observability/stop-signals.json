@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "signals": [
+    {
+      "id": "STOP-CROSS-TENANT",
+      "metric": "collab_cross_tenant_results_total",
+      "expression": "collab_cross_tenant_results_total > 0",
+      "duration": "0m",
+      "dashboard": "durable-collaboration",
+      "action": "halt_tenant_and_rollback"
+    },
+    {
+      "id": "STOP-REPLAY-OR-STALE",
+      "metric": "collab_accepted_stale_or_replay_total",
+      "expression": "collab_accepted_stale_or_replay_total > 0",
+      "duration": "0m",
+      "dashboard": "admission-realtime",
+      "action": "halt_deployment_and_rollback"
+    },
+    {
+      "id": "STOP-DUPLICATE-EXECUTION",
+      "metric": "agent_duplicate_executors_total",
+      "expression": "agent_duplicate_executors_total > 0",
+      "duration": "0m",
+      "dashboard": "execution-media",
+      "action": "disable_execution_and_preserve_state"
+    },
+    {
+      "id": "STOP-SHADOW-DIVERGENCE",
+      "metric": "collab_shadow_divergence_total",
+      "expression": "collab_shadow_divergence_total{class=\"unexplained\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "halt_cutover_and_preserve_state"
+    },
+    {
+      "id": "STOP-SECRET-CANARY",
+      "metric": "collab_redaction_canary_matches_total",
+      "expression": "collab_redaction_canary_matches_total{class=\"secret\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "disable_admissions_and_rollback"
+    },
+    {
+      "id": "STOP-CONTENT-CANARY",
+      "metric": "collab_redaction_canary_matches_total",
+      "expression": "collab_redaction_canary_matches_total{class=\"content\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "disable_admissions_and_rollback"
+    },
+    {
+      "id": "STOP-READY-AUTHORITY",
+      "metric": "collab_ready_with_failed_dependency_total",
+      "expression": "collab_ready_with_failed_dependency_total{dependency=\"authority\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "remove_ready_instances_and_rollback"
+    },
+    {
+      "id": "STOP-READY-SCHEMA",
+      "metric": "collab_ready_with_failed_dependency_total",
+      "expression": "collab_ready_with_failed_dependency_total{dependency=\"schema\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "remove_ready_instances_and_halt_migration"
+    },
+    {
+      "id": "STOP-READY-SECURITY",
+      "metric": "collab_ready_with_failed_dependency_total",
+      "expression": "collab_ready_with_failed_dependency_total{dependency=\"security_control\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "disable_admissions_and_rollback"
+    },
+    {
+      "id": "STOP-QUEUE-BOUNDARY",
+      "metric": "collab_outbox_oldest_seconds",
+      "expression": "collab_outbox_oldest_seconds > 300",
+      "duration": "5m",
+      "dashboard": "durable-collaboration",
+      "action": "halt_scoped_admissions_and_reconcile"
+    },
+    {
+      "id": "STOP-CLAIM-BOUNDARY",
+      "metric": "collab_outbox_stuck_claims",
+      "expression": "collab_outbox_stuck_claims > 0",
+      "duration": "5m",
+      "dashboard": "durable-collaboration",
+      "action": "halt_scoped_admissions_and_reconcile"
+    },
+    {
+      "id": "STOP-LEASE-BOUNDARY",
+      "metric": "remote_mesh_lease_age_seconds",
+      "expression": "remote_mesh_lease_age_seconds > 60",
+      "duration": "0m",
+      "dashboard": "execution-media",
+      "action": "disable_execution_and_reconcile"
+    },
+    {
+      "id": "STOP-CLIENT-TELEMETRY",
+      "metric": "client_telemetry_requests_total",
+      "expression": "client_telemetry_requests_total{enabled=\"false\"} > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "halt_release"
+    },
+    {
+      "id": "STOP-ADMISSION-AFTER-DISABLE",
+      "metric": "collab_admissions_after_disable_total",
+      "expression": "collab_admissions_after_disable_total > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "halt_deployment_and_preserve_state"
+    },
+    {
+      "id": "STOP-KILL-SWITCH-ACK",
+      "metric": "collab_kill_switch_age_seconds",
+      "expression": "collab_kill_switch_age_seconds > 60",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "halt_deployment_and_preserve_state"
+    },
+    {
+      "id": "STOP-ROLLBACK-OWNER-CONFLICT",
+      "metric": "collab_rollback_owner_conflicts_total",
+      "expression": "collab_rollback_owner_conflicts_total > 0",
+      "duration": "0m",
+      "dashboard": "migration-release",
+      "action": "halt_rollback_and_preserve_state"
+    }
+  ]
+}

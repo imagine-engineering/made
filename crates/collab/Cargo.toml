@@ -41,6 +41,8 @@ chrono.workspace = true
 clock.workspace = true
 cloud_api_types.workspace = true
 collections.workspace = true
+collaboration_domain.workspace = true
+collaboration_workflow.workspace = true
 cron.workspace = true
 dashmap.workspace = true
 envy = "0.4.2"
@@ -56,6 +58,7 @@ image.workspace = true
 livekit_api.workspace = true
 log.workspace = true
 nanoid.workspace = true
+nostr_compat.workspace = true
 parking_lot.workspace = true
 percent-encoding.workspace = true
 prometheus = "0.14"
@@ -91,7 +94,6 @@ url.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
-notifications = { workspace = true, features = ["test-support"] }
 agent = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
 async-channel.workspace = true
@@ -117,7 +119,9 @@ extension.workspace = true
 file_finder.workspace = true
 fs = { workspace = true, features = ["test-support"] }
 git = { workspace = true, features = ["test-support"] }
+git_credential_nostr = { path = "../../tools/git_credential_nostr" }
 git_hosting_providers.workspace = true
+git_sign_nostr = { path = "../../tools/git_sign_nostr" }
 git_ui = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 gpui_tokio.workspace = true
@@ -128,12 +132,17 @@ language_model = { workspace = true, features = ["test-support"] }
 language_tools = { workspace = true, features = ["test-support"] }
 livekit_client =  { workspace = true, features = ["test-support"] }
 lsp = { workspace = true, features = ["test-support"] }
+media = { workspace = true, features = ["collaboration"] }
 menu.workspace = true
 multi_buffer = { workspace = true, features = ["test-support"] }
 node_runtime.workspace = true
+nostr.workspace = true
+notifications = { workspace = true, features = ["multiplayer-tools", "test-support"] }
+pair_relay.workspace = true
 pretty_assertions.workspace = true
 project = { workspace = true, features = ["test-support"] }
 prompt_store.workspace = true
+push_gateway.workspace = true
 recent_projects = { workspace = true, features = ["test-support"] }
 release_channel.workspace = true
 remote = { workspace = true, features = ["test-support"] }
@@ -157,4 +166,5 @@ util.workspace = true
 workspace = { workspace = true, features = ["test-support"] }
 worktree = { workspace = true, features = ["test-support"] }
 zed_actions.workspace = true
+zed_credentials_provider = { workspace = true, features = ["multiplayer-tools"] }
 zlog.workspace = true

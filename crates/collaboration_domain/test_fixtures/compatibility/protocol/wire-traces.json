@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "traces": [
+    {
+      "id": "PROTO-WIRE-001",
+      "description": "Legacy and v2 stream messages coexist on one NIP-01 connection.",
+      "authenticated_pubkey": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "frames": [
+        {"direction":"client_to_relay","message":["EVENT",{"$event":"legacy_message"}]},
+        {"direction":"relay_to_client","message":["OK",{"$event_id":"legacy_message"},true,""]},
+        {"direction":"client_to_relay","message":["EVENT",{"$event":"v2_message"}]},
+        {"direction":"relay_to_client","message":["OK",{"$event_id":"v2_message"},true,""]}
+      ]
+    },
+    {
+      "id": "PROTO-WIRE-002",
+      "description": "An EVENT with content changed after signing receives a negative OK.",
+      "authenticated_pubkey": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "frames": [
+        {"direction":"client_to_relay","message":["EVENT",{"$event":"malformed_tampered_content"}]},
+        {"direction":"relay_to_client","message":["OK",{"$event_id":"malformed_tampered_content"},false,"invalid: invalid event id: computed 0c3a3f53d89b5dbb338fc7ecf0a6af734c3ec54b1ce28e3c4961a71342aeb904, got 4fe01b3f32599b1c541190751dc0f4dfa15361b602332231ae9c1fe91c80ec4c"]}
+      ]
+    },
+    {
+      "id": "PROTO-WIRE-003",
+      "description": "An author-only query for another author fails closed before storage access.",
+      "authenticated_pubkey": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+      "frames": [
+        {"direction":"client_to_relay","message":["REQ","author-only-foreign",{"kinds":[30350],"authors":["79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"]}]},
+        {"direction":"relay_to_client","message":["CLOSED","author-only-foreign","restricted: author-only kinds require authors=[self]"]}
+      ]
+    },
+    {
+      "id": "PROTO-WIRE-004",
+      "description": "A p-gated query naming another reader fails closed before storage access.",
+      "authenticated_pubkey": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+      "frames": [
+        {"direction":"client_to_relay","message":["REQ","p-gated-foreign",{"kinds":[30622],"#p":["c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"]}]},
+        {"direction":"relay_to_client","message":["CLOSED","p-gated-foreign","restricted: p-gated events require #p matching your pubkey"]}
+      ]
+    }
+  ]
+}

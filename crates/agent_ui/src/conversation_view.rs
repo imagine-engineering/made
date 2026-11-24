@@ -666,6 +666,21 @@ impl ConversationView {
         }
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    pub fn collaborative_active_thread(&self) -> Option<&Entity<ThreadView>> {
+        let connected = self.as_connected()?;
+        if connected.auth_state.is_ok() {
+            connected.active_view()
+        } else {
+            None
+        }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn project(&self) -> &Entity<Project> {
+        &self.project
+    }
+
     pub fn pending_tool_call<'a>(
         &'a self,
         cx: &'a App,
@@ -1393,6 +1408,94 @@ impl ConversationView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(Vec<acp::ContentBlock>, Task<Result<()>>)> {
+        #[cfg(feature = "multiplayer-tools")]
+        {
+            use crate::terminal_thread_metadata_store::{
+                InlineTerminalPromptReference, TerminalThreadMetadataStore,
+            };
+            let references = blocks
+                .iter()
+                .map(InlineTerminalPromptReference::from_content)
+                .collect::<Result<Vec<_>>>()?;
+            if references.iter().any(Option::is_some) {
+                anyhow::ensure!(
+                    thread.read(cx).is_draft_thread()
+                        && thread.read(cx).parent_session_id().is_none(),
+                    "Only a root unsent draft can restore terminal associations"
+                );
+                anyhow::ensure!(
+                    ThreadMetadataStore::try_global(cx).is_some_and(|store| store
+                        .read(cx)
+                        .entry(self.thread_id)
+                        .is_some_and(|metadata| metadata.is_draft()
+                            && metadata.agent_id == thread.read(cx).connection().agent_id())),
+                    "The saved draft identity is unavailable"
+                );
+                let capabilities = Arc::new(RwLock::new(SessionCapabilities::new(
+                    thread.read(cx).prompt_capabilities(),
+                    thread.read(cx).available_commands().to_vec(),
+                    Vec::new(),
+                )));
+                // Inline resources occupy no source characters; their full admission follows below.
+                // Excluding them also handles a partially persisted prior session restoration.
+                let projection = blocks
+                    .iter()
+                    .zip(&references)
+                    .filter(|(_, reference)| reference.is_none())
+                    .map(|(block, _)| block.clone())
+                    .collect();
+                let probe = cx.new(|cx| {
+                    let mut editor = MessageEditor::new(
+                        self.workspace.clone(),
+                        self.project.downgrade(),
+                        self.thread_store.clone(),
+                        capabilities,
+                        self.agent.agent_id(),
+                        "",
+                        editor::EditorMode::AutoHeight {
+                            min_lines: 1,
+                            max_lines: None,
+                        },
+                        window,
+                        cx,
+                    );
+                    editor.set_message(projection, window, cx);
+                    editor
+                });
+                let source = probe.read(cx).text(cx);
+                let mut prefix = Vec::new();
+                for (block, reference) in blocks.iter().zip(&references) {
+                    if let Some(reference) = reference {
+                        let offset = probe.update(cx, |editor, cx| {
+                            editor.set_message(prefix.clone(), window, cx);
+                            editor.text(cx).len()
+                        });
+                        anyhow::ensure!(
+                            offset == reference.position.byte_offset_for_source(&source)?,
+                            "The retained terminal no longer occurs at its saved draft boundary"
+                        );
+                    } else {
+                        prefix.push(block.clone());
+                    }
+                }
+                let store = TerminalThreadMetadataStore::try_global(cx)
+                    .ok_or_else(|| anyhow!("The retained terminal history is unavailable"))?;
+                let session_id = thread.read(cx).session_id().clone();
+                let remote_connection = self.project.read(cx).remote_connection_options(cx);
+                return store.update(cx, |store, cx| {
+                    let blocks = store.restore_draft_session(
+                        self.thread_id,
+                        &session_id,
+                        remote_connection.as_ref(),
+                        &source,
+                        blocks,
+                        cx,
+                    )?;
+                    Ok((blocks, store.flush(cx)))
+                });
+            }
+        }
+        #[cfg(not(feature = "multiplayer-tools"))]
         let _ = (thread, window, cx);
         Ok((blocks, Task::ready(Ok(()))))
     }
@@ -1440,6 +1543,12 @@ impl ConversationView {
                 session_capabilities.clone(),
                 self.agent.agent_id(),
             );
+            #[cfg(feature = "multiplayer-tools")]
+            let state = {
+                let mut state = state;
+                state.set_inline_terminal_scope(self.thread_id, session_id.clone(), _cx);
+                state
+            };
             state
         });
 
@@ -2304,6 +2413,32 @@ impl ConversationView {
     }
 
     fn finish_authentication(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(feature = "multiplayer-tools")]
+        if let Some(thread) = self.root_thread_view() {
+            // Authentication refreshes the existing connection. Reloading would close
+            // its sessions and discard the mounted conversation and unsent input.
+            if let Some(connected) = self.as_connected_mut() {
+                connected.auth_state = AuthState::Ok;
+            }
+            thread.update(cx, |thread, cx| {
+                if matches!(
+                    thread.thread_error,
+                    Some(ThreadError::AuthenticationRequired(_))
+                ) {
+                    thread.clear_thread_error(cx);
+                }
+            });
+            cx.emit(StateChange);
+            cx.notify();
+            if self.focus_handle.contains_focused(window, cx) {
+                thread
+                    .read(cx)
+                    .message_editor
+                    .focus_handle(cx)
+                    .focus(window, cx);
+            }
+            return;
+        }
         self.reset(window, cx);
     }
 
@@ -3620,6 +3755,14 @@ impl ConversationView {
 
 #[cfg(any(test, feature = "test-support"))]
 impl ConversationView {
+    #[cfg(all(test, feature = "multiplayer-tools"))]
+    pub(crate) fn load_error_for_test(&self) -> Option<String> {
+        match &self.server_state {
+            ServerState::LoadError { error } => Some(format!("{error:?}")),
+            _ => None,
+        }
+    }
+
     /// Expands a tool call so its content is visible.
     /// This is primarily useful for visual testing.
     pub fn expand_tool_call(&mut self, tool_call_id: acp::ToolCallId, cx: &mut Context<Self>) {
@@ -3670,6 +3813,15 @@ impl ConversationView {
 }
 
 impl ConversationView {
+    #[cfg(feature = "multiplayer-tools")]
+    pub(crate) fn render_collaborative_timeline(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.render_surface(true, window, cx)
+    }
+
     fn render_surface(
         &mut self,
         _integrated_input: bool,
@@ -3735,6 +3887,15 @@ impl ConversationView {
             ServerState::Connected(connected) => {
                 if let Some(view) = connected.active_view() {
                     let content = view.clone().into_any_element();
+                    #[cfg(feature = "multiplayer-tools")]
+                    let content = if _integrated_input {
+                        view.clone().update(cx, |view, cx| {
+                            view.render_collaborative_entries(window, cx)
+                                .into_any_element()
+                        })
+                    } else {
+                        content
+                    };
                     content
                 } else {
                     debug_panic!("This state should never be reached");
@@ -6612,6 +6773,226 @@ pub(crate) mod tests {
         thread.read_with(cx, |view, _cx| {
             assert_eq!(view.skill_loading_issues, vec![issue]);
         });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    struct IntegratedConversationTestItem {
+        conversation: Entity<ConversationView>,
+        _conversation_observation: gpui::Subscription,
+        _thread_observation: gpui::Subscription,
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    impl Item for IntegratedConversationTestItem {
+        type Event = ();
+
+        fn include_in_nav_history() -> bool {
+            false
+        }
+
+        fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
+            "Integrated conversation".into()
+        }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    impl EventEmitter<()> for IntegratedConversationTestItem {}
+
+    #[cfg(feature = "multiplayer-tools")]
+    impl Focusable for IntegratedConversationTestItem {
+        fn focus_handle(&self, cx: &App) -> FocusHandle {
+            self.conversation.read(cx).focus_handle(cx)
+        }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    impl Render for IntegratedConversationTestItem {
+        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let title_editor = self
+                .conversation
+                .read(cx)
+                .active_thread()
+                .map(|thread| thread.read(cx).title_editor.clone());
+            v_flex().size_full().children(title_editor).child(
+                self.conversation.update(cx, |conversation, cx| {
+                    conversation.render_collaborative_timeline(window, cx)
+                }),
+            )
+        }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    async fn exercise_queued_generating_row_focus(
+        navigate_while_generating: bool,
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        let (conversation, cx) =
+            setup_conversation_view(StubAgentServer::new(StubAgentConnection::new()), cx).await;
+        let view = active_thread(&conversation, cx);
+        let thread = view.read_with(cx, |view, _| view.thread.clone());
+        let editor = message_editor(&conversation, cx);
+        let workspace = conversation
+            .read_with(cx, |conversation, _| conversation.workspace.clone())
+            .upgrade()
+            .expect("canonical workspace");
+        cx.simulate_resize(size(px(800.), px(360.)));
+        workspace.update_in(cx, |workspace, window, cx| {
+            let item = cx.new(|cx| IntegratedConversationTestItem {
+                conversation: conversation.clone(),
+                _conversation_observation: cx.observe(&conversation, |_, _, cx| cx.notify()),
+                _thread_observation: cx.observe(&view, |_, _, cx| cx.notify()),
+            });
+            workspace.add_item_to_active_pane(Box::new(item), None, true, window, cx);
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        thread.update(cx, |thread, cx| {
+            thread
+                .handle_session_update(
+                    acp::SessionUpdate::UserMessageChunk(
+                        acp::ContentChunk::new("Earlier conversation line\n".repeat(400).into())
+                            .message_id("queued-generating-baseline"),
+                    ),
+                    cx,
+                )
+                .expect("canonical baseline entry");
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            editor.focus_handle(cx).focus(window, cx);
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+        });
+        view.read_with(cx, |view, cx| {
+            assert!(view.collaborative_input_in_list);
+            assert!(!view.generating_indicator_in_list);
+            assert_eq!(view.thread.read(cx).entries().len(), 1);
+            assert_eq!(view.list_state.item_count(), 2);
+        });
+        cx.update(|window, cx| {
+            assert!(editor.focus_handle(cx).is_focused(window));
+        });
+        let (release_turn, wait_for_release) = futures::channel::oneshot::channel::<()>();
+        let turn = view.update_in(cx, |view, _window, cx| {
+            let turn = view.thread.update(cx, |thread, cx| {
+                thread.run_turn(cx, async move |_thread, _cx| {
+                    wait_for_release.await.map_err(|error| {
+                        anyhow::anyhow!("canonical test turn release failed: {error}")
+                    })?;
+                    Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+                })
+            });
+            view.thread.update(cx, |thread, cx| {
+                thread
+                    .handle_session_update(
+                        acp::SessionUpdate::UserMessageChunk(
+                            acp::ContentChunk::new("New queued entry".into())
+                                .message_id("queued-generating-new-entry"),
+                        ),
+                        cx,
+                    )
+                    .expect("canonical new entry before queued subscribers");
+            });
+            assert_eq!(view.thread.read(cx).entries().len(), 2);
+            assert_eq!(
+                view.thread.read(cx).status(),
+                acp_thread::ThreadStatus::Generating
+            );
+            assert_eq!(
+                view.list_state.item_count(),
+                2,
+                "entry event remains queued"
+            );
+            assert!(!view.generating_indicator_in_list);
+            view.sync_generating_indicator(cx);
+            assert!(view.generating_indicator_in_list);
+            assert_eq!(view.list_state.item_count(), 3);
+            turn
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, cx| {
+            assert_eq!(view.thread.read(cx).entries().len(), 2);
+            assert_eq!(
+                view.thread.read(cx).status(),
+                acp_thread::ThreadStatus::Generating
+            );
+            assert!(view.generating_indicator_in_list);
+            assert_eq!(view.list_state.item_count(), 4);
+        });
+        let title_focus = view.read_with(cx, |view, cx| view.title_editor.focus_handle(cx));
+        if navigate_while_generating {
+            cx.update(|window, cx| title_focus.focus(window, cx));
+        }
+        release_turn
+            .send(())
+            .expect("complete the owned canonical turn");
+        turn.await.expect("canonical turn completion");
+        cx.run_until_parked();
+        view.update(cx, |view, cx| {
+            assert_eq!(
+                view.thread.read(cx).status(),
+                acp_thread::ThreadStatus::Idle
+            );
+            assert_eq!(view.thread.read(cx).entries().len(), 2);
+            assert!(!view.generating_indicator_in_list);
+            assert_eq!(view.list_state.item_count(), 3);
+            view.scroll_to_entry_for_tests(0, cx);
+        });
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.simulate_next_frame(cx);
+            if navigate_while_generating {
+                assert!(
+                    title_focus.is_focused(window),
+                    "completion cannot steal user navigation"
+                );
+            } else {
+                assert!(
+                    editor.focus_handle(cx).is_focused(window),
+                    "input focus survives queued entry timing"
+                );
+            }
+        });
+        if !navigate_while_generating {
+            view.read_with(cx, |view, _| {
+                let prefix = view
+                    .list_state
+                    .bounds_for_item(0)
+                    .expect("mounted prefix row");
+                let viewport = view.list_state.viewport_bounds();
+                assert!(viewport.size.height > px(0.));
+                assert!(
+                    prefix.size.height > viewport.size.height + px(2048.),
+                    "the input must be outside the canonical list overdraw"
+                );
+            });
+            let bounds = cx
+                .debug_bounds("COLLABORATIVE-NATIVE-ACP-COMPOSER")
+                .expect("offscreen focused input retains its canonical mounted dispatch node");
+            assert!(bounds.size.width > px(0.) && bounds.size.height > px(0.));
+            cx.simulate_keystrokes("x");
+            assert_eq!(editor.read_with(cx, |editor, cx| editor.text(cx)), "x");
+            assert_eq!(
+                view.entity_id(),
+                active_thread(&conversation, cx).entity_id()
+            );
+        }
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_integrated_input_focus_survives_queued_generating_entry(cx: &mut TestAppContext) {
+        exercise_queued_generating_row_focus(false, cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_queued_generating_entry_does_not_steal_user_navigation(cx: &mut TestAppContext) {
+        exercise_queued_generating_row_focus(true, cx).await;
     }
 
     fn add_to_workspace(conversation_view: Entity<ConversationView>, cx: &mut VisualTestContext) {
@@ -12676,6 +13057,136 @@ pub(crate) mod tests {
         );
     }
 
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_snapshot_failure_preserves_live_draft_and_reports_error(
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::{
+            InlineTerminalDraftPosition, TerminalThreadMetadataStore,
+        };
+        use settings::Settings as _;
+        init_test(cx);
+        let (conversation, cx) =
+            setup_conversation_view(StubAgentServer::default_response(), cx).await;
+        let parent = active_thread(&conversation, cx);
+        let editor = message_editor(&conversation, cx);
+        let session = parent.read_with(cx, |parent, _| parent.session_id.clone());
+        let thread_id = conversation.read_with(cx, |conversation, _| conversation.thread_id);
+        let accepted = vec![acp::ContentBlock::from("last trustworthy draft")];
+        cx.update(|_, cx| crate::draft_prompt_store::write(thread_id, &accepted, cx))
+            .await
+            .expect("save accepted draft");
+        cx.update(|window, cx| {
+            TerminalThreadMetadataStore::init_global(cx);
+            let history = TerminalThreadMetadataStore::global(cx);
+            let workspace = conversation
+                .read(cx)
+                .workspace
+                .upgrade()
+                .expect("mounted workspace");
+            let project = workspace.read(cx).project().clone();
+            let settings = terminal::terminal_settings::TerminalSettings::get_global(cx);
+            let builder = terminal::TerminalBuilder::new_display_only(
+                settings.cursor_shape,
+                settings.alternate_scroll,
+                settings.max_scroll_history_lines,
+                window.window_handle().window_id().as_u64(),
+                cx.background_executor(),
+                project.read(cx).path_style(cx),
+            );
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+            let terminal_view = cx.new(|cx| {
+                terminal_view::TerminalView::new(
+                    terminal,
+                    workspace.downgrade(),
+                    None,
+                    project.downgrade(),
+                    window,
+                    cx,
+                )
+            });
+            let inline = cx.new(|cx| {
+                crate::inline_terminal_view::InlineTerminalView::new(
+                    crate::TerminalId::new(),
+                    None,
+                    terminal_view.clone(),
+                    workspace.downgrade(),
+                    history.downgrade(),
+                    editor.downgrade(),
+                    false,
+                    cx,
+                )
+            });
+            editor.update(cx, |editor, cx| {
+                editor.set_text("AλB", window, cx);
+                let position = InlineTerminalDraftPosition::new("AλB", 1).expect("source position");
+                let block_id = editor
+                    .mount_inline_terminal_view(terminal_view, Some(inline.clone()), &position, cx)
+                    .expect("mounted unavailable-history fixture");
+                inline.update(cx, |inline, _| inline.set_block_id(block_id));
+                assert!(editor.draft_content_blocks_snapshot(cx).is_err());
+            });
+        });
+        conversation.update_in(cx, |conversation, window, cx| {
+            conversation.reset(window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            message_editor(&conversation, cx).entity_id(),
+            editor.entity_id(),
+            "failed snapshot must not reset or detach the live input"
+        );
+        assert_eq!(editor.read_with(cx, |editor, cx| editor.text(cx)), "AλB");
+        parent.read_with(cx, |parent, _| {
+            assert_eq!(parent.session_id, session);
+            assert!(
+                parent.draft_persistence_error.is_some(),
+                "snapshot failure must reach the existing draft error UI"
+            );
+        });
+        conversation.update(cx, |conversation, cx| {
+            conversation.schedule_draft_prompt_persist(cx)
+        });
+        cx.executor()
+            .advance_clock(DRAFT_PROMPT_PERSIST_DEBOUNCE * 2);
+        cx.run_until_parked();
+        assert_eq!(
+            cx.read(|cx| crate::draft_prompt_store::read(thread_id, cx)),
+            Some(accepted),
+            "failed inline capture cannot overwrite the last trustworthy saved draft with a partial snapshot"
+        );
+        assert!(cx.read(|cx| crate::draft_prompt_store::draft_has_user_content(thread_id, [], cx)));
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_command_remainder_preserves_later_draft_during_resolution(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_delayed_source_ownership(true, "\nLATER_DRAFT β", cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_send_preserves_later_draft_during_resolution(cx: &mut TestAppContext) {
+        assert_inline_delayed_source_ownership(false, "\nLATER_DRAFT β", cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_command_remainder_preserves_terminal_added_during_resolution(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_delayed_source_ownership(true, "", cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_send_preserves_terminal_added_during_resolution(cx: &mut TestAppContext) {
+        assert_inline_delayed_source_ownership(false, "", cx).await;
+    }
+
     #[gpui::test]
     async fn test_draft_normal_quit_flushes_latest_text_before_debounce(cx: &mut TestAppContext) {
         init_test(cx);
@@ -12717,6 +13228,495 @@ pub(crate) mod tests {
             Some(latest),
             "ordinary draft persistence is required in both product profiles"
         );
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_draft_normal_quit_flushes_latest_source_before_debounce(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_draft_quit_flushes_latest_source(false, true, cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_draft_reconnecting_quit_flushes_latest_source_before_debounce(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_draft_quit_flushes_latest_source(true, true, cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    #[gpui::test]
+    async fn test_inline_draft_release_flushes_latest_source_before_debounce(
+        cx: &mut TestAppContext,
+    ) {
+        assert_inline_draft_quit_flushes_latest_source(false, false, cx).await;
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    async fn assert_inline_draft_quit_flushes_latest_source(
+        reconnect: bool,
+        quit: bool,
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::{
+            InlineTerminalPromptReference, TerminalThreadMetadataStore,
+        };
+        init_test(cx);
+        cx.update(|cx| {
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+        });
+        let test_app_context = cx.clone();
+        let (conversation, cx) =
+            setup_conversation_view(StubAgentServer::default_response(), cx).await;
+        let parent = active_thread(&conversation, cx);
+        let editor = message_editor(&conversation, cx);
+        let thread_id = conversation.read_with(cx, |view, _| view.thread_id);
+        cx.update(|_, cx| TerminalThreadMetadataStore::init_global(cx));
+        let history = cx.read(TerminalThreadMetadataStore::global);
+        history.read_with(cx, |store, _| store.reload_task()).await;
+        editor.update_in(cx, |editor, window, cx| editor.set_text("AλB", window, cx));
+        cx.run_until_parked();
+        let terminal_id = crate::TerminalId::new();
+        retain_inline_resolution_fixture(&parent, terminal_id, 1, "RETAINED_OUTPUT\r\n", cx);
+        cx.run_until_parked();
+        cx.executor()
+            .advance_clock(DRAFT_PROMPT_PERSIST_DEBOUNCE * 2);
+        cx.run_until_parked();
+        let earlier = cx
+            .read(|cx| crate::draft_prompt_store::read_for_restore(thread_id, cx))
+            .expect("initial durable inline draft");
+        editor.update_in(cx, |editor, window, cx| {
+            editor.editor().update(cx, |editor, cx| {
+                editor.move_to_end(&editor::actions::MoveToEnd, window, cx);
+                editor.insert(" latest🦀", window, cx);
+            });
+        });
+        cx.run_until_parked();
+        let source = editor.read_with(cx, |editor, cx| editor.text(cx));
+        let latest = editor.read_with(cx, |editor, cx| {
+            editor
+                .draft_content_blocks_snapshot(cx)
+                .expect("latest source-bound snapshot")
+        });
+        assert_ne!(earlier, latest);
+        assert_eq!(
+            cx.read(|cx| crate::draft_prompt_store::read_for_restore(thread_id, cx)),
+            Some(earlier),
+            "the real debounce must still be pending before normal quit"
+        );
+        if reconnect {
+            conversation.update_in(cx, |view, window, cx| {
+                view.reset(window, cx);
+                assert!(
+                    view.is_loading(),
+                    "quit while the replacement session is pending"
+                );
+            });
+        }
+        if quit {
+            test_app_context
+                .background_executor
+                .set_block_on_ticks(usize::MAX..=usize::MAX);
+            test_app_context.update(|cx| cx.shutdown());
+        } else {
+            let weak_conversation = conversation.downgrade();
+            let released = std::rc::Rc::new(std::cell::Cell::new(false));
+            test_app_context.update(|cx| {
+                let released = released.clone();
+                cx.observe_release(&conversation, move |_, _| released.set(true))
+                    .detach();
+            });
+            test_app_context.update(move |_| drop(conversation));
+            assert!(released.get(), "actual release callback must run");
+            assert!(weak_conversation.upgrade().is_none());
+            test_app_context.run_until_parked();
+        }
+        let restored = test_app_context
+            .read(|cx| crate::draft_prompt_store::read_for_restore(thread_id, cx))
+            .expect("saved inline draft after normal quit");
+        assert_eq!(restored, latest, "normal quit must retain latest input");
+        let reference = restored
+            .iter()
+            .find_map(|block| {
+                InlineTerminalPromptReference::from_content(block).expect("typed terminal context")
+            })
+            .expect("retained terminal reference");
+        assert_eq!(reference.terminal_id, terminal_id);
+        assert_eq!(
+            reference
+                .position
+                .byte_offset_for_source(&source)
+                .expect("matching source"),
+            1
+        );
+        history.read_with(&test_app_context, |store, _| {
+            let metadata = store
+                .persisted_entry_for_test(terminal_id)
+                .expect("durable metadata")
+                .expect("retained metadata row");
+            assert_eq!(
+                metadata
+                    .inline_context
+                    .expect("conversation context")
+                    .draft_position,
+                Some(reference.position)
+            );
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    fn retain_inline_resolution_fixture(
+        parent: &Entity<ThreadView>,
+        terminal_id: crate::TerminalId,
+        source_offset: usize,
+        output: &str,
+        cx: &mut VisualTestContext,
+    ) {
+        use crate::terminal_thread_metadata_store::{
+            InlineTerminalContext, InlineTerminalDraftPosition, TerminalThreadMetadata,
+            TerminalThreadMetadataStore,
+        };
+        use settings::Settings as _;
+        parent.update_in(cx, |parent, window, cx| {
+            let workspace = parent.workspace.upgrade().expect("canonical workspace");
+            let project = workspace.read(cx).project().clone();
+            if workspace.read(cx).panel::<AgentPanel>(cx).is_none() {
+                workspace.update(cx, |workspace, cx| {
+                    let panel = cx.new(|cx| AgentPanel::new(workspace, window, cx));
+                    workspace.add_panel(panel, window, cx);
+                });
+            }
+            let settings = terminal::terminal_settings::TerminalSettings::get_global(cx);
+            let builder = terminal::TerminalBuilder::new_display_only(
+                settings.cursor_shape,
+                settings.alternate_scroll,
+                settings.max_scroll_history_lines,
+                window.window_handle().window_id().as_u64(),
+                cx.background_executor(),
+                project.read(cx).path_style(cx),
+            );
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+            terminal.update(cx, |terminal, cx| {
+                terminal.write_output(output.as_bytes(), cx)
+            });
+            let (snapshot, rendered_output) = terminal.read_with(cx, |terminal, _| {
+                (
+                    terminal.snapshot().expect("canonical styled snapshot"),
+                    terminal.get_content(),
+                )
+            });
+            let source = parent.message_editor.read(cx).text(cx);
+            let metadata = TerminalThreadMetadata {
+                terminal_id,
+                title: "Retained delayed-source fixture".into(),
+                custom_title: None,
+                created_at: chrono::Utc::now(),
+                worktree_paths: project.read(cx).worktree_paths(cx),
+                remote_connection: project.read(cx).remote_connection_options(cx),
+                working_directory: None,
+                inline_context: Some(InlineTerminalContext {
+                    occurrence_id: None,
+                    previous_occurrences: Vec::new(),
+
+                    thread_id: parent.root_thread_id,
+                    session_id: Some(parent.session_id.clone()),
+                    restored_draft_source_session_id: None,
+                    preceding_entry_count: parent.thread.read(cx).entries().len(),
+                    message_client_id: None,
+                    is_draft: true,
+                    presentation_order: None,
+                    draft_position: Some(
+                        InlineTerminalDraftPosition::new(&source, source_offset)
+                            .expect("exact fixture source boundary"),
+                    ),
+                    collapsed: false,
+                    output: rendered_output,
+                    snapshot: Some(snapshot),
+                }),
+            };
+            TerminalThreadMetadataStore::global(cx)
+                .update(cx, |history, cx| history.save_inline(metadata, cx))
+                .expect("canonical retained history admission");
+            parent
+                .sync_inline_terminal_history(window, cx)
+                .expect("canonical retained terminal placement");
+        });
+    }
+
+    #[cfg(feature = "multiplayer-tools")]
+    async fn assert_inline_delayed_source_ownership(
+        command_remainder: bool,
+        later_suffix: &str,
+        cx: &mut TestAppContext,
+    ) {
+        use crate::terminal_thread_metadata_store::{
+            InlineTerminalPromptReference, TerminalThreadMetadataStore,
+        };
+        init_test(cx);
+        cx.update(|cx| {
+            agent::ThreadStore::init_global(cx);
+            language_model::LanguageModelRegistry::test(cx);
+        });
+        let connection = RecordingNativeCommandConnection::new(false);
+        let prompts = connection.prompts.clone();
+        let (conversation, cx) =
+            setup_conversation_view(StubAgentServer::new(connection), cx).await;
+        let parent = active_thread(&conversation, cx);
+        let editor = message_editor(&conversation, cx);
+        parent.read_with(cx, |parent, _| {
+            parent
+                .session_capabilities
+                .write()
+                .set_prompt_capabilities(acp::PromptCapabilities::new().embedded_context(true));
+        });
+        cx.update(|_, cx| TerminalThreadMetadataStore::init_global(cx));
+        let prefix = if command_remainder {
+            "/compact captured λ "
+        } else {
+            "captured λ "
+        };
+        let (sender, receiver) = futures::channel::oneshot::channel::<
+            std::result::Result<crate::mention_set::Mention, String>,
+        >();
+        let resolution = cx.update(|_, cx| {
+            cx.spawn(async move |_| receiver.await.expect("controlled pending inline mention"))
+                .shared()
+        });
+        editor.update_in(cx, |editor, window, cx| {
+            editor.set_message(
+                vec![
+                    acp::ContentBlock::from(prefix),
+                    acp::ContentBlock::ResourceLink(acp::ResourceLink::new(
+                        "pending.rs",
+                        "file:///project/pending.rs",
+                    )),
+                    acp::ContentBlock::from(" 🦀tail"),
+                ],
+                window,
+                cx,
+            );
+            editor.mention_set().update(cx, |mentions, cx| {
+                let crease = mentions
+                    .creases()
+                    .into_iter()
+                    .next()
+                    .expect("real mention crease");
+                let uri = mentions
+                    .mention_uri_for_crease(&crease)
+                    .expect("real mention URI");
+                mentions.insert_mention(crease, uri, resolution, None, cx);
+            });
+        });
+        cx.run_until_parked();
+        let accepted_terminal = crate::TerminalId::new();
+        retain_inline_resolution_fixture(
+            &parent,
+            accepted_terminal,
+            prefix.len(),
+            "OLD_TERMINAL\r\n",
+            cx,
+        );
+        cx.run_until_parked();
+        let captured_source = editor.read_with(cx, |editor, cx| editor.text(cx));
+        let captured_snapshot = editor.read_with(cx, |editor, cx| {
+            editor
+                .draft_content_blocks_snapshot(cx)
+                .expect("mounted retained context")
+        });
+        let captured_reference = captured_snapshot
+            .iter()
+            .find_map(|block| {
+                InlineTerminalPromptReference::from_content(block).expect("typed reference")
+            })
+            .expect("captured terminal reference");
+        assert_eq!(captured_reference.terminal_id, accepted_terminal);
+        assert_eq!(
+            captured_reference
+                .position
+                .byte_offset_for_source(&captured_source)
+                .expect("captured source"),
+            prefix.len()
+        );
+        parent.update_in(cx, |parent, window, cx| {
+            if command_remainder {
+                parent.send(window, cx);
+            } else {
+                parent.send_impl(editor.clone(), window, cx);
+            }
+        });
+        cx.run_until_parked();
+        assert!(
+            prompts.lock().is_empty(),
+            "pending mention must gate actual submission"
+        );
+        parent.read_with(cx, |parent, _| assert!(parent.is_loading_contents));
+        if !later_suffix.is_empty() {
+            editor.update_in(cx, |editor, window, cx| {
+                let end = editor.text(cx).len();
+                editor.editor().update(cx, |editor, cx| {
+                    assert!(!editor.read_only(cx), "fixture input must remain editable");
+                    editor.change_selections(
+                        SelectionEffects::no_scroll(),
+                        window,
+                        cx,
+                        |selections| {
+                            selections
+                                .select_ranges([MultiBufferOffset(end)..MultiBufferOffset(end)]);
+                        },
+                    );
+                    editor.insert(later_suffix, window, cx);
+                });
+            });
+            cx.run_until_parked();
+        }
+        let later_source = format!("{captured_source}{later_suffix}");
+        assert_eq!(
+            editor.read_with(cx, |editor, cx| editor.text(cx)),
+            later_source
+        );
+        let later_terminal = crate::TerminalId::new();
+        retain_inline_resolution_fixture(
+            &parent,
+            later_terminal,
+            later_source.len(),
+            "NEW_TERMINAL\r\n",
+            cx,
+        );
+        cx.run_until_parked();
+        let later_snapshot = editor.read_with(cx, |editor, cx| {
+            editor
+                .draft_content_blocks_snapshot(cx)
+                .expect("both retained terminal contexts")
+        });
+        assert!(later_snapshot.iter().any(|block| {
+            InlineTerminalPromptReference::from_content(block)
+                .expect("later reference")
+                .is_some_and(|reference| reference.terminal_id == later_terminal)
+        }));
+        sender
+            .send(Ok(crate::mention_set::Mention::Text {
+                content: "resolved pending context".into(),
+                tracked_buffers: Vec::new(),
+            }))
+            .expect("captured context keeps its actual receiver");
+        cx.run_until_parked();
+        assert_eq!(
+            editor.entity_id(),
+            message_editor(&conversation, cx).entity_id()
+        );
+        assert_eq!(
+            editor.read_with(cx, |editor, cx| editor.text(cx)),
+            later_source,
+            "late resolution must preserve the later typed source"
+        );
+        let delivered = prompts.lock().clone();
+        let accepted_references = delivered
+            .iter()
+            .flat_map(|prompt| prompt.prompt.iter())
+            .filter_map(|block| {
+                InlineTerminalPromptReference::from_content(block).expect("delivered reference")
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            !accepted_references
+                .iter()
+                .any(|reference| reference.terminal_id == later_terminal),
+            "newly mounted terminal must remain unsent"
+        );
+        let accepted_matches = accepted_references
+            .iter()
+            .filter(|reference| reference.terminal_id == accepted_terminal)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            accepted_matches.len(),
+            1,
+            "captured terminal must be delivered exactly once"
+        );
+        let accepted_reference = *accepted_matches.first().expect("one accepted reference");
+        let accepted_source = if command_remainder {
+            captured_source
+                .strip_prefix("/compact ")
+                .expect("exact command prefix")
+        } else {
+            captured_source.as_str()
+        };
+        let accepted_offset = if command_remainder {
+            prefix.len() - "/compact ".len()
+        } else {
+            prefix.len()
+        };
+        assert_eq!(
+            accepted_reference
+                .position
+                .byte_offset_for_source(accepted_source)
+                .expect("accepted source remains exact"),
+            accepted_offset
+        );
+        if command_remainder {
+            assert!(
+                delivered
+                    .iter()
+                    .any(|prompt| prompt.prompt == vec![acp::ContentBlock::from("/compact")])
+            );
+        }
+        let live = editor.read_with(cx, |editor, cx| {
+            editor
+                .draft_content_blocks_snapshot(cx)
+                .expect("later live snapshot remains valid")
+        });
+        let live_references = live
+            .iter()
+            .filter_map(|block| {
+                InlineTerminalPromptReference::from_content(block).expect("live reference")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            live_references
+                .iter()
+                .map(|reference| reference.terminal_id)
+                .collect::<Vec<_>>(),
+            vec![later_terminal],
+            "accepted terminal must move to history without stealing the new terminal"
+        );
+        assert_eq!(
+            live_references
+                .first()
+                .expect("one later terminal")
+                .position
+                .byte_offset_for_source(&later_source)
+                .expect("later draft boundary"),
+            later_source.len()
+        );
+        let history = cx.update(|_, cx| TerminalThreadMetadataStore::global(cx));
+        history.read_with(cx, |history, _| {
+            let accepted = history
+                .entry(accepted_terminal)
+                .and_then(|entry| entry.inline_context.as_ref())
+                .expect("accepted history");
+            assert!(!accepted.is_draft);
+            assert_eq!(
+                accepted.draft_position.as_ref(),
+                Some(&accepted_reference.position)
+            );
+            let later = history
+                .entry(later_terminal)
+                .and_then(|entry| entry.inline_context.as_ref())
+                .expect("later history");
+            assert!(later.is_draft);
+            assert_eq!(
+                later.draft_position.as_ref(),
+                Some(
+                    &live_references
+                        .first()
+                        .expect("one later terminal")
+                        .position
+                )
+            );
+        });
+        parent.read_with(cx, |parent, _| assert!(parent.thread_error.is_none()));
     }
 
     #[gpui::test]

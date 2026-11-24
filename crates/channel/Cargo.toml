@@ -13,12 +13,14 @@ path = "src/channel.rs"
 doctest = false
 
 [features]
+multiplayer-tools = ["dep:collaboration_domain"]
 test-support = ["collections/test-support", "gpui/test-support", "rpc/test-support"]
 
 [dependencies]
 anyhow.workspace = true
 client.workspace = true
 clock.workspace = true
+collaboration_domain = { workspace = true, optional = true }
 collections.workspace = true
 futures.workspace = true
 gpui.workspace = true

@@ -2,6 +2,8 @@ mod channel_modal;
 mod contact_finder;
 
 use self::channel_modal::ChannelModal;
+#[cfg(feature = "multiplayer-tools")]
+use crate::channel_messaging::ChannelMessagingTransport;
 use crate::{CollaborationPanelSettings, channel_view::ChannelView};
 use anyhow::Context as _;
 use call::ActiveCall;
@@ -150,6 +152,69 @@ pub fn init(cx: &mut App) {
                 ChannelView::open(channel_id, None, workspace, window, cx).detach_and_log_err(cx);
             });
         });
+        #[cfg(feature = "multiplayer-tools")]
+        workspace.register_action(
+            |_, action: &workspace::OpenChannelMessagesById, window, cx| {
+                let channel_id = client::ChannelId(action.channel_id);
+                let workspace = cx.entity();
+                window.defer(cx, move |window, cx| {
+                    #[cfg(feature = "multiplayer-tools")]
+                    {
+                        let channel = ChannelStore::global(cx)
+                            .read(cx)
+                            .channel_for_id(channel_id)
+                            .cloned();
+                        let user = workspace.read(cx).user_store().read(cx).current_user();
+                        if let (Some(channel), Some(user)) = (channel, user) {
+                            let client = workspace.read(cx).client().clone();
+                            let project = workspace.read(cx).project().clone();
+                            match ChannelMessagingTransport::open(
+                                channel,
+                                user,
+                                client,
+                                project,
+                                workspace.clone(),
+                                window,
+                                cx,
+                            ) {
+                                Ok(views) => workspace.update(cx, |workspace, cx| {
+                                    workspace.set_collaborative_channel_timeline(
+                                        channel_id.0,
+                                        views.timeline.into(),
+                                        cx,
+                                    );
+                                    workspace.set_collaborative_channel_composer(
+                                        channel_id.0,
+                                        views.composer,
+                                        cx,
+                                    );
+                                    workspace.set_collaborative_channel_participants(
+                                        channel_id.0,
+                                        views.participants,
+                                        cx,
+                                    );
+                                }),
+                                Err(error) => {
+                                    workspace.update(cx, |workspace, cx| {
+                                        workspace.show_error(
+                                            format!("Could not open channel messages: {error:#}"),
+                                            cx,
+                                        )
+                                    });
+                                }
+                            }
+                        } else {
+                            workspace.update(cx, |workspace, cx| {
+                                workspace.show_error(
+                                    "Sign in and select an available channel to open messages",
+                                    cx,
+                                )
+                            });
+                        }
+                    }
+                });
+            },
+        );
         // TODO: make it possible to bind this one to a held key for push to talk?
         // how to make "toggle_on_modifiers_press" contextual?
         workspace.register_action(|_, _: &Mute, _, cx| title_bar::collab::toggle_mute(cx));

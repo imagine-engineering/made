@@ -51,6 +51,7 @@ use rpc::{
         RequestMessage, ShareProject, UpdateChannelBufferCollaborators,
     },
 };
+use sea_orm::ConnectionTrait as _;
 use semver::Version;
 use std::{
     any::TypeId,
@@ -250,6 +251,7 @@ struct Session {
     #[allow(unused)]
     system_id: Option<String>,
     _executor: Executor,
+    message_runtime: Option<Arc<crate::messages::channel_runtime::CanonicalMessageRuntime>>,
     #[cfg(any(test, feature = "test-support"))]
     test_update_buffer_probe: Arc<parking_lot::Mutex<TestUpdateBufferProbe>>,
 }
@@ -354,6 +356,7 @@ pub struct Server {
     app_state: Arc<AppState>,
     handlers: TypeIdHashMap<MessageHandler>,
     teardown: watch::Sender<bool>,
+    message_runtime: Option<Arc<crate::messages::channel_runtime::CanonicalMessageRuntime>>,
     #[cfg(any(test, feature = "test-support"))]
     test_update_buffer_probe: Arc<parking_lot::Mutex<TestUpdateBufferProbe>>,
 }
@@ -457,6 +460,24 @@ impl Server {
     }
 
     pub fn try_new(id: ServerId, app_state: Arc<AppState>) -> Result<Arc<Self>> {
+        let message_runtime =
+            if app_state.db.pool.get_database_backend() == sea_orm::DatabaseBackend::Postgres {
+                let service = crate::messages::channel_service::CanonicalMessageService::new(
+                    sea_orm::DatabaseConnection::from(
+                        app_state.db.pool.get_postgres_connection_pool().clone(),
+                    ),
+                )?;
+                Some(Arc::new(
+                    crate::messages::channel_runtime::CanonicalMessageRuntime::new(
+                        app_state.db.clone(),
+                        service,
+                        app_state.config.collaboration_redis_url.as_deref(),
+                        app_state.executor.clone(),
+                    )?,
+                ))
+            } else {
+                None
+            };
         let mut server = Self {
             id: parking_lot::Mutex::new(id),
             peer: Peer::new(id.0 as u32),
@@ -464,6 +485,7 @@ impl Server {
             connection_pool: Default::default(),
             handlers: Default::default(),
             teardown: watch::channel(false).0,
+            message_runtime,
             #[cfg(any(test, feature = "test-support"))]
             test_update_buffer_probe: Default::default(),
         };
@@ -646,6 +668,10 @@ impl Server {
             .add_message_handler(unfollow)
             .add_message_handler(update_followers)
             .add_message_handler(acknowledge_channel_message)
+            .add_request_handler(open_collaborative_channel)
+            .add_request_handler(close_collaborative_channel)
+            .add_request_handler(get_collaborative_message_window)
+            .add_request_handler(apply_collaborative_message_operation)
             .add_message_handler(acknowledge_buffer_version)
             .add_request_handler(forward_mutating_project_request::<proto::Stage>)
             .add_request_handler(forward_mutating_project_request::<proto::Unstage>)
@@ -703,6 +729,9 @@ impl Server {
     }
 
     pub async fn start(&self) -> Result<()> {
+        if let Some(runtime) = &self.message_runtime {
+            runtime.start_redis_receiver();
+        }
         let server_id = *self.id.lock();
         let app_state = self.app_state.clone();
         let peer = self.peer.clone();
@@ -874,6 +903,9 @@ impl Server {
     }
 
     pub fn teardown(&self) {
+        if let Some(runtime) = &self.message_runtime {
+            runtime.shutdown();
+        }
         self.peer.teardown();
         self.connection_pool.lock().reset();
         let _ = self.teardown.send(true);
@@ -1093,6 +1125,7 @@ impl Server {
                 geoip_country_code,
                 system_id,
                 _executor: executor.clone(),
+                message_runtime: this.message_runtime.clone(),
                 #[cfg(any(test, feature = "test-support"))]
                 test_update_buffer_probe: this.test_update_buffer_probe.clone(),
             };
@@ -1509,6 +1542,9 @@ async fn connection_lost(
     executor: Executor,
 ) -> Result<()> {
     session.peer.disconnect(session.connection_id);
+    if let Some(runtime) = &session.message_runtime {
+        runtime.close_connection(session.connection_id);
+    }
     session
         .connection_pool()
         .await
@@ -4272,6 +4308,835 @@ async fn get_channel_messages_by_id(
         "legacy channel chat protocol is unsupported; use collaborative message contract v1"
     )
     .into())
+}
+
+async fn open_collaborative_channel(
+    request: proto::OpenCollaborativeChannel,
+    response: Response<proto::OpenCollaborativeChannel>,
+    session: MessageContext,
+) -> Result<()> {
+    if request.contract_version != 1 {
+        response.send(proto::OpenCollaborativeChannelResponse {
+            contract_version: 1,
+            error_code:
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnsupportedVersion
+                    .into(),
+            ..Default::default()
+        })?;
+        return Ok(());
+    }
+    if request.page_size == 0
+        || request.page_size as usize > crate::messages::channel_service::MAX_PAGE_SIZE
+    {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    }
+    if session
+        .app_state
+        .db
+        .run_on_database_runtime(
+            crate::messages::channel_admission::bootstrap_canonical_channels(&session.app_state.db),
+        )
+        .await
+        .is_err()
+    {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    }
+    let Some((community_id, channel_id)) =
+        collaborative_route(&request.community_id, &request.channel_id)
+    else {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    };
+    let user = match &session.principal {
+        Principal::User(user) => user,
+    };
+    let authorization = match session
+        .app_state
+        .db
+        .run_on_database_runtime(crate::messages::channel_admission::admit_channel(
+            &session.app_state.db.pool,
+            user,
+            community_id,
+            channel_id,
+        ))
+        .await
+    {
+        Ok(authorization) => authorization,
+        Err(_) => {
+            response.send(collaborative_open_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+            ))?;
+            return Ok(());
+        }
+    };
+    let signing_public_key = match request.signing_public_key.as_slice() {
+        [] => None,
+        key if key.len() == 32 => Some(key),
+        _ => {
+            response.send(collaborative_open_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+            ))?;
+            return Ok(());
+        }
+    };
+    if session
+        .app_state
+        .db
+        .run_on_database_runtime(
+            crate::messages::channel_admission::update_principal_presentation(
+                &session.app_state.db.pool,
+                &authorization,
+                user,
+                signing_public_key,
+            ),
+        )
+        .await
+        .is_err()
+    {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+        ))?;
+        return Ok(());
+    }
+    if authorization
+        .authorize(
+            collaboration_domain::AuthorizationAction::Read,
+            unix_time_millis(),
+        )
+        .is_err()
+    {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+        ))?;
+        return Ok(());
+    }
+    let Some(runtime) = session.message_runtime() else {
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    };
+    let page = match session
+        .app_state
+        .db
+        .run_on_database_runtime(runtime.service().channel_page(
+            &authorization,
+            request.page_size.max(1) as usize,
+            None,
+        ))
+        .await
+    {
+        Ok(page) => page,
+        Err(error) => {
+            tracing::error!(?error, "could not load collaborative message history");
+            response.send(collaborative_open_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+            ))?;
+            return Ok(());
+        }
+    };
+    let principal_id = authorization.principal.principal_id();
+    if let Err(error) = session
+        .app_state
+        .db
+        .run_on_database_runtime(runtime.subscribe(
+            authorization,
+            session.connection_id,
+            request.after_outbox_sequence,
+            session.peer.clone(),
+        ))
+        .await
+    {
+        tracing::error!(
+            ?error,
+            "could not subscribe to collaborative message stream"
+        );
+        response.send(collaborative_open_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    }
+    response.send(proto::OpenCollaborativeChannelResponse {
+        contract_version: 1,
+        principal_id: principal_id.as_uuid().as_bytes().to_vec(),
+        page: Some(crate::messages::channel_runtime::page_to_proto(page)),
+        error_code: proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorNone.into(),
+    })?;
+    Ok(())
+}
+
+async fn close_collaborative_channel(
+    request: proto::CloseCollaborativeChannel,
+    response: Response<proto::CloseCollaborativeChannel>,
+    session: MessageContext,
+) -> Result<()> {
+    if request.contract_version == 1
+        && let Some((community_id, channel_id)) =
+            collaborative_route(&request.community_id, &request.channel_id)
+        && let Some(runtime) = session.message_runtime()
+    {
+        runtime.close(session.connection_id, community_id, channel_id);
+    }
+    response.send(proto::Ack {})?;
+    Ok(())
+}
+
+async fn get_collaborative_message_window(
+    request: proto::GetCollaborativeMessageWindow,
+    response: Response<proto::GetCollaborativeMessageWindow>,
+    session: MessageContext,
+) -> Result<()> {
+    if request.contract_version != 1 {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnsupportedVersion,
+        ))?;
+        return Ok(());
+    }
+    if request.page_size == 0
+        || request.page_size as usize > crate::messages::channel_service::MAX_PAGE_SIZE
+    {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    }
+    if session
+        .app_state
+        .db
+        .run_on_database_runtime(
+            crate::messages::channel_admission::bootstrap_canonical_channels(&session.app_state.db),
+        )
+        .await
+        .is_err()
+    {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    }
+    let Some((community_id, channel_id)) =
+        collaborative_route(&request.community_id, &request.channel_id)
+    else {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    };
+    let user = match &session.principal {
+        Principal::User(user) => user,
+    };
+    let authorization = match session
+        .app_state
+        .db
+        .run_on_database_runtime(crate::messages::channel_admission::admit_channel(
+            &session.app_state.db.pool,
+            user,
+            community_id,
+            channel_id,
+        ))
+        .await
+    {
+        Ok(authorization) => authorization,
+        Err(_) => {
+            response.send(collaborative_window_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+            ))?;
+            return Ok(());
+        }
+    };
+    if authorization
+        .authorize(
+            collaboration_domain::AuthorizationAction::Read,
+            unix_time_millis(),
+        )
+        .is_err()
+    {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+        ))?;
+        return Ok(());
+    }
+    let Some(runtime) = session.message_runtime() else {
+        response.send(collaborative_window_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    };
+    let cursor = match collaborative_cursor(request.cursor.as_ref()) {
+        Ok(cursor) => cursor,
+        Err(()) => {
+            response.send(collaborative_window_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+            ))?;
+            return Ok(());
+        }
+    };
+    let page = if request.thread_root_event_id.is_empty() {
+        session
+            .app_state
+            .db
+            .run_on_database_runtime(runtime.service().channel_page(
+                &authorization,
+                request.page_size.max(1) as usize,
+                cursor.map(|(cursor, snapshot)| {
+                    (
+                        crate::messages::window_repository::ChannelWindowCursor {
+                            message_created_at: cursor.created_at,
+                            source_event_id: cursor.event_id,
+                        },
+                        snapshot,
+                    )
+                }),
+            ))
+            .await
+    } else {
+        let Some(root_event_id) = collaborative_event_id(&request.thread_root_event_id) else {
+            response.send(collaborative_window_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+            ))?;
+            return Ok(());
+        };
+        session
+            .app_state
+            .db
+            .run_on_database_runtime(runtime.service().thread_page(
+                &authorization,
+                root_event_id,
+                request.page_size.max(1) as usize,
+                cursor,
+            ))
+            .await
+    };
+    match page {
+        Ok(page) => response.send(proto::GetCollaborativeMessageWindowResponse {
+            contract_version: 1,
+            page: Some(crate::messages::channel_runtime::page_to_proto(page)),
+            error_code: proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorNone.into(),
+        })?,
+        Err(error) => {
+            tracing::error!(?error, "could not load collaborative message continuation");
+            response.send(collaborative_window_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+            ))?;
+        }
+    }
+    Ok(())
+}
+
+async fn apply_collaborative_message_operation(
+    request: proto::ApplyCollaborativeMessageOperation,
+    response: Response<proto::ApplyCollaborativeMessageOperation>,
+    session: MessageContext,
+) -> Result<()> {
+    if request.contract_version != 1 {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnsupportedVersion,
+        ))?;
+        return Ok(());
+    }
+    if session
+        .app_state
+        .db
+        .run_on_database_runtime(
+            crate::messages::channel_admission::bootstrap_canonical_channels(&session.app_state.db),
+        )
+        .await
+        .is_err()
+    {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    }
+    let Some((community_id, channel_id)) =
+        collaborative_route(&request.community_id, &request.channel_id)
+    else {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    };
+    let Some(message_id) =
+        uuid_from_bytes(&request.message_id).map(collaboration_domain::AggregateId::from_uuid)
+    else {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    };
+    let Some(operation_id) = uuid::Uuid::parse_str(&request.operation_id)
+        .ok()
+        .map(collaboration_domain::OperationId::from_uuid)
+    else {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    };
+    let kind = match request.kind {
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageCreate as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageCreate
+        }
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageEdit as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageEdit
+        }
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageDelete as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageDelete
+        }
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionAdd
+                    as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionAdd
+        }
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionRemove
+                    as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionRemove
+        }
+        value
+            if value
+                == proto::CollaborativeMessageOperationKind::CollaborativeMessageAcknowledge
+                    as i32 =>
+        {
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageAcknowledge
+        }
+        _ => {
+            response.send(collaborative_apply_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+            ))?;
+            return Ok(());
+        }
+    };
+    let user = match &session.principal {
+        Principal::User(user) => user,
+    };
+    let authorization = match session
+        .app_state
+        .db
+        .run_on_database_runtime(crate::messages::channel_admission::admit_channel(
+            &session.app_state.db.pool,
+            user,
+            community_id,
+            channel_id,
+        ))
+        .await
+    {
+        Ok(authorization) => authorization,
+        Err(_) => {
+            response.send(collaborative_apply_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+            ))?;
+            return Ok(());
+        }
+    };
+    let action =
+        if kind == proto::CollaborativeMessageOperationKind::CollaborativeMessageAcknowledge {
+            collaboration_domain::AuthorizationAction::Read
+        } else {
+            collaboration_domain::AuthorizationAction::Write
+        };
+    if authorization.authorize(action, unix_time_millis()).is_err() {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorDenied,
+        ))?;
+        return Ok(());
+    }
+    let signed_event =
+        if kind == proto::CollaborativeMessageOperationKind::CollaborativeMessageAcknowledge {
+            None
+        } else {
+            match collaborative_signed_event(&authorization, request.signed_event.as_ref()) {
+                Ok(event) => Some(event),
+                Err(()) => {
+                    response.send(collaborative_apply_error(
+                    proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+                ))?;
+                    return Ok(());
+                }
+            }
+        };
+    if signed_event.as_ref().is_some_and(|event| {
+        matches!(
+            kind,
+            proto::CollaborativeMessageOperationKind::CollaborativeMessageCreate
+                | proto::CollaborativeMessageOperationKind::CollaborativeMessageEdit
+        ) && event.signed_event().event.content != request.body
+    }) {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    }
+    let expected_version = collaboration_domain::AggregateVersion::new(request.expected_version);
+    if request.expected_version != 0 && expected_version.is_none() {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+        ))?;
+        return Ok(());
+    }
+    let related_reaction_event_id = if request.related_reaction_event_id.is_empty() {
+        None
+    } else {
+        let Some(event_id) = collaborative_event_id(&request.related_reaction_event_id) else {
+            response.send(collaborative_apply_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest,
+            ))?;
+            return Ok(());
+        };
+        Some(event_id)
+    };
+    let operation_kind = match kind {
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageCreate => {
+            crate::messages::channel_mutation::MessageOperationKind::Create
+        }
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageEdit => {
+            crate::messages::channel_mutation::MessageOperationKind::Edit
+        }
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageDelete => {
+            crate::messages::channel_mutation::MessageOperationKind::Delete
+        }
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionAdd => {
+            crate::messages::channel_mutation::MessageOperationKind::ReactionAdd
+        }
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageReactionRemove => {
+            crate::messages::channel_mutation::MessageOperationKind::ReactionRemove
+        }
+        proto::CollaborativeMessageOperationKind::CollaborativeMessageAcknowledge => {
+            crate::messages::channel_mutation::MessageOperationKind::Acknowledge
+        }
+    };
+    let Some(runtime) = session.message_runtime() else {
+        response.send(collaborative_apply_error(
+            proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+        ))?;
+        return Ok(());
+    };
+    let mutation = crate::messages::channel_mutation::CanonicalMessageMutation::new(
+        sea_orm::DatabaseConnection::from(
+            session
+                .app_state
+                .db
+                .pool
+                .get_postgres_connection_pool()
+                .clone(),
+        ),
+    )
+    .map_err(|error| anyhow!(error))?;
+    let sink = crate::db::collaboration::outbox::TransactionalCommandOutbox::new(
+        sea_orm::DatabaseConnection::from(
+            session
+                .app_state
+                .db
+                .pool
+                .get_postgres_connection_pool()
+                .clone(),
+        ),
+        mutation,
+    )
+    .map_err(|backend| {
+        anyhow!("collaborative message outbox requires PostgreSQL, got {backend:?}")
+    })?;
+    let command = crate::collaboration_command::DomainCommand::new(
+        operation_id,
+        authorization.tenant.clone(),
+        authorization.principal.clone(),
+        expected_version,
+        None,
+        crate::collaboration_command::CommandAdapter::ZedRpc,
+        crate::messages::channel_mutation::MessageOperation {
+            authorization: authorization.clone(),
+            kind: operation_kind,
+            message_id,
+            expected_version,
+            signed_event,
+            reaction: (!request.reaction.is_empty()).then_some(request.reaction),
+            related_reaction_event_id,
+            acknowledged_outbox_sequence: (request.acknowledged_outbox_sequence != 0)
+                .then_some(request.acknowledged_outbox_sequence),
+        },
+    );
+    use crate::collaboration_command::DomainCommandSink as _;
+    let receipt = match session
+        .app_state
+        .db
+        .run_on_database_runtime(sink.submit(command))
+        .await
+    {
+        Ok(receipt) => receipt,
+        Err(crate::collaboration_command::DomainCommandSubmissionError::Unavailable) => {
+            response.send(collaborative_apply_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorUnavailable,
+            ))?;
+            return Ok(());
+        }
+        Err(crate::collaboration_command::DomainCommandSubmissionError::Rejected) => {
+            let mut error = collaborative_apply_error(if expected_version.is_some() {
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorStaleVersion
+            } else {
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorInvalidRequest
+            });
+            if matches!(
+                operation_kind,
+                crate::messages::channel_mutation::MessageOperationKind::Edit
+                    | crate::messages::channel_mutation::MessageOperationKind::Delete
+            ) && let Ok(Some(current)) = session
+                .app_state
+                .db
+                .run_on_database_runtime(runtime.service().message(&authorization, message_id))
+                .await
+                && expected_version.is_some_and(|version| version.get() != current.version)
+            {
+                error.authoritative_version = current.version;
+            }
+            response.send(error)?;
+            return Ok(());
+        }
+    };
+    match session
+        .app_state
+        .db
+        .run_on_database_runtime(runtime.publish_committed(&authorization, operation_id))
+        .await
+    {
+        Ok(envelope) => envelope,
+        Err(error) => {
+            tracing::error!(
+                ?error,
+                "committed collaboration message will require replay"
+            );
+            match session
+                .app_state
+                .db
+                .run_on_database_runtime(
+                    runtime
+                        .service()
+                        .replay()
+                        .envelope_for_operation(&authorization.tenant, operation_id),
+                )
+                .await
+            {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    tracing::error!(?error, "could not load committed collaboration receipt");
+                    response.send(collaborative_apply_error(
+                        proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorRetrying,
+                    ))?;
+                    return Ok(());
+                }
+            }
+        }
+    };
+    if operation_kind == crate::messages::channel_mutation::MessageOperationKind::Acknowledge {
+        response.send(proto::ApplyCollaborativeMessageOperationResponse {
+            contract_version: 1,
+            accepted: true,
+            duplicate: receipt.disposition()
+                == crate::collaboration_command::DomainCommandDisposition::Duplicate,
+            error_code: proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorNone.into(),
+            authoritative_version: receipt.authoritative_version().get(),
+            message: None,
+            retry_after_millis: 0,
+        })?;
+        return Ok(());
+    }
+    let hydrated_message = session
+        .app_state
+        .db
+        .run_on_database_runtime(runtime.service().message(&authorization, message_id))
+        .await;
+    // Database errors may contain message data. Report the affected scope without
+    // exposing that data, and retain the committed receipt for an idempotent retry.
+    let mut message = match hydrated_message
+        .map_err(|_| "query_failed")
+        .and_then(|message| message.ok_or("projection_missing"))
+    {
+        Ok(message) => message,
+        Err(reason) => {
+            tracing::warn!(
+                %community_id,
+                %channel_id,
+                %operation_id,
+                reason,
+                "committed collaboration message requires hydration retry"
+            );
+            response.send(collaborative_apply_error(
+                proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorRetrying,
+            ))?;
+            return Ok(());
+        }
+    };
+    message.accepted_operation_id = Some(operation_id);
+    response.send(proto::ApplyCollaborativeMessageOperationResponse {
+        contract_version: 1,
+        accepted: true,
+        duplicate: receipt.disposition()
+            == crate::collaboration_command::DomainCommandDisposition::Duplicate,
+        error_code: proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorNone.into(),
+        authoritative_version: receipt.authoritative_version().get(),
+        message: Some(crate::messages::channel_runtime::message_to_proto(message)),
+        retry_after_millis: 0,
+    })?;
+    Ok(())
+}
+
+impl MessageContext {
+    fn message_runtime(
+        &self,
+    ) -> Option<&Arc<crate::messages::channel_runtime::CanonicalMessageRuntime>> {
+        self.session.message_runtime.as_ref()
+    }
+}
+
+fn collaborative_route(
+    community_id: &[u8],
+    channel_id: &[u8],
+) -> Option<(
+    collaboration_domain::CommunityId,
+    collaboration_domain::AggregateId,
+)> {
+    Some((
+        collaboration_domain::CommunityId::from_uuid(uuid_from_bytes(community_id)?),
+        collaboration_domain::AggregateId::from_uuid(uuid_from_bytes(channel_id)?),
+    ))
+}
+
+fn uuid_from_bytes(bytes: &[u8]) -> Option<uuid::Uuid> {
+    <[u8; 16]>::try_from(bytes).ok().map(uuid::Uuid::from_bytes)
+}
+
+fn collaborative_event_id(bytes: &[u8]) -> Option<collaboration_domain::NostrEventId> {
+    <[u8; 32]>::try_from(bytes)
+        .ok()
+        .map(collaboration_domain::NostrEventId::from_bytes)
+}
+
+fn collaborative_cursor(
+    cursor: Option<&proto::CollaborativeMessageCursor>,
+) -> std::result::Result<
+    Option<(
+        collaboration_domain::ThreadCursor,
+        crate::messages::window_repository::WindowSnapshot,
+    )>,
+    (),
+> {
+    let Some(cursor) = cursor else {
+        return Ok(None);
+    };
+    if cursor.snapshot_micros == 0 {
+        return Err(());
+    }
+    Ok(Some((
+        collaboration_domain::ThreadCursor {
+            created_at: cursor.message_created_at,
+            event_id: collaborative_event_id(&cursor.source_event_id).ok_or(())?,
+        },
+        crate::messages::window_repository::WindowSnapshot::from_micros(cursor.snapshot_micros),
+    )))
+}
+
+fn collaborative_signed_event(
+    authorization: &crate::messages::channel_admission::AuthorizedChannel,
+    event: Option<&proto::CollaborativeSignedEvent>,
+) -> std::result::Result<crate::db::collaboration::event_repository::VerifiedEventRecord, ()> {
+    let event = event.ok_or(())?;
+    let claimed_id = <[u8; 32]>::try_from(event.claimed_event_id.as_slice()).map_err(|_| ())?;
+    let public_key = <[u8; 32]>::try_from(event.public_key.as_slice()).map_err(|_| ())?;
+    if authorization.signing_public_key != Some(public_key) {
+        return Err(());
+    }
+    let signature = <[u8; 64]>::try_from(event.signature.as_slice()).map_err(|_| ())?;
+    let kind = u16::try_from(event.kind).map_err(|_| ())?;
+    let signed_event = nostr_compat::SignedEvent {
+        claimed_id: nostr_compat::EventId::from_bytes(claimed_id),
+        event: nostr_compat::CanonicalEvent::new(
+            nostr_compat::PublicKey::from_bytes(public_key),
+            event.created_at,
+            kind,
+            event.tags.iter().map(|tag| tag.values.clone()).collect(),
+            event.content.clone(),
+        ),
+        signature: nostr_compat::EventSignature::from_hex(&hex::encode(signature))
+            .map_err(|_| ())?,
+    };
+    crate::db::collaboration::event_repository::VerifiedEventRecord::new(
+        authorization.tenant.community_id(),
+        signed_event,
+        crate::db::collaboration::event_repository::EventVerificationState::Live,
+        unix_time_millis(),
+        nostr_compat::TimestampPolicy::Bounded {
+            now: unix_time_seconds(),
+            max_past_seconds: 15 * 60,
+            max_future_seconds: 15 * 60,
+        },
+    )
+    .map_err(|_| ())
+}
+
+fn collaborative_open_error(
+    error: proto::CollaborativeMessageErrorCode,
+) -> proto::OpenCollaborativeChannelResponse {
+    proto::OpenCollaborativeChannelResponse {
+        contract_version: 1,
+        error_code: error.into(),
+        ..Default::default()
+    }
+}
+
+fn collaborative_window_error(
+    error: proto::CollaborativeMessageErrorCode,
+) -> proto::GetCollaborativeMessageWindowResponse {
+    proto::GetCollaborativeMessageWindowResponse {
+        contract_version: 1,
+        error_code: error.into(),
+        ..Default::default()
+    }
+}
+
+fn collaborative_apply_error(
+    error: proto::CollaborativeMessageErrorCode,
+) -> proto::ApplyCollaborativeMessageOperationResponse {
+    proto::ApplyCollaborativeMessageOperationResponse {
+        contract_version: 1,
+        error_code: error.into(),
+        retry_after_millis: (error
+            == proto::CollaborativeMessageErrorCode::CollaborativeMessageErrorRetrying)
+            .then_some(500)
+            .unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+fn unix_time_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
+}
+
+fn unix_time_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_millis() as u64)
 }
 
 /// Retrieve the current users notifications

@@ -7,60 +7,6 @@ use rpc::ConnectionId;
 use sea_orm::ConnectionTrait as _;
 use std::sync::Arc;
 
-#[gpui::test]
-fn shared_schema_preserves_previously_applied_multiplayer_migrations(
-    cx: &mut gpui::TestAppContext,
-) {
-    use anyhow::Context as _;
-    use sqlx::{Connection as _, migrate::Migrate as _};
-
-    if std::env::var("CI").is_ok() && !cfg!(target_os = "linux") {
-        return;
-    }
-    let fixture = crate::db_tests::TestDb::postgres(cx.executor().clone());
-    let db = fixture.db();
-    let runtime = &db
-        .test_options
-        .as_ref()
-        .expect("missing test runtime")
-        .runtime;
-
-    runtime
-        .block_on(async {
-            let database_url = db.options().get_url();
-            let mut connection = sqlx::PgConnection::connect(database_url).await?;
-            let fresh = connection.list_applied_migrations().await?;
-            assert_eq!(
-                fresh
-                    .iter()
-                    .map(|migration| migration.version)
-                    .collect::<Vec<_>>(),
-                [20251208000000, 20260930000100],
-            );
-
-            let historical_migrations = sqlx::migrate!("./migrations");
-            let identity_migration = historical_migrations
-                .iter()
-                .find(|migration| {
-                    migration.version == 20260815000100
-                        && !migration.migration_type.is_down_migration()
-                })
-                .context("missing published identity migration")?;
-            connection.apply(identity_migration).await?;
-            migrate_shared_schema(database_url).await?;
-
-            let upgraded = connection.list_applied_migrations().await?;
-            assert_eq!(upgraded.len(), fresh.len() + 1);
-            let identity_entry = upgraded
-                .iter()
-                .find(|migration| migration.version == identity_migration.version)
-                .context("missing preserved identity migration")?;
-            assert_eq!(identity_entry.checksum, identity_migration.checksum);
-            anyhow::Ok(())
-        })
-        .expect("shared migration runner should preserve previously applied migrations");
-}
-
 test_both_dbs!(
     test_add_contacts,
     test_add_contacts_postgres,

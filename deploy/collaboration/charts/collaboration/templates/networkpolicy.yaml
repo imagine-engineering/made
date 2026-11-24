@@ -1,0 +1,57 @@
+{{- if and .Values.deployment.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "collaboration.name" . }}
+  labels: {{- include "collaboration.runtimeLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "collaboration.runtimeLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.ingress.namespaceSelector | nindent 14 }}
+          podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.ingress.podSelector | nindent 14 }}
+      ports: [{ port: 8080, protocol: TCP }]
+    {{- if .Values.networkPolicy.monitoring.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.monitoring.namespaceSelector | nindent 14 }}
+          podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.monitoring.podSelector | nindent 14 }}
+      ports: [{ port: 8080, protocol: TCP }]
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.dns.namespaceSelector | nindent 14 }}
+          podSelector:
+            matchLabels: {{- toYaml .Values.networkPolicy.dns.podSelector | nindent 14 }}
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - to:
+      {{- range .Values.networkPolicy.postgresEgressCidrs }}
+        - ipBlock: { cidr: {{ . }} }
+      {{- end }}
+      ports: [{ port: 5432, protocol: TCP }]
+    {{- if .Values.redis.enabled }}
+    - to:
+      {{- range .Values.networkPolicy.redisEgressCidrs }}
+        - ipBlock: { cidr: {{ . }} }
+      {{- end }}
+      ports: [{ port: 6379, protocol: TCP }]
+    {{- end }}
+    - to:
+      {{- range .Values.networkPolicy.objectStoreEgressCidrs }}
+        - ipBlock: { cidr: {{ . }} }
+      {{- end }}
+      ports: [{ port: 443, protocol: TCP }]
+    {{- if or .Values.push.enabled .Values.pairing.enabled .Values.relayMesh.enabled }}
+    - to:
+      {{- range .Values.networkPolicy.optionalHttpsEgressCidrs }}
+        - ipBlock: { cidr: {{ . }} }
+      {{- end }}
+      ports: [{ port: 443, protocol: TCP }]
+    {{- end }}
+{{- end }}

@@ -1,3 +1,5 @@
+#[cfg(feature = "multiplayer-tools")]
+mod collaboration_observer;
 mod connection;
 mod diff;
 mod mention;
@@ -6,6 +8,8 @@ pub use ::terminal::HeadlessTerminal;
 use action_log::{ActionLog, ActionLogTelemetry};
 use agent_client_protocol::schema::{MaybeUndefined, v1 as acp};
 use anyhow::{Context as _, Result, anyhow};
+#[cfg(feature = "multiplayer-tools")]
+pub use collaboration_observer::*;
 use collections::HashSet;
 pub use connection::*;
 pub use diff::*;

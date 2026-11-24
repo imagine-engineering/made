@@ -1,0 +1,51 @@
+{{- if and .Values.deployment.enabled .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "collaboration.name" . }}
+  labels: {{- include "collaboration.runtimeLabels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  tls:
+    - hosts: [{{ .Values.ingress.hostname | quote }}]
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "collaboration.name" . }}
+                port: { number: {{ .Values.service.port }} }
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "collaboration.name" . }}
+                port: { number: {{ .Values.service.port }} }
+          {{- if .Values.nostrHttp.enabled }}
+          {{- range list "/events" "/query" }}
+          - path: {{ . }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "collaboration.name" $ }}
+                port: { number: {{ $.Values.service.port }} }
+          {{- end }}
+          {{- end }}
+          {{- range list "/rpc" "/extensions" "/telemetry" "/v1" "/media" "/git" "/.well-known" "/info" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "collaboration.name" $ }}
+                port: { number: {{ $.Values.service.port }} }
+          {{- end }}
+{{- end }}

@@ -1,0 +1,150 @@
+{{- if .Values.deployment.enabled }}
+{{- include "collaboration.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "collaboration.name" . }}
+  labels: {{- include "collaboration.runtimeLabels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.deployment.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 180
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: {{- include "collaboration.runtimeLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "collaboration.runtimeLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        collaboration.zed.dev/config-checksum: {{ toJson (dict "runtimeSecret" .Values.runtimeSecret "publicUrl" .Values.publicUrl "objectStore" .Values.objectStore "redis" .Values.redis "git" .Values.git "push" .Values.push "pairing" .Values.pairing "relayMesh" .Values.relayMesh "schema" .Values.migration.requiredSchemaVersion "nostrHttp" .Values.nostrHttp) | sha256sum }}
+        collaboration.zed.dev/rollback: {{ .Values.rollback.enabled | quote }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "collaboration.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, fsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: collaboration
+          image: {{ include "collaboration.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["serve", "all"]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports:
+            - { name: public, containerPort: 8080, protocol: TCP }
+          env:
+            - { name: COLLABORATION_PUBLIC_URL, value: {{ .Values.publicUrl | quote }} }
+            - { name: COLLABORATION_OBJECT_ENDPOINT, value: {{ .Values.objectStore.endpoint | quote }} }
+            - { name: COLLABORATION_OBJECT_REGION, value: {{ .Values.objectStore.region | quote }} }
+            - { name: COLLABORATION_OBJECT_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: COLLABORATION_OBJECT_ADDRESSING_STYLE, value: {{ .Values.objectStore.addressingStyle | quote }} }
+            - { name: COLLABORATION_GIT_REPOSITORY_PATH, value: {{ .Values.git.repositoryPath | quote }} }
+            - { name: COLLABORATION_REPLICA_COUNT, value: {{ include "collaboration.maximumReplicas" . | quote }} }
+            - { name: COLLABORATION_PUSH_ENABLED, value: {{ .Values.push.enabled | quote }} }
+            - { name: COLLABORATION_PAIRING_ENABLED, value: {{ .Values.pairing.enabled | quote }} }
+            - { name: COLLABORATION_RELAY_MESH_ENABLED, value: {{ .Values.relayMesh.enabled | quote }} }
+            {{- if .Values.nostrHttp.enabled }}
+            - { name: COLLABORATION_NOSTR_ROUTES, value: {{ include "collaboration.nostrHttpRoutes" . | quote }} }
+            - { name: COLLABORATION_NOSTR_API_CALLS_PER_MINUTE, value: {{ .Values.nostrHttp.callsPerMinute | toString | quote }} }
+            {{- end }}
+            {{- if kindIs "bool" .Values.nostrHttp.closedWebsocket }}
+            - { name: COLLABORATION_NOSTR_CLOSED_WEBSOCKET, value: {{ .Values.nostrHttp.closedWebsocket | toString | quote }} }
+            {{- end }}
+            - { name: HTTP_PORT, value: "8080" }
+            - { name: BLOB_STORE_URL, value: {{ .Values.objectStore.endpoint | quote }} }
+            - { name: BLOB_STORE_REGION, value: {{ .Values.objectStore.region | quote }} }
+            - { name: BLOB_STORE_BUCKET, value: {{ .Values.objectStore.bucket | quote }} }
+            - { name: ZED_ENVIRONMENT, value: {{ .Values.environment | quote }} }
+            - { name: RUST_LOG, value: "collab=info" }
+            - { name: LOG_JSON, value: "true" }
+            {{- if .Values.push.enabled }}
+            - { name: COLLABORATION_PUSH_URL, value: {{ .Values.push.url | quote }} }
+            {{- end }}
+            {{- if .Values.pairing.enabled }}
+            - { name: COLLABORATION_PAIRING_URL, value: {{ .Values.pairing.url | quote }} }
+            {{- end }}
+            {{- if .Values.relayMesh.enabled }}
+            - { name: COLLABORATION_RELAY_MESH_PEERS, value: {{ join "," .Values.relayMesh.peers | quote }} }
+            {{- end }}
+            {{- range $name, $key := dict "COLLABORATION_DATABASE_URL" .Values.runtimeSecret.databaseUrlKey "DATABASE_URL" .Values.runtimeSecret.databaseUrlKey "COLLABORATION_OBJECT_ACCESS_KEY" .Values.runtimeSecret.objectAccessKeyKey "BLOB_STORE_ACCESS_KEY" .Values.runtimeSecret.objectAccessKeyKey "COLLABORATION_OBJECT_SECRET_KEY" .Values.runtimeSecret.objectSecretKeyKey "BLOB_STORE_SECRET_KEY" .Values.runtimeSecret.objectSecretKeyKey "ZED_CLOUD_INTERNAL_API_KEY" .Values.runtimeSecret.internalApiKeyKey }}
+            - name: {{ $name }}
+              valueFrom: { secretKeyRef: { name: {{ $.Values.runtimeSecret.name }}, key: {{ $key }} } }
+            {{- end }}
+            - name: COLLABORATION_READ_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.readDatabaseUrlKey }}, optional: true } }
+            - name: READ_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.readDatabaseUrlKey }}, optional: true } }
+            {{- if .Values.redis.enabled }}
+            - name: COLLABORATION_REDIS_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.redisUrlKey }} } }
+            - name: REDIS_URL
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.redisUrlKey }} } }
+            {{- end }}
+            - name: COLLABORATION_GIT_HOOK_SECRET
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.gitHookSecretKey }}, optional: {{ le (include "collaboration.maximumReplicas" . | int) 1 }} } }
+            {{- if .Values.push.enabled }}
+            - name: COLLABORATION_PUSH_CREDENTIAL
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.pushCredentialKey }} } }
+            {{- end }}
+            {{- if .Values.relayMesh.enabled }}
+            - name: COLLABORATION_RELAY_MESH_TRUST_ROOT
+              valueFrom: { secretKeyRef: { name: {{ .Values.runtimeSecret.name }}, key: {{ .Values.runtimeSecret.meshTrustRootKey }} } }
+            {{- end }}
+          volumeMounts:
+            - { name: git, mountPath: {{ .Values.git.repositoryPath | quote }} }
+            - { name: temporary, mountPath: /tmp }
+          livenessProbe:
+            exec: { command: ["/app/collab", "version"] }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: public }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet: { path: /healthz, port: public }
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 60
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: git
+          {{- if .Values.persistence.git.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-git" (include "collaboration.name" .)) .Values.persistence.git.existingClaim }}
+          {{- else }}
+          emptyDir: { sizeLimit: {{ .Values.persistence.git.size | quote }} }
+          {{- end }}
+        - name: temporary
+          emptyDir: { sizeLimit: 128Mi }
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "collaboration.runtimeLabels" . | nindent 14 }}
+{{- end }}

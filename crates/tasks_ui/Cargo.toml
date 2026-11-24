@@ -13,6 +13,7 @@ path = "src/tasks_ui.rs"
 
 [features]
 default = []
+multiplayer-tools = []
 test-explorer = [
     "dep:db",
     "dep:fs",
