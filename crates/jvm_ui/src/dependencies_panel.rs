@@ -4925,7 +4925,6 @@ impl DependenciesPanel {
                 }
                 if provider == DependencyProvider::Jdtls
                     && current
-                    && worktree.is_local()
                     && let Some((snapshot, current)) = jdtls_snapshot
                 {
                     let (selections, unavailable) = operation_selections_for_snapshot(
@@ -5308,10 +5307,14 @@ impl DependenciesPanel {
     fn run_selected_offline_operation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let result = (|| -> anyhow::Result<()> {
             anyhow::ensure!(
-                !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
+                !self.host_unavailable(cx) && !self.project.read(cx).is_via_collab(),
                 "The project host is unavailable; reconnect and refresh before running operations"
             );
             let receipt = self.selected_operation_for_run(cx)?;
+            anyhow::ensure!(
+                self.operation_host_is_available(&receipt, cx),
+                "The project host is unavailable; reconnect and refresh before running operations"
+            );
             self.with_workspace_window(window, cx, |workspace, window, cx| {
                 workspace.run_jvm_operation(receipt, window, cx)
             })
@@ -5502,10 +5505,14 @@ impl DependenciesPanel {
     fn add_selected_ordered_operation(&mut self, cx: &mut Context<Self>) {
         let result = (|| -> anyhow::Result<()> {
             anyhow::ensure!(
-                !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
-                "Ordered execution requires a connected local project host"
+                !self.host_unavailable(cx) && !self.project.read(cx).is_via_collab(),
+                "Ordered execution requires the local project host or a direct remote connection"
             );
             let receipt = self.selected_operation_for_run(cx)?;
+            anyhow::ensure!(
+                self.operation_host_is_available(&receipt, cx),
+                "Refresh the current project host before queuing JVM operations"
+            );
             let mut proposed = self.ordered_operations.clone();
             proposed.push(receipt);
             compose_ordered_operations(&proposed, &self.operation_selections)?;
@@ -5653,25 +5660,48 @@ impl DependenciesPanel {
         let operation_row_selected = self
             .host
             .selected()
-            .is_some_and(|id| self.operation_selections.contains_key(id));
-        ordered_queue_menu_availability(
+            .and_then(|id| self.operation_selections.get(id))
+            .is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
+        let ordered_composes =
+            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
+                .is_ok_and(|receipt| self.operation_host_is_available(&receipt, cx));
+        let mut availability = ordered_queue_menu_availability(
             operation_row_selected,
             self.ordered_operations.len(),
-            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
-                .is_ok(),
-            !self.host_unavailable(cx) && !self.project.read(cx).is_remote(),
+            ordered_composes,
+            !self.host_unavailable(cx),
             &self.configuration_selections,
-        )
+        );
+        if self.project.read(cx).is_remote() {
+            availability.configurations.clear();
+        }
+        availability
+    }
+
+    fn operation_host_is_available(&self, receipt: &JvmBuildOperationReceipt, cx: &App) -> bool {
+        if self.host_unavailable(cx) {
+            return false;
+        }
+        let project = self.project.read(cx);
+        !project.is_remote()
+            || project
+                .lsp_store()
+                .read(cx)
+                .can_resolve_remote_jvm_operation(receipt, cx)
     }
 
     fn run_ordered_offline_operations(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let result = (|| -> anyhow::Result<()> {
             anyhow::ensure!(
-                !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
-                "Ordered execution requires a connected local project host"
+                !self.host_unavailable(cx) && !self.project.read(cx).is_via_collab(),
+                "Ordered execution requires the local project host or a direct remote connection"
             );
             let receipt =
                 compose_ordered_operations(&self.ordered_operations, &self.operation_selections)?;
+            anyhow::ensure!(
+                self.operation_host_is_available(&receipt, cx),
+                "Refresh the current project host before running ordered JVM operations"
+            );
             self.with_workspace_window(window, cx, |workspace, window, cx| {
                 workspace.run_jvm_operation(receipt, window, cx)
             })
@@ -8454,15 +8484,20 @@ impl Render for DependenciesPanel {
         let can_collect_graph = self.selected_graph().is_some()
             && self.graph_query_token.is_none()
             && !self.project.read(cx).is_remote();
-        let can_run_operation = self
-            .host
-            .selected()
-            .is_some_and(|id| self.operation_selections.contains_key(id))
-            && !self.host_unavailable(cx)
-            && !self.project.read(cx).is_remote();
         let selected_operation = selected
             .as_ref()
             .and_then(|id| self.operation_selections.get(id));
+        let can_run_operation =
+            selected_operation.is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
+        let run_operation_label = if self.project.read(cx).is_remote() {
+            if can_run_operation {
+                "Run selected offline build operation through Tasks on the project host"
+            } else {
+                "Discovered offline build execution unavailable for remote projects"
+            }
+        } else {
+            "Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"
+        };
         let selected_gradle_task = selected_operation.is_some_and(|receipt| {
             receipt
                 .operations
@@ -8471,10 +8506,9 @@ impl Render for DependenciesPanel {
         });
         let show_operation_options =
             can_run_operation && selected_operation == self.operation_option_target.as_ref();
-        let can_run_ordered = !self.host_unavailable(cx)
-            && !self.project.read(cx).is_remote()
-            && compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
-                .is_ok();
+        let can_run_ordered =
+            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
+                .is_ok_and(|receipt| self.operation_host_is_available(&receipt, cx));
         let can_cancel_graph = self.graph_query_is_pending(cx);
         let can_apply_build_selection =
             self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok();
@@ -8864,8 +8898,7 @@ impl Render for DependenciesPanel {
                                         )
                                         .shape(ui::IconButtonShape::Square)
                                         .tab_index(0_isize)
-                                        .aria_label(if self.project.read(cx).is_remote(){"Discovered offline build execution unavailable for remote projects"}
-                                            else{"Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"})
+                                        .aria_label(run_operation_label)
                                         .tooltip(Tooltip::text("Run selected offline operation"))
                                         .disabled(!can_run_operation)
                                         .on_click(cx.listener(|panel, _, window, cx| panel.run_selected_offline_operation(window, cx))),
@@ -9003,8 +9036,7 @@ impl Render for DependenciesPanel {
                     ))
                     .when(self.view!=BuildToolView::Dependencies && !icon_toolbar_active,|header|header.child(
                         Button::new("groovy-run-selected-offline-operation","Run selected offline operation")
-                            .aria_label(if self.project.read(cx).is_remote(){"Discovered offline build execution unavailable for remote projects"}
-                                else{"Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"})
+                            .aria_label(run_operation_label)
                             .disabled(!can_run_operation).tab_index(0_isize)
                             .on_click(cx.listener(|panel,_,window,cx|panel.run_selected_offline_operation(window,cx)))))
                     .when(can_run_operation, |header| header.child(
@@ -9061,7 +9093,11 @@ impl Render for DependenciesPanel {
                                 .disabled(self.ordered_operations.is_empty()).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, _, cx| panel.clear_ordered_operations(cx))))
                             .child(Button::new("groovy-run-ordered-offline-operations", "Run offline")
-                                .aria_label("Run ordered offline operations for the current local module through Tasks")
+                                .aria_label(if self.project.read(cx).is_remote() {
+                                    "Run ordered offline operations on the current project host through Tasks"
+                                } else {
+                                    "Run ordered offline operations for the current local module through Tasks"
+                                })
                                 .aria_value(format!("{} selected", self.ordered_operations.len()))
                                 .disabled(!can_run_ordered).tab_index(0_isize)
                                 .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx)))))),

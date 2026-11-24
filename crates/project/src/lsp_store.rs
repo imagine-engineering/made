@@ -8334,6 +8334,15 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
+    pub fn can_resolve_remote_jvm_operation(
+        &self,
+        receipt: &jvm_project::JvmBuildOperationReceipt,
+        cx: &App,
+    ) -> bool {
+        self.remote_jvm_operation_scope(receipt, cx).is_ok()
+    }
+
+    #[cfg(feature = "jvm-tools")]
     pub fn resolve_remote_jvm_operation(
         &self,
         receipt: jvm_project::JvmBuildOperationReceipt,

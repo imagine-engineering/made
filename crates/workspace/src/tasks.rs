@@ -483,6 +483,7 @@ fn native_profile_retiring_preparation(
                 completion: Some(completion),
                 native_terminal: prepared.native_terminal,
                 pending_launch: prepared.pending_launch,
+                check_before_spawn: prepared.check_before_spawn,
             })
         })
     })
@@ -895,8 +896,19 @@ impl Workspace {
         );
         let project = self.project.read(cx);
         anyhow::ensure!(
-            !project.is_remote() && project.remote_connection_state(cx).is_none(),
-            "Discovered build operations require a local host; remote execution is not qualified"
+            !project.is_via_collab(),
+            "Discovered build operations require the local host or a direct remote connection"
+        );
+        if project.is_remote() {
+            anyhow::ensure!(
+                project.remote_connection_state(cx) == Some(ConnectionState::Connected),
+                "Reconnect to the project host before running this JVM Task"
+            );
+            return self.run_remote_jvm_operation(receipt, window, cx);
+        }
+        anyhow::ensure!(
+            project.remote_connection_state(cx).is_none(),
+            "The JVM Task project connection is unavailable"
         );
         let lsp_store = project.lsp_store();
         let (snapshot, current) = lsp_store
@@ -916,6 +928,91 @@ impl Workspace {
             inventory.register_jvm_operation(receipt, &snapshot, current, cx)
         })?;
         self.schedule_resolved_task(source, resolved, false, window, cx);
+        Ok(())
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn run_remote_jvm_operation(
+        &mut self,
+        receipt: project::jvm_project::JvmBuildOperationReceipt,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
+        let project = self.project.clone();
+        let path_style = project.read(cx).path_style(cx);
+        let lsp_store = project.read(cx).lsp_store();
+        let resolution = lsp_store.update(cx, |store, cx| {
+            store.resolve_remote_jvm_operation(receipt.clone(), None, cx)
+        })?;
+        let lsp_store = lsp_store.downgrade();
+        let prepared = cx.spawn_in(window, async move |workspace, cx| {
+            let result = async {
+                let plan = resolution.await?;
+                anyhow::ensure!(
+                    path_style.is_absolute(&plan.working_directory)
+                        && path_style.is_absolute(&plan.command)
+                        && !plan.working_directory.chars().any(char::is_control)
+                        && !plan.command.chars().any(char::is_control)
+                        && !plan.windows_direct_program,
+                    "The host returned an unsupported JVM Task executable or working directory"
+                );
+                let authorization = plan.authorization.clone().context("Missing JVM Task authorization")?;
+                let task = SpawnInTerminal {
+                    id: TaskId(format!("groovy-remote-jvm:{}", authorization.task_id)),
+                    full_label: plan.label.clone(),
+                    label: plan.label.clone(),
+                    command: Some(plan.command.clone()),
+                    args: plan.arguments.clone(),
+                    cwd: Some(PathBuf::from(&plan.working_directory)),
+                    env: plan.environment.clone().into_iter().collect(),
+                    literal_command: true,
+                    literal_prefix_args: plan.arguments.len(),
+                    ..Default::default()
+                };
+                let handle = StructuredTaskHandle::new(task.id.clone());
+                let check_before_spawn: project::terminals::TaskTerminalCheck = Box::new(move |cx| {
+                    cx.spawn(async move |cx| {
+                        let renewal = lsp_store.update(cx, |store, cx| {
+                            store.resolve_remote_jvm_operation(receipt, Some(authorization), cx)
+                        })??;
+                        anyhow::ensure!(renewal.await? == plan,
+                            "The host build operation changed; refresh and select the operation again");
+                        Ok(())
+                    })
+                });
+                let preparation: crate::TaskLaunchPreparation = Box::new(move |launch, _| {
+                    Task::ready(Ok(crate::PreparedTaskLaunch {
+                        launch,
+                        completion: None,
+                        native_terminal: None,
+                        pending_launch: None,
+                        check_before_spawn: Some(check_before_spawn),
+                    }))
+                });
+                let task = workspace.update_in(cx, |workspace, window, cx| {
+                    anyhow::ensure!(
+                        workspace.project == project
+                            && project.read(cx).remote_connection_state(cx) == Some(ConnectionState::Connected),
+                        "The JVM project host changed; reconnect and select the operation again"
+                    );
+                    let provider = workspace.terminal_provider.as_ref()
+                        .context("The Task terminal is unavailable; reopen the workspace and check terminal setup")?;
+                    Ok::<_, anyhow::Error>(provider.spawn_prepared(task, Some(handle), preparation, window, cx))
+                })??;
+                task.await.transpose()?;
+                Ok::<_, anyhow::Error>(())
+            }.await;
+            if let Err(error) = result {
+                if let Err(closed) = workspace.update(cx, |workspace, cx| {
+                    workspace.show_toast(Toast::new(
+                        NotificationId::unique::<TaskSourceKind>(), error.to_string(),
+                    ), cx);
+                }) {
+                    log::debug!("Remote JVM Task notice owner expired: {closed:#}");
+                }
+            }
+        });
+        self.scheduled_tasks.push(prepared);
         Ok(())
     }
 
@@ -1825,7 +1922,7 @@ impl Workspace {
                                         result
                                     })
                                 }) as crate::TaskLaunchCompletion;
-                                Ok(crate::PreparedTaskLaunch{launch,completion:Some(completion),native_terminal,pending_launch:None})
+                                Ok(crate::PreparedTaskLaunch{launch,completion:Some(completion),native_terminal,pending_launch:None,check_before_spawn:None})
                             })
                         }) as crate::TaskLaunchPreparation
                     });
@@ -1961,7 +2058,7 @@ impl Workspace {
                                 if !artifact_directory_is_explicit {
                                     *working_directory.borrow_mut() = launch.cwd.clone();
                                 }
-                                Ok(crate::PreparedTaskLaunch{launch,completion:selected_completion,native_terminal,pending_launch:None})
+                                Ok(crate::PreparedTaskLaunch{launch,completion:selected_completion,native_terminal,pending_launch:None,check_before_spawn:None})
                             })
                         }) as crate::TaskLaunchPreparation
                     });
@@ -1987,7 +2084,7 @@ impl Workspace {
                                         Err(error)=>Task::ready(Some(Err(error))),
                                     }
                                 }) as crate::TaskLaunchCompletion;
-                                Ok(crate::PreparedTaskLaunch{launch,completion:Some(completion),native_terminal:None,pending_launch:None})
+                                Ok(crate::PreparedTaskLaunch{launch,completion:Some(completion),native_terminal:None,pending_launch:None,check_before_spawn:None})
                             })
                         }) as crate::TaskLaunchPreparation
                     }));
@@ -2009,6 +2106,7 @@ impl Workspace {
                                             completion: None,
                                             native_terminal: None,
                                             pending_launch: None,
+                                            check_before_spawn: None,
                                         },
                                     };
                                     cx.update(|_, cx| pending_launch.check(&prepared.launch, cx))??;
@@ -3992,11 +4090,12 @@ mod tests {
                     };
                     let terminal = match project
                         .update(cx, |project, cx| {
-                            project.create_terminal_task_with_pending_launch(
+                            project.create_terminal_task_with_preflight(
                                 prepared.launch,
                                 handle,
                                 prepared.native_terminal,
                                 prepared.pending_launch,
+                                prepared.check_before_spawn,
                                 cx,
                             )
                         })

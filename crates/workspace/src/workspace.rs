@@ -224,6 +224,7 @@ pub struct PreparedTaskLaunch {
     pub completion: Option<TaskLaunchCompletion>,
     pub native_terminal: Option<project::terminals::PreparedNativeTerminalLaunch>,
     pub pending_launch: Option<project::task_store::PendingExperimentalTaskLaunch>,
+    pub check_before_spawn: Option<project::terminals::TaskTerminalCheck>,
 }
 
 impl PreparedTaskLaunch {

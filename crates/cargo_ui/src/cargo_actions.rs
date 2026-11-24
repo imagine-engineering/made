@@ -4093,16 +4093,18 @@ mod tests {
                                 completion: None,
                                 native_terminal: None,
                                 pending_launch: None,
+                                check_before_spawn: None,
                             }
                         }
                     };
                     let terminal = match project
                         .update(cx, |project, cx| {
-                            project.create_terminal_task_with_pending_launch(
+                            project.create_terminal_task_with_preflight(
                                 prepared.launch,
                                 handle,
                                 prepared.native_terminal,
                                 prepared.pending_launch,
+                                prepared.check_before_spawn,
                                 cx,
                             )
                         })

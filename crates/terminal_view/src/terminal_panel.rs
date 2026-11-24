@@ -754,6 +754,7 @@ impl TerminalPanel {
                 structured_task,
                 None,
                 pending_launch,
+                None,
                 destination,
                 window,
                 cx,
@@ -799,6 +800,7 @@ impl TerminalPanel {
                     structured_task,
                     prepared.native_terminal,
                     prepared.pending_launch,
+                    prepared.check_before_spawn,
                     destination,
                     window,
                     cx,
@@ -817,6 +819,7 @@ impl TerminalPanel {
         structured_task: Option<StructuredTaskHandle>,
         native_terminal: Option<PreparedNativeTerminalLaunch>,
         pending_launch: Option<PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<project::terminals::TaskTerminalCheck>,
         destination: TaskTerminalDestination,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -827,6 +830,7 @@ impl TerminalPanel {
                 structured_task,
                 native_terminal,
                 pending_launch,
+                check_before_spawn,
                 window,
                 cx,
             ),
@@ -842,6 +846,7 @@ impl TerminalPanel {
                 structured_task,
                 native_terminal,
                 pending_launch,
+                check_before_spawn,
                 window,
                 cx,
             ),
@@ -854,6 +859,7 @@ impl TerminalPanel {
         structured_task: Option<StructuredTaskHandle>,
         native_terminal: Option<PreparedNativeTerminalLaunch>,
         pending_launch: Option<PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<project::terminals::TaskTerminalCheck>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<WeakEntity<Terminal>>> {
@@ -864,11 +870,12 @@ impl TerminalPanel {
                 .workspace
                 .update(cx, |workspace, cx| {
                     Self::add_center_terminal(workspace, window, cx, |project, cx| {
-                        project.create_terminal_task_with_pending_launch(
+                        project.create_terminal_task_with_preflight(
                             spawn_task,
                             structured_task,
                             native_terminal,
                             pending_launch,
+                            check_before_spawn,
                             cx,
                         )
                     })
@@ -880,6 +887,7 @@ impl TerminalPanel {
                 structured_task,
                 native_terminal,
                 pending_launch,
+                check_before_spawn,
                 window,
                 cx,
             ),
@@ -1113,6 +1121,7 @@ impl TerminalPanel {
             None,
             None,
             pending_launch,
+            None,
             window,
             cx,
         )
@@ -1125,6 +1134,7 @@ impl TerminalPanel {
         structured_task: Option<StructuredTaskHandle>,
         native_terminal: Option<PreparedNativeTerminalLaunch>,
         pending_launch: Option<PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<project::terminals::TaskTerminalCheck>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<WeakEntity<Terminal>>> {
@@ -1144,11 +1154,12 @@ impl TerminalPanel {
             };
             let created = project
                 .update(cx, |project, cx| {
-                    project.create_terminal_task_with_pending_launch(
+                    project.create_terminal_task_with_preflight(
                         task,
                         structured_task,
                         native_terminal,
                         pending_launch,
+                        check_before_spawn,
                         cx,
                     )
                 })
@@ -1346,6 +1357,7 @@ impl TerminalPanel {
         structured_task: Option<StructuredTaskHandle>,
         native_terminal: Option<PreparedNativeTerminalLaunch>,
         pending_launch: Option<PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<project::terminals::TaskTerminalCheck>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<WeakEntity<Terminal>>> {
@@ -1358,11 +1370,12 @@ impl TerminalPanel {
             })??;
             let new_terminal = project
                 .update(cx, |project, cx| {
-                    project.create_terminal_task_with_pending_launch(
+                    project.create_terminal_task_with_preflight(
                         spawn_task,
                         structured_task,
                         native_terminal,
                         pending_launch,
+                        check_before_spawn,
                         cx,
                     )
                 })
@@ -3096,6 +3109,7 @@ mod tests {
                         Some(handle.clone()),
                         None,
                         None,
+                        None,
                         window,
                         cx,
                     )
@@ -3192,6 +3206,7 @@ mod tests {
                             completion: None,
                             native_terminal: None,
                             pending_launch: None,
+                            check_before_spawn: None,
                         })
                     })
                 }
@@ -3518,6 +3533,7 @@ mod tests {
                         launch,
                         native_terminal: None,
                         pending_launch: None,
+                        check_before_spawn: None,
                         completion: Some(Box::new(move |result, _| {
                             completed.set(true);
                             drop(guard);

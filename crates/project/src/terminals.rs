@@ -32,6 +32,8 @@ pub struct Terminals {
     pub(crate) local_handles: Vec<WeakEntity<terminal::Terminal>>,
 }
 
+pub type TaskTerminalCheck = Box<dyn FnOnce(&mut gpui::AsyncApp) -> Task<Result<()>>>;
+
 pub struct PreparedNativeTerminalLaunch {
     _private: (),
     #[cfg(all(target_os = "macos", feature = "cargo-workspace"))]
@@ -372,6 +374,25 @@ impl Project {
         pending_launch: Option<crate::task_store::PendingExperimentalTaskLaunch>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Terminal>>> {
+        self.create_terminal_task_with_preflight(
+            spawn_task,
+            structured_task,
+            native,
+            pending_launch,
+            None,
+            cx,
+        )
+    }
+
+    pub fn create_terminal_task_with_preflight(
+        &mut self,
+        spawn_task: SpawnInTerminal,
+        structured_task: Option<StructuredTaskHandle>,
+        native: Option<PreparedNativeTerminalLaunch>,
+        pending_launch: Option<crate::task_store::PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<TaskTerminalCheck>,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Entity<Terminal>>> {
         let pending_launch = match pending_launch {
             Some(pending_launch) => {
                 if let Err(error) = pending_launch.check(&spawn_task, cx) {
@@ -400,9 +421,15 @@ impl Project {
                 spawn_task,
                 structured_task,
                 pending_launch,
+                check_before_spawn,
                 cx,
             );
         };
+        if check_before_spawn.is_some() {
+            return Task::ready(Err(anyhow::anyhow!(
+                "A direct native Task cannot use a separate terminal check"
+            )));
+        }
         #[cfg(all(target_os = "macos", feature = "cargo-workspace"))]
         {
             let initial = || -> Result<()> {
@@ -537,6 +564,7 @@ impl Project {
         spawn_task: SpawnInTerminal,
         structured_task: Option<StructuredTaskHandle>,
         pending_launch: Option<crate::task_store::PendingExperimentalTaskLaunch>,
+        check_before_spawn: Option<TaskTerminalCheck>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Terminal>>> {
         if let Err(error) =
@@ -716,6 +744,9 @@ impl Project {
                     .await?;
             }
 
+            if let Some(check) = check_before_spawn {
+                check(cx).await?;
+            }
             let preparation_handle = structured_task.clone();
             let builder = project
                 .update(cx, move |project, cx| {
@@ -1958,11 +1989,67 @@ mod tests {
             project.resolve_directory_environment(
                 &shell,
                 Some(Arc::from(directory.as_path())),
-                Some(remote_client),
+                Some(remote_client.clone()),
                 cx,
             )
         });
         assert_eq!(current_environment.await, Some(HashMap::default()));
+
+        let guarded_directory = PathBuf::from(util::path!("/remote-task-renewal"));
+        let (environment_started, waiting_for_environment) = oneshot::channel();
+        let (release_environment, held_environment) = oneshot::channel();
+        let (check_started, mut waiting_for_check) = oneshot::channel();
+        let pending = project.update(cx, |project, cx| {
+            let shell = remote_client.read(cx).shell().expect("remote shell");
+            project.environment.update(cx, |environment, cx| {
+                let held = cx.spawn(async move |_, _| {
+                    environment_started
+                        .send(())
+                        .expect("Task requested host environment");
+                    held_environment.await.expect("release host environment")
+                });
+                environment.cache_remote_directory_environment_for_test(
+                    Shell::Program(shell),
+                    Arc::from(guarded_directory.as_path()),
+                    held,
+                );
+            });
+            project.create_terminal_task_with_preflight(
+                SpawnInTerminal {
+                    command: Some("printf".into()),
+                    cwd: Some(guarded_directory),
+                    ..Default::default()
+                },
+                None,
+                None,
+                None,
+                Some(Box::new(move |_| {
+                    check_started.send(()).expect("observe the late check");
+                    Task::ready(Err(anyhow::anyhow!("held host authorization expired")))
+                })),
+                cx,
+            )
+        });
+        waiting_for_environment
+            .await
+            .expect("wait for host environment");
+        assert!(
+            waiting_for_check
+                .try_recv()
+                .expect("late check still pending")
+                .is_none()
+        );
+        release_environment
+            .send(Some(HashMap::default()))
+            .expect("release Task environment");
+        waiting_for_check
+            .await
+            .expect("final check runs after environment");
+        assert!(
+            pending
+                .await
+                .is_err_and(|error| error.to_string() == "held host authorization expired")
+        );
     }
 
     #[test]

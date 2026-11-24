@@ -379,13 +379,19 @@ one of those results opens its Usages pane.
 
 ### Ordered offline operations {#ordered-offline-operations}
 
-For a current local task, phase or goal, **Run selected offline operation**
+For a current task, phase or goal, **Run selected offline operation**
 uses the existing Tasks and terminal path. On an eligible operation, use
 **Add to Queue**. Open **Ordered operations** in Dependencies, or use the
 ordered-operations control in the diagram or analyzer toolbar. Expand the
 section to review the order, remove the last operation, clear the queue, or
 run offline. Saved run configurations appear in the queue row's context menu
 when available. Cancel a running queue from its Task terminal.
+
+On a direct remote connection, refresh JVM metadata with the matching
+Groovy-enabled host before selecting operations. The host prepares the offline
+command using its own build tools and settings, and checks the plan again before
+the terminal starts. If the connection, selected module, or provider metadata
+changes, refresh and select the operation again.
 
 For Gradle, put invocation-wide options in `java.import.gradle.arguments`
 under `lsp.jdtls.settings`. For example, use
