@@ -238,10 +238,6 @@ if [[ "$sim" = true ]]; then
 fi
 cp "${target_dir}/${target_triple}/release/cli" "${zed_dir}/bin/${ZED_PRODUCT_EXECUTABLE}"
 
-if [[ ",${ZED_PRODUCT_APP_FEATURES}," == *,agentic-tools,* ]]; then
-    python3 script/bundle-managed-runtime --platform "linux-$(uname -m)" --destination "${zed_dir}/libexec/llama-cpp"
-fi
-
 # Libs
 # Bundle libstdc++ so older supported systems can run binaries built with our
 # toolchain even when their system libstdc++.so.6 lacks required GLIBCXX symbols.

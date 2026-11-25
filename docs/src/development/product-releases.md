@@ -46,11 +46,11 @@ secrets explicitly allowed for this repository. Environment-only secrets need
 a separately reviewed environment binding. Never put secret values in source,
 chat, command arguments or logs.
 
-| Platform | Required GitHub secrets |
-| --- | --- |
-| macOS | `MACOS_SIGNING_IDENTITY`, `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_NOTARIZATION_KEY`, `APPLE_NOTARIZATION_KEY_ID`, `APPLE_NOTARIZATION_ISSUER_ID` |
-| Windows | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `ACCOUNT_NAME`, `CERT_PROFILE_NAME`, `ENDPOINT`, `WINDOWS_SIGNING_PUBLISHER`, `FILE_DIGEST`, `TIMESTAMP_DIGEST`, `TIMESTAMP_SERVER` |
-| Linux | `LINUX_SIGNING_KEY`, `LINUX_SIGNING_KEY_PASSWORD`, `LINUX_SIGNING_KEY_FINGERPRINT` |
+| Platform | Required GitHub secrets                                                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS    | `MACOS_SIGNING_IDENTITY`, `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, `APPLE_NOTARIZATION_KEY`, `APPLE_NOTARIZATION_KEY_ID`, `APPLE_NOTARIZATION_ISSUER_ID`                               |
+| Windows  | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `ACCOUNT_NAME`, `CERT_PROFILE_NAME`, `ENDPOINT`, `WINDOWS_SIGNING_PUBLISHER`, `FILE_DIGEST`, `TIMESTAMP_DIGEST`, `TIMESTAMP_SERVER` |
+| Linux    | `LINUX_SIGNING_KEY`, `LINUX_SIGNING_KEY_PASSWORD`, `LINUX_SIGNING_KEY_FINGERPRINT`                                                                                                               |
 
 macOS needs an Apple Developer account, Developer ID Application certificate
 with its private key exported as the existing base64 PKCS#12 secret, and an
@@ -136,8 +136,7 @@ RELEASE_VERSION=<tag-version> cargo xtask bundle --product rust \
   --phase package --signing required
 ```
 
-Existing packaging owners sign nested executables, libraries and the managed
-llama.cpp runtime. macOS requires Developer ID Application signatures, secure
+Existing packaging owners sign nested executables and libraries. macOS requires Developer ID Application signatures, secure
 timestamps, notarization and stapled tickets for app and DMG. Windows requires
 trusted signatures and timestamps for executables, native libraries and installer.
 Linux requires verified detached signatures. Platform smoke verification runs

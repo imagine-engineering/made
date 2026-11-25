@@ -330,9 +330,6 @@ function BuildInstaller {
         $definitions["Sim"] = "1"
     }
 
-    if (($env:ZED_PRODUCT_APP_FEATURES -split ',') -contains 'agentic-tools') {
-        $definitions["ManagedRuntime"] = "1"
-    }
     $defs = @()
     foreach ($key in $definitions.Keys) {
         $defs += "/d$key=`"$($definitions[$key])`""
@@ -410,10 +407,6 @@ ZipProductDebugSymbols
 DownloadAMDGpuServices
 DownloadConpty
 CollectFiles
-if (($env:ZED_PRODUCT_APP_FEATURES -split ',') -contains 'agentic-tools') {
-    python script/bundle-managed-runtime --platform "windows-$Architecture" --destination "$innoDir/llama-cpp"
-    if ($LASTEXITCODE -ne 0) { throw "Managed runtime packaging failed" }
-}
 SignZedAndItsFriends
 BuildInstaller
 

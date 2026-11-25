@@ -9,7 +9,6 @@ use language_model::{LanguageModelProviderId, LanguageModelRegistry};
 use provider::deepseek::DeepSeekLanguageModelProvider;
 
 pub mod extension;
-mod managed_models;
 pub mod provider;
 mod settings;
 
@@ -35,7 +34,6 @@ use crate::provider::x_ai::XAiLanguageModelProvider;
 pub use crate::settings::*;
 
 pub fn init(user_store: Entity<UserStore>, client: Arc<Client>, cx: &mut App) {
-    managed_models::init(client.http_client(), cx);
     let credentials_provider = client.credentials_provider();
     let registry = LanguageModelRegistry::global(cx);
     registry.update(cx, |registry, cx| {

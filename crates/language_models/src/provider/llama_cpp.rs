@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet};
 use credentials_provider::CredentialsProvider;
 use fs::Fs;
@@ -32,7 +32,6 @@ use util::ResultExt;
 use crate::AllLanguageModelSettings;
 
 const LLAMA_CPP_DOWNLOAD_URL: &str = "https://llama.app";
-const LLAMA_CPP_MODELS_URL: &str = "https://huggingface.co/models?library=gguf&sort=trending";
 
 const PROVIDER_ID: LanguageModelProviderId = LanguageModelProviderId::new("llama.cpp");
 const PROVIDER_NAME: LanguageModelProviderName = LanguageModelProviderName::new("llama.cpp");
@@ -48,9 +47,42 @@ const MODEL_EVENT_RECONNECT_INTERVAL: Duration = Duration::from_secs(5);
 /// it once the model loads.
 const ASSUMED_UNLOADED_CONTEXT: u64 = 131_072;
 
+// Older threads stored only the provider and model IDs. Reserve the shipped
+// managed IDs so restoring a thread cannot send it to a server using that ID.
+const RETIRED_MODEL_IDS: &[&str] = &[
+    "gemma-4-e2b-q4-0",
+    "gemma-4-e4b-q4-0",
+    "qwen3-4b-q4-k-m",
+    "qwen3-8b-q4-k-m",
+    "jetbrains-qwen3-8-3-6-27b-blend-q4-k-m",
+    "jetbrains-qwen3-8-3-6-27b-blend-iq3-s",
+    "underdog-saluki-27b-1-0-iq2-mix",
+    "unsloth-qwen3-8-27b-ud-q4-k-m",
+    "unsloth-qwen3-8-27b-ud-iq3-s",
+];
+
+fn external_model_id(server_model: &str, settings: &LlamaCppSettings) -> LanguageModelId {
+    const EXTERNAL_PREFIX: &str = "external/";
+
+    let mut remainder = server_model;
+    loop {
+        if is_retired_model_id(remainder, settings) {
+            return LanguageModelId::from(format!("{EXTERNAL_PREFIX}{server_model}"));
+        }
+        let Some(unprefixed) = remainder.strip_prefix(EXTERNAL_PREFIX) else {
+            return LanguageModelId::from(server_model.to_owned());
+        };
+        remainder = unprefixed;
+    }
+}
+
+fn is_retired_model_id(model: &str, settings: &LlamaCppSettings) -> bool {
+    RETIRED_MODEL_IDS.contains(&model) || settings.retired_model.as_deref() == Some(model)
+}
+
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct LlamaCppSettings {
-    pub managed_model: Option<String>,
+    pub retired_model: Option<String>,
     pub api_url: String,
     pub auto_discover: bool,
     pub available_models: Vec<AvailableModel>,
@@ -72,6 +104,7 @@ pub struct State {
     credentials_provider: Arc<dyn CredentialsProvider>,
     http_client: Arc<dyn HttpClient>,
     fetched_models: Vec<llama_cpp::Model>,
+    connection_error: Option<SharedString>,
     fetch_model_task: Option<Task<Result<()>>>,
     /// Router-mode task on `/models/sse`; re-runs discovery as models load/unload.
     model_event_task: Option<Task<()>>,
@@ -111,14 +144,6 @@ impl State {
     }
 
     fn authenticate(&mut self, cx: &mut Context<Self>) -> Task<Result<(), AuthenticateError>> {
-        if LlamaCppLanguageModelProvider::settings(cx)
-            .managed_model
-            .is_some()
-        {
-            let fetch_models = self.fetch_models(cx);
-            return cx
-                .spawn(async move |_, _| fetch_models.await.map_err(AuthenticateError::Other));
-        }
         let credentials_provider = self.credentials_provider.clone();
         let api_url = LlamaCppLanguageModelProvider::api_url(cx);
         let load_key_task = self.api_key_state.load_if_needed(
@@ -162,23 +187,35 @@ impl State {
     }
 
     fn fetch_models(&mut self, cx: &mut Context<Self>) -> Task<Result<()>> {
-        let http_client = match LlamaCppLanguageModelProvider::request_client(&self.http_client, cx)
-        {
-            Ok(client) => client,
-            Err(error) => return Task::ready(Err(error)),
-        };
+        let http_client = self.http_client.clone();
         let api_url = LlamaCppLanguageModelProvider::api_url(cx);
-        let api_key = LlamaCppLanguageModelProvider::request_key(self, &api_url, cx);
-        let extra_headers = LlamaCppLanguageModelProvider::request_headers(cx);
+        let api_key = self.api_key_state.key(&api_url);
+        let extra_headers = LlamaCppLanguageModelProvider::settings(cx)
+            .custom_headers
+            .clone();
 
         cx.spawn(async move |this, cx| {
-            let entries = get_models(
+            let entries = match get_models(
                 http_client.as_ref(),
                 &api_url,
                 api_key.as_deref(),
                 &extra_headers,
             )
-            .await?;
+            .await
+            {
+                Ok(entries) => entries,
+                Err(error) => {
+                    this.update(cx, |this, cx| {
+                        if api_url == LlamaCppLanguageModelProvider::api_url(cx) {
+                            this.connection_error = Some(
+                                format!("Could not list models at {api_url}. Check that your llama.cpp server is running and that the API URL and credentials are correct. {error}").into(),
+                            );
+                            cx.notify();
+                        }
+                    })?;
+                    return Err(error);
+                }
+            };
 
             let is_router = entries.iter().any(ModelEntry::is_router_entry);
 
@@ -239,6 +276,13 @@ impl State {
             };
 
             this.update(cx, |this, cx| {
+                if api_url != LlamaCppLanguageModelProvider::api_url(cx)
+                    || extra_headers != LlamaCppLanguageModelProvider::settings(cx).custom_headers
+                    || api_key != this.api_key_state.key(&api_url)
+                {
+                    return;
+                }
+                this.connection_error = None;
                 this.fetched_models = models;
                 let effective = compute_effective_models(
                     &this.fetched_models,
@@ -267,16 +311,12 @@ impl State {
     /// or the list changes, so capabilities stay current. Reconnects if the stream
     /// drops; on builds without `/models/sse` the refresh is simply skipped.
     fn start_model_event_stream(&mut self, cx: &mut Context<Self>) {
-        if LlamaCppLanguageModelProvider::settings(cx)
-            .managed_model
-            .is_some()
-        {
-            return;
-        }
         let http_client = Arc::clone(&self.http_client);
         let api_url = LlamaCppLanguageModelProvider::api_url(cx);
-        let api_key = LlamaCppLanguageModelProvider::request_key(self, &api_url, cx);
-        let extra_headers = LlamaCppLanguageModelProvider::request_headers(cx);
+        let api_key = self.api_key_state.key(&api_url);
+        let extra_headers = LlamaCppLanguageModelProvider::settings(cx)
+            .custom_headers
+            .clone();
 
         self.model_event_task = Some(cx.spawn(async move |this, cx| {
             loop {
@@ -400,33 +440,6 @@ fn compute_effective_models(
     fetched_models: &[llama_cpp::Model],
     settings: &LlamaCppSettings,
 ) -> HashMap<String, llama_cpp::Model> {
-    if let Some(id) = &settings.managed_model {
-        let artifact = llama_cpp::managed::catalog().log_err().and_then(|catalog| {
-            catalog
-                .models
-                .into_iter()
-                .find(|artifact| &artifact.id == id)
-        });
-        let model = llama_cpp::Model::new(
-            id,
-            Some(
-                artifact
-                    .as_ref()
-                    .map(|artifact| artifact.name.as_str())
-                    .unwrap_or("Unavailable local model"),
-            ),
-            Some(
-                artifact
-                    .as_ref()
-                    .map(|artifact| artifact.context_tokens)
-                    .unwrap_or(8192),
-            ),
-            artifact.is_some(),
-            false,
-            false,
-        );
-        return [(id.clone(), model)].into_iter().collect();
-    }
     let mut models: HashMap<String, llama_cpp::Model> = HashMap::default();
     if settings.auto_discover {
         for model in fetched_models {
@@ -505,23 +518,6 @@ impl LlamaCppLanguageModelProvider {
             capability_cells: capability_cells.clone(),
             loading_progress: loading_progress.clone(),
             state: cx.new(|cx| {
-                if cx
-                    .try_global::<crate::managed_models::ManagedModelsGlobal>()
-                    .is_some()
-                {
-                    let managed = crate::managed_models::global(cx);
-                    let mut last_endpoint = crate::managed_models::endpoint(cx);
-                    cx.observe(&managed, move |state: &mut State, _, cx| {
-                        let endpoint = crate::managed_models::endpoint(cx);
-                        if endpoint != last_endpoint {
-                            last_endpoint = endpoint;
-                            state.fetched_models.clear();
-                            state.restart_fetch_models_task(cx);
-                            cx.notify();
-                        }
-                    })
-                    .detach();
-                }
                 cx.observe_global::<SettingsStore>({
                     let mut last_settings = LlamaCppLanguageModelProvider::settings(cx).clone();
                     move |this: &mut State, cx| {
@@ -531,18 +527,13 @@ impl LlamaCppLanguageModelProvider {
                         let current_settings = LlamaCppLanguageModelProvider::settings(cx);
                         let settings_changed = current_settings != &last_settings;
                         if settings_changed {
-                            let url_changed = last_settings.api_url != current_settings.api_url
-                                || last_settings.managed_model != current_settings.managed_model;
+                            let connection_changed = last_settings.api_url
+                                != current_settings.api_url
+                                || last_settings.custom_headers != current_settings.custom_headers;
                             last_settings = current_settings.clone();
-                            if url_changed {
-                                let credentials_provider = this.credentials_provider.clone();
-                                let api_url = Self::api_url(cx);
-                                this.api_key_state.handle_url_change(
-                                    api_url,
-                                    |this| &mut this.api_key_state,
-                                    credentials_provider,
-                                    cx,
-                                );
+                            if connection_changed {
+                                this.fetch_model_task = None;
+                                this.connection_error = None;
                                 this.fetched_models.clear();
                                 // Drop the event stream so it reconnects against
                                 // the new URL (re-auth below restarts it).
@@ -559,6 +550,7 @@ impl LlamaCppLanguageModelProvider {
                 State {
                     http_client,
                     fetched_models: Default::default(),
+                    connection_error: None,
                     fetch_model_task: None,
                     model_event_task: None,
                     capability_cells,
@@ -570,7 +562,8 @@ impl LlamaCppLanguageModelProvider {
         };
         // Discover eagerly so a running server is picked up without opening settings.
         this.state
-            .update(cx, |state, cx| state.restart_fetch_models_task(cx));
+            .update(cx, |state, cx| state.authenticate(cx))
+            .detach();
         this
     }
 
@@ -578,12 +571,12 @@ impl LlamaCppLanguageModelProvider {
         &AllLanguageModelSettings::get_global(cx).llama_cpp
     }
 
+    pub fn is_retired_selection(selection: &language_model::SelectedModel, cx: &App) -> bool {
+        selection.provider == PROVIDER_ID
+            && is_retired_model_id(&selection.model.0, Self::settings(cx))
+    }
+
     fn api_url(cx: &App) -> SharedString {
-        if Self::settings(cx).managed_model.is_some() {
-            return crate::managed_models::endpoint(cx)
-                .unwrap_or_else(|| "http://127.0.0.1:0".into())
-                .into();
-        }
         let api_url = &Self::settings(cx).api_url;
         if api_url.is_empty() {
             LLAMA_CPP_API_URL.into()
@@ -594,34 +587,6 @@ impl LlamaCppLanguageModelProvider {
 
     fn has_custom_url(cx: &App) -> bool {
         Self::settings(cx).api_url != LLAMA_CPP_API_URL
-    }
-
-    fn request_client(client: &Arc<dyn HttpClient>, cx: &App) -> Result<Arc<dyn HttpClient>> {
-        if Self::settings(cx).managed_model.is_some() {
-            anyhow::ensure!(
-                crate::managed_models::endpoint(cx).is_some(),
-                "The selected local model is loading or unavailable. Open Local models in llama.cpp provider settings to check its state or retry loading. No cloud fallback was used."
-            );
-            crate::managed_models::local_http(cx)
-        } else {
-            Ok(client.clone())
-        }
-    }
-
-    fn request_headers(cx: &App) -> CustomHeaders {
-        if Self::settings(cx).managed_model.is_some() {
-            CustomHeaders::default()
-        } else {
-            Self::settings(cx).custom_headers.clone()
-        }
-    }
-
-    fn request_key(state: &State, url: &str, cx: &App) -> Option<Arc<str>> {
-        if Self::settings(cx).managed_model.is_some() {
-            crate::managed_models::api_key(cx)
-        } else {
-            state.api_key_state.key(url)
-        }
     }
 }
 
@@ -667,7 +632,7 @@ impl LanguageModelProvider for LlamaCppLanguageModelProvider {
             .into_values()
             .map(|model| {
                 Arc::new(LlamaCppLanguageModel {
-                    id: LanguageModelId::from(model.name.clone()),
+                    id: external_model_id(&model.name, settings),
                     name: model.name.clone(),
                     display_name: model.display_name().to_string(),
                     fallback_capabilities: LiveCapabilities::of(&model),
@@ -700,7 +665,7 @@ impl LanguageModelProvider for LlamaCppLanguageModelProvider {
                     .into()
             })
             .description(InlineDescription::Text(
-                "Run local models on your machine with LlamaCpp.".into(),
+                "Connect to a llama.cpp server you run on this machine or another host.".into(),
             )),
         ))
     }
@@ -762,26 +727,17 @@ impl LlamaCppLanguageModel {
         'static,
         Result<futures::stream::BoxStream<'static, Result<llama_cpp::ResponseStreamEvent>>>,
     > {
-        let (http_client, api_key, api_url, extra_headers) =
-            self.state.read_with(cx, |state, cx| {
-                let api_url = LlamaCppLanguageModelProvider::api_url(cx);
-                let extra_headers = LlamaCppLanguageModelProvider::request_headers(cx);
-                (
-                    validate_managed_request_model(
-                        &request.model,
-                        LlamaCppLanguageModelProvider::settings(cx),
-                    )
-                    .and_then(|()| {
-                        LlamaCppLanguageModelProvider::request_client(&self.http_client, cx)
-                    }),
-                    LlamaCppLanguageModelProvider::request_key(state, &api_url, cx),
-                    api_url,
-                    extra_headers,
-                )
-            });
-
+        let (api_key, api_url, extra_headers) = self.state.read_with(cx, |state, cx| {
+            let api_url = LlamaCppLanguageModelProvider::api_url(cx);
+            let settings = LlamaCppLanguageModelProvider::settings(cx);
+            (
+                state.api_key_state.key(&api_url),
+                api_url,
+                settings.custom_headers.clone(),
+            )
+        });
+        let http_client = self.http_client.clone();
         let future = self.request_limiter.stream(async move {
-            let http_client = http_client?;
             let stream = stream_chat_completion(
                 http_client.as_ref(),
                 &api_url,
@@ -789,22 +745,13 @@ impl LlamaCppLanguageModel {
                 request,
                 &extra_headers,
             )
-            .await?;
+            .await
+            .with_context(|| format!("Could not complete a request to llama.cpp at {api_url}"))?;
             Ok(stream)
         });
 
         async move { Ok(future.await?.boxed()) }.boxed()
     }
-}
-
-fn validate_managed_request_model(model: &str, settings: &LlamaCppSettings) -> Result<()> {
-    if let Some(selected) = &settings.managed_model {
-        anyhow::ensure!(
-            model == selected,
-            "This conversation requests local model {model}, but {selected} is selected. Choose the matching model in Local models before continuing. No cloud fallback was used."
-        );
-    }
-    Ok(())
 }
 
 fn build_llama_cpp_request(
@@ -1287,7 +1234,6 @@ fn merge_settings_into_models(
 }
 
 struct ConfigurationView {
-    managed_models: Option<Entity<crate::managed_models::ManagedModels>>,
     api_key_editor: Entity<InputField>,
     api_url_editor: Entity<InputField>,
     context_window_editor: Entity<InputField>,
@@ -1320,9 +1266,6 @@ impl ConfigurationView {
         .detach();
 
         Self {
-            managed_models: cx
-                .try_global::<crate::managed_models::ManagedModelsGlobal>()
-                .map(|_| crate::managed_models::global(cx)),
             api_key_editor,
             api_url_editor,
             context_window_editor,
@@ -1342,9 +1285,9 @@ impl ConfigurationView {
             self.save_api_key(&Default::default(), window, cx);
         }
 
-        self.state.update(cx, |state, cx| {
-            state.restart_fetch_models_task(cx);
-        });
+        self.state
+            .update(cx, |state, cx| state.authenticate(cx))
+            .detach();
     }
 
     fn save_api_key(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
@@ -1595,24 +1538,21 @@ impl Render for ConfigurationView {
         v_flex()
             .gap_2()
             .child(Headline::new("llama.cpp").size(HeadlineSize::Small))
-            .children(self.managed_models.clone())
-            .child(Divider::horizontal())
-            .child(Label::new("Existing server settings (optional)").color(Color::Muted))
-            .child(Label::new("Your manual server URL and credentials are preserved. Copper-managed local models need no manual server startup.").size(LabelSize::Small).color(Color::Muted))
-            .when(LlamaCppLanguageModelProvider::settings(cx).managed_model.is_some(), |view| view.child(
-                Button::new("use-existing-llama-server", "Use my existing server")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(managed) = &this.managed_models {
-                            managed.update(cx, |managed, cx| managed.stop(cx));
-                        }
-                        update_settings_file(<dyn Fs>::global(cx), cx, |settings, _| {
-                            settings.language_models.get_or_insert_default().llama_cpp.get_or_insert_default().managed_model = None;
-                        });
-                    }))
-            ))
+            .child(
+                Label::new(
+                    "Connect to a llama.cpp server you run on this machine or another host.",
+                )
+                .color(Color::Muted),
+            )
             .child(self.render_api_url_editor(cx))
             .child(self.render_context_window_editor(cx))
             .child(self.render_api_key_editor(cx))
+            .when_some(
+                self.state.read(cx).connection_error.clone(),
+                |view, error| {
+                    view.child(Label::new(error).size(LabelSize::Small).color(Color::Error))
+                },
+            )
             .child(Divider::horizontal())
             .child(
                 h_flex()
@@ -1621,62 +1561,10 @@ impl Render for ConfigurationView {
                     .flex_wrap()
                     .justify_between()
                     .gap_2()
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .flex_wrap()
-                            .gap_2()
-                            .map(|this| {
-                                if is_authenticated {
-                                    this.child(
-                                        Button::new("llama-cpp-webui", "Open WebUI")
-                                            .style(ButtonStyle::OutlinedGhost)
-                                            .size(ButtonSize::Medium)
-                                            .end_icon(
-                                                Icon::new(IconName::ArrowUpRight)
-                                                    .size(IconSize::XSmall)
-                                                    .color(Color::Muted),
-                                            )
-                                            .on_click(move |_, _, cx| {
-                                                let url =
-                                                    LlamaCppLanguageModelProvider::api_url(cx);
-                                                cx.open_url(&url);
-                                            })
-                                            .into_any_element(),
-                                    )
-                                    .child(
-                                        Button::new("llama-cpp-site", "llama.cpp")
-                                            .style(ButtonStyle::OutlinedGhost)
-                                            .size(ButtonSize::Medium)
-                                            .end_icon(
-                                                Icon::new(IconName::ArrowUpRight)
-                                                    .size(IconSize::XSmall)
-                                                    .color(Color::Muted),
-                                            )
-                                            .on_click(move |_, _, cx| {
-                                                cx.open_url(LLAMA_CPP_DOWNLOAD_URL)
-                                            })
-                                            .into_any_element(),
-                                    )
-                                } else {
-                                    this.child(
-                                        Button::new("download_llama_cpp_button", "Get llama.cpp")
-                                            .style(ButtonStyle::OutlinedGhost)
-                                            .size(ButtonSize::Medium)
-                                            .end_icon(
-                                                Icon::new(IconName::ArrowUpRight)
-                                                    .size(IconSize::XSmall)
-                                                    .color(Color::Muted),
-                                            )
-                                            .on_click(move |_, _, cx| {
-                                                cx.open_url(LLAMA_CPP_DOWNLOAD_URL)
-                                            })
-                                            .into_any_element(),
-                                    )
-                                }
-                            })
-                            .child(
-                                Button::new("view-models", "Browse GGUF Models")
+                    .child(h_flex().w_full().flex_wrap().gap_2().map(|this| {
+                        if is_authenticated {
+                            this.child(
+                                Button::new("llama-cpp-webui", "Open WebUI")
                                     .style(ButtonStyle::OutlinedGhost)
                                     .size(ButtonSize::Medium)
                                     .end_icon(
@@ -1684,9 +1572,39 @@ impl Render for ConfigurationView {
                                             .size(IconSize::XSmall)
                                             .color(Color::Muted),
                                     )
-                                    .on_click(move |_, _, cx| cx.open_url(LLAMA_CPP_MODELS_URL)),
-                            ),
-                    )
+                                    .on_click(move |_, _, cx| {
+                                        let url = LlamaCppLanguageModelProvider::api_url(cx);
+                                        cx.open_url(&url);
+                                    })
+                                    .into_any_element(),
+                            )
+                            .child(
+                                Button::new("llama-cpp-site", "llama.cpp")
+                                    .style(ButtonStyle::OutlinedGhost)
+                                    .size(ButtonSize::Medium)
+                                    .end_icon(
+                                        Icon::new(IconName::ArrowUpRight)
+                                            .size(IconSize::XSmall)
+                                            .color(Color::Muted),
+                                    )
+                                    .on_click(move |_, _, cx| cx.open_url(LLAMA_CPP_DOWNLOAD_URL))
+                                    .into_any_element(),
+                            )
+                        } else {
+                            this.child(
+                                Button::new("download_llama_cpp_button", "Get llama.cpp")
+                                    .style(ButtonStyle::OutlinedGhost)
+                                    .size(ButtonSize::Medium)
+                                    .end_icon(
+                                        Icon::new(IconName::ArrowUpRight)
+                                            .size(IconSize::XSmall)
+                                            .color(Color::Muted),
+                                    )
+                                    .on_click(move |_, _, cx| cx.open_url(LLAMA_CPP_DOWNLOAD_URL))
+                                    .into_any_element(),
+                            )
+                        }
+                    }))
                     .map(|this| {
                         if is_authenticated {
                             this.child(
@@ -1731,61 +1649,39 @@ impl Render for ConfigurationView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Context as _;
-    #[test]
-    fn managed_selection_keeps_pinned_context_and_ignores_unrelated_server_models() -> Result<()> {
-        let artifact = llama_cpp::managed::catalog()?
-            .models
-            .into_iter()
-            .next()
-            .context("Missing managed candidate")?;
-        let settings = LlamaCppSettings {
-            managed_model: Some(artifact.id.clone()),
-            context_window: Some(131072),
-            ..Default::default()
-        };
-        let server =
-            llama_cpp::Model::new("unrelated-manual-server", None, None, false, false, false);
-        let models = compute_effective_models(&[server], &settings);
-        assert_eq!(models.len(), 1);
-        let model = models
-            .get(&artifact.id)
-            .context("Selected local model missing")?;
-        assert_eq!(model.max_tokens, artifact.context_tokens);
-        assert!(model.supports_tools);
-        Ok(())
-    }
-
-    #[test]
-    fn unavailable_managed_selection_stays_explicit_to_prevent_registry_fallback() -> Result<()> {
-        let settings = LlamaCppSettings {
-            managed_model: Some("removed-catalog-model".into()),
-            ..Default::default()
-        };
-        let models = compute_effective_models(&[], &settings);
-        let model = models
-            .get("removed-catalog-model")
-            .context("Unavailable selection must remain visible")?;
-        assert!(!model.supports_tools);
-        assert_eq!(model.display_name(), "Unavailable local model");
-        Ok(())
-    }
-
-    #[test]
-    fn managed_requests_reject_other_thread_models_without_restricting_manual_servers() -> Result<()>
-    {
-        let mut settings = LlamaCppSettings::default();
-        validate_managed_request_model("manual-server-model", &settings)?;
-        settings.managed_model = Some("selected-local-model".into());
-        validate_managed_request_model("selected-local-model", &settings)?;
-        assert!(validate_managed_request_model("previous-thread-model", &settings).is_err());
-        assert!(validate_managed_request_model("manual-server-model", &settings).is_err());
-        Ok(())
-    }
     use gpui::TestAppContext;
     use http_client::FakeHttpClient;
     use parking_lot::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn external_models_cannot_reuse_retired_selection_ids() {
+        let settings = LlamaCppSettings {
+            retired_model: Some("custom-retired-id".into()),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            external_model_id("external/current", &settings).0,
+            "external/current"
+        );
+        assert_eq!(
+            external_model_id("organization/model", &settings).0,
+            "organization/model"
+        );
+        assert_eq!(
+            external_model_id("gemma-4-e2b-q4-0", &settings).0,
+            "external/gemma-4-e2b-q4-0"
+        );
+        assert_eq!(
+            external_model_id("external/gemma-4-e2b-q4-0", &settings).0,
+            "external/external/gemma-4-e2b-q4-0"
+        );
+        assert_eq!(
+            external_model_id("custom-retired-id", &settings).0,
+            "external/custom-retired-id"
+        );
+    }
 
     struct FakeCredentialsProvider {
         api_key: Vec<u8>,
@@ -2260,8 +2156,11 @@ mod tests {
             "authenticate should discover models after loading credentials"
         );
         assert_eq!(
-            &*model_request_authorizations.lock(),
-            &[None, Some("Bearer loaded-key".to_string())]
+            model_request_authorizations.lock().as_slice(),
+            &[
+                Some("Bearer loaded-key".to_string()),
+                Some("Bearer loaded-key".to_string())
+            ]
         );
     }
 }

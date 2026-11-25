@@ -170,19 +170,27 @@ impl Job {
     }
 }
 
-fn managed_runtime_update_jobs() -> [Job; 2] {
-    [
-        Job::move_if_exists("llama-cpp".into(), "old/llama-cpp".into()),
-        Job::move_if_exists("install/llama-cpp".into(), "llama-cpp".into()),
-    ]
+fn backup_retired_runtime() -> Job {
+    let Job { apply, rollback } = Job::move_if_exists("llama-cpp".into(), "old/llama-cpp".into());
+    Job {
+        apply: Box::new(move |app_dir| {
+            if app_dir
+                .join("llama-cpp/.copper-bundled-runtime.json")
+                .is_file()
+            {
+                apply(app_dir)?;
+            }
+            Ok(())
+        }),
+        rollback,
+    }
 }
 
 #[cfg(not(test))]
-pub(crate) static JOBS: LazyLock<[Job; 24]> = LazyLock::new(|| {
+pub(crate) static JOBS: LazyLock<[Job; 23]> = LazyLock::new(|| {
     fn p(value: impl AsRef<Path>) -> PathBuf {
         value.as_ref().to_path_buf()
     }
-    let [backup_runtime, install_runtime] = managed_runtime_update_jobs();
     let executable = format!("{}.exe", product_flavor::EXECUTABLE_NAME);
     let cli_executable = format!("bin\\{}.exe", product_flavor::EXECUTABLE_NAME);
     let cli_launcher = format!("bin\\{}", product_flavor::EXECUTABLE_NAME);
@@ -206,7 +214,7 @@ pub(crate) static JOBS: LazyLock<[Job; 24]> = LazyLock::new(|| {
         ),
         //
         Job::move_file(p("conpty.dll"), p("old\\conpty.dll")),
-        backup_runtime,
+        backup_retired_runtime(),
         // Copy new files
         Job::move_file(p(format!("install\\{executable}")), p(&executable)),
         Job::move_file(p(format!("install\\{cli_executable}")), p(&cli_executable)),
@@ -224,7 +232,6 @@ pub(crate) static JOBS: LazyLock<[Job; 24]> = LazyLock::new(|| {
         ),
         //
         Job::move_file(p("install\\conpty.dll"), p("conpty.dll")),
-        install_runtime,
         // Cleanup installer and updates folder
         Job::rmdir_nofail(p("updates")),
         Job::rmdir_nofail(p("install")),
@@ -465,50 +472,31 @@ pub(crate) fn perform_update(app_dir: &Path, hwnd: Option<isize>, launch: bool) 
 
 #[cfg(test)]
 mod test {
-    use super::{Job, managed_runtime_update_jobs, perform_update};
+    use super::{Job, backup_retired_runtime, perform_update};
 
     #[test]
-    fn managed_runtime_upgrade_and_rollback_preserve_payloads() -> anyhow::Result<()> {
-        for existing in [false, true] {
-            let temporary = tempfile::tempdir()?;
-            let root = temporary.path();
-            std::fs::create_dir_all(root.join("old"))?;
-            std::fs::create_dir_all(root.join("install/llama-cpp"))?;
-            std::fs::write(
-                root.join("install/llama-cpp/runtime.dll"),
-                b"new signed payload",
-            )?;
-            if existing {
-                std::fs::create_dir_all(root.join("llama-cpp"))?;
-                std::fs::write(
-                    root.join("llama-cpp/runtime.dll"),
-                    b"previous signed payload",
-                )?;
-            }
-            let jobs = managed_runtime_update_jobs();
-            for job in &jobs {
-                (job.apply)(root)?;
-            }
-            assert_eq!(
-                std::fs::read(root.join("llama-cpp/runtime.dll"))?,
-                b"new signed payload"
-            );
-            for job in jobs.iter().rev() {
-                (job.rollback)(root)?;
-            }
-            assert_eq!(
-                std::fs::read(root.join("install/llama-cpp/runtime.dll"))?,
-                b"new signed payload"
-            );
-            if existing {
-                assert_eq!(
-                    std::fs::read(root.join("llama-cpp/runtime.dll"))?,
-                    b"previous signed payload"
-                );
-            } else {
-                assert!(!root.join("llama-cpp").exists());
-            }
-        }
+    fn update_backs_up_only_the_installer_owned_runtime() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let root = temporary.path();
+        let installed = root.join("llama-cpp");
+        let backup = root.join("old/llama-cpp");
+        std::fs::create_dir_all(root.join("old"))?;
+        std::fs::create_dir(&installed)?;
+        let job = backup_retired_runtime();
+
+        (job.apply)(root)?;
+        assert!(installed.is_dir());
+        assert!(!backup.exists());
+
+        let receipt = ".copper-bundled-runtime.json";
+        std::fs::write(installed.join(receipt), b"{}")?;
+        (job.apply)(root)?;
+        assert!(!installed.exists());
+        assert!(backup.join(receipt).is_file());
+
+        (job.rollback)(root)?;
+        assert!(installed.join(receipt).is_file());
+        assert!(!backup.exists());
         Ok(())
     }
 

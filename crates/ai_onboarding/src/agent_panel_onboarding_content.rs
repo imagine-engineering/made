@@ -1,18 +1,14 @@
 use std::sync::Arc;
 
 use client::{Client, UserStore};
-use gpui::{AnyView, Entity, IntoElement, ParentElement};
-use language_model::{
-    LanguageModelProviderId, LanguageModelRegistry, ProviderSettingsView, ZED_CLOUD_PROVIDER_ID,
-};
+use gpui::{Entity, IntoElement, ParentElement};
+use language_model::{LanguageModelRegistry, ZED_CLOUD_PROVIDER_ID};
 use ui::prelude::*;
 
 use crate::{AgentPanelOnboardingCard, ApiKeysWithoutProviders, ZedAiOnboarding};
 
 pub struct AgentPanelOnboarding {
-    local_setup: Option<AnyView>,
     show_cloud_setup: bool,
-    setup_error: Option<String>,
     user_store: Entity<UserStore>,
     client: Arc<Client>,
     has_configured_providers: bool,
@@ -42,9 +38,7 @@ impl AgentPanelOnboarding {
         .detach();
 
         Self {
-            local_setup: None,
             show_cloud_setup: false,
-            setup_error: None,
             user_store,
             client,
             has_configured_providers: Self::has_configured_providers(cx),
@@ -76,41 +70,44 @@ impl Render for AgentPanelOnboarding {
         AgentPanelOnboardingCard::new()
             .child(Headline::new("Choose how to run your native agent").size(HeadlineSize::Small))
             .child(
-                h_flex().gap_2()
-                    .child(Button::new("choose-local-models", "Local models")
-                        .style(ButtonStyle::Outlined).toggle_state(self.local_setup.is_some())
-                        .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            let provider = LanguageModelRegistry::read_global(cx)
-                                .provider(&LanguageModelProviderId::new("llama.cpp"));
-                            match provider.and_then(|provider| provider.settings_view(cx)) {
-                                Some(ProviderSettingsView::SubPage(settings)) => {
-                                    this.local_setup = Some((settings.create_view)(window, cx));
-                                    this.show_cloud_setup = false;
-                                    this.setup_error = None;
-                                }
-                                _ => this.setup_error = Some("Local model setup is unavailable. Open model-provider settings and retry.".into()),
-                            }
-                            cx.notify();
-                        })))
-                    .child(Button::new("choose-cloud-providers", "Cloud providers")
-                        .style(ButtonStyle::Outlined).toggle_state(self.show_cloud_setup)
-                        .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.local_setup = None;
-                            this.show_cloud_setup = true;
-                            this.setup_error = None;
-                            cx.notify();
-                        }))),
+                h_flex()
+                    .gap_2()
+                    .child(
+                        Button::new("configure-providers", "Configure Providers")
+                            .style(ButtonStyle::Outlined)
+                            .on_click(|_, window, cx| {
+                                window.dispatch_action(
+                                    Box::new(zed_actions::OpenSettingsAt {
+                                        path: "llm_providers".into(),
+                                        target: None,
+                                    }),
+                                    cx,
+                                );
+                            }),
+                    )
+                    .child(
+                        Button::new("choose-cloud-providers", "Cloud providers")
+                            .style(ButtonStyle::Outlined)
+                            .toggle_state(self.show_cloud_setup)
+                            .selected_style(ButtonStyle::Tinted(ui::TintColor::Accent))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.show_cloud_setup = true;
+                                cx.notify();
+                            })),
+                    ),
             )
             .when(self.has_configured_providers, |this| {
-                this.child(Button::new("continue-native-agent", "Continue with selected model").style(ButtonStyle::Filled).on_click({
-                    let callback = self.continue_with_zed_ai.clone();
-                    move |_, window, cx| callback(window, cx)
-                }))
+                this.child(
+                    Button::new("continue-native-agent", "Continue with selected model")
+                        .style(ButtonStyle::Filled)
+                        .on_click({
+                            let callback = self.continue_with_zed_ai.clone();
+                            move |_, window, cx| callback(window, cx)
+                        }),
+                )
             })
-            .children(self.local_setup.clone())
-            .when(self.show_cloud_setup, |this| this.child(onboarding).child(ApiKeysWithoutProviders::new()))
-            .when_some(self.setup_error.clone(), |this, message| this.child(Label::new(message).color(Color::Error)))
+            .when(self.show_cloud_setup, |this| {
+                this.child(onboarding).child(ApiKeysWithoutProviders::new())
+            })
     }
 }

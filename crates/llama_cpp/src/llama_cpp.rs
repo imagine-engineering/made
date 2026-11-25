@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
-pub mod managed;
-
 pub const LLAMA_CPP_API_URL: &str = "http://localhost:8080";
 
 const DEFAULT_CONTEXT_LENGTH: u64 = 4096;

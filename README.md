@@ -12,7 +12,7 @@ _Copper development build with a disposable Rust project._
 
 You can open a project, edit and search its files, use the integrated terminal, and work with Git. Rust tooling includes `rust-analyzer` integration, a Cargo panel, and test exploration alongside the editor.
 
-The native agent can read and search project files, edit code, and run project commands through its tool permissions. Choose a provider and model before starting a conversation. Copper includes managed llama.cpp local models and cloud-provider configuration. Managed model downloads start only when you choose Download. Memory requirements and tool-use reliability vary by model. The [local-model guide](docs/src/ai/use-a-local-model.md) explains setup and qualification limits.
+The native agent can read and search project files, edit code, and run project commands through its tool permissions. Choose a provider and model before starting a conversation. Copper can connect to cloud providers or a model server you run, including llama.cpp, Ollama, and LM Studio. See the [local-model guide](docs/src/ai/use-a-local-model.md) for server configuration.
 
 For now, build Copper from source. Expanded multiplayer workflows and Sim visual workflows are opt-in features still being qualified. Groovy and Forge remain planned products, outside the enabled Copper configuration.
 
