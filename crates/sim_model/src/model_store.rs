@@ -23,7 +23,6 @@ use sim_tensor::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::File,
     io::{Read, Seek, SeekFrom},
     path::PathBuf,
     sync::{Arc, Weak},
@@ -33,6 +32,8 @@ const MAX_MODEL_OPERATION_RECORDS: usize = 4_096;
 const MAX_MODEL_CACHE_ENTRIES: usize = 64;
 const MODEL_STREAM_MAXIMUM_READ_BYTES: u64 = 1024 * 1024;
 
+#[cfg(any(unix, test))]
+use std::fs::File;
 #[cfg(unix)]
 use std::{ffi::c_void, os::fd::AsRawFd, ptr::NonNull, slice};
 

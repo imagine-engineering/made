@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use sim_tensor::CancellationToken;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::{self, File, Metadata},
+    fs::{self, File},
     io::{Read, Seek, Write},
     path::{Component, Path, PathBuf},
     sync::{
@@ -226,7 +226,7 @@ impl ArtifactRoot {
             limits.maximum_name_bytes,
         )?;
         reject_symbolic_link_components(path)?;
-        let metadata = fs::symlink_metadata(path).map_err(|error| ArtifactIndexError::Io {
+        let metadata = ambient_symlink_metadata(path).map_err(|error| ArtifactIndexError::Io {
             path: path.to_path_buf(),
             message: error.to_string(),
         })?;
@@ -249,21 +249,20 @@ impl ArtifactRoot {
                     message: error.to_string(),
                 },
             )?;
-        let opened_metadata = trusted_directory
-            .try_clone()
-            .and_then(|directory| directory.into_std_file().metadata())
-            .map_err(|error| ArtifactIndexError::Io {
-                path: canonical_path.clone(),
-                message: error.to_string(),
-            })?;
+        let opened_metadata =
+            trusted_directory
+                .dir_metadata()
+                .map_err(|error| ArtifactIndexError::Io {
+                    path: canonical_path.clone(),
+                    message: error.to_string(),
+                })?;
         let current_metadata =
-            fs::metadata(&canonical_path).map_err(|error| ArtifactIndexError::Io {
+            ambient_symlink_metadata(&canonical_path).map_err(|error| ArtifactIndexError::Io {
                 path: canonical_path.clone(),
                 message: error.to_string(),
             })?;
-        if !same_file_identity(&metadata, &opened_metadata)
-            || !same_file_identity(&metadata, &current_metadata)
-            || !same_file_identity(&opened_metadata, &current_metadata)
+        if !same_capability_file_identity(&metadata, &opened_metadata)
+            || !same_capability_file_identity(&opened_metadata, &current_metadata)
         {
             return Err(ArtifactIndexError::ChangedDuringScan(canonical_path));
         }
@@ -1879,20 +1878,20 @@ impl VerifiedArtifactFile {
     }
 
     pub fn verify_unchanged(&self) -> Result<(), ArtifactIndexError> {
-        let opened = self
-            .file
-            .metadata()
-            .map_err(|error| ArtifactIndexError::Io {
+        let opened = cap_std::fs::Metadata::from_file(&self.file).map_err(|error| {
+            ArtifactIndexError::Io {
+                path: self.path.clone(),
+                message: error.to_string(),
+            }
+        })?;
+        let current =
+            ambient_symlink_metadata(&self.path).map_err(|error| ArtifactIndexError::Io {
                 path: self.path.clone(),
                 message: error.to_string(),
             })?;
-        let current = fs::metadata(&self.path).map_err(|error| ArtifactIndexError::Io {
-            path: self.path.clone(),
-            message: error.to_string(),
-        })?;
-        if !same_file_identity(&opened, &current)
+        if !same_capability_file_identity(&opened, &current)
             || opened.len() != self.expected_byte_size
-            || modified_nanoseconds(&opened) != self.expected_modified_nanoseconds
+            || capability_modified_nanoseconds(&opened) != self.expected_modified_nanoseconds
         {
             return Err(ArtifactIndexError::ChangedDuringScan(self.path.clone()));
         }
@@ -2506,21 +2505,18 @@ fn validate_root_snapshot(
             "artifact root path components are not trusted: {error}"
         ))
     })?;
-    let opened = trusted_directory
-        .try_clone()
-        .and_then(|directory| directory.into_std_file().metadata())
-        .map_err(|error| {
-            ArtifactIndexError::InvalidSnapshot(format!(
-                "artifact root capability is unavailable: {error}"
-            ))
-        })?;
-    let current = fs::metadata(&root.canonical_path).map_err(|error| {
+    let opened = trusted_directory.dir_metadata().map_err(|error| {
+        ArtifactIndexError::InvalidSnapshot(format!(
+            "artifact root capability is unavailable: {error}"
+        ))
+    })?;
+    let current = ambient_symlink_metadata(&root.canonical_path).map_err(|error| {
         ArtifactIndexError::InvalidSnapshot(format!(
             "artifact root {} is unavailable: {error}",
             root.canonical_path.display()
         ))
     })?;
-    if !same_file_identity(&opened, &current) {
+    if !same_capability_file_identity(&opened, &current) {
         return Err(ArtifactIndexError::InvalidSnapshot(
             "artifact root changed after trusted admission".to_owned(),
         ));
@@ -2906,13 +2902,24 @@ fn hash_stable_capability_file(
     Ok((hex_digest(hasher.finalize()), after))
 }
 
-fn modified_nanoseconds(metadata: &Metadata) -> u128 {
-    metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0)
+#[cfg(not(target_os = "windows"))]
+fn ambient_symlink_metadata(path: &Path) -> std::io::Result<cap_std::fs::Metadata> {
+    fs::symlink_metadata(path).map(cap_std::fs::Metadata::from_just_metadata)
+}
+
+#[cfg(target_os = "windows")]
+fn ambient_symlink_metadata(path: &Path) -> std::io::Result<cap_std::fs::Metadata> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+
+    // Windows only provides the file identity through an open handle.
+    let file = fs::OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(path)?;
+    cap_std::fs::Metadata::from_file(&file)
 }
 
 fn capability_modified_nanoseconds(metadata: &cap_std::fs::Metadata) -> u128 {
@@ -2970,70 +2977,20 @@ fn normalize_relative_path_with_limits(
     Ok(normalized)
 }
 
-fn same_file_identity(left: &Metadata, right: &Metadata) -> bool {
-    if left.len() != right.len()
-        || modified_nanoseconds(left) != modified_nanoseconds(right)
-        || left.file_type() != right.file_type()
-    {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        left.dev() == right.dev() && left.ino() == right.ino()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::fs::MetadataExt;
-        matches!(
-            (
-                left.volume_serial_number(),
-                left.file_index(),
-                right.volume_serial_number(),
-                right.file_index(),
-            ),
-            (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-                if left_volume == right_volume && left_index == right_index
-        )
-    }
-    #[cfg(not(any(unix, target_os = "windows")))]
-    {
-        true
-    }
-}
-
 fn same_capability_file_identity(
     left: &cap_std::fs::Metadata,
     right: &cap_std::fs::Metadata,
 ) -> bool {
-    if left.len() != right.len()
-        || left.modified().ok() != right.modified().ok()
-        || left.file_type() != right.file_type()
-    {
+    if left.len() != right.len() || left.modified().ok() != right.modified().ok() {
         return false;
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, target_os = "windows"))]
     {
-        use cap_std::fs::MetadataExt;
-        left.dev() == right.dev() && left.ino() == right.ino()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use cap_std::fs::MetadataExt;
-        matches!(
-            (
-                left.volume_serial_number(),
-                left.file_index(),
-                right.volume_serial_number(),
-                right.file_index(),
-            ),
-            (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-                if left_volume == right_volume && left_index == right_index
-        )
+        same_capability_object_identity(left, right)
     }
     #[cfg(not(any(unix, target_os = "windows")))]
     {
-        true
+        left.file_type() == right.file_type()
     }
 }
 
@@ -3051,17 +3008,8 @@ fn same_capability_object_identity(
     }
     #[cfg(target_os = "windows")]
     {
-        use cap_std::fs::MetadataExt;
-        matches!(
-            (
-                left.volume_serial_number(),
-                left.file_index(),
-                right.volume_serial_number(),
-                right.file_index(),
-            ),
-            (Some(left_volume), Some(left_index), Some(right_volume), Some(right_index))
-                if left_volume == right_volume && left_index == right_index
-        )
+        use cap_fs_ext::MetadataExt;
+        left.dev() == right.dev() && left.ino() == right.ino()
     }
     #[cfg(not(any(unix, target_os = "windows")))]
     {
@@ -3928,6 +3876,40 @@ mod tests {
         bytes.clear();
         verified.read_to_end(&mut bytes)?;
         assert_eq!(bytes, b"other");
+        Ok(())
+    }
+
+    #[cfg(any(unix, target_os = "windows"))]
+    #[test]
+    fn verified_handle_rejects_replacement_with_identical_contents_and_timestamp()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("model.bin");
+        fs::write(&path, b"model")?;
+        let mut index = ArtifactIndex::default();
+        index.add_root(ArtifactRoot::canonical(
+            "models",
+            "checkpoints",
+            directory.path(),
+            ["bin"],
+        )?)?;
+        let cancellation = CancellationToken::default();
+        index.refresh(&cancellation)?;
+        let key = ArtifactKey::new("models", "model.bin")?;
+        let verified = index.open_verified(&key, &cancellation)?;
+        verified.verify_unchanged()?;
+
+        let original_modified = path.metadata()?.modified()?;
+        fs::rename(&path, directory.path().join("original.ignored"))?;
+        let mut replacement = File::create(&path)?;
+        replacement.write_all(b"model")?;
+        replacement.set_modified(original_modified)?;
+        drop(replacement);
+        assert_eq!(path.metadata()?.modified()?, original_modified);
+        assert!(matches!(
+            verified.verify_unchanged(),
+            Err(ArtifactIndexError::ChangedDuringScan(changed)) if changed == verified.path()
+        ));
         Ok(())
     }
 

@@ -19032,6 +19032,7 @@ name = "sim_model"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cap-fs-ext",
  "cap-std",
  "fancy-regex 0.18.0",
  "libc",

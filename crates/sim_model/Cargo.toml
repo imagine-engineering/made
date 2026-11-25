@@ -28,4 +28,5 @@ thiserror.workspace = true
 unicode-normalization.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
+cap-fs-ext = "3.4.6"
 windows.workspace = true
