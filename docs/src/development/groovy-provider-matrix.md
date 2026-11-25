@@ -54,6 +54,24 @@ launchers and their Java homes via `GROOVY_JDTLS_LAUNCHER`,
 `GROOVY_LSP_JAVA_HOME`, `GROOVY_KOTLIN_LSP`, and `GROOVY_KOTLIN_JAVA_HOME`.
 Both providers need access to the populated Maven repository.
 
+The Maven diagnostic follow-up traced `Greeting.class` in both
+`library/target/classes` and the library JAR. The baseline JDTLS import and
+Maven classpath refresh removed the loose class while the JAR stayed intact.
+An offline Maven build restored the file, but JDTLS still reported the type
+unresolved through its Maven project reference. The fixture now preserves
+Maven's output during the Eclipse Java build and explicitly includes the
+library's binary folder on the application classpath.
+
+The standalone JDTLS diagnostic probe accepted `Greeting`, rejected
+`Greetinng` and cleared the error after undo. In the native editor JDTLS
+also returned a `jdt:` binary location for the valid reference. Groovy's
+existing Kotlin source lookup now handles that response when the binary
+location cannot open. The guarded macOS ARM64 candidate passed the same
+diagnostic checks and F12 opened `Greeting.kt` before and after restart.
+Both modules reimported after watched POM changes. The Maven view's
+Refresh Dependencies action restored the current navigation metadata, and the
+editor checks then passed again.
+
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
 The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean

@@ -168,6 +168,8 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
         editor::init(cx);
         cx.update_global::<SettingsStore, _>(|store, cx| {
             let mut settings = serde_json::to_value(store.raw_user_settings()).expect("fixture settings");
+            settings["lsp"]["jdtls"]["initialization_options"]["extendedClientCapabilities"]
+                ["classFileContentsSupport"] = serde_json::Value::Bool(true);
             settings["lsp"]["kotlin-lsp"] = serde_json::json!({
                 "binary": {"path": kotlin, "arguments": ["--stdio"], "env": {
                     "JAVA_HOME": kotlin_java,
@@ -289,6 +291,49 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
     });
     let source = java_buffer.read_with(cx, |buffer, _| buffer.text());
     let position = MultiBufferOffset(source.find("Greeting").expect("Kotlin type reference") + 2);
+    let (row, line) = source
+        .lines()
+        .enumerate()
+        .find(|(_, line)| line.contains("new Greeting()"))
+        .expect("Java constructor reference");
+    let java_server = store.read_with(cx, |store, _| {
+        let (snapshot, _) = store
+            .jdtls_project_snapshot(worktree_id)
+            .expect("Java import");
+        store
+            .language_server_for_id(snapshot.server_id)
+            .expect("running Java server")
+    });
+    let raw_definition = java_server
+        .request::<lsp::request::GotoDefinition>(
+            lsp::GotoDefinitionParams {
+                text_document_position_params: lsp::TextDocumentPositionParams {
+                    text_document: lsp::TextDocumentIdentifier {
+                        uri: lsp::Uri::from_file_path(&java_path).expect("Java fixture URI"),
+                    },
+                    position: lsp::Position::new(
+                        row as u32,
+                        (line.find("Greeting").expect("Kotlin type reference") + 2) as u32,
+                    ),
+                },
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+            Duration::from_secs(15),
+        )
+        .await
+        .into_response()
+        .expect("JDTLS definition request")
+        .expect("JDTLS resolved the compiled class");
+    let uri = match &raw_definition {
+        lsp::GotoDefinitionResponse::Scalar(location) => Some(&location.uri),
+        lsp::GotoDefinitionResponse::Array(locations) => {
+            locations.first().map(|location| &location.uri)
+        }
+        lsp::GotoDefinitionResponse::Link(links) => links.first().map(|link| &link.target_uri),
+    };
+    assert_eq!(uri.expect("JDTLS classfile URI").scheme(), "jdt");
+
     let (container, cx) =
         cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
     let workspace = container.read_with(cx, |container, _| container.workspace().clone());

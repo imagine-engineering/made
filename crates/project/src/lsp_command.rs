@@ -774,6 +774,19 @@ impl LspCommand for GetDefinitions {
         return location_links_from_lsp(message, lsp_store, buffer, server_id, cx).await;
         #[cfg(feature = "jvm-tools")]
         {
+            let is_jdt_classfile = |uri: &lsp::Uri| uri.scheme() == "jdt";
+            let has_jdt_classfile = match &message {
+                Some(lsp::GotoDefinitionResponse::Scalar(location)) => {
+                    is_jdt_classfile(&location.uri)
+                }
+                Some(lsp::GotoDefinitionResponse::Array(locations)) => locations
+                    .iter()
+                    .any(|location| is_jdt_classfile(&location.uri)),
+                Some(lsp::GotoDefinitionResponse::Link(links)) => {
+                    links.iter().any(|link| is_jdt_classfile(&link.target_uri))
+                }
+                None => false,
+            };
             let definitions = location_links_from_lsp(
                 message,
                 lsp_store.clone(),
@@ -781,8 +794,10 @@ impl LspCommand for GetDefinitions {
                 server_id,
                 cx.clone(),
             )
-            .await?;
-            if definitions.is_empty() {
+            .await;
+            if definitions.as_ref().is_ok_and(Vec::is_empty)
+                || (has_jdt_classfile && definitions.is_err())
+            {
                 let mut cx = cx;
                 let alternative = lsp_store.update(&mut cx, |store, cx| {
                     store.maven_kotlin_definition(&buffer, self.position, server_id, cx)
@@ -800,7 +815,7 @@ impl LspCommand for GetDefinitions {
                     .await;
                 }
             }
-            Ok(definitions)
+            definitions
         }
     }
 

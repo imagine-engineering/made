@@ -28,6 +28,12 @@ The class and method are deliberately unambiguous. The fixture does not justify
 inferring an invocable method from arbitrary display names or parameterized
 cases.
 
+Build the default reactor before opening it for mixed-language Java editing.
+The library's Eclipse compiler preference preserves Maven-compiled Kotlin
+classes during JDTLS builds. The application's explicit binary classpath entry
+lets JDTLS resolve those classes alongside the Maven project reference. It
+points to the reactor's current output, which the offline build refreshes.
+
 With `-Dmaven.repo.local` pointing at an empty directory, the same `-o`
 command fails before compilation and names the missing
 `maven-resources-plugin:3.4.0`. This verifies an incomplete-cache failure of

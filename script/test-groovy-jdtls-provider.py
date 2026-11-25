@@ -268,6 +268,44 @@ def wait_for_java_diagnostics(client, uri, version, has_error):
         time.sleep(0.1)
     raise AssertionError(f"Java diagnostics did not reach the requested state: {last_diagnostics}")
 
+def verify_maven_kotlin_diagnostics(client, root, settings):
+    output = root / "library/target/classes"
+    if not (output / "evidence/Greeting.class").is_file():
+        raise AssertionError("JDTLS import removed Maven's Kotlin class")
+    if not any(
+        entry.get("kind") == 1 and Path(entry["path"]).resolve() == output
+        for entry in settings["application"]["org.eclipse.jdt.ls.core.classpathEntries"]
+    ):
+        raise AssertionError("JDTLS omitted the library's binary folder from the Java classpath")
+
+    source = root / "application/src/main/java/evidence/Main.java"
+    uri = source.as_uri()
+    original = source.read_text()
+    misspelled = original.replace("new Greeting()", "new Greetinng()")
+    if misspelled == original:
+        raise AssertionError("The fixture has no Java reference to the Kotlin type")
+    client.notify("textDocument/didOpen", {
+        "textDocument": {"uri": uri, "languageId": "java", "version": 1, "text": original}
+    })
+    try:
+        wait_for_java_diagnostics(client, uri, 1, False)
+        for version, text in [(2, misspelled), (3, original)]:
+            client.clear_document_notifications(uri)
+            client.notify("textDocument/didChange", {
+                "textDocument": {"uri": uri, "version": version},
+                "contentChanges": [{"text": text}],
+            })
+            diagnostics, _ = wait_for_java_diagnostics(client, uri, version, version == 2)
+            if version == 2 and not any(
+                diagnostic.get("severity") == 1
+                and diagnostic.get("source") == "Java"
+                and (diagnostic.get("data") or {}).get("arguments") == ["Greetinng"]
+                for diagnostic in diagnostics
+            ):
+                raise AssertionError(f"JDTLS did not report the misspelled type: {diagnostics}")
+    finally:
+        client.notify("textDocument/didClose", {"textDocument": {"uri": uri}})
+
 
 def apply_java_probe_quick_fix(source, uri, actions):
     if not source.isascii():
@@ -999,13 +1037,14 @@ def run_fixture(
     require_mixed_language_navigation=False,
     require_gradle_kotlin_navigation=False,
     require_java_language_features=False,
+    require_maven_kotlin_diagnostics=False,
 ):
     with tempfile.TemporaryDirectory(prefix=f"groovy-jdtls-{name}-") as directory:
         root = (Path(directory) / name).resolve()
         # m2e scans POMs on disk, including the inactive cyclic parity reactor.
         ignore = shutil.ignore_patterns("cycle-*", "parity-*", "target") if name == "maven" else None
         shutil.copytree(FIXTURES / f"groovy_jvm_{name}", root, ignore=ignore)
-        if name == "maven" and require_mixed_language_navigation:
+        if name == "maven" and (require_mixed_language_navigation or require_maven_kotlin_diagnostics):
             subprocess.run(
                 [str(root / "mvnw"), "-o", "-q", "-DskipTests", "package"],
                 cwd=root,
@@ -1077,6 +1116,8 @@ def run_fixture(
             settings = discover(client, root, expected)
             if name == "maven":
                 verify_maven_dependency_attributes(settings)
+                if require_maven_kotlin_diagnostics:
+                    verify_maven_kotlin_diagnostics(client, root, settings)
                 if require_mixed_language_navigation:
                     verify_mixed_language_navigation(client, root, name)
             else:
@@ -1123,6 +1164,7 @@ def run_fixture(
                         "source_levels": source_levels,
                         "target_levels": target_levels,
                         "java_language_features": java_features,
+                        "maven_kotlin_diagnostics": name == "maven" and require_maven_kotlin_diagnostics,
                         "generated_navigation": name == "gradle",
                         "maven_dependency_attributes": name == "maven",
                         "gradle_source_set_attributes": name == "gradle",
@@ -1141,6 +1183,11 @@ def main():
         "--require-mixed-language-navigation",
         action="store_true",
         help="Fail unless a Java source resolves the Maven-built Kotlin class",
+    )
+    parser.add_argument(
+        "--require-maven-kotlin-diagnostics",
+        action="store_true",
+        help="Require the Maven fixture to resolve the compiled Kotlin type and reject a Java misspelling",
     )
     parser.add_argument(
         "--require-gradle-kotlin-navigation",
@@ -1221,6 +1268,7 @@ def main():
             arguments.require_mixed_language_navigation,
             arguments.require_gradle_kotlin_navigation,
             arguments.require_java_language_features,
+            arguments.require_maven_kotlin_diagnostics,
         )
 
 
