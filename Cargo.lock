@@ -19113,6 +19113,8 @@ dependencies = [
  "anyhow",
  "async-channel 2.5.0",
  "base64 0.22.1",
+ "cap-fs-ext",
+ "cap-std",
  "chrono",
  "clock",
  "db",

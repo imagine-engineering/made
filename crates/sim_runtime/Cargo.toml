@@ -43,6 +43,7 @@ sim_tensor.workspace = true
 sim_types.workspace = true
 db.workspace = true
 futures.workspace = true
+libc.workspace = true
 parking_lot.workspace = true
 postcard.workspace = true
 ring.workspace = true
@@ -59,8 +60,9 @@ util.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
-[target.'cfg(unix)'.dependencies]
-libc.workspace = true
+[target.'cfg(target_os = "windows")'.dependencies]
+cap-fs-ext = "3.4.6"
+cap-std.workspace = true
 
 [dev-dependencies]
 sim_plugin_sdk = { workspace = true, features = ["signing-tooling"] }

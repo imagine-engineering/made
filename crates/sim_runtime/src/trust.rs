@@ -1058,7 +1058,9 @@ fn capture_native_library_image_with_limit(
     maximum_bytes: u64,
     check_cancellation: &mut impl FnMut() -> Result<(), CancellationError>,
 ) -> Result<CapturedNativeLibraryImage, NativeLibraryImageError> {
-    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    use cap_fs_ext::MetadataExt as _;
+    use cap_std::fs::{Metadata, MetadataExt as _};
+    use std::os::windows::fs::OpenOptionsExt;
 
     const FILE_SHARE_READ: u32 = 0x0000_0001;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
@@ -1077,8 +1079,7 @@ fn capture_native_library_image_with_limit(
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN)
         .open(path)
         .map_err(|error| NativeLibraryImageError::Invalid(error.to_string()))?;
-    let before = file
-        .metadata()
+    let before = Metadata::from_file(&file)
         .map_err(|error| NativeLibraryImageError::Invalid(error.to_string()))?;
     if !before.is_file()
         || before.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
@@ -1086,7 +1087,7 @@ fn capture_native_library_image_with_limit(
         || before.len() > maximum_bytes
     {
         return Err(NativeLibraryImageError::Invalid(format!(
-            "image must be a nonempty non-reparse regular file no larger than {maximum_bytes} bytes"
+            "image must be a nonempty regular file with no reparse point, no larger than {maximum_bytes} bytes"
         )));
     }
     let first = read_bounded_native_library_image(
@@ -1108,11 +1109,10 @@ fn capture_native_library_image_with_limit(
             "image changed while it was captured".to_owned(),
         ));
     }
-    let after = file
-        .metadata()
+    let after = Metadata::from_file(&file)
         .map_err(|error| NativeLibraryImageError::Invalid(error.to_string()))?;
-    if before.volume_serial_number() != after.volume_serial_number()
-        || before.file_index() != after.file_index()
+    if before.dev() != after.dev()
+        || before.ino() != after.ino()
         || before.len() != after.len()
         || before.last_write_time() != after.last_write_time()
         || before.creation_time() != after.creation_time()
