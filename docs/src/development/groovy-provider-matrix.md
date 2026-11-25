@@ -18,11 +18,16 @@ extraction and verifies the initialized server reports `ILS-271.2085.0`.
 The matched archive passed standalone Maven and Gradle restart, completion,
 Kotlin-to-Kotlin definition, diagnostic recovery, workspace export, cached
 imports with external networking denied and the framed Remote Server trust
-fixture. The standalone Java-to-Kotlin definition probe returned no locations
-for either build system. The measured provider and worker peak was 4.74 GiB.
-The full editor and owned-worker budget
-on the 32 GiB reference host, immutable extension-managed acquisition, terms,
-native workflows and platform qualification remain open. `jvm` stays planned.
+fixture. The measured provider and worker peak was 4.74 GiB. The full editor
+and owned-worker budget on the 32 GiB reference host, immutable
+extension-managed acquisition, terms, native workflows and platform
+qualification remain open. `jvm` stays planned.
+
+The standalone Kotlin server returned no Java-to-Kotlin definition locations
+for Maven or Gradle. In a separate Gradle run, JDTLS `1.61.0` resolved the Java
+reference to `Greeting.kt` and preserved the compiled Kotlin class. The cached
+Maven reactor built on retry. JDTLS exposed no fixture modules in that run, so
+Maven Java-to-Kotlin navigation remains open.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
