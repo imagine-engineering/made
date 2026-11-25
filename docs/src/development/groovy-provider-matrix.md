@@ -5,9 +5,28 @@ name; Groovy language support is a separate release decision. An upstream
 manifest or download link establishes an available integration, not a passed
 Groovy workflow or permission to redistribute its binary.
 
-## Kotlin provider status — 2026-11-24
+## Approved macOS ARM64 Kotlin LSP pin — 2026-11-25
 
-The preferred macOS ARM64 Kotlin LSP pin `263.4702.0` fails to start. A clean
+The approved qualification build is **`271.2085.0`**. The publisher's SHA-256
+for `kotlin-server-271.2085.0-aarch64.sit` is
+`2d22388f58be6f4dfa7a8f18c1e231871164dcacc16e407559029d7232816b4a`.
+The qualification probe's `--approved-archive` mode checks that digest before
+extraction and verifies the initialized server reports `ILS-271.2085.0`.
+[Official release](https://github.com/Kotlin/kotlin-lsp/releases/tag/kotlin-lsp/v271.2085.0) ·
+[Publisher checksum](https://download.jetbrains.com/language-server/kotlin-server/271.2085.0/kotlin-server-271.2085.0-aarch64.sit.sha256)
+
+The matched archive passed standalone Maven and Gradle restart, completion,
+Kotlin-to-Kotlin definition, diagnostic recovery, workspace export, cached
+imports with external networking denied and the framed Remote Server trust
+fixture. The standalone Java-to-Kotlin definition probe returned no locations
+for either build system. The measured provider and worker peak was 4.74 GiB.
+The full editor and owned-worker budget
+on the 32 GiB reference host, immutable extension-managed acquisition, terms,
+native workflows and platform qualification remain open. `jvm` stays planned.
+
+## Previous Kotlin pin and fallback evidence — 2026-11-24
+
+The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean
 extraction of the checksum-verified archive reproduced the EAP expiry and
 exited 7. The connected Remote Server trust fixture also received the expiry
 message when it tried to initialize the pinned provider on its host.
@@ -106,9 +125,9 @@ do not establish rights for downloaded server payloads. The [official server
 README](https://github.com/Kotlin/kotlin-lsp/blob/d266c18c3e7791ea1ac5bf49a3ab77a33c0be465/README.md)
 still identifies alpha and partly closed implementation.
 
-The accepted audit baseline remains **263.4702.0**. Official release
-**263.6379.0** requires separate qualification and inherits no prior binary,
-workflow or resource verdict. The macOS ARM64/32 GiB reference and 8 GiB combined
+The accepted audit baseline at this checkpoint was **263.4702.0**. Official
+release **263.6379.0** required its own binary, workflow and resource
+qualification. The macOS ARM64/32 GiB reference and 8 GiB combined
 editor/JVM/build-worker RSS ceiling remain unchanged. No new binary, adapter,
 extension or native candidate is installed, launched or qualified by this source
 review. Historical entries below retain their exact original inputs.

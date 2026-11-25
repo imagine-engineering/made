@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import os
+import platform
 import queue
 import shutil
 import signal
@@ -13,13 +15,34 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 
 REPOSITORY = Path(__file__).resolve().parent.parent
 FIXTURES = REPOSITORY / "crates/project/test_data"
 PROBE_SOURCE = "package evidence\n\nfun useGreeting(): String = Greeting().message()\n"
+APPROVED_MACOS_ARM64_VERSION = "271.2085.0"
+APPROVED_MACOS_ARM64_SHA256 = "2d22388f58be6f4dfa7a8f18c1e231871164dcacc16e407559029d7232816b4a"
+
+
+@contextmanager
+def approved_standalone_server(archive):
+    with tempfile.TemporaryDirectory(prefix="groovy-kotlin-approved-") as temporary:
+        directory = Path(temporary)
+        archive_copy = directory / "approved.sit"
+        shutil.copyfile(archive, archive_copy)
+        digest = hashlib.sha256()
+        with archive_copy.open("rb") as contents:
+            for block in iter(lambda: contents.read(1024 * 1024), b""):
+                digest.update(block)
+        if digest.hexdigest() != APPROVED_MACOS_ARM64_SHA256:
+            raise ValueError("Kotlin LSP archive SHA-256 does not match the approved macOS ARM64 pin")
+        subprocess.run(["/usr/bin/unzip", "-q", str(archive_copy), "-d", str(directory)], check=True)
+        server = directory / f"kotlin-server-{APPROVED_MACOS_ARM64_VERSION}/bin/intellij-server"
+        if not server.is_file():
+            raise ValueError("The approved Kotlin LSP archive is missing its standalone launcher")
+        yield server
 
 
 @contextmanager
@@ -1089,8 +1112,10 @@ def probe(
 
 def main():
     parser = argparse.ArgumentParser(description="Probe a pinned Kotlin server against Groovy fixtures")
-    parser.add_argument("--server", required=True, type=Path, help="Path to the standalone server executable")
-    parser.add_argument("--expected-version", required=True, help="Exact LSP serverInfo.version, such as ILS-263.4702.0")
+    launcher = parser.add_mutually_exclusive_group(required=True)
+    launcher.add_argument("--server", type=Path, help="Path to the standalone server executable")
+    launcher.add_argument("--approved-archive", type=Path, help="Verify the approved macOS ARM64 archive and run it from a temporary extraction")
+    parser.add_argument("--expected-version", help="Exact LSP serverInfo.version for an explicit --server")
     parser.add_argument("--server-kind", choices=("official", "alternate"), default="official")
     parser.add_argument(
         "--alternate-offline-restart",
@@ -1163,6 +1188,14 @@ def main():
         help="Include this explicitly identified editor and descendants in resource sums; does not certify a complete app workflow",
     )
     arguments = parser.parse_args()
+    if arguments.approved_archive is not None:
+        if arguments.expected_version is not None or arguments.server_kind != "official":
+            parser.error("--approved-archive uses the pinned official server version")
+        if sys.platform != "darwin" or platform.machine() != "arm64":
+            parser.error("the approved archive requires a native macOS ARM64 host")
+        arguments.expected_version = f"ILS-{APPROVED_MACOS_ARM64_VERSION}"
+    elif arguments.expected_version is None:
+        parser.error("--server requires --expected-version")
     if arguments.resource_editor_pid is not None and (
         not arguments.sample_process_resources or arguments.resource_editor_pid <= 0
     ):
@@ -1233,13 +1266,24 @@ def main():
         arguments.fixture != "maven" or arguments.restarts != 1 or os.uname().sysname != "Darwin"
     ):
         parser.error("denied-network mode requires macOS, Maven, and --restarts 1")
-    if not arguments.server.is_file():
+    if arguments.server is not None and not arguments.server.is_file():
         parser.error(f"Kotlin server is missing: {arguments.server}")
+    with ExitStack() as cleanup:
+        if arguments.approved_archive is not None:
+            try:
+                arguments.server = cleanup.enter_context(approved_standalone_server(arguments.approved_archive))
+            except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                parser.error(str(error))
+        print_probe_result(arguments)
+
+
+def print_probe_result(arguments):
     print(
         json.dumps(
             {
                 "fixture": arguments.fixture,
                 "serverKind": arguments.server_kind,
+                **({"approvedArchiveSha256": APPROVED_MACOS_ARM64_SHA256} if arguments.approved_archive is not None else {}),
                 "deniedNetworkOnRestart": arguments.alternate_denied_network_restart,
                 "mavenRepositoryAligned": arguments.alternate_maven_repository is not None,
                 "mavenDeniedNetwork": arguments.alternate_maven_denied_network,

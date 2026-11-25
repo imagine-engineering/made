@@ -61,8 +61,9 @@ JetBrains' official `kotlin-lsp` by default and
 download requires network access unless it is already cached. No server binary
 is bundled or certified for release by this development candidate.
 
-The pinned macOS ARM64 Kotlin LSP `263.4702.0` candidate reports an expired
-EAP build and exits before Kotlin support can start. In **Language Servers**,
+The approved macOS ARM64 Kotlin LSP build for qualification is `271.2085.0`.
+If an older installed EAP build has expired, Kotlin support cannot start.
+In **Language Servers**,
 choose **Check for Kotlin LSP Update** to compare the installed version with
 the latest official standalone build for the project host. A newer compatible
 archive provides an **Open Kotlin LSP release** action. The check reads release
@@ -72,6 +73,14 @@ For SSH, WSL, and container projects, install the standalone server on the
 project host. Set or update `lsp.kotlin-lsp.binary.path` to that executable and
 restart the language server. The check preserves your current provider and
 binary override.
+
+For a standalone qualification run, obtain the macOS ARM64 archive from the
+official release. `script/test-groovy-kotlin-provider.py --approved-archive
+<archive> --fixture maven --java-home <jdk>` checks the approved SHA-256,
+extracts a disposable copy, and verifies the language server's reported build.
+Use `--fixture gradle` for the Gradle run. The pin applies to the qualification
+probe. The installed extension still uses its own upstream resolver.
+[Official Kotlin LSP 271.2085.0 release](https://github.com/Kotlin/kotlin-lsp/releases/tag/kotlin-lsp/v271.2085.0)
 
 To choose the alternate Kotlin server, use the Settings Editor or add this to
 your project or user settings:
