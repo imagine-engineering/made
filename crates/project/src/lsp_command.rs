@@ -770,7 +770,38 @@ impl LspCommand for GetDefinitions {
         server_id: LanguageServerId,
         cx: AsyncApp,
     ) -> Result<Vec<LocationLink>> {
-        location_links_from_lsp(message, lsp_store, buffer, server_id, cx).await
+        #[cfg(not(feature = "jvm-tools"))]
+        return location_links_from_lsp(message, lsp_store, buffer, server_id, cx).await;
+        #[cfg(feature = "jvm-tools")]
+        {
+            let definitions = location_links_from_lsp(
+                message,
+                lsp_store.clone(),
+                buffer.clone(),
+                server_id,
+                cx.clone(),
+            )
+            .await?;
+            if definitions.is_empty() {
+                let mut cx = cx;
+                let alternative = lsp_store.update(&mut cx, |store, cx| {
+                    store.maven_kotlin_definition(&buffer, self.position, server_id, cx)
+                });
+                if let Some(alternative) = alternative
+                    && let Some(location) = alternative.await.log_err().flatten()
+                {
+                    return location_links_from_lsp(
+                        Some(lsp::GotoDefinitionResponse::Scalar(location)),
+                        lsp_store,
+                        buffer,
+                        server_id,
+                        cx,
+                    )
+                    .await;
+                }
+            }
+            Ok(definitions)
+        }
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDefinition {

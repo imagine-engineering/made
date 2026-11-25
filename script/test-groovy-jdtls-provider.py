@@ -1002,7 +1002,9 @@ def run_fixture(
 ):
     with tempfile.TemporaryDirectory(prefix=f"groovy-jdtls-{name}-") as directory:
         root = (Path(directory) / name).resolve()
-        shutil.copytree(FIXTURES / f"groovy_jvm_{name}", root)
+        # m2e scans POMs on disk, including the inactive cyclic parity reactor.
+        ignore = shutil.ignore_patterns("cycle-*", "parity-*", "target") if name == "maven" else None
+        shutil.copytree(FIXTURES / f"groovy_jvm_{name}", root, ignore=ignore)
         if name == "maven" and require_mixed_language_navigation:
             subprocess.run(
                 [str(root / "mvnw"), "-o", "-q", "-DskipTests", "package"],

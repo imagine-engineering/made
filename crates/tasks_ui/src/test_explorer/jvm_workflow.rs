@@ -148,6 +148,182 @@ async fn start_cached_fixture_jdtls(
 }
 
 #[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires the pinned JDTLS and Kotlin launchers and the cached default Maven fixture"]
+async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppContext) {
+    use editor::{MultiBufferOffset, SelectionEffects, actions::GoToDefinition};
+    use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher, LocalFile as _};
+
+    let root = cached_jvm_fixture_path("GROOVY_MAVEN_NAVIGATION_FIXTURE");
+    let kotlin = cached_jvm_fixture_path("GROOVY_KOTLIN_LSP");
+    let kotlin_java = cached_jvm_fixture_path("GROOVY_KOTLIN_JAVA_HOME");
+    let kotlin_state = tempfile::tempdir().expect("isolated Kotlin state");
+    let settings = serde_json::json!({
+        "import": {"maven": {"enabled": true}},
+        "jdt": {"ls": {"kotlinSupport": {"enabled": true}}}
+    });
+    let (project, worktree_id, _java_state) =
+        start_cached_fixture_jdtls(&root, settings, &[], cx).await;
+    cx.update(|cx| {
+        editor::init(cx);
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            let mut settings = serde_json::to_value(store.raw_user_settings()).expect("fixture settings");
+            settings["lsp"]["kotlin-lsp"] = serde_json::json!({
+                "binary": {"path": kotlin, "arguments": ["--stdio"], "env": {
+                    "JAVA_HOME": kotlin_java,
+                    "JAVA_TOOL_OPTIONS": format!("-Didea.system.path={0}/system -Didea.config.path={0}/config -Didea.log.path={0}/log", kotlin_state.path().display()),
+                }}
+            });
+            store.set_user_settings(&settings.to_string(), cx).expect("exact Kotlin binary override");
+        });
+    });
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    for (name, suffix, grammar) in [
+        ("Java", "java", Some(tree_sitter_java::LANGUAGE.into())),
+        ("Kotlin", "kt", None),
+    ] {
+        languages.add(Arc::new(Language::new(
+            LanguageConfig {
+                name: name.into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec![suffix.into()],
+                    ..Default::default()
+                }
+                .into(),
+                ..Default::default()
+            },
+            grammar,
+        )));
+    }
+    languages.register_fake_lsp_adapter(
+        "Kotlin",
+        FakeLspAdapter {
+            name: "kotlin-lsp",
+            ..Default::default()
+        },
+    );
+
+    let java_path = root.join("application/src/main/java/evidence/Main.java");
+    let kotlin_path = root.join("library/src/main/kotlin/evidence/Greeting.kt");
+    let (_kotlin_buffer, _kotlin_handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(kotlin_path.clone(), cx)
+        })
+        .await
+        .expect("start the preferred Kotlin provider");
+    let (java_buffer, _java_handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(java_path.clone(), cx)
+        })
+        .await
+        .expect("start JDTLS and open Java");
+    let store = project.read_with(cx, |project, _| project.lsp_store());
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now();
+    loop {
+        cx.run_until_parked();
+        let ready = store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot.projects.iter().any(|project| {
+                            project
+                                .project_references
+                                .iter()
+                                .any(|reference| reference == "library")
+                        })
+                })
+                && store
+                    .kotlin_workspace_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| current && snapshot.projects.len() >= 2)
+        });
+        if ready {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the pinned providers did not admit the Maven dependency and source facts: {:?}",
+            store.read_with(cx, |store, _| (
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .map(|(snapshot, current)| (
+                        snapshot
+                            .projects
+                            .iter()
+                            .map(|project| (
+                                project.module_root.clone(),
+                                project.project_references.clone()
+                            ))
+                            .collect::<Vec<_>>(),
+                        current,
+                    )),
+                store
+                    .kotlin_workspace_snapshot(worktree_id)
+                    .map(|(snapshot, current)| (snapshot.projects.len(), current,)),
+                store.kotlin_workspace_query_failed(worktree_id),
+                store.kotlin_workspace_import_failed(worktree_id),
+                store
+                    .language_server_statuses
+                    .values()
+                    .map(|status| status.name.clone())
+                    .collect::<Vec<_>>(),
+            ))
+        );
+        if Instant::now() >= refresh_at {
+            store.update(cx, |store, cx| {
+                store.refresh_jdtls_project(worktree_id, cx);
+                store.refresh_kotlin_workspace(worktree_id, cx);
+            });
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
+    let java_project_path = project.read_with(cx, |project, cx| {
+        project
+            .find_project_path(&java_path, cx)
+            .expect("Java project path")
+    });
+    let source = java_buffer.read_with(cx, |buffer, _| buffer.text());
+    let position = MultiBufferOffset(source.find("Greeting").expect("Kotlin type reference") + 2);
+    let (container, cx) =
+        cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
+    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+    let java_item = workspace
+        .update_in(cx, |workspace, window, cx| {
+            workspace.open_path(java_project_path, None, true, window, cx)
+        })
+        .await
+        .expect("open Java in the workbench");
+    let java_editor = java_item.downcast::<editor::Editor>().expect("Java Editor");
+    let navigation = java_editor.update_in(cx, |editor, window, cx| {
+        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
+            selections.select_ranges([position..position])
+        });
+        editor.go_to_definition(&GoToDefinition::default(), window, cx)
+    });
+    navigation.await.expect("execute Go to Definition");
+    workspace.read_with(cx, |workspace, cx| {
+        let item = workspace.active_item(cx).expect("the destination editor");
+        let editor = item
+            .downcast::<editor::Editor>()
+            .expect("destination editor");
+        let buffer = editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .expect("one destination buffer");
+        let file =
+            project::File::from_dyn(buffer.read(cx).file()).expect("a project source destination");
+        assert_eq!(file.abs_path(cx), kotlin_path);
+    });
+}
+
+#[cfg(all(test, unix))]
 async fn mount_dependencies_panel(
     project: Entity<Project>,
     cx: &mut TestAppContext,

@@ -25,9 +25,34 @@ qualification remain open. `jvm` stays planned.
 
 The standalone Kotlin server returned no Java-to-Kotlin definition locations
 for Maven or Gradle. In a separate Gradle run, JDTLS `1.61.0` resolved the Java
-reference to `Greeting.kt` and preserved the compiled Kotlin class. The cached
-Maven reactor built on retry. JDTLS exposed no fixture modules in that run, so
-Maven Java-to-Kotlin navigation remains open.
+reference to `Greeting.kt` and preserved the compiled Kotlin class.
+
+### Mounted Maven Java-to-Kotlin navigation
+
+The cached Maven build succeeds because it runs the default reactor. JDTLS
+`1.61.0` scans POMs on disk, including the inactive `parity-cycle` fixture
+projects. m2e logs a dependency cycle between `cycle-left` and `cycle-right`
+and aborts the import before `java.project.getAll` can return either default
+module. The standalone probe now copies only the default reactor.
+
+JDTLS then imports `application` and `library`, reports the compile-scoped
+project dependency and lists the library's Kotlin source root. Standalone
+Java definition still returns an empty result with `Greeting.class` present.
+When that happens in Groovy, the editor uses the current Maven project data from
+both providers to ask Kotlin LSP for the exact type and accepts a unique source
+location in the referenced module.
+
+On macOS ARM64, the mounted Tasks UI test
+`test_explorer::jvm_workflow::cached_maven_go_to_definition_opens_kotlin_source`
+passed with JDTLS `1.61.0`, Kotlin LSP `271.2085.0` and external networking
+denied. The normal editor action on the Java `Greeting` reference opened
+`library/src/main/kotlin/evidence/Greeting.kt`. To replay the opt-in test with
+`tasks_ui/jvm-workflow-test-support`, set `GROOVY_MAVEN_NAVIGATION_FIXTURE` to a
+fresh, offline-built copy of `crates/project/test_data/groovy_jvm_maven`
+omitting the `cycle-*` and `parity-*` directories. Supply the two cached
+launchers and their Java homes via `GROOVY_JDTLS_LAUNCHER`,
+`GROOVY_LSP_JAVA_HOME`, `GROOVY_KOTLIN_LSP`, and `GROOVY_KOTLIN_JAVA_HOME`.
+Both providers need access to the populated Maven repository.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
