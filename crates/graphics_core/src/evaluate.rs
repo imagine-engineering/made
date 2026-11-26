@@ -4,6 +4,7 @@ use futures::FutureExt as _;
 use graphite_core_types::{
     Color, Context, Node, Type,
     list::{Item, List},
+    ops::Convert as _,
 };
 use graphite_glam::{DAffine2, DVec2};
 use graphite_graph_craft::{
@@ -23,12 +24,15 @@ use graphite_interpreted_executor::{
     node_registry::NODE_REGISTRY,
 };
 use graphite_math_nodes::{NthRoot, SafeDivide};
+use graphite_raster_types::Raster;
 use graphite_std::{
     ATTR_TRANSFORM, Artboard, Graphic,
-    application_io::{ExportFormat, GetEditorPreferences, RenderConfig},
+    application_io::{ApplicationIo as _, ExportFormat, GetEditorPreferences, RenderConfig},
     memo::IORecord,
     platform_application_io::{decode_image, editor_api, resource},
+    transform::Footprint,
     transform_nodes::replace_transform,
+    vector_types::vector::style::RenderMode,
 };
 
 use crate::{
@@ -1167,38 +1171,14 @@ pub(crate) async fn evaluate_cpu_svg(
             storage.store(input.source.encoded_bytes().as_ref());
             application_io.inject_resource_proxy(Box::new(storage));
         }
-        let api = Arc::new(PlatformEditorApi {
-            application_io: Some(Arc::new(application_io)),
-            editor_preferences: Box::new(SvgPreferences(budget.max_viewport_pixels)),
-            ..PlatformEditorApi::default()
-        });
-        let mut network =
-            graphite_interpreted_executor::util::wrap_network_in_scope(network.clone(), api);
-        graphite_preprocessor::Preprocessor::new()
-            .preprocess(&mut network, &|_| None)
-            .map_err(|error| CpuSvgEvaluationError::Preprocessing(error.to_string()))?;
-        let proto = Compiler {}
-            .compile_single(network)
-            .map_err(CpuSvgEvaluationError::Compilation)?;
-        let executor = DynamicExecutor::new(proto)
-            .await
-            .map_err(|errors| CpuSvgEvaluationError::Construction(Box::new(errors)))?;
-        if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>))
-            || executor.output_type() != Some(graphite_std::future!(Item<RenderOutput>))
-        {
-            return Err(CpuSvgEvaluationError::UnexpectedContract);
-        }
-        let value = Executor::execute(&&executor, configuration.into_context())
-            .await
-            .map_err(|error| {
-                CpuSvgEvaluationError::Execution(CpuSvgExecutionError(error.to_string()))
-            })?;
-        if let Some((node, input)) = encoded_png {
-            validate_decoded_image(&executor, node, input)?;
-        }
-        let TaggedValue::RenderOutput(output) = value else {
-            return Err(CpuSvgEvaluationError::UnexpectedOutput);
-        };
+        let output = execute_source_render(
+            network,
+            configuration,
+            budget,
+            Arc::new(application_io),
+            encoded_png,
+        )
+        .await?;
         let RenderOutputType::Svg { svg, image_data } = &output.data else {
             return Err(CpuSvgEvaluationError::UnexpectedOutput);
         };
@@ -1212,18 +1192,159 @@ pub(crate) async fn evaluate_cpu_svg(
     })
     .catch_unwind()
     .await
-    .unwrap_or_else(|payload| {
-        let detail = payload
-            .downcast_ref::<String>()
-            .cloned()
-            .or_else(|| {
-                payload
-                    .downcast_ref::<&str>()
-                    .map(|detail| (*detail).to_owned())
+    .unwrap_or_else(|payload| Err(source_render_panic(payload)))
+}
+
+fn source_render_panic(payload: Box<dyn std::any::Any + Send>) -> CpuSvgEvaluationError {
+    let detail = payload
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| {
+            payload
+                .downcast_ref::<&str>()
+                .map(|detail| (*detail).to_owned())
+        })
+        .unwrap_or_else(|| "Non-string panic payload".to_owned());
+    CpuSvgEvaluationError::SourcePanic(detail)
+}
+
+async fn execute_source_render(
+    network: &NodeNetwork,
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+    application_io: Arc<PlatformApplicationIo>,
+    encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
+) -> Result<RenderOutput, CpuSvgEvaluationError> {
+    let api = Arc::new(PlatformEditorApi {
+        application_io: Some(application_io),
+        editor_preferences: Box::new(SvgPreferences(budget.max_viewport_pixels)),
+        ..PlatformEditorApi::default()
+    });
+    let mut network =
+        graphite_interpreted_executor::util::wrap_network_in_scope(network.clone(), api);
+    graphite_preprocessor::Preprocessor::new()
+        .preprocess(&mut network, &|_| None)
+        .map_err(|error| CpuSvgEvaluationError::Preprocessing(error.to_string()))?;
+    let proto = Compiler {}
+        .compile_single(network)
+        .map_err(CpuSvgEvaluationError::Compilation)?;
+    let executor = DynamicExecutor::new(proto)
+        .await
+        .map_err(|errors| CpuSvgEvaluationError::Construction(Box::new(errors)))?;
+    if executor.input_type() != Some(graphite_graph_craft::concrete!(Context<'static>))
+        || executor.output_type() != Some(graphite_std::future!(Item<RenderOutput>))
+    {
+        return Err(CpuSvgEvaluationError::UnexpectedContract);
+    }
+    let value = Executor::execute(&&executor, configuration.into_context())
+        .await
+        .map_err(|error| {
+            CpuSvgEvaluationError::Execution(CpuSvgExecutionError(error.to_string()))
+        })?;
+    if let Some((node, input)) = encoded_png {
+        validate_decoded_image(&executor, node, input)?;
+    }
+    match value {
+        TaggedValue::RenderOutput(output) => Ok(output),
+        _ => Err(CpuSvgEvaluationError::UnexpectedOutput),
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CanvasGpuError {
+    #[error("Graphite could not initialize the GPU Canvas renderer.")]
+    Unavailable,
+    #[error("Graphite requires a finite raster Canvas view.")]
+    InvalidConfiguration,
+    #[error("The Graphite viewport exceeds the raster rendering budget.")]
+    ViewportBudgetExceeded,
+    #[error("Graphite did not return pixels for the requested raster viewport.")]
+    UnexpectedOutput,
+    #[error("{0}")]
+    Evaluation(#[from] CpuSvgEvaluationError),
+}
+
+pub struct CanvasGpuRenderer {
+    application_io: Arc<PlatformApplicationIo>,
+}
+
+impl CanvasGpuRenderer {
+    pub async fn new() -> Result<Self, CanvasGpuError> {
+        let application_io = AssertUnwindSafe(PlatformApplicationIo::new())
+            .catch_unwind()
+            .await
+            .map_err(|_| CanvasGpuError::Unavailable)?;
+        if application_io.gpu_executor().is_none() {
+            return Err(CanvasGpuError::Unavailable);
+        }
+        Ok(Self {
+            application_io: Arc::new(application_io),
+        })
+    }
+
+    pub(crate) async fn render(
+        &self,
+        network: &NodeNetwork,
+        configuration: RenderConfig,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, CanvasGpuError> {
+        if configuration.export_format != ExportFormat::Raster
+            || configuration.for_export
+            || configuration.for_eyedropper
+            || configuration.render_mode == RenderMode::SvgPreview
+        {
+            return Err(CanvasGpuError::InvalidConfiguration);
+        }
+        validate_viewport_configuration(configuration, budget).map_err(|error| match error {
+            CpuSvgDocumentError::ViewportBudgetExceeded => CanvasGpuError::ViewportBudgetExceeded,
+            _ => CanvasGpuError::InvalidConfiguration,
+        })?;
+        let executor = self
+            .application_io
+            .gpu_executor()
+            .ok_or(CanvasGpuError::Unavailable)?;
+        let resolution = configuration.viewport.resolution;
+        if resolution.max_element() > executor.context().device.limits().max_texture_dimension_2d {
+            return Err(CanvasGpuError::ViewportBudgetExceeded);
+        }
+        AssertUnwindSafe(async {
+            let RenderOutput { data, metadata } = execute_source_render(
+                network,
+                configuration,
+                budget,
+                self.application_io.clone(),
+                None,
+            )
+            .await?;
+            let RenderOutputType::Texture(texture) = data else {
+                return Err(CanvasGpuError::UnexpectedOutput);
+            };
+            if texture.width() != resolution.x || texture.height() != resolution.y {
+                return Err(CanvasGpuError::UnexpectedOutput);
+            }
+            let raster = Raster::new_gpu(texture)
+                .convert(Footprint::BOUNDLESS, executor)
+                .await;
+            let (data, width, height) = raster.to_flat_u8();
+            if width != resolution.x
+                || height != resolution.y
+                || u64::try_from(data.len()).ok() != Some(u64::from(width) * u64::from(height) * 4)
+            {
+                return Err(CanvasGpuError::UnexpectedOutput);
+            }
+            Ok(RenderOutput {
+                data: RenderOutputType::Buffer {
+                    data,
+                    width,
+                    height,
+                },
+                metadata,
             })
-            .unwrap_or_else(|| "Non-string panic payload".to_owned());
-        Err(CpuSvgEvaluationError::SourcePanic(detail))
-    })
+        })
+        .catch_unwind()
+        .await
+        .unwrap_or_else(|payload| Err(source_render_panic(payload).into()))
+    }
 }
 
 fn source_network(
@@ -1464,18 +1585,27 @@ pub(crate) fn validate_svg_configuration(
     configuration: RenderConfig,
     budget: CpuSvgEvaluationBudget,
 ) -> Result<(), CpuSvgDocumentError> {
+    if configuration.export_format != ExportFormat::Svg
+        || configuration.render_mode != RenderMode::Normal
+        || !configuration.for_export
+        || configuration.for_eyedropper
+    {
+        return Err(CpuSvgDocumentError::InvalidConfiguration);
+    }
+    validate_viewport_configuration(configuration, budget)
+}
+
+fn validate_viewport_configuration(
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+) -> Result<(), CpuSvgDocumentError> {
     let scale = configuration.scale;
     let viewport = configuration.viewport;
     let reciprocal = 1. / scale;
     let physical = DAffine2::from_scale(DVec2::splat(scale)) * viewport.transform;
     let logical = DAffine2::from_scale(DVec2::splat(reciprocal)) * physical;
     let resolution = viewport.resolution.as_dvec2() / scale;
-    if configuration.export_format != ExportFormat::Svg
-        || configuration.render_mode
-            != graphite_std::vector_types::vector::style::RenderMode::Normal
-        || !configuration.for_export
-        || configuration.for_eyedropper
-        || !scale.is_finite()
+    if !scale.is_finite()
         || scale <= 0.
         || !reciprocal.is_finite()
         || !viewport.transform.is_finite()

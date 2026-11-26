@@ -81,12 +81,13 @@ use graphite_std::{
         generator_nodes::{ellipse, rectangle},
         stroke,
     },
+    vector_types::vector::style::RenderMode,
 };
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
-    CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
+    CanvasGpuRenderer, CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
     NumericGraphPreparationError, UnaryNumericOperation, evaluate_cpu_svg,
     typecheck_detached_numeric_network, typecheck_detached_ranked_network,
     validate_svg_configuration,
@@ -416,6 +417,14 @@ pub struct GddDocumentCanvasOutput {
     pub artboards: Vec<GddArtboardCanvasLayer>,
     pub can_draw_artboard: bool,
     pub snapping_document: Option<Box<DocumentMessageHandler>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct GddCanvasRenderTarget<'a> {
+    pub resolution: UVec2,
+    pub scale: f64,
+    pub budget: CpuSvgEvaluationBudget,
+    pub raster: Option<(&'a CanvasGpuRenderer, RenderMode)>,
 }
 
 pub struct GddArtboardCanvasLayer {
@@ -3751,8 +3760,24 @@ impl InspectedGddV1 {
         camera: Option<PTZ>,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
-        self.render_canvas_svg((resolution, scale), camera, budget, None)
-            .await
+        self.render_document_canvas(
+            GddCanvasRenderTarget {
+                resolution,
+                scale,
+                budget,
+                raster: None,
+            },
+            camera,
+        )
+        .await
+    }
+
+    pub async fn render_document_canvas(
+        &self,
+        target: GddCanvasRenderTarget<'_>,
+        camera: Option<PTZ>,
+    ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
+        self.render_canvas(target, camera, None).await
     }
 
     pub async fn render_document_artboard_move_draft_svg(
@@ -3763,11 +3788,31 @@ impl InspectedGddV1 {
         camera: PTZ,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
+        self.render_document_artboard_move_draft(
+            node,
+            location,
+            GddCanvasRenderTarget {
+                resolution: viewport.0,
+                scale: viewport.1,
+                budget,
+                raster: None,
+            },
+            camera,
+        )
+        .await
+    }
+
+    pub async fn render_document_artboard_move_draft(
+        &self,
+        node: &GddGraphNode,
+        location: DVec2,
+        target: GddCanvasRenderTarget<'_>,
+        camera: PTZ,
+    ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        self.render_canvas_svg(
-            viewport,
+        self.render_canvas(
+            target,
             Some(camera),
-            budget,
             Some(ArtboardCanvasDraft::Move(node, location)),
         )
         .await
@@ -3782,26 +3827,50 @@ impl InspectedGddV1 {
         camera: PTZ,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
+        self.render_document_artboard_resize_draft(
+            node,
+            pick,
+            geometry,
+            GddCanvasRenderTarget {
+                resolution: viewport.0,
+                scale: viewport.1,
+                budget,
+                raster: None,
+            },
+            camera,
+        )
+        .await
+    }
+
+    pub async fn render_document_artboard_resize_draft(
+        &self,
+        node: &GddGraphNode,
+        pick: &GddArtboardCanvasPick,
+        geometry: GddArtboardGeometry,
+        target: GddCanvasRenderTarget<'_>,
+        camera: PTZ,
+    ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        self.render_canvas_svg(
-            viewport,
+        self.render_canvas(
+            target,
             Some(camera),
-            budget,
             Some(ArtboardCanvasDraft::Resize(node, pick, geometry)),
         )
         .await
     }
 
-    async fn render_canvas_svg(
+    async fn render_canvas(
         &self,
-        (resolution, scale): (UVec2, f64),
+        target: GddCanvasRenderTarget<'_>,
         camera: Option<PTZ>,
-        budget: CpuSvgEvaluationBudget,
         draft: Option<ArtboardCanvasDraft<'_>>,
     ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
+        let GddCanvasRenderTarget {
+            resolution, scale, ..
+        } = target;
         let graph = self.runtime_graph().await?;
         let [
             NodeInput::Node {
@@ -3843,14 +3912,8 @@ impl InspectedGddV1 {
                 return Err(GddArchiveError::UnsupportedArtboardGeometry);
             }
             let can_draw_artboard = classify_document_artboard_source(&mut interface).is_ok();
-            let mut output = Self::render_unframed_canvas_svg(
-                &detached,
-                (resolution, scale),
-                camera,
-                budget,
-                can_draw_artboard,
-            )
-            .await?;
+            let mut output =
+                Self::render_unframed_canvas(&detached, target, camera, can_draw_artboard).await?;
             if can_draw_artboard {
                 output.snapping_document = Some(self.canvas_snapping_document(
                     interface,
@@ -3925,9 +3988,7 @@ impl InspectedGddV1 {
         let camera = camera.unwrap_or_else(|| fit_canvas_camera(origin, size, logical_size));
         let transform = NavigationMessageHandler::default()
             .calculate_offset_transform(logical_size / 2., &camera);
-        let configuration = canvas_render_configuration(resolution, scale, transform);
-        let render =
-            Self::render_detached_saved_layer_svg(&detached, configuration, budget).await?;
+        let render = Self::render_detached_canvas(&detached, target, transform).await?;
         let pane_to_document = transform.inverse();
         let metadata = &render.metadata;
         let can_draw_artboard = draft.is_none()
@@ -4020,26 +4081,20 @@ impl InspectedGddV1 {
         })
     }
 
-    async fn render_unframed_canvas_svg(
+    async fn render_unframed_canvas(
         detached: &NodeNetwork,
-        (resolution, scale): (UVec2, f64),
+        target: GddCanvasRenderTarget<'_>,
         requested_camera: Option<PTZ>,
-        budget: CpuSvgEvaluationBudget,
         can_draw_artboard: bool,
     ) -> Result<GddDocumentCanvasOutput, GddArchiveError> {
-        let logical_size = resolution.as_dvec2() / scale;
+        let logical_size = target.resolution.as_dvec2() / target.scale;
         if !logical_size.is_finite() || logical_size.min_element() <= 0. {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
         let navigation = NavigationMessageHandler::default();
         let mut camera = requested_camera.unwrap_or_default();
         let initial_transform = navigation.calculate_offset_transform(logical_size / 2., &camera);
-        let mut render = Self::render_detached_saved_layer_svg(
-            detached,
-            canvas_render_configuration(resolution, scale, initial_transform),
-            budget,
-        )
-        .await?;
+        let mut render = Self::render_detached_canvas(detached, target, initial_transform).await?;
         let pane_to_document = initial_transform.inverse();
         let metadata = &render.metadata;
         let bounds = metadata
@@ -4073,12 +4128,7 @@ impl InspectedGddV1 {
                     camera = fitted;
                     let transform =
                         navigation.calculate_offset_transform(logical_size / 2., &camera);
-                    render = Self::render_detached_saved_layer_svg(
-                        detached,
-                        canvas_render_configuration(resolution, scale, transform),
-                        budget,
-                    )
-                    .await?;
+                    render = Self::render_detached_canvas(detached, target, transform).await?;
                 }
             }
         }
@@ -4177,6 +4227,27 @@ impl InspectedGddV1 {
         };
         collect_layer_preview_node(network, selected, &mut detached, &mut BTreeSet::new())?;
         Self::render_detached_saved_layer_svg(&detached, configuration, budget).await
+    }
+
+    async fn render_detached_canvas(
+        detached: &NodeNetwork,
+        target: GddCanvasRenderTarget<'_>,
+        transform: DAffine2,
+    ) -> Result<RenderOutput, GddArchiveError> {
+        let mut configuration =
+            canvas_render_configuration(target.resolution, target.scale, transform);
+        if let Some((renderer, mode)) = target.raster {
+            configuration.render_mode = mode;
+            configuration.export_format = SvgExportFormat::Raster;
+            configuration.for_export = false;
+            validate_saved_path_modifications(detached)?;
+            validate_saved_ellipse_radius_sources(detached).await?;
+            return renderer
+                .render(detached, configuration, target.budget)
+                .await
+                .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()));
+        }
+        Self::render_detached_saved_layer_svg(detached, configuration, target.budget).await
     }
 
     async fn render_detached_saved_layer_svg(

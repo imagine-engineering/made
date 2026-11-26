@@ -15,16 +15,19 @@ use gpui::{
     EventEmitter, FocusHandle, Focusable, ImageSource, PathPromptOptions, Render, RenderImage,
     ScrollHandle, SharedString, Subscription, SvgRenderer, Task, WeakEntity, Window, actions, img,
 };
-use graphics_core::evaluate::{CpuSvgEvaluationBudget, UnaryNumericOperation};
+use graphics_core::evaluate::{
+    CanvasGpuError, CanvasGpuRenderer, CpuSvgEvaluationBudget, UnaryNumericOperation,
+};
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasLayer,
-        GddArtboardCanvasPick, GddArtboardGeometry, GddEllipseAxis, GddExportContent,
-        GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind,
-        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
-        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
-        inspect_gdd_folder_files, open_gdd_archive,
+        GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasRenderTarget, GddDocumentCanvasOutput,
+        GddEllipseAxis, GddExportContent, GddGraphGeometry, GddGraphInspection,
+        GddGraphLayerPreview, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
+        GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
+        ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -38,6 +41,7 @@ use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, U
 use graphite_std::{
     application_io::{ExportFormat as RenderFormat, RenderConfig},
     transform::Footprint,
+    vector_types::vector::style::RenderMode,
 };
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{
@@ -667,6 +671,7 @@ pub(crate) struct GraphiteDocumentItem {
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
     scene_canvas: Option<SavedSceneCanvas>,
+    canvas_render_mode: SavedSceneRenderMode,
     node_catalog: NodeCatalogPanel,
     node_copy: NodeCopyPanel,
     node_insert: Option<NodeInsertForm>,
@@ -685,6 +690,8 @@ struct SavedSceneCanvas {
     grid_frame: Option<SavedSceneGridFrame>,
     grid_task: Option<Task<()>>,
     measurement_pointer: Option<(gpui::Point<gpui::Pixels>, bool)>,
+    render_mode_task: Option<Task<()>>,
+    render_mode_error: Option<SharedString>,
     pan: Option<SavedScenePan>,
     pick_armed: bool,
     move_armed: bool,
@@ -815,6 +822,74 @@ struct SavedSceneArtboard {
     overlay: Option<Arc<ArtboardOverlay>>,
 }
 
+#[derive(Clone, Default)]
+struct SavedSceneRenderMode {
+    mode: RenderMode,
+    gpu: Option<Arc<CanvasGpuRenderer>>,
+}
+
+impl SavedSceneRenderMode {
+    fn target(&self, target: SavedSceneTarget) -> GddCanvasRenderTarget<'_> {
+        GddCanvasRenderTarget {
+            resolution: target.resolution,
+            scale: target.scale,
+            budget: CpuSvgEvaluationBudget {
+                max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
+                max_output_bytes: 64 * 1024,
+            },
+            raster: self
+                .gpu
+                .as_deref()
+                .filter(|_| self.mode != RenderMode::SvgPreview)
+                .map(|gpu| (gpu, self.mode)),
+        }
+    }
+}
+
+struct PreparedSceneFrame {
+    image: Arc<RenderImage>,
+    navigation: DocumentNavigation,
+    artboards: Vec<SavedSceneArtboard>,
+    can_draw_artboard: bool,
+    snapping_document: Option<Box<DocumentMessageHandler>>,
+}
+
+impl PreparedSceneFrame {
+    fn render(
+        contents: &InspectedGddV1,
+        mode: &SavedSceneRenderMode,
+        target: SavedSceneTarget,
+        camera: Option<PTZ>,
+        renderer: &SvgRenderer,
+    ) -> Result<Self, String> {
+        let GddDocumentCanvasOutput { render, camera, document_size, artboards, can_draw_artboard, mut snapping_document } =
+            futures::executor::block_on(contents.render_document_canvas(mode.target(target), camera))
+            .map_err(|error| match error {
+                GddArchiveError::UnsupportedGraphLayerPreview => {
+                    "Connect supported artwork or an Artboard to the document output to view the Canvas.".to_owned()
+                }
+                error => error.to_string(),
+            })?;
+        let image = target.render_image(render, renderer)?;
+        if let Some(document) = &mut snapping_document {
+            document.render_mode = mode.mode;
+        }
+        Ok(Self {
+            image,
+            navigation: DocumentNavigation {
+                camera,
+                document_size,
+            },
+            artboards: artboards
+                .into_iter()
+                .map(SavedSceneArtboard::from)
+                .collect(),
+            can_draw_artboard,
+            snapping_document,
+        })
+    }
+}
+
 impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
     fn from(layer: GddArtboardCanvasLayer) -> Self {
         Self {
@@ -827,6 +902,26 @@ impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
 }
 
 impl SavedSceneCanvas {
+    fn accept_frame(
+        &mut self,
+        frame: PreparedSceneFrame,
+        preferences: Option<&Arc<SnappingState>>,
+    ) {
+        self.navigation = Some(frame.navigation);
+        self.artboards = frame.artboards;
+        self.can_draw_artboard = frame.can_draw_artboard;
+        self.source_grid_visible = frame
+            .snapping_document
+            .as_ref()
+            .is_some_and(|document| document.snapping_state.grid_snapping);
+        self.snapping_document = frame.snapping_document;
+        self.applied_snapping_preferences = None;
+        if let Some(preferences) = preferences {
+            self.apply_snapping_preferences(preferences);
+        }
+        self.frame = SavedSceneFrame::Ready(frame.image);
+    }
+
     fn update_measurement_pointer(
         &mut self,
         pointer: Option<(gpui::Point<gpui::Pixels>, bool)>,
@@ -987,18 +1082,38 @@ impl SavedSceneTarget {
         output: graphite_graph_craft::document::value::RenderOutput,
         renderer: &SvgRenderer,
     ) -> Result<Arc<RenderImage>, String> {
-        let RenderOutputType::Svg { svg, .. } = output.data else {
-            return Err("Graphite did not return an SVG Canvas frame.".to_owned());
-        };
-        crate::render::prepare_svg_bytes_at_target(
-            svg.as_bytes(),
-            self.resolution.x,
-            self.resolution.y,
-            self.scale,
-            renderer,
-            SAVED_SCENE_PIXEL_BUDGET as usize * 4,
-        )
-        .map_err(|error| error.to_string())
+        match output.data {
+            RenderOutputType::Svg { svg, .. } => crate::render::prepare_svg_bytes_at_target(
+                svg.as_bytes(),
+                self.resolution.x,
+                self.resolution.y,
+                self.scale,
+                renderer,
+                SAVED_SCENE_PIXEL_BUDGET as usize * 4,
+            )
+            .map_err(|error| error.to_string()),
+            RenderOutputType::Buffer {
+                mut data,
+                width,
+                height,
+            } if self.resolution == UVec2::new(width, height)
+                && u64::from(width) * u64::from(height) <= u64::from(SAVED_SCENE_PIXEL_BUDGET)
+                && u64::try_from(data.len()).ok()
+                    == Some(u64::from(width) * u64::from(height) * 4) =>
+            {
+                // Vello writes straight RGBA. GPUI's image atlas accepts straight BGRA.
+                for pixel in data.as_chunks_mut::<4>().0 {
+                    pixel.swap(0, 2);
+                }
+                let image = image::RgbaImage::from_raw(width, height, data).ok_or_else(|| {
+                    "Graphite returned an invalid raster Canvas frame.".to_owned()
+                })?;
+                Ok(Arc::new(RenderImage::new(vec![image::Frame::new(image)])))
+            }
+            _ => Err(
+                "Graphite did not return a Canvas frame at the requested dimensions.".to_owned(),
+            ),
+        }
     }
 
     fn measure(size: gpui::Size<gpui::Pixels>, scale: f32) -> Option<Self> {
@@ -1741,6 +1856,7 @@ impl GraphiteDocumentItem {
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
             scene_canvas: None,
+            canvas_render_mode: SavedSceneRenderMode::default(),
             node_catalog: NodeCatalogPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
             node_insert: None,
@@ -1769,6 +1885,8 @@ impl GraphiteDocumentItem {
             grid_frame: None,
             grid_task: None,
             measurement_pointer: None,
+            render_mode_task: None,
+            render_mode_error: None,
             pan: None,
             pick_armed: false,
             move_armed: false,
@@ -2082,6 +2200,10 @@ impl GraphiteDocumentItem {
             .is_some_and(|working| working.inspection.document_output_is_empty());
         let revision_changed = !Arc::ptr_eq(&canvas.revision, &revision);
         let target_changed = canvas.target != target;
+        if canvas.render_mode_task.take().is_some() {
+            canvas.render_mode_error =
+                Some("The Canvas changed before the render mode was ready. Try again.".into());
+        }
         if revision_changed || target_changed {
             canvas.clear_artboard_edit(Some(window), cx);
         }
@@ -2135,34 +2257,9 @@ impl GraphiteDocumentItem {
             return;
         }
         let renderer = cx.svg_renderer();
+        let mode = self.canvas_render_mode.clone();
         let render = cx.background_spawn(async move {
-            let output = futures::executor::block_on(contents.render_document_canvas_svg(
-                target.resolution,
-                target.scale,
-                camera,
-                CpuSvgEvaluationBudget {
-                    max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
-                    max_output_bytes: 64 * 1024,
-                },
-            ))
-            .map_err(|error| match error {
-                GddArchiveError::UnsupportedGraphLayerPreview => {
-                    "Connect supported artwork or an Artboard to the document output to view the Canvas."
-                        .to_owned()
-                }
-                error => error.to_string(),
-            })?;
-            let navigation = DocumentNavigation {
-                camera: output.camera,
-                document_size: output.document_size,
-            };
-            let image = target.render_image(output.render, &renderer)?;
-            let artboards = output
-                .artboards
-                .into_iter()
-                .map(SavedSceneArtboard::from)
-                .collect();
-            Ok::<_, String>((image, navigation, artboards, output.can_draw_artboard, output.snapping_document))
+            PreparedSceneFrame::render(&contents, &mode, target, camera, &renderer)
         });
         let request = Arc::new(());
         canvas.frame = SavedSceneFrame::Pending {
@@ -2179,27 +2276,101 @@ impl GraphiteDocumentItem {
                     {
                         return;
                     }
-                    canvas.frame = match result {
-                        Ok((image, navigation, artboards, can_draw_artboard, snapping_document)) => {
-                            canvas.navigation = Some(navigation);
-                            canvas.artboards = artboards;
-                            canvas.can_draw_artboard = can_draw_artboard;
-                            canvas.source_grid_visible = snapping_document.as_ref()
-                                .is_some_and(|document| document.snapping_state.grid_snapping);
-                            canvas.snapping_document = snapping_document;
-                            if let Some(preferences) = &model.snapping_preferences {
-                                canvas.apply_snapping_preferences(preferences);
-                            }
-                            SavedSceneFrame::Ready(image)
-                        }
-                        Err(error) => SavedSceneFrame::Failed(error.into()),
-                    };
+                    match result {
+                        Ok(frame) => canvas.accept_frame(frame, model.snapping_preferences.as_ref()),
+                        Err(error) => canvas.frame = SavedSceneFrame::Failed(error.into()),
+                    }
                     cx.notify();
                 }) {
                     log::debug!("Graphite Canvas closed: {error:#}");
                 }
             }),
         };
+        cx.notify();
+    }
+
+    fn request_scene_render_mode(
+        &mut self,
+        instance: &Arc<()>,
+        revision: &Arc<()>,
+        selected: RenderMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let model = self.model.read(cx);
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        if !Arc::ptr_eq(instance, &canvas.instance)
+            || !Arc::ptr_eq(revision, &canvas.revision)
+            || !Arc::ptr_eq(revision, &model.revision)
+            || canvas.render_mode_task.is_some()
+            || canvas.artboard_view.is_some()
+            || canvas.pan.is_some()
+            || (selected == self.canvas_render_mode.mode
+                && (selected != RenderMode::Normal || self.canvas_render_mode.gpu.is_some()))
+        {
+            return;
+        }
+        let SavedSceneFrame::Ready(previous_image) = &canvas.frame else {
+            return;
+        };
+        let Some((target, contents)) = canvas.target.zip(model.gdd_contents().cloned()) else {
+            return;
+        };
+        let previous_image = previous_image.clone();
+        let camera = canvas.navigation.map(|navigation| navigation.camera);
+        let instance = instance.clone();
+        let revision = revision.clone();
+        let renderer = cx.svg_renderer();
+        let mut mode = self.canvas_render_mode.clone();
+        mode.mode = selected;
+        let render = cx.background_spawn(async move {
+            if mode.gpu.is_none() && selected != RenderMode::SvgPreview {
+                match futures::executor::block_on(CanvasGpuRenderer::new()) {
+                    Ok(gpu) => mode.gpu = Some(Arc::new(gpu)),
+                    Err(CanvasGpuError::Unavailable) if selected == RenderMode::Normal => {}
+                    Err(error) => return Err(error.to_string()),
+                }
+            }
+            let frame = PreparedSceneFrame::render(&contents, &mode, target, camera, &renderer)?;
+            Ok::<_, String>((mode, frame))
+        });
+        canvas.render_mode_error = None;
+        canvas.render_mode_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result = render.await;
+            if let Err(error) = item.update_in(cx, |item, window, cx| {
+                let Some(canvas) = &mut item.scene_canvas else {
+                    return;
+                };
+                if !Arc::ptr_eq(&instance, &canvas.instance) {
+                    return;
+                }
+                canvas.render_mode_task = None;
+                let model = item.model.read(cx);
+                if !Arc::ptr_eq(&revision, &model.revision)
+                    || !Arc::ptr_eq(&revision, &canvas.revision)
+                    || canvas.target != Some(target)
+                    || canvas.artboard_view.is_some()
+                    || canvas.pan.is_some()
+                    || !matches!(&canvas.frame, SavedSceneFrame::Ready(image) if Arc::ptr_eq(image, &previous_image))
+                {
+                    canvas.render_mode_error = Some("The Canvas changed before the render mode was ready. Try again.".into());
+                } else {
+                    match result {
+                        Ok((mode, frame)) => {
+                            item.canvas_render_mode = mode;
+                            canvas.accept_frame(frame, model.snapping_preferences.as_ref());
+                            cx.drop_image(previous_image, Some(window));
+                        }
+                        Err(error) => canvas.render_mode_error = Some(error.into()),
+                    }
+                }
+                cx.notify();
+            }) {
+                log::debug!("Graphite Canvas closed before switching render mode: {error:#}");
+            }
+        }));
         cx.notify();
     }
 
@@ -2754,51 +2925,44 @@ impl GraphiteDocumentItem {
                 (drag.node.clone(), placement, resize)
             });
         let renderer = cx.svg_renderer();
+        let mode = self.canvas_render_mode.clone();
         let render = cx.background_spawn(async move {
-            let budget = CpuSvgEvaluationBudget {
-                max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
-                max_output_bytes: 64 * 1024,
-            };
-            let viewport = (target.resolution, target.scale);
-            let output = futures::executor::block_on(async {
+            let viewport = mode.target(target);
+            let mut output = futures::executor::block_on(async {
                 match edit {
                     Some((node, placement, Some(pick))) => {
                         contents
-                            .render_document_artboard_resize_draft_svg(
+                            .render_document_artboard_resize_draft(
                                 &node,
                                 &pick,
                                 placement,
                                 viewport,
                                 request.camera,
-                                budget,
                             )
                             .await
                     }
                     Some((node, placement, None)) => {
                         contents
-                            .render_document_artboard_move_draft_svg(
+                            .render_document_artboard_move_draft(
                                 &node,
                                 placement.location,
                                 viewport,
                                 request.camera,
-                                budget,
                             )
                             .await
                     }
                     None => {
                         contents
-                            .render_document_canvas_svg(
-                                target.resolution,
-                                target.scale,
-                                Some(request.camera),
-                                budget,
-                            )
+                            .render_document_canvas(viewport, Some(request.camera))
                             .await
                     }
                 }
             })
             .map_err(|error| error.to_string())?;
             let image = target.render_image(output.render, &renderer)?;
+            if let Some(document) = &mut output.snapping_document {
+                document.render_mode = mode.mode;
+            }
             Ok::<_, String>(SavedSceneArtboardDraft {
                 request,
                 image,
@@ -3146,6 +3310,50 @@ impl GraphiteDocumentItem {
             .child(DropdownMenu::new(
                 "graphite-gdd-canvas-overlays",
                 "Overlays",
+                menu,
+            ))
+    }
+
+    fn render_scene_mode_control(
+        &self,
+        canvas: &SavedSceneCanvas,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let item = cx.weak_entity();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (mode, label) in [
+                (RenderMode::Normal, "Normal"),
+                (RenderMode::Outline, "Outline"),
+                (RenderMode::PixelPreview, "Pixel Preview"),
+                (RenderMode::SvgPreview, "SVG Preview"),
+            ] {
+                let item = item.clone();
+                let instance = canvas.instance.clone();
+                let revision = canvas.revision.clone();
+                menu = menu.toggleable_entry(
+                    label,
+                    self.canvas_render_mode.mode == mode,
+                    IconPosition::Start,
+                    None,
+                    move |window, cx| {
+                        if let Err(error) = item.update(cx, |item, cx| {
+                            item.request_scene_render_mode(&instance, &revision, mode, window, cx);
+                        }) {
+                            log::debug!(
+                                "Graphite Canvas closed before choosing render mode: {error:#}"
+                            );
+                        }
+                    },
+                );
+            }
+            menu
+        });
+        div()
+            .debug_selector(|| "GRAPHITE-GDD-CANVAS-VIEW-MODE".into())
+            .child(DropdownMenu::new(
+                "graphite-gdd-canvas-view-mode",
+                "View Mode",
                 menu,
             ))
     }
@@ -3527,6 +3735,8 @@ impl GraphiteDocumentItem {
         let view_controls = self.render_scene_view_controls(canvas, window, cx);
         let overlay_control = visibility
             .map(|visibility| self.render_scene_overlays_control(canvas, visibility, window, cx));
+        let mode_control = (current && matches!(canvas.frame, SavedSceneFrame::Ready(_)))
+            .then(|| self.render_scene_mode_control(canvas, window, cx));
         v_flex()
             .size_full()
             .relative()
@@ -3679,6 +3889,13 @@ impl GraphiteDocumentItem {
                             ),
                     )
                     .children(overlay_control)
+                    .children(mode_control)
+                    .when(canvas.render_mode_task.is_some(), |toolbar| {
+                        toolbar.child(Label::new("Changing view mode…").color(Color::Muted))
+                    })
+                    .when_some(canvas.render_mode_error.clone(), |toolbar, error| {
+                        toolbar.child(Label::new(error).color(Color::Error))
+                    })
                     .when_some(message, |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
@@ -8588,6 +8805,7 @@ impl Item for GraphiteDocumentItem {
             item.export_content = self.export_content;
             item.embed_linked_resources = self.embed_linked_resources;
             item.embed_legacy_document = self.embed_legacy_document;
+            item.canvas_render_mode = self.canvas_render_mode.clone();
             item
         })))
     }
@@ -16074,6 +16292,219 @@ mod tests {
             curve_to_artboard,
             rectangle_to_artboard,
         }
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_010_2_workspace_renders_pinned_f_vector_view_modes(
+        cx: &mut TestAppContext,
+    ) {
+        let SavedVectorFixture {
+            original,
+            origin,
+            rectangle_to_artboard,
+            ..
+        } = saved_vector_fixture(None, None).await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1400.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-modes.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-VECTOR")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (instance, revision, snapshot) = item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let model = item.model.read(cx);
+            (
+                canvas.instance.clone(),
+                model.revision.clone(),
+                model.gdd_contents().expect("source snapshot").clone(),
+            )
+        });
+        let select = |window: &mut gpui::VisualTestContext, selector| {
+            click(window, "GRAPHITE-GDD-CANVAS-VIEW-MODE");
+            click(window, selector);
+            window.run_until_parked();
+            paint(window);
+        };
+        let rectangle_center = origin + rectangle_to_artboard.transform_point2(DVec2::ZERO);
+        let accepted = |window: &gpui::VisualTestContext, mode| {
+            item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let model = item.model.read(cx);
+                assert!(
+                    canvas.render_mode_error.is_none(),
+                    "{:?}",
+                    canvas.render_mode_error
+                );
+                assert!(canvas.render_mode_task.is_none());
+                assert_eq!(item.canvas_render_mode.mode, mode);
+                assert_eq!(
+                    canvas
+                        .snapping_document
+                        .as_ref()
+                        .expect("accepted scene settings")
+                        .render_mode,
+                    mode
+                );
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert!(Arc::ptr_eq(
+                    model.gdd_contents().expect("source snapshot"),
+                    &snapshot
+                ));
+                assert!(!item.is_dirty(cx));
+                assert!(!item.can_save(cx));
+                let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                    panic!("accepted view frame");
+                };
+                let target = canvas.target.expect("measured viewport");
+                let navigation = canvas.navigation.expect("accepted camera");
+                let sample = navigation
+                    .document_to_pane(target.logical_size())
+                    .transform_point2(rectangle_center)
+                    * target.scale;
+                let sample = sample.round().as_uvec2();
+                let offset =
+                    (sample.y as usize * target.resolution.x as usize + sample.x as usize) * 4;
+                let pixel = image
+                    .as_bytes(0)
+                    .expect("BGRA Canvas")
+                    .get(offset..offset + 4)
+                    .expect("rectangle center")
+                    .to_vec();
+                (image.clone(), pixel, navigation.camera)
+            })
+        };
+        let (initial, red, camera) = accepted(window, RenderMode::Normal);
+        assert_eq!(red, [0, 0, 255, 255]);
+        select(window, "MENU_ITEM-Outline");
+        let unavailable = item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            if canvas.render_mode_error.as_deref() ==
+                Some("Graphite could not initialize the GPU Canvas renderer.")
+            {
+                assert_eq!(item.canvas_render_mode.mode, RenderMode::Normal);
+                assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(image) if Arc::ptr_eq(image, &initial)));
+                true
+            } else {
+                false
+            }
+        });
+        if unavailable {
+            assert!(
+                std::env::var_os("MADE_GRAPHITE_REQUIRE_GPU").is_none(),
+                "the required native GPU Canvas renderer is unavailable"
+            );
+        } else {
+            let (outline, interior, retained_camera) = accepted(window, RenderMode::Outline);
+            assert_ne!(interior, red);
+            assert_eq!(retained_camera, camera);
+            assert!(!window.update(|window, _| window.has_image_atlas_entry(&initial)));
+            assert!(
+                outline
+                    .as_bytes(0)
+                    .expect("outline pixels")
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|pixel| pixel[0] < 20 && pixel[1] < 20 && pixel[2] < 20 && pixel[3] > 200)
+            );
+            select(window, "MENU_ITEM-Normal");
+            let (normal, normal_fill, _) = accepted(window, RenderMode::Normal);
+            assert_eq!(normal_fill, red);
+            select(window, "MENU_ITEM-Pixel Preview");
+            let (pixels, pixel_fill, pixel_camera) = accepted(window, RenderMode::PixelPreview);
+            assert!(pixel_camera.zoom() > 1.);
+            assert_eq!(pixel_fill, red);
+            assert!(pixels.as_bytes(0) != normal.as_bytes(0));
+        }
+        select(window, "MENU_ITEM-SVG Preview");
+        let (svg, svg_fill, svg_camera) = accepted(window, RenderMode::SvgPreview);
+        assert!(svg.as_bytes(0) == initial.as_bytes(0));
+        assert_eq!(svg_fill, red);
+        assert_eq!(svg_camera, camera);
+
+        item.update_in(window, |item, window, cx| {
+            item.request_scene_render_mode(
+                &instance,
+                &Arc::new(()),
+                RenderMode::Outline,
+                window,
+                cx,
+            );
+        });
+        let (after_stale, _, _) = accepted(window, RenderMode::SvgPreview);
+        assert!(Arc::ptr_eq(&after_stale, &svg));
+        if !unavailable {
+            select(window, "MENU_ITEM-Outline");
+            accepted(window, RenderMode::Outline);
+        }
+        let pane = window
+            .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+            .expect("Canvas");
+        click(window, "GRAPHITE-GDD-CANVAS-PICK");
+        window.simulate_click(pane.center(), Default::default());
+        window.run_until_parked();
+        paint(window);
+        assert!(item.read_with(
+            window,
+            |item, _| matches!(&item.node_copy, NodeCopyPanel::Ready(form)
+            if form.selected_node().is_some_and(|node| node.artboard_geometry().is_some()))
+        ));
+        let export = PathBuf::from("/project/f-vector-mode-artwork.svg");
+        click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
+        window.simulate_new_path_selection(|_| Some(export.clone()));
+        window.run_until_parked();
+        paint(window);
+        let exported = filesystem
+            .load_bytes(&export)
+            .await
+            .expect("native Artboard export");
+        let renderer = window.update(|_, cx| cx.svg_renderer());
+        let rendered_export = crate::render::prepare_svg_bytes_at_target(
+            &exported,
+            220,
+            160,
+            1.,
+            &renderer,
+            220 * 160 * 4,
+        )
+        .expect("render exported artwork");
+        let center = rectangle_to_artboard
+            .transform_point2(DVec2::ZERO)
+            .round()
+            .as_uvec2();
+        let offset = (center.y as usize * 220 + center.x as usize) * 4;
+        assert_eq!(
+            rendered_export
+                .as_bytes(0)
+                .and_then(|bytes| bytes.get(offset..offset + 4)),
+            Some(red.as_slice()),
+            "the SVG exporter keeps the source rectangle fill in every Canvas mode",
+        );
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        if unavailable {
+            accepted(window, RenderMode::SvgPreview);
+        } else {
+            let (_, interior, _) = accepted(window, RenderMode::Outline);
+            assert_ne!(interior, red);
+        }
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("original ZIP"),
+            original.as_ref()
+        );
     }
 
     #[gpui::test]
