@@ -4002,10 +4002,11 @@ impl InspectedGddV1 {
                 }
             })
             .collect();
-        let can_snap =
-            can_draw_artboard || artboards.iter().any(|board| board.pick_target.is_some());
+        let has_canvas_geometry = can_draw_artboard
+            || artboards.iter().any(|board| board.pick_target.is_some())
+            || matches!(draft, Some(ArtboardCanvasDraft::Move(..)));
         Ok(GddDocumentCanvasOutput {
-            snapping_document: can_snap
+            snapping_document: has_canvas_geometry
                 .then(|| self.canvas_snapping_document(interface, &render, camera, logical_size)),
             render,
             camera,

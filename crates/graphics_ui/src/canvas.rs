@@ -53,9 +53,12 @@ pub(crate) type CanvasOverlayFlag = fn(&mut OverlaysVisibilitySettings) -> &mut 
 
 pub(crate) const CANVAS_OVERLAYS_ALL: CanvasOverlayFlag = |settings| &mut settings.all;
 
-pub(crate) const CANVAS_OVERLAY_OPTIONS: [(&str, CanvasOverlayFlag); 3] = [
+pub(crate) const CANVAS_OVERLAY_OPTIONS: [(&str, CanvasOverlayFlag); 4] = [
     ("All Overlays", CANVAS_OVERLAYS_ALL),
     ("Artboard Name", |settings| &mut settings.artboard_name),
+    ("Quick Measurement", |settings| {
+        &mut settings.quick_measurement
+    }),
     ("Transform Cage", |settings| &mut settings.transform_cage),
 ];
 

@@ -9,14 +9,19 @@ use graphite_editor::messages::{
             OverlaysMessage, OverlaysMessageContext, OverlaysMessageHandler,
             utility_types::{OverlayContext, OverlaysVisibilitySettings},
         },
+        utility_types::document_metadata::LayerNodeIdentifier,
     },
     prelude::{
         FrontendMessage, InputPreprocessorMessageHandler, Message, MessageHandler, ViewportMessage,
         ViewportMessageHandler,
     },
-    tool::common_functionality::snapping::{SnapData, SnapManager},
+    tool::common_functionality::{
+        measure,
+        snapping::{SnapData, SnapManager},
+    },
 };
 use graphite_graph_craft::document::value::DVec2;
+use graphite_std::renderer::Rect;
 use graphite_std::vector_types::kurbo::{Affine, BezPath, Cap, Join, Stroke, StrokeOpts, stroke};
 use vello_encoding::{DrawTag, Encoding, PathSegmentType, PathTag, Style, math::f16_to_f32};
 
@@ -30,6 +35,11 @@ pub(crate) struct OverlayBudget {
 const SNAP_BUDGET: OverlayBudget = OverlayBudget {
     paths: 2048,
     segments: 65_536,
+};
+
+const MEASUREMENT_BUDGET: OverlayBudget = OverlayBudget {
+    paths: 8192,
+    segments: 262_144,
 };
 
 pub(crate) fn source_overlay_context(
@@ -85,6 +95,72 @@ struct OverlayPath {
 pub(crate) struct CanvasOverlay(Vec<OverlayPath>);
 
 impl CanvasOverlay {
+    pub fn for_artboard_measurement(
+        document: &DocumentMessageHandler,
+        selected: LayerNodeIdentifier,
+        position: DVec2,
+        viewport_size: DVec2,
+        scale: f64,
+        visibility: OverlaysVisibilitySettings,
+    ) -> Result<Option<Self>> {
+        let metadata = document.metadata();
+        let Some(selected_bounds) = metadata.bounding_box_document(selected) else {
+            return Ok(None);
+        };
+        let mut context = source_overlay_context(viewport_size, scale, visibility)?;
+        let mut input = InputPreprocessorMessageHandler::default();
+        input.mouse.position = position;
+        let mut first_layer = None;
+        let hovered = document
+            .click_xray(&input, &context.viewport)
+            .find(|layer| {
+                first_layer.get_or_insert(*layer);
+                document
+                    .network_interface
+                    .is_artboard(&layer.to_node(), &[])
+            })
+            .or(first_layer);
+        let Some(hovered_bounds) = hovered.and_then(|layer| metadata.bounding_box_document(layer))
+        else {
+            return Ok(None);
+        };
+        if selected_bounds == hovered_bounds {
+            return Ok(None);
+        }
+        let transform = metadata.document_to_viewport;
+        let limit = MEASUREMENT_BUDGET.segments as f64 / 8.;
+        // Vello expands the source dash pattern before the encoded path budget can be applied.
+        ensure!(
+            transform.inverse().is_finite()
+                && [selected_bounds, hovered_bounds]
+                    .into_iter()
+                    .all(|[minimum, maximum]| {
+                        [
+                            minimum,
+                            maximum,
+                            DVec2::new(minimum.x, maximum.y),
+                            DVec2::new(maximum.x, minimum.y),
+                        ]
+                        .into_iter()
+                        .all(|corner| {
+                            let corner = transform.transform_point2(corner) * scale;
+                            corner.is_finite() && corner.abs().max_element() <= limit
+                        })
+                    }),
+            "Graphite Quick Measurement exceeds its viewport geometry budget",
+        );
+        measure::overlay(
+            Rect::from_box(selected_bounds),
+            Rect::from_box(hovered_bounds),
+            transform,
+            transform,
+            &mut context,
+        );
+        let scene = context.take_scene();
+        let measurement = Self::decode(scene.encoding(), scale, &MEASUREMENT_BUDGET)?;
+        Ok((!measurement.is_empty()).then_some(measurement))
+    }
+
     pub fn for_gesture(
         manager: &mut SnapManager,
         document: &DocumentMessageHandler,
