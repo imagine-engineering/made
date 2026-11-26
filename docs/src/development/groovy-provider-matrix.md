@@ -209,6 +209,12 @@ on the host. Use a development Remote Server with `jvm-tools` and set
 development companion, SHA-256
 `6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
 
+Set Maven import and offline mode under the project host's `lsp.jdtls.settings`.
+Groovy sends these preferences and the configured Maven user and global
+settings paths in JDTLS initialization, before the first Maven import.
+Explicit values in `lsp.jdtls.initialization_options.settings` take precedence
+during initialization.
+
 The opt-in `docker_gradle_java_definition_opens_host_kotlin_source` test
 uses the same Docker transport with the offline Gradle 8.13 reactor. Both
 providers identify the current application and library as Gradle modules.

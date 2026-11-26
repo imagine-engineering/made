@@ -928,7 +928,7 @@ impl LocalLspStore {
                     #[cfg(feature = "jvm-tools")]
                     {
                         if server_name.as_ref() == "jdtls" {
-                            jdtls_ext::apply_gradle_import_settings_at_startup(
+                            jdtls_ext::apply_build_import_settings_at_startup(
                                 &workspace_config,
                                 &mut initialization_options,
                             );
@@ -28183,7 +28183,9 @@ mod tests {
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
     #[gpui::test]
-    async fn jdtls_initializes_with_the_effective_gradle_build_jdk(cx: &mut gpui::TestAppContext) {
+    async fn jdtls_initializes_with_the_effective_build_import_settings(
+        cx: &mut gpui::TestAppContext,
+    ) {
         let mut fixture = ProjectLanguageFixture::new(cx).await;
         let languages = fixture
             .project
@@ -28226,14 +28228,23 @@ mod tests {
             },
         );
         let build_jdk = serde_json::json!("/fixture/gradle-jdk");
+        let maven_user_settings = serde_json::json!("/fixture/maven-user-settings.xml");
+        let maven_global_settings = serde_json::json!("/fixture/maven-global-settings.xml");
         let live_configuration = serde_json::json!({
-            "java": {"import": {"gradle": {"java": {"home": build_jdk}}}},
+            "java": {
+                "configuration": {"maven": {"userSettings": maven_user_settings}},
+                "import": {
+                    "gradle": {"java": {"home": build_jdk}},
+                    "maven": {"enabled": true, "offline": {"enabled": true}},
+                },
+            },
             "java.import.gradle.offline.enabled": true,
+            "java.configuration.maven.globalSettings": maven_global_settings,
         });
         languages.register_fake_lsp_adapter(
             "Kotlin",
             language::FakeLspAdapter {
-                name: "gradle-java-home-contributor",
+                name: "jvm-import-settings-contributor",
                 additional_workspace_configuration: HashMap::from_iter([(
                     LanguageServerName::new_static("jdtls"),
                     live_configuration.clone(),
@@ -28256,6 +28267,19 @@ mod tests {
         assert_eq!(
             options["settings"]["java.import.gradle.offline.enabled"],
             true
+        );
+        assert_eq!(
+            options["settings"]["java.import.maven.offline.enabled"], true,
+            "JDTLS needs Maven offline mode in its first import settings"
+        );
+        assert_eq!(options["settings"]["java.import.maven.enabled"], true);
+        assert_eq!(
+            options["settings"]["java.configuration.maven.userSettings"],
+            maven_user_settings
+        );
+        assert_eq!(
+            options["settings"]["java.configuration.maven.globalSettings"],
+            maven_global_settings
         );
         assert_eq!(options["bundles"], serde_json::json!(["fixture-bundle"]));
         assert_eq!(options["settings"]["java"]["autobuild"]["enabled"], false);

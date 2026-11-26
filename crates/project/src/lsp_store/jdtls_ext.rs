@@ -66,11 +66,11 @@ const COMPANION_COMMANDS: &[&str] = &[
     "groovy.gradle.unlinkSelected",
 ];
 
-pub(super) fn apply_gradle_import_settings_at_startup(
+pub(super) fn apply_build_import_settings_at_startup(
     workspace_configuration: &Value,
     initialization_options: &mut Option<Value>,
 ) {
-    // JDTLS can start Gradle import before receiving workspace/didChangeConfiguration.
+    // JDTLS can start importing builds before receiving workspace/didChangeConfiguration.
     const PREFERENCES: &[&str] = &[
         "java.import.gradle.annotationProcessing.enabled",
         "java.import.gradle.arguments",
@@ -82,6 +82,10 @@ pub(super) fn apply_gradle_import_settings_at_startup(
         "java.import.gradle.user.home",
         "java.import.gradle.version",
         "java.import.gradle.wrapper.enabled",
+        "java.import.maven.enabled",
+        "java.import.maven.offline.enabled",
+        "java.configuration.maven.globalSettings",
+        "java.configuration.maven.userSettings",
         "java.jdt.ls.kotlinSupport.enabled",
     ];
     let mut preferences = PREFERENCES
@@ -689,9 +693,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gradle_import_startup_preserves_explicit_initialization_settings() {
+    fn build_import_startup_preserves_explicit_initialization_settings() {
         let home = "java.import.gradle.java.home";
-        let offline = "java.import.gradle.offline.enabled";
+        let gradle_offline = "java.import.gradle.offline.enabled";
+        let maven_offline = "java.import.maven.offline.enabled";
+        let maven_user_settings = "java.configuration.maven.userSettings";
         let workspace_configuration = json!({
             "java": {"import": {"gradle": {
                 "java": {"home": "/gradle/live"},
@@ -699,24 +705,36 @@ mod tests {
                 "wrapper": {"enabled": false},
             }}},
             "java.import.gradle.home": "/gradle/distribution",
+            "java.import.maven.offline.enabled": true,
+            "java.configuration.maven.userSettings": "/maven/live.xml",
             "java.format.enabled": false,
         });
         let mut options = Some(json!({
             "bundles": ["fixture.jar"],
             "settings": {
                 "java.import.gradle.offline.enabled": false,
-                "java": {"import": {"gradle": {"java": {"home": null}}}},
+                "java.configuration.maven.userSettings": "/maven/explicit.xml",
+                "java": {"import": {
+                    "gradle": {"java": {"home": null}},
+                    "maven": {"offline": {"enabled": false}},
+                }},
             },
         }));
 
-        apply_gradle_import_settings_at_startup(&workspace_configuration, &mut options);
+        apply_build_import_settings_at_startup(&workspace_configuration, &mut options);
 
         let options = options.expect("initialization options");
         assert_eq!(options["bundles"], json!(["fixture.jar"]));
         let settings = &options["settings"];
         assert!(settings.get(home).is_none());
         assert_eq!(jdtls_nested_preference(settings, home), Some(&Value::Null));
-        assert_eq!(settings[offline], false);
+        assert_eq!(settings[gradle_offline], false);
+        assert!(settings.get(maven_offline).is_none());
+        assert_eq!(
+            jdtls_nested_preference(settings, maven_offline),
+            Some(&Value::Bool(false))
+        );
+        assert_eq!(settings[maven_user_settings], "/maven/explicit.xml");
         assert_eq!(settings["java.import.gradle.wrapper.enabled"], false);
         assert_eq!(settings["java.import.gradle.home"], "/gradle/distribution");
         assert!(settings.get("java.format.enabled").is_none());
