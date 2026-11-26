@@ -99,8 +99,17 @@ Linux ARM64 containers using checksum-verified Temurin `17.0.21+9`, isolated
 populated caches, and Docker's `none` network mode. Both compiled the Kotlin
 library and ran `evidence.GreetingTest.messageIsAvailable` with one passing
 JUnit XML result. Gradle also generated and compiled the fixture's Java
-source. These were standalone wrapper runs. The connected Groovy Task and
-provider journeys on Linux ARM64 still need qualification.
+source.
+
+The native macOS ARM64 client also connected to each Linux ARM64 Dev
+Container using a guarded development Remote Server. After trusting each
+container workspace, the built-in **Build Maven project** and **Build Gradle
+project** Tasks completed successfully in the shared terminal. Their fresh
+JUnit reports matched the container working directory or hostname. The
+Gradle and Kotlin compiler processes ran inside the container with no matching
+Java process on the macOS client. Both containers used cached inputs and
+Docker's `none` network mode. The Linux language-provider, Tests panel and
+Debug journeys still need qualification.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
