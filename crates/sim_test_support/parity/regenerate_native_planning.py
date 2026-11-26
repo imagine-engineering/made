@@ -1658,10 +1658,10 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
                 "crates/sim_test_support/parity/design.md", "crates/sim_test_support/parity/tasks.md",
                 "crates/sim_test_support/parity/traceability.md", "crates/sim_test_support/parity/validation.md",
-                "target/comfy-parity/val-runtime-persistence-001.json",
-                "target/comfy-parity/val-runtime-settings-001.json",
-                "target/comfy-parity/val-runtime-trust-001.json",
-                "target/comfy-parity/val-domain-001.json",
+                "target/sim-parity/val-runtime-persistence-001.json",
+                "target/sim-parity/val-runtime-settings-001.json",
+                "target/sim-parity/val-runtime-trust-001.json",
+                "target/sim-parity/val-domain-001.json",
                 "target/comfy-parity/val-ownership-001.json",
             ],
             "The registered default and merged profile layers map to one typed active profile; invalid active values fail visibly while unknown nonactive values remain lossless. Every historical DB prefix migrates deterministically: any unexpected nonempty profile, workspace, generic-mapping, or unversioned-attempt store is retained in explicit quarantine, while active storage contains only validated typed attempts and inactive legacy migration evidence. Restart, profile isolation, recursive secret removal, nested unknown-field retention, and reject-before-overwrite cases pass twice with byte-stable named artifacts; production contains no second workspace/profile/mapping owner. Full settings/flags/localization UI, watcher conflict, and persistence failure-injection closure remains assigned to the later settings-localization and GPUI-persistence tasks.",
@@ -1694,7 +1694,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/parity/regenerate_native_planning.py",
                 "crates/sim_test_support/parity/design.md", "crates/sim_test_support/parity/tasks.md",
                 "crates/sim_test_support/parity/traceability.md", "crates/sim_test_support/parity/validation.md",
-                "target/comfy-parity/val-runtime-trust-001.json",
+                "target/sim-parity/val-runtime-trust-001.json",
             ],
             "The byte-stable VAL-RUNTIME-TRUST-001 artifact passes with exact requested-capability sealing, real signature verification, closed/profile-scoped providers, redacted non-serializable secrets, safe exposure/navigation, registry-issued FFI evidence, canonical ArtifactRoot path checks, and canonical model archive/pickle ownership. Runtime contains no TypedRoot, secure-path module, duplicate pickle allowlist, caller verification boolean, or full-grant escalation. Production-consumer and ABI/wire integration remains explicitly executable in the immediately dependent authoritative-domain and later focused consolidation tasks, not falsely claimed by this foundation leaf.",
             "comfy-parity-settings-persistence-foundation",
@@ -1762,7 +1762,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_worker/src/supervisor.rs",
                 "target/comfy-parity/val-tensor-001.json",
                 "target/comfy-parity/val-autograd-001.json",
-                "target/comfy-parity/val-rng-001.json",
+                "target/sim-parity/val-rng-001.json",
             ],
             "Every one of 600 rows has a byte-stable per-row provenance fixture, canonical target, call syntax, parameter/output evidence, reference semantic, imported non-tensor disposition, or explicit blocker, exact later resolution-owner task, exact expected resolution module, rules, and fixture digest. The 82 reference rows map to closed category-specific domain contracts with no public arbitrary-target constructor; the 7 imported non-tensor rows retain stable IDs as non-dispatchable dispositions and cannot receive compiled tensor resolutions. Every one of 511 callable rows remains non-dispatchable until a strict parsed resolution and physical evidence fixture pass the shared build validator and receive a private compiled seal; cross-leaf ownership, placeholder semantics, missing or mismatched evidence, and symlinked paths fail closed, and production lookup never depends on the repository fixture tree. No foundation artifact claims release closure while any blocker remains. The canonical TensorDescriptor is the only descriptor-validation owner; checked SDK/host/runtime adapters preserve it without a second validation or lifecycle owner. `val_tensor_001`, `val_autograd_001`, and `val_rng_001` each pass twice and emit byte-stable zero-failure/zero-unexplained-skip artifacts that truthfully name residual release gates. The locked metadata and all affected crate checks/tests/clippy pass; Task 2 foundation validation is rerun after the authorized manifest/lock change.",
             "comfy-parity-test-support",
@@ -1799,8 +1799,8 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_plugin_host/tests/fixtures/list_ports_component", "crates/sim_plugin_host/tests/fixtures/hang_component",
                 "crates/sim_plugin_host/tests/fixtures/hang_component_source",
                 "crates/sim_test_support/tests/plugin_e2e.rs",
-                "target/comfy-parity/val-plugin-001.json", "target/comfy-parity/val-e2e-003.json",
-                "target/comfy-parity/val-runtime-trust-001.json",
+                "target/sim-parity/val-plugin-001.json", "target/comfy-parity/val-e2e-003.json",
+                "target/sim-parity/val-runtime-trust-001.json",
             ],
             "The generated type registry covers every cataloged built-in socket exactly once and rejects ID, alias, publisher-namespace, representation, and schema collisions. Compiled Rust and WIT fixtures project the same typed manifest, canonical type IDs, typed scalar defaults, and every port field. Required, absent/present optional, empty/non-empty list, and singular scalar/tensor/artifact/model ports round-trip with exact read/take ownership and finish-presence validation. ABI capability/cancellation types map exactly to sealed domain types. Allowed and denied conformance-resource calls for filesystem, network/provider, secret, clock, random, model, output proposal, sanitized log, declarative UI, and routes pass bounds, quotas, cancellation, rollback, and handle-revocation tests; the host never self-grants or publishes a final file. Successful no-WASI create/invoke/drop/finish plus version/signature/mapping/placeholder/trap/fuel-hang/workflow-preservation cases pass from reproducible checked-in Rust guests without Python or JavaScript execution. Evidence names Task 21 service/lifecycle injection and Task 23 proposal-to-OutputCommitter mapping as production activation gates rather than claiming those owners here.",
             "comfy-parity-model-formats",
@@ -1838,9 +1838,9 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_model/src/sim_model.rs",
                 "crates/sim_model/tests/numeric_formats.rs",
                 "crates/sim_test_support/fixtures/numeric_formats/sim_numeric_formats_v1.json",
-                "target/comfy-parity/val-node-registry-001.json",
-                "target/comfy-parity/val-model-registry-001.json",
-                "target/comfy-parity/val-numeric-formats-001.json",
+                "target/sim-parity/val-node-registry-001.json",
+                "target/sim-parity/val-model-registry-001.json",
+                "target/sim-parity/val-numeric-formats-001.json",
             ],
             "Every one of 789 registered nodes, 12 inactive nodes, 211 model rows, and 94 model-family inventory rows parses into one lossless bounded descriptor/status and round-trips deterministically; malformed, oversized, duplicate identity/feature, and ambiguous lookup cases fail or remain explicit. Generated descriptor IDs and exact five-image/six-diffusion memberships are deterministic read-side projections. Catalog-status changes also rebind the checked numeric fixture's source digest so the dependent validation cannot silently retain stale catalog evidence. The crates expose no mutable unverified plugin-registration or executable-dispatch decision, and no catalog row becomes executable merely by presence. VAL-NODE-REGISTRY-001, VAL-MODEL-REGISTRY-001, and VAL-NUMERIC-FORMATS-001 pass twice with byte-stable zero-failure/zero-skip artifacts. Full per-node schema/behavior closure and model-family forward closure remain assigned to their later executable leaves and terminal integration tasks.",
             "comfy-parity-rust-wasm-extensions",
@@ -1938,7 +1938,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_media/src/sim_media.rs",
                 "crates/sim_test_support/tests/filesystem_asset_recovery.rs",
                 "crates/sim_test_support/tests/native_foundation.rs",
-                "target/comfy-parity/val-domain-008.json",
+                "target/sim-parity/val-domain-008.json",
                 "target/comfy-parity/val-recovery-005.json",
                 "target/sim-parity/val-metadata-001.json",
                 "crates/sim_test_support/parity/regenerate_native_planning.py",
@@ -2349,8 +2349,8 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/zed/src/sim_cli.rs",
                 "crates/zed/src/sim_plugin_services.rs",
                 "crates/zed/src/zed.rs",
-                "target/comfy-parity/val-plugin-001.json",
-                "target/comfy-parity/val-runtime-trust-001.json",
+                "target/sim-parity/val-plugin-001.json",
+                "target/sim-parity/val-runtime-trust-001.json",
                 "target/comfy-parity/val-ownership-domain-001.json",
                 "crates/sim_test_support/src/bin/sim_native_image_worker_fixture.rs",
                 "crates/sim_test_support/src/bin/sim_test_worker_fixture.rs",
@@ -2888,8 +2888,8 @@ def base_tasks() -> list[dict[str, object]]:
                 "target/comfy-parity/val-ownership-001.json",
                 "target/comfy-parity/val-ownership-domain-001.json",
                 "target/comfy-parity/val-worker-plugin-001.json",
-                "target/comfy-parity/val-runtime-settings-001.json",
-                "target/comfy-parity/val-runtime-trust-001.json",
+                "target/sim-parity/val-runtime-settings-001.json",
+                "target/sim-parity/val-runtime-trust-001.json",
                 "crates/sim_test_support/parity/regenerate_native_planning.py",
                 "crates/sim_test_support/parity/design.md",
                 "crates/sim_test_support/parity/tasks.md",
@@ -3046,7 +3046,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/parity/traceability.md",
                 "crates/sim_test_support/parity/validation.md",
                 "target/comfy-parity/val-e2e-003.json",
-                "target/comfy-parity/val-plugin-001.json",
+                "target/sim-parity/val-plugin-001.json",
                 "target/comfy-parity/val-ownership-001.json",
             ],
             "A whole-repository definition and production-call-site scan finds exactly one legacy plugin mapping registry: LegacyMappingResolver. Workflow pins, explicit user choices, signed registry entries, and installed projections all reject undeclared aliases and preserve deterministic precedence/provenance. Every legacy payload is bounded before resolution and remains byte-exact until explicit acceptance. The signature-covered manifest sidecar carries bounded old-widget order, arbitrary input rename, typed fixed-value, and output-index translation descriptors, while the existing WIT 1.0 component projection remains unchanged and backward compatible. Signed PluginPort fields and those descriptors produce exact translations with type, direction, cardinality, presence, serialization, lazy, source-widget position, and source/target output indices. Provider-node mappings expose only canonical PermissionPolicy-parsed scopes and retain no authorization, credential, network, cancellation, persistence, or execution behavior; ProviderPolicy and PluginCapabilityBroker remain authoritative. Ambiguity and absence remain lossless placeholders. VAL-E2E-003 reconciles the compatibility disposition for every catalog identity and documented Python extension contract; native execution closure remains assigned to the disjoint node-family leaves and final VAL-NODE-CLOSURE-001 registry task. Focused Rust and WIT fixtures, provider denial/cancellation/error cases, ownership scans, formatting, and clippy pass; no `python_legacy`, provider registry, Python import, process, network fallback, or production source-runtime path exists.",
@@ -3097,7 +3097,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/parity/traceability.md",
                 "crates/sim_test_support/parity/validation.md",
                 "target/comfy-parity/val-e2e-003.json",
-                "target/comfy-parity/val-plugin-001.json",
+                "target/sim-parity/val-plugin-001.json",
                 "target/comfy-parity/val-gpui-015.json",
                 "target/comfy-parity/val-ownership-001.json",
             ],
@@ -3277,8 +3277,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                 "crates/sim_test_support/parity/traceability.md",
                 "crates/sim_test_support/parity/validation.md",
                 "target/comfy-parity/val-tensor-001.json",
-                "target/comfy-parity/val-model-format-001.json",
-                "target/comfy-parity/val-numeric-formats-001.json",
+                "target/sim-parity/val-model-format-001.json",
+                "target/sim-parity/val-numeric-formats-001.json",
                 "target/comfy-parity/val-cancel-001.json",
                 "target/comfy-parity/val-memory-001.json",
                 "target/comfy-parity/val-ownership-001.json",
@@ -3323,7 +3323,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
                 "crates/sim_test_support/parity/design.md", "crates/sim_test_support/parity/tasks.md",
                 "crates/sim_test_support/parity/traceability.md", "crates/sim_test_support/parity/validation.md",
-                "target/comfy-parity/val-model-family-001.json", "target/comfy-parity/val-sampler-001.json",
+                "target/sim-parity/val-model-family-001.json", "target/comfy-parity/val-sampler-001.json",
                 "target/comfy-parity/val-scheduler-001.json", "target/comfy-parity/val-latent-001.json",
             ],
             "The checked fixture directory contains exactly every file named by native-diffusion-fixture.json, every pinned source-provenance digest matches the live oracle source, and development-only fixture regeneration is byte-stable; its source-shape projection makes the production detector select only COMFY-MODEL-0117, while the reduced artifact is accepted only by the test-support provider and cannot bypass production detector tests; the complete key manifest matches topology/prefix rules; tokenizer RLE expands to 77 IDs; CLIP conditioning, exact normal sigmas, RNG/noise, every Euler denoiser/latent checkpoint, VAE f32 pixels, invalid keys/shapes, cancellation, and OOM behavior match source-oracle records.",
@@ -3574,8 +3574,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/tasks.md",
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
-                    "target/comfy-parity/val-model-family-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-model-family-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3616,8 +3616,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/tasks.md",
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
-                    "target/comfy-parity/val-model-family-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-model-family-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3657,7 +3657,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/tasks.md",
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend(["VAL-NUMERIC-FORMATS-001", "VAL-OWNERSHIP-001"])
@@ -3780,10 +3780,10 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
-                    "target/comfy-parity/val-rng-001.json",
+                    "target/sim-parity/val-rng-001.json",
                     "target/comfy-parity/val-memory-001.json",
-                    "target/comfy-parity/val-model-family-001.json",
-                    "target/comfy-parity/val-domain-004.json",
+                    "target/sim-parity/val-model-family-001.json",
+                    "target/sim-parity/val-domain-004.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3829,7 +3829,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3874,7 +3874,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3922,7 +3922,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -3965,7 +3965,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
-                    "target/comfy-parity/val-model-family-001.json",
+                    "target/sim-parity/val-model-family-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -4007,7 +4007,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
-                    "target/comfy-parity/val-model-format-001.json",
+                    "target/sim-parity/val-model-format-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -4287,7 +4287,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-device-001.json",
                     "target/comfy-parity/val-memory-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -4343,10 +4343,10 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-device-001.json",
                     "target/comfy-parity/val-memory-001.json",
-                    "target/comfy-parity/val-model-format-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-model-format-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
-                    "target/comfy-parity/val-runtime-trust-001.json",
+                    "target/sim-parity/val-runtime-trust-001.json",
                 ])
                 validations.extend([
                     "VAL-CANCEL-001",
@@ -4405,7 +4405,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-device-001.json",
                     "target/comfy-parity/val-memory-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -4573,7 +4573,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-device-001.json",
-                    "target/comfy-parity/val-numeric-formats-001.json",
+                    "target/sim-parity/val-numeric-formats-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -4790,7 +4790,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
-                    "target/comfy-parity/val-model-family-001.json",
+                    "target/sim-parity/val-model-family-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
                 validations.extend([
@@ -5185,7 +5185,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
                     "target/comfy-parity/val-autograd-001.json",
-                    "target/comfy-parity/val-rng-001.json",
+                    "target/sim-parity/val-rng-001.json",
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-ownership-001.json",
                 ])
@@ -5227,7 +5227,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-ownership-001.json",
-                    "target/comfy-parity/val-rng-001.json",
+                    "target/sim-parity/val-rng-001.json",
                 ])
                 validations.extend(["VAL-CANCEL-001", "VAL-OWNERSHIP-001", "VAL-RNG-001"])
                 requirements.extend([37, 41])
@@ -5265,7 +5265,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "target/comfy-parity/val-autograd-001.json",
                     "target/comfy-parity/val-cancel-001.json",
                     "target/comfy-parity/val-ownership-001.json",
-                    "target/comfy-parity/val-rng-001.json",
+                    "target/sim-parity/val-rng-001.json",
                 ])
                 validations.extend(["VAL-CANCEL-001", "VAL-OWNERSHIP-001", "VAL-RNG-001"])
                 requirements.extend([37, 41])
@@ -5982,7 +5982,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             "crates/sim_test_support/parity/tasks.md",
             "crates/sim_test_support/parity/traceability.md",
             "crates/sim_test_support/parity/validation.md",
-            "target/comfy-parity/val-model-family-foundation-001.json",
+            "target/sim-parity/val-model-family-foundation-001.json",
         ],
         "Repository-wide scans record exactly one ModelFamily registration/resolution/profile/tokenizer-target/state-plan/state-transaction/build/forward/memory owner and one PatchGraph validation/order/digest owner. The checked development projection contains exactly the 94 pinned source classes as the ordered ordinal sequence 0 through 93 with normalized input and per-method source digests and is byte-stable under generation and self-test without importing ComfyUI. Foundation tests are deliberately non-aggregate and non-vacuous: synthetic registrations prove stable serialization, source order, scored detection and ambiguous ties, immutable selector-output revalidation, typed tokenizer/CLIP-target selection with raw Python expressions rejected and checked native target/configuration facts retained, source bounds, recursive encoded-plan revalidation that rejects oversized or inverted selector bounds, invalid source keys, and overdeep dimension expressions, checked add/multiply/exact-divide dimensions including current matched tensors, every key-selection/rewrite/move/drop/repeatable-copy/route primitive, original and staged references, selector-driven split and branch pipelines with per-output post-transforms, explicit unmatched disposition, split/narrow/concat/assembly coverage, transpose/permute/reshape/expand/conditional/constant/arange delegation, exact required-component schema coverage, rejection of plan-targeted unschematized optional components, optional components absent and present, declared component and required-key closure, atomic multi-component rollback, exact key mapping, missing/partial/extra/misrouted keys in every component, checked native programs and checkpoints, patch order and copy-on-write rollback, cache identity, dtype/device matrices, checked memory arithmetic, cancellation, OOM, and typed errors. Pinned-shape contracts cover fused-QKV per-tensor splitting and PixelDiT-style reshape/branch/slice/reshape. The filtered foundation artifact owner executes these semantic cases, independently reads and newline-normalizes the three exact allowlisted pinned inputs, computes and compares their SHA-256 values with the catalog, and only then writes zero-failure/zero-skip evidence; copied catalog digest strings alone are not evidence. The build owner may expose zero row modules at this foundation but cannot claim `VAL-MODEL-FAMILY-001`; the dependent breadth closure alone proves exact 94-row source/module/fixture execution. The SD15 slice and every future row map explicitly into these owners without retaining competing constants or mechanics; focused model/tensor/ownership suites, formatting, clippy, and strict regeneration pass.",
         [
@@ -6022,7 +6022,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             "crates/sim_model/src/sim_model.rs",
             "crates/sim_model/tests/model_detection.rs",
             "crates/sim_test_support/fixtures/model_detection",
-            "target/comfy-parity/val-model-detection-001.json",
+            "target/sim-parity/val-model-detection-001.json",
         ],
         "Fixtures for safetensors, restricted PyTorch, GGUF, native-prefix, diffusers, malformed, partial, unknown-dtype, overflow, no-match, base-fallback, ambiguous, and cancellation cases construct their probes only from the existing parsed-model cache and compare exact normalized configuration facts and typed outcomes. Repository-wide definition and call-site scans prove ModelStore alone parses and caches artifacts, ArtifactIndex alone verifies paths and bytes, ModelStore::family_probe alone projects parsed metadata facts, and model_family alone owns normalized configuration selectors, registrations, resolution, transformation, build, memory, and execution. Rejected detection performs no file read, tensor allocation, cache mutation, state mapping, build, or publication; focused model-format, detection, cancellation, and ownership validations pass twice with a byte-stable zero-failure/zero-skip artifact, plus formatting, clippy, and strict regeneration.",
         model_family_foundation_task_id,
@@ -7914,7 +7914,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             "crates/sim_model/tests/model_families.rs",
             "crates/sim_model/tests/breadth_closure.rs",
             "crates/sim_test_support/parity/catalogs/native-model-family-closure.json",
-            "target/comfy-parity/val-model-family-001.json",
+            "target/sim-parity/val-model-family-001.json",
         ],
         "The aggregate artifact records exactly 94 passed, zero failed, and zero skipped family identities, with exact one-to-one equality across backend-models.csv, the source projection, generated registrations, compiled production modules, compiled row tests, and fixture directories. Duplicate, orphaned, missing, dead, substituted, or provenance-incomplete rows fail before artifact publication. Every actual row test executes through the canonical parsed-model detection, family, state-transaction, tensor, patch, memory, and cancellation owners. The aggregate artifact is byte-stable across two runs; complete model/tensor/support/ownership suites, formatting, clippy, and strict regeneration pass. No empty or partial registry can satisfy this task.",
         [model_detection_foundation_task_id, *model_family_tasks],
@@ -8669,7 +8669,7 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
             ["VAL-AUTOGRAD-001", "VAL-CANCEL-001", "VAL-DEVICE-001", "VAL-DOMAIN-004", "VAL-GPUI-005", "VAL-MEMORY-001", "VAL-MODEL-FAMILY-001", "VAL-MODEL-FORMAT-001", "VAL-NATIVE-BOUNDARY-001", "VAL-NATIVE-E2E-001", "VAL-NATIVE-E2E-002", "VAL-NUMERIC-FORMATS-001", "VAL-OWNERSHIP-001", "VAL-RECOVERY-003", "VAL-RECOVERY-008", "VAL-RNG-001", "VAL-RUNTIME-TRUST-001", "VAL-SAMPLER-001", "VAL-TENSOR-001"],
             "Perform the independent final definition, call-site, allocation, traceability, and artifact-consistency audit after every workspace migration leaf; establish one non-cloneable BackendWorkspaceAuthority implementation paired with each exact backend and one shared tracker as the sole scratch issuer, with CPU compatibility names only aliases; remove every superseded constructor, zero-scratch production path, and backend-local authorizer; and reopen every historical task whose prior evidence no longer proves the normative behavior.",
             ["crates", "crates/sim_test_support/parity", "target/comfy-parity"],
-            ["crates/sim_tensor/src", "crates/sim_tensor/tests", "crates/sim_model/src", "crates/sim_model/tests", "crates/sim_sampler/src/algorithms/native_diffusion.rs", "crates/sim_media/src/png.rs", "crates/sim_runtime/src/executor.rs", "crates/sim_runtime/src/native_execution_controller.rs", "crates/sim_runtime/tests", "crates/sim_worker/src", "crates/sim_worker/tests", "crates/sim_test_support/src/native_diffusion_fixture.rs", "crates/sim_test_support/src/bin/generate_native_diffusion_fixture.rs", "crates/sim_test_support/tests", "crates/sim_test_support/parity/regenerate_native_planning.py", "crates/sim_test_support/parity/generate_ownership_catalog.py", "crates/sim_test_support/parity/ownership-policy.json", "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv", "crates/sim_test_support/parity/design.md", "crates/sim_test_support/parity/tasks.md", "crates/sim_test_support/parity/traceability.md", "crates/sim_test_support/parity/validation.md", "crates/sim_test_support/parity/audit/artifact-consistency-audit.md", "crates/sim_test_support/parity/audit/independent-coverage-audit.md", "crates/sim_test_support/parity/audit/implementation-readiness-audit.md", "target/comfy-parity/val-autograd-001.json", "target/comfy-parity/val-cancel-001.json", "target/comfy-parity/val-device-001.json", "target/comfy-parity/val-domain-004.json", "target/comfy-parity/val-gpui-005.json", "target/comfy-parity/val-memory-001.json", "target/comfy-parity/val-model-family-001.json", "target/comfy-parity/val-model-format-001.json", "target/comfy-parity/val-native-boundary-001.json", "target/comfy-parity/val-native-e2e-001.json", "target/comfy-parity/val-native-e2e-002.json", "target/comfy-parity/val-numeric-formats-001.json", "target/comfy-parity/val-ownership-001.json", "target/comfy-parity/val-recovery-003.json", "target/comfy-parity/val-recovery-008.json", "target/comfy-parity/val-rng-001.json", "target/comfy-parity/val-runtime-trust-001.json", "target/comfy-parity/val-sampler-001.json", "target/comfy-parity/val-tensor-001.json"],
+            ["crates/sim_tensor/src", "crates/sim_tensor/tests", "crates/sim_model/src", "crates/sim_model/tests", "crates/sim_sampler/src/algorithms/native_diffusion.rs", "crates/sim_media/src/png.rs", "crates/sim_runtime/src/executor.rs", "crates/sim_runtime/src/native_execution_controller.rs", "crates/sim_runtime/tests", "crates/sim_worker/src", "crates/sim_worker/tests", "crates/sim_test_support/src/native_diffusion_fixture.rs", "crates/sim_test_support/src/bin/generate_native_diffusion_fixture.rs", "crates/sim_test_support/tests", "crates/sim_test_support/parity/regenerate_native_planning.py", "crates/sim_test_support/parity/generate_ownership_catalog.py", "crates/sim_test_support/parity/ownership-policy.json", "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv", "crates/sim_test_support/parity/design.md", "crates/sim_test_support/parity/tasks.md", "crates/sim_test_support/parity/traceability.md", "crates/sim_test_support/parity/validation.md", "crates/sim_test_support/parity/audit/artifact-consistency-audit.md", "crates/sim_test_support/parity/audit/independent-coverage-audit.md", "crates/sim_test_support/parity/audit/implementation-readiness-audit.md", "target/comfy-parity/val-autograd-001.json", "target/comfy-parity/val-cancel-001.json", "target/comfy-parity/val-device-001.json", "target/sim-parity/val-domain-004.json", "target/comfy-parity/val-gpui-005.json", "target/comfy-parity/val-memory-001.json", "target/sim-parity/val-model-family-001.json", "target/sim-parity/val-model-format-001.json", "target/comfy-parity/val-native-boundary-001.json", "target/comfy-parity/val-native-e2e-001.json", "target/comfy-parity/val-native-e2e-002.json", "target/sim-parity/val-numeric-formats-001.json", "target/comfy-parity/val-ownership-001.json", "target/comfy-parity/val-recovery-003.json", "target/comfy-parity/val-recovery-008.json", "target/sim-parity/val-rng-001.json", "target/sim-parity/val-runtime-trust-001.json", "target/comfy-parity/val-sampler-001.json", "target/comfy-parity/val-tensor-001.json"],
             "Whole-repository scans find zero production zero-scratch constructors, zero old cancellation-only compatibility entry points or allocation branches, zero caller-forgeable or backend-local authorization, zero legacy workspace contexts, zero unmapped data-sized temporary allocations, and exactly one planner, backend-neutral sealed authorization implementation, per-backend allocator/tracker, cancellation, and reduced-workspace retry owner. BackendWorkspaceAuthority is non-cloneable, performs the only ceiling check and ScratchReservation bind, and only WorkerSession invokes it in production after preflight; compatibility aliases own no state. Every generated operation signature and adapter maps explicitly to canonical domain state; all affected task validations, both deterministic native E2Es twice, formatting, full clippy, ownership twice, strict regeneration, refreshed audit reports, and artifact digests pass with fresh evidence.",
             [workspace_elementwise_01_11_task_id, workspace_elementwise_12_23_task_id, workspace_external_adapters_task_id, workspace_native_diffusion_task_id, workspace_pending_math_task_id],
             registered_source_edits=["sim_tensor", "sim_model", "sim_sampler", "sim_media", "sim_runtime", "sim_worker", "sim_test_support", "sim_ui"],
@@ -20908,8 +20908,8 @@ def all_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]]]:
                         "target/comfy-parity/val-autograd-shape-layout-transform-02.json",
                         "target/comfy-parity/val-tensor-shape-layout-transform-02.json",
                         "target/comfy-parity/val-latent-001.json",
-                        "target/comfy-parity/val-model-family-001.json",
-                        "target/comfy-parity/val-model-format-001.json",
+                        "target/sim-parity/val-model-family-001.json",
+                        "target/sim-parity/val-model-format-001.json",
                         "target/comfy-parity/val-sampling-foundation-001.json",
                     ]
                 )
@@ -20987,11 +20987,11 @@ def all_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]]]:
                         "target/comfy-parity/val-autograd-001.json",
                         "target/comfy-parity/val-device-001.json",
                         "target/comfy-parity/val-latent-001.json",
-                        "target/comfy-parity/val-model-family-001.json",
+                        "target/sim-parity/val-model-family-001.json",
                         "target/comfy-parity/val-ownership-001.json",
                         "target/sim-parity/val-patch-001.json",
                         "target/sim-parity/val-patch-adapter-001.json",
-                        "target/comfy-parity/val-rng-001.json",
+                        "target/sim-parity/val-rng-001.json",
                         "target/comfy-parity/val-sampler-001.json",
                         "target/comfy-parity/val-scheduler-001.json",
                         "target/comfy-parity/val-tensor-001.json",
@@ -24968,11 +24968,34 @@ def write_validation() -> None:
         "## Scenarios",
         "",
     ]
+    sim_artifact_ids = {
+        "VAL-DOMAIN-001",
+        "VAL-DOMAIN-002",
+        "VAL-DOMAIN-004",
+        "VAL-DOMAIN-008",
+        "VAL-METADATA-001",
+        "VAL-MODEL-DETECTION-001",
+        "VAL-MODEL-FAMILY-001",
+        "VAL-MODEL-FAMILY-FOUNDATION-001",
+        "VAL-MODEL-FORMAT-001",
+        "VAL-MODEL-REGISTRY-001",
+        "VAL-NODE-001",
+        "VAL-NODE-002",
+        "VAL-NODE-REGISTRY-001",
+        "VAL-NUMERIC-FORMATS-001",
+        "VAL-PLUGIN-001",
+        "VAL-RECOVERY-002",
+        "VAL-RNG-001",
+        "VAL-RUNTIME-PERSISTENCE-001",
+        "VAL-RUNTIME-SETTINGS-001",
+        "VAL-RUNTIME-TRUST-001",
+    }
     for identifier, (title, layer, fixture, procedure) in VALIDATIONS.items():
-        pass_artifact = f"exit status 0 plus `target/comfy-parity/{identifier.casefold()}.json` containing fixture digests, environment/backend identity, per-case results, and no unexplained skipped row."
+        directory = "sim-parity" if identifier in sim_artifact_ids else "comfy-parity"
+        pass_artifact = f"exit status 0 plus `target/{directory}/{identifier.casefold()}.json` containing fixture digests, environment/backend identity, per-case results, and no unexplained skipped row."
         if identifier in {"VAL-CLIP-001", "VAL-PATCH-001", "VAL-VAE-001", "VAL-CONTROLNET-001", "VAL-CONDITIONING-001"}:
             pass_artifact = (
-                f"exit status 0 plus `target/comfy-parity/{identifier.casefold()}.json` "
+                f"exit status 0 plus `target/{directory}/{identifier.casefold()}.json` "
                 "using schema version 1 with validation and environment identity, truthful "
                 "partial or passed overall status, aggregate summary, current sole-producer "
                 "path and SHA-256, current per-task implementation paths and SHA-256 values, "
@@ -24997,6 +25020,8 @@ def write_validation() -> None:
             )
         if identifier == "VAL-DEVICE-001":
             pass_artifact += " The Apple Metal baseline retains its signed artifact under `catalogs/native-device-certification/`; a supplied CPU artifact must verify cryptographically but may remain explicitly stale as an external release gate; optional accelerator artifacts are accepted only as external target-lab evidence."
+        if identifier == "VAL-RECOVERY-005":
+            pass_artifact += " The output-committer subset writes its separate record under `target/sim-parity/val-recovery-005.json`."
         if identifier == "VAL-MODEL-FAMILY-ROW-001":
             pass_artifact = "exit status 0 plus one deterministic artifact per executed fixture under `target/comfy-parity/val-model-family-row-001/`, each containing exact source/fixture/provenance digests, environment/backend identity, per-case results, and zero failures or skips."
         if identifier == "VAL-NODE-002":
