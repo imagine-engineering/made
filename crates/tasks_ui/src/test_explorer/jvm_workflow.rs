@@ -786,19 +786,36 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
         assert!(rejected.to_string().contains(reason), "{rejected:#}");
     }
     if restart {
-        let sync_error = lsp_store
-            .update(cx, |store, cx| {
-                store.synchronize_remote_gradle_metadata(Some(worktree_id), cx)
-            })
-            .expect("the restarted project host remains admitted")
-            .await
-            .expect_err("a missing cached topology must not execute a Gradle metadata query");
-        assert!(
-            sync_error
-                .to_string()
-                .contains("Gradle metadata synchronization failed or was superseded"),
-            "{sync_error:#}"
+        focus_control(
+            cx,
+            "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts",
         );
+        press_enter(cx);
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            cx.run_until_parked();
+            let notice = panel.read_with(cx, |panel, _| {
+                panel.build_phase_notice_for_test().map(str::to_owned)
+            });
+            if let Some(message) = notice
+                .as_deref()
+                .filter(|message| !message.starts_with("Synchronizing Gradle metadata"))
+            {
+                assert!(
+                    message.contains("Cached Gradle build topology is unavailable on the project host. Use Reimport Gradle projects, then Synchronize metadata."),
+                    "{message}"
+                );
+                assert!(!message.contains("/workspaces/gradle"), "{message}");
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "offline synchronization did not return reimport guidance: {notice:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
         let generation_before_reimport = lsp_store.read_with(cx, |store, _| {
             store
                 .jdtls_project_snapshot(worktree_id)

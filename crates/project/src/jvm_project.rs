@@ -3951,6 +3951,19 @@ pub struct ProviderRefreshToken {
 
 pub type JdtlsRefreshToken = ProviderRefreshToken;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GradleTopologyUnavailable;
+
+impl std::fmt::Display for GradleTopologyUnavailable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(
+            "Cached Gradle build topology is unavailable on the project host. Use Reimport Gradle projects, then Synchronize metadata.",
+        )
+    }
+}
+
+impl std::error::Error for GradleTopologyUnavailable {}
+
 impl ProviderRefreshToken {
     pub fn generation(self) -> u64 {
         self.generation
@@ -3971,7 +3984,7 @@ pub struct ProviderProjectState<Project, Metadata = ()> {
     failed_import: Option<LanguageServerId>,
     pending_import_refresh: Option<LanguageServerId>,
     import_operation: Option<ProviderRefreshToken>,
-    failed_query: Option<ProviderRefreshToken>,
+    failed_query: Option<(ProviderRefreshToken, Option<GradleTopologyUnavailable>)>,
     pending: Option<ProviderRefreshToken>,
     snapshot: Option<ProviderProjectSnapshot<Project, Metadata>>,
     pending_metadata: Metadata,
@@ -4153,13 +4166,21 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
     }
 
     pub fn fail(&mut self, token: ProviderRefreshToken) -> bool {
+        self.fail_with_recovery(token, None)
+    }
+
+    pub(crate) fn fail_with_recovery(
+        &mut self,
+        token: ProviderRefreshToken,
+        recovery: Option<GradleTopologyUnavailable>,
+    ) -> bool {
         if self.pending != Some(token) {
             return false;
         }
         self.import_operation = None;
         self.pending = None;
         self.pending_metadata = Metadata::default();
-        self.failed_query = Some(token);
+        self.failed_query = Some((token, recovery));
         true
     }
 
@@ -4186,7 +4207,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         }
         if self
             .failed_query
-            .is_some_and(|token| token.server_id == server_id)
+            .is_some_and(|(token, _)| token.server_id == server_id)
         {
             self.failed_query = None;
         }
@@ -4221,7 +4242,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         }
         if self
             .failed_query
-            .is_some_and(|token| token.worktree_id == worktree_id)
+            .is_some_and(|(token, _)| token.worktree_id == worktree_id)
         {
             self.failed_query = None;
         }
@@ -4286,7 +4307,19 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
     }
 
     pub fn failed_query(&self) -> Option<ProviderRefreshToken> {
-        self.failed_query
+        self.failed_query.map(|(token, _)| token)
+    }
+
+    pub(crate) fn query_recovery(
+        &self,
+        token: ProviderRefreshToken,
+    ) -> Option<GradleTopologyUnavailable> {
+        let (failed, recovery) = self.failed_query?;
+        if failed == token && self.generation == token.generation {
+            recovery
+        } else {
+            None
+        }
     }
 
     pub fn failed_import(&self) -> Option<LanguageServerId> {
@@ -8339,10 +8372,9 @@ impl ScopedGradleImports {
         if self.is_empty_selection() {
             return Ok(Vec::new());
         }
-        ensure!(
-            !self.grouping_roots.is_empty(),
-            "Gradle cached composite grouping roots are unavailable; refresh or reimport before synchronizing metadata"
-        );
+        if self.grouping_roots.is_empty() {
+            return Err(GradleTopologyUnavailable.into());
+        }
         self.imports.iter().filter(|import| !self.ignored.iter().any(|ignored| import.root.starts_with(ignored)))
             .map(|import| {
                 let (workspace, build) = import.scoped_roots()?;
@@ -20116,12 +20148,12 @@ mod tests {
             .expect("cache miss stays unknown without invented topology");
         assert!(miss.is_empty());
         plan.grouping_roots = miss;
-        assert!(
+        assert_eq!(
             plan.metadata_queries()
                 .expect_err("unknown cache refuses metadata configuration")
-                .to_string()
-                .contains("refresh or reimport"),
-            "cache miss recovery names refresh or reimport"
+                .downcast::<GradleTopologyUnavailable>()
+                .expect("typed cache-miss recovery"),
+            GradleTopologyUnavailable
         );
         let mut plan = ScopedGradleImports::for_metadata(&snapshot, snapshot.id(), &settings)
             .expect("metadata selection");
@@ -22252,11 +22284,17 @@ mod tests {
         let failed = state.begin(server, worktree).expect("failed generation");
         assert_eq!(state.pending_query(), Some(failed));
         assert!(!state.snapshot_is_current());
-        assert!(state.fail(failed));
+        let recovery = Some(GradleTopologyUnavailable);
+        assert!(!state.fail_with_recovery(old, recovery));
+        assert!(state.fail_with_recovery(failed, recovery));
         assert!(state.pending_query().is_none());
         assert_eq!(state.failed_query(), Some(failed));
+        assert_eq!(state.query_recovery(failed), recovery);
+        assert_eq!(state.query_recovery(old), None);
         assert_eq!(state.snapshot().expect("stale state").generation, 2);
         assert!(!state.snapshot_is_current());
+        state.mark_stale().expect("advance the generation");
+        assert_eq!(state.query_recovery(failed), None);
         state.invalidate_worktree(worktree);
         assert!(state.pending_query().is_none());
         assert!(state.snapshot().is_none());

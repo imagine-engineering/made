@@ -14717,6 +14717,13 @@ impl LspStore {
         }
         this.read_with(cx, |store, cx| {
             store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
+            if let Some(recovery) = store
+                .jdtls_projects
+                .get(&worktree_id)
+                .and_then(|state| state.query_recovery(token))
+            {
+                return Err(recovery.into());
+            }
             Ok(store
                 .jdtls_project_snapshot(worktree_id)
                 .is_some_and(|(snapshot, current)| {
@@ -19201,7 +19208,8 @@ impl LspStore {
                     }
                     Err(error) => {
                         log::warn!("Could not refresh JDTLS project data: {error:#}");
-                        if state.fail(token) {
+                        let recovery = error.downcast_ref::<jvm_project::GradleTopologyUnavailable>().copied();
+                        if state.fail_with_recovery(token, recovery) {
                             if store.language_server_statuses.get(&server_id).is_some_and(|status| status.worktree == Some(worktree_id)) {
                                 store.clear_pending_jvm_startup(server_id, None);
                             }

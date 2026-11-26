@@ -311,11 +311,11 @@ capabilities and a trusted project. These actions can execute build configuratio
 scripts and write caches. **Cancel selected import** applies to the current
 local import started from this panel.
 
-On a trusted direct connection, use **Reimport Gradle projects** when the Java
-server restarts and cached topology is unavailable. This runs the host's
-effective Gradle selection in offline mode. After reimport, use **Synchronize
-metadata** to load tasks and configurations. Both actions run on the project
-host and rely on that host's cached Gradle installation and dependencies.
+On a trusted direct connection, **Synchronize metadata** reports when cached
+Gradle topology is unavailable on the project host. Use **Reimport Gradle
+projects** to apply the host's effective Gradle selection in offline mode, then
+use **Synchronize metadata** again to load tasks and configurations. Both
+actions rely on the project host's cached Gradle installation and dependencies.
 
 For **Reload Maven projects** and **Apply saved Maven selection**, set
 `java.import.maven.offline.enabled` to `true` under the project host's

@@ -258,8 +258,16 @@ with untouched registration also passed on fresh hosts. Each observed the
 cached topology reply before configuration, ran both ordered operations, and
 wrote fresh host JUnit XML without restarting or reimporting. A valid bundle
 with the same length and a different SHA-256 was refused before any recovery
-probe or configuring command ran. Cold starts where the companion handler
-itself is unavailable and separate physical-host qualification remain open.
+probe or configuring command ran. A further untouched cold launch advertised
+only 33 built-in commands. Its read-only probe returned all three cached
+project identities, and the same process ran both ordered operations.
+Cold starts where the companion handler itself is unavailable and separate
+physical-host qualification remain open.
+
+When a restarted server has no cached Gradle topology, the connected panel
+now directs the user to **Reimport Gradle projects**, then **Synchronize
+metadata**. The offline host trace showed no configuring metadata command
+until explicit reimport restored the cached topology.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
