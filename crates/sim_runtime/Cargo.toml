@@ -65,5 +65,6 @@ cap-fs-ext = "3.4.6"
 cap-std.workspace = true
 
 [dev-dependencies]
+sim_model = { workspace = true, features = ["test-support"] }
 sim_plugin_sdk = { workspace = true, features = ["signing-tooling"] }
 db = { workspace = true, features = ["test-support"] }
