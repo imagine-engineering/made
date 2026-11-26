@@ -13,7 +13,7 @@
     "video_components_manifest_sha256": "c7e79dd1f035304b34d0b0e33aff4e812f89ee395242af407f9a75f1c80a250a",
     "codec_plan_manifest_sha256": "9ff5dde7b0d4fdde599fc377031e88c455e00afcf428e190069569b0c548704f",
     "codec_h264_mp4_sequence_encode_manifest_sha256": "518dd998c558cd34b114cf2b979db589992b4792de3634864eceb90d6e1a4794",
-    "codec_h264_mp4_thread_bridge_manifest_sha256": "dea88453625f9d2eaa1146ef6ab98f30a7fb2484cb315d4e87109116aecf5a93"
+    "codec_h264_mp4_thread_bridge_manifest_sha256": "e5c7bee838c272ee89a243fe0e0d9377a1016abe07126fae4f02d5797245a494"
   },
   "contract": {
     "canonical_owner": "sim_nodes::execution::NativeComponentH264Mp4BackingService",

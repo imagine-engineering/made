@@ -12,7 +12,7 @@
     "video_util_sha256": "5d2f7dd2b82aecec3c05f8f5bd9519530736825d33590207ea0aa32b8cc8627f"
   },
   "dependencies": {
-    "component_h264_mp4_backing_service_manifest_sha256": "9635836a06059bd41c255910acf07d7813988a0678151c2a1b5fd233b8b449d5"
+    "component_h264_mp4_backing_service_manifest_sha256": "69b4e6aba491f1810832f311a9a343cc7328a1f873bbfc55e225559001ce7eb1"
   },
   "contract": {
     "canonical_owner": "sim_media::NativeVideoPayload",

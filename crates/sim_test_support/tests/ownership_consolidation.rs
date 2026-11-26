@@ -19452,7 +19452,7 @@ fn val_ownership_native_video_component_h264_mp4_10bit_backing_001()
         "let bit_depth = components.bit_depth()",
         "NativeVideoBitDepth::Ten => crate::NativeVideoPixelFormat::Yuv420p10le",
         "zed.sim.media.video.encoded-h264-mp4.v1",
-        "111, 135, 190, 43",
+        "fn encoded_h264_mp4_video_binds_component_identity_and_portable_storage(",
     ] {
         assert!(
             media.contains(required),
@@ -19487,9 +19487,9 @@ fn val_ownership_native_video_component_h264_mp4_10bit_backing_001()
             "ten-bit backing adapter lacks {required}"
         );
     }
-    let fixture = fs::read_to_string(root.join(
-        "crates/sim_test_support/fixtures/video/component-h264-mp4-10bit-backing/manifest.json",
-    ))?;
+    let video_fixtures = root.join("crates/sim_test_support/fixtures/video");
+    let fixture =
+        fs::read_to_string(video_fixtures.join("component-h264-mp4-10bit-backing/manifest.json"))?;
     for required in [
         "synthetic-component-h264-mp4-eight-and-ten-bit-backing",
         "source_depth_is_authoritative",
@@ -19501,6 +19501,29 @@ fn val_ownership_native_video_component_h264_mp4_10bit_backing_001()
         assert!(
             fixture.contains(required),
             "ten-bit backing fixture lacks {required}"
+        );
+    }
+
+    let manifest: serde_json::Value = serde_json::from_str(&fixture)?;
+    for (key, relative_path) in [
+        (
+            "component_backing_service_manifest_sha256",
+            "component-h264-mp4-backing-service/manifest.json",
+        ),
+        (
+            "encoded_video_backing_manifest_sha256",
+            "encoded-video-backing-payload/manifest.json",
+        ),
+        (
+            "ten_bit_thread_bridge_manifest_sha256",
+            "codec-h264-mp4-10bit-thread-bridge/manifest.json",
+        ),
+    ] {
+        let actual = file_sha256(&video_fixtures.join(relative_path))?;
+        assert_eq!(
+            manifest["dependencies"][key].as_str(),
+            Some(actual.as_str()),
+            "ten-bit backing fixture has a stale digest for {relative_path}",
         );
     }
 

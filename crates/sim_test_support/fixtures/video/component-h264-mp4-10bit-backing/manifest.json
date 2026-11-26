@@ -11,9 +11,9 @@
     "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
   },
   "dependencies": {
-    "component_backing_service_manifest_sha256": "9635836a06059bd41c255910acf07d7813988a0678151c2a1b5fd233b8b449d5",
-    "encoded_video_backing_manifest_sha256": "b3b012d64c953ccab4002b8cde8a64f573cb5574728dbdf00b98f6361d484270",
-    "ten_bit_thread_bridge_manifest_sha256": "2f01ec8d48633ab6b4085102bcc6284f7c0fd7633b5efe6b252067728d5868ea"
+    "component_backing_service_manifest_sha256": "69b4e6aba491f1810832f311a9a343cc7328a1f873bbfc55e225559001ce7eb1",
+    "encoded_video_backing_manifest_sha256": "51a7b90c7a378b3dc38b86123f4710cd0792f71251e96084d628d1abf8904204",
+    "ten_bit_thread_bridge_manifest_sha256": "d33ddb283e09fb6e7b10d4c5346d89ae7ff6df0c39516c2db36ca3cc5ebb1b7f"
   },
   "contract": {
     "canonical_media_owner": "sim_media::NativeVideoPayload",

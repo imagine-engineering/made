@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "eight_bit_sequence_manifest_sha256": "518dd998c558cd34b114cf2b979db589992b4792de3634864eceb90d6e1a4794",
-    "encoded_video_backing_manifest_sha256": "b3b012d64c953ccab4002b8cde8a64f573cb5574728dbdf00b98f6361d484270",
+    "encoded_video_backing_manifest_sha256": "51a7b90c7a378b3dc38b86123f4710cd0792f71251e96084d628d1abf8904204",
     "reviewed_pixel_format_manifest_sha256": "b81706ef04a75af4fb3547de17f6f950b1df826b2aac4f9b2cb78df0ab0a4d6a"
   },
   "contract": {

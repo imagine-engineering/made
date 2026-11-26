@@ -11,8 +11,8 @@
     "video_input_impl_sha256": "b74216bc76178e9a21769e60cf4fd910183a19236cfa7fb352e74f2b13e482e2"
   },
   "dependencies": {
-    "eight_bit_thread_bridge_manifest_sha256": "dea88453625f9d2eaa1146ef6ab98f30a7fb2484cb315d4e87109116aecf5a93",
-    "ten_bit_sequence_encode_manifest_sha256": "e1a47ef7a454f4891e2bf551cbc4bf2842b7c724a48e9d795f3cef71e7edac4f"
+    "eight_bit_thread_bridge_manifest_sha256": "e5c7bee838c272ee89a243fe0e0d9377a1016abe07126fae4f02d5797245a494",
+    "ten_bit_sequence_encode_manifest_sha256": "b9b66a0850edeb1211b77eacc4d059dfb26f3c68c783ff24fca51366181cf875"
   },
   "contract": {
     "canonical_owner": "sim_runtime::native_video_codec_service::NativeLtxvCodecRequestProxy::encode_h264_mp4_batch",
