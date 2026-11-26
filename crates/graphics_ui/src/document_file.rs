@@ -5523,6 +5523,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::GroupLayers(operation) => {
                 self.group_saved_layers(operation, window, cx)
             }
+            SavedGraphAction::ExpandLayerStrokes => self.expand_saved_layer_strokes(window, cx),
             SavedGraphAction::ApplyLayerOpacity(kind) => {
                 self.apply_saved_layer_opacity(kind, window, cx)
             }
@@ -5881,6 +5882,33 @@ impl GraphiteDocumentItem {
                     operation,
                     ARCHIVE_BUDGET,
                 ))
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn expand_saved_layer_strokes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty())
+        else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_layer_snapshot(
+            revision,
+            async move {
+                futures::executor::block_on(
+                    snapshot.expand_root_layer_strokes_in_copy(&nodes, ARCHIVE_BUDGET),
+                )
             },
             window,
             cx,
@@ -10936,14 +10964,18 @@ mod tests {
     }
 
     async fn layer_order_archive_with_transforms(transformed: bool) -> Vec<u8> {
-        use graphite_core_types::Color;
+        layer_order_archive_with_options(transformed, false).await
+    }
+
+    async fn layer_order_archive_with_options(transformed: bool, painted_strokes: bool) -> Vec<u8> {
+        use graphite_core_types::{Color, NodeParameter};
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{
             resolve_network_node_type, resolve_proto_node_type,
         };
         use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
         use graphite_resource::ResourceRegistry;
-        use graphite_std::{blending_nodes::clipping_mask, repeat_nodes::repeat_array, transform_nodes::transform};
+        use graphite_std::{blending_nodes::clipping_mask, repeat_nodes::repeat_array, transform_nodes::transform, vector_nodes::{fill, stroke}};
 
         struct LayerMetadata;
         impl NodeMetadataSource for LayerMetadata {
@@ -11051,6 +11083,29 @@ mod tests {
                 .into_parts()
                 .0
         };
+        let stroke = |source_id, color| {
+            resolve_proto_node_type(stroke::IDENTIFIER)
+                .expect("pinned Stroke")
+                .node_template_input_override([
+                    source(source_id),
+                    Some(NodeInput::value(TaggedValue::Color(color), false)),
+                    Some(NodeInput::value(TaggedValue::Number(5.), false)),
+                ])
+                .into_parts()
+                .0
+        };
+        let mut gray = preview_rectangle(
+            NodeId(140),
+            NodeId(141),
+            12.,
+            12.,
+            Color::from_rgbaf32_unchecked(0.3, 0.3, 0.3, 1.),
+        );
+        if painted_strokes {
+            let [_, (_, paint)] = &mut gray;
+            paint.inputs[fill::PaintInput::INDEX] =
+                NodeInput::value(TaggedValue::no_paint(), false);
+        }
         let graph = NodeNetwork {
             nodes: [
                 (
@@ -11063,17 +11118,25 @@ mod tests {
                     NodeId(20),
                     layer(source(70), if transformed { 152 } else { 30 }),
                 ),
-                (NodeId(30), layer(source(40), 101)),
+                (
+                    NodeId(30),
+                    layer(source(40), if painted_strokes { 102 } else { 101 }),
+                ),
                 (NodeId(40), layer(source(50), 112)),
                 (NodeId(50), layer(source(60), 122)),
                 (NodeId(60), layer(None, 131)),
-                (NodeId(70), layer(None, 141)),
+                (
+                    NodeId(70),
+                    layer(None, if painted_strokes { 142 } else { 141 }),
+                ),
                 (NodeId(112), clip),
                 (NodeId(122), repeat),
             ]
             .into_iter()
             .chain(transformed.then(|| (NodeId(151), transform(20, DVec2::new(30., 46.)))))
             .chain(transformed.then(|| (NodeId(152), transform(30, DVec2::new(43., 0.)))))
+            .chain(painted_strokes.then(|| (NodeId(102), stroke(101, Color::BLUE))))
+            .chain(painted_strokes.then(|| (NodeId(142), stroke(141, Color::YELLOW))))
             .chain(preview_rectangle(
                 NodeId(100),
                 NodeId(101),
@@ -11102,13 +11165,7 @@ mod tests {
                 31.,
                 Color::YELLOW,
             ))
-            .chain(preview_rectangle(
-                NodeId(140),
-                NodeId(141),
-                12.,
-                12.,
-                Color::from_rgbaf32_unchecked(0.3, 0.3, 0.3, 1.),
-            ))
+            .chain(gray)
             .collect(),
             exports: vec![NodeInput::node(NodeId(1), 0)],
             ..Default::default()
@@ -14598,6 +14655,229 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_029_1_expands_source_stroke_geometry(_cx: &mut TestAppContext) {
+        let bytes = layer_order_archive_with_options(false, true).await.into();
+        let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = source.graph_nodes().await.expect("source nodes");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        assert!(matches!(
+            source
+                .expand_root_layer_strokes_in_copy(&[find("Green").clone()], ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::UnchangedLayerStroke)
+        ));
+        assert!(matches!(
+            source
+                .expand_root_layer_strokes_in_copy(&[find("Locked Gold").clone()], ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let (edited, selection) = source
+            .expand_root_layer_strokes_in_copy(
+                &[find("Gray").clone(), find("Red").clone()],
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("expand painted strokes");
+        assert!(selection.contains(&find("Red").storage_id()));
+        assert!(selection.contains(&find("Gray").storage_id()));
+        assert_eq!(selection.len(), 3);
+        let saved = edited.graph_nodes().await.expect("expanded source graph");
+        let wire = |node: &GddGraphNode, index: usize| {
+            let Some(GddGraphPortSource::Node {
+                storage_id,
+                output_index: 0,
+            }) = node.input_ports()[index].source
+            else {
+                panic!("source wire {index}");
+            };
+            saved
+                .iter()
+                .find(|node| node.storage_id() == storage_id)
+                .expect("saved wire target")
+        };
+        let red = find("Red").storage_id();
+        let [fill_layer, stroke_layer] = [true, false].map(|original| {
+            saved
+                .iter()
+                .find(|node| node.display_name() == "Red" && (node.storage_id() == red) == original)
+                .expect("distinct fill and stroke layers")
+        });
+        assert_eq!(
+            saved
+                .iter()
+                .filter(|node| node.display_name() == "Red")
+                .count(),
+            2
+        );
+        let fill = wire(fill_layer, 1);
+        let stroke = wire(stroke_layer, 1);
+        assert_eq!(fill.display_name(), "Item at Index");
+        assert_eq!(stroke.display_name(), "Item at Index");
+        let solidify = wire(fill, 0);
+        assert_eq!(solidify.display_name(), "Solidify Stroke");
+        assert_eq!(wire(stroke, 0).storage_id(), solidify.storage_id());
+        assert_eq!(
+            wire(solidify, 0).storage_id(),
+            wire(find("Red"), 1).storage_id()
+        );
+        let gray = saved
+            .iter()
+            .find(|node| node.display_name() == "Gray")
+            .expect("same stroke-only layer");
+        assert_eq!(wire(gray, 1).display_name(), "Solidify Stroke");
+        assert_eq!(
+            saved
+                .iter()
+                .filter(|node| node.display_name() == "Gray")
+                .count(),
+            1
+        );
+        for (layer, color) in [
+            (fill_layer, "#ff0000"),
+            (stroke_layer, "#0000ff"),
+            (gray, "#ffff00"),
+        ] {
+            let thumbnail = edited
+                .render_merge_thumbnail_svg(
+                    layer,
+                    LAYER_THUMBNAIL_SIZE,
+                    CpuSvgEvaluationBudget {
+                        max_viewport_pixels: LAYER_THUMBNAIL_SIZE.x * LAYER_THUMBNAIL_SIZE.y,
+                        max_output_bytes: 64 * 1024,
+                    },
+                )
+                .await
+                .expect("evaluate each edited fill independently");
+            assert!(
+                thumbnail.contains(&format!(r#"fill="{color}""#)),
+                "{thumbnail}"
+            );
+            assert!(!thumbnail.contains(r#"stroke=""#), "{thumbnail}");
+        }
+        let output = edited
+            .render_document_canvas_svg(
+                UVec2::new(640, 480),
+                1.,
+                None,
+                CpuSvgEvaluationBudget {
+                    max_viewport_pixels: 640 * 480,
+                    max_output_bytes: 256 * 1024,
+                },
+            )
+            .await
+            .expect("render editable expanded strokes");
+        let RenderOutputType::Svg { svg, .. } = output.render.data else {
+            panic!("source SVG");
+        };
+        assert!(svg.contains("<path "));
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_029_2_workspace_expands_fill_and_stroke_in_one_step(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive_with_options(false, true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/expand-stroke.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-4");
+        click(window, "GRAPHITE-GDD-LAYER-EXPAND-FILL-STROKE");
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-4");
+        click(window, "GRAPHITE-GDD-LAYER-EXPAND-FILL-STROKE");
+        let expanded = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers view");
+            };
+            let selected = form
+                .selected_layer_nodes()
+                .expect("stroke and fill selections");
+            assert_eq!(selected.len(), 2);
+            assert!(selected.iter().all(|node| node.display_name() == "Red"));
+            selected
+                .iter()
+                .map(GddGraphNode::storage_id)
+                .collect::<BTreeSet<_>>()
+        });
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+            if let SavedSceneFrame::Failed(error) = &canvas.frame {
+                panic!("Canvas failed: {error}");
+            }
+            assert!(matches!(canvas.frame, SavedSceneFrame::Ready(_)));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-UNDO");
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers view");
+            };
+            assert_eq!(
+                form.nodes
+                    .iter()
+                    .filter(|node| node.display_name() == "Red")
+                    .count(),
+                1
+            );
+            assert!(
+                !form
+                    .nodes
+                    .iter()
+                    .any(|node| node.display_name() == "Solidify Stroke")
+            );
+        });
+        click(window, "GRAPHITE-GDD-REDO");
+        let destination = PathBuf::from("/project/expanded-stroke.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("expanded working copy");
+        let nodes = reopened.graph_nodes().await.expect("saved graph");
+        let reds = nodes
+            .iter()
+            .filter(|node| node.display_name() == "Red")
+            .map(GddGraphNode::storage_id)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(reds, expanded);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("original archive"),
             original
         );
     }

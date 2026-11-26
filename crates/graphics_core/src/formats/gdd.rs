@@ -84,13 +84,14 @@ use graphite_std::{
     Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
     blending_nodes::{blend_mode, clipping_mask, opacity},
+    graphic::item_at_index,
     repeat_nodes::repeat_array,
     transform::Footprint,
     transform_nodes::transform,
     vector_nodes::{
         auto_tangents, fill,
         generator_nodes::{ellipse, rectangle},
-        morph, stroke,
+        morph, solidify_stroke, stroke,
     },
     vector_types::vector::style::RenderMode,
 };
@@ -349,6 +350,8 @@ pub enum GddArchiveError {
     LockedLayerStructure,
     #[error("The requested Graphite operation leaves the layer hierarchy unchanged.")]
     UnchangedLayerStructure,
+    #[error("The selected Graphite layers have no visible stroke to expand.")]
+    UnchangedLayerStroke,
     #[error("Choose a valid Graphite parent and insertion position for the selected layers.")]
     InvalidLayerDestination,
     #[error("Enter a layer opacity percentage between 0 and 100.")]
@@ -983,6 +986,8 @@ enum SavedGraphicProfile {
     InterpolationMorph,
     OriginsToPolyline,
     AutoTangents,
+    SolidifyStroke,
+    StrokeItemAtIndex,
     Layer(GddGraphLayerPreview),
 }
 
@@ -4480,10 +4485,16 @@ impl InspectedGddV1 {
             .iter()
             .filter_map(|(id, vector)| Some((source_layer(id)?, vector.clone())))
             .collect();
+        let appearance_attributes = metadata
+            .appearance_attributes
+            .iter()
+            .filter_map(|(id, appearance)| Some((source_layer(id)?, appearance.clone())))
+            .collect();
         interface.update_click_targets(click_targets);
         interface.update_outlines(outlines);
         interface.update_clip_targets(metadata.clip_targets.clone());
         interface.update_vector_data(vector_data);
+        interface.update_appearance_attributes(appearance_attributes);
         document.network_interface = interface;
         document
     }
@@ -6186,6 +6197,46 @@ impl InspectedGddV1 {
             },
             budget,
             GddArchiveError::UnchangedLayerStructure,
+        )
+        .await
+    }
+
+    pub async fn expand_root_layer_strokes_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        use graphite_editor::messages::prelude::DocumentMessage;
+
+        let mut document = self.render_layer_edit_geometry(&budget).await?;
+        let selected = self
+            .validate_layer_order_selection(&document, nodes)
+            .map_err(|error| match error {
+                GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                error => error,
+            })?;
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        self.finish_root_layer_edit(
+            &mut document,
+            |document| {
+                let before = document.network_interface.document_network().clone();
+                let mut commands = VecDeque::new();
+                plan_document_layer_command(
+                    document,
+                    DocumentMessage::ExpandFillStrokeOnSelectedLayers,
+                    &mut commands,
+                );
+                apply_document_layer_commands(document, commands)?;
+                if *document.network_interface.document_network() == before {
+                    return Err(GddArchiveError::UnchangedLayerStroke);
+                }
+                Ok(())
+            },
+            budget,
         )
         .await
     }
@@ -8406,6 +8457,13 @@ fn apply_document_layer_commands(
                 nested.append(&mut commands);
                 commands = nested;
             }
+            DocumentMessage::ExpandFillStrokeOnSelectedLayersNoTransaction => {
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                load_root_layer_structure(&mut document.network_interface)?;
+                nested.append(&mut commands);
+                commands = nested;
+            }
             DocumentMessage::NodeGraph(NodeGraphMessage::SelectedNodesSet { nodes }) => {
                 document
                     .network_interface
@@ -9196,6 +9254,37 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 SavedGraphicProfile::Rectangle,
             )
         }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &solidify_stroke::IDENTIFIER =>
+        {
+            let [content] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content) {
+                return None;
+            }
+            (
+                resolve_proto_node_type(solidify_stroke::IDENTIFIER)?,
+                vec![(0, content)],
+                SavedGraphicProfile::SolidifyStroke,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &item_at_index::IDENTIFIER =>
+        {
+            let [list, index] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(list) || !matches!(index.as_value(), Some(TaggedValue::Integer(0 | 1)))
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(item_at_index::IDENTIFIER)?,
+                vec![(0, list), (1, index)],
+                SavedGraphicProfile::StrokeItemAtIndex,
+            )
+        }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &ellipse::IDENTIFIER => {
             let horizontal = node.inputs.get(ellipse::RadiusXInput::INDEX)?;
             let vertical = node.inputs.get(ellipse::RadiusYInput::INDEX)?;
@@ -9276,8 +9365,14 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             let paint_index = fill::PaintInput::INDEX;
             let content = node.inputs.get(content_index)?;
             let paint = node.inputs.get(paint_index)?;
-            if !matches!(paint.as_value(), Some(TaggedValue::Color(color)) if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()))
-            {
+            let valid_paint = match paint.as_value()? {
+                TaggedValue::Color(color) => color
+                    .to_gamma_srgb_channels()
+                    .into_iter()
+                    .all(f32::is_finite),
+                value => value.is_no_paint(),
+            };
+            if !valid_paint {
                 return None;
             }
             let mut replacements = vec![(paint_index, paint)];

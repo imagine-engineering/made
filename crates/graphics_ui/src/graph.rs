@@ -165,6 +165,7 @@ pub(crate) enum SavedGraphAction {
     },
     ReorderLayers(GddLayerOrder),
     GroupLayers(GddLayerGrouping),
+    ExpandLayerStrokes,
     ApplyLayerOpacity(GddLayerOpacityKind),
     ToggleLayerClipping(usize),
     ToggleLayerRepresentation,
@@ -907,6 +908,7 @@ pub(crate) fn render_saved_graph(
             let keyboard_delete = dispatch.clone();
             let reorder_layers = dispatch.clone();
             let group_layers = dispatch.clone();
+            let expand_layer_strokes = dispatch.clone();
             let keyboard_blend = dispatch.clone();
             let keyboard_morph = dispatch.clone();
             let editing = view.working && view.can_start_connection && can_select;
@@ -1059,6 +1061,16 @@ pub(crate) fn render_saved_graph(
                                 move |operation, window, cx| {
                                     group_layers(
                                         SavedGraphAction::GroupLayers(operation),
+                                        window,
+                                        cx,
+                                    );
+                                },
+                            ))
+                            .child(crate::layers::render_saved_layer_expand_strokes(
+                                editing && selected,
+                                move |window, cx| {
+                                    expand_layer_strokes(
+                                        SavedGraphAction::ExpandLayerStrokes,
                                         window,
                                         cx,
                                     );

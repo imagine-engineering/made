@@ -192,6 +192,22 @@ pub(crate) fn render_saved_layer_grouping(
     )
 }
 
+pub(crate) fn render_saved_layer_expand_strokes(
+    enabled: bool,
+    dispatch: impl Fn(&mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-EXPAND-FILL-STROKE".into())
+        .child(
+            Button::new(
+                "graphite-saved-layer-expand-fill-stroke",
+                "Expand Fill and Stroke",
+            )
+            .disabled(!enabled)
+            .on_click(move |_, window, cx| dispatch(window, cx)),
+        )
+}
+
 pub(crate) fn render_saved_layer_order(
     enabled: bool,
     dispatch: impl Fn(GddLayerOrder, &mut Window, &mut App) + Clone + 'static,
