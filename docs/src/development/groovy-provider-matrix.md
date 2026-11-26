@@ -81,6 +81,12 @@ An independent replay of the guarded Maven reload command failed with only
 Maven's offline settings file configured and succeeded with
 `java.import.maven.offline.enabled` set in JDTLS.
 
+A fresh native macOS ARM64 build repeated the check after editor restart and
+watched Maven reimport with an isolated offline Maven wrapper cache. F12
+opened `Greeting.kt` at the declaration without a panel refresh after either
+event. JDTLS reported zero problems on `Greeting`, reported the saved typo
+`Greetinng` as an unresolved type, and cleared the error after undo and save.
+
 The connected Remote Server regression uses the same cached Maven reactor
 and both pinned processes on the host side of a framed connection. A Java
 definition request from the client returns the library's `Greeting.kt` as a
