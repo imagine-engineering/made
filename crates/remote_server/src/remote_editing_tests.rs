@@ -1814,83 +1814,156 @@ mod jvm_tools_runtime_tests {
                 );
             });
         let dap_store = project.read_with(cx, |project, _| project.dap_store());
-        let session = dap_store.update(cx, |store, cx| {
-            store.new_session(
-                Some(definition.label.clone()),
-                definition.adapter.clone(),
-                task::SharedTaskContext::default(),
-                None,
-                SessionQuirks::default(),
-                cx,
-            )
-        });
-        dap_store
-            .update(cx, |store, cx| {
-                store.boot_session(session.clone(), definition, worktree, cx)
-            })
-            .await
-            .expect("launch the installed Java adapter through Groovy's connected Debug session");
-        session.read_with(cx, |session, _| {
-            let client = session.adapter_client().expect("started Java Debug client");
-            assert!(client.binary().connection.is_none());
-            assert!(
-                client
-                    .binary()
-                    .arguments
-                    .iter()
-                    .any(|argument| argument == "java-debug-relay")
-            );
-        });
-
-        let deadline = Instant::now() + Duration::from_secs(30);
-        let thread = loop {
-            cx.run_until_parked();
-            let frame = session.update(cx, |session, cx| {
-                if !session.any_stopped_thread() {
-                    return None;
-                }
-                let thread = session
-                    .threads(cx)
-                    .into_iter()
-                    .find(|(_, status)| *status == ThreadStatus::Stopped)?
-                    .0;
-                let thread = ThreadId(thread.id);
-                session
-                    .stack_frames(thread, cx)
-                    .ok()?
-                    .into_iter()
-                    .find_map(|frame| {
-                        let frame_path = frame.dap.source?.path?;
-                        let mapped = project.read(cx).find_project_path(frame_path, cx)?;
-                        (mapped == source_path
-                            && frame.dap.line == 7
-                            && frame.dap.name.contains("DebugMain.main"))
-                        .then_some(thread)
-                    })
+        let container = std::env::var("GROOVY_JAVA_DEBUG_CONTAINER").expect("Docker fixture ID");
+        assert_eq!(
+            docker_java_debug_processes(&container).await,
+            (vec![], vec![])
+        );
+        for cancel in [true, false] {
+            let session = dap_store.update(cx, |store, cx| {
+                store.new_session(
+                    Some(definition.label.clone()),
+                    definition.adapter.clone(),
+                    task::SharedTaskContext::default(),
+                    None,
+                    SessionQuirks::default(),
+                    cx,
+                )
             });
-            if let Some(thread) = frame {
-                break thread;
+            dap_store
+                .update(cx, |store, cx| {
+                    store.boot_session(session.clone(), definition.clone(), worktree.clone(), cx)
+                })
+                .await
+                .expect(
+                    "launch the installed Java adapter through Groovy's connected Debug session",
+                );
+            session.read_with(cx, |session, _| {
+                let client = session.adapter_client().expect("started Java Debug client");
+                assert!(client.binary().connection.is_none());
+                assert!(
+                    client
+                        .binary()
+                        .arguments
+                        .iter()
+                        .any(|argument| argument == "java-debug-relay")
+                );
+            });
+
+            let deadline = Instant::now() + Duration::from_secs(30);
+            let thread = loop {
+                cx.run_until_parked();
+                let frame = session.update(cx, |session, cx| {
+                    if !session.any_stopped_thread() {
+                        return None;
+                    }
+                    let thread = session
+                        .threads(cx)
+                        .into_iter()
+                        .find(|(_, status)| *status == ThreadStatus::Stopped)?
+                        .0;
+                    let thread = ThreadId(thread.id);
+                    session
+                        .stack_frames(thread, cx)
+                        .ok()?
+                        .into_iter()
+                        .find_map(|frame| {
+                            let frame_path = frame.dap.source?.path?;
+                            let mapped = project.read(cx).find_project_path(frame_path, cx)?;
+                            (mapped == source_path
+                                && frame.dap.line == 7
+                                && frame.dap.name.contains("DebugMain.main"))
+                            .then_some(thread)
+                        })
+                });
+                if let Some(thread) = frame {
+                    break thread;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "connected Java Debug did not stop at DebugMain.java:7"
+                );
+                cx.background_executor
+                    .timer(Duration::from_millis(100))
+                    .await;
+            };
+            let (debuggees, relays) = docker_java_debug_processes(&container).await;
+            let [debuggee] = debuggees.as_slice() else {
+                panic!("expected one paused host debuggee: {debuggees:?}");
+            };
+            let [relay] = relays.as_slice() else {
+                panic!("expected one active host relay: {relays:?}");
+            };
+            eprintln!(
+                "Connected Docker Debug stopped at /workspaces/maven/{source}:7 with debuggee {debuggee} and relay {relay}"
+            );
+
+            if cancel {
+                let session_id = session.read_with(cx, |session, _| session.session_id());
+                dap_store
+                    .update(cx, |store, cx| store.shutdown_session(session_id, cx))
+                    .await
+                    .expect("stop the paused Java Debug session");
+                assert!(
+                    dap_store.read_with(cx, |store, _| store.session_by_id(session_id).is_none())
+                );
+            } else {
+                session.update(cx, |session, cx| session.continue_thread(thread, cx));
             }
-            assert!(
-                Instant::now() < deadline,
-                "connected Java Debug did not stop at DebugMain.java:7"
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                cx.run_until_parked();
+                let (debuggees, relays) = docker_java_debug_processes(&container).await;
+                if session.read_with(cx, |session, _| session.is_terminated())
+                    && debuggees.is_empty()
+                    && relays.is_empty()
+                {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "connected Debug did not finish after cancel={cancel}; debuggees {debuggees:?}, relays {relays:?}"
+                );
+                cx.background_executor
+                    .timer(Duration::from_millis(100))
+                    .await;
+            }
+            eprintln!(
+                "Connected Docker Debug removed host debuggee {debuggee} and relay {relay}; cancel={cancel}"
             );
-            cx.background_executor
-                .timer(Duration::from_millis(100))
-                .await;
-        };
-        eprintln!("Connected Docker Debug stopped at /workspaces/maven/{source}:7");
-        session.update(cx, |session, cx| session.continue_thread(thread, cx));
-        let deadline = Instant::now() + Duration::from_secs(15);
-        while !session.read_with(cx, |session, _| session.is_terminated()) {
-            assert!(
-                Instant::now() < deadline,
-                "connected Java Debug did not terminate after Continue"
-            );
-            cx.background_executor
-                .timer(Duration::from_millis(100))
-                .await;
         }
+    }
+
+    #[cfg(unix)]
+    async fn docker_java_debug_processes(container: &str) -> (Vec<u32>, Vec<u32>) {
+        let output = util::command::new_command("docker")
+            .args(["top", container, "-eo", "pid,args"])
+            .output()
+            .await
+            .expect("observe the disposable Docker Debug processes");
+        assert!(output.status.success(), "{:?}", output.stderr);
+        let mut debuggees = Vec::new();
+        let mut relays = Vec::new();
+        for line in std::str::from_utf8(&output.stdout)
+            .expect("Docker process list")
+            .lines()
+            .skip(1)
+        {
+            let (pid, command) = line
+                .trim_start()
+                .split_once(char::is_whitespace)
+                .expect("Docker process columns");
+            if command.split_whitespace().last() == Some("evidence.DebugMain") {
+                debuggees.push(pid.parse().expect("Java debuggee PID"));
+            }
+            if command
+                .split_whitespace()
+                .any(|part| part == "java-debug-relay")
+            {
+                relays.push(pid.parse().expect("Java Debug relay PID"));
+            }
+        }
+        (debuggees, relays)
     }
 
     #[cfg(unix)]

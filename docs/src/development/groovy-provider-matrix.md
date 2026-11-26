@@ -395,15 +395,19 @@ test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and
 loaded Java Debug `0.53.2`. After trust, the adapter verified
 `DebugMain.java:7` and the client mapped the stopped frame to the Maven
-worktree. Continue terminated the debuggee. DAP used a stdio relay to the
-container's loopback adapter socket. The container published no ports and
-had external networking disabled.
+worktree. Stop ended the paused JVM and the host relay. A fresh session
+stopped at the same source location, then Continue finished the program
+and closed the relay. DAP used stdio to the container's loopback adapter
+socket. The container published no ports and had external networking
+disabled.
 
 To replay `docker_maven_java_debug_stops_at_host_source`, set
 `GROOVY_JAVA_DEBUG_CONTAINER` to the full container ID. Use the default
-offline-built Maven fixture at `/workspaces/maven` and stage the pinned
-Java extension, proxy, and Debug JAR on the project host. Configure the
-extension's `jdtls_launcher`, `lsp_proxy_path`, and `java_debug_jar`
+offline-built Maven fixture at `/workspaces/maven` with the root POM,
+wrapper, `application`, and `library`. Keep the separate cyclic graph
+fixtures outside the Debug worktree so JDTLS can configure the reactor.
+Stage the pinned Java extension, proxy, and Debug JAR on the project
+host. Configure the extension's `jdtls_launcher`, `lsp_proxy_path`, and `java_debug_jar`
 settings so it runs its normal debugger setup. If overriding the
 initialization `bundles` list to include the Groovy model companion,
 include the Debug JAR in that list as well. Native connected editor, Tests
