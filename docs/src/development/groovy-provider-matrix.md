@@ -242,13 +242,15 @@ the JDTLS launcher JDK. Groovy sends these Gradle import preferences from
 An explicit value in `lsp.jdtls.initialization_options.settings` takes
 precedence during initialization.
 
-The connected Maven test also checks that the Dependencies panel removes a
-module when the host marks its paths private. The host reports the privacy
-change with the worktree update. Groovy discards the older Java and Kotlin
-snapshots for that worktree and requests fresh filtered facts. In the offline
-Docker fixture, marking the Maven library private removed its rows and
+The connected Maven and Gradle tests also check that the Dependencies
+panel removes a module when the host marks its paths private. The host
+reports the privacy change with the worktree update. Groovy discards the
+older Java and Kotlin snapshots and requests fresh filtered facts. In both
+offline Docker fixtures, JDTLS and Kotlin LSP omitted the private library,
+JDTLS omitted the reference to it, and the panel removed its rows and
 navigation targets while the application remained visible. Restoring the
-settings recovered both providers' library rows without a manual refresh.
+settings recovered both providers' library rows and the navigation target
+without a manual refresh.
 
 The opt-in `selected_maven_junit_uses_docker_host_through_tests_panel` case
 loads the shared Tests panel and selects `GreetingTest.messageIsAvailable`.

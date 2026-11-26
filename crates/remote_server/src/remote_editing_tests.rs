@@ -1547,22 +1547,30 @@ mod jvm_tools_runtime_tests {
                 assert!(store.language_server_for_id(id).is_none());
             }
         });
-        if build_kind == JdtlsImportedBuildKind::Maven {
-            verify_docker_dependency_path_revocation(&project, worktree_id, cx).await;
-        }
+        verify_docker_dependency_path_revocation(
+            container_variable,
+            project_root,
+            &project,
+            worktree_id,
+            cx,
+        )
+        .await;
     }
 
     #[cfg(unix)]
     async fn verify_docker_dependency_path_revocation(
+        container_variable: &str,
+        project_root: &Path,
         project: &Entity<Project>,
         worktree_id: settings::WorktreeId,
         cx: &mut TestAppContext,
     ) {
         use std::time::{Duration, Instant};
 
-        let container_id = std::env::var("GROOVY_MAVEN_NAVIGATION_CONTAINER")
-            .expect("disposable navigation container");
-        let settings_path = "/workspaces/maven/.zed/settings.json";
+        let container_id =
+            std::env::var(container_variable).expect("disposable navigation container");
+        let settings_path = project_root.join(".zed/settings.json");
+        let settings_path = settings_path.to_str().expect("UTF-8 fixture settings path");
         let original_settings = util::command::new_command("docker")
             .args(["exec", &container_id, "cat", settings_path])
             .output()
@@ -1688,19 +1696,30 @@ mod jvm_tools_runtime_tests {
                     .map(|project| project.module_root.as_str())
                     .collect::<Vec<_>>();
                 eprintln!(
-                    "Docker worktree with library private: Java {java_roots:?}, Kotlin {kotlin_roots:?}; Dependencies matched {matched}"
+                    "Docker worktree {} with library private: Java {java_roots:?}, Kotlin {kotlin_roots:?}; Dependencies matched {matched}",
+                    project_root.display(),
                 );
                 assert!(java.partial && kotlin.partial);
                 assert!(
                     java_roots.contains(&"application") && kotlin_roots.contains(&"application")
                 );
                 assert!(!java_roots.contains(&"library") && !kotlin_roots.contains(&"library"));
+                assert!(java.projects.iter().all(|project| {
+                    !project
+                        .project_references
+                        .iter()
+                        .any(|reference| reference == "library")
+                }));
             }
             assert!(
                 matched,
                 "Docker Dependencies did not reflect library visibility {library_visible}"
             );
         }
+        eprintln!(
+            "Docker worktree {} restored both provider rows and the library navigation target without manual refresh",
+            project_root.display(),
+        );
     }
 
     #[cfg(unix)]
