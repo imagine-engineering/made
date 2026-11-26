@@ -269,7 +269,7 @@ pub enum GddArchiveError {
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
     #[error(
-        "Graphite preview requires a saved root Merge or Artboard with supported rectangle layers."
+        "Graphite preview requires a saved root Merge or Artboard with supported filled shapes."
     )]
     UnsupportedGraphLayerPreview,
     #[error("The saved layer graph exceeds the preview budget.")]
@@ -290,6 +290,12 @@ pub enum GddArchiveError {
     UnsupportedArtboardBackground,
     #[error("Enter finite sRGB channels between zero and one for edited Background values.")]
     InvalidArtboardBackground,
+    #[error("Choose a root Ellipse with editable radii.")]
+    UnsupportedEllipseRadius,
+    #[error("Enter an Ellipse radius in pixels with a finite diameter.")]
+    InvalidEllipseRadius,
+    #[error("Enter a different Ellipse radius.")]
+    UnchangedEllipseRadius,
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -777,9 +783,16 @@ pub enum GddGraphLayerPreview {
 
 #[derive(Clone, Copy)]
 enum SavedGraphicProfile {
-    Shape,
+    Rectangle,
+    Ellipse([f64; 2]),
     Fill,
     Layer(GddGraphLayerPreview),
+}
+
+#[derive(Clone, Copy)]
+pub enum GddEllipseAxis {
+    X,
+    Y,
 }
 
 const LAYER_CONTENT_INPUT: usize = 1;
@@ -1133,7 +1146,10 @@ impl GddGraphNode {
             return None;
         }
         let index = match (self.graphic_profile?, source.graphic_profile?) {
-            (SavedGraphicProfile::Fill, SavedGraphicProfile::Shape) => fill::ContentInput::INDEX,
+            (
+                SavedGraphicProfile::Fill,
+                SavedGraphicProfile::Rectangle | SavedGraphicProfile::Ellipse(_),
+            ) => fill::ContentInput::INDEX,
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
@@ -1205,6 +1221,13 @@ impl GddGraphNode {
 
     pub fn artboard_background(&self) -> Option<Color> {
         self.artboard_background
+    }
+
+    pub fn ellipse_radii(&self) -> Option<[f64; 2]> {
+        match self.graphic_profile? {
+            SavedGraphicProfile::Ellipse(radii) => Some(radii),
+            _ => None,
+        }
     }
 
     pub fn has_numeric_connection(&self) -> bool {
@@ -4788,6 +4811,59 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn set_ellipse_radius_in_copy(
+        &self,
+        node: &GddGraphNode,
+        axis: GddEllipseAxis,
+        value: f64,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let previous = node
+            .ellipse_radii()
+            .ok_or(GddArchiveError::UnsupportedEllipseRadius)?;
+        if !valid_saved_ellipse_radius(value) {
+            return Err(GddArchiveError::InvalidEllipseRadius);
+        }
+        let [mut radius_x, mut radius_y] = previous;
+        let (index, radius) = match axis {
+            GddEllipseAxis::X => (ellipse::RadiusXInput::INDEX, &mut radius_x),
+            GddEllipseAxis::Y => (ellipse::RadiusYInput::INDEX, &mut radius_y),
+        };
+        if *radius == value {
+            return Err(GddArchiveError::UnchangedEllipseRadius);
+        }
+        *radius = value;
+        let expected = [radius_x, radius_y].map(f64::to_bits);
+        let path = node.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let exact_radii = |interface: &NodeNetworkInterface| {
+            let document = interface.document_node(&node.local_id, path)?;
+            match checked_saved_graphic_node(document)?.1 {
+                SavedGraphicProfile::Ellipse(radii) => Some(radii.map(f64::to_bits)),
+                _ => None,
+            }
+        };
+        if exact_radii(&interface) != Some(previous.map(f64::to_bits)) {
+            return Err(GddArchiveError::UnsupportedEllipseRadius);
+        }
+        interface.set_input(
+            &InputConnector::node_at_index(node.local_id, index),
+            NodeInput::value(TaggedValue::Number(value), false),
+            path,
+        );
+        if exact_radii(&interface) != Some(expected) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = self
+            .finish_graph_input(node, interface, index, None, budget)
+            .await?;
+        if exact_radii(&copy.runtime_graph().await?.into_interface()?) != Some(expected) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
     pub async fn set_graph_numeric_input_exposed_in_copy(
         &self,
         node: &GddGraphNode,
@@ -5803,6 +5879,11 @@ fn collect_layer_preview_node(
     Ok(())
 }
 
+fn valid_saved_ellipse_radius(radius: f64) -> bool {
+    // The source forms the diameter by subtracting the two opposite radii.
+    (radius * 2.).is_finite()
+}
+
 fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, SavedGraphicProfile)> {
     let output_wire = |input: &NodeInput| {
         matches!(
@@ -5866,25 +5947,25 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             (
                 resolve_proto_node_type(rectangle::IDENTIFIER)?,
                 replacements,
-                SavedGraphicProfile::Shape,
+                SavedGraphicProfile::Rectangle,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &ellipse::IDENTIFIER => {
-            let mut replacements = Vec::with_capacity(2);
-            for index in [ellipse::RadiusXInput::INDEX, ellipse::RadiusYInput::INDEX] {
+            let read_radius = |index: usize| {
                 let input = node.inputs.get(index)?;
-                // The source forms its diameters by subtracting the two opposite radii.
-                if input.is_exposed()
-                    || !matches!(input.as_value(), Some(TaggedValue::Number(value)) if (*value * 2.).is_finite())
-                {
-                    return None;
+                match input.as_non_exposed_value()? {
+                    TaggedValue::Number(value) if valid_saved_ellipse_radius(*value) => {
+                        Some(((index, input), *value))
+                    }
+                    _ => None,
                 }
-                replacements.push((index, input));
-            }
+            };
+            let (horizontal, radius_x) = read_radius(ellipse::RadiusXInput::INDEX)?;
+            let (vertical, radius_y) = read_radius(ellipse::RadiusYInput::INDEX)?;
             (
                 resolve_proto_node_type(ellipse::IDENTIFIER)?,
-                replacements,
-                SavedGraphicProfile::Shape,
+                Vec::from([horizontal, vertical]),
+                SavedGraphicProfile::Ellipse([radius_x, radius_y]),
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -10589,7 +10670,8 @@ mod tests {
                 .expect("horizontal radius") = NodeInput::value(TaggedValue::Number(value), false);
             assert!(matches!(
                 checked_saved_graphic_node(&ellipse_node),
-                Some((actual, SavedGraphicProfile::Shape)) if actual == ellipse_node
+                Some((actual, SavedGraphicProfile::Ellipse([radius_x, radius_y])))
+                    if actual == ellipse_node && radius_x == value && radius_y == 25.
             ));
         }
         for value in [f64::NAN, f64::INFINITY, f64::MAX] {
@@ -10604,6 +10686,94 @@ mod tests {
             .get_mut(ellipse::RadiusYInput::INDEX)
             .expect("vertical radius") = NodeInput::value(TaggedValue::Number(25.), true);
         assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+    }
+
+    #[test]
+    fn at_gra_node_262_2_edits_only_the_selected_saved_radius() {
+        use graphite_resource::ResourceRegistry;
+
+        futures::executor::block_on(async {
+            let mut template = resolve_proto_node_type(ellipse::IDENTIFIER)
+                .expect("pinned Ellipse definition")
+                .default_node_template();
+            template.normalize_stored_types();
+            let mut expected = template.into_parts().0;
+            let ellipse_id = NodeId(15);
+            let network = NodeNetwork {
+                nodes: [(ellipse_id, expected.clone())].into_iter().collect(),
+                ..Default::default()
+            };
+            let resources = HashMapResourceStorage::new();
+            let mut owner = document();
+            owner
+                .commit_from_runtime(&network, &NoMetadata, &ResourceRegistry::new(), &resources)
+                .expect("save a pinned Ellipse");
+            let original: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("original saved archive")
+                .into();
+            let archive = open_gdd_zip(&original, budget())
+                .await
+                .expect("open Ellipse");
+            let nodes = archive.graph_nodes().await.expect("saved Graphite graph");
+            let node = nodes.first().expect("saved Ellipse");
+            let original_files = archive.folder_files().expect("original files");
+            assert_eq!(node.ellipse_radii(), Some([50., 25.]));
+            assert!(matches!(
+                archive
+                    .set_ellipse_radius_in_copy(node, GddEllipseAxis::X, 50., budget())
+                    .await,
+                Err(GddArchiveError::UnchangedEllipseRadius)
+            ));
+            for value in [f64::NAN, f64::INFINITY, f64::MAX] {
+                assert!(matches!(
+                    archive
+                        .set_ellipse_radius_in_copy(node, GddEllipseAxis::X, value, budget())
+                        .await,
+                    Err(GddArchiveError::InvalidEllipseRadius)
+                ));
+            }
+            let changed = archive
+                .set_ellipse_radius_in_copy(node, GddEllipseAxis::X, -36.125, budget())
+                .await
+                .expect("edit the signed fractional radius");
+            assert_eq!(changed.history_len(), archive.history_len() + 1);
+            assert!(matches!(
+                changed
+                    .set_ellipse_radius_in_copy(node, GddEllipseAxis::Y, 0., budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let nodes = changed.graph_nodes().await.expect("changed graph");
+            let current = nodes.first().expect("same Ellipse");
+            assert_eq!(current.storage_id(), node.storage_id());
+            assert_eq!(current.ellipse_radii(), Some([-36.125, 25.]));
+            let changed = changed
+                .set_ellipse_radius_in_copy(current, GddEllipseAxis::Y, 0., budget())
+                .await
+                .expect("edit the degenerate radius");
+            for (index, value) in [
+                (ellipse::RadiusXInput::INDEX, -36.125),
+                (ellipse::RadiusYInput::INDEX, 0.),
+            ] {
+                *expected.inputs.get_mut(index).expect("pinned radius slot") =
+                    NodeInput::value(TaggedValue::Number(value), false);
+            }
+            let result = changed.runtime_graph().await.expect("read final graph");
+            assert_eq!(result.network.nodes.get(&ellipse_id), Some(&expected));
+            assert_eq!(result.network.exports, network.exports);
+            assert_eq!(changed.history_len(), archive.history_len() + 2);
+            assert_eq!(
+                archive.folder_files().expect("source files"),
+                original_files
+            );
+        });
     }
 
     #[test]
@@ -10638,7 +10808,7 @@ mod tests {
                 .expect("pinned loose Fill");
             let rectangle = nodes
                 .iter()
-                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Shape)))
+                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Rectangle)))
                 .expect("pinned Rectangle");
             assert!(matches!(
                 graph
@@ -10759,7 +10929,7 @@ mod tests {
                     .expect("pinned Merge");
                 let nodes = graph.graph_nodes().await.expect("saved addresses");
                 let profiles: [fn(Option<SavedGraphicProfile>) -> bool; 3] = [
-                    |profile| matches!(profile, Some(SavedGraphicProfile::Shape)),
+                    |profile| matches!(profile, Some(SavedGraphicProfile::Rectangle)),
                     |profile| matches!(profile, Some(SavedGraphicProfile::Fill)),
                     |profile| {
                         matches!(

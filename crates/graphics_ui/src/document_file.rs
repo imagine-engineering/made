@@ -18,11 +18,12 @@ use graphics_core::evaluate::{CpuSvgEvaluationBudget, UnaryNumericOperation};
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasPick,
-        GddArtboardGeometry, GddExportContent, GddGraphGeometry, GddGraphInspection,
-        GddGraphLayerPreview, GddGraphNetwork, GddGraphNode, GddHistoryDirection,
-        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
-        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
-        InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddArtboardGeometry, GddEllipseAxis, GddExportContent, GddGraphGeometry,
+        GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
+        GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
+        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -738,6 +739,7 @@ struct NodeCopyForm {
     value: Entity<Editor>,
     position: Entity<Editor>,
     artboard_background: Entity<Editor>,
+    ellipse_radii: [Entity<Editor>; 2],
     output_preview: NodeOutputPreview,
     document_run: NodeOutputPreview,
     document_run_evaluator: Option<Arc<GddNumericGraphEvaluator>>,
@@ -781,6 +783,7 @@ impl NodeCopyForm {
             value: cx.new(|cx| Editor::single_line(window, cx)),
             position: cx.new(|cx| Editor::single_line(window, cx)),
             artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
+            ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             output_preview: NodeOutputPreview::Hidden,
             document_run: NodeOutputPreview::Hidden,
             document_run_evaluator: None,
@@ -1202,6 +1205,7 @@ enum NodeCopyChange {
     BooleanInput(bool),
     ArtboardGeometry(GddArtboardGeometry),
     ArtboardBackground([f32; 4]),
+    EllipseRadius(GddEllipseAxis, f64),
     SetDocumentArtboard,
     ConnectGraphicContent(Box<GddGraphNode>),
     DisconnectNumericInput,
@@ -1272,6 +1276,11 @@ impl NodeCopyChange {
             Self::ArtboardBackground(channels) => {
                 archive
                     .set_artboard_background_in_copy(node, channels, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::EllipseRadius(axis, radius) => {
+                archive
+                    .set_ellipse_radius_in_copy(node, axis, radius, ARCHIVE_BUDGET)
                     .await
             }
             Self::SetDocumentArtboard => {
@@ -2526,6 +2535,13 @@ impl GraphiteDocumentItem {
                 form.artboard_background.update(cx, |editor, cx| {
                     editor.set_text(format!("{red}, {green}, {blue}, {alpha}"), window, cx)
                 });
+            }
+            if let Some(radii) = node.ellipse_radii() {
+                for (field, radius) in form.ellipse_radii.iter().zip(radii) {
+                    field.update(cx, |editor, cx| {
+                        editor.set_text(radius.to_string(), window, cx)
+                    });
+                }
             }
             cx.notify();
         }
@@ -4050,6 +4066,48 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn change_ellipse_radius(
+        &mut self,
+        axis: GddEllipseAxis,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form
+            .selected_node()
+            .filter(|node| node.ellipse_radii().is_some())
+        else {
+            return;
+        };
+        let [radius_x, radius_y] = &form.ellipse_radii;
+        let field = match axis {
+            GddEllipseAxis::X => radius_x,
+            GddEllipseAxis::Y => radius_y,
+        };
+        match field.read(cx).text(cx).trim().parse::<f64>() {
+            Ok(radius) => self.apply_graph_edit(
+                GraphiteCopy::EditNode {
+                    node: Box::new(node.clone()),
+                    change: NodeCopyChange::EllipseRadius(axis, radius),
+                },
+                window,
+                cx,
+            ),
+            Err(_) => {
+                self.copy_feedback = Some((
+                    GddArchiveError::InvalidEllipseRadius.to_string().into(),
+                    Color::Error,
+                ));
+                cx.notify();
+            }
+        }
+    }
+
     fn stage_working_snapshot(
         &mut self,
         expected: Arc<()>,
@@ -4156,6 +4214,7 @@ impl GraphiteDocumentItem {
             .is_some_and(|form| editor_focused(&form.position))
             || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
                 [&form.name, &form.value, &form.position, &form.artboard_background].into_iter().any(editor_focused)
+                    || form.ellipse_radii.iter().any(editor_focused)
                     || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
         if field_focused || self.model.read(cx).working.is_none() {
             cx.propagate();
@@ -4329,6 +4388,57 @@ impl GraphiteDocumentItem {
             div()
                 .debug_selector(move || selector.into())
                 .child(DropdownMenu::new(selector, label, menu)),
+        )
+    }
+
+    fn render_ellipse_radii(
+        &self,
+        form: &NodeCopyForm,
+        working: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        v_flex().gap_2().children(
+            [
+                (
+                    GddEllipseAxis::X,
+                    "Radius X (px)",
+                    "GRAPHITE-GDD-ELLIPSE-RADIUS-X",
+                    "GRAPHITE-GDD-APPLY-ELLIPSE-RADIUS-X",
+                    "Apply Radius X",
+                    "Save Radius X in a Copy",
+                ),
+                (
+                    GddEllipseAxis::Y,
+                    "Radius Y (px)",
+                    "GRAPHITE-GDD-ELLIPSE-RADIUS-Y",
+                    "GRAPHITE-GDD-APPLY-ELLIPSE-RADIUS-Y",
+                    "Apply Radius Y",
+                    "Save Radius Y in a Copy",
+                ),
+            ]
+            .into_iter()
+            .zip(&form.ellipse_radii)
+            .map(|((axis, label, field_id, button_id, apply, save), field)| {
+                v_flex()
+                    .gap_1()
+                    .child(Label::new(label))
+                    .child(
+                        div()
+                            .id(field_id)
+                            .aria_label(label)
+                            .debug_selector(move || field_id.into())
+                            .child(field.clone()),
+                    )
+                    .child(
+                        div().debug_selector(move || button_id.into()).child(
+                            Button::new(button_id, if working { apply } else { save })
+                                .disabled(self.copy_task.is_some())
+                                .on_click(cx.listener(move |item, _, window, cx| {
+                                    item.change_ellipse_radius(axis, window, cx)
+                                })),
+                        ),
+                    )
+            }),
         )
     }
 
@@ -5251,6 +5361,9 @@ impl GraphiteDocumentItem {
                             .when(selected.artboard_background().is_some(), |panel| {
                                 panel.child(self.render_artboard_background(form, working, cx))
                             })
+                            .when(selected.ellipse_radii().is_some(), |panel| {
+                                panel.child(self.render_ellipse_radii(form, working, cx))
+                            })
                             .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
@@ -5722,7 +5835,8 @@ impl GraphiteDocumentItem {
                             NodeCopyChange::NumericInput(_)
                             | NodeCopyChange::BooleanInput(_)
                             | NodeCopyChange::ArtboardGeometry(_)
-                            | NodeCopyChange::ArtboardBackground(_),
+                            | NodeCopyChange::ArtboardBackground(_)
+                            | NodeCopyChange::EllipseRadius(_, _),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -13634,13 +13748,33 @@ mod tests {
             "Rectangle",
             "GRAPHITE-NODE-CATALOG-ADD-Rectangle",
             [0, 0, 0, 255],
+            false,
         )
         .await;
     }
 
     #[gpui::test]
     async fn at_gra_node_262_3_workspace_paints_and_reopens_an_ellipse(cx: &mut TestAppContext) {
-        verify_painted_artboard(cx, "Ellipse", "GRAPHITE-NODE-CATALOG-ADD-Ellipse", [255; 4]).await;
+        verify_painted_artboard(
+            cx,
+            "Ellipse",
+            "GRAPHITE-NODE-CATALOG-ADD-Ellipse",
+            [255; 4],
+            false,
+        )
+        .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_262_3_workspace_edits_and_reopens_ellipse_radii(cx: &mut TestAppContext) {
+        verify_painted_artboard(
+            cx,
+            "Ellipse",
+            "GRAPHITE-NODE-CATALOG-ADD-Ellipse",
+            [0, 0, 0, 255],
+            true,
+        )
+        .await;
     }
 
     async fn verify_painted_artboard(
@@ -13648,6 +13782,7 @@ mod tests {
         shape: &'static str,
         add_shape: &'static str,
         expected_lower_sample: [u8; 4],
+        edit_ellipse: bool,
     ) {
         use graphics_core::formats::gdd::GddGraphPortSource;
 
@@ -13772,6 +13907,11 @@ mod tests {
                 assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback)
             });
         }
+        if edit_ellipse {
+            select(window, shape);
+            verify_ellipse_radius_edits(&item, window);
+            select(window, "Artboard");
+        }
         let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
         click(window, preview);
         let painting = [0, 0, 0, 255];
@@ -13840,6 +13980,10 @@ mod tests {
                 sample(left + inset, top + below),
                 expected_lower_sample.as_slice()
             );
+            if edit_ellipse {
+                let right = (60. * canvas_scale).round() as usize;
+                assert_eq!(sample(left + right, top + inset), painting.as_slice());
+            }
             assert_eq!(sample(width / 2, height / 2), background.as_slice());
             assert_eq!(sample(0, 0), [0; 4]);
         });
@@ -13876,6 +14020,10 @@ mod tests {
             pixels.get(offset..offset + 4),
             Some(expected_lower_sample.as_slice())
         );
+        if edit_ellipse {
+            let offset = (20 * 1920 + 60) * 4;
+            assert_eq!(pixels.get(offset..offset + 4), Some(painting.as_slice()));
+        }
         let published = PathBuf::from("/project/default-artboard-result.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
         window.simulate_new_path_selection(|_| Some(published.clone()));
@@ -13904,6 +14052,9 @@ mod tests {
             Some(GddGraphLayerPreview::Artboard { origin, size })
                 if origin == DVec2::ZERO && size == DVec2::new(1920.,1080.)
         ));
+        if edit_ellipse {
+            assert_eq!(find(shape).ellipse_radii(), Some([72.5, 52.5]));
+        }
         for (target, index, source) in [
             ("Artboard", 1, "Merge"),
             ("Merge", 1, "Fill"),
@@ -13922,6 +14073,57 @@ mod tests {
                 .expect("original entries"),
             original
         );
+    }
+
+    fn verify_ellipse_radius_edits(
+        item: &Entity<GraphiteDocumentItem>,
+        window: &mut gpui::VisualTestContext,
+    ) {
+        let radii = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Ellipse Inspector");
+                };
+                form.selected_node().and_then(GddGraphNode::ellipse_radii)
+            })
+        };
+        let apply_radius = |window: &mut gpui::VisualTestContext, field, apply, value: &str| {
+            click(window, field);
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(value);
+            window.run_until_parked();
+            paint(window);
+            click(window, apply);
+        };
+        let radius_x = "GRAPHITE-GDD-ELLIPSE-RADIUS-X";
+        let apply_x = "GRAPHITE-GDD-APPLY-ELLIPSE-RADIUS-X";
+        let radius_y = "GRAPHITE-GDD-ELLIPSE-RADIUS-Y";
+        let apply_y = "GRAPHITE-GDD-APPLY-ELLIPSE-RADIUS-Y";
+        assert_eq!(radii(window), Some([50., 25.]));
+        apply_radius(window, radius_x, apply_x, "72.5");
+        assert_eq!(radii(window), Some([72.5, 25.]));
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        for invalid in ["invalid", "1.7976931348623157e308"] {
+            apply_radius(window, radius_y, apply_y, invalid);
+            item.read_with(window, |item, cx| {
+                assert!(Arc::ptr_eq(&revision, &item.model.read(cx).revision));
+                assert!(
+                    matches!(item.copy_feedback.as_ref(), Some((message, Color::Error))
+                    if message.as_ref() == GddArchiveError::InvalidEllipseRadius.to_string())
+                );
+            });
+            assert_eq!(radii(window), Some([72.5, 25.]));
+        }
+        apply_radius(window, radius_y, apply_y, "52.5");
+        assert_eq!(radii(window), Some([72.5, 52.5]));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(radii(window), Some([72.5, 25.]));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(radii(window), Some([50., 25.]));
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(radii(window), Some([72.5, 25.]));
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(radii(window), Some([72.5, 52.5]));
     }
 
     #[gpui::test]
