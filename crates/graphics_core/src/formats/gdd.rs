@@ -248,6 +248,10 @@ pub enum GddArchiveError {
     InvalidArtworkFontSize,
     #[error("Enter finite artwork bounds of at least 1 px, or leave them empty.")]
     InvalidArtworkTextBounds,
+    #[error("Select a Graphite Fill node with an editable solid Paint input.")]
+    UnsupportedGraphFillColor,
+    #[error("Enter finite sRGB fill channels between 0 and 1.")]
+    InvalidGraphFillColor,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
@@ -1049,6 +1053,11 @@ pub struct GddArtworkTextLayout {
     pub alignment: TextAlign,
 }
 
+enum SavedColorInput {
+    ArtboardBackground,
+    Fill,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GddArtboardGeometry {
     pub location: DVec2,
@@ -1147,6 +1156,7 @@ pub struct GddGraphNode {
     artwork_text_layout: Option<GddArtworkTextLayout>,
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
+    fill_color: Option<Color>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
@@ -1389,6 +1399,10 @@ impl GddGraphNode {
 
     pub fn artwork_text_layout(&self) -> Option<GddArtworkTextLayout> {
         self.artwork_text_layout
+    }
+
+    pub fn fill_color(&self) -> Option<Color> {
+        self.fill_color
     }
 
     pub fn name(&self) -> &str {
@@ -1912,6 +1926,7 @@ impl InspectedGddV1 {
                     artwork_text_layout: None,
                     artboard_geometry: None,
                     artboard_background: None,
+                    fill_color: None,
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
@@ -2167,7 +2182,11 @@ impl InspectedGddV1 {
                     node.boolean_input =
                         hidden_graph_boolean(&document.inputs, ARTBOARD_CLIP_INPUT, "Clip");
                     node.artboard_geometry = GddArtboardGeometry::hidden(document);
-                    node.artboard_background = hidden_artboard_background(document);
+                    node.artboard_background =
+                        hidden_graph_color(document, ARTBOARD_BACKGROUND_INPUT);
+                }
+                if matches!(profile, SavedGraphicProfile::Fill) {
+                    node.fill_color = hidden_graph_color(document, fill::PaintInput::INDEX);
                 }
                 if node.interpolation_parameter_name().is_some() {
                     node.boolean_input = hidden_graph_boolean(&document.inputs, 2, "Reverse");
@@ -7411,10 +7430,50 @@ impl InspectedGddV1 {
         channels: [f32; 4],
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
+        self.set_literal_graph_color_in_copy(
+            node,
+            SavedColorInput::ArtboardBackground,
+            channels,
+            budget,
+        )
+        .await
+    }
+
+    pub async fn set_graph_fill_color_in_copy(
+        &self,
+        node: &GddGraphNode,
+        channels: [f32; 4],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.set_literal_graph_color_in_copy(node, SavedColorInput::Fill, channels, budget)
+            .await
+    }
+
+    async fn set_literal_graph_color_in_copy(
+        &self,
+        node: &GddGraphNode,
+        input: SavedColorInput,
+        channels: [f32; 4],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        let original = node
-            .artboard_background()
-            .ok_or(GddArchiveError::UnsupportedArtboardBackground)?;
+        let (index, original, unsupported, invalid) = match input {
+            SavedColorInput::ArtboardBackground => (
+                ARTBOARD_BACKGROUND_INPUT,
+                node.artboard_background(),
+                GddArchiveError::UnsupportedArtboardBackground,
+                GddArchiveError::InvalidArtboardBackground,
+            ),
+            SavedColorInput::Fill => (
+                fill::PaintInput::INDEX,
+                node.fill_color(),
+                GddArchiveError::UnsupportedGraphFillColor,
+                GddArchiveError::InvalidGraphFillColor,
+            ),
+        };
+        let Some(original) = original else {
+            return Err(unsupported);
+        };
         let current = original.to_gamma_srgb_channels();
         let changed: [bool; 4] = std::array::from_fn(|index| current[index] != channels[index]);
         if changed
@@ -7422,7 +7481,7 @@ impl InspectedGddV1 {
             .zip(channels)
             .any(|(changed, channel)| changed && !(0.0..=1.0).contains(&channel))
         {
-            return Err(GddArchiveError::InvalidArtboardBackground);
+            return Err(invalid);
         }
         let [red, green, blue, alpha] = channels;
         let entered = Color::from_gamma_srgb_channels(red, green, blue, alpha);
@@ -7442,27 +7501,55 @@ impl InspectedGddV1 {
         }
         let path = node.network_path.as_slice();
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let background = |interface: &NodeNetworkInterface| {
+        let saved_color = |interface: &NodeNetworkInterface, index| {
             interface
                 .document_node(&node.local_id, path)
-                .and_then(hidden_artboard_background)
+                .and_then(|document| hidden_graph_color(document, index))
         };
-        if background(&interface) != Some(original) {
-            return Err(GddArchiveError::UnsupportedArtboardBackground);
+        if saved_color(&interface, index) != Some(original) {
+            return Err(unsupported);
         }
-        interface.set_input(
-            &InputConnector::node_at_index(node.local_id, ARTBOARD_BACKGROUND_INPUT),
-            NodeInput::value(TaggedValue::Color(color), false),
-            path,
-        );
-        if background(&interface) != Some(color) {
+        let backup =
+            matches!(input, SavedColorInput::Fill).then_some(fill::BackupColorInput::INDEX);
+        let mut changed_indices = BTreeSet::new();
+        let mut edits = Vec::new();
+        for index in backup.into_iter().chain([index]) {
+            let Some(previous) = saved_color(&interface, index) else {
+                return Err(unsupported);
+            };
+            if previous != color {
+                let connector = InputConnector::node_at_index(node.local_id, index);
+                let value = NodeInput::value(TaggedValue::Color(color), false);
+                interface.set_input(&connector, value.clone(), path);
+                edits.push(write_graph_connector(path, connector, value));
+                changed_indices.insert(index);
+            }
+        }
+        if backup
+            .into_iter()
+            .chain([index])
+            .any(|index| saved_color(&interface, index) != Some(color))
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
-        let copy = self
-            .finish_graph_input(node, interface, ARTBOARD_BACKGROUND_INPUT, None, budget)
-            .await?;
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        if batch.ops.len() != edits.len()
+            || batch.ops.iter().any(|edit| {
+                !matches!(edit, RegistryDelta::ChangeNodeInput { id, index, .. }
+                    if *id == node.storage_id && usize::try_from(*index).ok()
+                        .is_some_and(|index| changed_indices.remove(&index)))
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if background(&actual) != Some(color) {
+        if backup
+            .into_iter()
+            .chain([index])
+            .any(|index| saved_color(&actual, index) != Some(color))
+        {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -10362,6 +10449,7 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
             let content_index = fill::ContentInput::INDEX;
             let paint_index = fill::PaintInput::INDEX;
+            let backup_index = fill::BackupColorInput::INDEX;
             let content = node.inputs.get(content_index)?;
             let paint = node.inputs.get(paint_index)?;
             let valid_paint = match paint.as_value()? {
@@ -10371,10 +10459,19 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                     .all(f32::is_finite),
                 value => value.is_no_paint(),
             };
-            if !valid_paint {
+            let backup = hidden_graph_color(node, backup_index)?;
+            if !valid_paint
+                || !backup
+                    .to_gamma_srgb_channels()
+                    .into_iter()
+                    .all(f32::is_finite)
+            {
                 return None;
             }
-            let mut replacements = vec![(paint_index, paint)];
+            let mut replacements = vec![
+                (paint_index, paint),
+                (backup_index, node.inputs.get(backup_index)?),
+            ];
             if output_wire(content) {
                 replacements.push((content_index, content));
             }
@@ -10770,11 +10867,11 @@ fn graph_boolean_literal(document: &DocumentNode) -> Option<GddGraphBooleanInput
     }
 }
 
-fn hidden_artboard_background(document: &DocumentNode) -> Option<Color> {
+fn hidden_graph_color(document: &DocumentNode, index: usize) -> Option<Color> {
     let NodeInput::Value {
         tagged_value,
         exposed: false,
-    } = document.inputs.get(ARTBOARD_BACKGROUND_INPUT)?
+    } = document.inputs.get(index)?
     else {
         return None;
     };
@@ -16531,6 +16628,70 @@ mod tests {
                 .expect("undo one wire");
             assert!(
                 undo.document
+                    .registry()
+                    .value_equal(graph.document.registry())
+            );
+        });
+    }
+
+    #[test]
+    fn at_gra_text_008_1_solid_fill_journals_paint_and_backup_together() {
+        futures::executor::block_on(async {
+            let graph = create_gdd_folder(623, 994, "Solid paint".into(), budget())
+                .await
+                .expect("new saved graph")
+                .insert_root_catalog_node_in_copy(
+                    &format!("PROTONODE:{}", fill::IDENTIFIER.as_str()),
+                    [0, 0],
+                    budget(),
+                )
+                .await
+                .expect("original Fill template");
+            let nodes = graph.graph_nodes().await.expect("saved Fill");
+            let node = nodes
+                .iter()
+                .find(|node| node.fill_color().is_some())
+                .expect("solid Fill");
+            let colored = graph
+                .set_graph_fill_color_in_copy(node, [1., 0., 0., 1.], budget())
+                .await
+                .expect("one native solid paint interaction");
+            assert_eq!(colored.history_len(), graph.history_len() + 2);
+            assert!(matches!(
+                colored
+                    .set_graph_fill_color_in_copy(node, [0., 1., 0., 1.], budget())
+                    .await,
+                Err(GddArchiveError::StaleGraphNode)
+            ));
+            let bytes: Arc<[u8]> = colored
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("persist the solid Fill edit")
+                .into();
+            let reopened = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("reopened color interaction");
+            let runtime = reopened
+                .runtime_graph()
+                .await
+                .expect("original Fill inputs rebuilt");
+            let actual = runtime
+                .network
+                .nodes
+                .get(&node.local_id)
+                .expect("same saved Fill");
+            assert!(checked_saved_graphic_node(actual).is_some());
+            assert_eq!(
+                [fill::PaintInput::INDEX, fill::BackupColorInput::INDEX]
+                    .map(|index| hidden_graph_color(actual, index)),
+                [Some(Color::RED); 2]
+            );
+            let undone = reopened
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo the paired change");
+            assert!(
+                undone
+                    .document
                     .registry()
                     .value_equal(graph.document.registry())
             );

@@ -1272,6 +1272,12 @@ struct SavedLayerPlacementMenu {
     destinations: Vec<SavedLayerDestination>,
 }
 
+#[derive(Clone, Copy)]
+enum SavedGraphColor {
+    ArtboardBackground,
+    Fill,
+}
+
 struct NodeCopyForm {
     snapshot: Arc<InspectedGddV1>,
     revision: Arc<()>,
@@ -1285,7 +1291,7 @@ struct NodeCopyForm {
     artwork_text: Entity<Editor>,
     artwork_bounds: [Entity<Editor>; 2],
     artwork_alignment: TextAlign,
-    artboard_background: Entity<Editor>,
+    color: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
     layer_opacity: [Entity<Editor>; 2],
     output_preview: NodeOutputPreview,
@@ -1339,7 +1345,7 @@ impl NodeCopyForm {
                 })
             }),
             artwork_alignment: TextAlign::default(),
-            artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
+            color: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             layer_opacity: std::array::from_fn(|_| {
                 cx.new(|cx| {
@@ -1374,6 +1380,18 @@ impl NodeCopyForm {
             saved_graph_box_selection: Default::default(),
             pending_canvas_source: None,
         }
+    }
+
+    fn set_color_draft(
+        &self,
+        color: graphite_core_types::Color,
+        window: &mut Window,
+        cx: &mut Context<GraphiteDocumentItem>,
+    ) {
+        let [red, green, blue, alpha] = color.to_gamma_srgb_channels();
+        self.color.update(cx, |editor, cx| {
+            editor.set_text(format!("{red}, {green}, {blue}, {alpha}"), window, cx);
+        });
     }
 
     fn reset_artwork_text(&mut self, window: &mut Window, cx: &mut Context<GraphiteDocumentItem>) {
@@ -1905,6 +1923,7 @@ enum NodeCopyChange {
     BooleanInput(bool),
     ArtboardGeometry(GddArtboardGeometry),
     ArtboardBackground([f32; 4]),
+    FillColor([f32; 4]),
     EllipseRadius(GddEllipseAxis, f64),
     EllipseRadiusSource(GddEllipseAxis, Option<Box<GddGraphNode>>),
     SetDocumentArtboard,
@@ -1982,6 +2001,11 @@ impl NodeCopyChange {
             Self::ArtboardBackground(channels) => {
                 archive
                     .set_artboard_background_in_copy(node, channels, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::FillColor(channels) => {
+                archive
+                    .set_graph_fill_color_in_copy(node, channels, ARCHIVE_BUDGET)
                     .await
             }
             Self::EllipseRadius(axis, radius) => {
@@ -5407,11 +5431,8 @@ impl GraphiteDocumentItem {
                     editor.set_text(format!("{width}, {height}"), window, cx)
                 });
             }
-            if let Some(background) = node.artboard_background() {
-                let [red, green, blue, alpha] = background.to_gamma_srgb_channels();
-                form.artboard_background.update(cx, |editor, cx| {
-                    editor.set_text(format!("{red}, {green}, {blue}, {alpha}"), window, cx)
-                });
+            if let Some(color) = node.artboard_background().or_else(|| node.fill_color()) {
+                form.set_color_draft(color, window, cx);
             }
             if let Some(radii) = node.ellipse_radii() {
                 for (field, radius) in form.ellipse_radii.iter().zip(radii) {
@@ -7663,27 +7684,44 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn change_artboard_background(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn change_graph_color(
+        &mut self,
+        color: SavedGraphColor,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.copy_task.is_some() {
             return;
         }
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
-        let Some(node) = form
-            .selected_node()
-            .filter(|node| node.artboard_background().is_some())
-        else {
+        let Some(node) = form.selected_node() else {
             return;
         };
-        match crate::session::parse_color(
-            &form.artboard_background.read(cx).text(cx),
-            "Artboard Background",
-        ) {
+        let description = match color {
+            SavedGraphColor::ArtboardBackground if node.artboard_background().is_some() => {
+                "Artboard Background"
+            }
+            SavedGraphColor::Fill if node.fill_color().is_some() => {
+                let model = self.model.read(cx);
+                if model.working.is_none() || !Arc::ptr_eq(&model.revision, &form.revision) {
+                    return;
+                }
+                "Fill Color"
+            }
+            _ => return,
+        };
+        match crate::session::parse_color(&form.color.read(cx).text(cx), description) {
             Ok(channels) => self.apply_graph_edit(
                 GraphiteCopy::EditNode {
                     node: Box::new(node.clone()),
-                    change: NodeCopyChange::ArtboardBackground(channels),
+                    change: match color {
+                        SavedGraphColor::ArtboardBackground => {
+                            NodeCopyChange::ArtboardBackground(channels)
+                        }
+                        SavedGraphColor::Fill => NodeCopyChange::FillColor(channels),
+                    },
                 },
                 window,
                 cx,
@@ -7928,7 +7966,7 @@ impl GraphiteDocumentItem {
             .as_ref()
             .is_some_and(|form| editor_focused(&form.position))
             || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
-                [&form.name, &form.value, &form.position, &form.artwork_text, &form.artboard_background].into_iter().any(editor_focused)
+                [&form.name, &form.value, &form.position, &form.artwork_text, &form.color].into_iter().any(editor_focused)
                     || form.artwork_bounds.iter().any(editor_focused)
                     || form.ellipse_radii.iter().any(editor_focused)
                     || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
@@ -8333,41 +8371,74 @@ impl GraphiteDocumentItem {
             )
     }
 
-    fn render_artboard_background(
+    fn render_graph_color(
         &self,
         form: &NodeCopyForm,
+        color: SavedGraphColor,
         working: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let label = "Background (sRGB RGBA, 0–1)";
+        let (field, field_selector, button, button_selector, label, apply) = match color {
+            SavedGraphColor::ArtboardBackground => (
+                "graphite-gdd-artboard-background",
+                "GRAPHITE-GDD-ARTBOARD-BACKGROUND",
+                "graphite-gdd-apply-artboard-background",
+                "GRAPHITE-GDD-APPLY-ARTBOARD-BACKGROUND",
+                "Background (sRGB RGBA, 0–1)",
+                if working {
+                    "Apply Background"
+                } else {
+                    "Save Background in a Copy"
+                },
+            ),
+            SavedGraphColor::Fill => (
+                "graphite-gdd-fill-color",
+                "GRAPHITE-GDD-FILL-COLOR",
+                "graphite-gdd-apply-fill-color",
+                "GRAPHITE-GDD-APPLY-FILL-COLOR",
+                "Fill color (sRGB RGBA, 0–1)",
+                "Apply Fill Color",
+            ),
+        };
         v_flex()
             .gap_1()
             .child(Label::new(label))
             .child(
                 div()
-                    .id("graphite-gdd-artboard-background")
+                    .id(field)
                     .aria_label(label)
-                    .debug_selector(|| "GRAPHITE-GDD-ARTBOARD-BACKGROUND".into())
-                    .child(form.artboard_background.clone()),
+                    .debug_selector(move || field_selector.into())
+                    .child(form.color.clone()),
             )
             .child(
-                div()
-                    .debug_selector(|| "GRAPHITE-GDD-APPLY-ARTBOARD-BACKGROUND".into())
-                    .child(
-                        Button::new(
-                            "graphite-gdd-apply-artboard-background",
-                            if working {
-                                "Apply Background"
-                            } else {
-                                "Save Background in a Copy"
-                            },
-                        )
+                div().debug_selector(move || button_selector.into()).child(
+                    Button::new(button, apply)
                         .disabled(self.copy_task.is_some())
-                        .on_click(cx.listener(|item, _, window, cx| {
-                            item.change_artboard_background(window, cx)
+                        .on_click(cx.listener(move |item, _, window, cx| {
+                            item.change_graph_color(color, window, cx)
                         })),
-                    ),
+                ),
             )
+            .when(matches!(color, SavedGraphColor::Fill), |panel| {
+                panel.child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-CANCEL-FILL-COLOR".into())
+                        .child(
+                            Button::new("graphite-gdd-cancel-fill-color", "Cancel")
+                                .disabled(self.copy_task.is_some())
+                                .on_click(cx.listener(|item, _, window, cx| {
+                                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                                        return;
+                                    };
+                                    if let Some(color) =
+                                        form.selected_node().and_then(GddGraphNode::fill_color)
+                                    {
+                                        form.set_color_draft(color, window, cx);
+                                    }
+                                })),
+                        ),
+                )
+            })
     }
 
     fn render_graphic_content_menu(
@@ -9482,7 +9553,10 @@ impl GraphiteDocumentItem {
                                 panel.child(self.render_saved_artwork_text(form, selected, window, cx))
                             })
                             .when(selected.artboard_background().is_some(), |panel| {
-                                panel.child(self.render_artboard_background(form, working, cx))
+                                panel.child(self.render_graph_color(form, SavedGraphColor::ArtboardBackground, working, cx))
+                            })
+                            .when(working && selected.fill_color().is_some(), |panel| {
+                                panel.child(self.render_graph_color(form, SavedGraphColor::Fill, working, cx))
                             })
                             .when(selected.ellipse_radii().is_some(), |panel| {
                                 panel.child(self.render_ellipse_radii(form, working, cx))
@@ -9977,6 +10051,7 @@ impl GraphiteDocumentItem {
                             NodeCopyChange::NumericInput(_)
                             | NodeCopyChange::BooleanInput(_)
                             | NodeCopyChange::ArtboardGeometry(_)
+                            | NodeCopyChange::FillColor(_)
                             | NodeCopyChange::ArtboardBackground(_)
                             | NodeCopyChange::EllipseRadius(_, _)
                             | NodeCopyChange::EllipseRadiusSource(_, _),
@@ -16100,12 +16175,15 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_gra_node_196_workspace_edits_saved_glyph_outlines(cx: &mut TestAppContext) {
+    async fn at_gra_node_196_at_gra_text_008_workspace_edits_saved_glyph_outlines(
+        cx: &mut TestAppContext,
+    ) {
         check_workspace_artwork_text(cx, false, true).await;
     }
 
     async fn check_workspace_artwork_text(cx: &mut TestAppContext, mapped: bool, glyphs: bool) {
         use gpui::EntityInputHandler as _;
+        use graphite_core_types::NodeParameter as _;
         let text_id = format!(
             "PROTONODE:{}",
             graphite_std::text::text::IDENTIFIER.as_str()
@@ -16308,8 +16386,6 @@ mod tests {
             image
         };
         paint(window);
-        let before = snapshot(window);
-        let original_image = artwork_image(window);
         let initial_text = |graph: &[GddGraphNode]| {
             graph
                 .iter()
@@ -16327,6 +16403,77 @@ mod tests {
             }
             paint(window);
         };
+        if glyphs {
+            let original = snapshot(window);
+            let before_text =
+                initial_text(&original.graph_nodes().await.expect("source glyph text"));
+            let before_pixels = artwork_image(window);
+            let select = |window: &mut gpui::VisualTestContext, id| {
+                item.update_in(window, |item, window, cx| {
+                    let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                        panic!("native glyph graph");
+                    };
+                    let index = form
+                        .nodes
+                        .iter()
+                        .position(|node| node.storage_id() == id)
+                        .expect("same saved node");
+                    item.select_copy_node(index, window, cx);
+                });
+                paint(window);
+            };
+            select(window, *fill_id);
+            let color = "GRAPHITE-GDD-FILL-COLOR";
+            let apply_color = "GRAPHITE-GDD-APPLY-FILL-COLOR";
+            enter_value(window, color, "1, 0, 0, 1");
+            click(window, "GRAPHITE-GDD-CANCEL-FILL-COLOR");
+            assert!(Arc::ptr_eq(&snapshot(window), &original));
+            assert_eq!(
+                item.read_with(window, |item, cx| match &item.node_copy {
+                    NodeCopyPanel::Ready(form) => form.color.read(cx).text(cx),
+                    _ => panic!("native fill color field"),
+                }),
+                "0, 0, 0, 1"
+            );
+            enter_value(window, color, "2, 0, 0, 1");
+            click(window, apply_color);
+            assert!(Arc::ptr_eq(&snapshot(window), &original));
+            enter_value(window, color, "1, 0, 0, 1");
+            click(window, apply_color);
+            let colored = snapshot(window);
+            assert!(!Arc::ptr_eq(&colored, &original));
+            let graph = colored.graph_nodes().await.expect("colored glyph branch");
+            let fill = graph
+                .iter()
+                .find(|node| node.storage_id() == *fill_id)
+                .expect("editable Fill");
+            assert_eq!(fill.fill_color(), Some(graphite_core_types::Color::RED));
+            let after_text = initial_text(&graph);
+            assert_eq!(after_text.artwork_text(), before_text.artwork_text());
+            assert_eq!(
+                after_text.artwork_text_layout(),
+                before_text.artwork_text_layout()
+            );
+            let font_port = |node: &GddGraphNode| {
+                let port = node
+                    .input_ports()
+                    .get(graphite_std::text::text::FontInput::INDEX)
+                    .expect("pinned Font input");
+                (port.exposed, port.stored_type.clone(), port.source.clone())
+            };
+            assert_eq!(font_port(&after_text), font_port(&before_text));
+            let red_pixels = artwork_image(window);
+            assert!(before_pixels.as_bytes(0) != red_pixels.as_bytes(0));
+            window.dispatch_action(editor::actions::Undo);
+            window.run_until_parked();
+            assert!(before_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
+            window.dispatch_action(editor::actions::Redo);
+            window.run_until_parked();
+            assert!(red_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
+            select(window, *text_id);
+        }
+        let before = snapshot(window);
+        let original_image = artwork_image(window);
         let size_field = "GRAPHITE-GDD-ARTWORK-FONT-SIZE";
         let width_field = "GRAPHITE-GDD-ARTWORK-MAX-WIDTH";
         let height_field = "GRAPHITE-GDD-ARTWORK-MAX-HEIGHT";
@@ -16518,6 +16665,13 @@ mod tests {
         assert_eq!(reopened_text.storage_id(), text.storage_id());
         assert_eq!(reopened_text.artwork_text(), Some(committed));
         assert_eq!(reopened_text.artwork_text_layout(), Some(edited_layout));
+        if glyphs {
+            let fill = graph
+                .iter()
+                .find(|node| node.storage_id() == *fill_id)
+                .expect("same reopened Fill");
+            assert_eq!(fill.fill_color(), Some(graphite_core_types::Color::RED));
+        }
         let reopened_converter = graph
             .iter()
             .find(|node| node.storage_id() == *converter_id)
