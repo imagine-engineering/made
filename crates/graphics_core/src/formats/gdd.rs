@@ -451,6 +451,7 @@ impl GddArtboardCanvasOverlay {
 pub struct GddArtboardCanvasPick {
     storage_id: StorageNodeId,
     snapshot: Arc<()>,
+    source_layer: LayerNodeIdentifier,
     pane_to_document: DAffine2,
     layer_to_document: DAffine2,
     targets: Vec<Arc<graphite_std::vector::click_target::ClickTarget>>,
@@ -474,6 +475,10 @@ impl GddArtboardCanvasPick {
 
     pub fn resize_bounds(&self) -> Option<[DVec2; 2]> {
         self.bounds
+    }
+
+    pub fn source_layer(&self) -> LayerNodeIdentifier {
+        self.source_layer
     }
 }
 
@@ -3925,7 +3930,7 @@ impl InspectedGddV1 {
                 metadata.local_transforms.clone(),
             );
         }
-        let artboards = boards
+        let artboards: Vec<_> = boards
             .into_iter()
             .map(|id| {
                 let empty = GddArtboardCanvasLayer {
@@ -3964,7 +3969,8 @@ impl InspectedGddV1 {
                 });
                 let pick_target = (draft.is_none() && !interface.is_locked(&id, &[])).then(|| {
                     let document = interface.document_metadata();
-                    let child_transforms = LayerNodeIdentifier::new(id, &interface)
+                    let source_layer = LayerNodeIdentifier::new(id, &interface);
+                    let child_transforms = source_layer
                         .children(document)
                         .map(|child| {
                             (
@@ -3976,6 +3982,7 @@ impl InspectedGddV1 {
                     GddArtboardCanvasPick {
                         storage_id,
                         snapshot: self.snapshot.clone(),
+                        source_layer,
                         pane_to_document,
                         layer_to_document,
                         targets: targets.clone(),
@@ -3989,8 +3996,10 @@ impl InspectedGddV1 {
                 }
             })
             .collect();
+        let can_snap =
+            can_draw_artboard || artboards.iter().any(|board| board.pick_target.is_some());
         Ok(GddDocumentCanvasOutput {
-            snapping_document: can_draw_artboard
+            snapping_document: can_snap
                 .then(|| self.canvas_snapping_document(interface, &render, camera, logical_size)),
             render,
             camera,

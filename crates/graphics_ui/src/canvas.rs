@@ -12,21 +12,28 @@ use graphite_editor::{
     },
     messages::{
         input_mapper::utility_types::{keyboard::Key, pointer::ScrollDelta},
-        portfolio::document::{DocumentMessageHandler, utility_types::misc::PTZ},
+        portfolio::document::{
+            DocumentMessageHandler,
+            utility_types::{document_metadata::LayerNodeIdentifier, misc::PTZ},
+        },
         prelude::{
             InputPreprocessorMessageHandler, Message, MessageHandler, NavigationMessageHandler,
             ViewportMessage, ViewportMessageHandler,
         },
         tool::common_functionality::auto_panning::AutoPanning,
         tool::common_functionality::resize::Resize,
+        tool::common_functionality::snapping::{
+            BBoxSnapValues, SnapCandidatePoint, SnapData, SnapManager, get_bbox_points,
+        },
         tool::common_functionality::transformation_cage::{
-            BoundingBoxManager, SelectedEdges, axis_align_drag,
+            BoundingBoxManager, SelectedEdges, SizeSnapData, snap_drag,
         },
     },
 };
 use graphite_graph_craft::document::value::{DAffine2, DVec2};
 use graphite_std::{
     ATTR_TRANSFORM,
+    renderer::Quad,
     text::{FALLBACK_FONT_RESOURCE, TextAlign, TextContext, TypesettingConfig},
     vector_types::kurbo::{Affine, BezPath, ParamCurve, PathEl},
 };
@@ -198,60 +205,103 @@ impl ArtboardDraw {
     }
 }
 
+pub(crate) struct ArtboardDragSnap {
+    viewport: ViewportMessageHandler,
+    ignored: [LayerNodeIdentifier; 1],
+    candidates: Vec<SnapCandidatePoint>,
+    manager: SnapManager,
+}
+
+impl ArtboardDragSnap {
+    pub fn new(
+        layer: LayerNodeIdentifier,
+        bounds: Option<[DVec2; 2]>,
+        document: &DocumentMessageHandler,
+        viewport_size: DVec2,
+    ) -> Self {
+        let mut candidates = Vec::new();
+        if let Some(bounds) = bounds {
+            get_bbox_points(
+                Quad::from_box(bounds),
+                &mut candidates,
+                BBoxSnapValues::ARTBOARD,
+                document,
+            );
+        }
+        Self {
+            viewport: artboard_viewport(viewport_size, &mut VecDeque::new()),
+            ignored: [layer],
+            candidates,
+            manager: SnapManager::default(),
+        }
+    }
+
+    pub fn snap_point(&self) -> Option<DVec2> {
+        self.manager.indicator_pos()
+    }
+}
+
 pub(crate) struct ArtboardMove {
     start: DVec2,
     geometry: GddArtboardGeometry,
-    document_to_pane: DAffine2,
 }
 
 pub(crate) struct ArtboardResize {
     edges: SelectedEdges,
-    start: Point<Pixels>,
-    pane_origin: Point<Pixels>,
-    document_to_pane: DAffine2,
+    start: DVec2,
 }
 
 impl ArtboardResize {
-    pub fn at_edge(
-        bounds: [DVec2; 2],
-        start: Point<Pixels>,
-        pane_origin: Point<Pixels>,
-        document_to_pane: DAffine2,
-    ) -> Option<Self> {
+    pub fn at_edge(bounds: [DVec2; 2], start: DVec2, document_to_pane: DAffine2) -> Option<Self> {
         let cage = BoundingBoxManager {
             bounds,
             transform: document_to_pane,
             ..Default::default()
         };
-        let (top, bottom, left, right) =
-            cage.check_selected_edges(logical_vector(start - pane_origin))?;
+        let (top, bottom, left, right) = cage.check_selected_edges(start)?;
         Some(Self {
             edges: SelectedEdges::new(top, bottom, left, right, bounds),
-            start,
-            pane_origin,
-            document_to_pane,
+            start: document_to_pane.inverse().transform_point2(start),
         })
     }
 
     pub fn placement(
         &self,
-        position: Point<Pixels>,
-        constrain: bool,
-        centered: bool,
+        position: DVec2,
+        modifiers: Modifiers,
+        document: &DocumentMessageHandler,
+        snapping: &mut ArtboardDragSnap,
     ) -> Option<GddArtboardGeometry> {
-        if position == self.start {
+        let transform = document.metadata().document_to_viewport;
+        if !position.is_finite()
+            || transform
+                .inverse()
+                .transform_point2(position)
+                .abs_diff_eq(self.start, 1e-9)
+        {
+            snapping.manager.clear_indicator();
             return None;
         }
-        let center = centered.then(|| {
+        let center = modifiers.alt.then(|| {
             let [first, last] = self.edges.bounds;
-            self.document_to_pane.transform_point2((first + last) / 2.)
+            transform.transform_point2((first + last) / 2.)
         });
+        let input = artboard_pointer(position, modifiers);
         let (first, size) = self.edges.new_size(
-            logical_vector(position - self.pane_origin),
-            self.document_to_pane,
+            position,
+            transform,
             center,
-            constrain,
-            None,
+            modifiers.shift,
+            Some(SizeSnapData {
+                manager: &mut snapping.manager,
+                points: &mut snapping.candidates,
+                snap_data: SnapData::ignore(
+                    document,
+                    &input,
+                    &snapping.viewport,
+                    &snapping.ignored,
+                ),
+            }),
         );
         let last = first + size;
         let location = first.min(last).round();
@@ -261,40 +311,43 @@ impl ArtboardResize {
             dimensions,
         })
     }
-
-    pub fn outline(&self, geometry: GddArtboardGeometry) -> [DVec2; 4] {
-        artboard_outline(geometry, self.document_to_pane)
-    }
 }
 
 impl ArtboardMove {
-    pub fn new(
-        start: Point<Pixels>,
-        geometry: GddArtboardGeometry,
-        document_to_pane: DAffine2,
-    ) -> Self {
+    pub fn new(start: DVec2, geometry: GddArtboardGeometry, document_to_pane: DAffine2) -> Self {
         Self {
-            start: logical_vector(start),
+            start: document_to_pane.inverse().transform_point2(start),
             geometry,
-            document_to_pane,
         }
     }
 
     pub fn placement(
         &self,
-        position: Point<Pixels>,
-        constrain: bool,
+        position: DVec2,
+        modifiers: Modifiers,
+        document: &DocumentMessageHandler,
+        snapping: &mut ArtboardDragSnap,
     ) -> Option<(GddArtboardGeometry, DVec2)> {
-        let position =
-            axis_align_drag(constrain, DVec2::ZERO, logical_vector(position), self.start);
-        let delta = self
-            .document_to_pane
-            .inverse()
-            .transform_vector2(position - self.start);
+        let transform = document.metadata().document_to_viewport;
+        let start = transform.transform_point2(self.start);
+        if !position.is_finite() || position.abs_diff_eq(start, 1e-9) {
+            snapping.manager.clear_indicator();
+            return None;
+        }
+        let input = artboard_pointer(position, modifiers);
+        // The working graph keeps its initial geometry until release, so request the total offset.
+        let offset = snap_drag(
+            start,
+            start,
+            modifiers.shift,
+            DVec2::ZERO,
+            SnapData::ignore(document, &input, &snapping.viewport, &snapping.ignored),
+            &mut snapping.manager,
+            &snapping.candidates,
+        );
+        let delta = transform.inverse().transform_vector2(offset);
         let geometry = self.geometry.translated(delta)?;
-        let offset = self
-            .document_to_pane
-            .transform_vector2(geometry.location - self.geometry.location);
+        let offset = transform.transform_vector2(geometry.location - self.geometry.location);
         Some((geometry, offset))
     }
 }
@@ -542,24 +595,41 @@ mod tests {
     fn artboard_resize_applies_source_edge_flip_aspect_and_center_rules() {
         let bounds = [DVec2::ZERO, DVec2::splat(40.)];
         let transform = DAffine2::from_scale(DVec2::splat(2.));
-        let pane = point(px(50.), px(30.));
-        let at = |x: f32, y: f32| pane + point(px(2. * x), px(2. * y));
-        assert!(ArtboardResize::at_edge(bounds, at(20., 20.), pane, transform).is_none());
+        let mut document = DocumentMessageHandler::default();
+        document
+            .network_interface
+            .set_document_to_viewport_transform(transform);
+        let mut snapping = ArtboardDragSnap::new(
+            LayerNodeIdentifier::ROOT_PARENT,
+            None,
+            &document,
+            DVec2::splat(200.),
+        );
+        let at = |x, y| transform.transform_point2(DVec2::new(x, y));
+        assert!(ArtboardResize::at_edge(bounds, at(20., 20.), transform).is_none());
         let corner = at(40., 40.);
-        let resize =
-            ArtboardResize::at_edge(bounds, corner, pane, transform).expect("source corner");
-        assert_eq!(resize.placement(corner, false, false), None);
+        let resize = ArtboardResize::at_edge(bounds, corner, transform).expect("source corner");
+        let ordinary = Modifiers::default();
         assert_eq!(
-            resize.placement(at(50., 43.), true, true),
+            resize.placement(corner, ordinary, &document, &mut snapping),
+            None
+        );
+        let centered_square = Modifiers {
+            alt: true,
+            shift: true,
+            ..ordinary
+        };
+        assert_eq!(
+            resize.placement(at(50., 43.), centered_square, &document, &mut snapping),
             Some(GddArtboardGeometry {
                 location: DVec2::splat(-10.),
                 dimensions: DVec2::splat(60.),
             }),
         );
-        let resize = ArtboardResize::at_edge(bounds, at(40., 20.), pane, transform)
-            .expect("source right edge");
+        let resize =
+            ArtboardResize::at_edge(bounds, at(40., 20.), transform).expect("source right edge");
         assert_eq!(
-            resize.placement(at(-8., 20.), false, false),
+            resize.placement(at(-8., 20.), ordinary, &document, &mut snapping),
             Some(GddArtboardGeometry {
                 location: DVec2::new(-8., 0.),
                 dimensions: DVec2::new(8., 40.),
