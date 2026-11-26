@@ -1647,19 +1647,21 @@ impl JvmTestProviderStore {
         let structured_results = structured_store.clone();
         let remote_lifecycle_task = cx.spawn(async move |_, cx| {
             while let Some(request) = remote_lifecycle_rx.next().await {
-                let terminal = match remote_jvm_lifecycle_from_proto(&request) {
-                    Ok(event) => event.state.is_terminal(),
+                let state = match remote_jvm_lifecycle_from_proto(&request) {
+                    Ok(event) => event.state,
                     Err(error) => {
                         log::warn!("Invalid remote Java test lifecycle: {error:#}");
                         continue;
                     }
                 };
+                let terminal = state.is_terminal();
+                let cancelled = matches!(state, StructuredTaskState::Cancelled { .. });
                 let run_id = StructuredRunId(request.run_id.clone());
                 let abandon_unlaunched = request.abandon_unlaunched;
-                match lifecycle_client.request(request).await {
-                    Ok(_) => {}
-                    Err(error) => {
-                        log::warn!("Failed to publish remote Java test lifecycle: {error:#}");
+                if let Err(error) = lifecycle_client.request(request).await {
+                    log::warn!("Failed to publish remote Java test lifecycle: {error:#}");
+                    // A reconnected peer cannot update the old run. Read the host's outcome.
+                    if !cancelled {
                         continue;
                     }
                 }
@@ -1750,6 +1752,31 @@ impl JvmTestProviderStore {
     }
 
     pub fn invalidate(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_with_reason(
+            "Java test selection changed during the Task",
+            "Java test selection changed; refresh Tests before running again",
+            cx,
+        );
+    }
+
+    pub fn native_transport_disconnected(&mut self, cx: &mut Context<Self>) {
+        for (_, abort) in self.active_remote_requests.drain() {
+            abort.abort();
+        }
+        self.cancelled_remote_requests.clear();
+        self.invalidate_with_reason(
+            "Connection to the Java test Task client was interrupted",
+            "Connection to the Java test Task client was interrupted; refresh Tests before running again",
+            cx,
+        );
+    }
+
+    fn invalidate_with_reason(
+        &mut self,
+        event_message: &str,
+        diagnostic: &str,
+        cx: &mut Context<Self>,
+    ) {
         if let Some((project_id, client)) = &self.remote {
             for handle in self.run_handles.values() {
                 if !handle.state().is_terminal() {
@@ -1804,9 +1831,7 @@ impl JvmTestProviderStore {
                             node_id: node_id.clone(),
                             state: StructuredNodeState::Cancelled,
                             duration_millis: None,
-                            message: Some(
-                                "Java test selection changed during the Task".to_string(),
-                            ),
+                            message: Some(event_message.to_string()),
                             location: None,
                         },
                         None,
@@ -1817,7 +1842,7 @@ impl JvmTestProviderStore {
                     &provider_id,
                     &run.id,
                     StructuredRunPhase::Cancelled,
-                    Some("Java test selection changed; refresh Tests before running again"),
+                    Some(diagnostic),
                 )?;
                 cx.emit(StructuredExecutionStoreEvent::Changed(provider_id.clone()));
             }

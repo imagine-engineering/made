@@ -180,6 +180,14 @@ The test verified that the Surefire process stopped, the test wrote no late
 completion marker, and the prior report retained its contents and modification
 time. The passing selected-test case continued to produce fresh host results.
 
+The opt-in `disconnecting_stops_a_selected_junit_over_docker` case interrupts
+the Docker connection after Surefire starts. The native Remote Server
+retires the interrupted run and its authorization when that connection ends.
+The reconnected client reads the host's cancelled result, and the Task
+terminal independently confirms the Surefire process stopped. The test
+rejected the old discovery, kept the existing XML unchanged, and ran the
+same test from fresh discovery to produce a new passing run and report.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and

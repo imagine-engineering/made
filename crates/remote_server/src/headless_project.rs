@@ -112,11 +112,15 @@ impl HeadlessProject {
             .update(cx, |store, cx| store.set_host_jvm_session(peer, cx))
             .log_err();
         self.jvm_transport_subscription =
-            Some(cx.subscribe(transport, |this, transport, _connected, cx| {
+            Some(cx.subscribe(transport, |this, transport, connected, cx| {
                 let peer = transport.read(cx).connection_id;
                 this.lsp_store
                     .update(cx, |store, cx| store.set_host_jvm_session(peer, cx))
                     .log_err();
+                if !connected {
+                    this.jvm_test_provider_store
+                        .update(cx, |store, cx| store.native_transport_disconnected(cx));
+                }
             }));
     }
 

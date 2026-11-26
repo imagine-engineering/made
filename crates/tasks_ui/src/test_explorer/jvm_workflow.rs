@@ -2720,6 +2720,7 @@ async fn selected_java_case_with_debug_hooks(
         .expect("cached JUnit metadata")
         .modified()
         .expect("cached JUnit modification time");
+    let cached_report = std::fs::read(&report).expect("cached JUnit report bytes");
 
     cx.update(|cx| project::trusted_worktrees::init(collections::HashMap::default(), cx));
 
@@ -3940,7 +3941,7 @@ async fn selected_java_case_with_debug_hooks(
         let connection_states = Arc::new(std::sync::Mutex::new(Vec::new()));
         let connection_observation = if outcome == JavaTestOutcome::DisconnectJavaProcess {
             let client = project.read_with(cx, |project, _| {
-                project.remote_client().expect("SSH test client")
+                project.remote_client().expect("connected test client")
             });
             let observation = cx.update(|_, cx| {
                 let connection_states = connection_states.clone();
@@ -3954,14 +3955,14 @@ async fn selected_java_case_with_debug_hooks(
             client
                 .update(cx, |client, cx| client.force_disconnect(cx))
                 .await
-                .expect("interrupt the actual SSH control connection");
+                .expect("interrupt the actual project host connection");
             Some(observation)
         } else {
             None
         };
         if outcome == JavaTestOutcome::DisconnectJavaProcess {
             let client = project.read_with(cx, |project, _| {
-                project.remote_client().expect("SSH test client")
+                project.remote_client().expect("connected test client")
             });
             let deadline = std::time::Instant::now() + Duration::from_secs(30);
             while std::time::Instant::now() < deadline {
@@ -4007,7 +4008,7 @@ async fn selected_java_case_with_debug_hooks(
                 "reconnection must not revive old discovery"
             );
             eprintln!(
-                "SSH reconnect states: {:?}",
+                "Remote reconnect states: {:?}",
                 connection_states.lock().expect("connection observations")
             );
         } else if matches!(
@@ -4051,6 +4052,23 @@ async fn selected_java_case_with_debug_hooks(
             cx.background_executor
                 .timer(Duration::from_millis(50))
                 .await;
+        }
+        if outcome == JavaTestOutcome::DisconnectJavaProcess
+            && structured.read_with(cx, |store, _| {
+                store
+                    .state()
+                    .provider(&StructuredProviderId(JVM_JUNIT_PROVIDER_ID.to_string()))
+                    .and_then(|provider| provider.current_run.as_ref())
+                    .is_some_and(|run| !run.phase.is_terminal())
+            })
+        {
+            let fresh = structured
+                .update(cx, |store, cx| {
+                    store.refresh_provider(StructuredProviderId(JVM_JUNIT_PROVIDER_ID.into()), cx)
+                })
+                .await
+                .map(|snapshot| (snapshot.status, snapshot.current_run.map(|run| run.phase)));
+            panic!("stopped remote test stayed active in Tests; host snapshot: {fresh:?}");
         }
         let stopped_run = structured.read_with(cx, |store, _| {
             store
@@ -4152,9 +4170,9 @@ async fn selected_java_case_with_debug_hooks(
             assert!(terminal_output.contains("Groovy test child started"));
         }
         #[cfg(unix)]
-        if use_ssh {
+        if connected {
             eprintln!(
-                "SSH stopped run={:?}, Task={task_id:?}, PID={child_pid}, state={task_state:?}",
+                "Remote stopped run={:?}, Task={task_id:?}, PID={child_pid}, state={task_state:?}",
                 stopped_run.id
             );
         }
@@ -4218,6 +4236,12 @@ async fn selected_java_case_with_debug_hooks(
         } else {
             assert!(!report.exists(), "cancelled report remains unreadable");
         }
+        if connected {
+            assert_eq!(
+                std::fs::read(&report).expect("retain the existing host report"),
+                cached_report
+            );
+        }
         assert!(structured.read_with(cx, |store, _| {
             store
                 .state()
@@ -4279,7 +4303,7 @@ async fn selected_java_case_with_debug_hooks(
                 }
                 assert!(
                     std::time::Instant::now() < deadline,
-                    "fresh SSH run did not complete"
+                    "fresh remote run did not complete"
                 );
                 cx.background_executor
                     .timer(Duration::from_millis(100))
@@ -4290,8 +4314,15 @@ async fn selected_java_case_with_debug_hooks(
             assert_eq!(recovered.events.len(), 1);
             assert_eq!(recovered.events[0].node_id, selection.node_id);
             assert_eq!(recovered.events[0].state, StructuredNodeState::Passed);
+            assert!(
+                std::fs::metadata(&report)
+                    .expect("fresh host JUnit report")
+                    .modified()
+                    .expect("fresh report modification time")
+                    > cached_report_modified
+            );
             eprintln!(
-                "SSH fresh recovery run={:?}, summary={:?}",
+                "Remote fresh recovery run={:?}, summary={:?}",
                 recovered.id, recovered.summary
             );
         }
