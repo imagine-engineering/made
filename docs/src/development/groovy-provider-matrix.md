@@ -157,6 +157,19 @@ server's input after flushing `exit` and gives an acknowledging process a
 bounded interval to finish cleanup. These standalone runs leave the native
 32 GiB reference editor and worker memory measurement open.
 
+The checksum-matched alternate Kotlin language server `1.3.13` also passed
+two launches each of the 500-source Maven and Gradle fixtures in fresh
+Linux ARM64 containers with external networking disabled. Each launch
+indexed the last generated source, completed `message()`, resolved
+`Greeting.kt`, reported the deliberate Kotlin error, cleared it on
+restoration, and exited with code 0. Maven used the aligned cache and
+`mvn` from Maven 3.9.16 on PATH. The Gradle 8.13 restart recorded 12
+offline wrapper invocations. The largest sampled server process-tree RSS
+was 4.12 GiB across the four launches. The sample omitted the editor and
+detached Gradle workers. This evidence covers the standalone fallback on
+Linux ARM64. App selection and full editor-and-worker memory qualification
+remain open for this cell.
+
 The opt-in `docker_maven_java_definition_opens_host_kotlin_source` test used
 Groovy's Docker transport from a GPUI test client to a Linux ARM64 development
 Remote Server. The host rejected provider startup before worktree trust, then
