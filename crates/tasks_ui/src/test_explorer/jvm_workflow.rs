@@ -547,6 +547,7 @@ async fn assert_fixture_task(
     root: &std::path::Path,
     executable: &std::path::Path,
     arguments: &[String],
+    host_shell: Option<&str>,
     cx: &mut VisualTestContext,
 ) -> String {
     use futures::future::{Either, select};
@@ -577,13 +578,15 @@ async fn assert_fixture_task(
     };
     let completed = terminal.read_with(cx, |terminal, cx| {
         let task = &terminal.task().expect("build Task").spawned_task;
-        let (shell, shell_arguments) = task::ShellBuilder::new(&task.shell, false)
-            .build_with_command_intent(
-                Some(executable.to_str().expect("executable path").to_owned()),
-                arguments,
-                true,
-                arguments.len(),
-            );
+        let host_shell = host_shell.map(|program| task::Shell::Program(program.into()));
+        let (shell, shell_arguments) =
+            task::ShellBuilder::new(host_shell.as_ref().unwrap_or(&task.shell), false)
+                .build_with_command_intent(
+                    Some(executable.to_str().expect("executable path").to_owned()),
+                    arguments,
+                    true,
+                    arguments.len(),
+                );
         assert_eq!(task.command.as_deref(), Some(shell.as_str()));
         assert_eq!(task.args, shell_arguments);
         assert_eq!(task.cwd.as_deref(), Some(root));
@@ -615,6 +618,232 @@ async fn cached_gradle_graph_reaches_mounted_dependency_diagram(cx: &mut TestApp
 #[ignore = "requires the pinned offline Gradle fixture with the ordered Task probes"]
 async fn cached_gradle_ordered_operations_keep_declared_options(cx: &mut TestAppContext) {
     run_cached_gradle_fixture(GradleFixtureRun::OrderedTasks, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires an offline Linux ARM64 Docker host with the Gradle fixture and pinned JDTLS model support"]
+async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut TestAppContext) {
+    use jvm_ui::ShowGradle;
+    use language_tools::language_tool_tree::ExpandAll;
+    use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
+    use remote::{DockerConnectionOptions, RemoteConnectionOptions};
+    use std::path::Path;
+
+    const FIRST: &str = ":application:parityArguments";
+    const SECOND: &str = ":application:check";
+    const MESSAGE: &str = "host value $ZED_FILE :library:help";
+    let fixture = cached_jvm_fixture_path("GROOVY_GRADLE_ORDERED_DOCKER_ROOT");
+    let report = fixture.join("application/build/test-results/test/TEST-evidence.GreetingTest.xml");
+    assert!(!report.exists(), "start with a fresh Gradle workspace");
+    let root = Path::new("/workspaces/gradle");
+    let container = docker_test_fixture_container(JvmTestBuildTool::Gradle);
+    cx.executor().allow_parking();
+    let app_state = cx.update(|cx| {
+        let state = workspace::AppState::test(cx);
+        trusted_worktrees::init(Default::default(), cx);
+        editor::init(cx);
+        jvm_ui::init(cx);
+        terminal_view::init(cx);
+        project::task_store::TaskStore::init(None);
+        state
+    });
+    let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
+        name: "Groovy ordered Gradle qualification".into(),
+        container_id: container.clone(),
+        remote_user: "root".into(),
+        ..Default::default()
+    });
+    let project = connect_cached_jvm_fixture(
+        root,
+        app_state,
+        options,
+        &[("java", "6.8.30"), ("kotlin", "0.3.5")],
+        cx,
+    )
+    .await;
+    let (worktrees, worktree_id, lsp_store) = project.read_with(cx, |project, cx| {
+        let worktrees = project.worktree_store();
+        let worktree_id = worktrees
+            .read(cx)
+            .worktrees()
+            .next()
+            .expect("Gradle worktree")
+            .read(cx)
+            .id();
+        (worktrees, worktree_id, project.lsp_store())
+    });
+    cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("fixture trust"))
+        .update(cx, |trusted, cx| {
+            trusted.trust(
+                &worktrees,
+                [PathTrust::Worktree(worktree_id)].into_iter().collect(),
+                cx,
+            );
+        });
+    lsp_store.update(cx, |store, cx| {
+        store
+            .set_default_jvm_project_languages_enabled(true, cx)
+            .expect("enable the trusted host's JVM providers");
+    });
+    let java =
+        util::rel_path::RelPath::from_unix_str("application/src/main/java/evidence/Main.java")
+            .expect("Gradle fixture Java path");
+    let (_java, _java_subscription) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(
+                project::ProjectPath {
+                    worktree_id,
+                    path: java.into(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("open Java on the Gradle project host");
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ShowGradle);
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now();
+    loop {
+        cx.run_until_parked();
+        if lsp_store.read_with(cx, |store, cx| {
+            store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx)
+                && store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current
+                            && snapshot.projects.iter().any(|module| {
+                                module.module_root.path.as_unix_str() == "application"
+                            })
+                    })
+        }) {
+            break;
+        }
+        if Instant::now() >= deadline {
+            panic!(
+                "the host did not expose the Gradle application: {:?}",
+                lsp_store.read_with(cx, |store, cx| (
+                    store.remote_jvm_consumer_roots().to_vec(),
+                    store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx),
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .map(|(snapshot, current)| (
+                            current,
+                            snapshot
+                                .projects
+                                .iter()
+                                .map(|module| module.module_root.path.to_string())
+                                .collect::<Vec<_>>()
+                        )),
+                    store.jdtls_project_query_failed(worktree_id),
+                ))
+            );
+        }
+        if Instant::now() >= refresh_at {
+            lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    focus_control(
+        cx,
+        "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts",
+    );
+    press_enter(cx);
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        cx.run_until_parked();
+        cx.dispatch_action(ExpandAll);
+        if panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            [FIRST, SECOND].into_iter().all(|path| {
+                rows.iter()
+                    .any(|row| row.label == path && row.id.0.contains(":gradle-task:"))
+            })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the synchronized Gradle tasks did not reach Dependencies"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
+    let terminal_panel = mount_fixture_terminal(&workspace, cx).await;
+    select_fixture_gradle_task(&workspace, &panel, FIRST, Some("message"), cx);
+    let option = format!("--message={MESSAGE}");
+    type_fixture_options(
+        cx,
+        "Configure declared options for the selected Gradle task",
+        "Gradle task options",
+        &serde_json::to_string(&[&option]).expect("option JSON"),
+    );
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    select_fixture_gradle_task(&workspace, &panel, SECOND, None, cx);
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+    assert_gradle_queue_rows(&panel, [FIRST, SECOND], cx);
+    assert!(
+        !report.exists(),
+        "queueing operations does not start a Task"
+    );
+    focus_control(
+        cx,
+        "Run ordered offline operations on the current project host through Tasks",
+    );
+    press_enter(cx);
+    let arguments = [
+        "--offline",
+        "-Dorg.gradle.java.home=/qualification/jdk17",
+        "--gradle-user-home",
+        "/qualification/gradle-home",
+        "--",
+        FIRST,
+        option.as_str(),
+        SECOND,
+    ]
+    .map(str::to_owned);
+    let transcript = assert_fixture_task(
+        &terminal_panel,
+        root,
+        Path::new("/qualification/gradle/bin/gradle"),
+        &arguments,
+        Some("/bin/bash"),
+        cx,
+    )
+    .await;
+    let first = transcript
+        .find(&format!("GROOVY_PARITY_MESSAGE={MESSAGE}"))
+        .expect("Gradle received the exact declared option");
+    let second = transcript
+        .find("> Task :application:check")
+        .expect("the later task ran");
+    assert!(first < second, "{transcript}");
+    let hostname = util::command::new_command("docker")
+        .args(["exec", &container, "hostname"])
+        .output()
+        .await
+        .expect("project host name");
+    assert!(hostname.status.success());
+    let hostname = std::str::from_utf8(&hostname.stdout)
+        .expect("UTF-8 project host name")
+        .trim();
+    let xml = std::fs::read_to_string(report).expect("the host wrote the Gradle report");
+    assert!(
+        !hostname.is_empty()
+            && xml.contains(&format!("hostname=\"{hostname}\""))
+            && xml.contains("failures=\"0\"")
+    );
+    eprintln!(
+        "Connected Dependencies ran both tasks in one offline Task on {hostname}:\n{transcript}"
+    );
 }
 
 #[cfg(all(test, unix))]
@@ -1094,81 +1323,59 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
 }
 
 #[cfg(all(test, unix))]
-async fn verify_gradle_queue(
-    root: &std::path::Path,
-    build_java: &std::path::Path,
-    gradle_installation: &std::path::Path,
-    gradle_user_home: &std::path::Path,
+fn select_fixture_gradle_task(
     workspace: &Entity<Workspace>,
     panel: &Entity<jvm_ui::DependenciesPanel>,
+    path: &str,
+    required_option: Option<&str>,
     cx: &mut VisualTestContext,
 ) {
     use jvm_ui::DependenciesPanel;
     use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
 
-    const WRITE: &str = ":application:qualificationQueueWrite";
-    const READ: &str = ":application:qualificationQueueRead";
-    const MESSAGE: &str = "value $ZED_FILE :library:help";
-    let output = root.join("application/build/qualification/queue-message.txt");
-    assert!(
-        !output.exists(),
-        "the disposable fixture has no Task output"
-    );
-    let terminal_panel = mount_fixture_terminal(workspace, cx).await;
-
-    let select_task = |cx: &mut VisualTestContext, path| {
-        workspace.update_in(cx, |workspace, window, cx| {
-            workspace.focus_panel::<DependenciesPanel>(window, cx);
-        });
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-        cx.dispatch_action(ExpandAll);
-        let task_row = panel.read_with(cx, |panel, _| {
-            let (_, rows, _) = panel.snapshot_for_test();
-            let (index, row) = rows
-                .iter()
-                .enumerate()
-                .find(|(_, row)| row.label == path && row.id.0.contains(":gradle-task:"))
-                .unwrap_or_else(|| panic!("missing provider Gradle task {path}"));
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.focus_panel::<DependenciesPanel>(window, cx);
+    });
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ExpandAll);
+    let task_row = panel.read_with(cx, |panel, _| {
+        let (_, rows, _) = panel.snapshot_for_test();
+        let (index, row) = rows
+            .iter()
+            .enumerate()
+            .find(|(_, row)| row.label == path && row.id.0.contains(":gradle-task:"))
+            .unwrap_or_else(|| panic!("missing provider Gradle task {path}"));
+        assert!(
+            row.secondary_label
+                .as_deref()
+                .is_some_and(|label| label.contains("run offline through Tasks"))
+        );
+        assert!(row.accessibility_label.contains("or Task options"));
+        if let Some(option) = required_option {
             assert!(
-                row.secondary_label
-                    .as_deref()
-                    .is_some_and(|label| label.contains("run offline through Tasks"))
+                rows.iter().any(|row| {
+                    row.label == format!("--{option}")
+                        && row.id.0.contains(":gradle-option:")
+                        && row.id.0.ends_with(&format!("{path}:{option}"))
+                }),
+                "the option is declared by the Gradle provider"
             );
-            assert!(row.accessibility_label.contains("or Task options"));
-            if path == WRITE {
-                assert!(
-                    rows.iter().any(|option| {
-                        option.label == "--project-dir"
-                            && option.id.0.contains(":gradle-option:")
-                            && option
-                                .id
-                                .0
-                                .ends_with(":application:qualificationQueueWrite:project-dir")
-                    }),
-                    "the option is declared by the Gradle provider"
-                );
-            }
-            index
-        });
-        cx.dispatch_action(SelectFirst);
-        for _ in 0..task_row {
-            cx.dispatch_action(SelectNext);
         }
-        cx.update(|window, cx| window.draw(cx).clear(cx));
-    };
-    select_task(cx, WRITE);
-    let option = format!("--project-dir={MESSAGE}");
-    let options = serde_json::to_string(&[&option]).expect("literal Gradle option JSON");
-    type_fixture_options(
-        cx,
-        "Configure declared options for the selected Gradle task",
-        "Gradle task options",
-        &options,
-    );
-    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
-    select_task(cx, READ);
-    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
-    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+        index
+    });
+    cx.dispatch_action(SelectFirst);
+    for _ in 0..task_row {
+        cx.dispatch_action(SelectNext);
+    }
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+}
+
+#[cfg(all(test, unix))]
+fn assert_gradle_queue_rows(
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    [first, second]: [&str; 2],
+    cx: &mut VisualTestContext,
+) {
     let queue = panel.read_with(cx, |panel, _| {
         panel
             .snapshot_for_test()
@@ -1180,8 +1387,43 @@ async fn verify_gradle_queue(
     });
     assert_eq!(
         queue,
-        [format!("1. {WRITE} (1 options)"), format!("2. {READ}")]
+        [format!("1. {first} (1 options)"), format!("2. {second}")]
     );
+}
+
+#[cfg(all(test, unix))]
+async fn verify_gradle_queue(
+    root: &std::path::Path,
+    build_java: &std::path::Path,
+    gradle_installation: &std::path::Path,
+    gradle_user_home: &std::path::Path,
+    workspace: &Entity<Workspace>,
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+) {
+    const WRITE: &str = ":application:qualificationQueueWrite";
+    const READ: &str = ":application:qualificationQueueRead";
+    const MESSAGE: &str = "value $ZED_FILE :library:help";
+    let output = root.join("application/build/qualification/queue-message.txt");
+    assert!(
+        !output.exists(),
+        "the disposable fixture has no Task output"
+    );
+    let terminal_panel = mount_fixture_terminal(workspace, cx).await;
+    select_fixture_gradle_task(workspace, panel, WRITE, Some("project-dir"), cx);
+    let option = format!("--project-dir={MESSAGE}");
+    let options = serde_json::to_string(&[&option]).expect("literal Gradle option JSON");
+    type_fixture_options(
+        cx,
+        "Configure declared options for the selected Gradle task",
+        "Gradle task options",
+        &options,
+    );
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    select_fixture_gradle_task(workspace, panel, READ, None, cx);
+    dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+    assert_gradle_queue_rows(panel, [WRITE, READ], cx);
     assert!(
         !output.exists(),
         "queueing operations does not start a Task"
@@ -1205,6 +1447,7 @@ async fn verify_gradle_queue(
         root,
         &gradle_installation.join("bin/gradle"),
         &arguments,
+        None,
         cx,
     )
     .await;
@@ -1878,8 +2121,15 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
         arguments.extend(["--activate-profiles", profile].map(str::to_owned));
     }
     arguments.extend(coordinates);
-    let transcript =
-        assert_fixture_task(&terminal_panel, &root, &root.join("mvnw"), &arguments, cx).await;
+    let transcript = assert_fixture_task(
+        &terminal_panel,
+        &root,
+        &root.join("mvnw"),
+        &arguments,
+        None,
+        cx,
+    )
+    .await;
     match run {
         MavenGoalRun::ResolveSources { cached } => {
             let (_, artifacts) = transcript
@@ -2026,15 +2276,15 @@ async fn selected_junit_ssh_project(
         nickname: None,
         upload_binary_over_ssh: true,
     });
-    selected_junit_remote_project(root, app_state, options, "6.8.27", cx).await
+    connect_cached_jvm_fixture(root, app_state, options, &[("java", "6.8.27")], cx).await
 }
 
 #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-async fn selected_junit_remote_project(
+async fn connect_cached_jvm_fixture(
     root: &std::path::Path,
     app_state: Arc<workspace::AppState>,
     options: remote::RemoteConnectionOptions,
-    java_extension_version: &str,
+    installed_extensions: &[(&str, &str)],
     cx: &mut TestAppContext,
 ) -> gpui::Entity<Project> {
     use remote::{ConnectionIdentifier, RemoteClient};
@@ -2067,18 +2317,21 @@ async fn selected_junit_remote_project(
     let extensions = client
         .update(cx, |client, _| {
             client.proto_client().request(rpc::proto::SyncExtensions {
-                extensions: vec![rpc::proto::Extension {
-                    id: "java".into(),
-                    version: java_extension_version.into(),
-                    dev: false,
-                }],
+                extensions: installed_extensions
+                    .iter()
+                    .map(|&(id, version)| rpc::proto::Extension {
+                        id: id.into(),
+                        version: version.into(),
+                        dev: false,
+                    })
+                    .collect(),
             })
         })
         .await
         .expect("normal remote extension sync");
     assert!(
         extensions.missing_extensions.is_empty(),
-        "provision the pinned complete Java extension through the app before running this fixture"
+        "provision the complete pinned extensions on the host before running this fixture"
     );
     let project = cx.update(|cx| {
         Project::remote(
@@ -2780,7 +3033,8 @@ async fn selected_java_case_with_debug_hooks(
                 )
                 .expect("isolated offline Maven configuration");
             }
-            selected_junit_remote_project(&host_root, app_state, options, "6.8.30", cx).await
+            connect_cached_jvm_fixture(&host_root, app_state, options, &[("java", "6.8.30")], cx)
+                .await
         }
         JvmWorkflowConnection::Local => {
             Project::test(

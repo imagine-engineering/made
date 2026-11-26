@@ -205,6 +205,25 @@ extension and the prepared JVM Remote Server on the host. Run the opt-in
 `cancelling_stops_a_selected_gradle_junit_over_docker`, and
 `rerunning_a_failed_gradle_junit_over_docker` cases.
 
+The opt-in `docker_gradle_ordered_operations_run_through_dependencies` case
+opens the mounted Dependencies panel on a fresh offline Linux ARM64 Gradle
+project. It synchronizes metadata on the host, adds `parityArguments` with
+its declared `--message` option, then adds `check`. The terminal runs one
+offline Task using the host's Gradle installation, Java 17 and bash. The
+option arrives as a literal argument and `check` follows it, producing a
+passing report with the container hostname.
+
+This fixture supplies the pinned build JDK in JDTLS initialization and
+loads the checksum-verified `0.50.0` companion at Eclipse startup. Bind the
+fresh fixture named by `GROOVY_GRADLE_ORDERED_DOCKER_ROOT` at
+`/workspaces/gradle` and supply the container ID in
+`GROOVY_GRADLE_TEST_DOCKER_CONTAINER`. In other
+runs, JDTLS installed the same companion during LSP initialization but
+did not advertise its commands. After a provider restart, Buildship also
+returned imported projects with unknown cached topology. Groovy refused the
+scoped metadata query in that state. Standard companion startup and restart
+recovery still require qualification.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and
