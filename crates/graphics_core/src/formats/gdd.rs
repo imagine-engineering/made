@@ -381,6 +381,30 @@ pub struct GddArtboardCanvasOutput {
     pub render: RenderOutput,
     pub camera: PTZ,
     pub artboard_size: DVec2,
+    pub pick_target: Option<GddArtboardCanvasPick>,
+}
+
+pub struct GddArtboardCanvasPick {
+    storage_id: StorageNodeId,
+    snapshot: Arc<()>,
+    pane_to_document: DAffine2,
+    layer_to_document: DAffine2,
+    targets: Vec<Arc<graphite_std::vector::click_target::ClickTarget>>,
+}
+
+impl GddArtboardCanvasPick {
+    pub fn contains(&self, pane_point: DVec2) -> bool {
+        let document_point = self.pane_to_document.transform_point2(pane_point);
+        document_point.is_finite()
+            && self
+                .targets
+                .iter()
+                .any(|target| target.intersect_point(document_point, self.layer_to_document))
+    }
+
+    pub fn matches_node(&self, node: &GddGraphNode) -> bool {
+        self.storage_id == node.storage_id && Arc::ptr_eq(&self.snapshot, &node.snapshot)
+    }
 }
 
 pub struct GddNetworkView {
@@ -3521,12 +3545,56 @@ impl InspectedGddV1 {
             for_export: true,
             ..Default::default()
         };
+        let node_id = *node_id;
         let render =
-            Self::render_saved_layer_svg(&graph.network, *node_id, configuration, budget).await?;
+            Self::render_saved_layer_svg(&graph.network, node_id, configuration, budget).await?;
+        let storage_id = graph
+            .nodes
+            .iter()
+            .find(|entry| entry.local_id == node_id && entry.network_path.is_empty())
+            .map(|entry| entry.storage_id);
+        let pick_target = if let Some((storage_id, targets)) =
+            storage_id.zip(render.metadata.click_targets.get(&node_id))
+        {
+            let interface = graph.into_interface()?;
+            let metadata = &render.metadata;
+            let pane_to_document = transform.inverse();
+            let parent_to_pane = metadata
+                .upstream_footprints
+                .get(&node_id)
+                .map_or(transform, |footprint| footprint.transform);
+            let local = metadata
+                .local_transforms
+                .get(&node_id)
+                .copied()
+                .unwrap_or_default();
+            let layer_to_document = pane_to_document * parent_to_pane * local;
+            if interface.is_layer(&node_id, &[])
+                && interface.is_artboard(&node_id, &[])
+                && interface.is_visible(&node_id, &[])
+                && !interface.is_locked(&node_id, &[])
+                && !targets.is_empty()
+                && pane_to_document.is_finite()
+                && layer_to_document.inverse().is_finite()
+            {
+                Some(GddArtboardCanvasPick {
+                    storage_id,
+                    snapshot: self.snapshot.clone(),
+                    pane_to_document,
+                    layer_to_document,
+                    targets: targets.clone(),
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ok(GddArtboardCanvasOutput {
             render,
             camera,
             artboard_size: size,
+            pick_target,
         })
     }
 
@@ -10243,6 +10311,89 @@ mod tests {
                     .registry()
                     .value_equal(bound.document.registry())
             );
+        });
+    }
+
+    #[test]
+    fn at_r10_1_picks_only_the_current_visible_unlocked_artboard() {
+        futures::executor::block_on(async {
+            let stage = create_gdd_folder(621, 187, "Canvas".into(), budget())
+                .await
+                .expect("native document")
+                .insert_root_catalog_node_in_copy(ARTBOARD_NODE_IDENTIFIER, [2, 0], budget())
+                .await
+                .expect("catalog Artboard");
+            let nodes = stage.graph_nodes().await.expect("initial graph");
+            let root = nodes
+                .iter()
+                .find(|node| node.can_set_document_artboard())
+                .expect("admitted Artboard");
+            let output = stage
+                .set_document_artboard_in_copy(root, budget())
+                .await
+                .expect("document Artboard output");
+            let nodes = output.graph_nodes().await.expect("Artboard output graph");
+            let root = nodes
+                .iter()
+                .find(|node| node.storage_id() == root.storage_id())
+                .expect("same stored Artboard");
+            let document = output
+                .set_artboard_geometry_in_copy(
+                    root,
+                    GddArtboardGeometry {
+                        location: DVec2::new(72., -12.),
+                        dimensions: DVec2::new(-64., 32.),
+                    },
+                    budget(),
+                )
+                .await
+                .expect("translated and signed Artboard");
+            let nodes = document.graph_nodes().await.expect("current graph");
+            let board = nodes
+                .iter()
+                .find(|node| node.storage_id() == root.storage_id())
+                .expect("current Artboard");
+            let viewport = UVec2::new(160, 80);
+            let limits = CpuSvgEvaluationBudget {
+                max_viewport_pixels: viewport.x * viewport.y,
+                max_output_bytes: 64 * 1024,
+            };
+            let mut camera = PTZ::default();
+            camera.pan = DVec2::new(-20., -2.);
+            camera.set_zoom(0.75);
+            for scale in [1., 1.5, 2.] {
+                let canvas = document
+                    .render_document_artboard_canvas_svg(viewport, scale, Some(camera), limits)
+                    .await
+                    .expect("original rendered frame");
+                let pick = canvas.pick_target.expect("Artboard render metadata");
+                let pane = NavigationMessageHandler::default()
+                    .calculate_offset_transform(viewport.as_dvec2() / (2. * scale), &camera);
+                assert!(pick.contains(pane.transform_point2(DVec2::new(24., -4.))));
+                assert!(!pick.contains(pane.transform_point2(DVec2::new(78., -4.))));
+                assert!(!pick.contains(DVec2::NAN));
+                assert!(pick.matches_node(board));
+                assert!(!pick.matches_node(root));
+            }
+            let hidden = document
+                .edit_root_layer_in_copy(board, GddRootLayerChange::Visibility(false), budget())
+                .await
+                .expect("hide the root Artboard");
+            assert!(matches!(
+                hidden
+                    .render_document_artboard_canvas_svg(viewport, 2., Some(camera), limits)
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphLayerPreview)
+            ));
+            let locked = document
+                .edit_root_layer_in_copy(board, GddRootLayerChange::Locked(true), budget())
+                .await
+                .expect("lock the root Artboard");
+            let canvas = locked
+                .render_document_artboard_canvas_svg(viewport, 2., Some(camera), limits)
+                .await
+                .expect("locked Artboard remains visible");
+            assert!(canvas.pick_target.is_none());
         });
     }
 
