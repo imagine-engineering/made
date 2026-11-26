@@ -466,6 +466,18 @@ pub struct GddGraphInspection {
     pub networks: Vec<GddGraphNetwork>,
 }
 
+impl GddGraphInspection {
+    pub fn empty_document_graph(&self) -> Option<&GddGraphNetwork> {
+        let [root] = self.networks.as_slice() else {
+            return None;
+        };
+        (self.nodes.is_empty()
+            && root.parent.is_none()
+            && (root.exports.is_empty() || (root.exports.len() == 1 && root.empty_exports == [0])))
+        .then_some(root)
+    }
+}
+
 pub struct GddNumericGraphEvaluator {
     evaluator: NumericGraphEvaluator,
     snapshot: Arc<()>,
@@ -3151,7 +3163,7 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::UnsupportedGraphClipboardSelection);
         }
         let (interface, nodes) = self.graph_templates_for_selection(targets, &budget).await?;
-        self.insert_graph_node_templates_in_copy(network, interface, nodes, budget)
+        self.insert_graph_node_templates_in_copy(network, interface, nodes, None, budget)
             .await
     }
 
@@ -3186,6 +3198,7 @@ impl InspectedGddV1 {
             network,
             self.runtime_graph().await?.into_interface()?,
             nodes,
+            None,
             budget,
         )
         .await
@@ -3196,6 +3209,7 @@ impl InspectedGddV1 {
         network: &GddGraphNetwork,
         mut interface: NodeNetworkInterface,
         mut nodes: Vec<(NodeId, NodeTemplate)>,
+        document_output: Option<NodeId>,
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         let path = network.path.as_slice();
@@ -3209,6 +3223,14 @@ impl InspectedGddV1 {
             }
             identifiers.insert(*id, inserted);
         }
+        let document_output = document_output
+            .map(|id| {
+                identifiers
+                    .get(&id)
+                    .copied()
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)
+            })
+            .transpose()?;
         interface.insert_node_group(nodes, identifiers, path);
         let nested = interface
             .nested_network(path)
@@ -3236,7 +3258,22 @@ impl InspectedGddV1 {
                     child_path.push(node_id);
                     expected_networks.insert(child_path);
                     expected_nodes += inner.nodes.len();
-                    if !path.is_empty() || !is_pinned_layer_template(&template) {
+                    if document_output == Some(node_id) {
+                        if !path.is_empty()
+                            || !interface.is_layer(&node_id, path)
+                            || !matches!(
+                                checked_saved_graphic_node(&node),
+                                Some((
+                                    _,
+                                    SavedGraphicProfile::Layer(
+                                        GddGraphLayerPreview::Artboard { .. }
+                                    )
+                                ))
+                            )
+                        {
+                            return Err(GddArchiveError::UnsupportedDocumentArtboard);
+                        }
+                    } else if !path.is_empty() || !is_pinned_layer_template(&template) {
                         for &child in inner.nodes.keys() {
                             check_clipboard_numeric_branch(inner, child, &node.inputs)?;
                         }
@@ -3256,11 +3293,24 @@ impl InspectedGddV1 {
                 metadata: Box::new(metadata),
             });
         }
+        let output_wire = document_output.map(|id| NodeInput::node(id, 0));
+        if let Some((node, wire)) = document_output.zip(output_wire.as_ref()) {
+            let connector = InputConnector::Export(0);
+            if interface.document_network().exports.is_empty() {
+                interface.add_export(TaggedValue::None, -1, "", path);
+            }
+            interface.create_wire(&OutputConnector::primary_output(node), &connector, path);
+            if interface.document_network().exports.as_slice() != std::slice::from_ref(wire) {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+            edits.push(write_graph_connector(path, connector, wire.clone()));
+        }
         let (mut owner, staged) = self.fork_working_copy(&budget).await?;
         if self.graph_root_needs_initialization() {
             initialize_graph_root_history(&mut owner)?;
         }
         let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let mut output_count = 0;
         let added_networks = batch
             .ops
             .iter()
@@ -3297,8 +3347,17 @@ impl InspectedGddV1 {
                             .hash
                             .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
                 }
+                RegistryDelta::SetNetworkExport {
+                    id: ROOT_NETWORK,
+                    index: 0,
+                    export: Some(graphite_document_graph_storage::NodeInput::Node { id, index: 0 }),
+                } if document_output.is_some() && added.contains(id) => {
+                    output_count += 1;
+                    true
+                }
                 _ => false,
             })
+            || output_count != usize::from(document_output.is_some())
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -3330,6 +3389,11 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         let actual = graph.into_interface()?;
+        if let Some(wire) = output_wire
+            && actual.document_network().exports != [wire]
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
         for (node_id, template) in expected {
             if actual.create_node_template(&node_id, path) != Some(template) {
                 return Err(GddArchiveError::IncompleteGraphNodeEdit);
@@ -3374,6 +3438,7 @@ impl InspectedGddV1 {
                     network,
                     self.runtime_graph().await?.into_interface()?,
                     vec![(NodeId(0), template)],
+                    None,
                     budget,
                 )
                 .await;
@@ -3402,6 +3467,7 @@ impl InspectedGddV1 {
             network,
             interface,
             vec![(NodeId(0), template)],
+            None,
             budget,
         )
         .await
@@ -3826,6 +3892,60 @@ impl InspectedGddV1 {
                 for_export: true,
                 ..Default::default()
             },
+            budget,
+        )
+        .await
+    }
+
+    pub async fn create_first_document_artboard_in_copy(
+        &self,
+        geometry: GddArtboardGeometry,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        if geometry.normalized().is_none()
+            || geometry.location != geometry.location.round()
+            || geometry.dimensions != geometry.dimensions.round()
+            || geometry.dimensions.min_element() < 0.
+            || geometry.dimensions == DVec2::ZERO
+        {
+            return Err(GddArchiveError::InvalidArtboardGeometry);
+        }
+        let inspection = self.graph_inspection().await?;
+        let network = inspection
+            .empty_document_graph()
+            .ok_or(GddArchiveError::UnsupportedDocumentArtboard)?;
+        let interface = self.runtime_graph().await?.into_interface()?;
+        let root = interface.document_network();
+        if !root.nodes.is_empty() || !empty_document_output(&root.exports) {
+            return Err(GddArchiveError::UnsupportedDocumentArtboard);
+        }
+        let template = artboard_node_definition()
+            .ok_or(GddArchiveError::MissingGraphNodeDefinition(
+                ARTBOARD_NODE_NAME,
+            ))?
+            .node_template_input_override([
+                None,
+                None,
+                Some(NodeInput::value(
+                    TaggedValue::DVec2(geometry.location),
+                    false,
+                )),
+                Some(NodeInput::value(
+                    TaggedValue::DVec2(geometry.dimensions),
+                    false,
+                )),
+                Some(NodeInput::value(TaggedValue::Color(Color::WHITE), false)),
+                Some(NodeInput::value(TaggedValue::Bool(true), false)),
+            ]);
+        let artboard = NodeId(0);
+        self.insert_graph_node_templates_in_copy(
+            network,
+            interface,
+            vec![(artboard, template)],
+            Some(artboard),
             budget,
         )
         .await

@@ -12,9 +12,9 @@
     }
   },
   {
-    "context": "GraphiteCanvasArtboardMove",
+    "context": "GraphiteCanvasArtboardEdit",
     "bindings": {
-      "escape": "graphite::CancelArtboardCanvasMove"
+      "escape": "graphite::CancelArtboardCanvasEdit"
     }
   }
 ]

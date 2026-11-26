@@ -82,20 +82,86 @@ impl ArtboardOverlay {
                 }
             }
         }
-        if let Some(offset) = outline_offset
-            && let Ok(color) = Rgba::try_from(COLOR_OVERLAY_BLUE)
-            && let [Some(first), Some(second), Some(third), Some(fourth)] = self
-                .outline
-                .map(|corner| pane_point(corner + offset, origin))
-        {
-            let mut outline = PathBuilder::stroke(px(1.));
-            outline.move_to(first);
-            outline.line_to(second);
-            outline.line_to(third);
-            outline.line_to(fourth);
-            outline.close();
-            paint_overlay_path(outline, color, window);
+        if let Some(offset) = outline_offset {
+            paint_artboard_outline(self.outline.map(|corner| corner + offset), origin, window);
         }
+    }
+}
+
+pub(crate) fn paint_artboard_outline(
+    corners: [DVec2; 4],
+    origin: Point<Pixels>,
+    window: &mut Window,
+) {
+    if let Ok(color) = Rgba::try_from(COLOR_OVERLAY_BLUE)
+        && let [Some(first), Some(second), Some(third), Some(fourth)] =
+            corners.map(|corner| pane_point(corner, origin))
+    {
+        let mut outline = PathBuilder::stroke(px(1.));
+        outline.move_to(first);
+        outline.line_to(second);
+        outline.line_to(third);
+        outline.line_to(fourth);
+        outline.close();
+        paint_overlay_path(outline, color, window);
+    }
+}
+
+pub(crate) struct ArtboardDraw {
+    start: DVec2,
+    document_to_pane: DAffine2,
+}
+
+impl ArtboardDraw {
+    pub fn new(start: Point<Pixels>, document_to_pane: DAffine2) -> Self {
+        Self {
+            start: document_to_pane
+                .inverse()
+                .transform_point2(logical_vector(start)),
+            document_to_pane,
+        }
+    }
+
+    pub fn placement(
+        &self,
+        position: Point<Pixels>,
+        constrain: bool,
+        center: bool,
+    ) -> Option<GddArtboardGeometry> {
+        let mut delta = self
+            .document_to_pane
+            .inverse()
+            .transform_point2(logical_vector(position))
+            - self.start;
+        if constrain {
+            delta = delta.signum() * delta.abs().max_element();
+        }
+        let start = if center {
+            self.start - delta
+        } else {
+            self.start
+        };
+        let end = self.start + delta;
+        let location = start.min(end).round();
+        let dimensions = (start.round() - end.round()).abs();
+        (location.is_finite() && dimensions.is_finite() && dimensions != DVec2::ZERO).then_some(
+            GddArtboardGeometry {
+                location,
+                dimensions,
+            },
+        )
+    }
+
+    pub fn outline(&self, geometry: GddArtboardGeometry) -> [DVec2; 4] {
+        let first = geometry.location;
+        let last = first + geometry.dimensions.max(DVec2::ONE);
+        [
+            first,
+            DVec2::new(last.x, first.y),
+            last,
+            DVec2::new(first.x, last.y),
+        ]
+        .map(|corner| self.document_to_pane.transform_point2(corner))
     }
 }
 
