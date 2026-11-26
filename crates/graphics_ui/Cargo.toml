@@ -32,6 +32,7 @@ project.workspace = true
 ui.workspace = true
 workspace.workspace = true
 theme.workspace = true
+tiny-skia = "=0.11.4"
 vello_encoding = "=0.10.0"
 
 [dev-dependencies]

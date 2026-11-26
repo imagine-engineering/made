@@ -5,7 +5,10 @@ use gpui::{FillRule, Pixels, Point, Rgba, Window};
 use graphite_editor::messages::{
     portfolio::document::{
         DocumentMessageHandler,
-        overlays::{OverlaysMessage, OverlaysMessageContext, OverlaysMessageHandler},
+        overlays::{
+            OverlaysMessage, OverlaysMessageContext, OverlaysMessageHandler,
+            utility_types::{OverlayContext, OverlaysVisibilitySettings},
+        },
     },
     prelude::{
         FrontendMessage, InputPreprocessorMessageHandler, Message, MessageHandler, ViewportMessage,
@@ -19,20 +22,69 @@ use vello_encoding::{DrawTag, Encoding, PathSegmentType, PathTag, Style, math::f
 
 use crate::canvas::filled_path_builder;
 
-const MAX_GUIDE_PATHS: usize = 2048;
-const MAX_GUIDE_SEGMENTS: usize = 65_536;
+pub(crate) struct OverlayBudget {
+    pub paths: usize,
+    pub segments: usize,
+}
+
+const SNAP_BUDGET: OverlayBudget = OverlayBudget {
+    paths: 2048,
+    segments: 65_536,
+};
+
+pub(crate) fn source_overlay_context(
+    viewport_size: DVec2,
+    scale: f64,
+    visibility_settings: OverlaysVisibilitySettings,
+) -> Result<OverlayContext> {
+    ensure!(
+        scale.is_finite()
+            && scale > 0.
+            && viewport_size.is_finite()
+            && viewport_size.min_element() > 0.
+    );
+    let mut viewport = ViewportMessageHandler::default();
+    let mut responses = VecDeque::new();
+    viewport.process_message(
+        ViewportMessage::Update {
+            x: 0.,
+            y: 0.,
+            width: viewport_size.x,
+            height: viewport_size.y,
+            scale,
+        },
+        &mut responses,
+        (),
+    );
+    responses.clear();
+    OverlaysMessageHandler::default().process_message(
+        OverlaysMessage::Draw,
+        &mut responses,
+        OverlaysMessageContext {
+            viewport: &viewport,
+            visibility_settings,
+        },
+    );
+    responses
+        .into_iter()
+        .find_map(|message| match message {
+            Message::Frontend(FrontendMessage::RenderOverlays { context }) => Some(context),
+            _ => None,
+        })
+        .context("Missing Graphite overlay context")
+}
 
 #[derive(PartialEq)]
-struct SnapGuidePath {
+struct OverlayPath {
     path: BezPath,
     color: Rgba,
     fill_rule: FillRule,
 }
 
 #[derive(PartialEq)]
-pub(crate) struct SnapGuides(Vec<SnapGuidePath>);
+pub(crate) struct CanvasOverlay(Vec<OverlayPath>);
 
-impl SnapGuides {
+impl CanvasOverlay {
     pub fn for_gesture(
         manager: &mut SnapManager,
         document: &DocumentMessageHandler,
@@ -42,54 +94,22 @@ impl SnapGuides {
         if manager.indicator_pos().is_none() || !document.overlays_visibility_settings.all() {
             return Ok(None);
         }
-        ensure!(
-            scale.is_finite()
-                && scale > 0.
-                && viewport_size.is_finite()
-                && viewport_size.min_element() > 0.
-        );
-        let mut viewport = ViewportMessageHandler::default();
-        let mut responses = VecDeque::new();
-        viewport.process_message(
-            ViewportMessage::Update {
-                x: 0.,
-                y: 0.,
-                width: viewport_size.x,
-                height: viewport_size.y,
-                scale,
-            },
-            &mut responses,
-            (),
-        );
-        responses.clear();
-        OverlaysMessageHandler::default().process_message(
-            OverlaysMessage::Draw,
-            &mut responses,
-            OverlaysMessageContext {
-                viewport: &viewport,
-                visibility_settings: document.overlays_visibility_settings,
-            },
-        );
-        let mut context = responses
-            .into_iter()
-            .find_map(|message| match message {
-                Message::Frontend(FrontendMessage::RenderOverlays { context }) => Some(context),
-                _ => None,
-            })
-            .context("Missing Graphite overlay context")?;
+        let mut context =
+            source_overlay_context(viewport_size, scale, document.overlays_visibility_settings)?;
+        let viewport = context.viewport;
         let input = InputPreprocessorMessageHandler::default();
         manager.draw_overlays(SnapData::new(document, &input, &viewport), &mut context);
         let scene = context.take_scene();
-        let guides = Self::decode(scene.encoding(), scale)?;
+        let guides = Self::decode(scene.encoding(), scale, &SNAP_BUDGET)?;
         Ok((!guides.0.is_empty()).then_some(guides))
     }
 
-    fn decode(encoding: &Encoding, scale: f64) -> Result<Self> {
+    pub fn decode(encoding: &Encoding, scale: f64, budget: &OverlayBudget) -> Result<Self> {
         ensure!(
-            encoding.path_tags.len() <= MAX_GUIDE_SEGMENTS + 3 * MAX_GUIDE_PATHS
-                && encoding.path_data.len() <= MAX_GUIDE_SEGMENTS * 8
-                && encoding.draw_tags.len() <= MAX_GUIDE_PATHS,
-            "Graphite snap guide geometry exceeds its viewport budget",
+            encoding.path_tags.len() <= budget.segments + 3 * budget.paths
+                && encoding.path_data.len() <= budget.segments * 8
+                && encoding.draw_tags.len() <= budget.paths,
+            "Graphite overlay geometry exceeds its viewport budget",
         );
         let mut coordinates = encoding.path_data.iter().copied();
         let mut colors = encoding.draw_data.iter().zip(&encoding.draw_tags);
@@ -125,7 +145,7 @@ impl SnapGuides {
                     let (outline, fill_rule) = paint_shape(std::mem::take(&mut path), style)?;
                     let path = (Affine::scale(scale.recip()) * transform) * outline;
                     ensure!(path.is_finite(), "Nonfinite Graphite snap path");
-                    guides.push(SnapGuidePath {
+                    guides.push(OverlayPath {
                         path,
                         color: solid_color(color),
                         fill_rule,
@@ -179,6 +199,56 @@ impl SnapGuides {
             "Trailing Graphite snap geometry"
         );
         Ok(Self(guides))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn rasterize(&self, target: &mut tiny_skia::Pixmap) -> Result<()> {
+        use graphite_std::vector_types::kurbo::PathEl;
+
+        let mut paint = tiny_skia::Paint::default();
+        for guide in &self.0 {
+            let mut path = tiny_skia::PathBuilder::new();
+            for element in guide.path.elements() {
+                match *element {
+                    PathEl::MoveTo(point) => path.move_to(point.x as f32, point.y as f32),
+                    PathEl::LineTo(point) => path.line_to(point.x as f32, point.y as f32),
+                    PathEl::QuadTo(first, point) => {
+                        path.quad_to(
+                            first.x as f32,
+                            first.y as f32,
+                            point.x as f32,
+                            point.y as f32,
+                        );
+                    }
+                    PathEl::CurveTo(first, second, point) => {
+                        path.cubic_to(
+                            first.x as f32,
+                            first.y as f32,
+                            second.x as f32,
+                            second.y as f32,
+                            point.x as f32,
+                            point.y as f32,
+                        );
+                    }
+                    PathEl::ClosePath => path.close(),
+                }
+            }
+            let path = path.finish().context("Invalid Graphite overlay path")?;
+            let color = guide.color;
+            paint.set_color(
+                tiny_skia::Color::from_rgba(color.r, color.g, color.b, color.a)
+                    .context("Invalid Graphite overlay color")?,
+            );
+            let rule = match guide.fill_rule {
+                FillRule::NonZero => tiny_skia::FillRule::Winding,
+                FillRule::EvenOdd => tiny_skia::FillRule::EvenOdd,
+            };
+            target.fill_path(&path, &paint, rule, tiny_skia::Transform::identity(), None);
+        }
+        Ok(())
     }
 
     pub fn paint(&self, origin: Point<Pixels>, window: &mut Window) {
@@ -303,7 +373,7 @@ mod tests {
         });
         let blue = Rgba::try_from(COLOR_OVERLAY_BLUE).expect("source overlay blue");
         for scale in [1., 1.5, 2.] {
-            let guides = SnapGuides::for_gesture(&mut manager, &document, viewport, scale)
+            let guides = CanvasOverlay::for_gesture(&mut manager, &document, viewport, scale)
                 .expect("admitted source paths")
                 .expect("active alignment guides");
             assert_eq!(guides.0.len(), 5);
@@ -336,7 +406,7 @@ mod tests {
         });
         let blue = Rgba::try_from(COLOR_OVERLAY_BLUE).expect("source overlay blue");
         let white = Rgba::try_from(COLOR_OVERLAY_WHITE).expect("source overlay white");
-        let guides = SnapGuides::for_gesture(&mut manager, &document, viewport, 2.)
+        let guides = CanvasOverlay::for_gesture(&mut manager, &document, viewport, 2.)
             .expect("admitted source paths")
             .expect("active labeled guide");
         assert!(
@@ -370,21 +440,21 @@ mod tests {
             distribution_equal_distance_horizontal: Some(25.),
             ..Default::default()
         });
-        let guides = SnapGuides::for_gesture(&mut manager, &document, viewport, 1.5)
+        let guides = CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)
             .expect("admitted source paths")
             .expect("active distribution guides");
         assert!(guides.0.len() >= 3);
         assert!(guides.0.iter().all(|guide| guide.color == blue));
         document.overlays_visibility_settings.all = false;
         assert!(
-            SnapGuides::for_gesture(&mut manager, &document, viewport, 1.5)
+            CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)
                 .expect("hidden overlays")
                 .is_none()
         );
         document.overlays_visibility_settings.all = true;
         manager.clear_indicator();
         assert!(
-            SnapGuides::for_gesture(&mut manager, &document, viewport, 1.5)
+            CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)
                 .expect("cleared snap")
                 .is_none()
         );
@@ -394,10 +464,11 @@ mod tests {
     fn at_gra_view_008_1_rejects_over_budget_or_incomplete_snap_paths() {
         let mut encoding = Encoding::default();
         encoding.path_tags.push(PathTag::TRANSFORM);
-        assert!(SnapGuides::decode(&encoding, 1.).is_err());
-        encoding
-            .path_tags
-            .resize(MAX_GUIDE_SEGMENTS + MAX_GUIDE_PATHS * 3 + 1, PathTag::STYLE);
-        assert!(SnapGuides::decode(&encoding, 1.).is_err());
+        assert!(CanvasOverlay::decode(&encoding, 1., &SNAP_BUDGET).is_err());
+        encoding.path_tags.resize(
+            SNAP_BUDGET.segments + SNAP_BUDGET.paths * 3 + 1,
+            PathTag::STYLE,
+        );
+        assert!(CanvasOverlay::decode(&encoding, 1., &SNAP_BUDGET).is_err());
     }
 }

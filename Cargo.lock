@@ -9081,6 +9081,7 @@ dependencies = [
  "tempfile",
  "theme",
  "theme_settings",
+ "tiny-skia",
  "ui",
  "uuid",
  "vector-types",

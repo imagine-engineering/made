@@ -4,13 +4,14 @@ pub mod resources;
 pub mod storage;
 
 mod canvas;
+mod canvas_grid;
+mod canvas_overlay;
 mod document_file;
 mod graph;
 mod layers;
 mod node_catalog;
 mod png_workflow;
 mod session;
-mod snap_guides;
 
 pub use graph::{
     CancelImageLoad, CancelMixEvaluation, GraphicsWorkspaceItem, GraphiteArtboardItem,

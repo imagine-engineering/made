@@ -55,12 +55,13 @@ use crate::canvas::{
     artboard_outline, canvas_snap_groups, logical_vector, paint_artboard_outline,
     set_artboard_snap_camera,
 };
+use crate::canvas_grid::CanvasGrid;
+use crate::canvas_overlay::CanvasOverlay;
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
     SavedGraphMenuTarget, SavedGraphView,
 };
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
-use crate::snap_guides::SnapGuides;
 
 actions!(
     graphite,
@@ -75,6 +76,8 @@ actions!(
         CancelArtboardCanvasEdit,
         /// Toggles snapping for the active Graphite Canvas.
         ToggleCanvasSnapping,
+        /// Toggles the document grid for the active Graphite Canvas.
+        ToggleCanvasGrid,
     ]
 );
 
@@ -185,6 +188,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     revision: Arc<()>,
     working: Option<GddWorkingCopy>,
     snapping_preferences: Option<Arc<SnappingState>>,
+    grid_visible: Option<bool>,
 }
 
 struct GddWorkingCopy {
@@ -377,6 +381,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 revision: Arc::new(()),
                 working: None,
                 snapping_preferences: None,
+                grid_visible: None,
             }))
         }))
     }
@@ -527,6 +532,7 @@ async fn open_folder_item(
             revision: Arc::new(()),
             working: None,
             snapping_preferences: None,
+            grid_visible: None,
         });
         workspace.open_project_item::<GraphiteDocumentItem>(
             workspace.active_pane().clone(),
@@ -665,6 +671,9 @@ struct SavedSceneCanvas {
     navigation: Option<DocumentNavigation>,
     snapping_document: Option<Box<DocumentMessageHandler>>,
     applied_snapping_preferences: Option<Arc<SnappingState>>,
+    source_grid_visible: bool,
+    grid_frame: Option<SavedSceneGridFrame>,
+    grid_task: Option<Task<()>>,
     pan: Option<SavedScenePan>,
     pick_armed: bool,
     move_armed: bool,
@@ -677,6 +686,11 @@ struct SavedSceneCanvas {
     can_draw_artboard: bool,
     overlay_visible: bool,
     frame: SavedSceneFrame,
+}
+
+struct SavedSceneGridFrame {
+    request: CanvasGrid,
+    image: Result<Option<Arc<RenderImage>>, SharedString>,
 }
 
 struct SavedScenePan {
@@ -707,7 +721,7 @@ struct SavedSceneArtboardView {
     pointer: Option<(gpui::Point<gpui::Pixels>, gpui::Modifiers)>,
     auto_pan_since: Option<Instant>,
     frame_queued: bool,
-    snap_guides: Option<Arc<SnapGuides>>,
+    snap_guides: Option<Arc<CanvasOverlay>>,
     snap_guide_error: Option<SharedString>,
     draft_frame: Option<SavedSceneArtboardDraft>,
     draft_task: Option<Task<()>>,
@@ -801,6 +815,36 @@ impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
 }
 
 impl SavedSceneCanvas {
+    fn grid_request(&self, visible: Option<bool>) -> Option<CanvasGrid> {
+        let document = self.snapping_document.as_ref()?;
+        if !visible.unwrap_or(self.source_grid_visible)
+            || !document.overlays_visibility_settings.all()
+        {
+            return None;
+        }
+        let target = self.target?;
+        let navigation = self
+            .artboard_view
+            .as_ref()
+            .map(|view| view.navigation)
+            .or_else(|| self.drawing_navigation())
+            .or(self.navigation)?;
+        Some(CanvasGrid {
+            resolution: target.resolution,
+            scale: target.scale,
+            camera: navigation.camera,
+            options: document.snapping_state.grid.clone(),
+        })
+    }
+
+    fn retire_grid_frame(&mut self, window: Option<&mut Window>, cx: &mut App) {
+        if let Some(frame) = self.grid_frame.take()
+            && let Ok(Some(image)) = frame.image
+        {
+            cx.drop_image(image, window);
+        }
+    }
+
     fn apply_snapping_preferences(&mut self, preferences: &Arc<SnappingState>) -> bool {
         let Some(document) = &mut self.snapping_document else {
             return false;
@@ -861,6 +905,7 @@ impl SavedSceneCanvas {
         let mut canvas = self;
         let mut window = window;
         canvas.clear_artboard_edit(window.as_deref_mut(), cx);
+        canvas.retire_grid_frame(window.as_deref_mut(), cx);
         if let SavedSceneFrame::Ready(image) = canvas.frame {
             cx.drop_image(image, window);
         }
@@ -1663,6 +1708,9 @@ impl GraphiteDocumentItem {
             navigation: None,
             snapping_document: None,
             applied_snapping_preferences: None,
+            source_grid_visible: false,
+            grid_frame: None,
+            grid_task: None,
             pan: None,
             pick_armed: false,
             move_armed: false,
@@ -1739,6 +1787,91 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn toggle_scene_grid(
+        &self,
+        instance: &Arc<()>,
+        revision: &Arc<()>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(canvas) = self.scene_canvas.as_ref().filter(|canvas| {
+            Arc::ptr_eq(instance, &canvas.instance)
+                && Arc::ptr_eq(revision, &canvas.revision)
+                && canvas.snapping_document.is_some()
+        }) else {
+            return false;
+        };
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(revision, &model.revision) {
+            return false;
+        }
+        let visible = model.grid_visible.unwrap_or(canvas.source_grid_visible);
+        self.model.update(cx, |model, cx| {
+            model.grid_visible = Some(!visible);
+            cx.notify();
+        });
+        true
+    }
+
+    fn render_scene_grid(
+        &mut self,
+        instance: &Arc<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(&canvas.instance, instance)
+            || !Arc::ptr_eq(&canvas.revision, &model.revision)
+        {
+            return;
+        }
+        let Some(request) = canvas.grid_request(model.grid_visible) else {
+            canvas.retire_grid_frame(Some(window), cx);
+            return;
+        };
+        if canvas.grid_task.is_some()
+            || canvas
+                .grid_frame
+                .as_ref()
+                .is_some_and(|frame| frame.request == request)
+        {
+            return;
+        }
+        let render = cx.background_spawn({
+            let request = request.clone();
+            async move {
+                request.render(SAVED_SCENE_PIXEL_BUDGET).map_err(|error| {
+                    SharedString::from(format!("Unable to render the grid. {error:#}"))
+                })
+            }
+        });
+        let instance = instance.clone();
+        canvas.grid_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let image = render.await;
+            if let Err(error) = item.update_in(cx, |item, window, cx| {
+                let Some(canvas) = &mut item.scene_canvas else {
+                    return;
+                };
+                if !Arc::ptr_eq(&canvas.instance, &instance) {
+                    return;
+                }
+                canvas.grid_task = None;
+                let model = item.model.read(cx);
+                if Arc::ptr_eq(&canvas.revision, &model.revision)
+                    && canvas.grid_request(model.grid_visible).as_ref() == Some(&request)
+                {
+                    canvas.retire_grid_frame(Some(window), cx);
+                    canvas.grid_frame = Some(SavedSceneGridFrame { request, image });
+                }
+                cx.notify();
+            }) {
+                log::debug!("Graphite Canvas closed before rendering the grid: {error:#}");
+            }
+        }));
+    }
+
     fn update_scene_canvas(
         &mut self,
         target: Option<SavedSceneTarget>,
@@ -1805,7 +1938,9 @@ impl GraphiteDocumentItem {
             return;
         }
         if blank_working_graph {
-            canvas.snapping_document = Some(contents.canvas_snapping_defaults());
+            let document = contents.canvas_snapping_defaults();
+            canvas.source_grid_visible = document.snapping_state.grid_snapping;
+            canvas.snapping_document = Some(document);
             if let Some(preferences) = &snapping_preferences {
                 canvas.apply_snapping_preferences(preferences);
             }
@@ -1863,6 +1998,8 @@ impl GraphiteDocumentItem {
                             canvas.navigation = Some(navigation);
                             canvas.artboards = artboards;
                             canvas.can_draw_artboard = can_draw_artboard;
+                            canvas.source_grid_visible = snapping_document.as_ref()
+                                .is_some_and(|document| document.snapping_state.grid_snapping);
                             canvas.snapping_document = snapping_document;
                             if let Some(preferences) = &model.snapping_preferences {
                                 canvas.apply_snapping_preferences(preferences);
@@ -2368,16 +2505,20 @@ impl GraphiteDocumentItem {
         } else {
             return false;
         };
-        let (guides, error) =
-            match SnapGuides::for_gesture(manager, document, target.logical_size(), target.scale) {
-                Ok(guides) => (guides, None),
-                Err(error) => (
-                    None,
-                    Some(SharedString::from(format!(
-                        "Unable to render snap guides. {error:#}"
-                    ))),
-                ),
-            };
+        let (guides, error) = match CanvasOverlay::for_gesture(
+            manager,
+            document,
+            target.logical_size(),
+            target.scale,
+        ) {
+            Ok(guides) => (guides, None),
+            Err(error) => (
+                None,
+                Some(SharedString::from(format!(
+                    "Unable to render snap guides. {error:#}"
+                ))),
+            ),
+        };
         let guides_changed =
             guides.as_ref() != view.snap_guides.as_deref() || error != view.snap_guide_error;
         if guides_changed {
@@ -2666,13 +2807,14 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn render_scene_snapping(
+    fn render_scene_view_controls(
         &self,
         canvas: &SavedSceneCanvas,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui::Div> {
-        if !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision) {
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(&canvas.revision, &model.revision) {
             return None;
         }
         let document = canvas.snapping_document.as_ref()?;
@@ -2680,6 +2822,9 @@ impl GraphiteDocumentItem {
         let enabled = state.snapping_enabled;
         let instance = canvas.instance.clone();
         let revision = canvas.revision.clone();
+        let grid_visible = model.grid_visible.unwrap_or(canvas.source_grid_visible);
+        let grid_instance = instance.clone();
+        let grid_revision = revision.clone();
         let item = cx.weak_entity();
         let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
             for (heading, options) in canvas_snap_groups() {
@@ -2710,6 +2855,26 @@ impl GraphiteDocumentItem {
         Some(
             h_flex()
                 .gap_1()
+                .child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-CANVAS-GRID".into())
+                        .child(
+                            Button::new(
+                                "graphite-gdd-canvas-grid",
+                                if grid_visible {
+                                    "Hide Grid"
+                                } else {
+                                    "Show Grid"
+                                },
+                            )
+                            .toggle_state(grid_visible)
+                            .on_click(cx.listener(
+                                move |item, _, _, cx| {
+                                    item.toggle_scene_grid(&grid_instance, &grid_revision, cx);
+                                },
+                            )),
+                        ),
+                )
                 .child(
                     div()
                         .debug_selector(|| "GRAPHITE-GDD-CANVAS-SNAPPING".into())
@@ -2767,7 +2932,27 @@ impl GraphiteDocumentItem {
         let move_bounds = pane_bounds.clone();
         let pick_bounds = pane_bounds.clone();
         let target = canvas.target;
-        let current = Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision);
+        let model = self.model.read(cx);
+        let current = Arc::ptr_eq(&canvas.revision, &model.revision);
+        let grid_request = current
+            .then(|| canvas.grid_request(model.grid_visible))
+            .flatten();
+        let grid_ready = canvas
+            .grid_frame
+            .as_ref()
+            .filter(|frame| Some(&frame.request) == grid_request.as_ref());
+        let refresh_grid = current
+            && if grid_request.is_some() {
+                grid_ready.is_none() && canvas.grid_task.is_none()
+            } else {
+                canvas.grid_frame.is_some()
+            };
+        let grid_image = grid_ready
+            .and_then(|frame| frame.image.as_ref().ok())
+            .and_then(Clone::clone);
+        let grid_error = grid_ready
+            .and_then(|frame| frame.image.as_ref().err())
+            .cloned();
         let transform = canvas
             .snapping_document
             .as_deref()
@@ -2871,7 +3056,7 @@ impl GraphiteDocumentItem {
             SavedSceneFrame::Failed(error) => Some((error.clone(), Color::Error)),
             _ => None,
         };
-        let snapping_controls = self.render_scene_snapping(canvas, window, cx);
+        let view_controls = self.render_scene_view_controls(canvas, window, cx);
         v_flex()
             .size_full()
             .child(
@@ -2911,7 +3096,7 @@ impl GraphiteDocumentItem {
                                 )),
                             ),
                     )
-                    .children(snapping_controls)
+                    .children(view_controls)
                     .when(can_draw, |toolbar| {
                         toolbar.child(
                             div()
@@ -3047,6 +3232,9 @@ impl GraphiteDocumentItem {
                     .when_some(message, |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
+                    .when_some(grid_error, |toolbar, error| {
+                        toolbar.child(Label::new(error).color(Color::Error))
+                    })
                     .when_some(self.copy_feedback.clone(), |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
@@ -3151,7 +3339,16 @@ impl GraphiteDocumentItem {
                                 if target == measured
                                     && gesture_pane.is_none_or(|pane| pane == bounds)
                                 {
-                                    return (image, overlays, edit_outline, snap_guides);
+                                    if refresh_grid {
+                                        window.defer(cx, move |window, cx| {
+                                            if let Err(error) = item.update(cx, |item, cx| {
+                                                item.render_scene_grid(&instance, window, cx);
+                                            }) {
+                                                log::debug!("Graphite Canvas closed before grid paint: {error:#}");
+                                            }
+                                        });
+                                    }
+                                    return (image, grid_image, overlays, edit_outline, snap_guides);
                                 }
                                 window.defer(cx, move |window, cx| {
                                     if let Err(error) = item.update(cx, |item, cx| {
@@ -3177,10 +3374,10 @@ impl GraphiteDocumentItem {
                                         );
                                     }
                                 });
-                                (None, Vec::new(), None, None)
+                                (None, None, Vec::new(), None, None)
                             },
                             move |bounds,
-                                  (image, overlays, edit_outline, snap_guides),
+                                  (image, grid_image, overlays, edit_outline, snap_guides),
                                   window,
                                   _| {
                                 Self::capture_scene_gestures(
@@ -3203,6 +3400,18 @@ impl GraphiteDocumentItem {
                                     )
                                 {
                                     log::warn!("Graphite Canvas frame was not painted: {error:#}");
+                                }
+                                if let Some(image) = grid_image
+                                    && let Err(error) = window.paint_image(
+                                        bounds,
+                                        bounds,
+                                        gpui::Corners::default(),
+                                        image,
+                                        0,
+                                        false,
+                                    )
+                                {
+                                    log::warn!("Graphite Canvas grid was not painted: {error:#}");
                                 }
                                 if !overlays.is_empty() {
                                     window.paint_layer(bounds, |window| {
@@ -7905,6 +8114,15 @@ impl Render for GraphiteDocumentItem {
                         CANVAS_SNAP_ENABLED,
                         cx,
                     )
+                {
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            }))
+            .on_action(cx.listener(|item, _: &ToggleCanvasGrid, _, cx| {
+                if let Some(canvas) = &item.scene_canvas
+                    && item.toggle_scene_grid(&canvas.instance, &canvas.revision, cx)
                 {
                     cx.stop_propagation();
                 } else {
@@ -15324,6 +15542,22 @@ mod tests {
             assert_scene(canvas, image, origin);
             assert!(!item.is_dirty(cx));
         });
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("F-VECTOR Canvas");
+            let grid = canvas.grid_frame.as_ref().expect("F-VECTOR grid");
+            assert!(matches!(&grid.image, Ok(Some(_))));
+            let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                panic!("accepted F-VECTOR frame")
+            };
+            assert_scene(canvas, image, origin);
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        window.run_until_parked();
+        paint(window);
         click(window, "GRAPHITE-GDD-CANVAS-BACK");
         click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
         click(window, "GRAPHITE-GDD-OPEN-CANVAS");
@@ -16217,6 +16451,172 @@ mod tests {
                 .expect("original ZIP")
                 .as_slice(),
             original.as_ref()
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_006_2_workspace_grid_visibility_is_independent_of_snapping(
+        cx: &mut TestAppContext,
+    ) {
+        let source = create_gdd_folder(667, 187, "Canvas Grid".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("new Graphite document")
+            .create_document_artboard_in_copy(
+                GddArtboardGeometry {
+                    location: DVec2::new(-50., -40.),
+                    dimensions: DVec2::new(100., 80.),
+                },
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("pinned Artboard");
+        let history = source.history_len();
+        let original = source
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.update(|_, cx| {
+            let bindings =
+                settings::KeymapFile::load_asset(crate::DEFAULT_GRAPHITE_KEYMAP_PATH, None, cx)
+                    .expect("Graphite keymap");
+            cx.bind_keys(bindings);
+        });
+        window.simulate_resize(gpui::size(px(1160.), px(1000.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/grid-visibility.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (revision, instance, content_frame) = source.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert!(canvas.grid_frame.is_none());
+            assert!(!canvas.source_grid_visible);
+            let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                panic!("accepted Canvas frame")
+            };
+            (
+                item.model.read(cx).revision.clone(),
+                canvas.instance.clone(),
+                image.clone(),
+            )
+        });
+        let read_grid = |window: &gpui::VisualTestContext, snapping: bool| {
+            source.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let model = item.model.read(cx);
+                let state = &canvas
+                    .snapping_document
+                    .as_ref()
+                    .expect("source snapping")
+                    .snapping_state;
+                assert_eq!(state.grid_snapping, snapping);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert_eq!(
+                    model.gdd_contents().expect("source snapshot").history_len(),
+                    history
+                );
+                assert!(!item.is_dirty(cx));
+                assert!(!item.can_save(cx));
+                canvas.grid_frame.as_ref().map(|frame| {
+                    let image = frame
+                        .image
+                        .as_ref()
+                        .expect("source grid rendered")
+                        .as_ref()
+                        .expect("non-empty grid")
+                        .clone();
+                    assert!(
+                        image
+                            .as_bytes(0)
+                            .expect("grid pixels")
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|pixel| pixel[3] > 0)
+                    );
+                    (frame.request.clone(), image)
+                })
+            })
+        };
+        let settle_grid = |window: &mut gpui::VisualTestContext| {
+            for _ in 0..2 {
+                window.run_until_parked();
+                paint(window);
+            }
+        };
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        settle_grid(window);
+        let (request, grid) =
+            read_grid(window, false).expect("visible grid with snapping disabled");
+        source.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(image) if Arc::ptr_eq(image, &content_frame)));
+        });
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&grid)));
+
+        click(window, "GRAPHITE-GDD-CANVAS-SNAP-OPTIONS");
+        click(window, "MENU_ITEM-Grid");
+        let (_, unchanged_grid) =
+            read_grid(window, true).expect("visible grid after changing snapping");
+        assert!(Arc::ptr_eq(&grid, &unchanged_grid));
+        window.simulate_keystrokes("alt-g");
+        settle_grid(window);
+        assert!(read_grid(window, true).is_none());
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&grid)));
+
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        assert!(read_grid(window, true).is_none());
+        source.update_in(window, |item, _, cx| {
+            assert!(!item.toggle_scene_grid(&instance, &revision, cx));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        settle_grid(window);
+        let (reopened, _) = read_grid(window, true).expect("newly visible grid");
+        assert_eq!(reopened.resolution, request.resolution);
+        window.simulate_resize(gpui::size(px(1280.), px(1020.)));
+        settle_grid(window);
+        let (resized, before_zoom) = read_grid(window, true).expect("grid fitted to new bounds");
+        assert_ne!(resized.resolution, reopened.resolution);
+        let pane = window
+            .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+            .expect("Canvas pane");
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::ScrollWheel(gpui::ScrollWheelEvent {
+                    position: pane.center(),
+                    delta: gpui::ScrollDelta::Pixels(gpui::point(px(0.), px(120.))),
+                    modifiers: gpui::Modifiers {
+                        control: true,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+                cx,
+            );
+        });
+        settle_grid(window);
+        let (zoomed, after_zoom) = read_grid(window, true).expect("grid follows accepted zoom");
+        assert!(zoomed.camera.zoom() > resized.camera.zoom());
+        assert_eq!(zoomed.resolution, resized.resolution);
+        assert!(!Arc::ptr_eq(&before_zoom, &after_zoom));
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&before_zoom)));
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("original ZIP"),
+            original
         );
     }
 
