@@ -308,7 +308,7 @@ pub fn command_registration(command_id: &str) -> Option<CommandRegistration> {
     command_registry().find(|registration| registration.command_id == command_id)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-support"))]
 pub(crate) fn native_command_id_from_catalog(command_id: &str) -> std::borrow::Cow<'_, str> {
     if let Some(suffix) = command_id.strip_prefix("Comfy.") {
         format!("Sim.{suffix}").into()
