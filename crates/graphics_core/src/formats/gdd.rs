@@ -8,7 +8,7 @@ use std::{
 };
 
 use graphite_core_types::Type;
-use graphite_core_types::{Color, NodeParameter, ProtoNodeIdentifier};
+use graphite_core_types::{BlendMode, Color, NodeParameter, ProtoNodeIdentifier};
 pub use graphite_document_container::archive::ArchiveFormat;
 use graphite_document_container::{
     AnyContainer, ByteHolder, Container, ContainerError,
@@ -60,7 +60,9 @@ use graphite_editor::{
     messages::{
         clipboard::utility_types::ClipboardItem,
         prelude::NavigationMessageHandler,
-        tool::common_functionality::graph_modification_utils::{get_fill, get_opacity},
+        tool::common_functionality::graph_modification_utils::{
+            get_blend_mode, get_clip_mode, get_fill, get_opacity,
+        },
     },
 };
 use graphite_glam::{DAffine2, DVec2, IVec2, UVec2};
@@ -79,7 +81,7 @@ use graphite_math_nodes::modulo;
 use graphite_std::{
     Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
-    blending_nodes::{clipping_mask, opacity},
+    blending_nodes::{blend_mode, clipping_mask, opacity},
     repeat_nodes::repeat_array,
     transform::Footprint,
     transform_nodes::transform,
@@ -353,6 +355,10 @@ pub enum GddArchiveError {
     UnsupportedLayerOpacity,
     #[error("The selected Graphite layers already have that opacity.")]
     UnchangedLayerOpacity,
+    #[error("Choose a Graphite layer and a supported blend mode.")]
+    UnsupportedLayerBlendMode,
+    #[error("Choose an unlocked Graphite layer with a sibling below it to use clipping.")]
+    UnsupportedLayerClipping,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -667,6 +673,8 @@ pub struct GddRootLayer {
     pub accepts_children: bool,
     pub is_artboard: bool,
     pub opacity: Option<GddLayerOpacity>,
+    pub blend_mode: Option<BlendMode>,
+    pub clipping: Option<bool>,
     pub select_all_eligible: bool,
 }
 
@@ -680,6 +688,12 @@ pub struct GddLayerOpacity {
 pub enum GddLayerOpacityKind {
     Overall,
     Fill,
+}
+
+#[derive(Clone, Copy)]
+pub enum GddLayerBlendingChange {
+    BlendMode(BlendMode),
+    ToggleClipping,
 }
 
 impl GddLayerOpacity {
@@ -955,6 +969,7 @@ enum SavedGraphicProfile {
     Fill,
     ClippingMask,
     Opacity,
+    BlendMode,
     RepeatArray,
     Layer(GddGraphLayerPreview),
 }
@@ -5178,6 +5193,102 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn edit_root_layer_blending_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        change: GddLayerBlendingChange,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_editor::messages::prelude::DocumentMessage;
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self
+            .validate_layer_order_selection(&document, nodes)
+            .map_err(|error| match error {
+                GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                error => error,
+            })?;
+        let interface = &document.network_interface;
+        let layers: Vec<_> = document
+            .metadata()
+            .all_layers()
+            .filter(|layer| {
+                selected.contains(&layer.to_node()) && !interface.is_artboard(&layer.to_node(), &[])
+            })
+            .collect();
+        let (message, clipping) = match change {
+            GddLayerBlendingChange::BlendMode(blend_mode) => {
+                if blend_mode.index_in_list_svg_subset().is_none()
+                    || layers.is_empty()
+                    || layers
+                        .iter()
+                        .any(|&layer| !layer_supports_blending(layer, interface))
+                {
+                    return Err(GddArchiveError::UnsupportedLayerBlendMode);
+                }
+                if layers.iter().all(|&layer| {
+                    get_blend_mode(layer, interface).unwrap_or_default() == blend_mode
+                }) {
+                    return Err(GddArchiveError::UnchangedRootLayer);
+                }
+                (
+                    DocumentMessage::SetBlendModeForSelectedLayers { blend_mode },
+                    None,
+                )
+            }
+            GddLayerBlendingChange::ToggleClipping => {
+                let [layer] = layers.as_slice() else {
+                    return Err(GddArchiveError::UnsupportedLayerClipping);
+                };
+                if selected.len() != 1
+                    || !layer_supports_blending(*layer, interface)
+                    || !layer.can_be_clipped(document.metadata())
+                {
+                    return Err(GddArchiveError::UnsupportedLayerClipping);
+                }
+                let clipping = get_clip_mode(*layer, interface).unwrap_or(false);
+                (
+                    DocumentMessage::ClipLayer {
+                        id: layer.to_node(),
+                    },
+                    Some(!clipping),
+                )
+            }
+        };
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        let mut commands = VecDeque::new();
+        plan_document_layer_command(&mut document, message, &mut commands);
+        self.finish_root_layer_edit(
+            &mut document,
+            |document| {
+                let before = layer_tree_order(&document.network_interface);
+                apply_document_layer_commands(document, commands)?;
+                let interface = &document.network_interface;
+                let valid = layers.iter().all(|&layer| match change {
+                    GddLayerBlendingChange::BlendMode(blend_mode) => {
+                        get_blend_mode(layer, interface).unwrap_or_default() == blend_mode
+                    }
+                    GddLayerBlendingChange::ToggleClipping => {
+                        get_clip_mode(layer, interface) == clipping
+                    }
+                });
+                if !valid || layer_tree_order(interface) != before {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                Ok(())
+            },
+            budget,
+        )
+        .await
+        .map(|(copy, _)| copy)
+    }
+
     pub async fn edit_root_layer_opacity_in_copy(
         &self,
         nodes: &[GddGraphNode],
@@ -7626,12 +7737,16 @@ fn layer_accepts_children(layer: LayerNodeIdentifier, interface: &NodeNetworkInt
             })
 }
 
+fn layer_supports_blending(layer: LayerNodeIdentifier, interface: &NodeNetworkInterface) -> bool {
+    let node = layer.to_node();
+    !interface.is_artboard(&node, &[]) && interface.layer_hosts_blending_nodes(&node, &[])
+}
+
 fn source_layer_opacity(
     layer: LayerNodeIdentifier,
     interface: &NodeNetworkInterface,
 ) -> Option<GddLayerOpacity> {
-    let node = layer.to_node();
-    if interface.is_artboard(&node, &[]) || !interface.layer_hosts_blending_nodes(&node, &[]) {
+    if !layer_supports_blending(layer, interface) {
         return None;
     }
     Some(GddLayerOpacity {
@@ -7669,6 +7784,7 @@ fn project_root_layers(
             .ok_or(GddArchiveError::InvalidRootLayerGraph)?;
         let effectively_locked = selection.layer_locked(layer, interface);
         let is_artboard = interface.is_artboard(&id, &[]);
+        let opacity = source_layer_opacity(layer, interface);
         layers.push(GddRootLayer {
             storage_id,
             parent,
@@ -7678,7 +7794,10 @@ fn project_root_layers(
             effectively_locked,
             accepts_children: !effectively_locked && layer_accepts_children(layer, interface),
             is_artboard,
-            opacity: source_layer_opacity(layer, interface),
+            opacity,
+            blend_mode: opacity.map(|_| get_blend_mode(layer, interface).unwrap_or_default()),
+            clipping: (opacity.is_some() && layer.can_be_clipped(metadata))
+                .then(|| get_clip_mode(layer, interface).unwrap_or(false)),
             select_all_eligible: !is_artboard
                 && selection.layer_visible(layer, interface)
                 && !effectively_locked,
@@ -7845,6 +7964,28 @@ fn apply_document_layer_commands(
                 )
                 .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
                 context.transform_set(transform, transform_in, skip_rerender);
+            }
+            DocumentMessage::GraphOperation(GraphOperationMessage::BlendModeSet {
+                layer,
+                blend_mode,
+            }) => {
+                let mut refresh = VecDeque::new();
+                let mut context = ModifyInputsContext::new_with_layer(
+                    layer,
+                    &mut document.network_interface,
+                    &mut refresh,
+                )
+                .ok_or(GddArchiveError::UnsupportedLayerBlendMode)?;
+                context.blend_mode_set(blend_mode);
+            }
+            DocumentMessage::GraphOperation(GraphOperationMessage::ClipModeToggle { layer }) => {
+                let interface = &mut document.network_interface;
+                let clip = get_clip_mode(layer, interface);
+                let mut refresh = VecDeque::new();
+                let mut context =
+                    ModifyInputsContext::new_with_layer(layer, interface, &mut refresh)
+                        .ok_or(GddArchiveError::UnsupportedLayerClipping)?;
+                context.clip_mode_toggle(clip);
             }
             DocumentMessage::GraphOperation(GraphOperationMessage::NewCustomLayer {
                 id,
@@ -8708,6 +8849,23 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 resolve_proto_node_type(opacity::IDENTIFIER)?,
                 node.inputs.iter().enumerate().collect(),
                 SavedGraphicProfile::Opacity,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &blend_mode::IDENTIFIER =>
+        {
+            let [content, mode] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content)
+                || !matches!(mode.as_value(), Some(TaggedValue::BlendMode(mode)) if mode.index_in_list_svg_subset().is_some())
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(blend_mode::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::BlendMode,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier)

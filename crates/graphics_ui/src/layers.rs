@@ -3,6 +3,7 @@ use gpui::{App, Entity, Window};
 use graphics_core::formats::gdd::{
     GddLayerGrouping, GddLayerOpacityKind, GddLayerOrder, GddRootLayer, GddRootLayerChange,
 };
+use graphite_core_types::BlendMode;
 use std::collections::BTreeSet;
 use ui::{
     Button, ButtonStyle, Color, ContextMenu, Label, LabelSize, PopoverMenu, TintColor, prelude::*,
@@ -12,6 +13,28 @@ pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
     ToggleExpansion { recursive: bool },
+    ToggleClipping,
+}
+
+pub(crate) fn render_saved_layer_blend_mode(
+    mode: Option<BlendMode>,
+    menu: impl Fn(&mut Window, &mut App) -> Option<Entity<ContextMenu>> + 'static,
+) -> impl IntoElement {
+    h_flex()
+        .gap_1()
+        .child(Label::new("Blend Mode").size(LabelSize::Small))
+        .child(
+            div()
+                .debug_selector(|| "GRAPHITE-GDD-LAYER-BLEND-MODE".into())
+                .child(
+                    PopoverMenu::new("graphite-saved-layer-blend-mode-menu")
+                        .trigger(Button::new(
+                            "graphite-saved-layer-blend-mode",
+                            mode.map_or_else(|| "Mixed".into(), |mode| mode.to_string()),
+                        ))
+                        .menu(menu),
+                ),
+        )
 }
 
 pub(crate) fn render_saved_layer_opacity(
@@ -236,6 +259,7 @@ pub(crate) fn render_saved_layer(
     } = row;
     let select = dispatch.clone();
     let toggle_expansion = dispatch.clone();
+    let toggle_clipping = dispatch.clone();
     h_flex()
         .gap_2()
         .flex_wrap()
@@ -303,6 +327,34 @@ pub(crate) fn render_saved_layer(
                     .color(Color::Muted),
             )
         })
+        .when(
+            edit_enabled.is_none() && layer.clipping == Some(true),
+            |row| {
+                row.child(
+                    Label::new("Clipped")
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+            },
+        )
+        .when_some(
+            edit_enabled.zip(layer.clipping),
+            |row, (enabled, clipped)| {
+                let label = if clipped { "Unclip" } else { "Clip" };
+                row.child(
+                    div()
+                        .debug_selector(move || format!("GRAPHITE-GDD-LAYER-CLIP-{index}"))
+                        .child(
+                            Button::new(("graphite-gdd-layer-clip", index), label)
+                                .aria_label(format!("{label} {name}"))
+                                .disabled(!enabled || layer.effectively_locked)
+                                .on_click(move |_, window, cx| {
+                                    toggle_clipping(SavedLayerAction::ToggleClipping, window, cx)
+                                }),
+                        ),
+                )
+            },
+        )
         .when_some(edit_enabled, |row, enabled| {
             let visibility = if layer.visible { "Hide" } else { "Show" };
             let locking = if layer.locked { "Unlock" } else { "Lock" };

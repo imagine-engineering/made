@@ -25,15 +25,16 @@ use graphics_core::formats::{
         GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
         GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddLayerGrouping, GddLayerOpacityKind,
-        GddLayerOrder, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
-        ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        GddGraphPortSource, GddHistoryDirection, GddLayerBlendingChange, GddLayerGrouping,
+        GddLayerOpacityKind, GddLayerOrder, GddNumericGraphEvaluator, GddNumericImportKind,
+        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
+        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
+        inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
+use graphite_core_types::BlendMode;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     overlays::utility_types::OverlaysVisibilitySettings,
@@ -1432,6 +1433,21 @@ impl NodeCopyForm {
             ]);
         }
         values
+    }
+
+    fn selected_layer_blend_mode(&self) -> Option<BlendMode> {
+        let mut modes = self
+            .saved_layer_rows()?
+            .into_iter()
+            .filter_map(|(index, layer)| {
+                if self.selected == Some(index) || self.node_selection.contains(&index) {
+                    layer.blend_mode
+                } else {
+                    None
+                }
+            });
+        let mode = modes.next()?;
+        modes.all(|value| value == mode).then_some(mode)
     }
 
     fn refresh_layer_opacity(&self, window: &mut Window, cx: &mut App) {
@@ -5448,6 +5464,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::ApplyLayerOpacity(kind) => {
                 self.apply_saved_layer_opacity(kind, window, cx)
             }
+            SavedGraphAction::ToggleLayerClipping(index) => {
+                self.toggle_saved_layer_clipping(index, window, cx)
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -5531,6 +5550,114 @@ impl GraphiteDocumentItem {
             window,
             cx,
         );
+    }
+
+    fn toggle_saved_layer_clipping(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        if form.pending_canvas_source.is_some()
+            || !form.saved_layer_rows().is_some_and(|rows| {
+                rows.iter().any(|(row, layer)| {
+                    *row == index && layer.clipping.is_some() && !layer.effectively_locked
+                })
+            })
+        {
+            return;
+        }
+        let Some(node) = form.nodes.get(index).cloned() else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .edit_root_layer_blending_in_copy(
+                        std::slice::from_ref(&node),
+                        GddLayerBlendingChange::ToggleClipping,
+                        ARCHIVE_BUDGET,
+                    )
+                    .await
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn saved_layer_blend_mode_menu(
+        item: WeakEntity<Self>,
+        revision: Arc<()>,
+        selection: Vec<GddGraphNode>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<ContextMenu> {
+        let selection = Arc::new(selection);
+        ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (index, group) in BlendMode::list_svg_subset().into_iter().enumerate() {
+                if index > 0 {
+                    menu = menu.separator();
+                }
+                for &mode in group {
+                    let item = item.clone();
+                    let revision = revision.clone();
+                    let selection = selection.clone();
+                    menu = menu.entry(mode.to_string(), None, move |window, cx| {
+                        if let Err(error) = item.update(cx, |item, cx| {
+                            if item.copy_task.is_some() || item.model.read(cx).working.is_none() {
+                                return;
+                            }
+                            if item.saved_graph_surface_is_current(None)
+                                && let NodeCopyPanel::Ready(form) = &item.node_copy
+                                && Arc::ptr_eq(&form.revision, &revision)
+                                && form.selected_layer_nodes().is_some_and(|nodes| {
+                                    nodes
+                                        .iter()
+                                        .map(GddGraphNode::storage_id)
+                                        .eq(selection.iter().map(GddGraphNode::storage_id))
+                                })
+                            {
+                                let snapshot = form.snapshot.clone();
+                                let selection = selection.clone();
+                                item.stage_working_snapshot(
+                                    revision.clone(),
+                                    async move {
+                                        snapshot
+                                            .edit_root_layer_blending_in_copy(
+                                                &selection,
+                                                GddLayerBlendingChange::BlendMode(mode),
+                                                ARCHIVE_BUDGET,
+                                            )
+                                            .await
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            } else {
+                                item.copy_feedback = Some((
+                                    "The Graphite layer selection changed. Reopen Blend Mode."
+                                        .into(),
+                                    Color::Error,
+                                ));
+                                cx.notify();
+                            }
+                        }) {
+                            log::debug!("Graphite Blend Mode menu closed: {error:#}");
+                        }
+                    });
+                }
+            }
+            menu
+        })
     }
 
     fn duplicate_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -7903,6 +8030,7 @@ impl GraphiteDocumentItem {
                 focus: &form.saved_graph_focus,
                 layer_focus: &form.saved_layers_focus,
                 layer_opacity: form.selected_layer_opacity().is_some().then_some(&form.layer_opacity),
+                layer_blend_mode: form.selected_layer_blend_mode(),
                 selected: form.selected,
                 selection: &form.node_selection,
                 collapsed_layers: &form.collapsed_layers,
@@ -7949,6 +8077,13 @@ impl GraphiteDocumentItem {
                     return None;
                 }
                 match target {
+                    SavedGraphMenuTarget::LayerBlendMode if working => {
+                        form.selected_layer_opacity()?;
+                        let nodes = form.selected_layer_nodes()?;
+                        let revision = form.revision.clone();
+                        Some(Self::saved_layer_blend_mode_menu(menu_item.clone(), revision, nodes, window, cx))
+                    }
+                    SavedGraphMenuTarget::LayerBlendMode => None,
                     SavedGraphMenuTarget::LayerParents(placement) if working => {
                         let destinations = Self::prepare_saved_layer_destinations(form, placement)?;
                         Some(Self::saved_layer_destination_menu(menu_item.clone(), destinations, placement, window, cx))
@@ -14342,6 +14477,220 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_023_1_and_at_gra_layer_024_1_validate_source_blending(
+        _cx: &mut TestAppContext,
+    ) {
+        let bytes = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = snapshot.graph_nodes().await.expect("saved source layers");
+        let node = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let original = snapshot.history_len();
+        let result = |name, change| {
+            snapshot.edit_root_layer_blending_in_copy(
+                std::slice::from_ref(node(name)),
+                change,
+                ARCHIVE_BUDGET,
+            )
+        };
+        assert!(matches!(
+            result(
+                "Blue Repeat",
+                GddLayerBlendingChange::BlendMode(BlendMode::Divide)
+            )
+            .await,
+            Err(GddArchiveError::UnsupportedLayerBlendMode)
+        ));
+        assert!(matches!(
+            result(
+                "Blue Repeat",
+                GddLayerBlendingChange::BlendMode(BlendMode::Normal)
+            )
+            .await,
+            Err(GddArchiveError::UnchangedRootLayer)
+        ));
+        assert!(matches!(
+            result("Gray", GddLayerBlendingChange::ToggleClipping).await,
+            Err(GddArchiveError::UnsupportedLayerClipping)
+        ));
+        assert!(matches!(
+            result(
+                "Locked Gold",
+                GddLayerBlendingChange::BlendMode(BlendMode::Multiply)
+            )
+            .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let unclipped = result("Green", GddLayerBlendingChange::ToggleClipping)
+            .await
+            .expect("source unclip edit");
+        let inspection = unclipped.graph_inspection().await.expect("editable graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document scope");
+        let rows = unclipped
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("source layers");
+        assert!(
+            rows.iter()
+                .any(|layer| layer.storage_id == node("Green").storage_id()
+                    && layer.clipping == Some(false))
+        );
+        assert_eq!(snapshot.history_len(), original);
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_023_2_and_at_gra_layer_024_2_workspace_blends_and_clips_saved_layers(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/layer-blend-and-clip.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-4");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-LAYER-BLEND-MODE")
+                .is_none()
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-LAYER-CLIP-4").is_none());
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let canvas_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let frame = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                match &canvas.frame {
+                    SavedSceneFrame::Ready(frame) => frame.clone(),
+                    SavedSceneFrame::Failed(error) => panic!("Canvas render failed: {error}"),
+                    _ => panic!("accepted source artwork"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            frame
+        };
+        let before = canvas_image(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-4");
+        let red = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers")
+            };
+            form.nodes[4].storage_id()
+        });
+        let style = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native Layers")
+                };
+                let rows = form.saved_layer_rows().expect("saved source layers");
+                let red = rows
+                    .iter()
+                    .find_map(|(_, layer)| (layer.storage_id == red).then_some(*layer))
+                    .expect("same Red layer");
+                (red.blend_mode, red.clipping)
+            })
+        };
+        assert_eq!(style(window), (Some(BlendMode::Normal), Some(false)));
+        click(window, "GRAPHITE-GDD-LAYER-BLEND-MODE");
+        assert!(
+            window.debug_bounds("MENU_ITEM-Multiply").is_some(),
+            "blend choices on initial open"
+        );
+        click(window, "GRAPHITE-GDD-LAYER-BLEND-MODE");
+        assert_eq!(style(window), (Some(BlendMode::Normal), Some(false)));
+        assert!(
+            window.debug_bounds("MENU_ITEM-Multiply").is_none(),
+            "the trigger dismisses Blend Mode"
+        );
+        click(window, "GRAPHITE-GDD-LAYER-BLEND-MODE");
+        click(window, "MENU_ITEM-Multiply");
+        assert_eq!(style(window), (Some(BlendMode::Multiply), Some(false)));
+        let blended = canvas_image(window);
+        assert!(before.as_bytes(0) != blended.as_bytes(0));
+        click(window, "GRAPHITE-GDD-LAYER-CLIP-4");
+        assert_eq!(style(window), (Some(BlendMode::Multiply), Some(true)));
+        assert!(blended.as_bytes(0) != canvas_image(window).as_bytes(0));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(style(window), (Some(BlendMode::Multiply), Some(false)));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(style(window), (Some(BlendMode::Normal), Some(false)));
+        click(window, "GRAPHITE-GDD-REDO");
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(style(window), (Some(BlendMode::Multiply), Some(true)));
+        let destination = PathBuf::from("/project/edited-layer-blend-and-clip.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved blend and clip");
+        let inspection = saved
+            .graph_inspection()
+            .await
+            .expect("editable source graph");
+        assert!(
+            inspection
+                .nodes
+                .iter()
+                .any(|node| node.display_name() == "Repeat Array")
+        );
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document scope");
+        let rows = saved
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("saved layers");
+        assert_eq!(rows.len(), 9);
+        assert!(
+            rows.iter()
+                .any(|layer| layer.storage_id == red
+                    && layer.blend_mode == Some(BlendMode::Multiply))
+        );
+        assert!(
+            rows.iter()
+                .any(|layer| layer.storage_id == red && layer.clipping == Some(true))
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }
