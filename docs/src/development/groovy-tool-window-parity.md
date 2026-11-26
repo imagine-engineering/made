@@ -103,12 +103,15 @@ designs identify the current owners. Native and remote qualification stays with
 
 The pinned Maven and Gradle provider fixtures, mounted GPUI checks and Cargo
 builds cover separate parts of these workflows. The mounted checks verify
-selection, filter retention, focus and bounded rendering. The network-denied
-Maven fixtures verify cached goals and profiles with the pinned wrapper.
-The current macOS ARM64 development builds prepare the native journeys.
-Accessibility access, exact-candidate launch approval, reference screenshots,
-representative timings, a connected separate host and platform qualification
-remain open. The product remains planned.
+selection, filter retention, focus and bounded rendering. In the macOS ARM64
+replay, the Gradle diagram drew a 126-component, 413-edge graph in 135 ms.
+Full-query search drew the late leaf in 359 ms and the shared dependency in
+431 ms. All-path inspection drew in 56 ms and reported 64 of 96 paths. The
+analyzer round trip kept the same provider generation. These timings measure
+mounted GPUI dispatch to draw. The network-denied Maven fixtures verify cached
+goals and profiles with the pinned wrapper. Native input-to-display timings,
+comparable screenshots, assistive coverage, a connected separate host and
+platform qualification remain open. The product remains planned.
 
 - [Bounded diagram search](https://github.com/imagine-engineering/made/commit/973e24bd8a7a26046887cddbf98fd313d3fac759)
 - [Bounded Mermaid export](https://github.com/imagine-engineering/made/commit/b2f48864f510567c3d3f3fdfc770c0c39b1e1d6e)

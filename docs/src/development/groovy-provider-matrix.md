@@ -253,9 +253,11 @@ worktree-privacy regression also passed with registration withheld.
 The opt-in `docker_gradle_ordered_operations_run_on_a_cold_host` case now
 covers one Java server process through synchronization and the same ordered
 Task. The offline Linux ARM64 journey passed with normal registration and
-with the callable companion's advertisement withheld. The cached proof
-preceded configuration, and the new report identified the host. A valid
-bundle with the same length and a different SHA-256 was refused: no recovery
+with the callable companion's advertisement withheld. Two subsequent trials
+with untouched registration also passed on fresh hosts. Each observed the
+cached topology reply before configuration, ran both ordered operations, and
+wrote fresh host JUnit XML without restarting or reimporting. A valid bundle
+with the same length and a different SHA-256 was refused before any recovery
 probe or configuring command ran. Cold starts where the companion handler
 itself is unavailable and separate physical-host qualification remain open.
 
