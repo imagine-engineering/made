@@ -1,7 +1,10 @@
 use std::str;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering::SeqCst},
+};
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use collections::HashMap;
 use futures::{
     AsyncBufReadExt, AsyncRead, AsyncReadExt as _, SinkExt as _,
@@ -32,21 +35,17 @@ pub struct LspStdoutHandler {
     pub(super) incoming_messages: Receiver<NotificationOrRequest>,
 }
 
-async fn read_headers<Stdout>(reader: &mut BufReader<Stdout>, buffer: &mut Vec<u8>) -> Result<()>
+async fn read_headers<Stdout>(reader: &mut BufReader<Stdout>, buffer: &mut Vec<u8>) -> Result<bool>
 where
     Stdout: AsyncRead + Unpin + Send + 'static,
 {
-    loop {
-        if buffer.len() >= HEADER_DELIMITER.len()
-            && buffer[(buffer.len() - HEADER_DELIMITER.len())..] == HEADER_DELIMITER[..]
-        {
-            return Ok(());
-        }
-
+    while !buffer.ends_with(HEADER_DELIMITER) {
         if reader.read_until(b'\n', buffer).await? == 0 {
-            anyhow::bail!("cannot read LSP message headers");
+            ensure!(buffer.is_empty(), "truncated LSP message header");
+            return Ok(false);
         }
     }
+    Ok(true)
 }
 
 impl LspStdoutHandler {
@@ -54,13 +53,20 @@ impl LspStdoutHandler {
         stdout: Input,
         response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
         io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
+        shutdown_acknowledged: Arc<AtomicBool>,
         cx: BackgroundExecutor,
     ) -> Self
     where
         Input: AsyncRead + Unpin + Send + 'static,
     {
         let (tx, notifications_channel) = channel(INCOMING_MESSAGE_QUEUE_CAPACITY);
-        let loop_handle = cx.spawn(Self::handler(stdout, tx, response_handlers, io_handlers));
+        let loop_handle = cx.spawn(Self::handler(
+            stdout,
+            tx,
+            response_handlers,
+            io_handlers,
+            shutdown_acknowledged,
+        ));
         Self {
             loop_handle,
             incoming_messages: notifications_channel,
@@ -72,6 +78,7 @@ impl LspStdoutHandler {
         mut notifications_sender: Sender<NotificationOrRequest>,
         response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
         io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
+        shutdown_acknowledged: Arc<AtomicBool>,
     ) -> anyhow::Result<()>
     where
         Input: AsyncRead + Unpin + Send + 'static,
@@ -83,7 +90,13 @@ impl LspStdoutHandler {
         loop {
             buffer.clear();
 
-            read_headers(&mut stdout, &mut buffer).await?;
+            if !read_headers(&mut stdout, &mut buffer).await? {
+                ensure!(
+                    shutdown_acknowledged.load(SeqCst),
+                    "language server stdout closed unexpectedly"
+                );
+                return Ok(());
+            }
 
             let headers = std::str::from_utf8(&buffer)?;
 
@@ -96,7 +109,10 @@ impl LspStdoutHandler {
                 .parse()?;
 
             buffer.resize(message_len, 0);
-            stdout.read_exact(&mut buffer).await?;
+            stdout
+                .read_exact(&mut buffer)
+                .await
+                .context("cannot read LSP message body")?;
 
             if let Ok(message) = str::from_utf8(&buffer) {
                 log::trace!("incoming message: {message}");
@@ -150,6 +166,7 @@ mod tests {
             reader,
             Arc::new(Mutex::new(Some(HashMap::default()))),
             Arc::new(Mutex::new(HashMap::default())),
+            Arc::new(AtomicBool::new(false)),
             cx.background_executor.clone(),
         );
 
@@ -184,6 +201,63 @@ mod tests {
                 "the message stream ended after {received} of {total_messages} messages"
             );
             received += 1;
+        }
+    }
+
+    #[gpui::test]
+    async fn test_header_read_distinguishes_frame_boundary_eof() {
+        let mut reader = BufReader::new(b"" as &[u8]);
+        let mut buffer = Vec::new();
+        assert!(
+            !read_headers(&mut reader, &mut buffer)
+                .await
+                .expect("read frame boundary")
+        );
+
+        let mut reader = BufReader::new(b"Content-Length: 12\r\n" as &[u8]);
+        assert!(read_headers(&mut reader, &mut buffer).await.is_err());
+    }
+
+    #[gpui::test]
+    async fn test_stdout_eof_preserves_shutdown_and_protocol_errors(cx: &mut TestAppContext) {
+        let payload = r#"{"jsonrpc":"2.0","method":"test/notification"}"#;
+        let frame = format!("Content-Length: {}\r\n\r\n{payload}", payload.len());
+        for (bytes, shutdown_acknowledged, error) in [
+            (frame.as_bytes(), true, None),
+            (
+                frame.as_bytes(),
+                false,
+                Some("language server stdout closed unexpectedly"),
+            ),
+            (
+                b"Content-Length: 12\r\n",
+                true,
+                Some("truncated LSP message header"),
+            ),
+            (
+                b"Content-Length: 12\r\n\r\n{}",
+                true,
+                Some("cannot read LSP message body"),
+            ),
+        ] {
+            let mut handler = LspStdoutHandler::new(
+                futures::io::Cursor::new(bytes.to_vec()),
+                Arc::new(Mutex::new(Some(HashMap::default()))),
+                Arc::new(Mutex::new(HashMap::default())),
+                Arc::new(AtomicBool::new(shutdown_acknowledged)),
+                cx.background_executor.clone(),
+            );
+            if bytes == frame.as_bytes() {
+                let message = handler.incoming_messages.next().await.unwrap();
+                assert_eq!(message.method, "test/notification");
+            }
+            assert!(handler.incoming_messages.next().await.is_none());
+            match error {
+                Some(expected) => {
+                    assert_eq!(handler.loop_handle.await.unwrap_err().to_string(), expected)
+                }
+                None => handler.loop_handle.await.unwrap(),
+            }
         }
     }
 

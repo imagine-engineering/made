@@ -34,7 +34,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc, Weak,
-        atomic::{AtomicI32, Ordering::SeqCst},
+        atomic::{AtomicBool, AtomicI32, Ordering::SeqCst},
     },
     task::Poll,
     time::{Duration, Instant},
@@ -140,6 +140,7 @@ pub struct LanguageServer {
     #[allow(clippy::type_complexity)]
     io_tasks: Mutex<Option<(Task<Option<()>>, Task<Option<()>>)>>,
     output_done_rx: Mutex<Option<barrier::Receiver>>,
+    shutdown_acknowledged: Arc<AtomicBool>,
     server: Arc<Mutex<Option<Child>>>,
     workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
     root_uri: Uri,
@@ -526,6 +527,7 @@ impl LanguageServer {
             Arc::new(Mutex::new(Some(HashMap::<_, ResponseHandler>::default())));
         let pending_respond_tasks = PendingRespondTasks::default();
         let io_handlers = Arc::new(Mutex::new(HashMap::default()));
+        let shutdown_acknowledged = Arc::new(AtomicBool::new(false));
 
         let stdout_input_task = cx.spawn({
             let unhandled_notification_wrapper = {
@@ -556,14 +558,21 @@ impl LanguageServer {
             let response_handlers = response_handlers.clone();
             let io_handlers = io_handlers.clone();
             let pending_respond_tasks = pending_respond_tasks.clone();
+            let shutdown_acknowledged = shutdown_acknowledged.clone();
             async move |cx| {
-                Self::handle_incoming_messages(
+                let input_handler = input_handler::LspStdoutHandler::new(
                     stdout,
+                    response_handlers.clone(),
+                    io_handlers,
+                    shutdown_acknowledged,
+                    cx.background_executor().clone(),
+                );
+                Self::handle_incoming_messages(
+                    input_handler,
                     unhandled_notification_wrapper,
                     notification_handlers,
                     response_handlers,
                     pending_respond_tasks,
-                    io_handlers,
                     cx,
                 )
                 .log_err()
@@ -623,6 +632,7 @@ impl LanguageServer {
             executor: cx.background_executor().clone(),
             io_tasks: Mutex::new(Some((input_task, output_task))),
             output_done_rx: Mutex::new(Some(output_done_rx)),
+            shutdown_acknowledged,
             server: Arc::new(Mutex::new(server)),
             workspace_folders,
             root_uri,
@@ -634,32 +644,20 @@ impl LanguageServer {
         self.code_action_kinds.clone()
     }
 
-    async fn handle_incoming_messages<Stdout>(
-        stdout: Stdout,
+    async fn handle_incoming_messages(
+        mut input_handler: input_handler::LspStdoutHandler,
         on_unhandled_notification: impl AsyncFn(NotificationOrRequest) + 'static + Send,
         notification_handlers: Arc<Mutex<HashMap<&'static str, NotificationHandler>>>,
         response_handlers: Arc<Mutex<Option<HashMap<RequestId, ResponseHandler>>>>,
         pending_respond_tasks: PendingRespondTasks,
-        io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
         cx: &mut AsyncApp,
-    ) -> anyhow::Result<()>
-    where
-        Stdout: AsyncRead + Unpin + Send + 'static,
-    {
-        let stdout = BufReader::new(stdout);
+    ) -> anyhow::Result<()> {
         let _clear_response_handlers = gpui_util::defer({
             let response_handlers = response_handlers.clone();
             move || {
                 response_handlers.lock().take();
             }
         });
-        let mut input_handler = input_handler::LspStdoutHandler::new(
-            stdout,
-            response_handlers,
-            io_handlers,
-            cx.background_executor().clone(),
-        );
-
         while let Some(msg) = input_handler.incoming_messages.next().await {
             if msg.method == <notification::Cancel as notification::Notification>::METHOD {
                 if let Some(params) = msg.params {
@@ -1117,6 +1115,7 @@ impl LanguageServer {
         let next_id = AtomicI32::new(self.next_id.load(SeqCst));
         let outbound_tx = self.outbound_tx.clone();
         let executor = self.executor.clone();
+        let shutdown_acknowledged = self.shutdown_acknowledged.clone();
         let mut output_done = self.output_done_rx.lock().take().unwrap();
         let shutdown_request = Self::request_internal::<request::Shutdown>(
             &next_id,
@@ -1159,6 +1158,7 @@ impl LanguageServer {
                 },
             };
 
+            shutdown_acknowledged.store(acknowledged, SeqCst);
             response_handlers.lock().take();
             Self::notify_internal::<notification::Exit>(&outbound_tx, ()).log_err();
             outbound_tx.close();

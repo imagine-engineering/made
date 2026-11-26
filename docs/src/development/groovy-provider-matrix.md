@@ -154,8 +154,10 @@ The Linux ARM64 Kotlin probe also passed two launches of each fixture with
 passed completion, definition, diagnostic recovery and workspace export, and
 exited with code 0 after `shutdown`, `exit` and stdin EOF. Groovy closes the
 server's input after flushing `exit` and gives an acknowledging process a
-bounded interval to finish cleanup. These standalone runs leave the native
-32 GiB reference editor and worker memory measurement open.
+bounded interval to finish cleanup. After acknowledgment, stdout can close
+cleanly between messages. A truncated frame or an early close still reports
+an error. These standalone runs leave the native 32 GiB reference editor
+and worker memory measurement open.
 
 The checksum-matched alternate Kotlin language server `1.3.13` also passed
 two launches each of the 500-source Maven and Gradle fixtures in fresh
