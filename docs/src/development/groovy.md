@@ -375,8 +375,9 @@ Search ranks exact dependency coordinates ahead of partial matches. In the
 analyzer you can paste a full coordinate even when group IDs are hidden.
 The temporary diagram preview offers the same search. Escape closes the
 search first, then closes the preview and returns to the workspace.
-On a larger graph, **Copy Diagram Source** copies the current bounded canvas
-as Mermaid source and identifies the limited coverage in the copied text.
+**Copy Diagram Source** retains the diagram's selected scope and layout in
+the Mermaid source. On a larger graph it copies the bounded canvas and
+identifies the limited coverage in the copied text.
 
 | Earlier panel control                                                                             | Where to find it                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

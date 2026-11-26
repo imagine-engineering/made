@@ -8,14 +8,15 @@ use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
     CopyDependencyDiagramSource, DependencyGraphReceipt, InspectGraphAllRootPaths,
     InspectGraphAllUsages, InspectGraphConflictOrigins, InspectGraphNeighbours,
-    InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, PinGraphSelection,
-    current_dependency_graph_receipt, derive_dependency_diagram,
+    InspectGraphPathsBetween, InspectGraphRootPaths, InspectGraphSelectionSet, MavenGraphScope,
+    PinGraphSelection, canvas_dependency_diagram_source, current_dependency_graph_receipt,
+    dependency_diagram_source_export, derive_dependency_diagram,
 };
 use crate::dependency_diagram_menu::{
     DependencyDiagramContextTarget, DependencyDiagramMenuCommand, DependencyDiagramMenuSnapshot,
     dependency_diagram_menu_available, stage_dependency_diagram_target,
 };
-use crate::dependency_graph_canvas::{CanvasGraph, CanvasNode, CanvasState};
+use crate::dependency_graph_canvas::{CanvasGraph, CanvasLayout, CanvasNode, CanvasState};
 use crate::{FocusNextGroovyControl, FocusPreviousGroovyControl};
 use gpui::{
     App, AppContext as _, Context, DismissEvent, EventEmitter, FocusHandle, Focusable, FontWeight,
@@ -580,8 +581,6 @@ impl DependencyDiagramItem {
         });
     }
 
-    /// Copies the exact Mermaid export payload derived from the same admitted
-    /// facts, matching the panel's Copy Diagram Source behaviour.
     pub fn copy_diagram_source(&mut self, cx: &mut Context<Self>) {
         let Some(source) = self.source.as_ref().filter(|_| self.receipt_is_current(cx)) else {
             self.notice = Some(
@@ -592,23 +591,26 @@ impl DependencyDiagramItem {
             return;
         };
         let graph = &self.canvas.read(cx).graph;
-        let (payload, description) = if graph.truncated {
+        let (payload, description) = if graph.truncated
+            || self.scope.maven_scope() != MavenGraphScope::All
+            || graph.layout != CanvasLayout::LeftToRight
+        {
             (
-                crate::dependencies_panel::bounded_dependency_diagram_source(graph),
-                "Copied Mermaid source for the current canvas. The provider graph contains additional facts.",
+                canvas_dependency_diagram_source(graph),
+                if graph.truncated {
+                    "Copied Mermaid source for the current canvas. The provider graph contains additional facts."
+                } else {
+                    "Copied Mermaid source for the current diagram view."
+                },
             )
         } else {
             (
-                crate::dependencies_panel::dependency_diagram_source_export(
-                    source.project.read(cx),
-                    &source.selection,
-                    cx,
-                )
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "The current provider graph is unavailable for Copy Diagram Source."
-                    )
-                }),
+                dependency_diagram_source_export(source.project.read(cx), &source.selection, cx)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "The current provider graph is unavailable for Copy Diagram Source."
+                        )
+                    }),
                 "Copied Mermaid source for the admitted dependency graph.",
             )
         };

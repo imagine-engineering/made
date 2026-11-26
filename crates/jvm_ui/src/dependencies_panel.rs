@@ -1050,7 +1050,7 @@ fn dependency_diagram_mermaid(
     Ok(source)
 }
 
-pub(crate) fn bounded_dependency_diagram_source(graph: &CanvasGraph) -> anyhow::Result<String> {
+pub(crate) fn canvas_dependency_diagram_source(graph: &CanvasGraph) -> anyhow::Result<String> {
     let nodes = graph
         .nodes
         .iter()
@@ -1074,12 +1074,12 @@ pub(crate) fn bounded_dependency_diagram_source(graph: &CanvasGraph) -> anyhow::
             )
         })
         .collect::<Vec<_>>();
-    dependency_diagram_mermaid(
-        &nodes,
-        &edges,
-        "Bounded diagram of the current canvas. The admitted provider graph contains additional facts. Dotted edges mark constraints, unresolved dependencies, or omitted occurrences.",
-        graph.layout,
-    )
+    let description = if graph.truncated {
+        "Bounded diagram of the current canvas. The admitted provider graph contains additional facts. Dotted edges mark constraints, unresolved dependencies, or omitted occurrences."
+    } else {
+        "Diagram of the current canvas. Dotted edges mark constraints, unresolved dependencies, or omitted occurrences."
+    };
+    dependency_diagram_mermaid(&nodes, &edges, description, graph.layout)
 }
 
 /// Derives a short module display name from the module root path.
@@ -16863,6 +16863,22 @@ mod tests {
                             .is_some_and(|notice| notice.contains("Shortest distance 1"))
                     );
                 });
+                let scoped_edges = diagram_item.read_with(cx, |item, cx| {
+                    let graph = &item.canvas().read(cx).graph;
+                    assert!(!graph.truncated);
+                    graph.edges.len()
+                });
+                diagram_item.update(cx, |item, cx| item.copy_diagram_source(cx));
+                let copied = cx
+                    .cx
+                    .update(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+                    .expect("scoped Mermaid source");
+                assert_eq!(
+                    copied.lines().filter(|line| line.contains("->|\"")).count(),
+                    scoped_edges,
+                    "Mermaid source uses the selected Maven scope"
+                );
+                rendered_diagram(&copied);
                 diagram_item.update(cx, |item, cx| {
                     item.apply_scope("__unreported-scope__".into(), cx);
                 });
@@ -17228,6 +17244,29 @@ mod tests {
                     Some(source.as_str()),
                     "toolbar Copy Diagram Source matches the panel action"
                 );
+            });
+            diagram_item.update(cx, |item, cx| {
+                item.canvas().update(cx, |canvas, cx| {
+                    assert!(!canvas.graph.truncated);
+                    assert!(canvas.set_layout(CanvasLayout::TopToBottom));
+                    cx.notify();
+                });
+                item.copy_diagram_source(cx);
+            });
+            let rotated_source = cx
+                .cx
+                .update(|cx| cx.read_from_clipboard().and_then(|item| item.text()))
+                .expect("rotated Mermaid source");
+            assert!(
+                rotated_source.contains("flowchart TB"),
+                "Mermaid source uses the current layout"
+            );
+            rendered_diagram(&rotated_source);
+            diagram_item.update(cx, |item, cx| {
+                item.canvas().update(cx, |canvas, cx| {
+                    assert!(canvas.set_layout(CanvasLayout::LeftToRight));
+                    cx.notify();
+                });
             });
             let legend_row = panel.read_with(cx, |panel, _| {
                 let legend = &panel.graph_diagram_legend;
