@@ -1,14 +1,29 @@
-use gpui::{App, Window};
+use gpui::{App, Entity, Window};
 use graphics_core::formats::gdd::{
     GddLayerGrouping, GddLayerOrder, GddRootLayer, GddRootLayerChange,
 };
 use std::collections::BTreeSet;
-use ui::{Button, ButtonStyle, Color, Label, LabelSize, TintColor, prelude::*};
+use ui::{
+    Button, ButtonStyle, Color, ContextMenu, Label, LabelSize, PopoverMenu, TintColor, prelude::*,
+};
 
 pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
     ToggleExpansion { recursive: bool },
+}
+
+pub(crate) fn render_saved_layer_move(
+    enabled: bool,
+    menu: impl Fn(&mut Window, &mut App) -> Option<Entity<ContextMenu>> + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-MOVE".into())
+        .child(
+            PopoverMenu::new("graphite-saved-layer-move-menu")
+                .trigger(Button::new("graphite-saved-layer-move", "Move To").disabled(!enabled))
+                .menu(menu),
+        )
 }
 
 pub(crate) fn render_saved_layer_grouping(

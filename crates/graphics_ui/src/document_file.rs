@@ -1199,6 +1199,18 @@ enum NodeCopyPanel {
     Failed(SharedString),
 }
 
+struct SavedLayerDestination {
+    parent: Option<GddGraphNode>,
+    label: String,
+    positions: Vec<String>,
+}
+
+struct SavedLayerMoveMenu {
+    revision: Arc<()>,
+    selected: BTreeSet<StorageNodeId>,
+    destinations: Vec<SavedLayerDestination>,
+}
+
 struct NodeCopyForm {
     snapshot: Arc<InspectedGddV1>,
     revision: Arc<()>,
@@ -5490,6 +5502,160 @@ impl GraphiteDocumentItem {
         self.install_working_snapshot(revision, staged, window, cx);
     }
 
+    fn prepare_saved_layer_destinations(form: &NodeCopyForm) -> Option<SavedLayerMoveMenu> {
+        let rows = form.saved_layer_rows()?;
+        let selection = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty())?;
+        let selected: BTreeSet<_> = selection.iter().map(GddGraphNode::storage_id).collect();
+        let mut excluded = selected.clone();
+        let mut labels = BTreeMap::new();
+        let mut siblings = BTreeMap::<_, Vec<_>>::new();
+        let mut selected_artboards = 0;
+        let mut root_has_artboards = false;
+        for &(index, layer) in &rows {
+            let name = form.nodes.get(index)?.display_name();
+            if selected.contains(&layer.storage_id) {
+                if layer.effectively_locked {
+                    return None;
+                }
+                selected_artboards += usize::from(layer.is_artboard);
+            }
+            root_has_artboards |= layer.parent.is_none() && layer.is_artboard;
+            if layer
+                .parent
+                .is_some_and(|parent| excluded.contains(&parent))
+            {
+                excluded.insert(layer.storage_id);
+            }
+            let label = layer
+                .parent
+                .and_then(|parent| labels.get(&parent))
+                .map_or_else(|| name.to_owned(), |parent| format!("{parent} › {name}"));
+            labels.insert(layer.storage_id, label);
+            siblings
+                .entry(layer.parent)
+                .or_default()
+                .push(format!("Before {name}"));
+        }
+        let destinations = (selected_artboards == selected.len() || !root_has_artboards)
+            .then(|| SavedLayerDestination {
+                parent: None,
+                label: "Document Root".into(),
+                positions: siblings.remove(&None).unwrap_or_default(),
+            })
+            .into_iter()
+            .chain(rows.into_iter().filter_map(|(index, layer)| {
+                if selected_artboards > 0
+                    || !layer.accepts_children
+                    || excluded.contains(&layer.storage_id)
+                {
+                    return None;
+                }
+                let label = labels.remove(&layer.storage_id)?;
+                let positions = siblings.remove(&Some(layer.storage_id)).unwrap_or_default();
+                Some(SavedLayerDestination {
+                    parent: Some(form.nodes.get(index)?.clone()),
+                    label,
+                    positions,
+                })
+            }))
+            .collect();
+        Some(SavedLayerMoveMenu {
+            revision: form.revision.clone(),
+            selected,
+            destinations,
+        })
+    }
+
+    fn saved_layer_destination_menu(
+        item: WeakEntity<Self>,
+        picker: SavedLayerMoveMenu,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entity<ContextMenu> {
+        let SavedLayerMoveMenu {
+            revision,
+            selected,
+            destinations,
+        } = picker;
+        let selected = Arc::new(selected);
+        ContextMenu::build(window, cx, |mut menu, _, _| {
+            for SavedLayerDestination {
+                parent,
+                label,
+                mut positions,
+            } in destinations
+            {
+                positions.push(
+                    if positions.is_empty() {
+                        "Move Here"
+                    } else {
+                        "At End"
+                    }
+                    .into(),
+                );
+                let item = item.clone();
+                let revision = revision.clone();
+                let selected = selected.clone();
+                menu = menu.submenu(label, move |mut menu, _, _| {
+                    for (insert_index, label) in positions.iter().enumerate() {
+                        let item = item.clone();
+                        let revision = revision.clone();
+                        let selected = selected.clone();
+                        let parent = parent.clone();
+                        menu = menu.entry(label.clone(), None, move |window, cx| {
+                            if let Err(error) = item.update(cx, |item, cx| {
+                                if item.copy_task.is_some() || item.model.read(cx).working.is_none()
+                                {
+                                    return;
+                                }
+                                if item.saved_graph_surface_is_current(None)
+                                    && let NodeCopyPanel::Ready(form) = &item.node_copy
+                                    && Arc::ptr_eq(&form.revision, &revision)
+                                    && let Some(nodes) = form.selected_layer_nodes()
+                                    && nodes.len() == selected.len()
+                                    && nodes
+                                        .iter()
+                                        .all(|node| selected.contains(&node.storage_id()))
+                                {
+                                    let snapshot = form.snapshot.clone();
+                                    let parent = parent.clone();
+                                    item.stage_working_snapshot(
+                                        revision.clone(),
+                                        async move {
+                                            futures::executor::block_on(
+                                                snapshot.reparent_root_layers_in_copy(
+                                                    &nodes,
+                                                    parent.as_ref(),
+                                                    insert_index,
+                                                    ARCHIVE_BUDGET,
+                                                ),
+                                            )
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                } else {
+                                    item.copy_feedback = Some((
+                                        "The Graphite layer selection changed. Reopen Move To."
+                                            .into(),
+                                        Color::Error,
+                                    ));
+                                    cx.notify();
+                                }
+                            }) {
+                                log::debug!("Graphite layer destination closed: {error:#}");
+                            }
+                        });
+                    }
+                    menu
+                });
+            }
+            menu
+        })
+    }
+
     fn edit_canvas_layer(
         &mut self,
         index: usize,
@@ -7578,6 +7744,11 @@ impl GraphiteDocumentItem {
                     return None;
                 }
                 match target {
+                    SavedGraphMenuTarget::LayerParents if working => {
+                        let destinations = Self::prepare_saved_layer_destinations(form)?;
+                        Some(Self::saved_layer_destination_menu(menu_item.clone(), destinations, window, cx))
+                    }
+                    SavedGraphMenuTarget::LayerParents => None,
                     SavedGraphMenuTarget::Background(position) => {
                         let network = Arc::new(form.clipboard_scope()?.clone());
                         let revision = form.revision.clone();
@@ -10300,6 +10471,10 @@ mod tests {
     }
 
     async fn layer_order_archive() -> Vec<u8> {
+        layer_order_archive_with_transforms(false).await
+    }
+
+    async fn layer_order_archive_with_transforms(transformed: bool) -> Vec<u8> {
         use graphite_core_types::Color;
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{
@@ -10307,7 +10482,7 @@ mod tests {
         };
         use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
         use graphite_resource::ResourceRegistry;
-        use graphite_std::{blending_nodes::clipping_mask, repeat_nodes::repeat_array};
+        use graphite_std::{blending_nodes::clipping_mask, repeat_nodes::repeat_array, transform_nodes::transform};
 
         struct LayerMetadata;
         impl NodeMetadataSource for LayerMetadata {
@@ -10405,6 +10580,16 @@ mod tests {
             ])
             .into_parts()
             .0;
+        let transform = |source_id, translation| {
+            resolve_proto_node_type(transform::IDENTIFIER)
+                .expect("pinned Transform")
+                .node_template_input_override([
+                    source(source_id),
+                    Some(NodeInput::value(TaggedValue::DVec2(translation), false)),
+                ])
+                .into_parts()
+                .0
+        };
         let graph = NodeNetwork {
             nodes: [
                 (
@@ -10412,8 +10597,11 @@ mod tests {
                     board(source(2), source(10), DVec2::new(-30., -40.)),
                 ),
                 (NodeId(2), board(None, None, DVec2::new(240., -40.))),
-                (NodeId(10), layer(None, 20)),
-                (NodeId(20), layer(source(70), 30)),
+                (NodeId(10), layer(None, if transformed { 151 } else { 20 })),
+                (
+                    NodeId(20),
+                    layer(source(70), if transformed { 152 } else { 30 }),
+                ),
                 (NodeId(30), layer(source(40), 101)),
                 (NodeId(40), layer(source(50), 112)),
                 (NodeId(50), layer(source(60), 122)),
@@ -10423,6 +10611,8 @@ mod tests {
                 (NodeId(122), repeat),
             ]
             .into_iter()
+            .chain(transformed.then(|| (NodeId(151), transform(20, DVec2::new(30., 46.)))))
+            .chain(transformed.then(|| (NodeId(152), transform(30, DVec2::new(43., 0.)))))
             .chain(preview_rectangle(
                 NodeId(100),
                 NodeId(101),
@@ -13945,6 +14135,239 @@ mod tests {
         assert_eq!(layer_tree(window), grouped);
         click(window, "GRAPHITE-GDD-REDO");
         assert_eq!(layer_tree(window), base);
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_012_1_rejects_invalid_layer_destinations(_cx: &mut TestAppContext) {
+        let archive = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&archive.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS snapshot");
+        let inspection = snapshot.graph_inspection().await.expect("editable layers");
+        let node = |name| {
+            inspection
+                .nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let outer = node("Outer Group");
+        let inner = node("Inner Group");
+        let green = node("Green");
+        let repeat = node("Blue Repeat");
+        let gray = node("Gray");
+        let locked = node("Locked Gold");
+        let history = snapshot.history_len();
+        for (selected, parent, position) in [
+            (outer, Some(inner), 0),
+            (inner, Some(inner), 0),
+            (gray, Some(inner), 5),
+            (gray, None, 0),
+        ] {
+            assert!(matches!(
+                snapshot
+                    .reparent_root_layers_in_copy(
+                        std::slice::from_ref(selected),
+                        parent,
+                        position,
+                        ARCHIVE_BUDGET,
+                    )
+                    .await,
+                Err(GddArchiveError::InvalidLayerDestination)
+            ));
+        }
+        assert!(matches!(
+            snapshot
+                .reparent_root_layers_in_copy(
+                    std::slice::from_ref(locked),
+                    Some(outer),
+                    0,
+                    ARCHIVE_BUDGET,
+                )
+                .await,
+            Err(GddArchiveError::LockedLayerOrder)
+        ));
+        let reparented = snapshot
+            .reparent_root_layers_in_copy(
+                &[gray.clone(), green.clone()],
+                Some(inner),
+                2,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("valid explicit position with layers from two parents");
+        let edited = reparented
+            .graph_inspection()
+            .await
+            .expect("reparented nodes");
+        let root = edited
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root scope");
+        let layers = reparented
+            .graph_geometry(root)
+            .await
+            .expect("reparented geometry")
+            .root_layers
+            .expect("layer structure");
+        let children = layers
+            .iter()
+            .filter(|layer| layer.parent == Some(inner.storage_id()))
+            .map(|layer| layer.storage_id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            children,
+            [
+                node("Red").storage_id(),
+                green.storage_id(),
+                gray.storage_id(),
+                repeat.storage_id(),
+                locked.storage_id()
+            ]
+        );
+        let current_gray = edited
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == gray.storage_id())
+            .expect("same Gray layer");
+        assert!(matches!(
+            reparented
+                .reparent_root_layers_in_copy(
+                    std::slice::from_ref(current_gray),
+                    Some(outer),
+                    0,
+                    ARCHIVE_BUDGET,
+                )
+                .await,
+            Err(GddArchiveError::StaleGraphNode)
+        ));
+        assert_eq!(snapshot.history_len(), history);
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_012_2_workspace_reparents_at_an_explicit_slot(cx: &mut TestAppContext) {
+        let original = layer_order_archive_with_transforms(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/reparent-layers.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        click(window, "GRAPHITE-GDD-LAYER-MOVE");
+        assert!(window.debug_bounds("MENU_SUBMENU-Main Artboard").is_none());
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let canvas_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let image = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                let SavedSceneFrame::Ready(frame) = &canvas.frame else {
+                    panic!("accepted Canvas artwork")
+                };
+                frame.clone()
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            image
+        };
+        let before = canvas_image(window);
+        let (inner, gray, repeat) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready saved layers")
+            };
+            (
+                form.nodes[3].storage_id(),
+                form.nodes[8].storage_id(),
+                form.nodes[6].storage_id(),
+            )
+        });
+        let source_tree = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready saved layers")
+                };
+                form.saved_layer_rows()
+                    .expect("root layers")
+                    .iter()
+                    .map(|(_, layer)| (layer.storage_id, layer.parent))
+                    .collect::<Vec<_>>()
+            })
+        };
+        let base = source_tree(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        click(window, "GRAPHITE-GDD-LAYER-MOVE");
+        assert!(window.debug_bounds("MENU_SUBMENU-Document Root").is_none());
+        click(
+            window,
+            "MENU_SUBMENU-Main Artboard › Outer Group › Inner Group",
+        );
+        window.simulate_keystrokes("escape");
+        window.simulate_keystrokes("escape");
+        paint(window);
+        assert_eq!(source_tree(window), base);
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-LAYER-MOVE");
+        click(
+            window,
+            "MENU_SUBMENU-Main Artboard › Outer Group › Inner Group",
+        );
+        click(window, "MENU_ITEM-Before Blue Repeat");
+        item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback)
+        });
+        let moved = source_tree(window);
+        assert_eq!(moved.len(), base.len());
+        assert!(
+            moved
+                .windows(2)
+                .any(|layers| layers == [(gray, Some(inner)), (repeat, Some(inner))])
+        );
+        assert!(before.as_bytes(0) == canvas_image(window).as_bytes(0));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(source_tree(window), base);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(source_tree(window), moved);
+        let destination = PathBuf::from("/project/reparented-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved reparenting");
+        let inspection = reopened.graph_inspection().await.expect("editable graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document network");
+        let rows = reopened
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("saved source hierarchy");
+        assert!(
+            rows.iter()
+                .map(|layer| (layer.storage_id, layer.parent))
+                .eq(moved)
+        );
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
             original

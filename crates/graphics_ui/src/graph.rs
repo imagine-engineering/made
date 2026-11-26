@@ -263,6 +263,7 @@ pub(crate) enum SavedGraphMenuTarget {
     NodeInput(usize),
     Boundary(ImportOrExport),
     Background([i32; 2]),
+    LayerParents,
 }
 
 pub(crate) struct SavedGraphView<'a> {
@@ -949,6 +950,22 @@ pub(crate) fn render_saved_graph(
                                         window,
                                         cx,
                                     );
+                                },
+                            ))
+                            .child(crate::layers::render_saved_layer_move(
+                                editing
+                                    && selected
+                                    && !layers.iter().any(|layer| {
+                                        layer.effectively_locked
+                                            && nodes_by_id.get(&layer.storage_id).is_some_and(
+                                                |&(index, _)| {
+                                                    view.selected == Some(index)
+                                                        || view.selection.contains(&index)
+                                                },
+                                            )
+                                    }),
+                                move |window, cx| {
+                                    context_menu(SavedGraphMenuTarget::LayerParents, window, cx)
                                 },
                             )),
                     )
