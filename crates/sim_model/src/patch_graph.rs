@@ -4522,15 +4522,16 @@ mod tests {
             "task_results": task_results,
             "contracts": contracts,
         });
-        let artifact_directory = repository.join("target/sim-parity");
+        let artifact_directory = repository.join("target/comfy-parity");
         std::fs::create_dir_all(&artifact_directory)
             .map_err(|error| PatchGraphError::Serialization(error.to_string()))?;
-        std::fs::write(
-            artifact_directory.join("val-patch-001.json"),
-            serde_json::to_vec_pretty(&artifact)
-                .map_err(|error| PatchGraphError::Serialization(error.to_string()))?,
-        )
-        .map_err(|error| PatchGraphError::Serialization(error.to_string()))?;
+        let destination = artifact_directory.join("val-patch-001.json");
+        let temporary = destination.with_extension(format!("{}.tmp", std::process::id()));
+        let bytes = serde_json::to_vec_pretty(&artifact)
+            .map_err(|error| PatchGraphError::Serialization(error.to_string()))?;
+        std::fs::write(&temporary, bytes)
+            .and_then(|()| std::fs::rename(temporary, destination))
+            .map_err(|error| PatchGraphError::Serialization(error.to_string()))?;
         Ok(())
     }
 

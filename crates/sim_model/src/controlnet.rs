@@ -3107,13 +3107,13 @@ mod tests {
             "task_results": task_results,
             "contracts": contracts,
         });
-        let artifact_directory = repository.join("target/sim-parity");
-        std::fs::create_dir_all(&artifact_directory)?;
-        std::fs::write(
-            artifact_directory.join("val-controlnet-001.json"),
-            serde_json::to_vec_pretty(&artifact)?,
-        )?;
         assert_eq!(context.scratch.in_use_bytes(), 0);
+        let artifact_directory = repository.join("target/comfy-parity");
+        std::fs::create_dir_all(&artifact_directory)?;
+        let destination = artifact_directory.join("val-controlnet-001.json");
+        let temporary = destination.with_extension(format!("{}.tmp", std::process::id()));
+        std::fs::write(&temporary, serde_json::to_vec_pretty(&artifact)?)?;
+        std::fs::rename(temporary, destination)?;
         Ok(())
     }
 

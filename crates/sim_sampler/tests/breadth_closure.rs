@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use sim_model::{
     GENERATED_LATENT_FORMAT_MANIFEST, GENERATED_LATENT_FORMATS, GENERATED_MODEL_FAMILIES,
@@ -538,6 +539,7 @@ fn patch_rows(root: &Path) -> Result<Vec<PatchRow>, Box<dyn std::error::Error>> 
     let source_path = column(header, "source_path")?;
     let source = column(header, "source_sha256")?;
     let symbol = column(header, "symbol_sha256")?;
+    let implementation_task = column(header, "implementation_task")?;
     let artifact = column(header, "validation_artifact_sha256")?;
     let closure_artifact = column(header, "closure_artifact")?;
     let mut patches = rows
@@ -549,7 +551,7 @@ fn patch_rows(root: &Path) -> Result<Vec<PatchRow>, Box<dyn std::error::Error>> 
             })
         })
         .map(|row| {
-            Ok(PatchRow {
+            let patch = PatchRow {
                 contract_id: row.get(contract).ok_or("missing contract id")?.clone(),
                 native_owner: row.get(owner).ok_or("missing native owner")?.clone(),
                 source_path: row.get(source_path).ok_or("missing source path")?.clone(),
@@ -563,13 +565,59 @@ fn patch_rows(root: &Path) -> Result<Vec<PatchRow>, Box<dyn std::error::Error>> 
                     .get(artifact)
                     .ok_or("missing validation artifact digest")?
                     .clone(),
-            })
+            };
+            let task = row
+                .get(implementation_task)
+                .ok_or("missing patch implementation task")?;
+            Ok((patch, task))
         })
         .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
     patches.sort();
     let mut contract_ids = BTreeSet::new();
     let mut owner_counts = BTreeMap::new();
-    for patch in &mut patches {
+    let workspace = root.canonicalize()?;
+    let receipts = ["VAL-PATCH-001", "VAL-PATCH-ADAPTER-001"]
+        .into_iter()
+        .map(|id| {
+            let path = workspace.join(format!(
+                "target/comfy-parity/{}.json",
+                id.to_ascii_lowercase()
+            ));
+            assert_eq!(path.canonicalize()?, path);
+            let bytes = fs::read(&path)?;
+            let receipt: Value = serde_json::from_slice(&bytes)?;
+            assert_eq!(receipt["schema_version"], 1);
+            assert_eq!(receipt["validation_id"], id);
+            assert!(matches!(
+                receipt["overall_status"].as_str(),
+                Some("partial" | "passed")
+            ));
+            assert!(
+                receipt["summary"]["passed"]
+                    .as_u64()
+                    .is_some_and(|passed| passed > 0),
+                "patch receipt has no passes"
+            );
+            assert_eq!(receipt["summary"]["failed"], 0);
+            assert_eq!(receipt["summary"]["skipped"], 0);
+            let producer = receipt["implementation"]["path"]
+                .as_str()
+                .ok_or("missing patch producer")?;
+            let producer = workspace.join(producer);
+            assert!(producer.starts_with(&workspace));
+            assert_eq!(producer.canonicalize()?, producer);
+            assert_eq!(receipt["implementation"]["sha256"], digest_file(&producer)?);
+            let contracts = receipt["contracts"]
+                .as_array()
+                .ok_or("missing patch receipt contracts")?;
+            assert_eq!(contracts.len(), 14);
+            Ok::<_, Box<dyn std::error::Error>>((
+                id,
+                (format!("{:x}", Sha256::digest(bytes)), receipt),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    for (patch, task) in &mut patches {
         assert!(contract_ids.insert(&patch.contract_id));
         *owner_counts
             .entry(patch.native_owner.as_str())
@@ -578,21 +626,64 @@ fn patch_rows(root: &Path) -> Result<Vec<PatchRow>, Box<dyn std::error::Error>> 
             digest_file(&root.join(&patch.source_path))?,
             patch.source_sha256
         );
-        let artifact_path = root.join(format!(
-            "target/sim-parity/{}.json",
-            patch.closure_artifact.to_ascii_lowercase()
-        ));
-        let validation_artifact_sha256 = digest_file(&artifact_path)?;
+        let (artifact_digest, receipt) = receipts
+            .get(patch.closure_artifact.as_str())
+            .ok_or("unrecognized patch receipt")?;
+        let contracts = receipt["contracts"]
+            .as_array()
+            .ok_or("missing patch receipt contracts")?;
+        let mut matching = contracts
+            .iter()
+            .filter(|row| row["contract_id"] == patch.contract_id);
+        let row = matching
+            .next()
+            .ok_or_else(|| format!("patch receipt missing {}", patch.contract_id))?;
+        assert!(
+            matching.next().is_none(),
+            "duplicate patch receipt for {}",
+            patch.contract_id
+        );
+        assert_eq!(row["task_id"].as_str(), Some(task.as_str()));
+        assert_eq!(row["source_sha256"], patch.source_sha256);
+        assert_eq!(row["symbol_sha256"], patch.symbol_sha256);
+        assert_eq!(row["status"], "passed");
+        let case_ids = row["case_ids"]
+            .as_array()
+            .ok_or("missing patch receipt cases")?;
+        assert!(!case_ids.is_empty());
+        assert!(
+            case_ids
+                .iter()
+                .all(|value| value.as_str().is_some_and(|id| !id.is_empty()))
+        );
+        assert_eq!(
+            case_ids
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<BTreeSet<_>>()
+                .len(),
+            case_ids.len()
+        );
+        let task_result = &receipt["task_results"][task.as_str()];
+        assert_eq!(task_result["status"], "passed");
+        assert!(
+            task_result["passed"]
+                .as_u64()
+                .is_some_and(|passed| passed > 0),
+            "patch task has no passes"
+        );
+        assert_eq!(task_result["failed"], 0);
+        assert_eq!(task_result["skipped"], 0);
         if patch.validation_artifact_sha256.is_empty() {
-            patch.validation_artifact_sha256 = validation_artifact_sha256;
+            patch.validation_artifact_sha256.clone_from(artifact_digest);
         } else {
-            assert_eq!(validation_artifact_sha256, patch.validation_artifact_sha256);
+            assert_eq!(artifact_digest, &patch.validation_artifact_sha256);
         }
     }
     assert_eq!(owner_counts.get("sim_model::patch_graph"), Some(&14));
     assert_eq!(owner_counts.get("sim_model::patches"), Some(&14));
     assert_eq!(owner_counts.len(), 2);
-    Ok(patches)
+    Ok(patches.into_iter().map(|(patch, _)| patch).collect())
 }
 
 fn validate_closure(value: &NativeComputeClosure) -> Result<(), &'static str> {

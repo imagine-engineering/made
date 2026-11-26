@@ -521,12 +521,7 @@ def validation_artifact(
 ) -> tuple[str, str]:
     if VALIDATION_IDENTIFIER.fullmatch(closure_artifact) is None:
         return "", ""
-    artifact_directory = (
-        "target/sim-parity"
-        if closure_artifact in {PATCH_GRAPH_CLOSURE_ARTIFACT, PATCH_ADAPTER_CLOSURE_ARTIFACT}
-        else "target/comfy-parity"
-    )
-    path = workspace / artifact_directory / f"{closure_artifact.lower()}.json"
+    path = workspace / "target/comfy-parity" / f"{closure_artifact.lower()}.json"
     if (
         not path.is_file()
         or has_symlink_component(path, workspace)

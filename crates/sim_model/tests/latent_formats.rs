@@ -247,11 +247,14 @@ fn val_latent_001_all_formats_emit_complete_artifact() -> Result<(), Box<dyn std
         "validation": "VAL-LATENT-001",
         "validation_id": "VAL-LATENT-001",
     });
-    let artifact_directory = workspace.join("target/sim-parity");
+    let artifact_directory = workspace.join("target/comfy-parity");
     fs::create_dir_all(&artifact_directory)?;
+    let destination = artifact_directory.join("val-latent-001.json");
+    let temporary = destination.with_extension(format!("{}.tmp", std::process::id()));
     let mut bytes = serde_json::to_vec_pretty(&artifact)?;
     bytes.push(b'\n');
-    fs::write(artifact_directory.join("val-latent-001.json"), bytes)?;
+    fs::write(&temporary, bytes)?;
+    fs::rename(temporary, destination)?;
     Ok(())
 }
 

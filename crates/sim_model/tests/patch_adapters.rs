@@ -1063,11 +1063,11 @@ fn val_patch_adapter_001_exact_catalog_manifest_and_artifact_are_current()
         },
         "contracts": contracts,
     });
-    let artifact_directory = repository.join("target/sim-parity");
+    let artifact_directory = repository.join("target/comfy-parity");
     std::fs::create_dir_all(&artifact_directory)?;
-    std::fs::write(
-        artifact_directory.join("val-patch-adapter-001.json"),
-        serde_json::to_vec_pretty(&artifact)?,
-    )?;
+    let destination = artifact_directory.join("val-patch-adapter-001.json");
+    let temporary = destination.with_extension(format!("{}.tmp", std::process::id()));
+    std::fs::write(&temporary, serde_json::to_vec_pretty(&artifact)?)?;
+    std::fs::rename(temporary, destination)?;
     Ok(())
 }
