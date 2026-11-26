@@ -55,7 +55,7 @@ use crate::canvas::{
     artboard_outline, canvas_snap_groups, logical_vector, paint_artboard_outline,
     set_artboard_snap_camera,
 };
-use crate::canvas_grid::CanvasGrid;
+use crate::canvas_grid::{CanvasGrid, GridOptionsForm};
 use crate::canvas_overlay::CanvasOverlay;
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
@@ -189,6 +189,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     working: Option<GddWorkingCopy>,
     snapping_preferences: Option<Arc<SnappingState>>,
     grid_visible: Option<bool>,
+    grid_options_edited: bool,
 }
 
 struct GddWorkingCopy {
@@ -382,6 +383,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 working: None,
                 snapping_preferences: None,
                 grid_visible: None,
+                grid_options_edited: false,
             }))
         }))
     }
@@ -533,6 +535,7 @@ async fn open_folder_item(
             working: None,
             snapping_preferences: None,
             grid_visible: None,
+            grid_options_edited: false,
         });
         workspace.open_project_item::<GraphiteDocumentItem>(
             workspace.active_pane().clone(),
@@ -672,6 +675,7 @@ struct SavedSceneCanvas {
     snapping_document: Option<Box<DocumentMessageHandler>>,
     applied_snapping_preferences: Option<Arc<SnappingState>>,
     source_grid_visible: bool,
+    grid_options: Option<GridOptionsForm>,
     grid_frame: Option<SavedSceneGridFrame>,
     grid_task: Option<Task<()>>,
     pan: Option<SavedScenePan>,
@@ -822,6 +826,11 @@ impl SavedSceneCanvas {
         {
             return None;
         }
+        self.grid_viewport()
+    }
+
+    fn grid_viewport(&self) -> Option<CanvasGrid> {
+        let document = self.snapping_document.as_ref()?;
         let target = self.target?;
         let navigation = self
             .artboard_view
@@ -1709,6 +1718,7 @@ impl GraphiteDocumentItem {
             snapping_document: None,
             applied_snapping_preferences: None,
             source_grid_visible: false,
+            grid_options: None,
             grid_frame: None,
             grid_task: None,
             pan: None,
@@ -1810,6 +1820,105 @@ impl GraphiteDocumentItem {
             cx.notify();
         });
         true
+    }
+
+    fn open_scene_grid_options(
+        &mut self,
+        instance: &Arc<()>,
+        revision: &Arc<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(canvas) = self.scene_canvas.as_mut().filter(|canvas| {
+            Arc::ptr_eq(instance, &canvas.instance) && Arc::ptr_eq(revision, &canvas.revision)
+        }) else {
+            return;
+        };
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(revision, &model.revision) {
+            return;
+        }
+        if canvas.grid_options.take().is_some() {
+            self.focus_handle.focus(window, cx);
+            cx.notify();
+            return;
+        }
+        let Some(document) = &canvas.snapping_document else {
+            return;
+        };
+        let preferences = model
+            .snapping_preferences
+            .as_deref()
+            .unwrap_or(&document.snapping_state);
+        let form = GridOptionsForm::new(
+            preferences.grid.clone(),
+            canvas.revision.clone(),
+            window,
+            cx,
+        );
+        form.focus(window, cx);
+        canvas.grid_options = Some(form);
+        cx.notify();
+    }
+
+    fn apply_scene_grid_options(
+        &mut self,
+        id: EntityId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let Some(form) = canvas.grid_options.as_ref().filter(|form| form.id() == id) else {
+            return;
+        };
+        let result = (|| {
+            let model = self.model.read(cx);
+            ensure!(
+                Arc::ptr_eq(&form.revision, &model.revision),
+                "The document changed. Reopen Grid Options."
+            );
+            let document = canvas
+                .snapping_document
+                .as_ref()
+                .context("Wait for the Canvas to render.")?;
+            let current = model
+                .snapping_preferences
+                .as_deref()
+                .unwrap_or(&document.snapping_state);
+            ensure!(
+                current.grid == form.baseline,
+                "Grid options changed in another view. Reopen Grid Options."
+            );
+            let mut grid = canvas
+                .grid_viewport()
+                .context("Wait for the Canvas to render.")?;
+            grid.options = form.options(cx)?;
+            grid.validate()?;
+            let mut preferences = current.clone();
+            preferences.grid = grid.options;
+            anyhow::Ok(preferences)
+        })();
+        match result {
+            Ok(preferences) => {
+                if preferences.grid != form.baseline {
+                    self.model.update(cx, |model, cx| {
+                        model.grid_options_edited = true;
+                        model.snapping_preferences = Some(Arc::new(preferences));
+                        cx.notify();
+                    });
+                }
+                canvas.grid_options = None;
+                self.focus_handle.focus(window, cx);
+            }
+            Err(error) => {
+                if let Some(form) = &mut canvas.grid_options {
+                    form.error = Some(error.to_string().into());
+                }
+            }
+        }
+        cx.notify();
     }
 
     fn render_scene_grid(
@@ -2827,6 +2936,16 @@ impl GraphiteDocumentItem {
         let grid_revision = revision.clone();
         let item = cx.weak_entity();
         let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            let grid_item = item.clone();
+            let options_instance = instance.clone();
+            let options_revision = revision.clone();
+            menu = menu.entry("Grid Options", None, move |window, cx| {
+                if let Err(error) = grid_item.update(cx, |item, cx| {
+                    item.open_scene_grid_options(&options_instance, &options_revision, window, cx);
+                }) {
+                    log::debug!("Graphite Canvas closed before opening grid options: {error:#}");
+                }
+            });
             for (heading, options) in canvas_snap_groups() {
                 menu = menu.header(heading);
                 for &(label, flag, _) in options {
@@ -2910,6 +3029,123 @@ impl GraphiteDocumentItem {
                         )),
                 ),
         )
+    }
+
+    fn render_scene_grid_options(
+        &self,
+        form: &GridOptionsForm,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let id = form.id();
+        let mode = |label, isometric, selector: &'static str, cx: &mut Context<Self>| {
+            div().debug_selector(move || selector.into()).child(
+                Button::new(selector, label)
+                    .toggle_state(form.isometric == isometric)
+                    .on_click(cx.listener(move |item, _, _, cx| {
+                        if let Some(form) = item
+                            .scene_canvas
+                            .as_mut()
+                            .and_then(|canvas| canvas.grid_options.as_mut())
+                            && form.id() == id
+                        {
+                            form.isometric = isometric;
+                            cx.notify();
+                        }
+                    })),
+            )
+        };
+        v_flex()
+            .id("graphite-gdd-grid-options")
+            .absolute()
+            .top_9()
+            .left_0()
+            .w_96()
+            .max_w_full()
+            .bottom_0()
+            .overflow_y_scroll()
+            .child(
+                v_flex()
+                    .occlude()
+                    .p_2()
+                    .gap_2()
+                    .border_1()
+                    .rounded_md()
+                    .border_color(cx.theme().colors().border)
+                    .bg(cx.theme().colors().surface_background)
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(mode(
+                                "Rectangular",
+                                false,
+                                "GRAPHITE-GDD-GRID-RECTANGULAR",
+                                cx,
+                            ))
+                            .child(mode("Isometric", true, "GRAPHITE-GDD-GRID-ISOMETRIC", cx))
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-GRID-DOTTED".into())
+                                    .child(
+                                        Button::new("graphite-gdd-grid-dotted", "Dotted")
+                                            .toggle_state(form.dots)
+                                            .on_click(cx.listener(move |item, _, _, cx| {
+                                                if let Some(form) = item
+                                                    .scene_canvas
+                                                    .as_mut()
+                                                    .and_then(|canvas| canvas.grid_options.as_mut())
+                                                    && form.id() == id
+                                                {
+                                                    form.dots = !form.dots;
+                                                    cx.notify();
+                                                }
+                                            })),
+                                    ),
+                            ),
+                    )
+                    .child(form.render_fields())
+                    .when_some(form.error.clone(), |panel, error| {
+                        panel.child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-GDD-GRID-ERROR".into())
+                                .child(Label::new(error).color(Color::Error)),
+                        )
+                    })
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-GRID-APPLY".into())
+                                    .child(
+                                        Button::new("graphite-gdd-grid-apply", "Apply").on_click(
+                                            cx.listener(move |item, _, window, cx| {
+                                                item.apply_scene_grid_options(id, window, cx);
+                                            }),
+                                        ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-GRID-CANCEL".into())
+                                    .child(
+                                        Button::new("graphite-gdd-grid-cancel", "Cancel").on_click(
+                                            cx.listener(move |item, _, window, cx| {
+                                                if let Some(canvas) = &mut item.scene_canvas
+                                                    && canvas
+                                                        .grid_options
+                                                        .as_ref()
+                                                        .is_some_and(|form| form.id() == id)
+                                                {
+                                                    canvas.grid_options = None;
+                                                    item.focus_handle.focus(window, cx);
+                                                    cx.notify();
+                                                }
+                                            }),
+                                        ),
+                                    ),
+                            ),
+                    ),
+            )
     }
 
     fn render_scene_canvas(
@@ -3059,6 +3295,7 @@ impl GraphiteDocumentItem {
         let view_controls = self.render_scene_view_controls(canvas, window, cx);
         v_flex()
             .size_full()
+            .relative()
             .child(
                 h_flex()
                     .id("graphite-gdd-canvas-toolbar")
@@ -3447,6 +3684,12 @@ impl GraphiteDocumentItem {
                         .absolute()
                         .size_full(),
                     ),
+            )
+            .children(
+                canvas
+                    .grid_options
+                    .as_ref()
+                    .map(|form| self.render_scene_grid_options(form, cx)),
             )
     }
 
@@ -7225,6 +7468,11 @@ impl GraphiteDocumentItem {
         );
         let source = model.path.clone();
         let revision = model.revision.clone();
+        let grid = model
+            .snapping_preferences
+            .as_ref()
+            .filter(|_| model.grid_options_edited)
+            .map(|preferences| preferences.grid.clone());
         let suggested_name = format!("Working copy of {}.gdd", gdd_copy_stem(&model.name));
         let project = self.project.clone();
         let (filesystem, prompt) = project.read_with(cx, |project, cx| {
@@ -7259,7 +7507,14 @@ impl GraphiteDocumentItem {
             let files = cx
                 .background_spawn({
                     let snapshot = snapshot.clone();
-                    async move { snapshot.folder_files() }
+                    async move {
+                        match grid {
+                            Some(grid) => Ok(snapshot
+                                .folder_files_with_grid_options(&grid, ARCHIVE_BUDGET)
+                                .await?),
+                            None => anyhow::Ok(snapshot.folder_files()?),
+                        }
+                    }
                 })
                 .await?;
             item.read_with(cx, |_, _| ())?;
@@ -15296,10 +15551,14 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    async fn at_gra_tool_008_2_workspace_moves_and_resizes_the_saved_f_vector_scene(
-        cx: &mut TestAppContext,
-    ) {
+    struct SavedVectorFixture {
+        original: Arc<[u8]>,
+        origin: DVec2,
+        curve_to_artboard: DAffine2,
+        rectangle_to_artboard: DAffine2,
+    }
+
+    async fn saved_vector_fixture() -> SavedVectorFixture {
         use graphite_core_types::Color;
         use graphite_document_graph_storage::NodeMetadataSource;
         use graphite_editor::messages::portfolio::document::{
@@ -15453,7 +15712,7 @@ mod tests {
         owner
             .commit_from_runtime(&graph, &VectorLayers, &ResourceRegistry::new(), &resources)
             .expect("F-VECTOR source document");
-        let original: Arc<[u8]> = owner
+        let original = owner
             .export_to_bytes(
                 ExportFormat::Zip,
                 ExportOptions::default(),
@@ -15463,6 +15722,178 @@ mod tests {
             .await
             .expect("source ZIP")
             .into();
+        SavedVectorFixture {
+            original,
+            origin,
+            curve_to_artboard,
+            rectangle_to_artboard,
+        }
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_007_2_workspace_applies_and_saves_f_vector_grid_options(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::portfolio::document::utility_types::misc::GridType;
+
+        let SavedVectorFixture { original, .. } = saved_vector_fixture().await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-grid.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let open_options = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-CANVAS-SNAP-OPTIONS");
+            click(window, "MENU_ITEM-Grid Options");
+        };
+        open_options(window);
+        click(window, "GRAPHITE-GDD-GRID-ISOMETRIC");
+        click(window, "GRAPHITE-GDD-GRID-CANCEL");
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).snapping_preferences.is_none());
+            assert!(!item.can_save(cx));
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (base, revision, artwork) = item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let SavedSceneFrame::Ready(artwork) = &canvas.frame else {
+                panic!("accepted artwork frame");
+            };
+            (
+                model.gdd_contents().expect("F-VECTOR snapshot").clone(),
+                model.revision.clone(),
+                artwork.clone(),
+            )
+        });
+        open_options(window);
+        let enter = |window: &mut gpui::VisualTestContext, label, text| {
+            click(window, label);
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(text);
+            paint(window);
+        };
+        enter(window, "Spacing X", "16");
+        enter(window, "Spacing Y", "20");
+        click(window, "GRAPHITE-GDD-GRID-ISOMETRIC");
+        enter(window, "Display color", "wrong");
+        click(window, "GRAPHITE-GDD-GRID-APPLY");
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRID-ERROR").is_some());
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).snapping_preferences.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        enter(window, "Display color", "aa444480");
+        enter(window, "Origin X", "12");
+        enter(window, "Origin Y", "-8");
+        enter(window, "Isometric spacing Y", "23");
+        enter(window, "Angle A (°)", "35");
+        enter(window, "Angle B (°)", "40");
+        click(window, "GRAPHITE-GDD-GRID-DOTTED");
+        click(window, "GRAPHITE-GDD-GRID-APPLY");
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRID-APPLY").is_none());
+        let expected = item.read_with(window, |item, cx| {
+            let grid = &item
+                .model
+                .read(cx)
+                .snapping_preferences
+                .as_ref()
+                .expect("applied Grid Options")
+                .grid;
+            assert_eq!(grid.color, "#aa444480");
+            assert_eq!(grid.origin, DVec2::new(12., -8.));
+            assert_eq!(grid.rectangular_spacing, DVec2::new(16., 20.));
+            assert_eq!(
+                grid.grid_type,
+                GridType::Isometric {
+                    y_axis_spacing: 23.,
+                    angle_a: 35.,
+                    angle_b: 40.,
+                }
+            );
+            assert!(grid.dot_display);
+            grid.clone()
+        });
+        open_options(window);
+        click(window, "GRAPHITE-GDD-GRID-RECTANGULAR");
+        item.update_in(window, |item, _, _| {
+            item.scene_canvas
+                .as_mut()
+                .expect("Canvas")
+                .grid_options
+                .as_mut()
+                .expect("open form")
+                .revision = Arc::new(());
+        });
+        click(window, "GRAPHITE-GDD-GRID-APPLY");
+        assert!(window.debug_bounds("GRAPHITE-GDD-GRID-ERROR").is_some());
+        click(window, "GRAPHITE-GDD-GRID-CANCEL");
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let grid = canvas.grid_frame.as_ref().expect("visible grid");
+            assert_eq!(grid.request.options, expected);
+            assert!(matches!(grid.image, Ok(Some(_))));
+            let snapping = &canvas.snapping_document.as_ref().expect("accepted scene").snapping_state;
+            assert!(!snapping.grid_snapping);
+            assert!(Arc::ptr_eq(&model.revision, &revision));
+            assert!(Arc::ptr_eq(model.gdd_contents().expect("F-VECTOR snapshot"), &base));
+            assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(image) if Arc::ptr_eq(image, &artwork)));
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| None);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        let destination = PathBuf::from("/project/f-vector-grid-working.gdd");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopen saved F-VECTOR");
+        assert!(saved.matches_saved_history(&base));
+        let restored = saved.canvas_snapping_defaults().snapping_state;
+        assert_eq!(restored.grid, expected);
+        assert!(!restored.grid_snapping);
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source ZIP"),
+            original.as_ref()
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_tool_008_2_workspace_moves_and_resizes_the_saved_f_vector_scene(
+        cx: &mut TestAppContext,
+    ) {
+        let SavedVectorFixture {
+            original,
+            origin,
+            curve_to_artboard,
+            rectangle_to_artboard,
+        } = saved_vector_fixture().await;
         let (workspace, window) = native_workspace(cx).await;
         window.simulate_resize(gpui::size(px(1160.), px(1050.)));
         let filesystem = workspace.read_with(window, |workspace, cx| {

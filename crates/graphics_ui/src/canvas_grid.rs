@@ -1,14 +1,19 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result, ensure};
-use gpui::{RenderImage, swap_rgba_pa_to_bgra};
+use editor::Editor;
+use gpui::{
+    App, AppContext as _, Entity, EntityId, RenderImage, SharedString, Window, swap_rgba_pa_to_bgra,
+};
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     overlays::grid_overlays::grid_overlay,
     utility_types::misc::{GridSnapping, GridType, PTZ},
 };
 use graphite_graph_craft::document::value::{DVec2, UVec2};
+use graphite_std::color::SRGBA8;
 use image::{Frame, RgbaImage};
+use ui::{Label, prelude::*};
 
 use crate::canvas_overlay::{CanvasOverlay, OverlayBudget, source_overlay_context};
 
@@ -26,6 +31,14 @@ pub(crate) struct CanvasGrid {
 }
 
 impl CanvasGrid {
+    pub fn validate(&self) -> Result<()> {
+        self.check_geometry(
+            &DocumentMessageHandler::default(),
+            self.resolution.as_dvec2() / self.scale,
+        )?;
+        Ok(())
+    }
+
     pub fn render(&self, pixel_budget: u32) -> Result<Option<Arc<RenderImage>>> {
         let size = self.resolution;
         ensure!(
@@ -164,6 +177,181 @@ impl CanvasGrid {
             "Graphite grid exceeds its viewport geometry budget",
         );
         Ok(true)
+    }
+}
+
+pub(crate) struct GridOptionsForm {
+    pub revision: Arc<()>,
+    pub baseline: GridSnapping,
+    pub isometric: bool,
+    pub dots: bool,
+    pub error: Option<SharedString>,
+    color: GridOptionField,
+    origin_x: GridOptionField,
+    origin_y: GridOptionField,
+    spacing_x: GridOptionField,
+    spacing_y: GridOptionField,
+    isometric_spacing: GridOptionField,
+    angle_a: GridOptionField,
+    angle_b: GridOptionField,
+}
+
+struct GridOptionField {
+    label: &'static str,
+    editor: Entity<Editor>,
+}
+
+impl GridOptionField {
+    fn new(
+        label: &'static str,
+        text: impl Into<String>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
+        let editor = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_text(text.into(), window, cx);
+            editor
+        });
+        Self { label, editor }
+    }
+
+    fn number(&self, cx: &App) -> Result<f64> {
+        let value = self.editor.read(cx).text(cx);
+        value
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite())
+            .with_context(|| format!("Enter a finite number for {}.", self.label))
+    }
+
+    fn spacing(&self, cx: &App) -> Result<f64> {
+        let value = self.number(cx)?;
+        ensure!(value >= 0., "Enter zero or greater for {}.", self.label);
+        Ok(value)
+    }
+
+    fn render(&self) -> gpui::Div {
+        let label = self.label;
+        v_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_1()
+            .child(Label::new(self.label).size(ui::LabelSize::Small))
+            .child(
+                div()
+                    .id(label)
+                    .aria_label(label)
+                    .debug_selector(move || label.into())
+                    .child(self.editor.clone()),
+            )
+    }
+}
+
+impl GridOptionsForm {
+    pub fn new(grid: GridSnapping, revision: Arc<()>, window: &mut Window, cx: &mut App) -> Self {
+        let (isometric, rectangular_spacing, isometric_spacing, angle_a, angle_b) =
+            match grid.grid_type {
+                GridType::Rectangular { spacing } => (
+                    false,
+                    spacing,
+                    grid.isometric_y_spacing,
+                    grid.isometric_angle_a,
+                    grid.isometric_angle_b,
+                ),
+                GridType::Isometric {
+                    y_axis_spacing,
+                    angle_a,
+                    angle_b,
+                } => (
+                    true,
+                    grid.rectangular_spacing,
+                    y_axis_spacing,
+                    angle_a,
+                    angle_b,
+                ),
+            };
+        let color = GridOptionField::new("Display color", grid.color.clone(), window, cx);
+        let mut number =
+            |label, value: f64| GridOptionField::new(label, value.to_string(), window, cx);
+        Self {
+            revision,
+            isometric,
+            dots: grid.dot_display,
+            color,
+            origin_x: number("Origin X", grid.origin.x),
+            origin_y: number("Origin Y", grid.origin.y),
+            spacing_x: number("Spacing X", rectangular_spacing.x),
+            spacing_y: number("Spacing Y", rectangular_spacing.y),
+            isometric_spacing: number("Isometric spacing Y", isometric_spacing),
+            angle_a: number("Angle A (°)", angle_a),
+            angle_b: number("Angle B (°)", angle_b),
+            baseline: grid,
+            error: None,
+        }
+    }
+
+    pub fn id(&self) -> EntityId {
+        self.color.editor.entity_id()
+    }
+
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        use gpui::Focusable as _;
+        self.color.editor.focus_handle(cx).focus(window, cx);
+    }
+
+    pub fn options(&self, cx: &App) -> Result<GridSnapping> {
+        let color = self.color.editor.read(cx).text(cx);
+        let color = color
+            .is_ascii()
+            .then(|| SRGBA8::from_hex_str(&color))
+            .flatten()
+            .context("Enter a display color in #RRGGBB or #RRGGBBAA format.")?;
+        let rectangular_spacing =
+            DVec2::new(self.spacing_x.spacing(cx)?, self.spacing_y.spacing(cx)?);
+        let isometric_y_spacing = self.isometric_spacing.spacing(cx)?;
+        let isometric_angle_a = self.angle_a.number(cx)?;
+        let isometric_angle_b = self.angle_b.number(cx)?;
+        let grid_type = if self.isometric {
+            GridType::Isometric {
+                y_axis_spacing: isometric_y_spacing,
+                angle_a: isometric_angle_a,
+                angle_b: isometric_angle_b,
+            }
+        } else {
+            GridType::Rectangular {
+                spacing: rectangular_spacing,
+            }
+        };
+        Ok(GridSnapping {
+            grid_type,
+            rectangular_spacing,
+            isometric_y_spacing,
+            isometric_angle_a,
+            isometric_angle_b,
+            color: color.to_css_hex(),
+            origin: DVec2::new(self.origin_x.number(cx)?, self.origin_y.number(cx)?),
+            dot_display: self.dots,
+        })
+    }
+
+    pub fn render_fields(&self) -> gpui::Div {
+        let spacing: &[&GridOptionField] = if self.isometric {
+            &[&self.isometric_spacing, &self.angle_a, &self.angle_b]
+        } else {
+            &[&self.spacing_x, &self.spacing_y]
+        };
+        v_flex()
+            .gap_2()
+            .child(h_flex().gap_2().children(
+                [&self.color, &self.origin_x, &self.origin_y].map(GridOptionField::render),
+            ))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .children(spacing.iter().map(|field| field.render())),
+            )
     }
 }
 

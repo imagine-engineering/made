@@ -38,7 +38,7 @@ use graphite_editor::messages::portfolio::document::{
     },
     utility_types::{
         document_metadata::LayerNodeIdentifier,
-        misc::{GridType, PTZ},
+        misc::{GridSnapping, GridType, PTZ},
         network_interface::{
             InputConnector, LayerPosition, NavigationMetadata, NodeNetworkInterface, NodePosition,
             NodeTemplate, NodeTemplateImplementation, NodeTypePersistentMetadata, OutputConnector,
@@ -163,6 +163,12 @@ pub enum GddArchiveError {
     PendingGraphEdits,
     #[error("The Graphite copy did not restore the saved history position.")]
     IncompleteHistoryStep,
+    #[error("The Graphite copy did not preserve the document while saving grid options.")]
+    IncompleteGridOptionsSave,
+    #[error("The stored Graphite snapping settings are malformed.")]
+    InvalidStoredSnappingSettings,
+    #[error("Could not encode the Graphite grid options. {0}")]
+    GridOptionsEncoding(#[from] graphite_document_graph_storage::ValueError),
     #[error("The selected node belongs to an earlier Graphite snapshot. Select the node again.")]
     StaleGraphNode,
     #[error("The Graphite graph is missing a saved network identity.")]
@@ -6299,6 +6305,46 @@ impl InspectedGddV1 {
 
     pub fn folder_files(&self) -> Result<Vec<(PathBuf, Vec<u8>)>, ContainerError> {
         self.entries.folder_files()
+    }
+
+    pub async fn folder_files_with_grid_options(
+        &self,
+        grid: &GridSnapping,
+        budget: GddArchiveBudget,
+    ) -> Result<Vec<(PathBuf, Vec<u8>)>, GddArchiveError> {
+        use graphite_document_graph_storage::{Value, attr::session::doc::SNAPPING, to_value};
+
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        let entries = self.copy_entries(&budget)?.finish()?;
+        let mut owner =
+            GddV1::open_in(AnyContainer::Memory(entries.working.clone()), GddV1Layout).await?;
+        let mut settings = owner.view_settings().clone();
+        let snapping = settings
+            .entry(SNAPPING.into())
+            .or_insert_with(|| Value::Object(Vec::new()));
+        let Value::Object(fields) = snapping else {
+            return Err(GddArchiveError::InvalidStoredSnappingSettings);
+        };
+        let grid_value = to_value(grid)?;
+        if let Some((_, stored_grid)) = fields.iter_mut().find(|(key, _)| key == "grid") {
+            *stored_grid = grid_value;
+        } else {
+            fields.push(("grid".into(), grid_value));
+        }
+        owner.set_view_settings(settings)?;
+        let copy = entries.reopen_after_edit(&budget).await?;
+        if !copy.matches_saved_history(self)
+            || !copy
+                .document
+                .registry()
+                .value_equal(self.document.registry())
+            || &copy.canvas_snapping_defaults().snapping_state.grid != grid
+        {
+            return Err(GddArchiveError::IncompleteGridOptionsSave);
+        }
+        Ok(copy.folder_files()?)
     }
 
     pub async fn export_folder_files_with_content(
@@ -16028,6 +16074,97 @@ mod tests {
             assert_eq!(source.recovery(), summary);
             assert!(source.document.registry().value_equal(owner.registry()));
             assert_eq!(source.original_bytes(), source_bytes.as_ref());
+        });
+    }
+
+    #[test]
+    fn at_gra_view_007_1_saves_only_the_grid_in_the_peer_session() {
+        use graphite_document_graph_storage::{Value, attr::session, to_value};
+
+        futures::executor::block_on(async {
+            let mut owner = document();
+            let mut snapping = DocumentMessageHandler::default().snapping_state;
+            snapping.grid_snapping = true;
+            snapping.tolerance = 5.;
+            let Value::Object(mut fields) = to_value(&snapping).expect("source snapping state")
+            else {
+                panic!("source snapping object");
+            };
+            fields.push(("future_setting".into(), Value::Bool(true)));
+            owner
+                .set_view_settings(BTreeMap::from([
+                    (session::doc::SNAPPING.into(), Value::Object(fields)),
+                    (session::doc::RULERS_VISIBLE.into(), Value::Bool(false)),
+                ]))
+                .expect("persist source settings");
+            owner
+                .set_network_view_settings(BTreeMap::from([(
+                    ROOT_NETWORK,
+                    BTreeMap::from([(session::network::NAV_WIDTH.into(), Value::Float(700.))]),
+                )]))
+                .expect("persist unrelated network settings");
+            let original = export(&owner, None).await;
+            let source = open_gdd_zip(&original, budget()).await.expect("source GDD");
+            let grid = GridSnapping {
+                origin: DVec2::new(18., -7.),
+                color: "#ed742eb2".into(),
+                dot_display: true,
+                ..snapping.grid.clone()
+            };
+            let updated_files = source
+                .folder_files_with_grid_options(&grid, budget())
+                .await
+                .expect("update only the peer session");
+            let original_files = source.folder_files().expect("source files");
+            let session_file = PathBuf::from(path_for(
+                GddV1Layout.session_basename(),
+                source.manifest().codecs.session,
+            ));
+            assert_eq!(original_files.len(), updated_files.len());
+            for ((path, before), (next_path, after)) in original_files.iter().zip(&updated_files) {
+                assert_eq!(path, next_path);
+                assert_eq!(before == after, *path != session_file, "{path:?}");
+            }
+            let updated_files = updated_files
+                .into_iter()
+                .map(|(path, bytes)| {
+                    (
+                        path.into_os_string().into_string().expect("GDD path"),
+                        bytes,
+                    )
+                })
+                .collect();
+            let reopened = inspect_gdd_folder_files(updated_files, budget())
+                .await
+                .expect("reopen working copy");
+            let restored = reopened.canvas_snapping_defaults().snapping_state;
+            assert_eq!(restored.grid, grid);
+            assert!(restored.grid_snapping);
+            assert_eq!(restored.tolerance, 5.);
+            assert_eq!(
+                reopened
+                    .document
+                    .view_settings()
+                    .get(session::doc::RULERS_VISIBLE),
+                Some(&Value::Bool(false))
+            );
+            let Some(Value::Object(fields)) = reopened
+                .document
+                .view_settings()
+                .get(session::doc::SNAPPING)
+            else {
+                panic!("persisted snapping object");
+            };
+            assert!(fields.contains(&("future_setting".into(), Value::Bool(true))));
+            assert_eq!(
+                source.document.network_view_settings(),
+                reopened.document.network_view_settings()
+            );
+            assert!(source.matches_saved_history(&reopened));
+            assert_eq!(
+                source.canvas_snapping_defaults().snapping_state.grid,
+                snapping.grid
+            );
         });
     }
 
