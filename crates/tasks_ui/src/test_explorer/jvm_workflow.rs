@@ -638,8 +638,6 @@ async fn docker_gradle_ordered_operations_run_on_a_cold_host(cx: &mut TestAppCon
 async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppContext) {
     use jvm_ui::ShowGradle;
     use language_tools::language_tool_tree::{ExpandAll, status_message};
-    use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
-    use remote::{DockerConnectionOptions, RemoteConnectionOptions};
     use rpc::proto;
     use std::path::Path;
 
@@ -651,54 +649,8 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
     assert!(!report.exists(), "start with a fresh Gradle workspace");
     let root = Path::new("/workspaces/gradle");
     let container = docker_test_fixture_container(JvmTestBuildTool::Gradle);
-    cx.executor().allow_parking();
-    let app_state = cx.update(|cx| {
-        let state = workspace::AppState::test(cx);
-        trusted_worktrees::init(Default::default(), cx);
-        editor::init(cx);
-        jvm_ui::init(cx);
-        terminal_view::init(cx);
-        project::task_store::TaskStore::init(None);
-        state
-    });
-    let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
-        name: "Groovy ordered Gradle qualification".into(),
-        container_id: container.clone(),
-        remote_user: "root".into(),
-        ..Default::default()
-    });
-    let project = connect_cached_jvm_fixture(
-        root,
-        app_state,
-        options,
-        &[("java", "6.8.30"), ("kotlin", "0.3.5")],
-        cx,
-    )
-    .await;
-    let (worktrees, worktree_id, lsp_store) = project.read_with(cx, |project, cx| {
-        let worktrees = project.worktree_store();
-        let worktree_id = worktrees
-            .read(cx)
-            .worktrees()
-            .next()
-            .expect("Gradle worktree")
-            .read(cx)
-            .id();
-        (worktrees, worktree_id, project.lsp_store())
-    });
-    cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("fixture trust"))
-        .update(cx, |trusted, cx| {
-            trusted.trust(
-                &worktrees,
-                [PathTrust::Worktree(worktree_id)].into_iter().collect(),
-                cx,
-            );
-        });
-    lsp_store.update(cx, |store, cx| {
-        store
-            .set_default_jvm_project_languages_enabled(true, cx)
-            .expect("enable the trusted host's JVM providers");
-    });
+    let (project, worktree_id) = connect_ordered_jvm_task_fixture(root, &container, cx).await;
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
     let java =
         util::rel_path::RelPath::from_unix_str("application/src/main/java/evidence/Main.java")
             .expect("Gradle fixture Java path");
@@ -2016,6 +1968,13 @@ async fn cached_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut T
     run_cached_maven_goals(MavenGoalRun::OrderedHelp, cx).await;
 }
 
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Maven host with cached Help goals and pinned JDTLS"]
+async fn docker_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(MavenGoalRun::OrderedHelp, MavenGoalConnection::Docker, cx).await;
+}
+
 #[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires a cached Maven Dependency goal, pinned Maven wrapper and pinned JDTLS"]
@@ -2055,6 +2014,22 @@ enum MavenGoalRun {
 
 #[cfg(all(test, unix))]
 async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
+    run_maven_goal_fixture(run, MavenGoalConnection::Local, cx).await;
+}
+
+#[cfg(all(test, unix))]
+enum MavenGoalConnection {
+    Local,
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    Docker,
+}
+
+#[cfg(all(test, unix))]
+async fn run_maven_goal_fixture(
+    run: MavenGoalRun,
+    connection: MavenGoalConnection,
+    cx: &mut TestAppContext,
+) {
     use jvm_ui::DependenciesPanel;
     use language_tools::language_tool_tree::{ExpandAll, SelectFirst, SelectNext};
 
@@ -2089,27 +2064,63 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
         .iter()
         .map(|goal| format!("org.apache.maven.plugins:{plugin}:{version}:{goal}"))
         .collect();
-    let root = cached_jvm_fixture_path(root_key);
-    let settings = cached_jvm_fixture_path(settings_key);
-    let options = serde_json::json!({
-        "autobuild": {"enabled": false},
-        "configuration": {"maven": {"userSettings": settings}},
-        "import": {"gradle": {"enabled": false}, "maven": {
-            "enabled": true, "offline": {"enabled": true},
-        }},
-    });
-    let (project, worktree_id, _provider_data) = start_cached_fixture_jdtls(
-        &root,
-        options,
-        &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
-        cx,
-    )
-    .await;
-    cx.update(terminal_view::init);
+    let fixture_root = cached_jvm_fixture_path(root_key);
+    let (project, worktree_id, _provider_data, root, settings, host_shell) = match connection {
+        MavenGoalConnection::Local => {
+            let settings = cached_jvm_fixture_path(settings_key);
+            let options = serde_json::json!({
+                "autobuild": {"enabled": false},
+                "configuration": {"maven": {"userSettings": settings}},
+                "import": {"gradle": {"enabled": false}, "maven": {
+                    "enabled": true, "offline": {"enabled": true},
+                }},
+            });
+            let (project, worktree_id, provider_data) = start_cached_fixture_jdtls(
+                &fixture_root,
+                options,
+                &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+                cx,
+            )
+            .await;
+            cx.update(terminal_view::init);
+            (
+                project,
+                worktree_id,
+                Some(provider_data),
+                fixture_root.clone(),
+                settings,
+                None,
+            )
+        }
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+        MavenGoalConnection::Docker => {
+            let root = std::path::PathBuf::from("/workspaces/maven");
+            let settings =
+                std::path::PathBuf::from("/qualification/state/settings with spaces.xml");
+            let container = docker_test_fixture_container(JvmTestBuildTool::Maven);
+            let (project, worktree_id) =
+                connect_ordered_jvm_task_fixture(&root, &container, cx).await;
+            (
+                project,
+                worktree_id,
+                None,
+                root,
+                settings,
+                Some("/bin/bash"),
+            )
+        }
+    };
     let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let source = util::rel_path::RelPath::from_unix_str(source).expect("fixture Java source path");
     let (_source, _open_source) = project
         .update(cx, |project, cx| {
-            project.open_local_buffer_with_lsp(root.join(source), cx)
+            project.open_buffer_with_lsp(
+                project::ProjectPath {
+                    worktree_id,
+                    path: source.into(),
+                },
+                cx,
+            )
         })
         .await
         .expect("Maven module source");
@@ -2186,7 +2197,7 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
         }
         cx.update(|window, cx| window.draw(cx).clear(cx));
     };
-    let output = root.join("target/groovy-effective.xml");
+    let output = fixture_root.join("target/groovy-effective.xml");
     if matches!(run, MavenGoalRun::EffectivePom | MavenGoalRun::OrderedHelp) {
         assert!(
             !output.exists(),
@@ -2231,7 +2242,15 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             assert_eq!(queue_labels(cx), expected_queue);
             assert!(!output.exists(), "editing the queue does not start a Task");
-            dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
+            if host_shell.is_some() {
+                focus_control(
+                    cx,
+                    "Run ordered offline operations on the current project host through Tasks",
+                );
+                press_enter(cx);
+            } else {
+                dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
+            }
         }
         _ => {
             let [goal] = goals else {
@@ -2272,7 +2291,7 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
         &root,
         &root.join("mvnw"),
         &arguments,
-        None,
+        host_shell,
         cx,
     )
     .await;
@@ -2343,6 +2362,66 @@ async fn run_cached_maven_goals(run: MavenGoalRun, cx: &mut TestAppContext) {
             }
         }
     }
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn connect_ordered_jvm_task_fixture(
+    root: &std::path::Path,
+    container: &str,
+    cx: &mut TestAppContext,
+) -> (Entity<Project>, WorktreeId) {
+    use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
+    use remote::{DockerConnectionOptions, RemoteConnectionOptions};
+
+    cx.executor().allow_parking();
+    let app_state = cx.update(|cx| {
+        let state = workspace::AppState::test(cx);
+        trusted_worktrees::init(Default::default(), cx);
+        editor::init(cx);
+        jvm_ui::init(cx);
+        terminal_view::init(cx);
+        project::task_store::TaskStore::init(None);
+        state
+    });
+    let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
+        name: "Groovy ordered JVM Task qualification".into(),
+        container_id: container.into(),
+        remote_user: "root".into(),
+        ..Default::default()
+    });
+    let project = connect_cached_jvm_fixture(
+        root,
+        app_state,
+        options,
+        &[("java", "6.8.30"), ("kotlin", "0.3.5")],
+        cx,
+    )
+    .await;
+    let (worktrees, worktree_id, lsp_store) = project.read_with(cx, |project, cx| {
+        let worktrees = project.worktree_store();
+        let worktree_id = worktrees
+            .read(cx)
+            .worktrees()
+            .next()
+            .expect("ordered JVM Task worktree")
+            .read(cx)
+            .id();
+        (worktrees, worktree_id, project.lsp_store())
+    });
+    cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("fixture trust"))
+        .update(cx, |trusted, cx| {
+            trusted.trust(
+                &worktrees,
+                [PathTrust::Worktree(worktree_id)].into_iter().collect(),
+                cx,
+            );
+        });
+    lsp_store.update(cx, |store, cx| {
+        store
+            .set_default_jvm_project_languages_enabled(true, cx)
+            .expect("enable the trusted host's JVM providers");
+    });
+    (project, worktree_id)
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

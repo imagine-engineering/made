@@ -14419,6 +14419,19 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
+    fn host_jdtls_task_snapshot_allowed(&self, project_id: u64, peer: proto::PeerId) -> bool {
+        self.ensure_host_jvm_consumer_scope(project_id, peer)
+            .is_ok()
+            && self.as_local().is_some_and(|local| {
+                local
+                    .host_jvm_task_inventory
+                    .as_ref()
+                    .and_then(WeakEntity::upgrade)
+                    .is_some()
+            })
+    }
+
+    #[cfg(feature = "jvm-tools")]
     fn host_jvm_operation_session(
         &self,
         project_id: u64,
@@ -14680,41 +14693,18 @@ impl LspStore {
         cx: &mut AsyncApp,
     ) -> Result<bool> {
         let worktree_id = token.worktree_id();
-        let wait = this.update(cx, |store, cx| {
-            if store.jdtls_project_query_token(worktree_id) != Some(token) {
-                return None;
-            }
-            let (send, response) = oneshot::channel();
-            let mut send = Some(send);
-            let subscription = cx.observe_self(move |store, cx| {
-                if store.jdtls_project_query_token(worktree_id) == Some(token)
-                    && store
-                        .ensure_host_gradle_scope(worktree_id, scope, cx)
-                        .is_ok()
-                {
-                    return;
-                }
-                if let Some(send) = send.take()
-                    && send.send(()).is_err()
-                {
-                    log::debug!("Remote Gradle metadata requester dropped");
-                }
-            });
-            Some((response, subscription))
-        });
-        if let Some((response, _subscription)) = wait {
-            let deadline = cx.background_executor().timer(Duration::from_secs(60));
-            match futures::future::select(response, Box::pin(deadline)).await {
-                Either::Left((result, _)) => {
-                    result.context("The Gradle metadata owner disappeared")?
-                }
-                Either::Right(_) => {
-                    anyhow::bail!(
-                        "Gradle metadata did not finish before the host request timed out"
-                    )
-                }
-            }
-        }
+        Self::wait_for_host_jdtls_query(
+            this,
+            token,
+            move |store, cx| {
+                store
+                    .ensure_host_gradle_scope(worktree_id, scope, cx)
+                    .is_ok()
+            },
+            "Gradle metadata",
+            cx,
+        )
+        .await?;
         this.read_with(cx, |store, cx| {
             store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
             if let Some(recovery) = store
@@ -14732,6 +14722,51 @@ impl LspStore {
                         && snapshot.generation == token.generation()
                 }))
         })
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn wait_for_host_jdtls_query(
+        this: &Entity<Self>,
+        token: jvm_project::ProviderRefreshToken,
+        scope_is_current: impl Fn(&Self, &mut Context<Self>) -> bool + 'static,
+        operation: &'static str,
+        cx: &mut AsyncApp,
+    ) -> Result<()> {
+        let worktree_id = token.worktree_id();
+        let wait = this.update(cx, |store, cx| {
+            if store.jdtls_project_query_token(worktree_id) != Some(token)
+                || !scope_is_current(store, cx)
+            {
+                return None;
+            }
+            let (send, response) = oneshot::channel();
+            let mut send = Some(send);
+            let subscription = cx.observe_self(move |store, cx| {
+                if store.jdtls_project_query_token(worktree_id) == Some(token)
+                    && scope_is_current(store, cx)
+                {
+                    return;
+                }
+                if let Some(send) = send.take()
+                    && send.send(()).is_err()
+                {
+                    log::debug!("Remote {operation} requester dropped");
+                }
+            });
+            Some((response, subscription))
+        });
+        if let Some((response, _subscription)) = wait {
+            let deadline = cx.background_executor().timer(Duration::from_secs(60));
+            match futures::future::select(response, Box::pin(deadline)).await {
+                Either::Left((result, _)) => {
+                    result.with_context(|| format!("The {operation} owner disappeared"))?
+                }
+                Either::Right(_) => {
+                    anyhow::bail!("{operation} did not finish before the host request timed out")
+                }
+            }
+        }
+        Ok(())
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -14854,6 +14889,10 @@ impl LspStore {
         let request = envelope.payload;
         let response_limit = jvm_project::jdtls_snapshot_size_limit(request.protocol_version)?;
         let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        let task_snapshot_request =
+            request.protocol_version >= 8 && envelope.original_sender_id.is_none();
+        let project_id = request.project_id;
+        let peer = envelope.sender_id;
         let (server_id, server, worktree, request_timeout) =
             this.update(&mut cx, |store, cx| {
                 store.host_jvm_snapshot_provider(
@@ -14864,6 +14903,63 @@ impl LspStore {
                     cx,
                 )
             })?;
+        // A fallback read can display dependencies but cannot authorize a Task.
+        // A current direct client can wait for the ordinary host-owned read refresh.
+        let refresh = this.update(&mut cx, |store, cx| {
+            if !task_snapshot_request || !store.host_jdtls_task_snapshot_allowed(project_id, peer) {
+                return Ok(None);
+            }
+            if let Some(state) = store.jdtls_projects.get(&worktree_id) {
+                if state.import_operation().is_some()
+                    || state.failed_import() == Some(server_id)
+                    || (state.snapshot_is_current()
+                        && state
+                            .snapshot()
+                            .is_some_and(|snapshot| snapshot.server_id == server_id))
+                {
+                    return Ok(None);
+                }
+                if let Some(token) = state.pending_query()
+                    && token.server_id() == server_id
+                {
+                    return Ok(Some(token));
+                }
+            }
+            store.schedule_local_jdtls_project_refresh(
+                server_id,
+                worktree_id,
+                None,
+                true,
+                None,
+                None,
+                cx,
+            )?;
+            Ok::<_, anyhow::Error>(store.jdtls_project_query_token(worktree_id))
+        })?;
+        if let Some(token) = refresh {
+            let original_worktree = worktree.clone();
+            Self::wait_for_host_jdtls_query(
+                &this,
+                token,
+                move |store, cx| {
+                    store.host_jdtls_task_snapshot_allowed(project_id, peer)
+                        && store
+                            .ensure_host_jvm_snapshot_current(
+                                project_id,
+                                worktree_id,
+                                &original_worktree,
+                                server_id,
+                                "jdtls",
+                                "Java project",
+                                cx,
+                            )
+                            .is_ok()
+                },
+                "Java project metadata",
+                &mut cx,
+            )
+            .await?;
+        }
         let (cached_snapshot, host_generation) = this.update(&mut cx, |store, _| {
             let state = store.jdtls_projects.entry(worktree_id).or_default();
             ensure!(
@@ -14940,18 +15036,8 @@ impl LspStore {
                     .transpose()?
                     .flatten();
                 partial |= had_selection && maven_selection.is_none();
-                let host_operation_generation = (request.protocol_version >= 8
-                    && envelope.original_sender_id.is_none()
-                    && store
-                        .ensure_host_jvm_consumer_scope(request.project_id, envelope.sender_id)
-                        .is_ok()
-                    && store.as_local().is_some_and(|local| {
-                        local
-                            .host_jvm_task_inventory
-                            .as_ref()
-                            .and_then(WeakEntity::upgrade)
-                            .is_some()
-                    }))
+                let host_operation_generation = (task_snapshot_request
+                    && store.host_jdtls_task_snapshot_allowed(project_id, peer))
                 .then_some(host_generation);
                 let response = proto::JdtlsProjectSnapshotResponse {
                     protocol_version: request.protocol_version,
