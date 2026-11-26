@@ -130,7 +130,7 @@ impl ArtboardOverlay {
     ) {
         if show_name && let Ok(color) = Rgba::try_from(COLOR_OVERLAY_GRAY) {
             for path in &self.name_paths {
-                if let Some(builder) = name_path_builder(path, origin) {
+                if let Some(builder) = filled_path_builder(path, origin, gpui::FillRule::NonZero) {
                     paint_overlay_path(builder, color, window);
                 }
             }
@@ -157,20 +157,6 @@ pub(crate) fn paint_artboard_outline(
         outline.line_to(fourth);
         outline.close();
         paint_overlay_path(outline, color, window);
-    }
-}
-
-pub(crate) fn paint_artboard_snap_point(
-    position: DVec2,
-    origin: Point<Pixels>,
-    window: &mut Window,
-) {
-    if let (Some(center), Ok(color)) = (
-        pane_point(position, origin),
-        Rgba::try_from(COLOR_OVERLAY_BLUE),
-    ) {
-        let bounds = Bounds::new(center - point(px(2.5), px(2.5)), gpui::size(px(5.), px(5.)));
-        window.paint_quad(gpui::fill(bounds, color));
     }
 }
 
@@ -235,6 +221,11 @@ impl ArtboardDraw {
         )
     }
 
+    pub fn snap_manager(&mut self) -> &mut SnapManager {
+        &mut self.resize.snap_manager
+    }
+
+    #[cfg(test)]
     pub fn snap_point(&self) -> Option<DVec2> {
         self.resize.snap_manager.indicator_pos()
     }
@@ -279,6 +270,11 @@ impl ArtboardDragSnap {
         }
     }
 
+    pub fn snap_manager(&mut self) -> &mut SnapManager {
+        &mut self.manager
+    }
+
+    #[cfg(test)]
     pub fn snap_point(&self) -> Option<DVec2> {
         self.manager.indicator_pos()
     }
@@ -395,9 +391,13 @@ impl ArtboardMove {
     }
 }
 
-fn name_path_builder(path: &BezPath, origin: Point<Pixels>) -> Option<PathBuilder> {
+pub(crate) fn filled_path_builder(
+    path: &BezPath,
+    origin: Point<Pixels>,
+    rule: gpui::FillRule,
+) -> Option<PathBuilder> {
     let mut builder = PathBuilder::fill().with_style(PathStyle::Fill(
-        gpui::FillOptions::default().with_fill_rule(gpui::FillRule::NonZero),
+        gpui::FillOptions::default().with_fill_rule(rule),
     ));
     let convert = |position: graphite_std::vector_types::kurbo::Point| {
         pane_point(DVec2::new(position.x, position.y), origin)
@@ -701,7 +701,7 @@ mod tests {
             assert!(path_bounds.max_y() <= 87.);
             assert!(path_bounds.height() > 0.);
             assert!(
-                name_path_builder(path, point(px(12.), px(18.)))
+                filled_path_builder(path, point(px(12.), px(18.)), gpui::FillRule::NonZero)
                     .expect("finite source glyph coordinates")
                     .build()
                     .is_ok()

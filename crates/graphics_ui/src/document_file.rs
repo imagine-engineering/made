@@ -53,13 +53,14 @@ use crate::canvas::{
     ArtboardDragSnap, ArtboardDraw, ArtboardMove, ArtboardOverlay, ArtboardResize,
     CANVAS_SNAP_ENABLED, CanvasSnapFlag, DocumentNavigation, artboard_auto_pan_delta,
     artboard_outline, canvas_snap_groups, logical_vector, paint_artboard_outline,
-    paint_artboard_snap_point, set_artboard_snap_camera,
+    set_artboard_snap_camera,
 };
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
     SavedGraphMenuTarget, SavedGraphView,
 };
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
+use crate::snap_guides::SnapGuides;
 
 actions!(
     graphite,
@@ -706,6 +707,8 @@ struct SavedSceneArtboardView {
     pointer: Option<(gpui::Point<gpui::Pixels>, gpui::Modifiers)>,
     auto_pan_since: Option<Instant>,
     frame_queued: bool,
+    snap_guides: Option<Arc<SnapGuides>>,
+    snap_guide_error: Option<SharedString>,
     draft_frame: Option<SavedSceneArtboardDraft>,
     draft_task: Option<Task<()>>,
     draft_error: Option<SharedString>,
@@ -721,6 +724,8 @@ impl SavedSceneArtboardView {
             pointer: None,
             auto_pan_since: None,
             frame_queued: false,
+            snap_guides: None,
+            snap_guide_error: None,
             draft_frame: None,
             draft_task: None,
             draft_error: None,
@@ -2338,14 +2343,12 @@ impl GraphiteDocumentItem {
         };
         set_artboard_snap_camera(document, view.navigation, target.logical_size());
         let position = logical_vector(position - view.pane.origin);
-        if let Some(draw) = &mut canvas.artboard_draw {
-            let previous_snap = draw.gesture.snap_point();
+        let (placement_changed, manager) = if let Some(draw) = &mut canvas.artboard_draw {
             let placement = draw.gesture.placement(position, modifiers, document);
-            let changed = draw.placement != placement || previous_snap != draw.gesture.snap_point();
+            let changed = draw.placement != placement;
             draw.placement = placement;
-            return changed;
+            (changed, draw.gesture.snap_manager())
         } else if let Some(drag) = &mut canvas.artboard_drag {
-            let previous_snap = drag.snapping.snap_point();
             let placement =
                 drag.gesture
                     .placement(position, modifiers, document, &mut drag.snapping);
@@ -2353,17 +2356,35 @@ impl GraphiteDocumentItem {
             let desired = placement
                 .map(|(geometry, _)| geometry)
                 .filter(|geometry| drag.node.artboard_geometry() != Some(*geometry));
-            if desired != drag.placement {
+            let changed = desired != drag.placement;
+            if changed {
                 drag.placement = desired;
                 view.draft_error = None;
                 if desired.is_none() {
                     view.retire_draft(Some(window), cx);
                 }
-                return true;
             }
-            return previous_snap != drag.snapping.snap_point();
+            (changed, drag.snapping.snap_manager())
+        } else {
+            return false;
+        };
+        let (guides, error) =
+            match SnapGuides::for_gesture(manager, document, target.logical_size(), target.scale) {
+                Ok(guides) => (guides, None),
+                Err(error) => (
+                    None,
+                    Some(SharedString::from(format!(
+                        "Unable to render snap guides. {error:#}"
+                    ))),
+                ),
+            };
+        let guides_changed =
+            guides.as_ref() != view.snap_guides.as_deref() || error != view.snap_guide_error;
+        if guides_changed {
+            view.snap_guides = guides.map(Arc::new);
+            view.snap_guide_error = error;
         }
-        false
+        placement_changed || guides_changed
     }
 
     fn render_scene_artboard_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -2754,16 +2775,14 @@ impl GraphiteDocumentItem {
             .map(|document| document.metadata().document_to_viewport);
         let drawing = canvas.artboard_draw.as_ref().filter(|_| current);
         let moving = canvas.artboard_drag.as_ref().filter(|_| current);
-        let snap_point = drawing
-            .and_then(|draw| draw.gesture.snap_point())
-            .or_else(|| moving.and_then(|drag| drag.snapping.snap_point()))
-            .zip(transform.filter(|_| canvas.overlay_visible))
-            .map(|(position, transform)| transform.transform_point2(position));
         let blank = current && matches!(canvas.frame, SavedSceneFrame::Blank);
         let can_draw = current
             && self.model.read(cx).working.is_some()
             && canvas.drawing_navigation().is_some();
         let view = canvas.artboard_view.as_ref().filter(|_| current);
+        let snap_guides = view
+            .filter(|_| canvas.overlay_visible)
+            .and_then(|view| view.snap_guides.clone());
         let draft = view
             .zip(canvas.artboard_render_request())
             .and_then(|(view, request)| {
@@ -3032,10 +3051,12 @@ impl GraphiteDocumentItem {
                         toolbar.child(Label::new(message).color(color))
                     })
                     .when_some(
-                        canvas
-                            .artboard_view
-                            .as_ref()
-                            .and_then(|draft| draft.draft_error.clone()),
+                        canvas.artboard_view.as_ref().and_then(|draft| {
+                            draft
+                                .draft_error
+                                .clone()
+                                .or_else(|| draft.snap_guide_error.clone())
+                        }),
                         |toolbar, message| toolbar.child(Label::new(message).color(Color::Error)),
                     )
                     .when(
@@ -3130,7 +3151,7 @@ impl GraphiteDocumentItem {
                                 if target == measured
                                     && gesture_pane.is_none_or(|pane| pane == bounds)
                                 {
-                                    return (image, overlays, edit_outline, snap_point);
+                                    return (image, overlays, edit_outline, snap_guides);
                                 }
                                 window.defer(cx, move |window, cx| {
                                     if let Err(error) = item.update(cx, |item, cx| {
@@ -3159,7 +3180,7 @@ impl GraphiteDocumentItem {
                                 (None, Vec::new(), None, None)
                             },
                             move |bounds,
-                                  (image, overlays, edit_outline, snap_point),
+                                  (image, overlays, edit_outline, snap_guides),
                                   window,
                                   _| {
                                 Self::capture_scene_gestures(
@@ -3195,19 +3216,22 @@ impl GraphiteDocumentItem {
                                         }
                                     });
                                 }
-                                if edit_outline.is_some() || snap_point.is_some() {
-                                    window.paint_layer(bounds, |window| {
-                                        if let Some(outline) = edit_outline {
-                                            paint_artboard_outline(outline, bounds.origin, window);
-                                        }
-                                        if let Some(position) = snap_point {
-                                            paint_artboard_snap_point(
-                                                position,
-                                                bounds.origin,
-                                                window,
-                                            );
-                                        }
-                                    });
+                                if edit_outline.is_some() || snap_guides.is_some() {
+                                    window.with_content_mask(
+                                        Some(gpui::ContentMask { bounds }),
+                                        |window| {
+                                            if let Some(outline) = edit_outline {
+                                                paint_artboard_outline(
+                                                    outline,
+                                                    bounds.origin,
+                                                    window,
+                                                );
+                                            }
+                                            if let Some(guides) = snap_guides {
+                                                guides.paint(bounds.origin, window);
+                                            }
+                                        },
+                                    );
                                 }
                             },
                         )
@@ -15967,6 +15991,13 @@ mod tests {
             assert_eq!(placement.location, DVec2::new(10., 40.));
             assert_eq!(placement.dimensions, DVec2::new(150., 80.));
             assert!(moving.snapping.snap_point().is_some());
+            let view = canvas.artboard_view.as_ref().expect("Artboard view");
+            assert!(
+                view.snap_guide_error.is_none(),
+                "{:?}",
+                view.snap_guide_error
+            );
+            assert!(view.snap_guides.is_some());
             let draft = canvas
                 .artboard_view
                 .as_ref()
@@ -16081,6 +16112,12 @@ mod tests {
                 assert_eq!(drag.placement, Some(snapped_resize));
                 assert!(drag.snapping.snap_point().is_some());
                 let view = canvas.artboard_view.as_ref().expect("Artboard view");
+                assert!(
+                    view.snap_guide_error.is_none(),
+                    "{:?}",
+                    view.snap_guide_error
+                );
+                assert!(view.snap_guides.is_some());
                 assert!(view.draft_error.is_none(), "{:?}", view.draft_error);
                 let draft = view.draft_frame.as_ref().expect("source resize draft");
                 assert_eq!(draft.request.placement, Some(snapped_resize));
@@ -16684,6 +16721,12 @@ mod tests {
                 let target = canvas.target.expect("measured Canvas");
                 assert_eq!(view.offset_from(target, view.initial.camera), expected_pan);
                 assert_eq!(draw.placement, Some(second_geometry));
+                assert!(
+                    view.snap_guide_error.is_none(),
+                    "{:?}",
+                    view.snap_guide_error
+                );
+                assert!(view.snap_guides.is_some());
                 let snapped = draw.gesture.snap_point().expect("Graphite snap indicator");
                 assert!(snapped.abs_diff_eq(DVec2::new(-30., 70.), 1e-9));
                 assert_eq!(
@@ -16707,6 +16750,14 @@ mod tests {
             assert_eq!(unsnapped.dimensions.x, 139.);
             assert_eq!(unsnapped.location.x, -29.);
             assert!(draw.gesture.snap_point().is_none());
+            assert!(
+                canvas
+                    .artboard_view
+                    .as_ref()
+                    .expect("Artboard view")
+                    .snap_guides
+                    .is_none()
+            );
             assert_eq!(
                 item.model
                     .read(cx)

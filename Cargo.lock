@@ -9084,6 +9084,7 @@ dependencies = [
  "ui",
  "uuid",
  "vector-types",
+ "vello_encoding",
  "workspace",
  "zed_actions",
 ]

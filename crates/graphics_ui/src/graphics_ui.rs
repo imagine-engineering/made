@@ -10,6 +10,7 @@ mod layers;
 mod node_catalog;
 mod png_workflow;
 mod session;
+mod snap_guides;
 
 pub use graph::{
     CancelImageLoad, CancelMixEvaluation, GraphicsWorkspaceItem, GraphiteArtboardItem,

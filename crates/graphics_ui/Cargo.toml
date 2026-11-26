@@ -32,6 +32,7 @@ project.workspace = true
 ui.workspace = true
 workspace.workspace = true
 theme.workspace = true
+vello_encoding = "=0.10.0"
 
 [dev-dependencies]
 graphite-document-container.workspace = true
