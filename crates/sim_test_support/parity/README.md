@@ -21,3 +21,9 @@ verify tracked static include inputs and absence of `.agents/` from Git's index.
 The CLI reconciliation filename/hash table binds the relocated `sim-cli-*`
 catalogs. Inventory counts, task IDs and parity completion states are retained;
 refreshing this table is not a new parity or live-service qualification.
+
+Run `python3 crates/sim_test_support/parity/validate_media.py` from a checkout
+with the pinned source fixtures. The report under `target/comfy-parity/`
+records which native media, node, runtime, and worker fixture checks ran. A
+`partial` report records those results while leaving full catalog coverage,
+visual application verification, and signed target codec qualification open.

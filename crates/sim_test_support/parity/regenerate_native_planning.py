@@ -24913,7 +24913,7 @@ def validation_runner(identifier: str) -> str:
     if identifier == "VAL-WORKER-PLUGIN-001":
         return "CARGO_INCREMENTAL=0 cargo test -p sim_test_support --test plugin_e2e val_worker_plugin_001 -- --nocapture"
     if identifier == "VAL-MEDIA-001":
-        return "cargo test -p sim_media val_media_001"
+        return "python3 crates/sim_test_support/parity/validate_media.py"
     if identifier == "VAL-METADATA-001":
         return "cargo test -p sim_media val_metadata_001"
     if identifier == "VAL-RECOVERY-002":
@@ -25018,6 +25018,15 @@ def write_validation() -> None:
                 "matches and both complete regeneration passes produce no changed paths. "
                 "The checked-in generated outputs and command result are the evidence; this "
                 "command-only gate emits no separate target JSON artifact."
+            )
+        if identifier == "VAL-MEDIA-001":
+            pass_artifact = (
+                "`target/comfy-parity/val-media-001.json` (under `CARGO_TARGET_DIR` when set) "
+                "contains the native environment, fixture digests, scoped suite counts, and exact required cases. "
+                "An empty, failed, or skipped required suite fails the runner. "
+                "A successful run emits `partial` evidence for the executed suites. "
+                "Full acceptance still requires source-linked coverage of the complete media catalog, "
+                "visual verification of the application output and previews, and target release codec receipts."
             )
         if identifier == "VAL-DEVICE-001":
             pass_artifact += " The Apple Metal baseline retains its signed artifact under `catalogs/native-device-certification/`; a supplied CPU artifact must verify cryptographically but may remain explicitly stale as an external release gate; optional accelerator artifacts are accepted only as external target-lab evidence."
