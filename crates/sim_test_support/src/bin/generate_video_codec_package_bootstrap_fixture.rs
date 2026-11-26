@@ -197,7 +197,7 @@ fn build_fixture() -> Result<BTreeMap<String, Vec<u8>>> {
     ];
     let mut dependencies = Vec::new();
     for (identity, filename, soname, abi_version) in dependency_specs {
-        let bytes = elf_fixture(62, &[], &["libc.so.6"], soname, "ZED_FIXTURE_1")?;
+        let bytes = elf_fixture(62, &[], &["libc.so.6"], soname, "ZED_FIXTURE_1", true)?;
         let digest = sha256(&bytes);
         files.insert(filename.to_owned(), bytes);
         dependencies.push(Dependency {
@@ -230,6 +230,7 @@ fn build_fixture() -> Result<BTreeMap<String, Vec<u8>>> {
             &needed_refs,
             &soname,
             &contract.symbol_version_namespace,
+            identity != "avfilter",
         )?;
         let digest = sha256(&bytes);
         files.insert(filename.clone(), bytes);
@@ -522,6 +523,7 @@ fn elf_fixture(
     needed: &[&str],
     soname: &str,
     version_namespace: &str,
+    writable_dynamic: bool,
 ) -> Result<Vec<u8>> {
     let mut strings = vec![0_u8];
     let mut names = Vec::new();
@@ -612,17 +614,18 @@ fn elf_fixture(
     write_u64(&mut bytes, program_offset + 48, u64::try_from(page_size)?)?;
     let data_program = program_offset + program_entry_size;
     let data_size = file_length - executable_size;
+    let dynamic_flags = if writable_dynamic { 6 } else { 4 };
     write_u32(&mut bytes, data_program, 1)?;
-    write_u32(&mut bytes, data_program + 4, 6)?;
+    write_u32(&mut bytes, data_program + 4, dynamic_flags)?;
     write_u64(&mut bytes, data_program + 8, executable_size)?;
     write_u64(&mut bytes, data_program + 16, executable_size)?;
     write_u64(&mut bytes, data_program + 32, data_size)?;
     write_u64(&mut bytes, data_program + 40, data_size)?;
     write_u64(&mut bytes, data_program + 48, u64::try_from(page_size)?)?;
-    // glibc relocates dynamic pointers in a writable segment.
+    // Using both permissions exercises relocated and relative dynamic pointers.
     let dynamic_program = data_program + program_entry_size;
     write_u32(&mut bytes, dynamic_program, 2)?;
-    write_u32(&mut bytes, dynamic_program + 4, 6)?;
+    write_u32(&mut bytes, dynamic_program + 4, dynamic_flags)?;
     write_u64(
         &mut bytes,
         dynamic_program + 8,

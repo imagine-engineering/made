@@ -14,7 +14,8 @@ use crate::{
     GeneralVideoCodecPackageVerificationKey, NativeFfiContract, NativeFfiRegistry,
     NativeGeneralVideoCodecPackageSettings,
     native_ffi_elf::{
-        NativeElfDynamicContract, NativeElfInspectionError, inspect_elf64_dynamic_contract,
+        NativeElfDynamicContract, NativeElfDynamicLayout, NativeElfInspectionError,
+        inspect_elf64_dynamic_contract,
     },
     native_video_codec_abi::{
         general_video_codec_library_contracts, general_video_codec_symbol_version_namespace,
@@ -400,6 +401,15 @@ impl CertifiedGeneralVideoCodecDependencyClosure {
                     .iter()
                     .map(|(identity, contract)| (identity.clone(), contract.needed().clone())),
             )
+            .collect()
+    }
+
+    pub(crate) fn dynamic_layouts(&self) -> BTreeMap<String, NativeElfDynamicLayout> {
+        self.inspected
+            .primary_contracts
+            .iter()
+            .chain(&self.inspected.dependency_contracts)
+            .map(|(identity, contract)| (identity.clone(), contract.layout))
             .collect()
     }
 

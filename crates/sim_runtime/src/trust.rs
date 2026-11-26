@@ -4638,6 +4638,7 @@ pub struct VideoCodecElfLibraryIdentity {
     exported_symbols: BTreeSet<String>,
     callable_symbols: BTreeMap<String, VideoCodecCallableElfSymbolIdentity>,
     needed_libraries: BTreeSet<String>,
+    pub(crate) dynamic_layout: crate::native_ffi_elf::NativeElfDynamicLayout,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4989,6 +4990,7 @@ fn capture_video_codec_package_internal(
                     exported_symbols: dynamic.symbols().clone(),
                     callable_symbols,
                     needed_libraries: dynamic.needed().clone(),
+                    dynamic_layout: dynamic.layout,
                 },
             );
         }
@@ -5579,6 +5581,7 @@ fn certify_video_codec_dependency_closure_with_limits(
                 exported_symbols: dynamic.symbols().clone(),
                 callable_symbols: BTreeMap::new(),
                 needed_libraries: dynamic.needed().clone(),
+                dynamic_layout: dynamic.layout,
             },
         );
         let retained = captured

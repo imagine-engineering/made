@@ -1,6 +1,7 @@
 use crate::{
     CertifiedGeneralVideoCodecDependencyClosure, CertifiedVideoCodecDependencyClosure,
-    VIDEO_CODEC_FFI_UNSAFE_OWNER, native_video_codec_abi as abi,
+    VIDEO_CODEC_FFI_UNSAFE_OWNER, native_ffi_elf::NativeElfDynamicLayout,
+    native_video_codec_abi as abi,
 };
 use sim_media::{
     NativeAudioPayload, NativeCancellableMediaPayloadError, NativeDecodedVideo,
@@ -6769,6 +6770,7 @@ struct VideoCodecLoadProjection {
     paths: BTreeMap<String, PathBuf>,
     sonames: BTreeMap<String, String>,
     needed: BTreeMap<String, BTreeSet<String>>,
+    dynamic_layouts: BTreeMap<String, NativeElfDynamicLayout>,
     system_libraries: BTreeSet<String>,
     dependency_first_order: Vec<String>,
 }
@@ -6818,10 +6820,17 @@ impl VideoCodecLoadProjection {
                 .ok_or(NativeVideoCodecLoadError::InvalidClosure)?
                 .insert(required);
         }
+        let dynamic_layouts = closure
+            .primary_elf_libraries()
+            .iter()
+            .chain(closure.dependency_elf_libraries())
+            .map(|(identity, library)| (identity.clone(), library.dynamic_layout))
+            .collect();
         Ok(Self {
             paths,
             sonames,
             needed,
+            dynamic_layouts,
             system_libraries: closure.reviewed_system_libraries().clone(),
             dependency_first_order,
         })
@@ -6849,6 +6858,7 @@ impl VideoCodecLoadProjection {
             paths,
             sonames,
             needed,
+            dynamic_layouts: closure.dynamic_layouts(),
             system_libraries: closure.reviewed_system_sonames(),
             dependency_first_order,
         })
@@ -7063,72 +7073,104 @@ fn loaded_link_map(
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
-unsafe fn bounded_loaded_string(
-    string_table: *const u8,
+fn bounded_loaded_string(
+    string_table: &[u8],
     offset: u64,
 ) -> Result<String, NativeVideoCodecLoadError> {
-    let offset = usize::try_from(offset).map_err(|_| {
-        NativeVideoCodecLoadError::BindingProof(
-            "loaded dynamic string offset exceeds the address space".to_owned(),
-        )
-    })?;
-    let start = unsafe { string_table.add(offset) };
-    let mut length = 0;
-    while length <= 255 {
-        if unsafe { *start.add(length) } == 0 {
-            let bytes = unsafe { std::slice::from_raw_parts(start, length) };
-            return std::str::from_utf8(bytes).map(str::to_owned).map_err(|_| {
-                NativeVideoCodecLoadError::BindingProof(
-                    "loaded dynamic string is not UTF-8".to_owned(),
-                )
-            });
-        }
-        length += 1;
-    }
-    Err(NativeVideoCodecLoadError::BindingProof(
-        "loaded dynamic string exceeds 255 bytes".to_owned(),
-    ))
+    let suffix = usize::try_from(offset)
+        .ok()
+        .and_then(|offset| string_table.get(offset..))
+        .ok_or_else(|| {
+            NativeVideoCodecLoadError::BindingProof(
+                "loaded dynamic string offset is outside the certified table".to_owned(),
+            )
+        })?;
+    let length = suffix
+        .iter()
+        .take(256)
+        .position(|byte| *byte == 0)
+        .ok_or_else(|| {
+            NativeVideoCodecLoadError::BindingProof(
+                "loaded dynamic string is not terminated within 255 bytes".to_owned(),
+            )
+        })?;
+    std::str::from_utf8(&suffix[..length])
+        .map(str::to_owned)
+        .map_err(|_| {
+            NativeVideoCodecLoadError::BindingProof("loaded dynamic string is not UTF-8".to_owned())
+        })
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
 unsafe fn loaded_dynamic_identity(
     link_map: *mut LoaderLinkMap,
+    layout: NativeElfDynamicLayout,
 ) -> Result<(String, BTreeSet<String>), NativeVideoCodecLoadError> {
-    let dynamic = unsafe { (*link_map).dynamic.cast::<LoaderElfDynamic>() };
-    if dynamic.is_null() {
+    let map = unsafe { &*link_map };
+    let loaded_address = |address: u64, size: usize| {
+        usize::try_from(address)
+            .ok()
+            .and_then(|address| map.address.checked_add(address))
+            .filter(|start| *start != 0 && start.checked_add(size).is_some())
+            .ok_or_else(|| {
+                NativeVideoCodecLoadError::BindingProof(
+                    "certified dynamic table address exceeds the loaded address space".to_owned(),
+                )
+            })
+    };
+    let dynamic = map.dynamic.cast::<LoaderElfDynamic>();
+    if dynamic.addr() != loaded_address(layout.dynamic_address, layout.dynamic_size)?
+        || !dynamic.is_aligned()
+    {
         return Err(NativeVideoCodecLoadError::BindingProof(
-            "loaded object has no dynamic table".to_owned(),
+            "loaded PT_DYNAMIC differs from the certified range".to_owned(),
         ));
     }
-    let mut string_table = std::ptr::null();
+    let string_table_address = loaded_address(layout.string_address, layout.string_size)?;
+    // The link map belongs to the retained image whose readable ranges were checked before loading.
+    let entries = unsafe {
+        std::slice::from_raw_parts(
+            dynamic,
+            layout.dynamic_size / std::mem::size_of::<LoaderElfDynamic>(),
+        )
+    };
+    let mut string_table = None;
+    let mut string_size = None;
     let mut soname_offset = None;
     let mut needed_offsets = Vec::new();
     let mut terminated = false;
-    for index in 0..65_536 {
-        let entry = unsafe { &*dynamic.add(index) };
+    for entry in entries {
         match entry.tag {
             0 => {
                 terminated = true;
                 break;
             }
             1 => needed_offsets.push(entry.value),
-            5 => string_table = entry.value as *const u8,
+            5 => string_table = Some(entry.value),
+            10 => string_size = usize::try_from(entry.value).ok(),
             14 => soname_offset = Some(entry.value),
             _ => {}
         }
     }
-    if !terminated || string_table.is_null() {
+    // glibc leaves pointers relative when the dynamic table is read-only.
+    let matching_string_pointer = string_table.is_some_and(|address| {
+        address == layout.string_address || usize::try_from(address) == Ok(string_table_address)
+    });
+    if !terminated || !matching_string_pointer || string_size != Some(layout.string_size) {
         return Err(NativeVideoCodecLoadError::BindingProof(
-            "loaded object has an invalid dynamic string table".to_owned(),
+            "loaded dynamic string table differs from the certified range".to_owned(),
         ));
     }
+    let strings = unsafe {
+        std::slice::from_raw_parts(string_table_address as *const u8, layout.string_size)
+    };
     let soname_offset = soname_offset.ok_or_else(|| {
         NativeVideoCodecLoadError::BindingProof("loaded object has no DT_SONAME".to_owned())
     })?;
-    let soname = unsafe { bounded_loaded_string(string_table, soname_offset) }?;
+    let soname = bounded_loaded_string(strings, soname_offset)?;
     let mut needed = BTreeSet::new();
     for offset in needed_offsets {
-        let dependency = unsafe { bounded_loaded_string(string_table, offset) }?;
+        let dependency = bounded_loaded_string(strings, offset)?;
         if !needed.insert(dependency) {
             return Err(NativeVideoCodecLoadError::BindingProof(format!(
                 "{soname} repeats a DT_NEEDED entry"
@@ -7265,7 +7307,11 @@ fn prove_exact_loaded_bindings(
 
     for (identity, link_map) in maps_by_identity {
         check_cancellation()?;
-        let (actual_soname, actual_needed) = unsafe { loaded_dynamic_identity(link_map) }?;
+        let layout = projection
+            .dynamic_layouts
+            .get(identity)
+            .ok_or(NativeVideoCodecLoadError::InvalidClosure)?;
+        let (actual_soname, actual_needed) = unsafe { loaded_dynamic_identity(link_map, *layout) }?;
         let expected_soname = projection
             .sonames
             .get(identity)
@@ -12316,6 +12362,7 @@ mod tests {
         let mut paths = BTreeMap::new();
         let mut sonames = BTreeMap::new();
         let mut needed = BTreeMap::new();
+        let mut dynamic_layouts = BTreeMap::new();
         let mut binding_libraries = BTreeMap::new();
         for (identity, major, symbols) in abi::video_codec_library_contracts() {
             let namespace = abi::video_codec_symbol_version_namespace(identity)
@@ -12457,6 +12504,7 @@ mod tests {
             paths.insert(identity.to_owned(), image.loader_path().to_path_buf());
             sonames.insert(identity.to_owned(), soname);
             needed.insert(identity.to_owned(), dynamic.needed().clone());
+            dynamic_layouts.insert(identity.to_owned(), dynamic.layout);
             binding_libraries.insert(
                 identity.to_owned(),
                 VideoCodecBindingLibraryProjection {
@@ -12483,6 +12531,7 @@ mod tests {
                 paths,
                 sonames,
                 needed,
+                dynamic_layouts,
                 system_libraries,
                 dependency_first_order,
             },
@@ -12551,6 +12600,7 @@ mod tests {
         let mut paths = BTreeMap::new();
         let mut sonames = BTreeMap::new();
         let mut needed = BTreeMap::new();
+        let mut dynamic_layouts = BTreeMap::new();
         for (identity, path, soname) in [
             ("dependency", dependency, "libvideo_dependency.so.1"),
             ("consumer", consumer, "libvideo_consumer.so.1"),
@@ -12562,6 +12612,7 @@ mod tests {
             paths.insert(identity.to_owned(), image.loader_path().to_path_buf());
             sonames.insert(identity.to_owned(), soname.to_owned());
             needed.insert(identity.to_owned(), dynamic.needed().clone());
+            dynamic_layouts.insert(identity.to_owned(), dynamic.layout);
             retained.push(image);
         }
         let package_sonames = sonames.values().cloned().collect::<BTreeSet<_>>();
@@ -12578,6 +12629,7 @@ mod tests {
                 paths,
                 sonames,
                 needed,
+                dynamic_layouts,
                 system_libraries,
                 dependency_first_order: vec!["dependency".to_owned(), "consumer".to_owned()],
             },

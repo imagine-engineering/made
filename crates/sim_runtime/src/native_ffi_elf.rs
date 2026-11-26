@@ -11,6 +11,15 @@ pub(crate) struct NativeElfDynamicContract {
     pub(crate) symbol_identities: BTreeMap<String, Vec<NativeElfSymbolIdentity>>,
     pub(crate) needed: BTreeSet<String>,
     pub(crate) soname: Option<String>,
+    pub(crate) layout: NativeElfDynamicLayout,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct NativeElfDynamicLayout {
+    pub(crate) dynamic_address: u64,
+    pub(crate) dynamic_size: usize,
+    pub(crate) string_address: u64,
+    pub(crate) string_size: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -168,18 +177,13 @@ fn inspect_elf64_dynamic_contract_inner(
     {
         return Err("PT_DYNAMIC has an invalid bounded size".to_owned());
     }
-    if !programs
-        .iter()
-        .filter(|program| program.kind == 1)
-        .any(|program| {
-            contains_virtual_range(
-                *program,
-                dynamic_segment.virtual_address,
-                dynamic_segment.file_size,
-            )
-        })
+    if virtual_to_file_offset(
+        &programs,
+        dynamic_segment.virtual_address,
+        dynamic_segment.file_size,
+    )? != dynamic_segment.file_offset
     {
-        return Err("PT_DYNAMIC is not contained in a loadable segment".to_owned());
+        return Err("PT_DYNAMIC differs from its file-backed PT_LOAD range".to_owned());
     }
     let dynamic_table = checked_slice(
         bytes,
@@ -423,6 +427,12 @@ fn inspect_elf64_dynamic_contract_inner(
         symbol_identities,
         needed,
         soname,
+        layout: NativeElfDynamicLayout {
+            dynamic_address: dynamic_segment.virtual_address,
+            dynamic_size: dynamic_segment.file_size,
+            string_address,
+            string_size,
+        },
     })
 }
 
@@ -687,7 +697,10 @@ fn virtual_to_file_offset(
     length: usize,
 ) -> Result<usize, String> {
     let mut resolved = None;
-    for program in programs.iter().filter(|program| program.kind == 1) {
+    for program in programs
+        .iter()
+        .filter(|program| program.kind == 1 && program.flags & 4 != 0)
+    {
         if !contains_virtual_range(*program, address, length) {
             continue;
         }
@@ -1174,6 +1187,24 @@ pub(crate) mod tests {
                 .expect_err("a non-ELF64 header size must fail closed");
             assert!(error.to_string().contains("ELF64 header size"));
         }
+    }
+
+    #[test]
+    fn elf_inspection_rejects_dynamic_table_mapped_to_different_file_bytes() {
+        let mut bytes = fixture(62, &BTreeSet::new(), &[], None, "libavcodec.so.61");
+        let cancellation = CancellationToken::default();
+        let layout = inspect_elf64_dynamic_contract(&bytes, 62, &cancellation)
+            .expect("synthetic ELF should be admitted")
+            .layout;
+        let dynamic_program_file_offset = 64 + 56 + 8;
+        write_u64(
+            &mut bytes,
+            dynamic_program_file_offset,
+            layout.dynamic_address + 16,
+        );
+        let error = inspect_elf64_dynamic_contract(&bytes, 62, &cancellation)
+            .expect_err("PT_DYNAMIC must identify the bytes used by the loader");
+        assert!(error.to_string().contains("file-backed PT_LOAD range"));
     }
 
     #[test]
