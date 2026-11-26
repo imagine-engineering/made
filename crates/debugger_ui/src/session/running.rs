@@ -73,13 +73,34 @@ async fn wait_for_java_test_debugger(
 ) -> Result<()> {
     let ready = format!("Listening for transport dt_socket at address: {port}");
     for _ in 0..600 {
+        let completed = terminal.read_with(cx, |terminal, cx| {
+            let task = terminal
+                .task()
+                .context("The selected Java test Debug terminal no longer has a Task")?;
+            if task.structured_task.as_ref().is_some_and(|handle| {
+                matches!(handle.state(), task::StructuredTaskState::Cancelled { .. })
+            }) {
+                bail!("The selected Java test Task was cancelled before the JVM suspended.");
+            }
+            Ok::<_, anyhow::Error>(
+                (task.status != terminal::TaskStatus::Running)
+                    .then(|| terminal.wait_for_completed_task(cx)),
+            )
+        })?;
+        if let Some(completion) = completed {
+            match completion.await {
+                Some(status) if status.success() => bail!(
+                    "The selected Java test Task finished successfully before the JVM suspended. Check the Debug terminal for the build output."
+                ),
+                Some(status) => bail!(
+                    "The selected Java test Task failed before the JVM suspended ({status}). Check the Debug terminal for the build output."
+                ),
+                None => bail!(
+                    "The selected Java test Task stopped before the JVM suspended. Check the Debug terminal for the build output."
+                ),
+            }
+        }
         let is_ready = terminal.read_with(cx, |terminal, _| {
-            anyhow::ensure!(
-                terminal
-                    .task()
-                    .is_some_and(|task| task.status == terminal::TaskStatus::Running),
-                "The selected Java test ended before opening its Debug port"
-            );
             if use_terminal_output {
                 Ok(terminal
                     .last_n_non_empty_lines(32)
@@ -2282,24 +2303,33 @@ mod tests {
         init_test(cx);
         let project = Project::test(FakeFs::new(cx.executor()), [], cx).await;
         let (_, cx) = cx.add_window_view(|_, _| gpui::EmptyView);
-        for (script, ready) in [
+        for (script, error_message) in [
             (
-                "printf '%s\\n' 'Listening for transport dt_socket at address: 50051'; exit 3",
-                false,
+                "printf '%s\\n' 'Listening for transport dt_socket at address: 50051' 'Fixture test build failed'; exit 3",
+                Some("failed before the JVM suspended (exit status: 3)"),
+            ),
+            (
+                "printf '%s\\n' 'Fixture test completed without suspending'; exit 0",
+                Some("finished successfully before the JVM suspended"),
             ),
             (
                 "printf '%s\\n' 'Listening for transport dt_socket at address: 5005'; read answer",
-                true,
+                None,
             ),
         ] {
+            let spawn_task = SpawnInTerminal {
+                command: Some("/bin/sh".into()),
+                args: vec!["-c".into(), script.into()],
+                ..Default::default()
+            };
+            let handle = error_message
+                .is_none()
+                .then(|| StructuredTaskHandle::new(spawn_task.id.clone()));
             let terminal = project
                 .update(cx, |project, cx| {
-                    project.create_terminal_task(
-                        SpawnInTerminal {
-                            command: Some("/bin/sh".into()),
-                            args: vec!["-c".into(), script.into()],
-                            ..Default::default()
-                        },
+                    project.create_terminal_task_with_structured_handle(
+                        spawn_task,
+                        handle.clone(),
                         cx,
                     )
                 })
@@ -2307,19 +2337,32 @@ mod tests {
                 .expect("test Debug terminal");
             let mut window = cx.update(|window, cx| window.to_async(cx));
             let result = wait_for_java_test_debugger(&terminal, 5005, true, &mut window).await;
-            if ready {
+            if let Some(expected) = error_message {
+                let error = result.expect_err("only a suspended JVM authorizes attachment");
+                let error = error.to_string();
+                assert!(error.contains(expected), "{error}");
+                assert!(error.contains("Check the Debug terminal"), "{error}");
+                terminal.read_with(cx, |terminal, _| {
+                    assert!(terminal.get_content().contains("Fixture test"));
+                });
+            } else {
                 result.expect("attached while the Task was still waiting");
-                terminal.update(cx, |terminal, _| {
+                terminal.read_with(cx, |terminal, _| {
                     assert!(
                         terminal
                             .task()
                             .is_some_and(|task| task.status == terminal::TaskStatus::Running)
                     );
-                    terminal.kill_active_task();
                 });
-            } else {
-                let error = result.expect_err("a different port never authorizes attachment");
-                assert!(error.to_string().contains("ended before opening"));
+                assert!(cx.update(|_, cx| handle.expect("selected test Task handle").cancel(cx)));
+                let error = wait_for_java_test_debugger(&terminal, 5005, true, &mut window)
+                    .await
+                    .expect_err("the cancelled Task cannot authorize attachment");
+                assert!(
+                    error
+                        .to_string()
+                        .contains("was cancelled before the JVM suspended")
+                );
             }
             assert!(
                 terminal

@@ -554,6 +554,10 @@ port 5005. Maven uses a separate loopback port for each launch. Stopping the
 Debug session or restricting project trust cancels its selected test Task,
 including during terminal preparation.
 
+If the Task ends before the test JVM suspends, the Debug console reports
+its exit status, cancellation, or an interruption without an exit status.
+The Debug terminal retains the build output.
+
 The debugger supplies the selected module's Java test source directory to the
 adapter. When the pinned adapter fails a whole stack request on a frame
 without source, the debugger retries in bounded pages and logs the number of
