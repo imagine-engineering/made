@@ -376,7 +376,13 @@ def artifact_covers_row(
     implementation = payload.get("implementation")
     if not isinstance(implementation, dict):
         return False
-    implementation_path = safe_workspace_file(workspace, implementation.get("path"))
+    producer_path = implementation.get("path")
+    if (
+        closure_artifact == "VAL-CLIP-001"
+        and producer_path != "crates/sim_model/tests/support/clip_receipt.rs"
+    ):
+        return False
+    implementation_path = safe_workspace_file(workspace, producer_path)
     producer_sha256 = implementation.get("sha256")
     if (
         implementation_path is None
@@ -403,6 +409,19 @@ def artifact_covers_row(
             return False
         if result.get("status") != "passed" or passed == 0 or failed != 0 or skipped != 0:
             return False
+        if closure_artifact == "VAL-CLIP-001":
+            validation_source = result.get("validation_source")
+            if not isinstance(validation_source, dict):
+                return False
+            test_source = safe_workspace_file(workspace, validation_source.get("path"))
+            test_sha256 = validation_source.get("sha256")
+            if (
+                test_source is None
+                or not isinstance(test_sha256, str)
+                or SHA256.fullmatch(test_sha256) is None
+                or digest(test_source.read_bytes()) != test_sha256
+            ):
+                return False
         task_case_ids = result.get("case_ids", [])
         if (
             not isinstance(task_case_ids, list)

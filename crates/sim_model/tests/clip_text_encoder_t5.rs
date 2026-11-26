@@ -1,4 +1,7 @@
-use serde_json::{Value, json};
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use sim_model::{
     ArtifactIndex, ArtifactKey, ArtifactRoot, BERT_SOURCE_PATH, BERT_SOURCE_SHA256,
@@ -717,64 +720,32 @@ fn val_clip_001_t5_bidirectional_rows_execute_and_extend_cumulative_ledger()
     assert_eq!(symbols, T5_BIDIRECTIONAL_CATALOG_SYMBOLS);
     assert_eq!(contracts.len(), 19);
 
-    let artifact_path = workspace.join("target/sim-parity/val-clip-001.json");
-    let mut artifact = serde_json::from_slice::<Value>(&fs::read(&artifact_path)?)?;
-    assert_eq!(artifact.get("schema_version"), Some(&json!(1)));
-    assert_eq!(artifact.get("validation_id"), Some(&json!("VAL-CLIP-001")));
-    let implementations = IMPLEMENTATION_CLOSURE
-        .iter()
-        .map(|path| {
-            Ok(json!({
-                "path": path,
-                "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    task_results.insert(
-        TASK_ID.to_owned(),
-        json!({
-            "status": "passed",
-            "passed": 19,
-            "failed": 0,
-            "skipped": 0,
-            "case_ids": [
-                "text-encoder-t5:source-provenance-and-exact-row-closure",
-                "text-encoder-t5:sentencepiece-and-token-input-delegation",
-                "text-encoder-t5:relative-attention-and-gated-feed-forward",
-                "text-encoder-t5:typed-target-cancellation-oom-workspace",
-            ],
-            "implementations": implementations,
-        }),
-    );
-    let passed = task_results.values().try_fold(0_u64, |total, result| {
-        total
-            .checked_add(
-                result
-                    .get("passed")
-                    .and_then(Value::as_u64)
-                    .ok_or("task result passed count is missing")?,
+    let implementations = clip_receipt::implementation_digests(workspace, &IMPLEMENTATION_CLOSURE)?;
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_text_encoder_t5.rs",
+        |evidence| {
+            evidence.record(
+                [(
+                    TASK_ID,
+                    json!({
+                        "status": "passed",
+                        "passed": 19,
+                        "failed": 0,
+                        "skipped": 0,
+                        "case_ids": [
+                            "text-encoder-t5:source-provenance-and-exact-row-closure",
+                            "text-encoder-t5:sentencepiece-and-token-input-delegation",
+                            "text-encoder-t5:relative-attention-and-gated-feed-forward",
+                            "text-encoder-t5:typed-target-cancellation-oom-workspace",
+                        ],
+                        "implementations": implementations,
+                    }),
+                )],
+                contracts,
             )
-            .ok_or("passed count overflowed")
-    })?;
-    let artifact_contracts = artifact
-        .get_mut("contracts")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 contracts are missing")?;
-    artifact_contracts
-        .retain(|contract| contract.get("task_id").and_then(Value::as_str) != Some(TASK_ID));
-    artifact_contracts.extend(contracts);
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    let remaining = artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?;
-    remaining.retain(|task| task.as_str() != Some(TASK_ID));
-    fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
-    Ok(())
+        },
+    )
 }
 
 fn verified_prompt_tokenizer() -> Result<NativePromptTokenizer, Box<dyn Error>> {

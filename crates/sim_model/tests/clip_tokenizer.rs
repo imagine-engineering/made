@@ -1,3 +1,6 @@
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sim_model::clip::{
@@ -18,11 +21,7 @@ use sim_model::{
     parse_prompt_weights,
 };
 use sim_tensor::CancellationToken;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs,
-    path::Path,
-};
+use std::{collections::BTreeMap, fs, path::Path};
 
 const TOKENIZER_IMPLEMENTATION_CLOSURE: [(&str, &str); 7] = [
     (
@@ -2423,35 +2422,19 @@ fn val_clip_001_tokenizer_rows_execute_and_publish_partial_ledger()
         CLIP_EXECUTION_SOURCE_ROWS.len()
     );
 
-    let producer_path = "crates/sim_model/tests/clip_tokenizer.rs";
-    let producer_sha256 = format!(
-        "{:x}",
-        Sha256::digest(fs::read(workspace.join(producer_path))?)
-    );
-    let task_implementations = TOKENIZER_IMPLEMENTATION_CLOSURE
-        .iter()
-        .map(|(path, _)| {
-            Ok(json!({
-                "path": path,
-                "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
+    let implementation_paths = TOKENIZER_IMPLEMENTATION_CLOSURE.map(|(path, _)| path);
+    let task_implementations =
+        clip_receipt::implementation_digests(workspace, &implementation_paths)?;
     let tokenizer_task_implementations = task_implementations
         .iter()
         .filter(|implementation| {
-            implementation
-                .get("path")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|path| {
-                    matches!(
-                        path,
-                        "crates/sim_model/src/clip.rs"
-                            | "crates/sim_model/src/clip_tokenizer.rs"
-                            | "crates/sim_model/src/formats.rs"
-                            | "crates/sim_model/src/model_store.rs"
-                    )
-                })
+            matches!(
+                implementation.path.as_str(),
+                "crates/sim_model/src/clip.rs"
+                    | "crates/sim_model/src/clip_tokenizer.rs"
+                    | "crates/sim_model/src/formats.rs"
+                    | "crates/sim_model/src/model_store.rs"
+            )
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -2513,135 +2496,9 @@ fn val_clip_001_tokenizer_rows_execute_and_publish_partial_ledger()
             }),
         ),
     ]);
-    let artifact_directory = workspace.join("target/sim-parity");
-    let artifact_path = artifact_directory.join("val-clip-001.json");
-    let previous_artifact = if artifact_path.exists() {
-        Some(serde_json::from_slice::<Value>(&fs::read(&artifact_path)?)?)
-    } else {
-        None
-    };
-    let mut artifact = json!({
-        "schema_version": 1,
-        "validation_id": "VAL-CLIP-001",
-        "overall_status": "partial",
-        "environment": {
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "backend": "sim_tensor::CpuBackend",
-            "device": "cpu",
-            "dtype": "f32",
-        },
-        "summary": {
-            "passed": 0,
-            "failed": 0,
-            "skipped": 0,
-        },
-        "implementation": {
-            "path": producer_path,
-            "sha256": producer_sha256,
-        },
-        "task_results": task_results,
-        "contracts": contracts,
-        "remaining_tasks": [
-            "comfy-parity-clip-execution-foundation",
-            "comfy-parity-clip-text-transformer-foundation",
-            "comfy-parity-clip-vision-foundation",
-            "comfy-parity-clip-text-encoder-breadth",
-            "comfy-parity-clip-owner-consolidation"
-        ],
-    });
-    if let Some(previous_artifact) = previous_artifact {
-        let current_results = artifact
-            .get_mut("task_results")
-            .and_then(Value::as_object_mut)
-            .ok_or("VAL-CLIP-001 task results are missing")?;
-        if let Some(previous_results) = previous_artifact
-            .get("task_results")
-            .and_then(Value::as_object)
-        {
-            for (task, result) in previous_results {
-                if task != CONTRACT_TASK && task != EXECUTION_TASK && task != OWNER_RESULT_TASK {
-                    current_results.insert(task.clone(), result.clone());
-                }
-            }
-        }
-        let current_contracts = artifact
-            .get_mut("contracts")
-            .and_then(Value::as_array_mut)
-            .ok_or("VAL-CLIP-001 contracts are missing")?;
-        if let Some(previous_contracts) =
-            previous_artifact.get("contracts").and_then(Value::as_array)
-        {
-            let mut contract_ids = current_contracts
-                .iter()
-                .filter_map(|contract| {
-                    contract
-                        .get("contract_id")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                })
-                .collect::<BTreeSet<_>>();
-            for contract in previous_contracts {
-                let task = contract.get("task_id").and_then(Value::as_str);
-                if task != Some(CONTRACT_TASK)
-                    && task != Some(EXECUTION_TASK)
-                    && task != Some(OWNER_RESULT_TASK)
-                {
-                    let contract_id = contract
-                        .get("contract_id")
-                        .and_then(Value::as_str)
-                        .ok_or("VAL-CLIP-001 prior contract has no contract ID")?;
-                    if !contract_ids.insert(contract_id.to_owned()) {
-                        let current = current_contracts
-                            .iter()
-                            .find(|current| {
-                                current.get("contract_id").and_then(Value::as_str)
-                                    == Some(contract_id)
-                            })
-                            .ok_or("VAL-CLIP-001 duplicate contract is unavailable")?;
-                        assert_eq!(
-                            current, contract,
-                            "conflicting prior contract {contract_id}"
-                        );
-                        continue;
-                    }
-                    current_contracts.push(contract.clone());
-                }
-            }
-        }
-    }
-    let completed_tasks = artifact
-        .get("task_results")
-        .and_then(Value::as_object)
-        .ok_or("VAL-CLIP-001 task results are missing")?
-        .keys()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?
-        .retain(|task| {
-            task.as_str()
-                .is_none_or(|task| !completed_tasks.contains(task))
-        });
-    let passed = artifact
-        .get("task_results")
-        .and_then(Value::as_object)
-        .ok_or("VAL-CLIP-001 task results are missing")?
-        .values()
-        .try_fold(0_u64, |total, result| {
-            total
-                .checked_add(
-                    result
-                        .get("passed")
-                        .and_then(Value::as_u64)
-                        .ok_or("VAL-CLIP-001 task result has no passed count")?,
-                )
-                .ok_or("VAL-CLIP-001 passed count overflowed")
-        })?;
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    fs::create_dir_all(&artifact_directory)?;
-    fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
-    Ok(())
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_tokenizer.rs",
+        |evidence| evidence.record(task_results, contracts),
+    )
 }

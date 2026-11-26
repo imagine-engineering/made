@@ -1,3 +1,6 @@
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sim_model::{
@@ -48,7 +51,6 @@ use std::{collections::BTreeMap, error::Error, fs, path::Path, sync::Arc};
 
 const MEMORY_LIMIT: u64 = 64 * 1024 * 1024;
 const TASK_ID: &str = "comfy-parity-clip-text-encoder-multimodal-foundation";
-const COMPOSITE_TASK_ID: &str = "comfy-parity-clip-text-encoder-composite-adapters";
 const IMPLEMENTATION_CLOSURE: [&str; 3] = [
     "crates/sim_model/src/clip_text_encoder_multimodal.rs",
     "crates/sim_model/src/sim_model.rs",
@@ -3053,88 +3055,32 @@ fn val_clip_001_multimodal_rows_execute_and_extend_cumulative_ledger() -> Result
     assert_eq!(symbols, MULTIMODAL_TEXT_ENCODER_CATALOG_SYMBOLS);
     assert_eq!(contracts.len(), 53);
 
-    let artifact_path = workspace.join("target/sim-parity/val-clip-001.json");
-    let mut artifact = if artifact_path.exists() {
-        serde_json::from_slice::<Value>(&fs::read(&artifact_path)?)?
-    } else {
-        empty_clip_artifact()
-    };
-    assert_eq!(artifact.get("schema_version"), Some(&json!(1)));
-    assert_eq!(artifact.get("validation_id"), Some(&json!("VAL-CLIP-001")));
-    let implementations = IMPLEMENTATION_CLOSURE
-        .iter()
-        .map(|path| {
-            Ok(json!({
-                "path": path,
-                "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    task_results.insert(
-        TASK_ID.to_owned(),
-        json!({
-            "status": "passed",
-            "passed": 53,
-            "failed": 0,
-            "skipped": 0,
-            "case_ids": [
-                "text-encoder-multimodal:source-provenance-and-exact-row-closure",
-                "text-encoder-multimodal:canonical-text-and-vision-delegation",
-                "text-encoder-multimodal:position-and-projection-semantics",
-                "text-encoder-multimodal:typed-target-cancellation-oom-workspace",
-            ],
-            "implementations": implementations,
-        }),
-    );
-    let composite_completed = task_results.contains_key(COMPOSITE_TASK_ID);
-    let passed = task_results.values().try_fold(0_u64, |total, result| {
-        total
-            .checked_add(
-                result
-                    .get("passed")
-                    .and_then(Value::as_u64)
-                    .ok_or("passed count")?,
+    let implementations = clip_receipt::implementation_digests(workspace, &IMPLEMENTATION_CLOSURE)?;
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_text_encoder_multimodal.rs",
+        |evidence| {
+            evidence.record(
+                [(
+                    TASK_ID,
+                    json!({
+                        "status": "passed",
+                        "passed": 53,
+                        "failed": 0,
+                        "skipped": 0,
+                        "case_ids": [
+                            "text-encoder-multimodal:source-provenance-and-exact-row-closure",
+                            "text-encoder-multimodal:canonical-text-and-vision-delegation",
+                            "text-encoder-multimodal:position-and-projection-semantics",
+                            "text-encoder-multimodal:typed-target-cancellation-oom-workspace",
+                        ],
+                        "implementations": implementations,
+                    }),
+                )],
+                contracts,
             )
-            .ok_or("passed count overflowed")
-    })?;
-    let artifact_contracts = artifact
-        .get_mut("contracts")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 contracts are missing")?;
-    artifact_contracts
-        .retain(|contract| contract.get("task_id").and_then(Value::as_str) != Some(TASK_ID));
-    artifact_contracts.extend(contracts);
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    let remaining = artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?;
-    remaining.retain(|task| task.as_str() != Some(TASK_ID));
-    if !composite_completed
-        && !remaining
-            .iter()
-            .any(|task| task.as_str() == Some(COMPOSITE_TASK_ID))
-    {
-        let insertion = remaining
-            .iter()
-            .position(|task| task.as_str() == Some("comfy-parity-clip-text-encoder-breadth"))
-            .unwrap_or(remaining.len());
-        remaining.insert(insertion, json!(COMPOSITE_TASK_ID));
-    }
-    let producer_path = "crates/sim_model/tests/clip_text_encoder_multimodal.rs";
-    artifact["implementation"] = json!({
-        "path": producer_path,
-        "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(producer_path))?)),
-    });
-    if let Some(parent) = artifact_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
-    Ok(())
+        },
+    )
 }
 
 fn execute_contract_witness(source_path: &str, symbol: &str) -> Result<(), Box<dyn Error>> {
@@ -3180,31 +3126,6 @@ fn workspace() -> Result<&'static Path, Box<dyn Error>> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "workspace root is unavailable".into())
-}
-
-fn empty_clip_artifact() -> Value {
-    json!({
-        "schema_version": 1,
-        "validation_id": "VAL-CLIP-001",
-        "overall_status": "partial",
-        "environment": {
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "backend": "sim_tensor::CpuBackend",
-            "device": "cpu",
-            "dtype": "f32",
-        },
-        "summary": {"passed": 0, "failed": 0, "skipped": 0},
-        "implementation": {},
-        "task_results": {},
-        "contracts": [],
-        "remaining_tasks": [
-            "comfy-parity-clip-text-encoder-multimodal-foundation",
-            "comfy-parity-clip-text-encoder-composite-adapters",
-            "comfy-parity-clip-text-encoder-breadth",
-            "comfy-parity-clip-owner-consolidation"
-        ],
-    })
 }
 
 fn python_symbol_sha256(source: &[u8], symbol: &str) -> Result<String, Box<dyn Error>> {

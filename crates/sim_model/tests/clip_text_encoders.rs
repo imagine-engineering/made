@@ -1,4 +1,7 @@
-use serde_json::{Value, json};
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use sim_model::{
     TEXT_ENCODER_ARCHITECTURE_CONTRACT_COUNT, TEXT_ENCODER_ARCHITECTURE_REGISTRY_VERSION,
@@ -12,7 +15,7 @@ use std::{
 };
 
 const TASK_ID: &str = "comfy-parity-clip-text-encoder-breadth";
-const OWNER_TASKS: [(&str, u64); 4] = [
+const OWNER_TASKS: [(&str, usize); 4] = [
     ("comfy-parity-clip-text-encoder-t5-foundation", 19),
     ("comfy-parity-clip-text-encoder-decoder-foundation", 127),
     ("comfy-parity-clip-text-encoder-multimodal-foundation", 53),
@@ -104,170 +107,64 @@ fn registry_is_versioned_total_unique_and_deterministic() -> Result<(), Box<dyn 
 fn val_clip_001_reconciles_all_398_rows_and_extends_ledger() -> Result<(), Box<dyn Error>> {
     let workspace = workspace()?;
     let rows = text_encoder_rows(workspace)?;
-    let artifact_path = workspace.join("target/sim-parity/val-clip-001.json");
-    let mut artifact: Value = serde_json::from_slice(&fs::read(&artifact_path)?)?;
-    assert_eq!(artifact.get("schema_version"), Some(&json!(1)));
-    assert_eq!(artifact.get("validation_id"), Some(&json!("VAL-CLIP-001")));
-
-    refresh_shared_module_root_digest(workspace, &mut artifact)?;
-
-    let task_results = artifact
-        .get("task_results")
-        .and_then(Value::as_object)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    for (task, expected_passed) in OWNER_TASKS {
-        let result = task_results
-            .get(task)
-            .ok_or("owner task result is missing")?;
-        assert_eq!(result.get("status"), Some(&json!("passed")));
-        assert_eq!(result.get("passed"), Some(&json!(expected_passed)));
-        assert_eq!(result.get("failed"), Some(&json!(0)));
-        assert_eq!(result.get("skipped"), Some(&json!(0)));
-        validate_implementation_digests(workspace, result)?;
-    }
-
-    let contracts = artifact
-        .get("contracts")
-        .and_then(Value::as_array)
-        .ok_or("VAL-CLIP-001 contracts are missing")?;
-    let contracts = contracts
-        .iter()
-        .filter_map(|contract| {
-            contract
-                .get("contract_id")
-                .and_then(Value::as_str)
-                .map(|contract_id| (contract_id, contract))
-        })
-        .collect::<BTreeMap<_, _>>();
-    for row in &rows {
-        let contract = contracts
-            .get(row.contract_id.as_str())
-            .ok_or("text-encoder contract is missing from VAL-CLIP-001")?;
-        assert_eq!(
-            contract.get("task_id"),
-            Some(&json!(row.implementation_task))
-        );
-        assert_eq!(
-            contract.get("source_sha256"),
-            Some(&json!(row.source_sha256))
-        );
-        assert_eq!(
-            contract.get("symbol_sha256"),
-            Some(&json!(row.symbol_sha256))
-        );
-        assert_eq!(contract.get("status"), Some(&json!("passed")));
-        let cases = contract
-            .get("case_ids")
-            .and_then(Value::as_array)
-            .ok_or("contract cases are missing")?;
-        assert!(!cases.is_empty());
-    }
-
-    let implementations = IMPLEMENTATIONS
-        .iter()
-        .map(|path| {
-            Ok(json!({
-                "path": path,
-                "sha256": sha256(&fs::read(workspace.join(path))?),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    task_results.insert(
-        TASK_ID.to_owned(),
-        json!({
-            "status": "passed",
-            "passed": TEXT_ENCODER_ARCHITECTURE_CONTRACT_COUNT,
-            "failed": 0,
-            "skipped": 0,
-            "case_ids": [
-                "text-encoder-breadth:exact-398-row-reconciliation",
-                "text-encoder-breadth:four-owner-registry-uniqueness",
-                "text-encoder-breadth:source-symbol-and-implementation-digests",
-                "text-encoder-breadth:deterministic-cache-identity",
-                "text-encoder-breadth:typed-unknown-failure",
-            ],
-            "implementations": implementations,
-        }),
-    );
-    let passed = task_results.values().try_fold(0_u64, |total, result| {
-        total
-            .checked_add(
-                result
-                    .get("passed")
-                    .and_then(Value::as_u64)
-                    .ok_or("task passed count is missing")?,
-            )
-            .ok_or("task passed count overflowed")
-    })?;
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    let remaining = artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?;
-    remaining.retain(|task| task.as_str() != Some(TASK_ID));
-    let producer = "crates/sim_model/tests/clip_text_encoders.rs";
-    artifact["implementation"] = json!({
-        "path": producer,
-        "sha256": sha256(&fs::read(workspace.join(producer))?),
-    });
-    let mut bytes = serde_json::to_vec_pretty(&artifact)?;
-    bytes.push(b'\n');
-    fs::write(artifact_path, bytes)?;
-    Ok(())
-}
-
-fn refresh_shared_module_root_digest(
-    workspace: &Path,
-    artifact: &mut Value,
-) -> Result<(), Box<dyn Error>> {
-    const MODULE_ROOT: &str = "crates/sim_model/src/sim_model.rs";
-    let digest = sha256(&fs::read(workspace.join(MODULE_ROOT))?);
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    for result in task_results.values_mut() {
-        let implementations = result
-            .get_mut("implementations")
-            .and_then(Value::as_array_mut)
-            .ok_or("task implementations are missing")?;
-        for implementation in implementations {
-            if implementation.get("path").and_then(Value::as_str) == Some(MODULE_ROOT) {
-                implementation["sha256"] = json!(digest.clone());
+    let implementations = clip_receipt::implementation_digests(workspace, &IMPLEMENTATIONS)?;
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_text_encoders.rs",
+        |evidence| {
+            for (task, expected_passed) in OWNER_TASKS {
+                let result = evidence.task_results.get(task).ok_or_else(|| {
+                    format!("current CLIP receipt is missing architecture task {task}")
+                })?;
+                assert_eq!(result.status, "passed");
+                assert_eq!(result.passed, expected_passed);
+                assert_eq!(result.failed, 0);
+                assert_eq!(result.skipped, 0);
             }
-        }
-    }
-    Ok(())
-}
-
-fn validate_implementation_digests(workspace: &Path, result: &Value) -> Result<(), Box<dyn Error>> {
-    let implementations = result
-        .get("implementations")
-        .and_then(Value::as_array)
-        .ok_or("task implementations are missing")?;
-    assert!(!implementations.is_empty());
-    for implementation in implementations {
-        let path = implementation
-            .get("path")
-            .and_then(Value::as_str)
-            .ok_or("implementation path is missing")?;
-        let expected = implementation
-            .get("sha256")
-            .and_then(Value::as_str)
-            .ok_or("implementation digest is missing")?;
-        assert_eq!(sha256(&fs::read(workspace.join(path))?), expected);
-    }
-    Ok(())
+            let contracts = evidence
+                .contracts
+                .iter()
+                .map(|contract| (contract.contract_id.as_str(), contract))
+                .collect::<BTreeMap<_, _>>();
+            for row in &rows {
+                let contract = contracts
+                    .get(row.contract_id.as_str())
+                    .ok_or("text-encoder contract is missing from VAL-CLIP-001")?;
+                assert_eq!(contract.task_id, row.implementation_task);
+                assert_eq!(contract.source_sha256, row.source_sha256);
+                assert_eq!(contract.symbol_sha256, row.symbol_sha256);
+                assert_eq!(contract.status, "passed");
+                assert!(!contract.case_ids.is_empty());
+            }
+            evidence.record(
+                [(
+                    TASK_ID,
+                    json!({
+                        "status": "passed",
+                        "passed": TEXT_ENCODER_ARCHITECTURE_CONTRACT_COUNT,
+                        "failed": 0,
+                        "skipped": 0,
+                        "case_ids": [
+                            "text-encoder-breadth:exact-398-row-reconciliation",
+                            "text-encoder-breadth:four-owner-registry-uniqueness",
+                            "text-encoder-breadth:source-symbol-and-implementation-digests",
+                            "text-encoder-breadth:deterministic-cache-identity",
+                            "text-encoder-breadth:typed-unknown-failure",
+                        ],
+                        "implementations": implementations,
+                    }),
+                )],
+                Vec::new(),
+            )
+        },
+    )
 }
 
 fn text_encoder_rows(workspace: &Path) -> Result<Vec<CatalogRow>, Box<dyn Error>> {
-    let records = parse_csv(&fs::read_to_string(workspace.join(
-        "crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv",
-    ))?)?;
+    let records = clip_receipt::parse_csv(&fs::read_to_string(
+        workspace
+            .join("crates/sim_test_support/parity/catalogs/backend-conditioning-contracts.csv"),
+    )?)?;
     let header = records.first().ok_or("conditioning catalog is empty")?;
     let index = |name: &str| {
         header
@@ -305,38 +202,6 @@ fn text_encoder_rows(workspace: &Path) -> Result<Vec<CatalogRow>, Box<dyn Error>
             })
         })
         .collect()
-}
-
-fn parse_csv(source: &str) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-    let mut records = Vec::new();
-    let mut record = Vec::new();
-    let mut field = String::new();
-    let mut quoted = false;
-    let mut characters = source.chars().peekable();
-    while let Some(character) = characters.next() {
-        match character {
-            '"' if quoted && characters.peek() == Some(&'"') => {
-                characters.next();
-                field.push('"');
-            }
-            '"' => quoted = !quoted,
-            ',' if !quoted => record.push(std::mem::take(&mut field)),
-            '\n' if !quoted => {
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
-            }
-            '\r' if !quoted => {}
-            value => field.push(value),
-        }
-    }
-    if quoted {
-        return Err("CSV ended inside a quoted field".into());
-    }
-    if !field.is_empty() || !record.is_empty() {
-        record.push(field);
-        records.push(record);
-    }
-    Ok(records)
 }
 
 fn valid_sha256(value: &str) -> bool {

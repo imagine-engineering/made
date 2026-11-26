@@ -1,4 +1,7 @@
-use serde_json::{Value, json};
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use sim_model::clip_text::{
     CLIP_TEXT_CATALOG_SYMBOLS, CLIP_TEXT_SOURCE_PATH, CLIP_TEXT_SOURCE_SHA256, ClipTextActivation,
@@ -649,32 +652,6 @@ fn execute_invalid_text_contract(symbol: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn empty_clip_artifact() -> Value {
-    json!({
-        "schema_version": 1,
-        "validation_id": "VAL-CLIP-001",
-        "overall_status": "partial",
-        "environment": {
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-            "backend": "sim_tensor::CpuBackend",
-            "device": "cpu",
-            "dtype": "f32",
-        },
-        "summary": {"passed": 0, "failed": 0, "skipped": 0},
-        "implementation": {},
-        "task_results": {},
-        "contracts": [],
-        "remaining_tasks": [
-            "comfy-parity-clip-execution-foundation",
-            "comfy-parity-clip-text-transformer-foundation",
-            "comfy-parity-clip-vision-foundation",
-            "comfy-parity-clip-text-encoder-breadth",
-            "comfy-parity-clip-owner-consolidation"
-        ],
-    })
-}
-
 #[test]
 fn val_clip_001_text_rows_execute_and_extend_cumulative_ledger() -> Result<(), Box<dyn Error>> {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -718,81 +695,35 @@ fn val_clip_001_text_rows_execute_and_extend_cumulative_ledger() -> Result<(), B
     assert_eq!(symbols, CLIP_TEXT_CATALOG_SYMBOLS);
     assert_eq!(contracts.len(), CLIP_TEXT_CATALOG_SYMBOLS.len());
 
-    let artifact_path = workspace.join("target/sim-parity/val-clip-001.json");
-    let mut artifact = if artifact_path.exists() {
-        serde_json::from_slice::<Value>(&fs::read(&artifact_path)?)?
-    } else {
-        empty_clip_artifact()
-    };
-    assert_eq!(artifact.get("schema_version"), Some(&json!(1)));
-    assert_eq!(artifact.get("validation_id"), Some(&json!("VAL-CLIP-001")));
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    let implementations = TEXT_IMPLEMENTATION_CLOSURE
-        .iter()
-        .map(|path| {
-            Ok(json!({
-                "path": path,
-                "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
-    task_results.insert(
-        TEXT_TASK.to_owned(),
-        json!({
-            "status": "passed",
-            "passed": contracts.len(),
-            "failed": 0,
-            "skipped": 0,
-            "case_ids": [
-                "task339:source-provenance-and-ten-contracts",
-                "task339:embedding-attention-activation-residual",
-                "task339:causal-padding-and-pooling",
-                "task339:hidden-list-all-final-capture-continuation",
-                "task339:projection-and-unprojected-pooling",
-                "task339:typed-target-shape-mask-layer-rejection",
-                "task339:cancellation-oom-no-publication",
-                "task339:ownership-consolidation",
-            ],
-            "implementations": implementations,
-        }),
-    );
-    let passed = task_results.values().try_fold(0_u64, |total, result| {
-        let count = result
-            .get("passed")
-            .and_then(Value::as_u64)
-            .ok_or("VAL-CLIP-001 task result has no passed count")?;
-        total
-            .checked_add(count)
-            .ok_or("VAL-CLIP-001 passed count overflowed")
-    })?;
-    let artifact_contracts = artifact
-        .get_mut("contracts")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 contracts are missing")?;
-    artifact_contracts
-        .retain(|contract| contract.get("task_id").and_then(Value::as_str) != Some(TEXT_TASK));
-    artifact_contracts.extend(contracts);
-    let remaining = artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?;
-    remaining.retain(|task| task.as_str() != Some(TEXT_TASK));
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    artifact["implementation"] = json!({
-        "path": "crates/sim_model/tests/clip_text.rs",
-        "sha256": format!(
-            "{:x}",
-            Sha256::digest(fs::read(workspace.join("crates/sim_model/tests/clip_text.rs"))?)
-        ),
-    });
-    fs::create_dir_all(
-        artifact_path
-            .parent()
-            .ok_or("artifact parent is unavailable")?,
-    )?;
-    fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
-    Ok(())
+    let implementations =
+        clip_receipt::implementation_digests(workspace, &TEXT_IMPLEMENTATION_CLOSURE)?;
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_text.rs",
+        |evidence| {
+            evidence.record(
+                [(
+                    TEXT_TASK,
+                    json!({
+                        "status": "passed",
+                        "passed": contracts.len(),
+                        "failed": 0,
+                        "skipped": 0,
+                        "case_ids": [
+                            "task339:source-provenance-and-ten-contracts",
+                            "task339:embedding-attention-activation-residual",
+                            "task339:causal-padding-and-pooling",
+                            "task339:hidden-list-all-final-capture-continuation",
+                            "task339:projection-and-unprojected-pooling",
+                            "task339:typed-target-shape-mask-layer-rejection",
+                            "task339:cancellation-oom-no-publication",
+                            "task339:ownership-consolidation",
+                        ],
+                        "implementations": implementations,
+                    }),
+                )],
+                contracts,
+            )
+        },
+    )
 }

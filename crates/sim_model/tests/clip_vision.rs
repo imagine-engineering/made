@@ -1,4 +1,7 @@
-use serde_json::{Value, json};
+#[path = "support/clip_receipt.rs"]
+mod clip_receipt;
+
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use sim_model::clip_vision::{
     CLIP_VISION_CATALOG_SYMBOLS, CLIP_VISION_SOURCE_PATH, CLIP_VISION_SOURCE_SHA256,
@@ -1026,72 +1029,34 @@ fn val_clip_001_vision_rows_execute_and_extend_cumulative_ledger() -> Result<(),
     cancellation_and_workspace_oom_publish_nothing_and_converge()?;
     adapter_delegates_foundational_ownership_without_absorbing_other_vision_models()?;
 
-    let artifact_path = workspace.join("target/sim-parity/val-clip-001.json");
-    let mut artifact: Value = serde_json::from_slice(&fs::read(&artifact_path)?)?;
-    assert_eq!(artifact.get("schema_version"), Some(&json!(1)));
-    assert_eq!(artifact.get("validation_id"), Some(&json!("VAL-CLIP-001")));
-    let task_results = artifact
-        .get_mut("task_results")
-        .and_then(Value::as_object_mut)
-        .ok_or("VAL-CLIP-001 task results are missing")?;
-    let implementations = VISION_IMPLEMENTATION_CLOSURE
-        .iter()
-        .map(|path| {
-            Ok(json!({
-                "path": path,
-                "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-            }))
-        })
-        .collect::<Result<Vec<_>, std::io::Error>>()?;
-    task_results.insert(
-        VISION_TASK.to_owned(),
-        json!({
-            "status": "passed",
-            "passed": contracts.len(),
-            "failed": 0,
-            "skipped": 0,
-            "case_ids": [
-                "task340:source-provenance-and-nine-contracts",
-                "task340:standard-and-flexible-preprocess",
-                "task340:embeddings-and-position-resize",
-                "task340:attention-pooling-and-projections",
-                "task340:typed-target-and-shape-rejection",
-                "task340:cancellation-oom-no-publication",
-                "task340:ownership-consolidation",
-            ],
-            "implementations": implementations,
-        }),
-    );
-    let passed = task_results.values().try_fold(0_u64, |total, result| {
-        let count = result
-            .get("passed")
-            .and_then(Value::as_u64)
-            .ok_or("VAL-CLIP-001 task result has no passed count")?;
-        total
-            .checked_add(count)
-            .ok_or("VAL-CLIP-001 passed count overflowed")
-    })?;
-    let artifact_contracts = artifact
-        .get_mut("contracts")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 contracts are missing")?;
-    artifact_contracts
-        .retain(|contract| contract.get("task_id").and_then(Value::as_str) != Some(VISION_TASK));
-    artifact_contracts.extend(contracts);
-    let remaining = artifact
-        .get_mut("remaining_tasks")
-        .and_then(Value::as_array_mut)
-        .ok_or("VAL-CLIP-001 remaining tasks are missing")?;
-    remaining.retain(|task| task.as_str() != Some(VISION_TASK));
-    artifact["summary"] = json!({"passed": passed, "failed": 0, "skipped": 0});
-    let producer_path = "crates/sim_model/tests/clip_vision.rs";
-    artifact["implementation"] = json!({
-        "path": producer_path,
-        "sha256": format!(
-            "{:x}",
-            Sha256::digest(fs::read(workspace.join(producer_path))?)
-        ),
-    });
-    fs::write(&artifact_path, serde_json::to_vec_pretty(&artifact)?)?;
-    Ok(())
+    let implementations =
+        clip_receipt::implementation_digests(workspace, &VISION_IMPLEMENTATION_CLOSURE)?;
+    clip_receipt::update(
+        workspace,
+        "crates/sim_model/tests/clip_vision.rs",
+        |evidence| {
+            evidence.record(
+                [(
+                    VISION_TASK,
+                    json!({
+                        "status": "passed",
+                        "passed": contracts.len(),
+                        "failed": 0,
+                        "skipped": 0,
+                        "case_ids": [
+                            "task340:source-provenance-and-nine-contracts",
+                            "task340:standard-and-flexible-preprocess",
+                            "task340:embeddings-and-position-resize",
+                            "task340:attention-pooling-and-projections",
+                            "task340:typed-target-and-shape-rejection",
+                            "task340:cancellation-oom-no-publication",
+                            "task340:ownership-consolidation",
+                        ],
+                        "implementations": implementations,
+                    }),
+                )],
+                contracts,
+            )
+        },
+    )
 }
