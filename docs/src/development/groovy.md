@@ -104,7 +104,8 @@ For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
 repository. Cache the Maven Dependency Plugin used by `dependency:list` and
 install any required reactor artifacts before going offline. The alternate
-resolves dependencies for each module POM separately.
+resolves dependencies for each module POM separately. Put `mvn` on the project
+host's `PATH` when child modules have no wrapper of their own.
 
 If the host extension policy denies a server setup download, review extension
 permissions on the project host. After changing `granted_extension_capabilities`,
@@ -147,23 +148,22 @@ navigation to Kotlin source. You can turn it off in user or project settings:
 }
 ```
 
-A cached standalone Gradle fixture and a later installed-extension Groovy
-development run on macOS ARM64 resolved Java to Kotlin with this option. The
-corresponding Maven fixture still fails after JDTLS import. Packaged Groovy and
-other platforms remain unverified, so this default is not a release claim for
-mixed-language navigation.
+A cached Gradle fixture and a guarded Groovy development run on macOS ARM64
+resolved Java to Kotlin with this option. The cached Maven reactor also passed
+in guarded Groovy on macOS ARM64 with JDTLS `1.61.0` and Kotlin LSP `271.2085.0`.
+Go to Definition opened `Greeting.kt` after an editor restart and Maven
+reimport. JDTLS accepted the valid Java reference and reported an unresolved
+type for a deliberate typo. Packaged Groovy and other platforms still need
+mixed-language qualification. [Maven navigation evidence](./groovy-provider-matrix.md#mounted-maven-java-to-kotlin-navigation)
 
-The alternate server is a selectable recovery path, not a verified replacement
-for every project. Its pinned `1.3.13` candidate failed the checked-in
-multi-module Maven fixture even when Maven was available: it reported no
-artifacts and an internal Kotlin analysis error. A standalone Gradle fixture
-did return navigation, completion, and diagnostics, but its installed-extension
-and other-platform paths remain unverified. Groovy shows bounded
-language-server health messages for the observed Maven failures and a Gradle
-standard-library resolution failure. For the latter, restore the host Gradle
-cache or allow dependency downloads, then restart the selected server. See the
-[provider evidence](./groovy-provider-matrix.md) before relying on either
-server for a release target.
+The selectable alternate server `1.3.13` passed standalone navigation,
+completion, and diagnostic recovery in the cached Maven and Gradle fixtures
+on macOS ARM64. The Maven run used the aligned cache described above, including
+an offline install of the reactor library. Installed-extension and
+other-platform workflows still need qualification. If the alternate reports a
+missing Gradle standard library, restore the project host's Gradle cache or
+allow dependency downloads, then restart the selected server.
+[Kotlin fallback evidence](./groovy-provider-matrix.md)
 
 If JDTLS reports a missing Maven artifact in offline mode, populate the Maven
 cache on the project host or turn off Maven offline mode, then reimport. The
