@@ -16088,13 +16088,21 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_r14_1_at_gra_text_003_at_gra_text_006_at_gra_text_007_workspace_edits_saved_artwork_text(
+    async fn at_r14_1_at_gra_text_003_at_gra_text_006_at_gra_text_007_at_gra_node_195_workspace_edits_saved_artwork_text(
         cx: &mut TestAppContext,
     ) {
         use gpui::EntityInputHandler as _;
         let text_id = format!(
             "PROTONODE:{}",
             graphite_std::text::text::IDENTIFIER.as_str()
+        );
+        let converter_id = format!(
+            "PROTONODE:{}",
+            graphite_std::text::text_to_vector::IDENTIFIER.as_str()
+        );
+        let fill_id = format!(
+            "PROTONODE:{}",
+            graphite_std::vector_nodes::fill::IDENTIFIER.as_str()
         );
         let mut document = create_gdd_folder(965, 966, "Artwork Text".into(), ARCHIVE_BUDGET)
             .await
@@ -16103,7 +16111,9 @@ mod tests {
         for (identifier, position) in [
             ("NETWORK:Artboard", [2, -8]),
             ("NETWORK:Merge", [-6, 0]),
-            (text_id.as_str(), [-12, 0]),
+            (fill_id.as_str(), [-12, 0]),
+            (converter_id.as_str(), [-18, 0]),
+            (text_id.as_str(), [-24, 0]),
         ] {
             document = document
                 .insert_root_catalog_node_in_copy(identifier, position, ARCHIVE_BUDGET)
@@ -16127,8 +16137,8 @@ mod tests {
             };
             inserted.push(node.storage_id());
         }
-        let [board_id, merge_id, text_id] = inserted.as_slice() else {
-            panic!("original Artboard, Merge and Text");
+        let [board_id, merge_id, fill_id, converter_id, text_id] = inserted.as_slice() else {
+            panic!("original Artboard, Merge, Fill, converter and Text");
         };
         let graph = document.graph_nodes().await.expect("text graph");
         let board = graph
@@ -16139,19 +16149,17 @@ mod tests {
             .set_document_artboard_in_copy(board, ARCHIVE_BUDGET)
             .await
             .expect("document output");
-        for (destination, source) in [(*merge_id, *text_id), (*board_id, *merge_id)] {
-            let graph = document.graph_nodes().await.expect("current text graph");
-            let find = |id: StorageNodeId| {
-                graph
-                    .iter()
-                    .find(|node| node.storage_id() == id)
-                    .expect("stable source node")
-            };
-            document = document
-                .connect_graphic_content_in_copy(find(destination), find(source), ARCHIVE_BUDGET)
-                .await
-                .expect("wire editable text");
-        }
+        let graph = document.graph_nodes().await.expect("current text graph");
+        let find = |id: StorageNodeId| {
+            graph
+                .iter()
+                .find(|node| node.storage_id() == id)
+                .expect("stable source node")
+        };
+        document = document
+            .connect_graphic_content_in_copy(find(*board_id), find(*merge_id), ARCHIVE_BUDGET)
+            .await
+            .expect("attach the pending text layer");
         let original = document
             .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
             .expect("saved text archive");
@@ -16174,6 +16182,44 @@ mod tests {
             .expect("native artwork");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
         click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let source_buttons = [
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-0",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-1",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-2",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-3",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-4",
+        ];
+        for (target, source) in [
+            (*converter_id, *text_id),
+            (*fill_id, *converter_id),
+            (*merge_id, *fill_id),
+        ] {
+            let source_index = item.update_in(window, |item, window, cx| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native vector text graph");
+                };
+                let index = |id| {
+                    form.nodes
+                        .iter()
+                        .position(|node| node.storage_id() == id)
+                        .expect("current node")
+                };
+                let source = index(source);
+                item.select_copy_node(index(target), window, cx);
+                source
+            });
+            paint(window);
+            click(window, "GRAPHITE-GDD-CONNECT-GRAPHIC-CONTENT");
+            click(
+                window,
+                source_buttons
+                    .get(source_index)
+                    .expect("typed source selector"),
+            );
+            item.read_with(window, |item, _| {
+                assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback)
+            });
+        }
         let editor = item.update_in(window, |item, window, cx| {
             let NodeCopyPanel::Ready(form) = &item.node_copy else {
                 panic!("native artwork graph")
@@ -16403,6 +16449,15 @@ mod tests {
         assert_eq!(reopened_text.storage_id(), text.storage_id());
         assert_eq!(reopened_text.artwork_text(), Some(committed));
         assert_eq!(reopened_text.artwork_text_layout(), Some(edited_layout));
+        let reopened_converter = graph
+            .iter()
+            .find(|node| node.storage_id() == *converter_id)
+            .expect("same saved Text to Vector");
+        assert!(matches!(
+            reopened_converter.input_ports().first().and_then(|port| port.source.as_ref()),
+            Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
+                if *storage_id == *text_id
+        ));
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

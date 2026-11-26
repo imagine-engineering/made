@@ -254,6 +254,52 @@ mod tests {
     use graphite_vector_types::Gradient;
 
     #[test]
+    fn at_gra_node_195_1_joins_the_pinned_text_to_vector_contract() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_std::text::text_to_vector;
+
+        let identifier = text_to_vector::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "graphene_std::text::TextToVectorNode");
+        let registered = registered_node(identifier.as_str()).expect("pinned source registration");
+        assert_eq!(registered.metadata.display_name, "Text to Vector");
+        assert_eq!(registered.metadata.category, "Text");
+        assert!(registered.metadata.context_features.is_empty());
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            HashSet::from([
+                NodeIOTypes::new(
+                    concrete!(Context<'static>),
+                    Type::Future(Box::new(concrete!(Item<Vector>))),
+                    vec![fn_type_fut!(Context<'static>, Item<String>)],
+                ),
+                NodeIOTypes::new(
+                    concrete!(Context<'static>),
+                    Type::Future(Box::new(concrete!(List<Vector>))),
+                    vec![fn_type_fut!(Context<'static>, List<String>)],
+                ),
+            ]),
+        );
+        let [field] = registered.metadata.fields.as_slice() else {
+            panic!("one pinned String port");
+        };
+        assert_eq!(field.name, "String");
+        assert!(matches!(field.value_source, RegistryValueSource::None));
+        assert!(matches!(
+            field.widget_override,
+            RegistryWidgetOverride::None
+        ));
+        let template = resolve_proto_node_type(identifier)
+            .expect("native catalog template")
+            .default_node_template();
+        assert_eq!(text_to_vector::StringInput::INDEX, 0);
+        assert_eq!(
+            template.inputs,
+            [NodeInput::value(TaggedValue::String(String::new()), true)]
+        );
+        assert!(template.output_names.is_empty());
+    }
+
+    #[test]
     fn at_gra_node_141_1_joins_the_pinned_flatten_raster_contract() {
         use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
         use graphite_graph_craft::document::NodeNetwork;
