@@ -85,6 +85,8 @@ actions!(
         ToggleCanvasGrid,
         /// Toggles all overlays for the active Graphite Canvas.
         ToggleCanvasOverlays,
+        /// Opens or closes the node graph over the active Graphite Canvas.
+        ToggleCanvasGraphOverlay,
     ]
 );
 
@@ -689,6 +691,7 @@ struct SavedSceneCanvas {
     grid_options: Option<GridOptionsForm>,
     grid_frame: Option<SavedSceneGridFrame>,
     grid_task: Option<Task<()>>,
+    graph_overlay: Option<Arc<()>>,
     measurement_pointer: Option<(gpui::Point<gpui::Pixels>, bool)>,
     render_mode_task: Option<Task<()>>,
     render_mode_error: Option<SharedString>,
@@ -1884,6 +1887,7 @@ impl GraphiteDocumentItem {
             grid_options: None,
             grid_frame: None,
             grid_task: None,
+            graph_overlay: None,
             measurement_pointer: None,
             render_mode_task: None,
             render_mode_error: None,
@@ -1905,11 +1909,64 @@ impl GraphiteDocumentItem {
     }
 
     fn close_scene_canvas(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_scene_graph_overlay();
         if let Some(canvas) = self.scene_canvas.take() {
             canvas.retire(Some(window), cx);
         }
         self.focus_handle.focus(window, cx);
         cx.notify();
+    }
+
+    fn scene_graph_overlay_is_open(&self) -> bool {
+        self.scene_canvas
+            .as_ref()
+            .is_some_and(|canvas| canvas.graph_overlay.is_some())
+    }
+
+    fn close_scene_graph_overlay(&mut self) {
+        if self
+            .scene_canvas
+            .as_mut()
+            .and_then(|canvas| canvas.graph_overlay.take())
+            .is_some()
+            && let NodeCopyPanel::Ready(form) = &mut self.node_copy
+        {
+            form.saved_graph_drag_start.set(None);
+            form.saved_graph_box_selection.set(None);
+            form.pending_canvas_source = None;
+        }
+    }
+
+    fn toggle_scene_graph_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.scene_canvas.is_none() {
+            return false;
+        }
+        if self.scene_graph_overlay_is_open() {
+            self.close_scene_graph_overlay();
+            self.focus_handle.focus(window, cx);
+            cx.notify();
+            return true;
+        }
+        self.finish_scene_pan(true, window, cx);
+        self.cancel_scene_artboard_edit(window, cx);
+        if let Some(canvas) = &mut self.scene_canvas {
+            canvas.graph_overlay = Some(Arc::new(()));
+            canvas.grid_options = None;
+            canvas.measurement_pointer = None;
+            if let Some(navigation) = &mut canvas.navigation
+                && navigation.camera.unmodified_tilt() != 0.
+            {
+                navigation.camera.set_tilt(0.);
+                canvas.camera_override = Some(navigation.camera);
+                let target = canvas.target;
+                self.update_scene_canvas(target, true, window, cx);
+            }
+        }
+        self.focus_handle.focus(window, cx);
+        self.show_node_copy(None, window, cx);
+        self.show_saved_graph(window, cx);
+        cx.notify();
+        true
     }
 
     fn toggle_scene_snapping(
@@ -3600,7 +3657,11 @@ impl GraphiteDocumentItem {
         let target = canvas.target;
         let model = self.model.read(cx);
         let current = Arc::ptr_eq(&canvas.revision, &model.revision);
-        let visibility = current.then(|| canvas.overlay_visibility(model)).flatten();
+        let graph_overlay_open = canvas.graph_overlay.is_some();
+        let show_artwork_overlays = current && !graph_overlay_open;
+        let visibility = show_artwork_overlays
+            .then(|| canvas.overlay_visibility(model))
+            .flatten();
         let show_overlays = visibility
             .as_ref()
             .is_some_and(OverlaysVisibilitySettings::all);
@@ -3610,12 +3671,14 @@ impl GraphiteDocumentItem {
         let show_cage = visibility
             .as_ref()
             .is_some_and(OverlaysVisibilitySettings::transform_cage);
-        let grid_request = current.then(|| canvas.grid_request(model)).flatten();
+        let grid_request = show_artwork_overlays
+            .then(|| canvas.grid_request(model))
+            .flatten();
         let grid_ready = canvas
             .grid_frame
             .as_ref()
             .filter(|frame| Some(&frame.request) == grid_request.as_ref());
-        let refresh_grid = current
+        let refresh_grid = show_artwork_overlays
             && if grid_request.is_some() {
                 grid_ready.is_none() && canvas.grid_task.is_none()
             } else {
@@ -3757,7 +3820,7 @@ impl GraphiteDocumentItem {
                                     })),
                             ),
                     )
-                    .child(
+                    .when(!graph_overlay_open, |toolbar| toolbar.child(
                         div()
                             .debug_selector(|| "GRAPHITE-GDD-CANVAS-FIT".into())
                             .child(
@@ -3889,7 +3952,27 @@ impl GraphiteDocumentItem {
                             ),
                     )
                     .children(overlay_control)
-                    .children(mode_control)
+                    .children(mode_control))
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-CANVAS-GRAPH-TOGGLE".into())
+                            .child(
+                                Button::new(
+                                    "graphite-gdd-canvas-graph-toggle",
+                                    if graph_overlay_open {
+                                        "Hide Node Graph"
+                                    } else {
+                                        "Node Graph"
+                                    },
+                                )
+                                .on_click(cx.listener(|item, _, window, cx| {
+                                    item.toggle_scene_graph_overlay(window, cx);
+                                })),
+                            ),
+                    )
+                    .when(graph_overlay_open, |toolbar| {
+                        toolbar.child(self.render_scene_graph_controls(cx))
+                    })
                     .when(canvas.render_mode_task.is_some(), |toolbar| {
                         toolbar.child(Label::new("Changing view mode…").color(Color::Muted))
                     })
@@ -3950,7 +4033,7 @@ impl GraphiteDocumentItem {
                             && canvas.artboard_drag.is_none(),
                         |pane| pane.cursor(gpui::CursorStyle::Crosshair),
                     )
-                    .on_click(
+                    .when(!graph_overlay_open, |pane| pane.on_click(
                         cx.listener(move |item, event: &gpui::ClickEvent, window, cx| {
                             if let Some(pane) = pick_bounds.get() {
                                 item.pick_scene_artboard(
@@ -3996,7 +4079,7 @@ impl GraphiteDocumentItem {
                         if let Some(pane) = scroll_bounds.get() {
                             item.scroll_scene_canvas(&scroll_instance, pane, event, window, cx);
                         }
-                    }))
+                    })))
                     .child(
                         gpui::canvas(
                             move |bounds, window, cx| {
@@ -4006,12 +4089,16 @@ impl GraphiteDocumentItem {
                                 if target == measured
                                     && gesture_pane.is_none_or(|pane| pane == bounds)
                                 {
-                                    let (cage, measurement) = artboard_overlay_item
+                                    let (cage, measurement) = if graph_overlay_open {
+                                        (None, None)
+                                    } else {
+                                        artboard_overlay_item
                                         .read_with(cx, |item, cx| (
                                             item.scene_transform_cage(&instance, cx),
                                             item.scene_quick_measurement(&instance, bounds, window, cx),
                                         ))
-                                        .unwrap_or_default();
+                                        .unwrap_or_default()
+                                    };
                                     if refresh_grid {
                                         window.defer(cx, move |window, cx| {
                                             if let Err(error) = item.update(cx, |item, cx| {
@@ -4053,12 +4140,14 @@ impl GraphiteDocumentItem {
                                   (image, grid_image, overlays, edit_outline, snap_guides, cage, measurement),
                                   window,
                                   _| {
-                                Self::capture_scene_gestures(
-                                    capture_item,
-                                    capture_instance,
-                                    bounds,
-                                    window,
-                                );
+                                if !graph_overlay_open {
+                                    Self::capture_scene_gestures(
+                                        capture_item,
+                                        capture_instance,
+                                        bounds,
+                                        window,
+                                    );
+                                }
                                 if let Some(image) = image
                                     && let Err(error) = window.paint_image(
                                         bounds,
@@ -4125,7 +4214,10 @@ impl GraphiteDocumentItem {
                         )
                         .absolute()
                         .size_full(),
-                    ),
+                    )
+                    .when_some(canvas.graph_overlay.as_ref(), |pane, overlay| {
+                        pane.child(self.render_scene_graph_overlay(overlay, target, window, cx))
+                    }),
             )
             .children(
                 canvas
@@ -4133,6 +4225,124 @@ impl GraphiteDocumentItem {
                     .as_ref()
                     .map(|form| self.render_scene_grid_options(form, cx)),
             )
+    }
+
+    fn render_scene_graph_controls(&self, cx: &Context<Self>) -> impl IntoElement {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return h_flex();
+        };
+        h_flex()
+            .gap_2()
+            .when_some(form.clipboard_scope(), |controls, network| {
+                controls
+                    .when(network.parent.is_some(), |controls| {
+                        controls.child(
+                            Button::new("graphite-canvas-graph-parent", "Parent Network").on_click(
+                                cx.listener(|item, _, window, cx| {
+                                    item.exit_copy_network(cx);
+                                    item.show_saved_graph(window, cx);
+                                }),
+                            ),
+                        )
+                    })
+                    .child(Label::new(network.name.clone()).color(Color::Muted))
+            })
+            .when(
+                form.selected_node()
+                    .is_some_and(|node| node.nested_network().is_some()),
+                |controls| {
+                    controls.child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-CANVAS-GRAPH-ENTER".into())
+                            .child(
+                                Button::new("graphite-canvas-graph-enter", "Enter Network")
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.enter_copy_network(cx);
+                                        item.show_saved_graph(window, cx);
+                                    })),
+                            ),
+                    )
+                },
+            )
+            .when(form.pending_canvas_source.is_some(), |controls| {
+                controls.child(
+                    Button::new("graphite-canvas-graph-cancel-wire", "Cancel Connection").on_click(
+                        cx.listener(|item, _, window, cx| {
+                            item.handle_saved_graph_action(
+                                SavedGraphAction::CancelConnection,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ),
+                )
+            })
+    }
+
+    fn render_scene_graph_overlay(
+        &self,
+        overlay: &Arc<()>,
+        target: Option<SavedSceneTarget>,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let status = |text: Label| div().p_2().child(text).into_any_element();
+        let contents = match &self.node_copy {
+            NodeCopyPanel::Ready(form)
+                if Arc::ptr_eq(&form.revision, &self.model.read(cx).revision) =>
+            {
+                match (&form.saved_graph, form.clipboard_scope(), target) {
+                    (SavedGraphPanel::Ready(geometry), Some(network), Some(target)) => {
+                        let size = target.logical_size();
+                        self.render_saved_graph_surface(
+                            form,
+                            network,
+                            geometry,
+                            Some((overlay, gpui::size(px(size.x as f32), px(size.y as f32)))),
+                            window,
+                            cx,
+                        )
+                    }
+                    (SavedGraphPanel::Failed(error), _, _) => h_flex()
+                        .p_2()
+                        .gap_2()
+                        .child(Label::new(error.clone()).color(Color::Error))
+                        .child(
+                            Button::new("graphite-canvas-graph-retry-geometry", "Retry").on_click(
+                                cx.listener(|item, _, window, cx| {
+                                    item.show_saved_graph(window, cx);
+                                }),
+                            ),
+                        )
+                        .into_any_element(),
+                    (_, None, _) => status(Label::new("This document has no node network.")),
+                    _ => status(Label::new("Loading Node Graph…").color(Color::Muted)),
+                }
+            }
+            NodeCopyPanel::Failed(error) => h_flex()
+                .p_2()
+                .gap_2()
+                .child(Label::new(error.clone()).color(Color::Error))
+                .child(
+                    Button::new("graphite-canvas-graph-retry-inspection", "Retry").on_click(
+                        cx.listener(|item, _, window, cx| {
+                            item.show_node_copy(None, window, cx);
+                        }),
+                    ),
+                )
+                .into_any_element(),
+            _ => status(Label::new("Loading Node Graph…").color(Color::Muted)),
+        };
+        div()
+            .id("graphite-canvas-graph-overlay")
+            .debug_selector(|| "GRAPHITE-GDD-CANVAS-GRAPH-OVERLAY".into())
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .occlude()
+            .bg(gpui::Hsla::from(gpui::rgb(0x222222)).opacity(0.8))
+            .child(contents)
     }
 
     fn capture_scene_gestures(
@@ -4707,6 +4917,9 @@ impl GraphiteDocumentItem {
                         if let Some(pick) = pick {
                             item.select_picked_artboard(pick, window, cx);
                         }
+                        if item.scene_graph_overlay_is_open() {
+                            item.show_saved_graph(window, cx);
+                        }
                         cx.notify();
                     }) {
                         log::debug!("Graphite node edit panel closed: {error:#}");
@@ -4804,6 +5017,23 @@ impl GraphiteDocumentItem {
             cx.notify();
             return;
         }
+        self.show_saved_graph(window, cx);
+    }
+
+    fn show_saved_graph(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let overlay_open = self.scene_graph_overlay_is_open();
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        if matches!(form.saved_graph, SavedGraphPanel::Ready(_)) {
+            if overlay_open {
+                form.saved_graph_focus.focus(window, cx);
+            }
+            return;
+        }
+        if matches!(form.saved_graph, SavedGraphPanel::Loading { .. }) {
+            return;
+        }
         let Some(network) = form.clipboard_scope().cloned() else {
             return;
         };
@@ -4816,7 +5046,9 @@ impl GraphiteDocumentItem {
         form.saved_graph = SavedGraphPanel::Loading {
             _task: cx.spawn_in(window, async move |item, cx| {
                 let result = load.await;
-                if let Err(error) = item.update_in(cx, |item, _, cx| {
+                if let Err(error) = item.update_in(cx, |item, window, cx| {
+                    let focus_overlay = item.scene_graph_overlay_is_open()
+                        && item.focus_handle.contains_focused(window, cx);
                     if let NodeCopyPanel::Ready(form) = &mut item.node_copy
                         && matches!(form.saved_graph, SavedGraphPanel::Loading { .. })
                         && form
@@ -4827,6 +5059,9 @@ impl GraphiteDocumentItem {
                             Ok(geometry) => SavedGraphPanel::Ready(geometry),
                             Err(error) => SavedGraphPanel::Failed(error.to_string().into()),
                         };
+                        if focus_overlay && matches!(form.saved_graph, SavedGraphPanel::Ready(_)) {
+                            form.saved_graph_focus.focus(window, cx);
+                        }
                         cx.notify();
                     }
                 }) {
@@ -6960,6 +7195,163 @@ impl GraphiteDocumentItem {
         )
     }
 
+    fn render_saved_graph_surface(
+        &self,
+        form: &NodeCopyForm,
+        network: &GddGraphNetwork,
+        geometry: &GddGraphGeometry,
+        overlay: Option<(&Arc<()>, gpui::Size<gpui::Pixels>)>,
+        window: &Window,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let working = self.model.read(cx).working.is_some();
+        let item = cx.entity().downgrade();
+        let menu_item = item.clone();
+        let scope = network.id;
+        let visible_revision = form.revision.clone();
+        let menu_revision = visible_revision.clone();
+        let overlay_size = overlay.map(|(_, size)| size);
+        let overlay = overlay.map(|(overlay, _)| overlay.clone());
+        let menu_overlay = overlay.clone();
+        crate::graph::render_saved_graph(
+            geometry,
+            &form.nodes,
+            SavedGraphView {
+                network,
+                viewport: &form.saved_graph_viewport,
+                focus: &form.saved_graph_focus,
+                layer_focus: &form.saved_layers_focus,
+                selected: form.selected,
+                selection: &form.node_selection,
+                collapsed_layers: &form.collapsed_layers,
+                pending_source: form.pending_canvas_source,
+                can_start_connection: self.copy_task.is_none(),
+                working,
+                overlay_size,
+                revision: &form.revision,
+                drag_start: working.then_some(&form.saved_graph_drag_start),
+                box_selection: &form.saved_graph_box_selection,
+            },
+            window,
+            cx,
+            move |action, window, cx| {
+                if let Err(error) = item.update(cx, |item, cx| {
+                    if item.saved_graph_surface_is_current(overlay.as_ref())
+                        && let NodeCopyPanel::Ready(form) = &item.node_copy
+                        && Arc::ptr_eq(&form.revision, &visible_revision)
+                        && form
+                            .clipboard_scope()
+                            .is_some_and(|network| network.id == scope)
+                    {
+                        item.handle_saved_graph_action(action, window, cx);
+                    }
+                }) {
+                    log::debug!("Graphite saved graph selection closed: {error:#}");
+                }
+            },
+            move |target, window, cx| {
+                let item = menu_item.upgrade()?;
+                let item_state = item.read(cx);
+                let NodeCopyPanel::Ready(form) = &item_state.node_copy else {
+                    return None;
+                };
+                if !item_state.saved_graph_surface_is_current(menu_overlay.as_ref())
+                    || item_state.copy_task.is_some()
+                    || form.pending_canvas_source.is_some()
+                    || !matches!(form.saved_graph, SavedGraphPanel::Ready(_))
+                    || !Arc::ptr_eq(&form.revision, &menu_revision)
+                    || !form
+                        .clipboard_scope()
+                        .is_some_and(|network| network.id == scope)
+                {
+                    return None;
+                }
+                match target {
+                    SavedGraphMenuTarget::Background(position) => {
+                        let network = Arc::new(form.clipboard_scope()?.clone());
+                        let revision = form.revision.clone();
+                        let item = item.downgrade();
+                        let picker_overlay = menu_overlay.clone();
+                        Some(Self::graph_node_picker(
+                            network.can_insert_custom_node_in_copy(),
+                            move |node, window, cx| {
+                                if let Err(error) = item.update(cx, |item, cx| {
+                                if item.saved_graph_surface_is_current(picker_overlay.as_ref())
+                                            && matches!(&item.node_copy, NodeCopyPanel::Ready(form) if
+                                    matches!(form.saved_graph, SavedGraphPanel::Ready(_))
+                                        && Arc::ptr_eq(&form.revision, &revision)
+                                                && form.pending_canvas_source.is_none()
+                                        && form.clipboard_scope().is_some_and(|network| network.id == scope))
+                                {
+                                    item.insert_working_graph_node(node, position, Some(network.clone()), revision.clone(), window, cx);
+                                } else {
+                                    item.copy_feedback = Some(("The Graphite canvas changed. Reopen the node picker.".into(), Color::Error));
+                                    cx.notify();
+                                }
+                            }) {
+                                log::debug!("Graphite canvas picker closed: {error:#}");
+                            }
+                            },
+                            window,
+                            cx,
+                        ))
+                    }
+                    SavedGraphMenuTarget::NodeInput(index) => {
+                        let target = form
+                            .nodes
+                            .get(index)
+                            .filter(|node| {
+                                node.network_id() == scope
+                                    && node.has_numeric_connection()
+                                    && node.can_preview_numeric_output()
+                            })?
+                            .clone();
+                        Some(Self::numeric_wire_insertion_menu(
+                            menu_item.clone(),
+                            &target,
+                            window,
+                            cx,
+                        ))
+                    }
+                    SavedGraphMenuTarget::Boundary(port) => {
+                        let (kind, index) = match port {
+                            ImportOrExport::Import(index) => (NetworkPortKind::Import, index),
+                            ImportOrExport::Export(index) => (NetworkPortKind::Export, index),
+                        };
+                        let network = form
+                            .active_network()
+                            .filter(|network| {
+                                network.id == scope
+                                    && network.can_extend_ports_in_copy()
+                                    && index < kind.count(network)
+                            })?
+                            .clone();
+                        Some(Self::network_port_menu(
+                            menu_item.clone(),
+                            &network,
+                            kind,
+                            [index],
+                            window,
+                            cx,
+                        ))
+                    }
+                }
+            },
+        )
+        .into_any_element()
+    }
+
+    fn saved_graph_surface_is_current(&self, overlay: Option<&Arc<()>>) -> bool {
+        match (&self.scene_canvas, overlay) {
+            (None, None) => true,
+            (Some(canvas), Some(expected)) => canvas
+                .graph_overlay
+                .as_ref()
+                .is_some_and(|active| Arc::ptr_eq(active, expected)),
+            _ => false,
+        }
+    }
+
     fn render_node_copy(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = match self.node_copy {
             NodeCopyPanel::Closed if self.model.read(cx).working.is_some() => "Open Node Editor",
@@ -7259,104 +7651,9 @@ impl GraphiteDocumentItem {
                             row.child(Self::render_document_run(&form.document_run, cx))
                         }));
                         match &form.saved_graph {
-                            SavedGraphPanel::Ready(geometry) => {
-                                let item = cx.entity().downgrade();
-                                let menu_item = item.clone();
-                                let scope = network.id;
-                                let visible_revision = form.revision.clone();
-                                let menu_revision = visible_revision.clone();
-                                panel.child(crate::graph::render_saved_graph(
-                                    geometry, &form.nodes,
-                                    SavedGraphView {
-                                        network,
-                                        viewport: &form.saved_graph_viewport,
-                                        focus: &form.saved_graph_focus,
-                                        layer_focus: &form.saved_layers_focus,
-                                        selected: form.selected,
-                                        selection: &form.node_selection,
-                                        collapsed_layers: &form.collapsed_layers,
-                                        pending_source: form.pending_canvas_source,
-                                        can_start_connection: self.copy_task.is_none(),
-                                        working,
-                                        revision: &form.revision,
-                                        drag_start: working.then_some(&form.saved_graph_drag_start),
-                                        box_selection: &form.saved_graph_box_selection,
-                                    },
-                                    window, cx,
-                                    move |action, window, cx| {
-                                        if let Err(error) = item.update(cx, |item, cx| {
-                                            if let NodeCopyPanel::Ready(form) = &item.node_copy
-                                                && Arc::ptr_eq(&form.revision, &visible_revision)
-                                                && form.clipboard_scope().is_some_and(|network| network.id == scope)
-                                            {
-                                                item.handle_saved_graph_action(action, window, cx);
-                                            }
-                                        }) {
-                                            log::debug!("Graphite saved graph selection closed: {error:#}");
-                                        }
-                                    },
-                                    move |target, window, cx| {
-                                        let item = menu_item.upgrade()?;
-                                        let item_state = item.read(cx);
-                                        let NodeCopyPanel::Ready(form) = &item_state.node_copy else {
-                                            return None;
-                                        };
-                                        if item_state.copy_task.is_some()
-                                            || form.pending_canvas_source.is_some()
-                                            || !matches!(form.saved_graph, SavedGraphPanel::Ready(_))
-                                            || !Arc::ptr_eq(&form.revision, &menu_revision)
-                                            || !form.clipboard_scope().is_some_and(|network| network.id == scope)
-                                        {
-                                            return None;
-                                        }
-                                        match target {
-                                            SavedGraphMenuTarget::Background(position) => {
-                                                let network = Arc::new(form.clipboard_scope()?.clone());
-                                                let revision = form.revision.clone();
-                                                let item = item.downgrade();
-                                                Some(Self::graph_node_picker(
-                                                    network.can_insert_custom_node_in_copy(),
-                                                    move |node, window, cx| {
-                                                    if let Err(error) = item.update(cx, |item, cx| {
-                                                        if matches!(&item.node_copy, NodeCopyPanel::Ready(form) if
-                                                            matches!(form.saved_graph, SavedGraphPanel::Ready(_))
-                                                                && form.pending_canvas_source.is_none()
-                                                                && form.clipboard_scope().is_some_and(|network| network.id == scope))
-                                                        {
-                                                            item.insert_working_graph_node(node, position, Some(network.clone()), revision.clone(), window, cx);
-                                                        } else {
-                                                            item.copy_feedback = Some(("The Graphite canvas changed. Reopen the node picker.".into(), Color::Error));
-                                                            cx.notify();
-                                                        }
-                                                    }) {
-                                                        log::debug!("Graphite canvas picker closed: {error:#}");
-                                                    }
-                                                }, window, cx))
-                                            }
-                                            SavedGraphMenuTarget::NodeInput(index) => {
-                                                let target = form.nodes.get(index).filter(|node| {
-                                                    node.network_id() == scope
-                                                        && node.has_numeric_connection()
-                                                        && node.can_preview_numeric_output()
-                                                })?.clone();
-                                                Some(Self::numeric_wire_insertion_menu(menu_item.clone(), &target, window, cx))
-                                            }
-                                            SavedGraphMenuTarget::Boundary(port) => {
-                                                let (kind, index) = match port {
-                                                    ImportOrExport::Import(index) => (NetworkPortKind::Import, index),
-                                                    ImportOrExport::Export(index) => (NetworkPortKind::Export, index),
-                                                };
-                                                let network = form.active_network().filter(|network| {
-                                                    network.id == scope
-                                                        && network.can_extend_ports_in_copy()
-                                                        && index < kind.count(network)
-                                                })?.clone();
-                                                Some(Self::network_port_menu(menu_item.clone(), &network, kind, [index], window, cx))
-                                            }
-                                        }
-                                    },
-                                ))
-                            }
+                            SavedGraphPanel::Ready(geometry) => panel.child(
+                                self.render_saved_graph_surface(form, network, geometry, None, window, cx),
+                            ),
                             SavedGraphPanel::Failed(error) => panel.child(Label::new(error.clone()).color(Color::Error)),
                             SavedGraphPanel::Closed | SavedGraphPanel::Loading { .. } => panel,
                         }
@@ -8839,6 +9136,15 @@ impl Render for GraphiteDocumentItem {
                     }
                 },
             ))
+            .on_action(
+                cx.listener(|item, _: &ToggleCanvasGraphOverlay, window, cx| {
+                    if item.toggle_scene_graph_overlay(window, cx) {
+                        cx.stop_propagation();
+                    } else {
+                        cx.propagate();
+                    }
+                }),
+            )
             .on_action(cx.listener(|item, _: &ToggleCanvasSnapping, _, cx| {
                 if let Some(canvas) = &item.scene_canvas
                     && item.toggle_scene_snapping(
@@ -16292,6 +16598,147 @@ mod tests {
             curve_to_artboard,
             rectangle_to_artboard,
         }
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_011_2_workspace_overlays_the_same_f_vector_network(
+        cx: &mut TestAppContext,
+    ) {
+        let SavedVectorFixture { original, .. } = saved_vector_fixture(None, None).await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.update(|_, cx| {
+            let bindings =
+                settings::KeymapFile::load_asset(crate::DEFAULT_GRAPHITE_KEYMAP_PATH, None, cx)
+                    .expect("Graphite keymap");
+            cx.bind_keys(bindings);
+        });
+        window.simulate_resize(gpui::size(px(1400.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-node-graph.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-VECTOR")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        window.simulate_keystrokes("ctrl-space");
+        assert!(item.read_with(window, |item, _| matches!(
+            item.node_copy,
+            NodeCopyPanel::Closed
+        )));
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (revision, image, camera) = item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("document Canvas");
+            let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                panic!("accepted artwork")
+            };
+            (
+                item.model.read(cx).revision.clone(),
+                image.clone(),
+                canvas.navigation.expect("document camera").camera,
+            )
+        });
+        let artwork_bounds = window
+            .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+            .expect("artwork pane");
+        click(window, "GRAPHITE-GDD-CANVAS-GRAPH-TOGGLE");
+        assert_eq!(
+            window.debug_bounds("GRAPHITE-GDD-CANVAS-GRAPH-OVERLAY"),
+            Some(artwork_bounds)
+        );
+        assert_eq!(
+            window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH"),
+            Some(artwork_bounds)
+        );
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-GRAPH-NODE-0",
+            gpui::MouseButton::Left,
+            gpui::Modifiers::default(),
+        );
+        click(window, "GRAPHITE-CANVAS-GRAPH-ENTER");
+        let (scope, first_overlay) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("read-only document graph")
+            };
+            let network = form.active_network().expect("entered Artboard network");
+            assert!(network.parent.is_some());
+            assert!(matches!(form.saved_graph, SavedGraphPanel::Ready(_)));
+            let canvas = item.scene_canvas.as_ref().expect("document Canvas");
+            (
+                network.id,
+                canvas.graph_overlay.as_ref().expect("open overlay").clone(),
+            )
+        });
+        window.simulate_mouse_down(
+            artwork_bounds.center(),
+            gpui::MouseButton::Middle,
+            gpui::Modifiers::default(),
+        );
+        item.read_with(window, |item, _| {
+            assert!(item.scene_canvas.as_ref().expect("Canvas").pan.is_none());
+        });
+        window.simulate_mouse_up(
+            artwork_bounds.center(),
+            gpui::MouseButton::Middle,
+            gpui::Modifiers::default(),
+        );
+        window.simulate_keystrokes("ctrl-space");
+        paint(window);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-CANVAS-GRAPH-OVERLAY")
+                .is_none()
+        );
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH").is_none());
+        window.simulate_keystrokes("ctrl-space");
+        paint(window);
+        assert_eq!(
+            window.debug_bounds("GRAPHITE-GDD-SAVED-GRAPH"),
+            Some(artwork_bounds)
+        );
+        let active = workspace.read_with(window, |workspace, cx| {
+            workspace
+                .active_item(cx)
+                .expect("same active tab")
+                .item_id()
+        });
+        assert_eq!(active, item.entity_id());
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("retained read-only graph")
+            };
+            assert_eq!(
+                form.clipboard_scope().expect("retained nested network").id,
+                scope
+            );
+            assert!(!item.saved_graph_surface_is_current(Some(&first_overlay)));
+            let canvas = item.scene_canvas.as_ref().expect("same Canvas");
+            assert!(
+                matches!(&canvas.frame, SavedSceneFrame::Ready(frame) if Arc::ptr_eq(frame, &image))
+            );
+            assert_eq!(canvas.navigation.expect("same camera").camera, camera);
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+            assert!(!item.is_dirty(cx));
+            assert!(!item.can_save(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("same source archive")
+                .as_slice(),
+            original.as_ref()
+        );
     }
 
     #[gpui::test]

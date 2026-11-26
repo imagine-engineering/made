@@ -10,6 +10,7 @@
     "bindings": {
       "alt-g": "graphite::ToggleCanvasGrid",
       "alt-o": "graphite::ToggleCanvasOverlays",
+      "ctrl-space": "graphite::ToggleCanvasGraphOverlay",
       "alt-s": "graphite::ToggleCanvasSnapping"
     }
   },

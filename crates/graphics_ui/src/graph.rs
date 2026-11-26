@@ -274,6 +274,7 @@ pub(crate) struct SavedGraphView<'a> {
     pub pending_source: Option<SavedGraphConnectionSource>,
     pub can_start_connection: bool,
     pub working: bool,
+    pub overlay_size: Option<gpui::Size<Pixels>>,
     pub revision: &'a Arc<()>,
     pub drag_start: Option<&'a SavedGraphDragStart>,
     pub box_selection: &'a SavedGraphBoxSelection,
@@ -290,10 +291,16 @@ pub(crate) fn render_saved_graph(
     + Clone
     + 'static,
 ) -> impl IntoElement {
-    let padding = 24.;
-    let height = 256.;
     let viewport_width: f32 = window.viewport_size().width.into();
-    let width = f64::from((viewport_width - 96.).clamp(200., 800.));
+    let (width, height) = view.overlay_size.map_or_else(
+        || (f64::from((viewport_width - 96.).clamp(200., 800.)), 256.),
+        |size| {
+            let width: f32 = size.width.into();
+            let height: f32 = size.height.into();
+            (f64::from(width), f64::from(height))
+        },
+    );
+    let padding = 24_f64.min(width.min(height) / 4.);
     let mut points = geometry
         .nodes
         .iter()
@@ -431,9 +438,12 @@ pub(crate) fn render_saved_graph(
         .debug_selector(|| "GRAPHITE-GDD-SAVED-GRAPH".into())
         .relative()
         .overflow_hidden()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.editor_background)
+        .when(view.overlay_size.is_none(), |graph| {
+            graph
+                .border_1()
+                .border_color(colors.border)
+                .bg(colors.editor_background)
+        })
         .w(px(width as f32))
         .flex_none()
         .h(px(height as f32))
@@ -818,9 +828,10 @@ pub(crate) fn render_saved_graph(
                     .bg(colors.text_accent.opacity(0.15)),
             )
         });
-    let root_layers = match &geometry.root_layers {
-        Ok(layers) if layers.is_empty() => None,
-        Ok(layers) => {
+    let root_layers = match (&geometry.root_layers, view.overlay_size) {
+        (_, Some(_)) => None,
+        (Ok(layers), None) if layers.is_empty() => None,
+        (Ok(layers), None) => {
             let mut collapsed_depth = None;
             let layers_focus = view.layer_focus.clone();
             let can_select = view.pending_source.is_none();
@@ -953,7 +964,7 @@ pub(crate) fn render_saved_graph(
                     .into_any_element(),
             )
         }
-        Err(error) => Some(
+        (Err(error), None) => Some(
             Label::new(error.to_string())
                 .color(Color::Error)
                 .into_any_element(),
@@ -971,27 +982,36 @@ pub(crate) fn render_saved_graph(
                 .child(graph),
         )
         .children(root_layers)
-        .when(view.pending_source.is_some(), |panel| {
-            panel.child(
-                h_flex()
-                    .gap_2()
-                    .flex_wrap()
-                    .child(Label::new("Choose a node with a compatible numeric input."))
-                    .child(
-                        div()
-                            .debug_selector(|| "GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION".into())
-                            .child(
-                                Button::new(
-                                    "graphite-gdd-cancel-graph-connection",
-                                    "Cancel Connection",
-                                )
-                                .on_click(move |_, window, cx| {
-                                    dispatch(SavedGraphAction::CancelConnection, window, cx);
-                                }),
-                            ),
-                    ),
-            )
-        })
+        .when(
+            view.overlay_size.is_none() && view.pending_source.is_some(),
+            |panel| {
+                panel.child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .child(Label::new("Choose a node with a compatible numeric input."))
+                        .child(
+                            div()
+                                .debug_selector(|| "GRAPHITE-GDD-CANCEL-GRAPH-CONNECTION".into())
+                                .child(
+                                    Button::new(
+                                        "graphite-gdd-cancel-graph-connection",
+                                        "Cancel Connection",
+                                    )
+                                    .on_click(
+                                        move |_, window, cx| {
+                                            dispatch(
+                                                SavedGraphAction::CancelConnection,
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    ),
+                                ),
+                        ),
+                )
+            },
+        )
 }
 
 fn saved_graph_node_socket(
