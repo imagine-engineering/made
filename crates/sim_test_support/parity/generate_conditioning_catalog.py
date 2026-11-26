@@ -915,6 +915,7 @@ TASK_IMPLEMENTATION_CLOSURES = {
             "crates/sim_model/src/vae_tiling.rs",
             "crates/sim_model/tests/vae_architecture.rs",
             "crates/sim_model/tests/vae_tiling.rs",
+            "crates/sim_model/tests/support/vae_tiling_ownership.rs",
         }
     ),
     VAE_IMAGE_TASK: frozenset(

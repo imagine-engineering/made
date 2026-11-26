@@ -1,5 +1,8 @@
 use sim_model::{VaeOperation, VaeTileAxisFormula};
-use std::{error::Error, fs, path::Path};
+use std::{error::Error, path::Path};
+
+#[path = "support/vae_tiling_ownership.rs"]
+mod vae_tiling_ownership;
 
 #[test]
 fn val_vae_001_one_dimensional_and_causal_three_dimensional_formulas_match_source()
@@ -20,31 +23,5 @@ fn val_vae_001_one_dimensional_and_causal_three_dimensional_formulas_match_sourc
 
 #[test]
 fn val_vae_001_tiling_extends_the_canonical_vae_and_tensor_owners() -> Result<(), Box<dyn Error>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let vae = fs::read_to_string(root.join("src/vae.rs"))?;
-    let tiling = fs::read_to_string(root.join("src/vae_tiling.rs"))?;
-    let production_tiling = tiling.split("#[cfg(test)]").next().unwrap_or(&tiling);
-    let model_root = fs::read_to_string(root.join("src/sim_model.rs"))?;
-
-    assert_eq!(vae.matches("pub struct VaeTilePlan").count(), 1);
-    assert!(!production_tiling.contains("struct VaeTilePlan"));
-    assert!(model_root.contains("mod vae_tiling;"));
-    assert!(!model_root.contains("pub mod vae_tiling;"));
-    assert!(production_tiling.contains("backend.reserve_workspace(context"));
-    assert!(production_tiling.contains("context.check()?"));
-    for forbidden in [
-        "CpuBackend",
-        "CpuWorkspaceAuthority",
-        "authorize_workspace",
-        "CancellationToken::default",
-        "python",
-        "Command::new",
-    ] {
-        assert!(
-            !production_tiling.contains(forbidden),
-            "unexpected competing owner: {forbidden}"
-        );
-    }
-    assert!(!production_tiling.to_ascii_lowercase().contains("retry"));
-    Ok(())
+    vae_tiling_ownership::check_tiling_ownership(Path::new(env!("CARGO_MANIFEST_DIR")))
 }

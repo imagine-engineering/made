@@ -6223,6 +6223,25 @@ mod tests {
         let decoded = vae.decode(&backend, &latent, &context)?;
         assert_eq!(decoded.descriptor().shape(), &[1, 1, 4]);
         assert_eq!(values(&decoded)?, vec![1.0, 1.0, 5.0, 5.0]);
+
+        let encode_plan = vae.plan_encode_tiles(&pixels, vec![2], vec![0])?;
+        assert_eq!(encode_plan.tile_count(), 2);
+        let tiled_latent = vae.encode_tiled(&backend, &pixels, &encode_plan, &context)?;
+        assert_eq!(values(&tiled_latent)?, values(&latent)?);
+        assert!(matches!(
+            vae.plan_encode_tiles(&pixels, vec![2], vec![2]),
+            Err(VaeError::InvalidTileDimension { dimension: 0, .. })
+        ));
+
+        let decode_plan = vae.plan_decode_tiles(&tiled_latent, vec![1], vec![0])?;
+        assert_eq!(decode_plan.tile_count(), 2);
+        let tiled_pixels = vae.decode_tiled(&backend, &tiled_latent, &decode_plan, &context)?;
+        assert_eq!(values(&tiled_pixels)?, values(&decoded)?);
+        assert!(matches!(
+            vae.plan_decode_tiles(&tiled_latent, vec![1], vec![1]),
+            Err(VaeError::InvalidTileDimension { dimension: 0, .. })
+        ));
+        assert_eq!(context.scratch.in_use_bytes(), 0);
         Ok(())
     }
 
@@ -6257,6 +6276,11 @@ mod tests {
         assert_eq!(decode_plan.pass_count(), 3);
         let tiled_decode = vae.decode_tiled(&backend, &untiled, &decode_plan, &context)?;
         assert_eq!(values(&tiled_decode)?, values(&full_decode)?);
+        assert!(matches!(
+            vae.plan_decode_tiles(&untiled, vec![4, 4], vec![0, 4]),
+            Err(VaeError::InvalidTileDimension { dimension: 1, .. })
+        ));
+        assert_eq!(context.scratch.in_use_bytes(), 0);
         assert!(
             values(&full_decode)?
                 .iter()
@@ -6307,6 +6331,14 @@ mod tests {
         let tiled_pixels = vae.decode_tiled(&backend, &full_latent, &decode_plan, &context)?;
         assert_eq!(tiled_pixels.descriptor().shape(), &[1, 1, 5, 4, 4]);
         assert_eq!(values(&tiled_pixels)?, values(&full_pixels)?);
+        assert!(matches!(
+            vae.plan_encode_tiles(&pixels, vec![4, 4, 4], vec![4, 0, 0]),
+            Err(VaeError::InvalidTileDimension { dimension: 0, .. })
+        ));
+        assert!(matches!(
+            vae.plan_decode_tiles(&full_latent, vec![2, 2, 2], vec![2, 0, 0]),
+            Err(VaeError::InvalidTileDimension { dimension: 0, .. })
+        ));
         assert_eq!(context.scratch.in_use_bytes(), 0);
         Ok(())
     }
@@ -6333,6 +6365,12 @@ mod tests {
         assert_eq!(cropped.descriptor().shape(), &[1, 2, 2]);
         assert_eq!(read_f32(&cropped, &[0, 0, 0])?, 0.0);
         assert_eq!(read_f32(&cropped, &[0, 1, 1])?, 3.0);
+        let (input_extent, offset, output_extent) =
+            encode_spatial_geometry(&[VaeTileAxisFormula::checked_linear(4)?], &[1, 1, 7])?;
+        assert_eq!(
+            (input_extent, offset, output_extent),
+            (vec![4], vec![1], vec![1])
+        );
 
         let missing = upload(&backend, vec![1, 1, 2], &[2.0, 3.0], &context)?;
         let replicated = prepare_pixel_channels(
@@ -6479,6 +6517,132 @@ mod tests {
             first.decode_tiled(&backend, &latent, &plan, &context),
             Err(VaeError::TilePlanOperationMismatch { .. })
         ));
+
+        let decode_plan = first.plan_decode_tiles(&latent, vec![4, 4], vec![1, 1])?;
+        assert!(matches!(
+            first.encode_tiled(&backend, &pixels, &decode_plan, &context),
+            Err(VaeError::TilePlanOperationMismatch { .. })
+        ));
+        assert_eq!(context.scratch.in_use_bytes(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn val_vae_001_record_tiling_execution() -> Result<(), Box<dyn Error>> {
+        val_vae_001_one_dimensional_sequence_layout_crops_averages_and_decodes()?;
+        val_vae_001_source_channel_crop_replicate_and_constant_padding_are_exact()?;
+        val_vae_001_invalid_descriptors_shapes_and_tiles_fail_closed()?;
+        val_vae_001_extra_channel_audio_tiles_reshape_at_the_kernel_boundary()?;
+        val_vae_001_two_dimensional_affine_scaling_clamp_and_three_pass_tiling_are_exact()?;
+        val_vae_001_causal_three_dimensional_tiles_match_full_execution()?;
+        val_vae_001_plans_are_bound_to_operation_identity_and_input_shape()?;
+        val_vae_001_cancellation_and_oom_do_not_mutate_input_or_leave_workspace_leased()?;
+        crate::vae_tiling::verify_tiling_contract_execution()?;
+
+        let cases = std::collections::BTreeMap::from([
+            (
+                "vae_encode_crop_pixels",
+                ["center-crop-and-channel-padding", "undersized-pixels"],
+            ),
+            (
+                "decode_tiled_",
+                [
+                    "three-pass-source-order-and-clamp",
+                    "invalid-spatial-overlap",
+                ],
+            ),
+            (
+                "decode_tiled_1d",
+                [
+                    "sequence-and-audio-channel-reshape",
+                    "invalid-sequence-overlap",
+                ],
+            ),
+            (
+                "decode_tiled_3d",
+                ["causal-first-frame-and-overlap", "invalid-temporal-overlap"],
+            ),
+            (
+                "encode_tiled_",
+                [
+                    "three-pass-source-order-and-affine",
+                    "invalid-spatial-overlap",
+                ],
+            ),
+            (
+                "encode_tiled_1d",
+                [
+                    "sequence-and-audio-channel-reshape",
+                    "invalid-sequence-overlap",
+                ],
+            ),
+            (
+                "encode_tiled_3d",
+                ["causal-first-frame-and-overlap", "invalid-temporal-overlap"],
+            ),
+            (
+                "decode_tiled",
+                ["one-two-three-dimensional-dispatch", "encode-plan-rejected"],
+            ),
+            (
+                "encode_tiled",
+                ["one-two-three-dimensional-dispatch", "decode-plan-rejected"],
+            ),
+            (
+                "get_tiled_scale_steps",
+                ["asymmetric-spatial-step-count", "stride-zero"],
+            ),
+            (
+                "tiled_scale_multidim",
+                [
+                    "bounded-batch-feather-and-direct-assignment",
+                    "cancel-oom-and-caller-retry",
+                ],
+            ),
+            (
+                "tiled_scale",
+                ["asymmetric-xy-forwarding", "invalid-spatial-overlap"],
+            ),
+        ]);
+        let implementations = [
+            (
+                "crates/sim_model/src/vae.rs",
+                include_bytes!("vae.rs").as_slice(),
+            ),
+            (
+                "crates/sim_model/src/vae_tiling.rs",
+                include_bytes!("vae_tiling.rs").as_slice(),
+            ),
+        ]
+        .map(|(path, source)| {
+            serde_json::json!({
+                "path": path,
+                "sha256": format!("{:x}", Sha256::digest(source)),
+            })
+        });
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .ok_or("workspace root is unavailable")?
+            .canonicalize()?;
+        let directory = workspace.join("target/comfy-parity");
+        std::fs::create_dir_all(&directory)?;
+        if directory.canonicalize()? != directory {
+            return Err("invalid VAE tiling execution output directory".into());
+        }
+        let mut temporary = tempfile::NamedTempFile::new_in(&directory)?;
+        serde_json::to_writer_pretty(
+            &mut temporary,
+            &serde_json::json!({
+                "schema_version": 1,
+                "os": std::env::consts::OS,
+                "arch": std::env::consts::ARCH,
+                "implementations": implementations,
+                "cases": cases,
+            }),
+        )?;
+        temporary.write_all(b"\n")?;
+        temporary.persist(directory.join("val-vae-tiling-execution.json"))?;
         Ok(())
     }
 
@@ -7146,6 +7310,11 @@ mod tests {
         let small_version = small_pixels.mutation_version();
         assert!(matches!(
             vae.encode(&small_backend, &small_pixels, &small_context),
+            Err(VaeError::Tensor(TensorError::AllocationFailed { .. }))
+        ));
+        let plan = vae.plan_encode_tiles(&small_pixels, vec![4, 4], vec![0, 0])?;
+        assert!(matches!(
+            vae.encode_tiled(&small_backend, &small_pixels, &plan, &small_context),
             Err(VaeError::Tensor(TensorError::AllocationFailed { .. }))
         ));
         assert_eq!(small_pixels.mutation_version(), small_version);

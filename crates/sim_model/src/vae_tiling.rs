@@ -869,6 +869,9 @@ impl From<std::num::TryFromIntError> for VaeError {
 }
 
 #[cfg(test)]
+pub(crate) use tests::verify_tiling_contract_execution;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use sim_tensor::{
@@ -1015,6 +1018,60 @@ mod tests {
         assert_eq!(decode.passes[0].tile_extent, [32, 12]);
         assert_eq!(decode.passes[1].tile_extent, [8, 48]);
         assert_eq!(decode.passes[2].tile_extent, [16, 24]);
+        Ok(())
+    }
+
+    #[test]
+    fn val_vae_001_tiled_scale_uses_source_xy_order_and_step_count() -> Result<(), VaeError> {
+        let cancellation = CancellationToken::default();
+        let (backend, authority) = CpuWorkspaceAuthority::create_backend(1 << 20)?;
+        let context = context(&authority, &cancellation, 1 << 20)?;
+        let shape = [1, 1, 3, 5];
+        let values = (0..15).map(|value| value as f32).collect::<Vec<_>>();
+        let (input, event) = backend.upload_f32_payload(&shape, &values, DType::F32, &context)?;
+        backend.wait_event(event, &context)?;
+        let make_plan = |overlap| {
+            let formula = VaeTileAxisFormula::checked_linear(1)?;
+            TileExecutionPlan::checked(
+                VaeOperation::Encode,
+                vec![3, 5],
+                vec![0, 0],
+                vec![3, 5],
+                vec![formula, formula],
+                TileTensorLayout::ChannelsFirst,
+                TileTensorLayout::ChannelsFirst,
+                vec![2, 3],
+                overlap,
+                false,
+                false,
+            )
+        };
+        let plan = make_plan(vec![1, 1])?;
+        assert_eq!(plan.tile_count(), 4);
+        let mut tiles = Vec::new();
+        let output = execute_tiled_scale(
+            &backend,
+            &input,
+            &shape,
+            1,
+            &plan,
+            |tile, _, context| {
+                tiles.push(tile.descriptor().shape().to_vec());
+                copy_tile(&backend, tile, context)
+            },
+            &context,
+        )?;
+        assert_eq!(tiles, vec![vec![1, 1, 2, 3]; 4]);
+        assert_eq!(output.contiguous_bytes()?, input.contiguous_bytes()?);
+        assert!(matches!(
+            make_plan(vec![2, 1]),
+            Err(VaeError::InvalidTileDimension { dimension: 0, .. })
+        ));
+        assert!(matches!(
+            make_plan(vec![1, 3]),
+            Err(VaeError::InvalidTileDimension { dimension: 1, .. })
+        ));
+        assert_eq!(context.scratch.in_use_bytes(), 0);
         Ok(())
     }
 
@@ -1202,6 +1259,25 @@ mod tests {
             ))
         ));
         assert_eq!(constrained.scratch.in_use_bytes(), 0);
+        let retried = execute_tiled_scale(
+            &backend,
+            &input,
+            &output_shape,
+            1,
+            &plan,
+            |tile, _, context| copy_tile(&backend, tile, context),
+            &upload_context,
+        )?;
+        assert_eq!(retried.contiguous_bytes()?, input.contiguous_bytes()?);
+        assert_eq!(upload_context.scratch.in_use_bytes(), 0);
         Ok(())
+    }
+    pub(crate) fn verify_tiling_contract_execution() -> Result<(), VaeError> {
+        val_vae_001_source_rounding_and_causal_formulas_are_exact()?;
+        val_vae_001_source_three_pass_order_is_exact()?;
+        val_vae_001_tiled_scale_uses_source_xy_order_and_step_count()?;
+        val_vae_001_tiled_scale_executes_each_batch_tile_and_normalizes_feathers()?;
+        val_vae_001_single_tile_uses_the_source_direct_assignment_path()?;
+        val_vae_001_cancellation_at_every_tile_and_underauthorization_publish_nothing()
     }
 }

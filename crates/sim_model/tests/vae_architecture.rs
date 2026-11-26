@@ -21,6 +21,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[path = "support/vae_tiling_ownership.rs"]
+mod vae_tiling_ownership;
+
 const VAE_TILING_TASK: &str = "comfy-parity-vae-multidimensional-tiling";
 const VAE_EXECUTION_TASK: &str = "comfy-parity-vae-execution-foundation";
 const VAE_VIDEO_TASK: &str = "comfy-parity-vae-video-architectures";
@@ -780,7 +783,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
         .filter(|fields| fields.get(8).is_some_and(|task| task == LOADER_TASK))
         .collect::<Vec<_>>();
     assert_eq!(vae_rows.len(), VAE_SELECTOR_ROW_COUNT);
-    let mut loader_contracts = Vec::with_capacity(VAE_SELECTOR_ROW_COUNT);
+    let mut contracts = Vec::with_capacity(VAE_SELECTOR_ROW_COUNT);
     for row in VAE_SELECTOR_CATALOG_ROWS {
         let fields = vae_rows
             .iter()
@@ -821,7 +824,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                 format!("{}:wrong-family", row.contract_id),
             ]
         };
-        loader_contracts.push(json!({
+        contracts.push(json!({
             "contract_id": row.contract_id,
             "task_id": LOADER_TASK,
             "source_sha256": fields[5],
@@ -830,7 +833,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "case_ids": case_ids,
         }));
     }
-    let loader_contract_count = loader_contracts.len();
+    let loader_contract_count = contracts.len();
     let mut catalog_contracts = Vec::new();
     let execution_rows = catalog_rows
         .iter()
@@ -948,6 +951,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "vae-execution:typed-boundary-rejection",
         ],
     }));
+    let tiling_execution = current_tiling_execution(&workspace)?;
     let tiling_rows = catalog_rows
         .iter()
         .filter(|fields| fields.get(8).is_some_and(|task| task == VAE_TILING_TASK))
@@ -978,15 +982,28 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             ),
             source_sha256
         );
-        catalog_contracts.push(json!({
-            "contract_id": contract_id,
-            "task_id": VAE_TILING_TASK,
-            "source_sha256": source_sha256,
-            "symbol_sha256": symbol_sha256,
-            "fixture_case_ids": [
-                format!("{contract_id}:pinned-source-row"),
-            ],
-        }));
+        if let Some(execution) = &tiling_execution {
+            let cases = execution
+                .cases
+                .get(source_symbol)
+                .ok_or("VAE tiling execution case is missing")?;
+            contracts.push(json!({
+                "contract_id": contract_id,
+                "task_id": VAE_TILING_TASK,
+                "source_sha256": source_sha256,
+                "symbol_sha256": symbol_sha256,
+                "status": "passed",
+                "case_ids": cases.iter().map(|case| format!("{contract_id}:{case}")).collect::<Vec<_>>(),
+            }));
+        } else {
+            catalog_contracts.push(json!({
+                "contract_id": contract_id,
+                "task_id": VAE_TILING_TASK,
+                "source_sha256": source_sha256,
+                "symbol_sha256": symbol_sha256,
+                "fixture_case_ids": [format!("{contract_id}:pinned-source-row")],
+            }));
+        }
     }
 
     let image_fixture_path =
@@ -1553,7 +1570,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
     let producer_path = "crates/sim_model/tests/vae_architecture.rs";
     let producer_bytes = fs::read(workspace.join(producer_path))?;
     let producer_sha256 = format!("{:x}", Sha256::digest(producer_bytes));
-    let task_results = BTreeMap::from([(
+    let mut task_results = BTreeMap::from([(
         LOADER_TASK,
         json!({
             "status": "passed",
@@ -1566,7 +1583,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             },
         }),
     )]);
-    let catalog_checks = BTreeMap::from([
+    let mut catalog_checks = BTreeMap::from([
         (
             VAE_EXECUTION_TASK,
             json!({
@@ -1665,6 +1682,22 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             }),
         ),
     ]);
+    if let Some(execution) = tiling_execution {
+        vae_tiling_ownership::check_tiling_ownership(Path::new(env!("CARGO_MANIFEST_DIR")))?;
+        task_results.insert(
+            VAE_TILING_TASK,
+            json!({
+                "status": "passed",
+                "passed": VAE_TILING_CONTRACTS.len(),
+                "failed": 0,
+                "skipped": 0,
+                "case_ids": VAE_TILING_CASE_IDS,
+                "implementations": execution.implementations,
+            }),
+        );
+        catalog_checks.remove(VAE_TILING_TASK);
+    }
+
     let artifact = json!({
         "schema_version": 1,
         "validation_id": "VAL-VAE-001",
@@ -1677,7 +1710,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "dtype": "f32",
         },
         "summary": {
-            "passed": loader_contract_count,
+            "passed": contracts.len(),
             "failed": 0,
             "skipped": 0,
         },
@@ -1686,7 +1719,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "sha256": producer_sha256,
         },
         "task_results": task_results,
-        "contracts": loader_contracts,
+        "contracts": contracts,
         "selector_cases": validated,
         "catalog_checks": { "tasks": catalog_checks, "contracts": catalog_contracts },
         "remaining_tasks": catalog_checks.keys().copied()
@@ -1716,6 +1749,76 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
     fs::write(&temporary, bytes)?;
     fs::rename(temporary, destination)?;
     Ok(())
+}
+
+#[derive(serde::Deserialize)]
+struct TilingExecutionEvidence {
+    schema_version: u32,
+    os: String,
+    arch: String,
+    implementations: Vec<serde_json::Value>,
+    cases: BTreeMap<String, [String; 2]>,
+}
+
+fn current_tiling_execution(
+    workspace: &Path,
+) -> Result<Option<TilingExecutionEvidence>, Box<dyn Error>> {
+    const TESTED_SOURCES: [&str; 2] = [
+        "crates/sim_model/src/vae.rs",
+        "crates/sim_model/src/vae_tiling.rs",
+    ];
+    let directory = workspace.canonicalize()?.join("target/comfy-parity");
+    let evidence_path = directory.join("val-vae-tiling-execution.json");
+    if evidence_path.is_symlink() || directory.exists() && directory.canonicalize()? != directory {
+        return Err("invalid VAE tiling execution evidence path".into());
+    }
+    let bytes = match fs::read(&evidence_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let mut evidence: TilingExecutionEvidence = serde_json::from_slice(&bytes)?;
+    if evidence.schema_version != 1
+        || evidence.os != std::env::consts::OS
+        || evidence.arch != std::env::consts::ARCH
+        || evidence.implementations.len() != TESTED_SOURCES.len()
+        || evidence.cases.len() != VAE_TILING_CONTRACTS.len()
+    {
+        return Ok(None);
+    }
+    for (path, implementation) in TESTED_SOURCES.into_iter().zip(&evidence.implementations) {
+        if *implementation != current_implementation(workspace, path)? {
+            return Ok(None);
+        }
+    }
+    for (_, _, symbol, _, _) in VAE_TILING_CONTRACTS {
+        let Some([valid, invalid]) = evidence.cases.get(symbol) else {
+            return Ok(None);
+        };
+        if valid.is_empty() || invalid.is_empty() || valid == invalid {
+            return Ok(None);
+        }
+    }
+    for path in [
+        "crates/sim_model/tests/vae_architecture.rs",
+        "crates/sim_model/tests/vae_tiling.rs",
+        "crates/sim_model/tests/support/vae_tiling_ownership.rs",
+    ] {
+        evidence
+            .implementations
+            .push(current_implementation(workspace, path)?);
+    }
+    Ok(Some(evidence))
+}
+
+fn current_implementation(
+    workspace: &Path,
+    path: &str,
+) -> Result<serde_json::Value, Box<dyn Error>> {
+    Ok(json!({
+        "path": path,
+        "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
+    }))
 }
 
 #[test]
