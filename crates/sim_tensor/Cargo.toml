@@ -47,6 +47,7 @@ sim_backend_directml = { workspace = true, features = ["test-support"] }
 sim_backend_metal = { workspace = true, features = ["test-support"] }
 sim_backend_npu = { workspace = true, features = ["test-support"] }
 sim_backend_xpu = { workspace = true, features = ["test-support"] }
+smol.workspace = true
 [build-dependencies]
 serde.workspace = true
 serde_json.workspace = true

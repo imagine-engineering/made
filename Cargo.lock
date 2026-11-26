@@ -19190,6 +19190,7 @@ dependencies = [
  "sim_backend_rocm",
  "sim_backend_xpu",
  "sim_types",
+ "smol",
  "syn 2.0.117",
  "thiserror 2.0.21",
  "wgpu",

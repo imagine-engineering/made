@@ -245,12 +245,58 @@ fn write_operation_resolutions(
         })
         .collect::<Vec<_>>()
         .join(", ");
+    write_catalog_test_index(output, &baseline_contracts, operation_modules)?;
     fs::write(
         output.join("generated_operation_resolutions.rs"),
         format!(
             "{includes}pub static GENERATED_RESOLVED_OPERATION_CONTRACT_SLICES: &[GeneratedOperationResolutionSlice] = &[{slices}];\npub static GENERATED_BUILD_SEALED_OPERATION_RESOLUTIONS: &[(&str, &str, &str, &str)] = &[{sealed}];\npub const GENERATED_OPERATION_RESOLUTION_MODULES: &[&str] = &[{modules}];\npub const GENERATED_OPERATION_RESOLUTION_SOURCE_DIRECTORY: &str = \"src/operation_resolutions\";\n"
         ),
     )
+}
+
+fn write_catalog_test_index(
+    output: &Path,
+    baselines: &BTreeMap<String, BaselineContract>,
+    operation_modules: &BTreeSet<String>,
+) -> io::Result<()> {
+    let mut modules = BTreeSet::new();
+    let mut rows = Vec::new();
+    for contract in baselines.values() {
+        let disposition = match contract.inventory_kind {
+            BaselineInventoryKind::CallableOperation => "Callable",
+            BaselineInventoryKind::NamespaceValueReference
+            | BaselineInventoryKind::TypeReference => "TypedReference",
+            BaselineInventoryKind::ReclassifiedExternalOperation => "External",
+        };
+        let module = &contract.expected_resolution_module;
+        if contract.inventory_kind != BaselineInventoryKind::ReclassifiedExternalOperation {
+            if !operation_modules.contains(module) {
+                return Err(io::Error::other(format!(
+                    "tensor catalog row {} has no implementation module {module}",
+                    contract.operation_id
+                )));
+            }
+            modules.insert(module);
+        }
+        rows.push(format!(
+            "    CatalogInput {{ operation_id: {:?}, overload_id: {:?}, baseline_sha256: {:?}, owner: {:?}, module: {:?}, disposition: CatalogDisposition::{disposition} }},\n",
+            contract.operation_id,
+            contract.overload_id,
+            contract.oracle_fixture_sha256,
+            contract.resolution_owner_task_id,
+            module,
+        ));
+    }
+    let mut source = format!(
+        "const CATALOG_INPUTS: &[CatalogInput] = &[\n{}];\n",
+        rows.concat()
+    );
+    for module in modules {
+        source.push_str(&format!(
+            "mod catalog_{module} {{ include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/tests/ops/{module}.rs\")); }}\n"
+        ));
+    }
+    fs::write(output.join("generated_catalog_tests.rs"), source)
 }
 
 impl ParsedResolution {
