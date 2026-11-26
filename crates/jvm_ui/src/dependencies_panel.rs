@@ -692,6 +692,7 @@ pub struct DependenciesPanel {
     build_phase_token: Option<project::jvm_project::ProviderRefreshToken>,
     build_phase_waiter: Option<gpui::Task<()>>,
     build_phase_notice: Option<String>,
+    remote_gradle_reimport_pending: bool,
     graph_search: Entity<Editor>,
     graph_inspection: Option<GraphInspection>,
     graph_pin: Option<GraphPin>,
@@ -3046,6 +3047,11 @@ impl DependenciesPanel {
         )
     }
 
+    #[cfg(feature = "test-support")]
+    pub fn build_phase_notice_for_test(&self) -> Option<&str> {
+        self.build_phase_notice.as_deref()
+    }
+
     pub async fn load(
         workspace: WeakEntity<Workspace>,
         mut cx: AsyncWindowContext,
@@ -3128,6 +3134,7 @@ impl DependenciesPanel {
                     build_phase_token: None,
                     build_phase_waiter: None,
                     build_phase_notice: None,
+                    remote_gradle_reimport_pending: false,
                     graph_search,
                     graph_inspection: None,
                     graph_pin: None,
@@ -5317,6 +5324,9 @@ impl DependenciesPanel {
     }
 
     fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
+        if self.remote_gradle_reimport_pending {
+            return;
+        }
         let selected_worktree = self.selected_gradle_worktree();
         let lsp_store = self.project.read(cx).lsp_store();
         if self.project.read(cx).is_remote() {
@@ -5825,12 +5835,45 @@ impl DependenciesPanel {
     }
 
     fn apply_saved_build_selection(&mut self, maven: bool, cx: &mut Context<Self>) {
+        if !maven && self.project.read(cx).is_remote() {
+            self.reimport_remote_gradle_projects(cx);
+            return;
+        }
         let action = if maven {
             BuildImport::SavedMaven
         } else {
             BuildImport::GradleSelection
         };
         self.run_build_import(action, cx);
+    }
+
+    fn reimport_remote_gradle_projects(&mut self, cx: &mut Context<Self>) {
+        if self.remote_gradle_reimport_pending || self.host_unavailable(cx) {
+            return;
+        }
+        let worktree_id = self.selected_gradle_worktree();
+        match self.project.read(cx).lsp_store().update(cx, |store, cx| {
+            store.reimport_remote_gradle_projects(worktree_id, cx)
+        }) {
+            Ok(import) => {
+                self.remote_gradle_reimport_pending = true;
+                self.build_phase_notice =
+                    Some("Reimporting Gradle projects offline on the project host.".into());
+                cx.spawn(async move |panel, cx| {
+                    let result = import.await;
+                    panel.update(cx, |panel, cx| {
+                        panel.remote_gradle_reimport_pending = false;
+                        panel.build_phase_notice = Some(match result {
+                            Ok(()) => "Gradle projects reimported. Use Synchronize metadata to load tasks and configurations.".into(),
+                            Err(error) => error.to_string(),
+                        });
+                        cx.notify();
+                    }).log_err();
+                }).detach();
+            }
+            Err(error) => self.build_phase_notice = Some(error.to_string()),
+        }
+        cx.notify();
     }
 
     fn run_build_import(&mut self, action: BuildImport, cx: &mut Context<Self>) {
@@ -8564,15 +8607,18 @@ impl Render for DependenciesPanel {
         let can_apply_build_selection =
             self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok();
         let remote_project = self.project.read(cx).is_remote();
-        let can_synchronize_gradle = !remote_project
-            || (!self.host_unavailable(cx)
-                && self
-                    .project
-                    .read(cx)
-                    .lsp_store()
-                    .read(cx)
-                    .can_synchronize_remote_gradle_metadata(self.selected_gradle_worktree(), cx));
-        let synchronize_gradle_label = match (remote_project, can_synchronize_gradle) {
+        let has_remote_gradle_scope = remote_project
+            && !self.host_unavailable(cx)
+            && self
+                .project
+                .read(cx)
+                .lsp_store()
+                .read(cx)
+                .can_synchronize_remote_gradle_metadata(self.selected_gradle_worktree(), cx);
+        let can_use_remote_gradle_actions =
+            has_remote_gradle_scope && !self.remote_gradle_reimport_pending;
+        let can_synchronize_gradle = !remote_project || can_use_remote_gradle_actions;
+        let synchronize_gradle_label = match (remote_project, has_remote_gradle_scope) {
             (false, _) => {
                 "Synchronize local Gradle metadata; executes trusted build configuration scripts"
             }
@@ -8582,6 +8628,24 @@ impl Render for DependenciesPanel {
             (true, false) => {
                 "Gradle metadata synchronization requires a trusted direct connection to the project host"
             }
+        };
+        let (gradle_import_text, gradle_import_label, can_import_gradle) = if remote_project {
+            let label = if has_remote_gradle_scope {
+                "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts"
+            } else {
+                "Gradle reimport requires a trusted direct connection to the project host"
+            };
+            (
+                "Reimport Gradle projects",
+                label,
+                can_use_remote_gradle_actions,
+            )
+        } else {
+            (
+                "Import Gradle selection",
+                "Import effective Gradle selection for the selected local project folder; executes trusted build configuration",
+                can_apply_build_selection,
+            )
         };
         let can_cancel_import = self.build_phase_is_pending(cx);
         let can_inspect_graph = self
@@ -8824,9 +8888,9 @@ impl Render for DependenciesPanel {
                                         )
                                         .shape(ui::IconButtonShape::Square)
                                         .tab_index(0_isize)
-                                        .aria_label(if self.project.read(cx).is_remote() { "Gradle selection import unavailable for remote projects" } else { "Import effective Gradle selection for the selected local project folder; executes trusted build configuration" })
-                                        .tooltip(Tooltip::text("Import Gradle selection"))
-                                        .disabled(!can_apply_build_selection)
+                                        .aria_label(gradle_import_label)
+                                        .tooltip(Tooltip::text(gradle_import_text))
+                                        .disabled(!can_import_gradle)
                                         .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx))),
                                     )
                                 })
@@ -9009,9 +9073,9 @@ impl Render for DependenciesPanel {
                             .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
                     ))
                     .when(self.view != BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-import-gradle-selection", "Import Gradle selection")
-                            .aria_label(if self.project.read(cx).is_remote() { "Gradle selection import unavailable for remote projects" } else { "Import effective Gradle selection for the selected local project folder; executes trusted build configuration" })
-                            .disabled(!can_apply_build_selection).tab_index(0_isize)
+                        Button::new("groovy-import-gradle-selection", gradle_import_text)
+                            .aria_label(gradle_import_label)
+                            .disabled(!can_import_gradle).tab_index(0_isize)
                             .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx)))
                     ))
                     .when(self.view != BuildToolView::Maven, |header| header.child(

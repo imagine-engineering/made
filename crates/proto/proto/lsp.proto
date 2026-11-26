@@ -1206,6 +1206,13 @@ message SynchronizeRemoteGradleMetadata {
   uint64 worktree_id = 4;
 }
 
+message ReimportRemoteGradleProjects {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 session_generation = 3;
+  uint64 worktree_id = 4;
+}
+
 message CheckKotlinLspRelease {
   uint64 project_id = 1;
 }

@@ -306,13 +306,16 @@ Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
 [Maven 3.9.16 project builder](https://maven.apache.org/ref/3.9.16/maven-core/xref/org/apache/maven/project/DefaultProjectBuilder.html#L698)
 
-Explicit selection import, saved Maven selection and Gradle metadata
-synchronization require the relevant provider capabilities and a trusted local
-project. These actions can execute build configuration scripts and write
-caches. Missing capabilities or ambiguous ownership require repair and a new
-refresh. They do not grant trust, prove full synchronization or provide a
-remote fallback. **Cancel selected import** applies only to this panel's
-current import.
+Build import and Gradle metadata synchronization require the relevant provider
+capabilities and a trusted project. These actions can execute build configuration
+scripts and write caches. **Cancel selected import** applies to the current
+local import started from this panel.
+
+On a trusted direct connection, use **Reimport Gradle projects** when the Java
+server restarts and cached topology is unavailable. This runs the host's
+effective Gradle selection in offline mode. After reimport, use **Synchronize
+metadata** to load tasks and configurations. Both actions run on the project
+host and rely on that host's cached Gradle installation and dependencies.
 
 For **Reload Maven projects** and **Apply saved Maven selection**, set
 `java.import.maven.offline.enabled` to `true` under the project host's

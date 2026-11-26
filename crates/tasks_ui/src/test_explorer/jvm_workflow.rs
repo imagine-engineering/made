@@ -508,20 +508,20 @@ fn type_fixture_options(cx: &mut VisualTestContext, control: &str, editor: &str,
             window.simulate_next_frame(cx);
         });
     }
+    focus_control(cx, editor);
     cx.simulate_input(options);
     cx.update(|window, cx| {
         window.draw(cx).clear(cx);
         let tree: serde_json::Value =
             serde_json::from_str(&window.debug_a11y_tree_json().expect("Task options editor"))
                 .expect("accessibility JSON");
-        assert!(
-            tree["nodes"]
-                .as_object()
-                .expect("accessibility nodes")
-                .values()
-                .any(|node| node["aria"]["label"] == editor && node["aria"]["value"] == options),
-            "keyboard input reaches {editor}"
-        );
+        let value = tree["nodes"]
+            .as_object()
+            .expect("accessibility nodes")
+            .values()
+            .find(|node| node["aria"]["label"] == editor)
+            .and_then(|node| node["aria"]["value"].as_str());
+        assert_eq!(value, Some(options), "keyboard input reaches {editor}");
     });
 }
 
@@ -628,6 +628,7 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
     use language_tools::language_tool_tree::{ExpandAll, status_message};
     use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
     use remote::{DockerConnectionOptions, RemoteConnectionOptions};
+    use rpc::proto;
     use std::path::Path;
 
     const FIRST: &str = ":application:parityArguments";
@@ -701,51 +702,106 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
         })
         .await
         .expect("open Java on the Gradle project host");
+    let remote_client = project.read_with(cx, |project, cx| {
+        project
+            .remote_client()
+            .expect("Gradle project host")
+            .read(cx)
+            .proto_client()
+    });
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.dispatch_action(ShowGradle);
-    let deadline = Instant::now() + Duration::from_secs(90);
-    let mut refresh_at = Instant::now();
-    loop {
-        cx.run_until_parked();
-        if lsp_store.read_with(cx, |store, cx| {
-            store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx)
-                && !store.jdtls_project_query_pending(worktree_id)
-                && store
+    let mut previous_server = None;
+    for phase in ["initial import", "provider restart"] {
+        let deadline = Instant::now() + Duration::from_secs(90);
+        let mut refresh_at = Instant::now();
+        loop {
+            cx.run_until_parked();
+            if let Some(server_id) = lsp_store.read_with(cx, |store, cx| {
+                store
                     .jdtls_project_snapshot(worktree_id)
-                    .is_some_and(|(snapshot, current)| {
-                        current
+                    .and_then(|(snapshot, current)| {
+                        (current
+                            && Some(snapshot.server_id) != previous_server
+                            && store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx)
+                            && !store.jdtls_project_query_pending(worktree_id)
                             && snapshot.projects.iter().any(|module| {
                                 module.module_root.path.as_unix_str() == "application"
-                            })
+                            }))
+                        .then_some(snapshot.server_id)
                     })
-        }) {
+            }) {
+                previous_server = Some(server_id);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the host did not expose the Gradle application after {phase}"
+            );
+            if Instant::now() >= refresh_at {
+                lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+                refresh_at = Instant::now() + Duration::from_secs(5);
+            }
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        if phase == "initial import" {
+            lsp_store.update(cx, |store, cx| store.restart_all_language_servers(cx));
+        }
+    }
+    for version in [1, 2] {
+        let rejected = remote_client
+            .request(proto::ReimportRemoteGradleProjects {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                protocol_version: version,
+                session_generation: 0,
+                worktree_id: worktree_id.to_proto(),
+            })
+            .await
+            .expect_err("a stale or incompatible connection cannot reimport Gradle projects");
+        let reason = if version == 1 {
+            "JVM project ownership changed"
+        } else {
+            "Gradle reimport requires a current direct Groovy connection"
+        };
+        assert!(rejected.to_string().contains(reason), "{rejected:#}");
+    }
+    let sync_error = lsp_store
+        .update(cx, |store, cx| {
+            store.synchronize_remote_gradle_metadata(Some(worktree_id), cx)
+        })
+        .expect("the restarted project host remains admitted")
+        .await
+        .expect_err("a missing cached topology must not execute a Gradle metadata query");
+    assert!(
+        sync_error
+            .to_string()
+            .contains("Gradle metadata synchronization failed or was superseded"),
+        "{sync_error:#}"
+    );
+    focus_control(
+        cx,
+        "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts",
+    );
+    press_enter(cx);
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        cx.run_until_parked();
+        let notice = panel.read_with(cx, |panel, _| {
+            panel.build_phase_notice_for_test().map(str::to_owned)
+        });
+        if notice
+            .as_deref()
+            .is_some_and(|notice| notice.starts_with("Gradle projects reimported."))
+        {
             break;
         }
-        if Instant::now() >= deadline {
-            panic!(
-                "the host did not expose the Gradle application: {:?}",
-                lsp_store.read_with(cx, |store, cx| (
-                    store.remote_jvm_consumer_roots().to_vec(),
-                    store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx),
-                    store
-                        .jdtls_project_snapshot(worktree_id)
-                        .map(|(snapshot, current)| (
-                            current,
-                            snapshot
-                                .projects
-                                .iter()
-                                .map(|module| module.module_root.path.to_string())
-                                .collect::<Vec<_>>()
-                        )),
-                    store.jdtls_project_query_failed(worktree_id),
-                ))
-            );
-        }
-        if Instant::now() >= refresh_at {
-            lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
-            refresh_at = Instant::now() + Duration::from_secs(5);
-        }
+        assert!(
+            Instant::now() < deadline,
+            "offline host reimport did not complete: {notice:?}"
+        );
         cx.background_executor
             .timer(Duration::from_millis(100))
             .await;

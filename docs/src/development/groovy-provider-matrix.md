@@ -228,10 +228,14 @@ recorded initialization options advertised all 22 Gradle companion commands
 and returned cached topology. A control with no companion rejected the
 topology command. After a provider restart, Buildship also
 returned imported projects with unknown cached topology. Groovy refused the
-scoped metadata query in that state. In the standalone probe, an explicit
-offline selected reimport restored the three cached project identities. The
-connected recovery workflow and standard companion startup still require
-qualification.
+scoped metadata query in that state. The mounted Docker case now restarts the
+host language servers, checks that synchronization fails before configuration,
+and uses **Reimport Gradle projects**. The supported host import command
+restores all three cached project identities. An explicit **Synchronize
+metadata** then loads the tasks, and the ordered Task writes fresh JUnit XML.
+The host also rejects incompatible requests and stale session generations.
+The fixture provisions the companion at Eclipse startup. Standard companion
+startup and separate physical-host qualification remain open.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java

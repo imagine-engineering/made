@@ -5394,6 +5394,8 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_synchronize_remote_gradle_metadata);
         #[cfg(feature = "jvm-tools")]
+        client.add_entity_request_handler(Self::handle_reimport_remote_gradle_projects);
+        #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_check_kotlin_lsp_release);
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_resolve_jvm_build_operation);
@@ -8415,7 +8417,7 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
-    fn remote_gradle_metadata_scope(
+    fn remote_gradle_scope(
         &self,
         selected: Option<WorktreeId>,
         cx: &App,
@@ -8426,14 +8428,12 @@ impl LspStore {
                 remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
                     && remote.jvm_consumers.connected
             })
-            .context(
-                "Connect directly to the Groovy project host to synchronize Gradle metadata",
-            )?;
+            .context("Connect directly to the Groovy project host to work with Gradle projects")?;
         let client = remote
             .upstream_client
             .as_ref()
             .filter(|client| !client.is_via_collab())
-            .context("Gradle metadata synchronization requires a direct project host connection")?;
+            .context("Gradle project actions require a direct project host connection")?;
         let worktrees = remote
             .jvm_consumers
             .accepted_roots
@@ -8452,7 +8452,7 @@ impl LspStore {
                 trusted.observed_worktree_trust(&self.worktree_store, worktree_id, cx) == Some(true)
                     && !trusted.has_restricted_worktrees(&self.worktree_store, cx)
             }),
-            "Trust the current Gradle worktree before synchronizing metadata"
+            "Trust the current Gradle worktree before running Gradle project actions"
         );
         Ok((client, remote.jvm_consumers.generation, worktree_id))
     }
@@ -8463,7 +8463,7 @@ impl LspStore {
         selected: Option<WorktreeId>,
         cx: &App,
     ) -> bool {
-        self.remote_gradle_metadata_scope(selected, cx).is_ok()
+        self.remote_gradle_scope(selected, cx).is_ok()
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -8472,8 +8472,7 @@ impl LspStore {
         selected: Option<WorktreeId>,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
-        let (client, session_generation, worktree_id) =
-            self.remote_gradle_metadata_scope(selected, cx)?;
+        let (client, session_generation, worktree_id) = self.remote_gradle_scope(selected, cx)?;
         let client = client.clone();
         Ok(cx.spawn(async move |this, cx| {
             let request = client.request(proto::SynchronizeRemoteGradleMetadata {
@@ -8488,9 +8487,47 @@ impl LspStore {
                 Either::Right(_) => return Err(anyhow!("Gradle metadata synchronization timed out; check the project host and retry")),
             }
             this.update(cx, |store, cx| {
-                let (current_client, current_generation, _) = store.remote_gradle_metadata_scope(Some(worktree_id), cx)?;
+                let (current_client, current_generation, _) = store.remote_gradle_scope(Some(worktree_id), cx)?;
                 ensure!(
                     current_client.is_same_instance(&client) && current_generation == session_generation,
+                    "The Gradle project host changed; reconnect and refresh"
+                );
+                store.refresh_jdtls_project(worktree_id, cx);
+                Ok(())
+            })?
+        }))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn reimport_remote_gradle_projects(
+        &self,
+        selected: Option<WorktreeId>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        let (client, session_generation, worktree_id) = self.remote_gradle_scope(selected, cx)?;
+        let client = client.clone();
+        Ok(cx.spawn(async move |this, cx| {
+            let request = client.request(proto::ReimportRemoteGradleProjects {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                protocol_version: 1,
+                session_generation,
+                worktree_id: worktree_id.to_proto(),
+            });
+            let deadline = cx.background_executor().timer(Duration::from_secs(245));
+            match futures::future::select(Box::pin(request), Box::pin(deadline)).await {
+                Either::Left((result, _)) => {
+                    result?;
+                }
+                Either::Right(_) => {
+                    anyhow::bail!("Gradle reimport timed out; check the project host and refresh")
+                }
+            }
+            this.update(cx, |store, cx| {
+                let (current_client, current_generation, _) =
+                    store.remote_gradle_scope(Some(worktree_id), cx)?;
+                ensure!(
+                    current_client.is_same_instance(&client)
+                        && current_generation == session_generation,
                     "The Gradle project host changed; reconnect and refresh"
                 );
                 store.refresh_jdtls_project(worktree_id, cx);
@@ -14528,7 +14565,7 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
-    fn ensure_host_gradle_metadata_scope(
+    fn ensure_host_gradle_scope(
         &self,
         worktree_id: WorktreeId,
         remote_scope: (u64, JvmConsumerStamp),
@@ -14565,7 +14602,7 @@ impl LspStore {
         )?;
         ensure!(
             !roots.is_empty(),
-            "Select a Gradle build on the project host before synchronizing metadata"
+            "Select a Gradle build on the project host before running Gradle project actions"
         );
         for root in roots {
             self.host_jvm_operation_session(project_id, stamp, &root, cx)?;
@@ -14592,23 +14629,43 @@ impl LspStore {
                 generation: request.session_generation,
             },
         );
-        let (token, response, _subscription) = this.update(&mut cx, |store, cx| {
-            store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
+        let token = this.update(&mut cx, |store, cx| {
+            store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
             ensure!(
                 !store.jdtls_project_query_pending(worktree_id)
                     && store.jdtls_project_import_token(worktree_id).is_none(),
                 "Java project metadata is already refreshing; wait and retry"
             );
             store.synchronize_gradle_project_with_scope(Some(worktree_id), Some(scope), cx)?;
-            let token = store
+            store
                 .jdtls_project_query_token(worktree_id)
-                .context("Gradle metadata synchronization did not start on the host")?;
+                .context("Gradle metadata synchronization did not start on the host")
+        })?;
+        ensure!(
+            Self::wait_for_host_gradle_project_query(&this, token, scope, &mut cx).await?,
+            "Gradle metadata synchronization failed or was superseded; check the host and retry"
+        );
+        Ok(proto::Ack {})
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn wait_for_host_gradle_project_query(
+        this: &Entity<Self>,
+        token: jvm_project::ProviderRefreshToken,
+        scope: (u64, JvmConsumerStamp),
+        cx: &mut AsyncApp,
+    ) -> Result<bool> {
+        let worktree_id = token.worktree_id();
+        let wait = this.update(cx, |store, cx| {
+            if store.jdtls_project_query_token(worktree_id) != Some(token) {
+                return None;
+            }
             let (send, response) = oneshot::channel();
             let mut send = Some(send);
             let subscription = cx.observe_self(move |store, cx| {
                 if store.jdtls_project_query_token(worktree_id) == Some(token)
                     && store
-                        .ensure_host_gradle_metadata_scope(worktree_id, scope, cx)
+                        .ensure_host_gradle_scope(worktree_id, scope, cx)
                         .is_ok()
                 {
                     return;
@@ -14619,29 +14676,142 @@ impl LspStore {
                     log::debug!("Remote Gradle metadata requester dropped");
                 }
             });
-            Ok::<_, anyhow::Error>((token, response, subscription))
-        })?;
-        let deadline = cx.background_executor().timer(Duration::from_secs(60));
-        match futures::future::select(response, Box::pin(deadline)).await {
-            Either::Left((result, _)) => result.context("The Gradle metadata owner disappeared")?,
-            Either::Right(_) => {
-                anyhow::bail!("Gradle metadata did not finish before the host request timed out")
+            Some((response, subscription))
+        });
+        if let Some((response, _subscription)) = wait {
+            let deadline = cx.background_executor().timer(Duration::from_secs(60));
+            match futures::future::select(response, Box::pin(deadline)).await {
+                Either::Left((result, _)) => {
+                    result.context("The Gradle metadata owner disappeared")?
+                }
+                Either::Right(_) => {
+                    anyhow::bail!(
+                        "Gradle metadata did not finish before the host request timed out"
+                    )
+                }
             }
         }
-        this.read_with(&cx, |store, cx| {
-            store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
-            ensure!(
-                store
-                    .jdtls_project_snapshot(worktree_id)
-                    .is_some_and(|(snapshot, current)| {
-                        current
-                            && snapshot.server_id == token.server_id()
-                            && snapshot.generation == token.generation()
-                    }),
-                "Gradle metadata synchronization failed or was superseded; check the host and retry"
-            );
-            Ok(proto::Ack {})
+        this.read_with(cx, |store, cx| {
+            store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
+            Ok(store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot.server_id == token.server_id()
+                        && snapshot.generation == token.generation()
+                }))
         })
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn handle_reimport_remote_gradle_projects(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::ReimportRemoteGradleProjects>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        let request = envelope.payload;
+        ensure!(
+            envelope.original_sender_id.is_none() && request.protocol_version == 1,
+            "Gradle reimport requires a current direct Groovy connection"
+        );
+        let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        let scope = (
+            request.project_id,
+            JvmConsumerStamp {
+                peer: envelope.sender_id,
+                generation: request.session_generation,
+            },
+        );
+        let refresh = this.update(&mut cx, |store, cx| {
+            store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
+            ensure!(
+                !store.jdtls_project_query_pending(worktree_id)
+                    && store.jdtls_project_import_token(worktree_id).is_none(),
+                "Java project metadata is already refreshing; wait and retry"
+            );
+            if store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(_, current)| current)
+            {
+                return Ok(None);
+            }
+            let server_id = store
+                .live_jdtls_server_id(worktree_id)
+                .context("Java language server is unavailable on the project host")?;
+            store.schedule_local_jdtls_project_refresh(
+                server_id,
+                worktree_id,
+                None,
+                true,
+                None,
+                None,
+                cx,
+            )?;
+            store
+                .jdtls_project_query_token(worktree_id)
+                .context("Java project refresh did not start on the host")
+                .map(Some)
+        })?;
+        if let Some(refresh) = refresh {
+            ensure!(
+                Self::wait_for_host_gradle_project_query(&this, refresh, scope, &mut cx).await?,
+                "Could not refresh current Java project ownership; check the host and retry reimporting"
+            );
+        }
+        let (import, token, _subscription) = this.update(&mut cx, |store, cx| {
+            store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
+            ensure!(
+                !store.jdtls_project_query_pending(worktree_id),
+                "Java project metadata is already refreshing; wait and retry"
+            );
+            let intent = store.effective_saved_gradle_selection(worktree_id, cx)?;
+            let import = store.execute_selected_local_jdtls_phase(
+                worktree_id,
+                SelectedJdtlsPhaseTarget::GradleModules {
+                    intent,
+                    remote_scope: Some(scope),
+                },
+                cx,
+            )?;
+            let token = store
+                .jdtls_project_import_token(worktree_id)
+                .context("Gradle reimport did not start on the host")?;
+            let subscription = cx.observe_self(move |store, cx| {
+                if store.jdtls_project_import_token(worktree_id) == Some(token)
+                    && store
+                        .ensure_host_gradle_scope(worktree_id, scope, cx)
+                        .is_err()
+                {
+                    store
+                        .cancel_selected_project_phase_for_token(token, cx)
+                        .log_err();
+                }
+            });
+            Ok::<_, anyhow::Error>((import, token, subscription))
+        })?;
+        let deadline = cx.background_executor().timer(Duration::from_secs(120));
+        match futures::future::select(import, Box::pin(deadline)).await {
+            Either::Left((result, _)) => result?,
+            Either::Right(_) => {
+                this.update(&mut cx, |store, cx| {
+                    store
+                        .cancel_selected_project_phase_for_token(token, cx)
+                        .log_err();
+                });
+                anyhow::bail!("Gradle reimport timed out; check the project host and refresh")
+            }
+        }
+        let refresh = this.read_with(&cx, |store, cx| {
+            store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
+            Ok::<_, anyhow::Error>(store.jdtls_project_query_token(worktree_id))
+        })?;
+        if let Some(refresh) = refresh {
+            ensure!(
+                Self::wait_for_host_gradle_project_query(&this, refresh, scope, &mut cx).await?,
+                "Gradle projects were reimported. Refresh Java project data on the host before synchronizing metadata"
+            );
+        }
+        Ok(proto::Ack {})
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -16179,7 +16349,13 @@ impl LspStore {
                     configuration,
                 )?)
             }
-            SelectedJdtlsPhaseTarget::GradleModules(intent) => {
+            SelectedJdtlsPhaseTarget::GradleModules {
+                intent,
+                remote_scope,
+            } => {
+                if let Some(scope) = remote_scope {
+                    self.ensure_host_gradle_scope(worktree_id, *scope, cx)?;
+                }
                 let mut ignored = Vec::new();
                 let mut ignored_root = false;
                 let mut default_roots = None;
@@ -16211,8 +16387,16 @@ impl LspStore {
                         .flatten()
                 };
                 if let Some(scoped) = scoped {
+                    ensure!(
+                        remote_scope.is_none() || !scoped.is_empty_selection(),
+                        "Select a Gradle build on the project host before reimporting"
+                    );
                     PreparedJdtlsPhase::GradleScoped(Box::new(scoped))
                 } else {
+                    ensure!(
+                        remote_scope.is_none(),
+                        "Scoped Gradle reimport is unavailable; check the Groovy provider on the project host and refresh"
+                    );
                     if let Some(intent) = intent {
                         if intent.selected_build_files.is_none()
                             && intent
@@ -16828,9 +17012,9 @@ impl LspStore {
             {
                 *pending_maven_startup = None;
             }
-            if target
-                .is_none_or(|target| matches!(target, SelectedJdtlsPhaseTarget::GradleModules(_)))
-            {
+            if target.is_none_or(|target| {
+                matches!(target, SelectedJdtlsPhaseTarget::GradleModules { .. })
+            }) {
                 *pending_gradle_startup = None;
             }
         }
@@ -16884,8 +17068,10 @@ impl LspStore {
                     })
                     .or_else(|| {
                         pending_gradle_startup.take().map(|intent| {
-                            intent
-                                .map(|intent| SelectedJdtlsPhaseTarget::GradleModules(Some(intent)))
+                            intent.map(|intent| SelectedJdtlsPhaseTarget::GradleModules {
+                                intent: Some(intent),
+                                remote_scope: None,
+                            })
                         })
                     }),
                 _ => None,
@@ -17242,8 +17428,12 @@ impl LspStore {
                         reload_defaults: true,
                     })
                 }),
-                gradle: has_gradle
-                    .then(|| Box::new(SelectedJdtlsPhaseTarget::GradleModules(gradle))),
+                gradle: has_gradle.then(|| {
+                    Box::new(SelectedJdtlsPhaseTarget::GradleModules {
+                        intent: gradle,
+                        remote_scope: None,
+                    })
+                }),
             },
             cx,
         )?;
@@ -17588,7 +17778,10 @@ impl LspStore {
         let intent = self.effective_saved_gradle_selection(worktree_id, cx)?;
         self.execute_selected_local_jdtls_phase(
             worktree_id,
-            SelectedJdtlsPhaseTarget::GradleModules(intent),
+            SelectedJdtlsPhaseTarget::GradleModules {
+                intent,
+                remote_scope: None,
+            },
             cx,
         )
     }
@@ -17862,6 +18055,10 @@ impl LspStore {
                         None
                     }
                     PreparedJdtlsPhase::GradleScoped(mut plan) => {
+                        let remote_scope = match &target {
+                            SelectedJdtlsPhaseTarget::GradleModules { remote_scope, .. } => *remote_scope,
+                            _ => None,
+                        };
                         let authorize = |plan: &jvm_project::ScopedGradleImports, store: &LspStore, cx: &mut Context<LspStore>| -> Result<()> {
                             let (current_server, current_provider, current_worktree, current_selection) = store.selected_jdtls_phase_provider(worktree_id, &target, Some(token), cx)?;
                             ensure!(current_server == server_id && current_worktree == worktree
@@ -17871,7 +18068,20 @@ impl LspStore {
                                 && settings_are_current(cx),
                                 "Scoped Gradle import permission, inputs or host settings changed; import may be partial, refresh before retrying");
                             plan.validate_current(&current_worktree.read(cx).snapshot(), worktree_id)?;
-                            plan.validate_initialized_folders(&current_provider)
+                            plan.validate_initialized_folders(&current_provider)?;
+                            if let Some((project_id, stamp)) = remote_scope {
+                                let path_style = current_worktree.read(cx).path_style();
+                                for import in plan.imports() {
+                                    let (_, build) = import.scoped_roots()?;
+                                    let relative = path_style.strip_prefix(build, root.as_ref())
+                                        .context("The selected Gradle build is outside the current host worktree")?;
+                                    store.host_jvm_operation_session(project_id, stamp, &ProjectPath {
+                                        worktree_id,
+                                        path: relative.into(),
+                                    }, cx)?;
+                                }
+                            }
+                            Ok(())
                         };
                         if let Some(query) = plan.default_query() {
                             this.update(cx, |store, cx| authorize(&plan, store, cx))
@@ -17882,6 +18092,8 @@ impl LspStore {
                             plan.resolve_defaults(roots, &server)?;
                         }
                         let reconcile_cached = plan.is_empty_selection() || jvm_project::ScopedGradleImports::supports_cached_reconciliation(&server);
+                        ensure!(remote_scope.is_none() || reconcile_cached,
+                            "Scoped Gradle ownership is unavailable; check the Groovy provider on the project host and refresh");
                         if reconcile_cached {
                             let mut associations = Vec::new();
                             for scope in plan.initialized_roots() {
@@ -17923,7 +18135,10 @@ impl LspStore {
                         };
                         read_ownership(cx, false, reconcile_cached).await?;
                         if reconcile_cached {
-                            for scope in plan.cached_unlink_scopes()? {
+                            let unlink_scopes = plan.cached_unlink_scopes()?;
+                            ensure!(remote_scope.is_none() || unlink_scopes.is_empty(),
+                                "Deselected Gradle projects are still linked on the host; apply the saved selection on the host before reimporting");
+                            for scope in unlink_scopes {
                                 this.update(cx, |store, cx| authorize(&plan, store, cx))
                                     .map_err(|_| anyhow!("Gradle project closed before unlink; refresh before retrying"))??;
                                 let current = plan.query_cached_associations(&scope, server.clone(), request_timeout).await?;
@@ -18741,7 +18956,7 @@ impl LspStore {
             ).await;
             let authorize_metadata = |plan: Option<&jvm_project::ScopedGradleImports>, store: &Self, cx: &mut Context<Self>| -> Result<()> {
                 if let Some(scope) = remote_scope {
-                    store.ensure_host_gradle_metadata_scope(worktree_id, scope, cx)?;
+                    store.ensure_host_gradle_scope(worktree_id, scope, cx)?;
                 }
                 let current_worktree = store.worktree_store.read(cx).worktree_for_id(worktree_id, cx)
                     .context("Gradle project closed; reopen and refresh before synchronizing metadata")?;
@@ -22966,7 +23181,10 @@ enum SelectedJdtlsPhaseTarget {
         excluded_projects: Vec<ProjectPath>,
         pom_masks: Option<Vec<String>>,
     },
-    GradleModules(Option<settings::GradleBuildSettingsContent>),
+    GradleModules {
+        intent: Option<settings::GradleBuildSettingsContent>,
+        remote_scope: Option<(u64, JvmConsumerStamp)>,
+    },
     Unlink {
         provider: jvm_project::JdtlsUnlinkProvider,
         modules: Vec<ProjectPath>,
@@ -22983,7 +23201,7 @@ impl SelectedJdtlsPhaseTarget {
             | Self::MavenGraph(_)
             | Self::MavenReactor { .. }
             | Self::SavedMaven { .. } => "Maven",
-            Self::GradleModules(_) | Self::GradleGraph { .. } => "Gradle",
+            Self::GradleModules { .. } | Self::GradleGraph { .. } => "Gradle",
             Self::Unlink { provider, .. } => provider.name(),
         }
     }
@@ -23008,7 +23226,7 @@ impl SelectedJdtlsPhaseTarget {
                 pom_masks: Some(_), ..
             } => "groovy.maven.importReactorWithMasks",
             Self::MavenReactor { .. } => "groovy.maven.importReactor",
-            Self::GradleModules(_) => "groovy.gradle.moduleStates",
+            Self::GradleModules { .. } => "groovy.gradle.moduleStates",
             Self::Unlink { provider, .. } => provider.command(),
         }
     }
