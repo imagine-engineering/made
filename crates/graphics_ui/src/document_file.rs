@@ -44,7 +44,7 @@ use workspace::{
     notifications::DetachAndPromptErr as _,
 };
 
-use crate::canvas::ArtboardNavigation;
+use crate::canvas::{ArtboardNavigation, ArtboardOverlay};
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
     SavedGraphMenuTarget, SavedGraphView,
@@ -636,6 +636,8 @@ struct SavedSceneCanvas {
     pan: Option<SavedScenePan>,
     pick_armed: bool,
     pick_target: Option<GddArtboardCanvasPick>,
+    overlay_visible: bool,
+    artboard_overlay: Option<Arc<ArtboardOverlay>>,
     frame: SavedSceneFrame,
 }
 
@@ -1405,6 +1407,8 @@ impl GraphiteDocumentItem {
             pan: None,
             pick_armed: false,
             pick_target: None,
+            overlay_visible: true,
+            artboard_overlay: None,
             frame: SavedSceneFrame::Empty,
         });
         self.focus_handle.focus(window, cx);
@@ -1453,6 +1457,7 @@ impl GraphiteDocumentItem {
         canvas.revision = revision.clone();
         canvas.target = target;
         canvas.pick_target = None;
+        canvas.artboard_overlay = None;
         let camera = canvas.camera_override;
         if let SavedSceneFrame::Ready(image) =
             std::mem::replace(&mut canvas.frame, SavedSceneFrame::Empty)
@@ -1507,7 +1512,10 @@ impl GraphiteDocumentItem {
                 SAVED_SCENE_PIXEL_BUDGET as usize * 4,
             )
             .map_err(|error| error.to_string())?;
-            Ok((image, navigation, output.pick_target))
+            let overlay = output
+                .overlay
+                .map(|overlay| Arc::new(ArtboardOverlay::prepare(overlay)));
+            Ok((image, navigation, output.pick_target, overlay))
         });
         let request = Arc::new(());
         canvas.frame = SavedSceneFrame::Pending {
@@ -1524,9 +1532,10 @@ impl GraphiteDocumentItem {
                         return;
                     }
                     canvas.frame = match result {
-                        Ok((image, navigation, pick_target)) => {
+                        Ok((image, navigation, pick_target, overlay)) => {
                             canvas.navigation = Some(navigation);
                             canvas.pick_target = pick_target;
+                            canvas.artboard_overlay = overlay;
                             SavedSceneFrame::Ready(image)
                         }
                         Err(error) => SavedSceneFrame::Failed(error.into()),
@@ -1730,6 +1739,12 @@ impl GraphiteDocumentItem {
             }
             _ => None,
         };
+        let overlay = canvas
+            .artboard_overlay
+            .as_ref()
+            .filter(|_| canvas.overlay_visible && image.is_some())
+            .cloned();
+        let outline_visible = canvas.pick_armed;
         let message = match &canvas.frame {
             SavedSceneFrame::Pending { .. } => Some(("Rendering Canvas…".into(), Color::Muted)),
             SavedSceneFrame::Failed(error) => Some((error.clone(), Color::Error)),
@@ -1739,7 +1754,9 @@ impl GraphiteDocumentItem {
             .size_full()
             .child(
                 h_flex()
+                    .id("graphite-gdd-canvas-toolbar")
                     .h_9()
+                    .overflow_x_scroll()
                     .px_2()
                     .gap_2()
                     .child(
@@ -1780,6 +1797,28 @@ impl GraphiteDocumentItem {
                                     |item, _, _, cx| {
                                         if let Some(canvas) = &mut item.scene_canvas {
                                             canvas.pick_armed = !canvas.pick_armed;
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-CANVAS-ARTBOARD-OVERLAYS".into())
+                            .child(
+                                Button::new(
+                                    "graphite-gdd-canvas-artboard-overlays",
+                                    if canvas.overlay_visible {
+                                        "Hide Artboard Overlays"
+                                    } else {
+                                        "Show Artboard Overlays"
+                                    },
+                                )
+                                .on_click(cx.listener(
+                                    |item, _, _, cx| {
+                                        if let Some(canvas) = &mut item.scene_canvas {
+                                            canvas.overlay_visible = !canvas.overlay_visible;
                                             cx.notify();
                                         }
                                     },
@@ -1851,7 +1890,7 @@ impl GraphiteDocumentItem {
                                 let measured =
                                     SavedSceneTarget::measure(bounds.size, window.scale_factor());
                                 if target == measured {
-                                    return image;
+                                    return (image, overlay);
                                 }
                                 window.defer(cx, move |window, cx| {
                                     if let Err(error) = item.update(cx, |item, cx| {
@@ -1866,9 +1905,9 @@ impl GraphiteDocumentItem {
                                         );
                                     }
                                 });
-                                None
+                                (None, None)
                             },
-                            move |bounds, image, window, _| {
+                            move |bounds, (image, overlay), window, _| {
                                 Self::capture_scene_pan(capture_item, capture_instance, window);
                                 if let Some(image) = image
                                     && let Err(error) = window.paint_image(
@@ -1881,6 +1920,11 @@ impl GraphiteDocumentItem {
                                     )
                                 {
                                     log::warn!("Graphite Canvas frame was not painted: {error:#}");
+                                }
+                                if let Some(overlay) = overlay {
+                                    window.paint_layer(bounds, |window| {
+                                        overlay.paint(bounds.origin, outline_visible, window);
+                                    });
                                 }
                             },
                         )
@@ -13211,6 +13255,19 @@ mod tests {
             assert!(matches!(item.node_copy, NodeCopyPanel::Closed));
             assert!(!item.is_dirty(cx));
         });
+        for visible in [false, true] {
+            click(window, "GRAPHITE-GDD-CANVAS-ARTBOARD-OVERLAYS");
+            item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("Artboard Canvas");
+                assert_eq!(canvas.overlay_visible, visible);
+                assert!(canvas.artboard_overlay.is_some());
+                let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                    panic!("the artwork frame is retained during overlay changes");
+                };
+                assert!(Arc::ptr_eq(image, &initial_frame));
+                assert!(!item.is_dirty(cx));
+            });
+        }
         window.simulate_resize(gpui::size(px(1030.), px(1400.)));
         paint(window);
         let (resized_viewport, resized_frame) = canvas_frame(window, [255; 4]);
@@ -13541,6 +13598,8 @@ mod tests {
         let svg = std::str::from_utf8(&bytes).expect("SVG text");
         assert!(svg.contains(r#"viewBox="0 0 65 32" width="65" height="32""#));
         assert!(svg.contains(r##"fill="#ff0000""##));
+        assert!(!svg.contains(graphite_editor::consts::COLOR_OVERLAY_GRAY));
+        assert!(!svg.contains(graphite_editor::consts::COLOR_OVERLAY_BLUE));
         let saved = PathBuf::from("/project/changed-artboard-bounds.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
         window.simulate_new_path_selection(|_| Some(saved.clone()));

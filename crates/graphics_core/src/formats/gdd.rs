@@ -382,6 +382,37 @@ pub struct GddArtboardCanvasOutput {
     pub camera: PTZ,
     pub artboard_size: DVec2,
     pub pick_target: Option<GddArtboardCanvasPick>,
+    pub overlay: Option<GddArtboardCanvasOverlay>,
+}
+
+pub struct GddArtboardCanvasOverlay {
+    pub name: String,
+    pub outline: [DVec2; 4],
+    pub name_transform: DAffine2,
+}
+
+impl GddArtboardCanvasOverlay {
+    fn from_document_bounds(
+        name: String,
+        [min, max]: [DVec2; 2],
+        transform: DAffine2,
+        camera: PTZ,
+    ) -> Self {
+        let left = if camera.flip { max.x } else { min.x };
+        let label_corner = DVec2::new(left, min.y);
+        let flip = DVec2::new(if camera.flip { -1. } else { 1. }, 1.);
+        Self {
+            name,
+            outline: [min, DVec2::new(max.x, min.y), max, DVec2::new(min.x, max.y)]
+                .map(|corner| transform.transform_point2(corner)),
+            // Match DrawArtboardOverlays, including the unscaled four-pixel gap.
+            name_transform: transform
+                * DAffine2::from_translation(label_corner)
+                * DAffine2::from_scale(DVec2::splat(camera.zoom().recip()))
+                * DAffine2::from_translation(-DVec2::Y * 4.)
+                * DAffine2::from_scale(flip),
+        }
+    }
 }
 
 pub struct GddArtboardCanvasPick {
@@ -3553,7 +3584,7 @@ impl InspectedGddV1 {
             .iter()
             .find(|entry| entry.local_id == node_id && entry.network_path.is_empty())
             .map(|entry| entry.storage_id);
-        let pick_target = if let Some((storage_id, targets)) =
+        let (pick_target, overlay) = if let Some((storage_id, targets)) =
             storage_id.zip(render.metadata.click_targets.get(&node_id))
         {
             let interface = graph.into_interface()?;
@@ -3572,29 +3603,44 @@ impl InspectedGddV1 {
             if interface.is_layer(&node_id, &[])
                 && interface.is_artboard(&node_id, &[])
                 && interface.is_visible(&node_id, &[])
-                && !interface.is_locked(&node_id, &[])
                 && !targets.is_empty()
                 && pane_to_document.is_finite()
                 && layer_to_document.inverse().is_finite()
             {
-                Some(GddArtboardCanvasPick {
+                let bounds = targets
+                    .iter()
+                    .filter_map(|target| target.bounding_box_with_transform(layer_to_document))
+                    .reduce(|[first_min, first_max], [second_min, second_max]| {
+                        [first_min.min(second_min), first_max.max(second_max)]
+                    });
+                let overlay = bounds.map(|bounds| {
+                    GddArtboardCanvasOverlay::from_document_bounds(
+                        interface.display_name(&node_id, &[]),
+                        bounds,
+                        transform,
+                        camera,
+                    )
+                });
+                let pick = (!interface.is_locked(&node_id, &[])).then(|| GddArtboardCanvasPick {
                     storage_id,
                     snapshot: self.snapshot.clone(),
                     pane_to_document,
                     layer_to_document,
                     targets: targets.clone(),
-                })
+                });
+                (pick, overlay)
             } else {
-                None
+                (None, None)
             }
         } else {
-            None
+            (None, None)
         };
         Ok(GddArtboardCanvasOutput {
             render,
             camera,
             artboard_size: size,
             pick_target,
+            overlay,
         })
     }
 
@@ -10369,6 +10415,23 @@ mod tests {
                 let pick = canvas.pick_target.expect("Artboard render metadata");
                 let pane = NavigationMessageHandler::default()
                     .calculate_offset_transform(viewport.as_dvec2() / (2. * scale), &camera);
+                let overlay = canvas.overlay.expect("Artboard overlay geometry");
+                assert_eq!(overlay.name, "Artboard");
+                let expected_outline = [
+                    DVec2::new(8., -12.),
+                    DVec2::new(72., -12.),
+                    DVec2::new(72., 20.),
+                    DVec2::new(8., 20.),
+                ]
+                .map(|corner| pane.transform_point2(corner));
+                for (actual, expected) in overlay.outline.into_iter().zip(expected_outline) {
+                    assert!((actual - expected).length() < 1e-9);
+                }
+                let expected_name_anchor = expected_outline[0] - DVec2::Y * 4.;
+                assert!(
+                    (overlay.name_transform.translation - expected_name_anchor).length() < 1e-9
+                );
+                assert!((overlay.name_transform.matrix2.x_axis - DVec2::X).length() < 1e-9);
                 assert!(pick.contains(pane.transform_point2(DVec2::new(24., -4.))));
                 assert!(!pick.contains(pane.transform_point2(DVec2::new(78., -4.))));
                 assert!(!pick.contains(DVec2::NAN));
@@ -10394,6 +10457,7 @@ mod tests {
                 .await
                 .expect("locked Artboard remains visible");
             assert!(canvas.pick_target.is_none());
+            assert!(canvas.overlay.is_some());
         });
     }
 
