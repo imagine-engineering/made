@@ -14,9 +14,9 @@ import torch.nn.functional as functional
 DIRECTORY = Path(__file__).resolve().parent
 ROOT = DIRECTORY.parents[4]
 OUTPUT = DIRECTORY / "learned-sd15-reduced.json"
-SOURCE = "projects/sim/ComfyUI/sim/ldm/modules/diffusionmodules/model.py"
+SOURCE = "projects/comfy/ComfyUI/comfy/ldm/modules/diffusionmodules/model.py"
 SOURCE_SHA256 = "6b4422fd14b0c8fc0f709aebbc94b51a712f2667fb607dd245c5643e6e316be4"
-LATENT_SOURCE = "projects/sim/ComfyUI/sim/latent_formats.py"
+LATENT_SOURCE = "projects/comfy/ComfyUI/comfy/latent_formats.py"
 LATENT_SOURCE_SHA256 = "ab6278dbbd3a999d051a21b59c138fe2c42b303792d47d744e7f63da18544aac"
 
 
