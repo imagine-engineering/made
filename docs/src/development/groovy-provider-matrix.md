@@ -27,6 +27,35 @@ The standalone Kotlin server returned no Java-to-Kotlin definition locations
 for Maven or Gradle. In a separate Gradle run, JDTLS `1.61.0` resolved the Java
 reference to `Greeting.kt` and preserved the compiled Kotlin class.
 
+### Standalone Kotlin LSP distribution notices
+
+The cached macOS and Linux ARM64 `271.2085.0` archives independently matched
+their publisher SHA-256 sidecars. Both identify `ILS` build `271.2085.0` as
+`2027.1 EAP` and include JetBrains Runtime `25.0.4.1+1-661.7-nomod`. All eight
+files in `license/` match byte for byte, including the indexes of 168
+platform libraries and 99 file-watcher dependencies. The archives also
+include separate runtime legal files. After normalizing the runtime path,
+267 runtime notice files and symlinks match. macOS adds zlib and FreeType
+notices at that path, and Linux adds a GCC notice. A bounded scan checked 649
+JARs per archive and found eight embedded legal files and 59 manifests with
+license fields in each archive.
+[macOS ARM64 checksum](https://download.jetbrains.com/language-server/kotlin-server/271.2085.0/kotlin-server-271.2085.0-aarch64.sit.sha256) ·
+[Linux ARM64 checksum](https://download.jetbrains.com/language-server/kotlin-server/271.2085.0/kotlin-server-271.2085.0-aarch64.tar.gz.sha256)
+
+JetBrains' Homebrew formula labels this exact macOS standalone version
+Apache-2.0 and specifies the approved ARM64 digest. JetBrains also documents
+free direct use without a subscription. The release-tag source carries an
+Apache-2.0 license, and its README describes proprietary Air and Fleet
+components in the server. The archive inventories found component notices
+and no top-level agreement for the entire standalone distribution. Governing
+terms for the proprietary payload and redistribution clearance for the full
+archives remain open. The Groovy release plan calls for extension-managed
+downloads from the publisher.
+[Publisher formula](https://github.com/JetBrains/homebrew-utils/blob/621261c6748318c75eb57e8bab85f261615d4825/Formula/kotlin-lsp.rb) ·
+[Publisher licensing explanation](https://blog.jetbrains.com/idea/2026/08/intellij-idea-goes-lsp/#licensing) ·
+[Release-tag README](https://github.com/Kotlin/kotlin-lsp/blob/ce29f8446ba2d60ba914d23dd8ddf2f1b410dc6e/README.md) ·
+[Release-tag source license](https://github.com/Kotlin/kotlin-lsp/blob/ce29f8446ba2d60ba914d23dd8ddf2f1b410dc6e/LICENSE.txt)
+
 ### Mounted Maven Java-to-Kotlin navigation
 
 The cached Maven build succeeds because it runs the default reactor. JDTLS
