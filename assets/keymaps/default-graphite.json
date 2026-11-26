@@ -6,6 +6,12 @@
     }
   },
   {
+    "context": "GraphiteCanvas",
+    "bindings": {
+      "alt-s": "graphite::ToggleCanvasSnapping"
+    }
+  },
+  {
     "context": "GraphiteCanvasPan",
     "bindings": {
       "escape": "graphite::CancelArtboardCanvasPan"

@@ -14,7 +14,12 @@ use graphite_editor::{
         input_mapper::utility_types::{keyboard::Key, pointer::ScrollDelta},
         portfolio::document::{
             DocumentMessageHandler,
-            utility_types::{document_metadata::LayerNodeIdentifier, misc::PTZ},
+            utility_types::{
+                document_metadata::LayerNodeIdentifier,
+                misc::{
+                    PTZ, SNAP_FUNCTIONS_FOR_BOUNDING_BOXES, SNAP_FUNCTIONS_FOR_PATHS, SnappingState,
+                },
+            },
         },
         prelude::{
             InputPreprocessorMessageHandler, Message, MessageHandler, NavigationMessageHandler,
@@ -37,6 +42,36 @@ use graphite_std::{
     text::{FALLBACK_FONT_RESOURCE, TextAlign, TextContext, TypesettingConfig},
     vector_types::kurbo::{Affine, BezPath, ParamCurve, PathEl},
 };
+
+pub(crate) type CanvasSnapFlag = for<'state> fn(&'state mut SnappingState) -> &'state mut bool;
+type CanvasSnapOption = (&'static str, CanvasSnapFlag, &'static str);
+
+pub(crate) const CANVAS_SNAP_ENABLED: CanvasSnapFlag = |state| &mut state.snapping_enabled;
+
+pub(crate) fn canvas_snap_groups() -> [(&'static str, &'static [CanvasSnapOption]); 3] {
+    const OTHER: [CanvasSnapOption; 3] = [
+        (
+            "Artboards",
+            |state| &mut state.artboards,
+            "Snap to Artboard edges and bounds.",
+        ),
+        (
+            "Grid",
+            |state| &mut state.grid_snapping,
+            "Snap to lines and intersections in the document grid.",
+        ),
+        (
+            "Perpendicular from Endpoint",
+            |state| &mut state.path.perpendicular_from_endpoint,
+            "Snap from a path endpoint along its perpendicular.",
+        ),
+    ];
+    [
+        ("Bounding Boxes", &SNAP_FUNCTIONS_FOR_BOUNDING_BOXES),
+        ("Paths", &SNAP_FUNCTIONS_FOR_PATHS),
+        ("Other Targets", &OTHER),
+    ]
+}
 
 pub(crate) struct ArtboardOverlay {
     name_paths: Vec<BezPath>,
@@ -208,6 +243,7 @@ impl ArtboardDraw {
 pub(crate) struct ArtboardDragSnap {
     viewport: ViewportMessageHandler,
     ignored: [LayerNodeIdentifier; 1],
+    bounds: Option<[DVec2; 2]>,
     candidates: Vec<SnapCandidatePoint>,
     manager: SnapManager,
 }
@@ -219,20 +255,27 @@ impl ArtboardDragSnap {
         document: &DocumentMessageHandler,
         viewport_size: DVec2,
     ) -> Self {
-        let mut candidates = Vec::new();
-        if let Some(bounds) = bounds {
+        let mut snapping = Self {
+            viewport: artboard_viewport(viewport_size, &mut VecDeque::new()),
+            ignored: [layer],
+            bounds,
+            candidates: Vec::new(),
+            manager: SnapManager::default(),
+        };
+        snapping.refresh_candidates(document);
+        snapping
+    }
+
+    pub fn refresh_candidates(&mut self, document: &DocumentMessageHandler) {
+        self.manager.clear_indicator();
+        self.candidates.clear();
+        if let Some(bounds) = self.bounds {
             get_bbox_points(
                 Quad::from_box(bounds),
-                &mut candidates,
+                &mut self.candidates,
                 BBoxSnapValues::ARTBOARD,
                 document,
             );
-        }
-        Self {
-            viewport: artboard_viewport(viewport_size, &mut VecDeque::new()),
-            ignored: [layer],
-            candidates,
-            manager: SnapManager::default(),
         }
     }
 

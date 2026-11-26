@@ -30,7 +30,8 @@ use graphics_core::formats::{
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
 use graphite_editor::messages::portfolio::document::{
-    DocumentMessageHandler, utility_types::misc::PTZ,
+    DocumentMessageHandler,
+    utility_types::misc::{PTZ, SnappingState},
 };
 use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, UVec2};
 use graphite_std::{
@@ -39,7 +40,7 @@ use graphite_std::{
 };
 use project::{DirectoryLister, Project, ProjectEntryId, ProjectPath, Worktree};
 use ui::{
-    Button, Checkbox, Color, ContextMenu, DropdownMenu, Label, LabelSize, Switch,
+    Button, Checkbox, Color, ContextMenu, DropdownMenu, IconPosition, Label, LabelSize, Switch,
     SwitchLabelPosition, ToggleState, prelude::*,
 };
 use workspace::{
@@ -50,8 +51,9 @@ use workspace::{
 
 use crate::canvas::{
     ArtboardDragSnap, ArtboardDraw, ArtboardMove, ArtboardOverlay, ArtboardResize,
-    DocumentNavigation, artboard_auto_pan_delta, artboard_outline, logical_vector,
-    paint_artboard_outline, paint_artboard_snap_point, set_artboard_snap_camera,
+    CANVAS_SNAP_ENABLED, CanvasSnapFlag, DocumentNavigation, artboard_auto_pan_delta,
+    artboard_outline, canvas_snap_groups, logical_vector, paint_artboard_outline,
+    paint_artboard_snap_point, set_artboard_snap_camera,
 };
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
@@ -70,6 +72,8 @@ actions!(
         CancelArtboardCanvasPan,
         /// Cancels the current Artboard gesture on the Canvas.
         CancelArtboardCanvasEdit,
+        /// Toggles snapping for the active Graphite Canvas.
+        ToggleCanvasSnapping,
     ]
 );
 
@@ -179,6 +183,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     document: InspectedDocument,
     revision: Arc<()>,
     working: Option<GddWorkingCopy>,
+    snapping_preferences: Option<Arc<SnappingState>>,
 }
 
 struct GddWorkingCopy {
@@ -370,6 +375,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 document,
                 revision: Arc::new(()),
                 working: None,
+                snapping_preferences: None,
             }))
         }))
     }
@@ -519,6 +525,7 @@ async fn open_folder_item(
             document: InspectedDocument::gdd(contents),
             revision: Arc::new(()),
             working: None,
+            snapping_preferences: None,
         });
         workspace.open_project_item::<GraphiteDocumentItem>(
             workspace.active_pane().clone(),
@@ -656,6 +663,7 @@ struct SavedSceneCanvas {
     camera_override: Option<PTZ>,
     navigation: Option<DocumentNavigation>,
     snapping_document: Option<Box<DocumentMessageHandler>>,
+    applied_snapping_preferences: Option<Arc<SnappingState>>,
     pan: Option<SavedScenePan>,
     pick_armed: bool,
     move_armed: bool,
@@ -695,7 +703,8 @@ struct SavedSceneArtboardView {
     pane: gpui::Bounds<gpui::Pixels>,
     initial: DocumentNavigation,
     navigation: DocumentNavigation,
-    pointer: Option<(gpui::Point<gpui::Pixels>, gpui::Modifiers, Instant)>,
+    pointer: Option<(gpui::Point<gpui::Pixels>, gpui::Modifiers)>,
+    auto_pan_since: Option<Instant>,
     frame_queued: bool,
     draft_frame: Option<SavedSceneArtboardDraft>,
     draft_task: Option<Task<()>>,
@@ -710,6 +719,7 @@ impl SavedSceneArtboardView {
             initial: navigation,
             navigation,
             pointer: None,
+            auto_pan_since: None,
             frame_queued: false,
             draft_frame: None,
             draft_task: None,
@@ -786,6 +796,25 @@ impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
 }
 
 impl SavedSceneCanvas {
+    fn apply_snapping_preferences(&mut self, preferences: &Arc<SnappingState>) -> bool {
+        let Some(document) = &mut self.snapping_document else {
+            return false;
+        };
+        if self
+            .applied_snapping_preferences
+            .as_ref()
+            .is_some_and(|applied| Arc::ptr_eq(applied, preferences))
+        {
+            return false;
+        }
+        document.snapping_state = (**preferences).clone();
+        self.applied_snapping_preferences = Some(preferences.clone());
+        if let Some(drag) = &mut self.artboard_drag {
+            drag.snapping.refresh_candidates(document);
+        }
+        true
+    }
+
     fn drawing_navigation(&self) -> Option<DocumentNavigation> {
         match self.frame {
             SavedSceneFrame::Blank => Some(DocumentNavigation {
@@ -1576,6 +1605,7 @@ impl GraphiteDocumentItem {
             item.update_working_inspection(window, cx);
             if let Some(target) = item.scene_canvas.as_ref().and_then(|canvas| canvas.target) {
                 item.update_scene_canvas(Some(target), false, window, cx);
+                item.refresh_scene_snapping(window, cx);
             }
             cx.emit(ItemEvent::UpdateTab);
             cx.notify();
@@ -1627,6 +1657,7 @@ impl GraphiteDocumentItem {
             camera_override: None,
             navigation: None,
             snapping_document: None,
+            applied_snapping_preferences: None,
             pan: None,
             pick_armed: false,
             move_armed: false,
@@ -1652,6 +1683,57 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
+    fn toggle_scene_snapping(
+        &self,
+        instance: &Arc<()>,
+        revision: &Arc<()>,
+        flag: CanvasSnapFlag,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(canvas) = self.scene_canvas.as_ref().filter(|canvas| {
+            Arc::ptr_eq(instance, &canvas.instance) && Arc::ptr_eq(revision, &canvas.revision)
+        }) else {
+            return false;
+        };
+        let Some(document) = &canvas.snapping_document else {
+            return false;
+        };
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(revision, &model.revision) {
+            return false;
+        }
+        let mut preferences = model
+            .snapping_preferences
+            .as_deref()
+            .unwrap_or(&document.snapping_state)
+            .clone();
+        let value = flag(&mut preferences);
+        *value = !*value;
+        self.model.update(cx, |model, cx| {
+            model.snapping_preferences = Some(Arc::new(preferences));
+            cx.notify();
+        });
+        true
+    }
+
+    fn refresh_scene_snapping(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let model = self.model.read(cx);
+        let Some(preferences) = &model.snapping_preferences else {
+            return;
+        };
+        if Arc::ptr_eq(&canvas.revision, &model.revision)
+            && canvas.apply_snapping_preferences(preferences)
+            && let Some((position, modifiers)) =
+                canvas.artboard_view.as_ref().and_then(|view| view.pointer)
+            && self.update_scene_artboard_placement(position, modifiers, window, cx)
+        {
+            self.render_scene_artboard_draft(window, cx);
+        }
+    }
+
     fn update_scene_canvas(
         &mut self,
         target: Option<SavedSceneTarget>,
@@ -1668,6 +1750,7 @@ impl GraphiteDocumentItem {
         }
         let revision = model.revision.clone();
         let contents = model.gdd_contents().cloned();
+        let snapping_preferences = model.snapping_preferences.clone();
         let working_copy = model.working.is_some();
         let blank_working_graph = model
             .working
@@ -1694,6 +1777,7 @@ impl GraphiteDocumentItem {
         canvas.target = target;
         canvas.artboards.clear();
         canvas.snapping_document = None;
+        canvas.applied_snapping_preferences = None;
         canvas.can_draw_artboard = false;
         let camera = canvas.camera_override;
         if let SavedSceneFrame::Ready(image) =
@@ -1717,6 +1801,9 @@ impl GraphiteDocumentItem {
         }
         if blank_working_graph {
             canvas.snapping_document = Some(contents.canvas_snapping_defaults());
+            if let Some(preferences) = &snapping_preferences {
+                canvas.apply_snapping_preferences(preferences);
+            }
             canvas.frame = SavedSceneFrame::Blank;
             cx.notify();
             return;
@@ -1760,7 +1847,8 @@ impl GraphiteDocumentItem {
                     let Some(canvas) = &mut item.scene_canvas else {
                         return;
                     };
-                    if !Arc::ptr_eq(&revision, &item.model.read(cx).revision)
+                    let model = item.model.read(cx);
+                    if !Arc::ptr_eq(&revision, &model.revision)
                         || !matches!(&canvas.frame, SavedSceneFrame::Pending { request: pending, .. } if Arc::ptr_eq(pending, &request))
                     {
                         return;
@@ -1771,6 +1859,9 @@ impl GraphiteDocumentItem {
                             canvas.artboards = artboards;
                             canvas.can_draw_artboard = can_draw_artboard;
                             canvas.snapping_document = snapping_document;
+                            if let Some(preferences) = &model.snapping_preferences {
+                                canvas.apply_snapping_preferences(preferences);
+                            }
                             SavedSceneFrame::Ready(image)
                         }
                         Err(error) => SavedSceneFrame::Failed(error.into()),
@@ -2147,16 +2238,17 @@ impl GraphiteDocumentItem {
             return;
         }
         let point = logical_vector(event.position - pane.origin);
-        view.pointer = if point.is_finite()
+        view.pointer = point
+            .is_finite()
+            .then_some((event.position, event.modifiers));
+        if point.is_finite()
             && (point.min_element() < 0. || point.cmpgt(target.logical_size()).any())
         {
-            let since = view
-                .pointer
-                .map_or_else(|| cx.background_executor().now(), |(_, _, since)| since);
-            Some((event.position, event.modifiers, since))
+            view.auto_pan_since
+                .get_or_insert_with(|| cx.background_executor().now());
         } else {
-            None
-        };
+            view.auto_pan_since = None;
+        }
         Self::schedule_scene_artboard_pan(view, window, cx);
         if self.update_scene_artboard_placement(event.position, event.modifiers, window, cx) {
             self.render_scene_artboard_draft(window, cx);
@@ -2170,7 +2262,7 @@ impl GraphiteDocumentItem {
         window: &Window,
         cx: &Context<Self>,
     ) {
-        if view.frame_queued || view.pointer.is_none() {
+        if view.frame_queued || view.auto_pan_since.is_none() {
             return;
         }
         view.frame_queued = true;
@@ -2203,7 +2295,7 @@ impl GraphiteDocumentItem {
             return;
         }
         view.frame_queued = false;
-        let Some((position, modifiers, previous)) = view.pointer else {
+        let Some(((position, modifiers), previous)) = view.pointer.zip(view.auto_pan_since) else {
             return;
         };
         if SavedSceneTarget::measure(view.pane.size, window.scale_factor()) != Some(target) {
@@ -2211,7 +2303,7 @@ impl GraphiteDocumentItem {
             return;
         }
         let now = cx.background_executor().now();
-        view.pointer = Some((position, modifiers, now));
+        view.auto_pan_since = Some(now);
         let viewport = target.logical_size();
         let delta = artboard_auto_pan_delta(
             viewport,
@@ -2553,9 +2645,91 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn render_scene_snapping(
+        &self,
+        canvas: &SavedSceneCanvas,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::Div> {
+        if !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision) {
+            return None;
+        }
+        let document = canvas.snapping_document.as_ref()?;
+        let mut state = document.snapping_state.clone();
+        let enabled = state.snapping_enabled;
+        let instance = canvas.instance.clone();
+        let revision = canvas.revision.clone();
+        let item = cx.weak_entity();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (heading, options) in canvas_snap_groups() {
+                menu = menu.header(heading);
+                for &(label, flag, _) in options {
+                    let item = item.clone();
+                    let instance = instance.clone();
+                    let revision = revision.clone();
+                    menu = menu.toggleable_entry(
+                        label,
+                        *flag(&mut state),
+                        IconPosition::Start,
+                        None,
+                        move |_, cx| {
+                            if let Err(error) = item.update(cx, |item, cx| {
+                                item.toggle_scene_snapping(&instance, &revision, flag, cx);
+                            }) {
+                                log::debug!(
+                                    "Graphite Canvas closed before changing snapping: {error:#}"
+                                );
+                            }
+                        },
+                    );
+                }
+            }
+            menu
+        });
+        Some(
+            h_flex()
+                .gap_1()
+                .child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-CANVAS-SNAPPING".into())
+                        .child(
+                            Button::new(
+                                "graphite-gdd-canvas-snapping",
+                                if enabled {
+                                    "Snapping On"
+                                } else {
+                                    "Snapping Off"
+                                },
+                            )
+                            .toggle_state(enabled)
+                            .on_click(cx.listener(
+                                move |item, _, _, cx| {
+                                    item.toggle_scene_snapping(
+                                        &instance,
+                                        &revision,
+                                        CANVAS_SNAP_ENABLED,
+                                        cx,
+                                    );
+                                },
+                            )),
+                        ),
+                )
+                .child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-CANVAS-SNAP-OPTIONS".into())
+                        .child(DropdownMenu::new(
+                            "graphite-gdd-canvas-snap-options",
+                            "Snap Options",
+                            menu,
+                        )),
+                ),
+        )
+    }
+
     fn render_scene_canvas(
         &self,
         canvas: &SavedSceneCanvas,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let item = cx.entity().downgrade();
@@ -2678,6 +2852,7 @@ impl GraphiteDocumentItem {
             SavedSceneFrame::Failed(error) => Some((error.clone(), Color::Error)),
             _ => None,
         };
+        let snapping_controls = self.render_scene_snapping(canvas, window, cx);
         v_flex()
             .size_full()
             .child(
@@ -2717,6 +2892,7 @@ impl GraphiteDocumentItem {
                                 )),
                             ),
                     )
+                    .children(snapping_controls)
                     .when(can_draw, |toolbar| {
                         toolbar.child(
                             div()
@@ -7686,14 +7862,31 @@ impl Render for GraphiteDocumentItem {
             .id("graphite-document-inspector")
             .track_focus(&self.focus_handle)
             .key_context(match self.scene_canvas.as_ref() {
-                Some(canvas) if canvas.pan.is_some() => "GraphiteGdd GraphiteCanvasPan",
+                Some(canvas) if canvas.pan.is_some() => {
+                    "GraphiteGdd GraphiteCanvas GraphiteCanvasPan"
+                }
                 Some(canvas)
                     if canvas.artboard_drag.is_some() || canvas.artboard_draw.is_some() =>
                 {
-                    "GraphiteGdd GraphiteCanvasArtboardEdit"
+                    "GraphiteGdd GraphiteCanvas GraphiteCanvasArtboardEdit"
                 }
+                Some(_) => "GraphiteGdd GraphiteCanvas",
                 _ => "GraphiteGdd",
             })
+            .on_action(cx.listener(|item, _: &ToggleCanvasSnapping, _, cx| {
+                if let Some(canvas) = &item.scene_canvas
+                    && item.toggle_scene_snapping(
+                        &canvas.instance,
+                        &canvas.revision,
+                        CANVAS_SNAP_ENABLED,
+                        cx,
+                    )
+                {
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            }))
             .on_action(
                 cx.listener(|item, _: &CancelArtboardCanvasEdit, window, cx| {
                     if item.cancel_scene_artboard_edit(window, cx) {
@@ -7725,7 +7918,7 @@ impl Render for GraphiteDocumentItem {
             .size_full();
         if let Some(canvas) = &self.scene_canvas {
             return view
-                .child(self.render_scene_canvas(canvas, cx))
+                .child(self.render_scene_canvas(canvas, window, cx))
                 .into_any_element();
         }
         let view = view
@@ -15048,6 +15241,19 @@ mod tests {
             .expect("native Inspector");
         paint(window);
         click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        for enabled in [false, true] {
+            click(window, "GRAPHITE-GDD-CANVAS-SNAP-OPTIONS");
+            click(window, "MENU_ITEM-Anchor Points");
+            item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("F-VECTOR Canvas");
+                let document = canvas
+                    .snapping_document
+                    .as_ref()
+                    .expect("F-VECTOR snapping");
+                assert_eq!(document.snapping_state.path.anchor_point, enabled);
+                assert!(!item.is_dirty(cx));
+            });
+        }
         let assert_pixels = |navigation: DocumentNavigation,
                              target: SavedSceneTarget,
                              image: &RenderImage,
@@ -15978,6 +16184,145 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_view_008_2_workspace_shares_snap_controls_without_editing_artwork(
+        cx: &mut TestAppContext,
+    ) {
+        let source = create_gdd_folder(664, 187, "Snap Controls".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("new Graphite document")
+            .create_document_artboard_in_copy(
+                GddArtboardGeometry {
+                    location: DVec2::new(-50., -40.),
+                    dimensions: DVec2::new(100., 80.),
+                },
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("pinned Artboard");
+        let history = source.history_len();
+        let original = source
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("source ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.update(|_, cx| {
+            let bindings =
+                settings::KeymapFile::load_asset(crate::DEFAULT_GRAPHITE_KEYMAP_PATH, None, cx)
+                    .expect("Graphite keymap");
+            cx.bind_keys(bindings);
+        });
+        window.simulate_resize(gpui::size(px(1320.), px(1000.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/snap-controls.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (revision, base, instance, frame) = source.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let SavedSceneFrame::Ready(frame) = &canvas.frame else {
+                panic!("accepted Canvas frame")
+            };
+            (
+                model.revision.clone(),
+                model.gdd_contents().expect("saved snapshot").clone(),
+                canvas.instance.clone(),
+                frame.clone(),
+            )
+        });
+        let toggle_option = |window: &mut gpui::VisualTestContext, selector| {
+            click(window, "GRAPHITE-GDD-CANVAS-SNAP-OPTIONS");
+            click(window, selector);
+        };
+        toggle_option(window, "MENU_ITEM-Corner Points");
+        toggle_option(window, "MENU_ITEM-Anchor Points");
+        toggle_option(window, "MENU_ITEM-Grid");
+        click(window, "GRAPHITE-GDD-CANVAS-SNAPPING");
+        let check_view =
+            |view: &Entity<GraphiteDocumentItem>, window: &gpui::VisualTestContext, enabled| {
+                view.read_with(window, |item, cx| {
+                    let model = item.model.read(cx);
+                    let canvas = item.scene_canvas.as_ref().expect("accepted Canvas");
+                    let state = &canvas
+                        .snapping_document
+                        .as_ref()
+                        .expect("source snapping context")
+                        .snapping_state;
+                    assert_eq!(state.snapping_enabled, enabled);
+                    assert!(!state.bounding_box.corner_point);
+                    assert!(!state.path.anchor_point);
+                    assert!(state.grid_snapping);
+                    assert!(state.artboards);
+                    assert!(Arc::ptr_eq(&model.revision, &revision));
+                    assert!(Arc::ptr_eq(
+                        model.gdd_contents().expect("saved snapshot"),
+                        &base
+                    ));
+                    assert_eq!(base.history_len(), history);
+                    assert!(!item.is_dirty(cx));
+                    assert!(!item.can_save(cx));
+                });
+            };
+        check_view(&source, window, false);
+        source.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(current) if Arc::ptr_eq(current, &frame)));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        check_view(&source, window, false);
+        source.update_in(window, |item, _, cx| {
+            assert!(!item.toggle_scene_snapping(&instance, &revision, CANVAS_SNAP_ENABLED, cx));
+        });
+        let pane = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.split_and_clone(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            })
+            .await
+            .expect("clone the source into a real split");
+        let split = pane.read_with(window, |pane, _| {
+            pane.active_item()
+                .expect("split source tab")
+                .downcast::<GraphiteDocumentItem>()
+                .expect("split native Inspector")
+        });
+        assert_ne!(source, split);
+        split.update_in(window, |item, window, cx| {
+            item.open_scene_canvas(window, cx)
+        });
+        window.run_until_parked();
+        paint(window);
+        check_view(&source, window, false);
+        check_view(&split, window, false);
+        window.simulate_keystrokes("alt-s");
+        window.run_until_parked();
+        paint(window);
+        check_view(&source, window, true);
+        check_view(&split, window, true);
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("original ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_tool_008_2_workspace_draws_and_stacks_artboards_on_canvas(
         cx: &mut TestAppContext,
     ) {
@@ -16352,6 +16697,30 @@ mod tests {
             });
         };
         assert_snapped(window, DVec2::ZERO);
+        window.simulate_keystrokes("alt-s");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let draw = canvas.artboard_draw.as_ref().expect("active draw gesture");
+            let unsnapped = draw.placement.expect("unsnapped draft");
+            assert_eq!(unsnapped.dimensions.x, 139.);
+            assert_eq!(unsnapped.location.x, -29.);
+            assert!(draw.gesture.snap_point().is_none());
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("working GDD")
+                    .history_len(),
+                history
+            );
+        });
+        window.simulate_keystrokes("alt-s");
+        window.run_until_parked();
+        paint(window);
+        assert_snapped(window, DVec2::ZERO);
+
         let pivot = at(end);
         for (outside, offset) in [(pane.left() - px(70.), 16.), (pane.right() + px(70.), 0.)] {
             move_pointer(window, gpui::point(outside, pivot.y));
