@@ -449,6 +449,16 @@ initialization `bundles` list to include the Groovy model companion,
 include the Debug JAR in that list as well. Native connected editor, Tests
 panel, and Debug checks still need a desktop replay.
 
+For the Gradle application, run
+`docker_gradle_java_debug_stops_at_host_source` with the same pinned host
+Debug setup and an offline Gradle 8.13 build of `:application:assemble`
+at `/workspaces/gradle`. Stage the cached Kotlin 2.0.21 standard library
+at `/qualification/state/kotlin-stdlib.jar`. The test checks trust denial,
+the frame at `Main.java:5`, host process cleanup on Stop, and the application
+output after Continue. The output exercises the Kotlin library and generated
+Java source in the Gradle application. This covers Java application Debug.
+Selected-test, build-script, and task-fork Debug have separate gates.
+
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
 The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean

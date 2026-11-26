@@ -1726,35 +1726,84 @@ mod jvm_tools_runtime_tests {
     #[gpui::test]
     #[ignore = "requires GROOVY_JAVA_DEBUG_CONTAINER with the pinned offline Maven and Java Debug fixture"]
     async fn docker_maven_java_debug_stops_at_host_source(cx: &mut TestAppContext) {
-        use project::debugger::{
-            breakpoint_store::{Breakpoint, BreakpointEditAction, BreakpointWithPosition},
-            session::{SessionQuirks, ThreadId, ThreadStatus},
+        docker_java_debug_stops_at_host_source(false, cx).await;
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_JAVA_DEBUG_CONTAINER with the pinned offline Gradle and Java Debug fixture"]
+    async fn docker_gradle_java_debug_stops_at_host_source(cx: &mut TestAppContext) {
+        docker_java_debug_stops_at_host_source(true, cx).await;
+    }
+
+    #[cfg(unix)]
+    async fn docker_java_debug_stops_at_host_source(gradle: bool, cx: &mut TestAppContext) {
+        use project::{
+            debugger::{
+                breakpoint_store::{Breakpoint, BreakpointEditAction, BreakpointWithPosition},
+                session::{OutputToken, SessionQuirks, ThreadId, ThreadStatus},
+            },
+            jvm_project::JdtlsImportedBuildKind,
         };
         use std::time::{Duration, Instant};
 
+        let (build_tool, root, main_class, line, class_paths): (_, _, _, u32, &[_]) = if gradle {
+            (
+                "Gradle",
+                "/workspaces/gradle",
+                "Main",
+                5,
+                &[
+                    "/workspaces/gradle/application/build/classes/java/main",
+                    "/workspaces/gradle/library/build/classes/kotlin/main",
+                    "/qualification/state/kotlin-stdlib.jar",
+                ],
+            )
+        } else {
+            (
+                "Maven",
+                "/workspaces/maven",
+                "DebugMain",
+                7,
+                &["/workspaces/maven/application/target/classes"],
+            )
+        };
         let (project, worktree) = connect_docker_jvm_project(
             "GROOVY_JAVA_DEBUG_CONTAINER",
-            Path::new("/workspaces/maven"),
+            Path::new(root),
             &[("java", "6.8.30")],
             cx,
         )
         .await;
         cx.update(dap::transport::use_real_transport_for_test);
         let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
-        let source = rel_path("application/src/main/java/evidence/DebugMain.java");
+        let source = format!("application/src/main/java/evidence/{main_class}.java");
+        let source = rel_path(&source);
+        let qualified_class = format!("evidence.{main_class}");
+        let main_method = format!("{main_class}.main");
+        let expected_output = if gradle {
+            "Hello from Kotlin generated"
+        } else {
+            "42"
+        };
+        let build_kind = if gradle {
+            JdtlsImportedBuildKind::Gradle
+        } else {
+            JdtlsImportedBuildKind::Maven
+        };
         let source_path = ProjectPath {
             worktree_id,
             path: source.into(),
         };
         let definition = DebugTaskDefinition {
-            label: "Debug Maven Java main".into(),
+            label: format!("Debug {build_tool} Java main").into(),
             adapter: "Java".into(),
             config: json!({
                 "request": "launch",
-                "mainClass": "evidence.DebugMain",
+                "mainClass": qualified_class,
                 "projectName": "application",
-                "classPaths": ["/workspaces/maven/application/target/classes"],
-                "cwd": "/workspaces/maven",
+                "classPaths": class_paths,
+                "cwd": root,
                 "stopOnEntry": false,
                 "console": "internalConsole",
             }),
@@ -1789,7 +1838,7 @@ mod jvm_tools_runtime_tests {
             .await
             .expect("open the current Docker Java source");
         let store = project.read_with(cx, |project, _| project.lsp_store());
-        let deadline = Instant::now() + Duration::from_secs(60);
+        let deadline = Instant::now() + Duration::from_secs(90);
         loop {
             cx.run_until_parked();
             if store.read_with(cx, |store, _| {
@@ -1800,6 +1849,7 @@ mod jvm_tools_runtime_tests {
                             && snapshot.projects.iter().any(|project| {
                                 project.module_root.path.as_ref() == rel_path("application")
                                     && project.membership.is_imported()
+                                    && project.imported_build_kind == build_kind
                             })
                     })
             }) {
@@ -1807,7 +1857,7 @@ mod jvm_tools_runtime_tests {
             }
             assert!(
                 Instant::now() < deadline,
-                "JDTLS did not import the Docker Maven application"
+                "JDTLS did not import the Docker {build_tool} application"
             );
             store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             cx.background_executor
@@ -1821,7 +1871,7 @@ mod jvm_tools_runtime_tests {
                 let position = java_buffer
                     .read(cx)
                     .snapshot()
-                    .anchor_after(Point::new(6, 0));
+                    .anchor_after(Point::new(line - 1, 0));
                 breakpoints.toggle_breakpoint(
                     java_buffer.clone(),
                     BreakpointWithPosition {
@@ -1835,7 +1885,7 @@ mod jvm_tools_runtime_tests {
         let dap_store = project.read_with(cx, |project, _| project.dap_store());
         let container = std::env::var("GROOVY_JAVA_DEBUG_CONTAINER").expect("Docker fixture ID");
         assert_eq!(
-            docker_java_debug_processes(&container).await,
+            docker_java_debug_processes(&container, &qualified_class).await,
             (vec![], vec![])
         );
         for cancel in [true, false] {
@@ -1890,8 +1940,8 @@ mod jvm_tools_runtime_tests {
                             let frame_path = frame.dap.source?.path?;
                             let mapped = project.read(cx).find_project_path(frame_path, cx)?;
                             (mapped == source_path
-                                && frame.dap.line == 7
-                                && frame.dap.name.contains("DebugMain.main"))
+                                && frame.dap.line == u64::from(line)
+                                && frame.dap.name.contains(&main_method))
                             .then_some(thread)
                         })
                 });
@@ -1900,13 +1950,14 @@ mod jvm_tools_runtime_tests {
                 }
                 assert!(
                     Instant::now() < deadline,
-                    "connected Java Debug did not stop at DebugMain.java:7"
+                    "connected Java Debug did not stop at {source}:{line}"
                 );
                 cx.background_executor
                     .timer(Duration::from_millis(100))
                     .await;
             };
-            let (debuggees, relays) = docker_java_debug_processes(&container).await;
+            let (debuggees, relays) =
+                docker_java_debug_processes(&container, &qualified_class).await;
             let [debuggee] = debuggees.as_slice() else {
                 panic!("expected one paused host debuggee: {debuggees:?}");
             };
@@ -1914,7 +1965,7 @@ mod jvm_tools_runtime_tests {
                 panic!("expected one active host relay: {relays:?}");
             };
             eprintln!(
-                "Connected Docker Debug stopped at /workspaces/maven/{source}:7 with debuggee {debuggee} and relay {relay}"
+                "Connected Docker Debug stopped at {root}/{source}:{line} with debuggee {debuggee} and relay {relay}"
             );
 
             if cancel {
@@ -1932,7 +1983,8 @@ mod jvm_tools_runtime_tests {
             let deadline = Instant::now() + Duration::from_secs(15);
             loop {
                 cx.run_until_parked();
-                let (debuggees, relays) = docker_java_debug_processes(&container).await;
+                let (debuggees, relays) =
+                    docker_java_debug_processes(&container, &qualified_class).await;
                 if session.read_with(cx, |session, _| session.is_terminated())
                     && debuggees.is_empty()
                     && relays.is_empty()
@@ -1950,11 +2002,25 @@ mod jvm_tools_runtime_tests {
             eprintln!(
                 "Connected Docker Debug removed host debuggee {debuggee} and relay {relay}; cancel={cancel}"
             );
+            if !cancel {
+                session.read_with(cx, |session, _| {
+                    let (events, _) = session.output(OutputToken(0));
+                    let stdout = events
+                        .filter(|event| event.category == Some(dap::OutputEventCategory::Stdout))
+                        .map(|event| event.output.as_str())
+                        .collect::<String>();
+                    assert_eq!(stdout.trim(), expected_output);
+                });
+                eprintln!("Connected Docker Debug continued to stdout: {expected_output}");
+            }
         }
     }
 
     #[cfg(unix)]
-    async fn docker_java_debug_processes(container: &str) -> (Vec<u32>, Vec<u32>) {
+    async fn docker_java_debug_processes(
+        container: &str,
+        main_class: &str,
+    ) -> (Vec<u32>, Vec<u32>) {
         let output = util::command::new_command("docker")
             .args(["top", container, "-eo", "pid,args"])
             .output()
@@ -1972,7 +2038,7 @@ mod jvm_tools_runtime_tests {
                 .trim_start()
                 .split_once(char::is_whitespace)
                 .expect("Docker process columns");
-            if command.split_whitespace().last() == Some("evidence.DebugMain") {
+            if command.split_whitespace().last() == Some(main_class) {
                 debuggees.push(pid.parse().expect("Java debuggee PID"));
             }
             if command
