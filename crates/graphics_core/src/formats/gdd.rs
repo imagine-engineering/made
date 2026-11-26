@@ -45,8 +45,8 @@ use graphite_editor::messages::portfolio::document::{
             NodeTemplate, NodeTemplateImplementation, NodeTypePersistentMetadata, OutputConnector,
             Previewing,
             editor_delta::{
-                ConstructedOps, EditorDelta, NetworkMetadataChange, NodeMetadataChange,
-                construct_batch,
+                BatchDeclarations, ConstructedOps, EditorDelta, NetworkMetadataChange,
+                NodeMetadataChange, construct_batch,
             },
             storage_metadata::{
                 InterfaceRebuildError, StorageMetadataView, apply_network_view_settings,
@@ -75,6 +75,8 @@ use graphite_math_nodes::modulo;
 use graphite_std::{
     Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
+    blending_nodes::clipping_mask,
+    repeat_nodes::repeat_array,
     transform::Footprint,
     transform_nodes::transform,
     vector_nodes::{
@@ -331,6 +333,10 @@ pub enum GddArchiveError {
     UnsupportedRootLayerEdit,
     #[error("The Graphite layer already has this setting.")]
     UnchangedRootLayer,
+    #[error("The selected Graphite layers are already in that order.")]
+    UnchangedLayerOrder,
+    #[error("Unlock the selected Graphite layers and their destination before reordering.")]
+    LockedLayerOrder,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -650,6 +656,15 @@ pub enum GddRootLayerChange {
     Locked(bool),
 }
 
+#[derive(Clone, Copy)]
+pub enum GddLayerOrder {
+    Raise,
+    Lower,
+    Front,
+    Back,
+    Reverse,
+}
+
 #[derive(Clone)]
 pub struct GddGraphNetwork {
     pub id: NetworkId,
@@ -890,6 +905,8 @@ enum SavedGraphicProfile {
     EllipseList,
     EllipseWired,
     Fill,
+    ClippingMask,
+    RepeatArray,
     Layer(GddGraphLayerPreview),
 }
 
@@ -4296,7 +4313,7 @@ impl InspectedGddV1 {
             configuration.render_mode = mode;
             configuration.export_format = SvgExportFormat::Raster;
             configuration.for_export = false;
-            validate_saved_path_modifications(detached)?;
+            validate_saved_graphic_work(detached)?;
             validate_saved_ellipse_radius_sources(detached).await?;
             return renderer
                 .render(detached, configuration, target.budget)
@@ -4313,7 +4330,7 @@ impl InspectedGddV1 {
     ) -> Result<RenderOutput, GddArchiveError> {
         validate_svg_configuration(configuration, budget)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
-        validate_saved_path_modifications(detached)?;
+        validate_saved_graphic_work(detached)?;
         validate_saved_ellipse_radius_sources(detached).await?;
         evaluate_cpu_svg(detached, configuration, budget, None)
             .await
@@ -5110,6 +5127,152 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
+    }
+
+    pub async fn reorder_root_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        order: GddLayerOrder,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_editor::messages::prelude::{DocumentMessage, Message, PortfolioMessage};
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self.validate_layer_order_selection(&document, nodes)?;
+        let select = |document: &mut DocumentMessageHandler| {
+            document
+                .network_interface
+                .selected_nodes_mut(&[])
+                .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+                .set_selected_nodes(selected.clone());
+            Ok::<_, GddArchiveError>(())
+        };
+        select(&mut document)?;
+        let mut commands = VecDeque::new();
+        // The pinned planner adds the relative offset to the pivot index.
+        let extent = isize::try_from(document.document_network().nodes.len())
+            .map_err(|_| GddArchiveError::InvalidRootLayerGraph)?;
+        let offset = match order {
+            GddLayerOrder::Raise => Some(-1),
+            GddLayerOrder::Lower => Some(1),
+            GddLayerOrder::Front => Some(-extent),
+            GddLayerOrder::Back => Some(extent),
+            GddLayerOrder::Reverse => None,
+        };
+        if let Some(offset) = offset {
+            document.selected_layers_reorder(offset, &mut commands);
+            let Some(Message::Portfolio(PortfolioMessage::Document(
+                message @ DocumentMessage::MoveSelectedLayersTo { parent, .. },
+            ))) = commands.pop_front()
+            else {
+                return Err(GddArchiveError::UnchangedLayerOrder);
+            };
+            let changes_parent = document
+                .network_interface
+                .shallowest_unique_layers_sorted(&[])
+                .iter()
+                .any(|layer| layer.parent(document.metadata()) != Some(parent));
+            if changes_parent {
+                let viewport = GddCanvasRenderTarget {
+                    resolution: UVec2::splat(256),
+                    scale: 1.,
+                    budget: CpuSvgEvaluationBudget {
+                        max_viewport_pixels: 256 * 256,
+                        max_output_bytes: budget.max_entry_bytes.min(8 * 1024 * 1024) as usize,
+                    },
+                    raster: None,
+                };
+                document = self
+                    .render_document_canvas(viewport, None)
+                    .await?
+                    .snapping_document
+                    .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
+                select(&mut document)?;
+            }
+            plan_document_layer_move(&mut document, message, &mut commands);
+        } else {
+            document.selected_layers_reverse(&mut commands);
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let resources = owner
+            .registry()
+            .to_resource_registry()
+            .map_err(GddArchiveError::RuntimeRegistry)?;
+        let peer = owner.session().peer();
+        let convert = |interface: &NodeNetworkInterface| {
+            Registry::convert_from_runtime(
+                interface.document_network(),
+                &StorageMetadataView::new(interface),
+                &resources,
+                peer,
+            )
+            .map_err(GddArchiveError::GraphNodePreparation)
+        };
+        let baseline = convert(&document.network_interface)?;
+        let before = layer_tree_order(&document.network_interface);
+        apply_document_layer_moves(&mut document.network_interface, commands)?;
+        let after = layer_tree_order(&document.network_interface);
+        if before == after {
+            return Err(GddArchiveError::UnchangedLayerOrder);
+        }
+        let converted = convert(&document.network_interface)?;
+        // A diff between source projections keeps unrelated registry attributes and resources in the GDD.
+        let ops = graphite_document_graph_storage::delta::compute_deltas(
+            &baseline.registry,
+            &converted.registry,
+        );
+        let batch = ConstructedOps {
+            ops,
+            declarations: BatchDeclarations {
+                bytes: converted.declaration_bytes,
+                decoded: converted.declarations,
+            },
+        };
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let mut actual = copy.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut actual)?;
+        if layer_tree_order(&actual) != after
+            || !converted.registry.value_equal(&convert(&actual)?.registry)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    fn validate_layer_order_selection(
+        &self,
+        document: &DocumentMessageHandler,
+        nodes: &[GddGraphNode],
+    ) -> Result<Vec<NodeId>, GddArchiveError> {
+        let requested: BTreeSet<_> = nodes.iter().map(|node| node.local_id).collect();
+        let interface = &document.network_interface;
+        let layers: Vec<_> = document
+            .metadata()
+            .all_layers()
+            .filter(|layer| requested.contains(&layer.to_node()))
+            .collect();
+        if requested.is_empty()
+            || requested.len() != layers.len()
+            || requested.len() != nodes.len()
+            || nodes.iter().any(|node| !node.network_path.is_empty())
+        {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        }
+        if layers
+            .iter()
+            .any(|layer| interface.selected_nodes().layer_locked(*layer, interface))
+        {
+            return Err(GddArchiveError::LockedLayerOrder);
+        }
+        for node in nodes {
+            self.check_node_edit_target(node)?;
+        }
+        Ok(layers
+            .into_iter()
+            .map(LayerNodeIdentifier::to_node)
+            .collect())
     }
 
     pub async fn set_graph_node_pinned_in_copy(
@@ -6791,6 +6954,106 @@ fn project_root_layers(
     Ok(layers)
 }
 
+fn layer_tree_order(
+    interface: &NodeNetworkInterface,
+) -> Vec<(NodeId, Option<LayerNodeIdentifier>)> {
+    let metadata = interface.document_metadata();
+    metadata
+        .all_layers()
+        .map(|layer| (layer.to_node(), layer.parent(metadata)))
+        .collect()
+}
+
+fn plan_document_layer_move(
+    document: &mut DocumentMessageHandler,
+    message: graphite_editor::messages::prelude::DocumentMessage,
+    commands: &mut VecDeque<graphite_editor::messages::prelude::Message>,
+) {
+    use graphite_editor::{
+        messages::{prelude::*, tool::utility_types::ToolType},
+        node_graph_executor::NodeGraphExecutor,
+    };
+
+    document.process_message(
+        message,
+        commands,
+        DocumentMessageContext {
+            document_id: DocumentId(0),
+            ipp: &Default::default(),
+            executor: &mut NodeGraphExecutor::default(),
+            current_tool: &ToolType::Select,
+            preferences: &Default::default(),
+            data_panel_open: false,
+            layers_panel_open: false,
+            properties_panel_open: false,
+            viewport: &Default::default(),
+            resource_storage: &Default::default(),
+            fonts: &Default::default(),
+        },
+    );
+}
+
+fn apply_document_layer_moves(
+    interface: &mut NodeNetworkInterface,
+    commands: VecDeque<graphite_editor::messages::prelude::Message>,
+) -> Result<(), GddArchiveError> {
+    use graphite_editor::messages::prelude::*;
+    for command in commands {
+        let Message::Portfolio(PortfolioMessage::Document(command)) = command else {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        };
+        match command {
+            DocumentMessage::NodeGraph(NodeGraphMessage::MoveLayerToStack {
+                layer,
+                parent,
+                insert_index,
+            }) => {
+                let metadata = interface.document_metadata();
+                if parent != LayerNodeIdentifier::ROOT_PARENT {
+                    if interface.selected_nodes().layer_locked(parent, interface) {
+                        return Err(GddArchiveError::LockedLayerOrder);
+                    }
+                    if parent.ancestors(metadata).any(|ancestor| ancestor == layer) {
+                        return Err(GddArchiveError::UnsupportedRootLayerEdit);
+                    }
+                }
+                let previous = parent.children(metadata).position(|child| child == layer);
+                let expected =
+                    insert_index - usize::from(previous.is_some_and(|index| index < insert_index));
+                if previous == Some(expected) {
+                    continue;
+                }
+                interface.move_layer_to_stack(layer, parent, insert_index, &[]);
+                load_root_layer_structure(interface)?;
+                if parent.children(interface.document_metadata()).nth(expected) != Some(layer) {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+            }
+            DocumentMessage::GraphOperation(GraphOperationMessage::TransformSet {
+                layer,
+                transform,
+                transform_in,
+                skip_rerender,
+            }) => {
+                if !transform.is_finite() {
+                    return Err(GddArchiveError::UnsupportedRootLayerEdit);
+                }
+                let mut refresh = VecDeque::new();
+                let mut context =
+                    ModifyInputsContext::new_with_layer(layer, interface, &mut refresh)
+                        .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
+                context.transform_set(transform, transform_in, skip_rerender);
+            }
+            DocumentMessage::AddTransaction
+            | DocumentMessage::NodeGraph(
+                NodeGraphMessage::RunDocumentGraph | NodeGraphMessage::SendGraph,
+            ) => {}
+            _ => return Err(GddArchiveError::UnsupportedRootLayerEdit),
+        }
+    }
+    Ok(())
+}
+
 fn load_root_layer_structure(interface: &mut NodeNetworkInterface) -> Result<(), GddArchiveError> {
     // The pinned traversal assumes acyclic inputs and reserves both ends of the layer ID range.
     if [NodeId(0), NodeId(u64::MAX)]
@@ -7196,7 +7459,8 @@ fn valid_saved_ellipse_radius_value(value: &TaggedValue) -> bool {
     }
 }
 
-fn validate_saved_path_modifications(network: &NodeNetwork) -> Result<(), GddArchiveError> {
+fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveError> {
+    validate_saved_repeat_work(network)?;
     for node in network.nodes.values() {
         let [_, modification] = node.inputs.as_slice() else {
             continue;
@@ -7223,6 +7487,59 @@ fn validate_saved_path_modifications(network: &NodeNetwork) -> Result<(), GddArc
         }
         crate::render::validate_vector_geometry(&vector, DAffine2::IDENTITY, DAffine2::IDENTITY)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
+    }
+    Ok(())
+}
+
+fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveError> {
+    if !network.nodes.values().any(|node| matches!(&node.implementation,
+        DocumentNodeImplementation::ProtoNode(identifier) if *identifier == repeat_array::IDENTIFIER))
+    {
+        return Ok(());
+    }
+    fn cost(
+        network: &NodeNetwork,
+        node_id: NodeId,
+        calculated: &mut BTreeMap<NodeId, usize>,
+    ) -> Result<usize, GddArchiveError> {
+        if let Some(&cost) = calculated.get(&node_id) {
+            return Ok(cost);
+        }
+        let node = network
+            .nodes
+            .get(&node_id)
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+        let mut work = 1_usize;
+        for input in &node.inputs {
+            if let Some(upstream) = input.as_node() {
+                work = work.saturating_add(cost(network, upstream, calculated)?);
+            } else if let Some(TaggedValue::Numbers(values)) = input.as_value() {
+                work = work.max(values.len());
+            }
+        }
+        if matches!(&node.implementation,
+            DocumentNodeImplementation::ProtoNode(identifier) if *identifier == repeat_array::IDENTIFIER)
+        {
+            let Some(TaggedValue::Integer(count)) = node
+                .inputs
+                .get(repeat_array::CountInput::INDEX)
+                .and_then(NodeInput::as_value)
+            else {
+                return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+            };
+            work = work.saturating_mul(
+                usize::try_from(*count).map_err(|_| GddArchiveError::GraphLayerPreviewBudget)?,
+            );
+        }
+        if work > MAX_PREVIEW_VALUES {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        calculated.insert(node_id, work);
+        Ok(work)
+    }
+    let mut calculated = BTreeMap::new();
+    for node in network.exports.iter().filter_map(NodeInput::as_node) {
+        cost(network, node, &mut calculated)?;
     }
     Ok(())
 }
@@ -7283,7 +7600,18 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 .iter()
                 .take(2)
                 .enumerate()
-                .filter(|(_, input)| output_wire(input))
+                .filter(|&(index, input)| {
+                    if output_wire(input) {
+                        return true;
+                    }
+                    // Moving a layer may reset a stack connector to its scalar default.
+                    let expected = if node.inputs.len() == 6 && index == 0 {
+                        graphite_core_types::concrete!(graphite_std::Artboard)
+                    } else {
+                        graphite_core_types::concrete!(graphite_std::Graphic)
+                    };
+                    input == &NodeInput::type_default(Type::Item(Box::new(expected)), true)
+                })
                 .collect::<Vec<_>>();
             match node.inputs.as_slice() {
                 [_, modification]
@@ -7399,6 +7727,41 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 resolve_proto_node_type(fill::IDENTIFIER)?,
                 replacements,
                 SavedGraphicProfile::Fill,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &clipping_mask::IDENTIFIER =>
+        {
+            let [content, clip] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content) || !matches!(clip.as_value(), Some(TaggedValue::Bool(_))) {
+                return None;
+            }
+            (
+                resolve_proto_node_type(clipping_mask::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::ClippingMask,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &repeat_array::IDENTIFIER =>
+        {
+            let [content, direction, angle, count] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content)
+                || !matches!(direction.as_value(), Some(TaggedValue::DVec2(value)) if value.is_finite())
+                || !matches!(angle.as_value(), Some(TaggedValue::Number(value)) if value.to_radians().is_finite())
+                || !matches!(count.as_value(), Some(TaggedValue::Integer(value))
+                    if (1..=MAX_PREVIEW_VALUES as i64).contains(value))
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(repeat_array::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::RepeatArray,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier)
@@ -12306,6 +12669,44 @@ mod tests {
     }
 
     #[test]
+    fn saved_repeat_preview_bounds_nested_expansion() {
+        let repeat = |input, count| {
+            resolve_proto_node_type(repeat_array::IDENTIFIER)
+                .expect("pinned Repeat Array")
+                .node_template_input_override([
+                    Some(NodeInput::node(input, 0)),
+                    Some(NodeInput::value(TaggedValue::DVec2(DVec2::X), false)),
+                    Some(NodeInput::value(TaggedValue::Number(0.), false)),
+                    Some(NodeInput::value(TaggedValue::Integer(count), false)),
+                ])
+                .into_parts()
+                .0
+        };
+        let rectangle = resolve_proto_node_type(rectangle::IDENTIFIER)
+            .expect("pinned Rectangle")
+            .default_node_template()
+            .into_parts()
+            .0;
+        let mut graph = NodeNetwork {
+            nodes: [
+                (NodeId(1), rectangle),
+                (NodeId(2), repeat(NodeId(1), 50)),
+                (NodeId(3), repeat(NodeId(2), 3)),
+            ]
+            .into_iter()
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(3), 0)],
+            ..Default::default()
+        };
+        validate_saved_repeat_work(&graph).expect("bounded repeated work");
+        graph.nodes.insert(NodeId(3), repeat(NodeId(2), 50));
+        assert!(matches!(
+            validate_saved_repeat_work(&graph),
+            Err(GddArchiveError::GraphLayerPreviewBudget)
+        ));
+    }
+
+    #[test]
     fn saved_path_preview_enforces_the_geometry_budget() {
         use graphite_std::{vector::VectorModification, vector_types::kurbo::BezPath};
 
@@ -12333,9 +12734,9 @@ mod tests {
                 ..Default::default()
             }
         };
-        validate_saved_path_modifications(&path(2)).expect("admitted open Path");
+        validate_saved_graphic_work(&path(2)).expect("admitted open Path");
         assert!(matches!(
-            validate_saved_path_modifications(&path(1024)),
+            validate_saved_graphic_work(&path(1024)),
             Err(GddArchiveError::GraphLayerPreviewBudget)
         ));
     }

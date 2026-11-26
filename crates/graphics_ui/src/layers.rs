@@ -1,5 +1,5 @@
 use gpui::{App, Window};
-use graphics_core::formats::gdd::{GddRootLayer, GddRootLayerChange};
+use graphics_core::formats::gdd::{GddLayerOrder, GddRootLayer, GddRootLayerChange};
 use std::collections::BTreeSet;
 use ui::{Button, ButtonStyle, Color, Label, LabelSize, TintColor, prelude::*};
 
@@ -7,6 +7,32 @@ pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
     ToggleExpansion { recursive: bool },
+}
+
+pub(crate) fn render_saved_layer_order(
+    enabled: bool,
+    dispatch: impl Fn(GddLayerOrder, &mut Window, &mut App) + Clone + 'static,
+) -> impl IntoElement {
+    h_flex().gap_2().flex_wrap().children(
+        [
+            ("RAISE", "Raise", GddLayerOrder::Raise),
+            ("LOWER", "Lower", GddLayerOrder::Lower),
+            ("FRONT", "To Front", GddLayerOrder::Front),
+            ("BACK", "To Back", GddLayerOrder::Back),
+            ("REVERSE", "Reverse Order", GddLayerOrder::Reverse),
+        ]
+        .into_iter()
+        .map(move |(id, label, order)| {
+            let dispatch = dispatch.clone();
+            div()
+                .debug_selector(move || format!("GRAPHITE-GDD-LAYER-ORDER-{id}"))
+                .child(
+                    Button::new(format!("graphite-saved-layer-order-{id}"), label)
+                        .disabled(!enabled)
+                        .on_click(move |_, window, cx| dispatch(order, window, cx)),
+                )
+        }),
+    )
 }
 
 pub(crate) fn update_layer_selection(

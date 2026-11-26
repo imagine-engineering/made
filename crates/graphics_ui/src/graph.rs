@@ -7,7 +7,7 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-    GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
+    GddLayerOrder, GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
 };
 use std::{
     cell::Cell,
@@ -159,6 +159,7 @@ pub(crate) enum SavedGraphAction {
         index: usize,
         change: GddRootLayerChange,
     },
+    ReorderLayers(GddLayerOrder),
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -849,6 +850,17 @@ pub(crate) fn render_saved_graph(
             let keyboard_select = dispatch.clone();
             let keyboard_deselect = dispatch.clone();
             let keyboard_parent = dispatch.clone();
+            let reorder_layers = dispatch.clone();
+            let can_reorder = view.working
+                && view.can_start_connection
+                && can_select
+                && layers.iter().any(|layer| {
+                    nodes_by_id
+                        .get(&layer.storage_id)
+                        .is_some_and(|&(index, _)| {
+                            view.selected == Some(index) || view.selection.contains(&index)
+                        })
+                });
             Some(
                 v_flex()
                     .gap_1()
@@ -914,6 +926,12 @@ pub(crate) fn render_saved_graph(
                                     ),
                             ),
                     )
+                    .child(crate::layers::render_saved_layer_order(
+                        can_reorder,
+                        move |order, window, cx| {
+                            reorder_layers(SavedGraphAction::ReorderLayers(order), window, cx);
+                        },
+                    ))
                     .children(layers.iter().enumerate().filter_map(|(position, layer)| {
                         if collapsed_depth.is_some_and(|depth| layer.depth > depth) {
                             return None;

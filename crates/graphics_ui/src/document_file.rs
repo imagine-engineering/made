@@ -24,10 +24,10 @@ use graphics_core::formats::{
         GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
         GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind,
-        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
-        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
-        inspect_gdd_folder_files, open_gdd_archive,
+        GddGraphPortSource, GddHistoryDirection, GddLayerOrder, GddNumericGraphEvaluator,
+        GddNumericImportKind, GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer,
+        GddRootLayerChange, GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId,
+        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -5360,6 +5360,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::EditLayer { index, change } => {
                 self.edit_canvas_layer(index, change, window, cx);
             }
+            SavedGraphAction::ReorderLayers(order) => self.reorder_saved_layers(order, window, cx),
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -5399,6 +5400,50 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn reorder_saved_layers(
+        &mut self,
+        order: GddLayerOrder,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(rows) = form
+            .saved_layer_rows()
+            .filter(|_| form.pending_canvas_source.is_none())
+        else {
+            return;
+        };
+        let nodes: Vec<_> = rows
+            .into_iter()
+            .filter(|(index, _)| {
+                form.selected == Some(*index) || form.node_selection.contains(index)
+            })
+            .filter_map(|(index, _)| form.nodes.get(index).cloned())
+            .collect();
+        if nodes.is_empty() {
+            return;
+        }
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                futures::executor::block_on(snapshot.reorder_root_layers_in_copy(
+                    &nodes,
+                    order,
+                    ARCHIVE_BUDGET,
+                ))
+            },
+            window,
+            cx,
+        );
     }
 
     fn edit_canvas_layer(
@@ -10179,6 +10224,193 @@ mod tests {
         graph_layer_archive_with_grandchild(false).await
     }
 
+    async fn layer_order_archive() -> Vec<u8> {
+        use graphite_core_types::Color;
+        use graphite_document_graph_storage::{NodeMetadataSource, Position};
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::{
+            resolve_network_node_type, resolve_proto_node_type,
+        };
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::{blending_nodes::clipping_mask, repeat_nodes::repeat_array};
+
+        struct LayerMetadata;
+        impl NodeMetadataSource for LayerMetadata {
+            fn is_layer(&self, path: &[NodeId], node: NodeId) -> bool {
+                path.is_empty() && node.0 < 100
+            }
+
+            fn reference(&self, path: &[NodeId]) -> Option<&str> {
+                match path {
+                    [NodeId(1 | 2)] => Some("Artboard"),
+                    [NodeId(10..=70)] => Some("Merge"),
+                    _ => None,
+                }
+            }
+
+            fn display_name(&self, path: &[NodeId], node: NodeId) -> Option<&str> {
+                path.is_empty().then_some(())?;
+                match node {
+                    NodeId(1) => Some("Main Artboard"),
+                    NodeId(2) => Some("Second Artboard"),
+                    NodeId(10) => Some("Outer Group"),
+                    NodeId(20) => Some("Inner Group"),
+                    NodeId(30) => Some("Red"),
+                    NodeId(40) => Some("Green"),
+                    NodeId(50) => Some("Blue Repeat"),
+                    NodeId(60) => Some("Locked Gold"),
+                    NodeId(70) => Some("Gray"),
+                    _ => None,
+                }
+            }
+
+            fn position(&self, path: &[NodeId], node: NodeId) -> Option<Position> {
+                path.is_empty().then_some(())?;
+                let position = match node {
+                    NodeId(1) => [24, -12],
+                    NodeId(2) => [24, 34],
+                    NodeId(10) => [16, -8],
+                    NodeId(20) => [8, -4],
+                    NodeId(30) => [0, 0],
+                    NodeId(40) => [0, 8],
+                    NodeId(50) => [0, 16],
+                    NodeId(60) => [0, 24],
+                    NodeId(70) => [8, 34],
+                    NodeId(id) => [-10 - (id % 10) as i32 * 8, ((id - 100) / 10) as i32 * 8],
+                };
+                Some(Position::Absolute(position))
+            }
+
+            fn locked(&self, path: &[NodeId], node: NodeId) -> bool {
+                path.is_empty() && node == NodeId(60)
+            }
+        }
+
+        let merge = resolve_network_node_type("Merge").expect("pinned Merge");
+        let layer = |sibling, content| {
+            merge
+                .node_template_input_override([sibling, Some(NodeInput::node(NodeId(content), 0))])
+                .into_parts()
+                .0
+        };
+        let artboard = resolve_network_node_type("Artboard").expect("pinned Artboard");
+        let board = |sibling, content, location| {
+            artboard
+                .node_template_input_override([
+                    sibling,
+                    content,
+                    Some(NodeInput::value(TaggedValue::DVec2(location), false)),
+                    Some(NodeInput::value(
+                        TaggedValue::DVec2(DVec2::new(220., 160.)),
+                        false,
+                    )),
+                ])
+                .into_parts()
+                .0
+        };
+        let source = |id| Some(NodeInput::node(NodeId(id), 0));
+        let clip = resolve_proto_node_type(clipping_mask::IDENTIFIER)
+            .expect("pinned clipping mask")
+            .node_template_input_override([
+                source(111),
+                Some(NodeInput::value(TaggedValue::Bool(true), false)),
+            ])
+            .into_parts()
+            .0;
+        let repeat = resolve_proto_node_type(repeat_array::IDENTIFIER)
+            .expect("pinned Repeat Array")
+            .node_template_input_override([
+                source(121),
+                Some(NodeInput::value(
+                    TaggedValue::DVec2(DVec2::new(54., 0.)),
+                    false,
+                )),
+                Some(NodeInput::value(TaggedValue::Number(0.), false)),
+                Some(NodeInput::value(TaggedValue::Integer(3), false)),
+            ])
+            .into_parts()
+            .0;
+        let graph = NodeNetwork {
+            nodes: [
+                (
+                    NodeId(1),
+                    board(source(2), source(10), DVec2::new(-30., -40.)),
+                ),
+                (NodeId(2), board(None, None, DVec2::new(240., -40.))),
+                (NodeId(10), layer(None, 20)),
+                (NodeId(20), layer(source(70), 30)),
+                (NodeId(30), layer(source(40), 101)),
+                (NodeId(40), layer(source(50), 112)),
+                (NodeId(50), layer(source(60), 122)),
+                (NodeId(60), layer(None, 131)),
+                (NodeId(70), layer(None, 141)),
+                (NodeId(112), clip),
+                (NodeId(122), repeat),
+            ]
+            .into_iter()
+            .chain(preview_rectangle(
+                NodeId(100),
+                NodeId(101),
+                35.,
+                24.,
+                Color::RED,
+            ))
+            .chain(preview_rectangle(
+                NodeId(110),
+                NodeId(111),
+                29.,
+                27.,
+                Color::from_rgbaf32_unchecked(0., 1., 0., 0.5),
+            ))
+            .chain(preview_rectangle(
+                NodeId(120),
+                NodeId(121),
+                16.,
+                16.,
+                Color::BLUE,
+            ))
+            .chain(preview_rectangle(
+                NodeId(130),
+                NodeId(131),
+                52.,
+                31.,
+                Color::YELLOW,
+            ))
+            .chain(preview_rectangle(
+                NodeId(140),
+                NodeId(141),
+                12.,
+                12.,
+                Color::from_rgbaf32_unchecked(0.3, 0.3, 0.3, 1.),
+            ))
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(1), 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            671,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("F-LAYERS storage");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &LayerMetadata, &ResourceRegistry::new(), &resources)
+            .expect("source layered Artboards");
+        owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source archive")
+    }
+
     async fn graph_layer_archive_with_grandchild(with_grandchild: bool) -> (Vec<u8>, usize) {
         use graphite_document_graph_storage::{NodeMetadataSource, Position};
         use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_network_node_type;
@@ -13477,6 +13709,271 @@ mod tests {
                 .load_bytes(&path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r11_2_workspace_reorders_saved_graphite_layers_as_one_edit(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/ordered-layers.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-RAISE");
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        paint(window);
+        const ORIGINAL_ORDER: [&str; 4] = ["Red", "Green", "Blue Repeat", "Locked Gold"];
+        const REVERSED_SELECTION: [&str; 4] = ["Blue Repeat", "Red", "Green", "Locked Gold"];
+        let assert_order = |window: &mut gpui::VisualTestContext, expected: [&str; 4]| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("document graph");
+                };
+                let SavedGraphPanel::Ready(graph) = &form.saved_graph else {
+                    panic!("current layer tree")
+                };
+                let layers = graph.root_layers.as_ref().expect("source-projected layers");
+                let actual = layers
+                    .iter()
+                    .filter(|layer| layer.depth == 3)
+                    .map(|layer| {
+                        let node = form
+                            .nodes
+                            .iter()
+                            .find(|node| node.storage_id() == layer.storage_id)
+                            .expect("layer's saved node");
+                        (node.display_name(), layer.parent)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    actual.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+                    expected,
+                    "{:?}",
+                    item.copy_feedback
+                );
+                let inner = form
+                    .nodes
+                    .iter()
+                    .find(|node| node.display_name() == "Inner Group")
+                    .expect("inner group")
+                    .storage_id();
+                assert!(actual.iter().all(|(_, parent)| *parent == Some(inner)));
+            });
+        };
+        let layer_content = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("source nodes");
+                };
+                form.nodes
+                    .iter()
+                    .filter(|node| ORIGINAL_ORDER.contains(&node.display_name()))
+                    .map(|node| {
+                        (
+                            node.storage_id(),
+                            node.input_ports()
+                                .get(1)
+                                .expect("content port")
+                                .source
+                                .clone(),
+                        )
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            })
+        };
+        assert_order(window, ORIGINAL_ORDER);
+        let content = layer_content(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-7");
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-RAISE");
+        assert_order(window, ORIGINAL_ORDER);
+        item.read_with(window, |item, cx| {
+            assert!(item.copy_feedback.is_some());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        for (command, order) in [
+            (
+                "GRAPHITE-GDD-LAYER-ORDER-RAISE",
+                ["Green", "Red", "Blue Repeat", "Locked Gold"],
+            ),
+            ("GRAPHITE-GDD-LAYER-ORDER-LOWER", ORIGINAL_ORDER),
+            (
+                "GRAPHITE-GDD-LAYER-ORDER-BACK",
+                ["Red", "Blue Repeat", "Locked Gold", "Green"],
+            ),
+            (
+                "GRAPHITE-GDD-LAYER-ORDER-FRONT",
+                ["Green", "Red", "Blue Repeat", "Locked Gold"],
+            ),
+        ] {
+            click(window, command);
+            assert_order(window, order);
+            assert_eq!(layer_content(window), content);
+        }
+        let extend = if cfg!(target_os = "macos") {
+            gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            }
+        } else {
+            gpui::Modifiers {
+                control: true,
+                ..Default::default()
+            }
+        };
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-6",
+            gpui::MouseButton::Left,
+            extend,
+        );
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-REVERSE");
+        assert_order(window, REVERSED_SELECTION);
+        assert_eq!(layer_content(window), content);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("selected layer graph");
+            };
+            assert_eq!(
+                form.node_selection
+                    .iter()
+                    .filter_map(|index| form.nodes.get(*index))
+                    .map(GddGraphNode::display_name)
+                    .collect::<BTreeSet<_>>(),
+                BTreeSet::from(["Blue Repeat", "Green"])
+            );
+        });
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_order(window, ["Green", "Red", "Blue Repeat", "Locked Gold"]);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_order(window, REVERSED_SELECTION);
+        assert_eq!(layer_content(window), content);
+        let destination = PathBuf::from("/project/reordered-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved layer graph");
+        let inspection = reopened
+            .graph_inspection()
+            .await
+            .expect("reopen saved graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root network");
+        let geometry = reopened
+            .graph_geometry(root)
+            .await
+            .expect("reopened layer geometry");
+        let actual = geometry
+            .root_layers
+            .expect("reopened layers")
+            .into_iter()
+            .filter(|layer| layer.depth == 3)
+            .map(|layer| {
+                inspection
+                    .nodes
+                    .iter()
+                    .find(|node| node.storage_id() == layer.storage_id)
+                    .expect("original saved layer identity")
+                    .display_name()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, REVERSED_SELECTION);
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-8",
+            gpui::MouseButton::Left,
+            extend,
+        );
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-RAISE");
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("reordered graph");
+            };
+            let rows = form.saved_layer_rows().expect("current root layer tree");
+            assert_eq!(
+                rows.iter()
+                    .filter(|(_, layer)| layer.depth == 3)
+                    .filter_map(|(index, _)| form.nodes.get(*index))
+                    .map(GddGraphNode::display_name)
+                    .collect::<Vec<_>>(),
+                ["Blue Repeat", "Green", "Gray", "Red", "Locked Gold"],
+                "{:?}",
+                item.copy_feedback
+            );
+            assert!(item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        item.read_with(window, |item, _| {
+            use graphite_editor::messages::{
+                portfolio::document::utility_types::document_metadata::LayerNodeIdentifier,
+                tool::common_functionality::graph_modification_utils::get_clip_mode,
+            };
+            use graphite_graph_craft::document::NodeId;
+
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert!(matches!(canvas.frame, SavedSceneFrame::Ready(_)));
+            let document = canvas
+                .snapping_document
+                .as_deref()
+                .expect("source renderer metadata");
+            let interface = &document.network_interface;
+            let repeated = LayerNodeIdentifier::new(NodeId(50), interface);
+            let clipped = LayerNodeIdentifier::new(NodeId(40), interface);
+            assert!(
+                document
+                    .metadata()
+                    .click_targets(repeated)
+                    .is_some_and(|targets| targets.len() >= 3)
+            );
+            assert_eq!(get_clip_mode(clipped, interface), Some(true));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_order(window, REVERSED_SELECTION);
+        item.read_with(window, |item, cx| {
+            assert!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("restored snapshot")
+                    .can_move_history(GddHistoryDirection::Redo)
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }
