@@ -3,6 +3,7 @@ pub mod interop;
 pub mod resources;
 pub mod storage;
 
+mod canvas;
 mod document_file;
 mod graph;
 mod layers;

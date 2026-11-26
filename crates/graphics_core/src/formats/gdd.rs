@@ -377,6 +377,12 @@ pub struct GddDocumentView {
     pub rulers_visible: bool,
 }
 
+pub struct GddArtboardCanvasOutput {
+    pub render: RenderOutput,
+    pub camera: PTZ,
+    pub artboard_size: DVec2,
+}
+
 pub struct GddNetworkView {
     pub id: NetworkId,
     pub path: Vec<NodeId>,
@@ -3462,8 +3468,9 @@ impl InspectedGddV1 {
         &self,
         resolution: UVec2,
         scale: f64,
+        camera: Option<PTZ>,
         budget: CpuSvgEvaluationBudget,
-    ) -> Result<RenderOutput, GddArchiveError> {
+    ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
@@ -3490,14 +3497,17 @@ impl InspectedGddV1 {
         if !logical_size.is_finite() || logical_size.min_element() <= 0. {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
-        let center = origin + size / 2.;
-        let mut camera = PTZ::default();
-        if center.abs().max_element() > 0.5 {
-            camera.pan = -center;
-        }
-        camera.set_zoom(
-            (logical_size / size).min_element() * VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
-        );
+        let camera = camera.unwrap_or_else(|| {
+            let center = origin + size / 2.;
+            let mut camera = PTZ::default();
+            if center.abs().max_element() > 0.5 {
+                camera.pan = -center;
+            }
+            camera.set_zoom(
+                (logical_size / size).min_element() * VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
+            );
+            camera
+        });
         let transform = NavigationMessageHandler::default()
             .calculate_offset_transform(logical_size / 2., &camera);
         let configuration = RenderConfig {
@@ -3511,7 +3521,13 @@ impl InspectedGddV1 {
             for_export: true,
             ..Default::default()
         };
-        Self::render_saved_layer_svg(&graph.network, *node_id, configuration, budget).await
+        let render =
+            Self::render_saved_layer_svg(&graph.network, *node_id, configuration, budget).await?;
+        Ok(GddArtboardCanvasOutput {
+            render,
+            camera,
+            artboard_size: size,
+        })
     }
 
     async fn render_saved_layer_svg(
@@ -10085,6 +10101,7 @@ mod tests {
                 .render_document_artboard_canvas_svg(
                     viewport,
                     2.,
+                    None,
                     CpuSvgEvaluationBudget {
                         max_viewport_pixels: viewport.x * viewport.y,
                         ..limits
@@ -10092,19 +10109,19 @@ mod tests {
                 )
                 .await
                 .expect("render the document Artboard into a scaled pane");
-            let RenderOutputType::Svg { svg, image_data } = canvas.data else {
+            let RenderOutputType::Svg { svg, image_data } = canvas.render.data else {
                 panic!("source Canvas output")
             };
             assert!(image_data.is_empty());
             assert!(svg.contains(r#"viewBox="0 0 80 40" width="80" height="40""#));
             assert!(svg.contains("<clipPath"));
             assert_eq!(
-                canvas.metadata.local_transforms.get(&board_id),
+                canvas.render.metadata.local_transforms.get(&board_id),
                 output.metadata.local_transforms.get(&board_id)
             );
             assert!(matches!(
                 archive
-                    .render_document_artboard_canvas_svg(viewport, 2., limits)
+                    .render_document_artboard_canvas_svg(viewport, 2., None, limits)
                     .await,
                 Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
             ));
@@ -10141,6 +10158,7 @@ mod tests {
                     .render_document_artboard_canvas_svg(
                         UVec2::new(80, 40),
                         1.,
+                        None,
                         CpuSvgEvaluationBudget {
                             max_viewport_pixels: 80 * 40,
                             max_output_bytes: 64 * 1024,

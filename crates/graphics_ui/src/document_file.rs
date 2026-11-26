@@ -1,7 +1,9 @@
 use std::{
+    cell::Cell,
     collections::{BTreeMap, BTreeSet},
     future::Future,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::{Arc, Weak},
 };
 
@@ -25,6 +27,7 @@ use graphics_core::formats::{
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
+use graphite_editor::messages::portfolio::document::utility_types::misc::PTZ;
 use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, UVec2};
 use graphite_std::{
     application_io::{ExportFormat as RenderFormat, RenderConfig},
@@ -41,6 +44,7 @@ use workspace::{
     notifications::DetachAndPromptErr as _,
 };
 
+use crate::canvas::ArtboardNavigation;
 use crate::graph::{
     SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
     SavedGraphMenuTarget, SavedGraphView,
@@ -625,6 +629,8 @@ struct SavedSceneCanvas {
     instance: Arc<()>,
     revision: Arc<()>,
     target: Option<SavedSceneTarget>,
+    camera_override: Option<PTZ>,
+    navigation: Option<ArtboardNavigation>,
     frame: SavedSceneFrame,
 }
 
@@ -642,6 +648,10 @@ struct SavedSceneTarget {
 }
 
 impl SavedSceneTarget {
+    fn logical_size(self) -> DVec2 {
+        self.resolution.as_dvec2() / self.scale
+    }
+
     fn measure(size: gpui::Size<gpui::Pixels>, scale: f32) -> Option<Self> {
         let scale = f64::from(scale);
         let resolution = (DVec2::new(
@@ -1373,6 +1383,8 @@ impl GraphiteDocumentItem {
             instance: Arc::new(()),
             revision: model.revision.clone(),
             target: None,
+            camera_override: None,
+            navigation: None,
             frame: SavedSceneFrame::Empty,
         });
         self.focus_handle.focus(window, cx);
@@ -1407,8 +1419,14 @@ impl GraphiteDocumentItem {
         }
         let revision = model.revision.clone();
         let contents = model.gdd_contents().cloned();
+        if !Arc::ptr_eq(&canvas.revision, &revision)
+            || (canvas.target != target && canvas.camera_override.is_none())
+        {
+            canvas.navigation = None;
+        }
         canvas.revision = revision.clone();
         canvas.target = target;
+        let camera = canvas.camera_override;
         if let SavedSceneFrame::Ready(image) =
             std::mem::replace(&mut canvas.frame, SavedSceneFrame::Empty)
         {
@@ -1433,6 +1451,7 @@ impl GraphiteDocumentItem {
             let output = futures::executor::block_on(contents.render_document_artboard_canvas_svg(
                 target.resolution,
                 target.scale,
+                camera,
                 CpuSvgEvaluationBudget {
                     max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
                     max_output_bytes: 64 * 1024,
@@ -1445,10 +1464,14 @@ impl GraphiteDocumentItem {
                 }
                 error => error.to_string(),
             })?;
-            let RenderOutputType::Svg { svg, .. } = output.data else {
+            let navigation = ArtboardNavigation {
+                camera: output.camera,
+                artboard_size: output.artboard_size,
+            };
+            let RenderOutputType::Svg { svg, .. } = output.render.data else {
                 return Err("Graphite did not return an SVG Canvas frame.".to_owned());
             };
-            crate::render::prepare_svg_bytes_at_target(
+            let image = crate::render::prepare_svg_bytes_at_target(
                 svg.as_bytes(),
                 target.resolution.x,
                 target.resolution.y,
@@ -1456,7 +1479,8 @@ impl GraphiteDocumentItem {
                 &renderer,
                 SAVED_SCENE_PIXEL_BUDGET as usize * 4,
             )
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+            Ok((image, navigation))
         });
         let request = Arc::new(());
         canvas.frame = SavedSceneFrame::Pending {
@@ -1473,7 +1497,10 @@ impl GraphiteDocumentItem {
                         return;
                     }
                     canvas.frame = match result {
-                        Ok(image) => SavedSceneFrame::Ready(image),
+                        Ok((image, navigation)) => {
+                            canvas.navigation = Some(navigation);
+                            SavedSceneFrame::Ready(image)
+                        }
                         Err(error) => SavedSceneFrame::Failed(error.into()),
                     };
                     cx.notify();
@@ -1485,6 +1512,47 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
+    fn scroll_scene_canvas(
+        &mut self,
+        instance: &Arc<()>,
+        pane: gpui::Bounds<gpui::Pixels>,
+        event: &gpui::ScrollWheelEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let Some((target, navigation)) = canvas.target.zip(canvas.navigation.as_mut()) else {
+            return;
+        };
+        if !Arc::ptr_eq(instance, &canvas.instance)
+            || !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision)
+            || SavedSceneTarget::measure(pane.size, window.scale_factor()) != Some(target)
+        {
+            return;
+        }
+        let Some(camera) =
+            navigation.scroll(target.logical_size(), pane, event, window.line_height())
+        else {
+            return;
+        };
+        navigation.camera = camera;
+        canvas.camera_override = Some(camera);
+        cx.stop_propagation();
+        self.update_scene_canvas(Some(target), true, window, cx);
+    }
+
+    fn fit_scene_canvas(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(canvas) = &mut self.scene_canvas
+            && canvas.camera_override.take().is_some()
+        {
+            canvas.navigation = None;
+            let target = canvas.target;
+            self.update_scene_canvas(target, true, window, cx);
+        }
+    }
+
     fn render_scene_canvas(
         &self,
         canvas: &SavedSceneCanvas,
@@ -1492,6 +1560,9 @@ impl GraphiteDocumentItem {
     ) -> impl IntoElement {
         let item = cx.entity().downgrade();
         let instance = canvas.instance.clone();
+        let scroll_instance = instance.clone();
+        let pane_bounds = Rc::new(Cell::new(None));
+        let scroll_bounds = pane_bounds.clone();
         let target = canvas.target;
         let image = match &canvas.frame {
             SavedSceneFrame::Ready(image)
@@ -1523,6 +1594,17 @@ impl GraphiteDocumentItem {
                                     })),
                             ),
                     )
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-CANVAS-FIT".into())
+                            .child(
+                                Button::new("graphite-gdd-canvas-fit", "Fit Artboard")
+                                    .disabled(canvas.camera_override.is_none())
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.fit_scene_canvas(window, cx);
+                                    })),
+                            ),
+                    )
                     .when_some(message, |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
@@ -1549,9 +1631,15 @@ impl GraphiteDocumentItem {
                     .bg(cx.theme().colors().editor_background)
                     .aria_label("Graphite Document Canvas")
                     .debug_selector(|| "GRAPHITE-GDD-DOCUMENT-CANVAS".into())
+                    .on_scroll_wheel(cx.listener(move |item, event, window, cx| {
+                        if let Some(pane) = scroll_bounds.get() {
+                            item.scroll_scene_canvas(&scroll_instance, pane, event, window, cx);
+                        }
+                    }))
                     .child(
                         gpui::canvas(
                             move |bounds, window, cx| {
+                                pane_bounds.set(Some(bounds));
                                 let measured =
                                     SavedSceneTarget::measure(bounds.size, window.scale_factor());
                                 if target == measured {
@@ -12791,6 +12879,90 @@ mod tests {
         assert!(resized_viewport.x < initial_viewport.x);
         assert!(!Arc::ptr_eq(&initial_frame, &resized_frame));
         assert!(!window.update(|window, _| window.has_image_atlas_entry(&initial_frame)));
+        let pane = window
+            .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+            .expect("visible Canvas");
+        let cursor = pane.origin + gpui::point(pane.size.width * 0.35, pane.size.height * 0.42);
+        let coordinate = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("open Canvas");
+                let target = canvas.target.expect("current viewport");
+                canvas
+                    .navigation
+                    .expect("current evaluated Artboard camera")
+                    .document_to_pane(target.logical_size())
+            })
+        };
+        let send_scroll = |window: &mut gpui::VisualTestContext, delta, modifiers| {
+            window.update(|window, cx| {
+                window.dispatch_event(
+                    gpui::PlatformInput::ScrollWheel(gpui::ScrollWheelEvent {
+                        position: cursor,
+                        delta: gpui::ScrollDelta::Pixels(delta),
+                        modifiers,
+                        ..Default::default()
+                    }),
+                    cx,
+                );
+            });
+            window.run_until_parked();
+            paint(window);
+        };
+        let fitted = coordinate(window);
+        send_scroll(
+            window,
+            gpui::point(px(80.), px(-20.)),
+            gpui::Modifiers::default(),
+        );
+        let panned = coordinate(window);
+        assert_eq!(panned.matrix2, fitted.matrix2);
+        let expected_pan = DVec2::new(80., -20.) * graphite_editor::consts::VIEWPORT_SCROLL_RATE;
+        assert!(
+            (panned.translation - fitted.translation - expected_pan)
+                .abs()
+                .max_element()
+                <= 1.
+        );
+        let (_, panned_frame) = canvas_frame(window, [255; 4]);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&resized_frame)));
+        let cursor_in_pane = cursor - pane.origin;
+        let anchor = DVec2::new(
+            f64::from(f32::from(cursor_in_pane.x)),
+            f64::from(f32::from(cursor_in_pane.y)),
+        );
+        let addressed_point = panned.inverse().transform_point2(anchor);
+        send_scroll(
+            window,
+            gpui::point(px(0.), px(120.)),
+            gpui::Modifiers {
+                control: true,
+                ..Default::default()
+            },
+        );
+        let zoomed = coordinate(window);
+        assert!(zoomed.matrix2.x_axis.x > panned.matrix2.x_axis.x);
+        assert!(
+            (zoomed.transform_point2(addressed_point) - anchor)
+                .abs()
+                .max_element()
+                <= 2.
+        );
+        let (_, zoomed_frame) = canvas_frame(window, [255; 4]);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&panned_frame)));
+        send_scroll(
+            window,
+            gpui::point(px(120.), px(0.)),
+            gpui::Modifiers {
+                control: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(coordinate(window), zoomed);
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&zoomed_frame)));
+        click(window, "GRAPHITE-GDD-CANVAS-FIT");
+        window.run_until_parked();
+        assert_eq!(coordinate(window), fitted);
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
         click(window, "GRAPHITE-GDD-CANVAS-BACK");
         assert!(!window.update(|window, _| window.has_image_atlas_entry(&resized_frame)));
         click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
