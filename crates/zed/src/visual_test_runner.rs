@@ -107,10 +107,10 @@ use {
     feature_flags::FeatureFlagAppExt as _,
     git_ui::project_diff::ProjectDiff,
     gpui::{
-        App, AppContext as _, BorrowAppContext as _, Bounds, Entity, Modifiers,
-        VisualTestAppContext, WindowBounds, WindowHandle, WindowOptions, point, px, size,
+        App, AppContext as _, Bounds, Entity, Modifiers, VisualTestAppContext, WindowBounds,
+        WindowHandle, WindowOptions, point, px, size,
     },
-    image::{GenericImage as _, RgbaImage},
+    image::RgbaImage,
     project::{AgentId, Project},
     project_panel::ProjectPanel,
     settings::{NotifyWhenAgentWaiting, PlaySoundWhenAgentDone, Settings as _},
