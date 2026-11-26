@@ -15475,6 +15475,354 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_r11_3_workspace_transfers_a_mixed_editable_layer_group(cx: &mut TestAppContext) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/mixed-source.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("F-LAYERS source");
+        let source = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("source document")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native source");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        struct LayerState {
+            storage_id: StorageNodeId,
+            parent: Option<StorageNodeId>,
+            visible: bool,
+            locked: bool,
+            clipping: Option<bool>,
+            opacity: Option<f64>,
+        }
+        let row = |window: &gpui::VisualTestContext, label: &str| {
+            source.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native Layers");
+                };
+                let (index, layer) = form
+                    .saved_layer_rows()
+                    .expect("source layer tree")
+                    .into_iter()
+                    .find(|(index, _)| form.nodes[*index].display_name() == label)
+                    .expect(label);
+                (
+                    index,
+                    LayerState {
+                        storage_id: layer.storage_id,
+                        parent: layer.parent,
+                        visible: layer.visible,
+                        locked: layer.locked,
+                        clipping: layer.clipping,
+                        opacity: layer.opacity.map(|opacity| opacity.overall),
+                    },
+                )
+            })
+        };
+        let select = |window: &mut gpui::VisualTestContext, label| {
+            let (index, _) = row(window, label);
+            source.update_in(window, |item, window, cx| {
+                item.handle_saved_graph_action(
+                    SavedGraphAction::SelectLayer {
+                        index,
+                        extend: false,
+                        range: false,
+                    },
+                    window,
+                    cx,
+                );
+            });
+            window.run_until_parked();
+            paint(window);
+        };
+        let source_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let image = source.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("source Canvas");
+                match &canvas.frame {
+                    SavedSceneFrame::Ready(image) => image.clone(),
+                    SavedSceneFrame::Failed(error) => panic!("source Canvas: {error}"),
+                    _ => panic!("accepted source image"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            image
+        };
+
+        let (_, inner) = row(window, "Inner Group");
+        let (_, green) = row(window, "Green");
+        let (_, blue) = row(window, "Blue Repeat");
+        let (_, gray) = row(window, "Gray");
+        select(window, "Locked Gold");
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-GROUP");
+        assert!(!source.read_with(window, |item, cx| item.is_dirty(cx)));
+        select(window, "Gray");
+        click(window, "GRAPHITE-GDD-LAYER-MOVE");
+        click(
+            window,
+            "MENU_SUBMENU-Main Artboard › Outer Group › Inner Group",
+        );
+        click(window, "MENU_ITEM-Before Blue Repeat");
+        assert_eq!(row(window, "Gray").1.parent, Some(inner.storage_id));
+        select(window, "Gray");
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-FRONT");
+        assert_eq!(row(window, "Gray").1.storage_id, gray.storage_id);
+        assert_eq!(row(window, "Gray").0, 8);
+        let visible_gray = source_image(window);
+        click(window, "GRAPHITE-GDD-LAYER-VISIBILITY-8");
+        assert!(!row(window, "Gray").1.visible);
+        assert!(row(window, "Locked Gold").1.locked);
+        assert_eq!(row(window, "Green").0, 5);
+        click(window, "GRAPHITE-GDD-LAYER-CLIP-5");
+        assert_eq!(row(window, "Green").1.clipping, Some(false));
+        click(window, "GRAPHITE-GDD-LAYER-CLIP-5");
+        assert_eq!(row(window, "Green").1.clipping, Some(true));
+        let before_group = source_image(window);
+        assert!(visible_gray.as_bytes(0) != before_group.as_bytes(0));
+        select(window, "Green");
+        assert_eq!(row(window, "Blue Repeat").0, 6);
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-6",
+            gpui::MouseButton::Left,
+            gpui::Modifiers {
+                platform: cfg!(target_os = "macos"),
+                control: !cfg!(target_os = "macos"),
+                ..Default::default()
+            },
+        );
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-GROUP");
+        let (group_id, rename) = source.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers");
+            };
+            (
+                form.selected_node().expect("new group").storage_id(),
+                form.name.clone(),
+            )
+        });
+        assert_eq!(row(window, "Green").1.parent, Some(group_id));
+        assert_eq!(row(window, "Blue Repeat").1.parent, Some(group_id));
+        assert!(before_group.as_bytes(0) == source_image(window).as_bytes(0));
+        rename.update_in(window, |editor, window, cx| {
+            editor.set_text("Styled Repeats", window, cx);
+        });
+        paint(window);
+        click(window, "GRAPHITE-GDD-SAVE-RENAMED");
+        assert_eq!(row(window, "Styled Repeats").1.storage_id, group_id);
+        select(window, "Blue Repeat");
+        click(window, "GRAPHITE-GDD-LAYER-OPACITY-PERCENT");
+        window.dispatch_action(editor::actions::SelectAll);
+        window.simulate_input("60");
+        click(window, "GRAPHITE-GDD-LAYER-OPACITY-APPLY");
+        assert_eq!(row(window, "Blue Repeat").1.opacity, Some(60.));
+        assert!(before_group.as_bytes(0) != source_image(window).as_bytes(0));
+        select(window, "Styled Repeats");
+        click(window, "GRAPHITE-GDD-LAYER-COPY");
+        let clipboard = window.update(|_, cx| {
+            cx.read_from_clipboard()
+                .and_then(|item| item.text())
+                .expect("native layer clipboard")
+        });
+        let source_snapshot = source.read_with(window, |item, cx| {
+            item.model
+                .read(cx)
+                .gdd_contents()
+                .expect("source snapshot")
+                .clone()
+        });
+
+        let target_path = PathBuf::from("/project/mixed-destination.gdd");
+        window.dispatch_action(NewGraphiteFolder);
+        window.run_until_parked();
+        window.simulate_new_path_selection(|_| Some(target_path.clone()));
+        window.run_until_parked();
+        let destination = workspace.read_with(window, |workspace, cx| {
+            workspace
+                .active_item_as::<GraphiteDocumentItem>(cx)
+                .expect("destination")
+        });
+        assert_ne!(destination, source);
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        saved_graph_shortcut(window, "v");
+        let destination_snapshot = destination.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            assert!(
+                item.scene_canvas
+                    .as_ref()
+                    .is_some_and(|canvas| { matches!(canvas.frame, SavedSceneFrame::Ready(_)) })
+            );
+            item.model
+                .read(cx)
+                .gdd_contents()
+                .expect("destination snapshot")
+                .clone()
+        });
+        let projection = |inspection: &GddGraphInspection, name: &str| {
+            inspection
+                .nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+                .clone()
+        };
+        let source_graph = source_snapshot
+            .graph_inspection()
+            .await
+            .expect("edited source");
+        let paste_graph = destination_snapshot
+            .graph_inspection()
+            .await
+            .expect("pasted graph");
+        let content_chain = |inspection: &GddGraphInspection, layer: &GddGraphNode| {
+            let follow = |node: &GddGraphNode, index: usize| {
+                let Some(GddGraphPortSource::Node {
+                    storage_id,
+                    output_index: 0,
+                }) = node
+                    .input_ports()
+                    .get(index)
+                    .and_then(|port| port.source.as_ref())
+                else {
+                    panic!("editable source wire");
+                };
+                inspection
+                    .nodes
+                    .iter()
+                    .find(|node| node.storage_id() == *storage_id)
+                    .expect("addressed editable source node")
+            };
+            let opacity = follow(layer, 1);
+            assert_eq!(opacity.display_name(), "Opacity");
+            let repeat = follow(opacity, 0);
+            assert_eq!(repeat.display_name(), "Repeat Array");
+            [opacity.storage_id(), repeat.storage_id()]
+        };
+        let new_group = projection(&paste_graph, "Styled Repeats");
+        let new_green = projection(&paste_graph, "Green");
+        let new_blue = projection(&paste_graph, "Blue Repeat");
+        let original_blue = projection(&source_graph, "Blue Repeat");
+        let new_chain = content_chain(&paste_graph, &new_blue);
+        for (source, destination) in content_chain(&source_graph, &original_blue)
+            .into_iter()
+            .zip(new_chain)
+        {
+            assert_ne!(source, destination);
+        }
+        for (original, pasted) in [
+            (group_id, &new_group),
+            (green.storage_id, &new_green),
+            (blue.storage_id, &new_blue),
+        ] {
+            assert_ne!(original, pasted.storage_id());
+        }
+        let root = paste_graph
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root graph");
+        let geometry = destination_snapshot
+            .graph_geometry(root)
+            .await
+            .expect("pasted native graph");
+        let layers = geometry.root_layers.expect("editable pasted layers");
+        assert_eq!(
+            layers
+                .iter()
+                .filter(|layer| layer.parent == Some(new_group.storage_id()))
+                .map(|layer| layer.storage_id)
+                .collect::<Vec<_>>(),
+            [new_green.storage_id(), new_blue.storage_id()]
+        );
+        assert_eq!(
+            layers
+                .iter()
+                .find(|layer| layer.storage_id == new_green.storage_id())
+                .and_then(|layer| layer.clipping),
+            Some(true)
+        );
+        assert_eq!(
+            layers
+                .iter()
+                .find(|layer| layer.storage_id == new_blue.storage_id())
+                .and_then(|layer| layer.opacity)
+                .map(|opacity| opacity.overall),
+            Some(60.)
+        );
+        let budget = CpuSvgEvaluationBudget {
+            max_viewport_pixels: 40_000,
+            max_output_bytes: 64 * 1024,
+        };
+        let source_thumb = source_snapshot
+            .render_merge_thumbnail_svg(&original_blue, UVec2::new(120, 80), budget)
+            .await
+            .expect("source repeat thumbnail");
+        let target_thumb = destination_snapshot
+            .render_merge_thumbnail_svg(&new_blue, UVec2::new(120, 80), budget)
+            .await
+            .expect("pasted repeat thumbnail");
+        assert_eq!(source_thumb, target_thumb);
+        window.dispatch_action(editor::actions::Undo);
+        window.run_until_parked();
+        destination.read_with(window, |item, cx| {
+            let working = item
+                .model
+                .read(cx)
+                .working
+                .as_ref()
+                .expect("destination history");
+            assert!(working.inspection.document_output_is_empty());
+        });
+        window.dispatch_action(editor::actions::Redo);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        let saved_path = PathBuf::from("/project/mixed-reopened.gdd");
+        window.simulate_new_path_selection(|_| Some(saved_path.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &saved_path)
+            .await
+            .expect("saved destination");
+        let reopened_graph = reopened.graph_inspection().await.expect("reopened graph");
+        let reopened_blue = projection(&reopened_graph, "Blue Repeat");
+        assert_eq!(reopened_blue.storage_id(), new_blue.storage_id());
+        assert_eq!(content_chain(&reopened_graph, &reopened_blue), new_chain);
+        assert_eq!(
+            reopened
+                .render_merge_thumbnail_svg(&reopened_blue, UVec2::new(120, 80), budget)
+                .await
+                .expect("reopened repeat"),
+            target_thumb
+        );
+        window.update(|_, cx| {
+            assert_eq!(
+                cx.read_from_clipboard().and_then(|item| item.text()),
+                Some(clipboard)
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_layer_029_1_expands_source_stroke_geometry(_cx: &mut TestAppContext) {
         let bytes = layer_order_archive_with_options(false, true).await.into();
         let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)

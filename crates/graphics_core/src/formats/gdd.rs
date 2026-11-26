@@ -9536,7 +9536,7 @@ fn collect_saved_layer_preview_branch(
     node_id: NodeId,
     detached: &mut NodeNetwork,
     visiting: &mut BTreeSet<NodeId>,
-    include_hidden_artboards: bool,
+    include_hidden_layers: bool,
 ) -> Result<(), GddArchiveError> {
     const MAX_PREVIEW_NODES: usize = 32;
     if let Some(existing) = detached.nodes.get(&node_id) {
@@ -9555,13 +9555,12 @@ fn collect_saved_layer_preview_branch(
         .nodes
         .get(&node_id)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
-    let (node, profile) = if include_hidden_artboards && !source_node.visible {
+    let (node, profile) = if include_hidden_layers && !source_node.visible {
         // Keep the hidden flag so the pinned compiler passes the Base through.
         let mut visible = source_node.clone();
         visible.visible = true;
-        let (_, profile @ SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })) =
-            checked_saved_graphic_node(&visible)
-                .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?
+        let (_, profile @ SavedGraphicProfile::Layer(_)) = checked_saved_graphic_node(&visible)
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?
         else {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         };
@@ -9600,7 +9599,7 @@ fn collect_saved_layer_preview_branch(
                     *node_id,
                     detached,
                     visiting,
-                    include_hidden_artboards,
+                    include_hidden_layers,
                 )?;
             }
         }
