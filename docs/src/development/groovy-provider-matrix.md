@@ -188,6 +188,23 @@ terminal independently confirms the Surefire process stopped. The test
 rejected the old discovery, kept the existing XML unchanged, and ran the
 same test from fresh discovery to produce a new passing run and report.
 
+The same connected Tests panel ran one selected Gradle `8.13` JUnit case on
+an offline Linux ARM64 host. The report named the container and contained a
+fresh result. Rerun Failed retained the case identity and returned a new
+failed run with fresh XML. In the cancellation case, the selected test worker
+ran under the Gradle daemon in a separate process group. The worker stopped
+and both the terminal and Tests showed cancellation. Gradle had removed the
+previous XML before cancellation, and the cancelled run produced no report or
+late result. A subsequent selected run still passed on the same host.
+
+To replay the Gradle cases, set `GROOVY_GRADLE_TEST_DOCKER_CONTAINER` to the
+full container ID and bind `GROOVY_GRADLE_TEST_DOCKER_ROOT` to
+`/workspaces/tests`. Use a populated `GRADLE_USER_HOME`, the pinned Java
+extension and the prepared JVM Remote Server on the host. Run the opt-in
+`selected_gradle_junit_uses_docker_host_through_tests_panel`,
+`cancelling_stops_a_selected_gradle_junit_over_docker`, and
+`rerunning_a_failed_gradle_junit_over_docker` cases.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and

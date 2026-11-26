@@ -2131,13 +2131,14 @@ pub async fn selected_java_case_through_tests_panel_with_connection(
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-pub(super) async fn selected_maven_case_through_docker_tests_panel(
+pub(super) async fn selected_java_case_through_docker_tests_panel(
     cx: &mut TestAppContext,
+    build_tool: JvmTestBuildTool,
     outcome: JavaTestOutcome,
 ) {
     selected_java_case_with_debug_hooks(
         cx,
-        JvmTestBuildTool::Maven,
+        build_tool,
         outcome,
         JvmWorkflowConnection::Docker,
         None,
@@ -2146,9 +2147,12 @@ pub(super) async fn selected_maven_case_through_docker_tests_panel(
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-fn docker_maven_fixture_container() -> String {
-    let container = std::env::var("GROOVY_MAVEN_TEST_DOCKER_CONTAINER")
-        .expect("disposable Maven test container ID");
+fn docker_test_fixture_container(build_tool: JvmTestBuildTool) -> String {
+    let variable = match build_tool {
+        JvmTestBuildTool::Maven => "GROOVY_MAVEN_TEST_DOCKER_CONTAINER",
+        JvmTestBuildTool::Gradle => "GROOVY_GRADLE_TEST_DOCKER_CONTAINER",
+    };
+    let container = std::env::var(variable).expect("disposable JVM test container ID");
     assert_eq!(container.len(), 64);
     assert!(container.bytes().all(|byte| byte.is_ascii_hexdigit()));
     container
@@ -2157,6 +2161,7 @@ fn docker_maven_fixture_container() -> String {
 #[cfg(unix)]
 async fn selected_junit_process_running(
     connection: JvmWorkflowConnection,
+    _build_tool: JvmTestBuildTool,
     process_id: u32,
 ) -> bool {
     match connection {
@@ -2165,11 +2170,11 @@ async fn selected_junit_process_running(
             let output = util::command::new_command("docker")
                 .args([
                     "exec",
-                    &docker_maven_fixture_container(),
+                    &docker_test_fixture_container(_build_tool),
                     "sh",
                     "-c",
                     "if read -r pid name state tail 2>/dev/null < \"/proc/$1/stat\" && test \"$state\" != Z; then printf running; else printf exited; fi",
-                    "groovy-maven-test",
+                    "groovy-jvm-test",
                     &process_id.to_string(),
                 ])
                 .output()
@@ -2393,6 +2398,11 @@ async fn selected_java_case_with_debug_hooks(
     let use_ssh = connection == JvmWorkflowConnection::Ssh;
     let connected = connection != JvmWorkflowConnection::Local;
     let use_gradle = build_tool == JvmTestBuildTool::Gradle;
+    let use_docker = match connection {
+        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        JvmWorkflowConnection::Docker => true,
+        _ => false,
+    };
     let with_real_providers = outcome == JavaTestOutcome::CombinedGradleWorkflow;
     let debug_selected = matches!(
         debug_hooks,
@@ -2489,7 +2499,11 @@ async fn selected_java_case_with_debug_hooks(
     let root = match connection {
         #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
         JvmWorkflowConnection::Docker => {
-            tempfile::tempdir_in(cached_jvm_fixture_path("GROOVY_MAVEN_TEST_DOCKER_ROOT"))
+            tempfile::tempdir_in(cached_jvm_fixture_path(if use_gradle {
+                "GROOVY_GRADLE_TEST_DOCKER_ROOT"
+            } else {
+                "GROOVY_MAVEN_TEST_DOCKER_ROOT"
+            }))
         }
         _ => tempfile::tempdir(),
     }
@@ -2638,17 +2652,18 @@ async fn selected_java_case_with_debug_hooks(
         )
         .expect("write cancellable test wrapper");
     }
+    if use_gradle && (real_java_process || use_docker) {
+        let wrapper = root.path().join(wrapper_name);
+        let original = std::fs::read_to_string(&wrapper).expect("Gradle wrapper");
+        assert!(original.starts_with("#!/bin/sh"));
+        std::fs::write(
+            wrapper,
+            original.replacen("#!/bin/sh", "#!/bin/sh\nset -- --offline \"$@\"", 1),
+        )
+        .expect("require cached Gradle dependencies");
+    }
     if real_java_process {
-        if use_gradle {
-            let wrapper = root.path().join(wrapper_name);
-            let original = std::fs::read_to_string(&wrapper).expect("Gradle wrapper");
-            assert!(original.starts_with("#!/bin/sh"));
-            std::fs::write(
-                wrapper,
-                original.replacen("#!/bin/sh", "#!/bin/sh\nset -- --offline \"$@\"", 1),
-            )
-            .expect("require cached Gradle dependencies");
-        } else {
+        if !use_gradle {
             std::fs::write(root.path().join(".mvn/maven.config"), "-o\n")
                 .expect("require cached Maven dependencies");
         }
@@ -2748,21 +2763,23 @@ async fn selected_java_case_with_debug_hooks(
             use remote::{DockerConnectionOptions, RemoteConnectionOptions};
 
             let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
-                name: "Groovy Maven Tests qualification".into(),
-                container_id: docker_maven_fixture_container(),
+                name: "Groovy JVM Tests qualification".into(),
+                container_id: docker_test_fixture_container(build_tool),
                 remote_user: "root".into(),
                 ..Default::default()
             });
             let host_root = Path::new("/workspaces/tests").join(
                 root.path()
                     .file_name()
-                    .expect("disposable Maven fixture name"),
+                    .expect("disposable JVM fixture name"),
             );
-            std::fs::write(
-                root.path().join(".mvn/maven.config"),
-                "--offline\n-Dmaven.repo.local=/qualification/maven-cache/repository\n",
-            )
-            .expect("isolated offline Maven configuration");
+            if !use_gradle {
+                std::fs::write(
+                    root.path().join(".mvn/maven.config"),
+                    "--offline\n-Dmaven.repo.local=/qualification/maven-cache/repository\n",
+                )
+                .expect("isolated offline Maven configuration");
+            }
             selected_junit_remote_project(&host_root, app_state, options, "6.8.30", cx).await
         }
         JvmWorkflowConnection::Local => {
@@ -3902,7 +3919,11 @@ async fn selected_java_case_with_debug_hooks(
             .parse::<u32>()
             .expect("numeric selected wrapper process ID");
         #[cfg(unix)]
-        assert!(selected_junit_process_running(connection, child_pid).await);
+        assert!(selected_junit_process_running(connection, build_tool, child_pid).await);
+        let report_removed_while_running = use_gradle
+            && !report
+                .try_exists()
+                .expect("inspect the Gradle report while the worker is active");
         #[cfg(target_os = "macos")]
         if use_ssh {
             let mut ancestor = child_pid;
@@ -4178,7 +4199,7 @@ async fn selected_java_case_with_debug_hooks(
         }
         #[cfg(unix)]
         assert!(
-            !selected_junit_process_running(connection, child_pid).await,
+            !selected_junit_process_running(connection, build_tool, child_pid).await,
             "the selected Java process survived cancellation"
         );
         if matches!(
@@ -4226,21 +4247,30 @@ async fn selected_java_case_with_debug_hooks(
         cx.background_executor.timer(Duration::from_secs(1)).await;
         cx.run_until_parked();
         assert!(!root.path().join("groovy-test-late").exists());
-        if let Ok(metadata) = std::fs::metadata(&report) {
-            assert_eq!(
-                metadata
-                    .modified()
-                    .expect("retained report modification time"),
-                cached_report_modified
-            );
-        } else {
-            assert!(!report.exists(), "cancelled report remains unreadable");
-        }
-        if connected {
-            assert_eq!(
-                std::fs::read(&report).expect("retain the existing host report"),
-                cached_report
-            );
+        match std::fs::read(&report) {
+            Ok(bytes) => {
+                assert!(
+                    !report_removed_while_running,
+                    "a late Gradle report appeared"
+                );
+                assert_eq!(bytes, cached_report);
+                assert_eq!(
+                    std::fs::metadata(&report)
+                        .and_then(|metadata| metadata.modified())
+                        .expect("retained report modification time"),
+                    cached_report_modified
+                );
+            }
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound && (use_gradle || !connected) =>
+            {
+                if use_gradle && connected {
+                    eprintln!(
+                        "Gradle removed the old report. Absent while worker ran: {report_removed_while_running}"
+                    );
+                }
+            }
+            Err(error) => panic!("could not read the retained JUnit report: {error}"),
         }
         assert!(structured.read_with(cx, |store, _| {
             store
@@ -4463,7 +4493,26 @@ async fn selected_java_case_with_debug_hooks(
     let fresh_report = std::fs::read_to_string(&report).expect("fresh JUnit report");
     assert!(fresh_report.contains("messageIsAvailable"));
     #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-    if connection == JvmWorkflowConnection::Docker {
+    if connection == JvmWorkflowConnection::Docker && use_gradle {
+        let host = util::command::new_command("docker")
+            .args([
+                "exec",
+                &docker_test_fixture_container(build_tool),
+                "hostname",
+            ])
+            .output()
+            .await
+            .expect("read Gradle project host name");
+        assert!(host.status.success());
+        let host = std::str::from_utf8(&host.stdout)
+            .expect("UTF-8 Gradle host name")
+            .trim();
+        assert!(!host.is_empty() && fresh_report.contains(&format!("hostname=\"{host}\"")));
+        assert_ne!(fresh_report.as_bytes(), cached_report);
+        eprintln!("Selected Gradle case produced a new report on Docker host {host}");
+    }
+    #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+    if connection == JvmWorkflowConnection::Docker && !use_gradle {
         assert!(fresh_report.contains(r#"name="os.name" value="Linux""#));
         assert!(fresh_report.contains(r#"name="os.arch" value="aarch64""#));
         assert!(fresh_report.contains(r#"name="user.dir" value="/workspaces/tests/"#));
@@ -4498,8 +4547,8 @@ async fn selected_java_case_with_debug_hooks(
                 store
                     .state()
                     .provider(&StructuredProviderId(JVM_JUNIT_PROVIDER_ID.to_string()))
-                    .filter(|provider| provider.completed_runs.len() == 2)
                     .and_then(|provider| provider.last_complete_run.clone())
+                    .filter(|run| run.id != first_run_id)
             });
             if rerun.is_some() {
                 break;
@@ -4512,6 +4561,10 @@ async fn selected_java_case_with_debug_hooks(
         assert_ne!(rerun.id, first_run_id);
         assert_eq!(rerun.summary.failed, 1);
         assert_eq!(rerun.events[0].node_id, selection.node_id);
+        assert_ne!(
+            std::fs::read_to_string(&report).expect("fresh failed-case rerun report"),
+            fresh_report
+        );
         if with_real_providers {
             let (test_buffer, _handle) = project
                 .update(cx, |project, cx| {
