@@ -396,6 +396,10 @@ pub struct GddArtboardCanvasOutput {
     pub render: RenderOutput,
     pub camera: PTZ,
     pub artboard_size: DVec2,
+    pub artboards: Vec<GddArtboardCanvasLayer>,
+}
+
+pub struct GddArtboardCanvasLayer {
     pub pick_target: Option<GddArtboardCanvasPick>,
     pub overlay: Option<GddArtboardCanvasOverlay>,
 }
@@ -3705,7 +3709,7 @@ impl InspectedGddV1 {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
-        let mut graph = self.runtime_graph().await?;
+        let graph = self.runtime_graph().await?;
         let [
             NodeInput::Node {
                 node_id,
@@ -3715,15 +3719,54 @@ impl InspectedGddV1 {
         else {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         };
-        let node_id = *node_id;
+        let root = *node_id;
+        let ids: BTreeMap<_, _> = graph
+            .nodes
+            .iter()
+            .filter(|entry| entry.network_path.is_empty())
+            .map(|entry| (entry.local_id, entry.storage_id))
+            .collect();
+        let mut interface = graph.into_interface()?;
+        let mut detached = NodeNetwork {
+            exports: vec![NodeInput::node(root, 0)],
+            ..Default::default()
+        };
+        collect_saved_layer_preview_branch(
+            interface.document_network(),
+            root,
+            &mut detached,
+            &mut BTreeSet::new(),
+            true,
+        )?;
+        let saved = detached
+            .nodes
+            .get(&root)
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+        if GddArtboardGeometry::read(saved).is_none() {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        }
+        let root_visible = saved.visible;
+        let boards: Vec<_> = if interface.is_artboard(&root, &[]) && interface.is_layer(&root, &[])
+        {
+            load_root_layer_structure(&mut interface)?;
+            LayerNodeIdentifier::ROOT_PARENT
+                .children(interface.document_metadata())
+                .map(LayerNodeIdentifier::to_node)
+                .filter(|id| interface.is_artboard(id, &[]) && interface.is_visible(id, &[]))
+                .collect()
+        } else {
+            Vec::new()
+        };
         if let Some((node, location)) = draft {
-            if node.local_id != node_id || !node.network_path.is_empty() {
+            if !node.network_path.is_empty()
+                || !boards.contains(&node.local_id)
+                || interface.is_locked(&node.local_id, &[])
+            {
                 return Err(GddArchiveError::UnsupportedArtboardGeometry);
             }
-            let saved = graph
-                .network
+            let saved = detached
                 .nodes
-                .get_mut(&node_id)
+                .get_mut(&node.local_id)
                 .ok_or(GddArchiveError::StaleGraphNode)?;
             let original = GddArtboardGeometry::hidden(saved)
                 .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
@@ -3740,17 +3783,27 @@ impl InspectedGddV1 {
                 .ok_or(GddArchiveError::UnsupportedArtboardGeometry)? =
                 NodeInput::value(TaggedValue::DVec2(proposed.location), false);
         }
-        let Some((_, SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { origin, size }))) =
-            graph
-                .network
-                .nodes
-                .get(&node_id)
-                .and_then(checked_saved_graphic_node)
-        else {
-            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        let fitted_boards = if boards.is_empty() && root_visible {
+            std::slice::from_ref(&root)
+        } else {
+            boards.as_slice()
         };
+        let mut bounds: Option<(DVec2, DVec2)> = None;
+        for id in fitted_boards {
+            let (origin, size) = detached
+                .nodes
+                .get(id)
+                .and_then(GddArtboardGeometry::read)
+                .and_then(GddArtboardGeometry::normalized)
+                .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+            let end = origin + size;
+            bounds =
+                Some(bounds.map_or((origin, end), |(min, max)| (min.min(origin), max.max(end))));
+        }
+        let (origin, end) = bounds.ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+        let size = end - origin;
         let logical_size = resolution.as_dvec2() / scale;
-        if !logical_size.is_finite() || logical_size.min_element() <= 0. {
+        if !logical_size.is_finite() || logical_size.min_element() <= 0. || !size.is_finite() {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
         let camera = camera.unwrap_or_else(|| {
@@ -3777,36 +3830,37 @@ impl InspectedGddV1 {
             for_export: true,
             ..Default::default()
         };
-        let render =
-            Self::render_saved_layer_svg(&graph.network, node_id, configuration, budget).await?;
-        let storage_id = graph
-            .nodes
-            .iter()
-            .find(|entry| entry.local_id == node_id && entry.network_path.is_empty())
-            .map(|entry| entry.storage_id);
-        let (pick_target, overlay) = if let Some((storage_id, targets)) =
-            storage_id.zip(render.metadata.click_targets.get(&node_id))
-        {
-            let interface = graph.into_interface()?;
-            let metadata = &render.metadata;
-            let pane_to_document = transform.inverse();
-            let parent_to_pane = metadata
-                .upstream_footprints
-                .get(&node_id)
-                .map_or(transform, |footprint| footprint.transform);
-            let local = metadata
-                .local_transforms
-                .get(&node_id)
-                .copied()
-                .unwrap_or_default();
-            let layer_to_document = pane_to_document * parent_to_pane * local;
-            if interface.is_layer(&node_id, &[])
-                && interface.is_artboard(&node_id, &[])
-                && interface.is_visible(&node_id, &[])
-                && !targets.is_empty()
-                && pane_to_document.is_finite()
-                && layer_to_document.inverse().is_finite()
-            {
+        let render = Self::render_detached_saved_layer_svg(detached, configuration, budget).await?;
+        let pane_to_document = transform.inverse();
+        let metadata = &render.metadata;
+        let artboards = boards
+            .into_iter()
+            .map(|id| {
+                let empty = GddArtboardCanvasLayer {
+                    pick_target: None,
+                    overlay: None,
+                };
+                let Some((&storage_id, targets)) =
+                    ids.get(&id).zip(metadata.click_targets.get(&id))
+                else {
+                    return empty;
+                };
+                let parent_to_pane = metadata
+                    .upstream_footprints
+                    .get(&id)
+                    .map_or(transform, |footprint| footprint.transform);
+                let local = metadata
+                    .local_transforms
+                    .get(&id)
+                    .copied()
+                    .unwrap_or_default();
+                let layer_to_document = pane_to_document * parent_to_pane * local;
+                if targets.is_empty()
+                    || !pane_to_document.is_finite()
+                    || !layer_to_document.inverse().is_finite()
+                {
+                    return empty;
+                }
                 let bounds = targets
                     .iter()
                     .filter_map(|target| target.bounding_box_with_transform(layer_to_document))
@@ -3815,13 +3869,13 @@ impl InspectedGddV1 {
                     });
                 let overlay = bounds.map(|bounds| {
                     GddArtboardCanvasOverlay::from_document_bounds(
-                        interface.display_name(&node_id, &[]),
+                        interface.display_name(&id, &[]),
                         bounds,
                         transform,
                         camera,
                     )
                 });
-                let pick = (draft.is_none() && !interface.is_locked(&node_id, &[])).then(|| {
+                let pick_target = (draft.is_none() && !interface.is_locked(&id, &[])).then(|| {
                     GddArtboardCanvasPick {
                         storage_id,
                         snapshot: self.snapshot.clone(),
@@ -3830,19 +3884,17 @@ impl InspectedGddV1 {
                         targets: targets.clone(),
                     }
                 });
-                (pick, overlay)
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
+                GddArtboardCanvasLayer {
+                    pick_target,
+                    overlay,
+                }
+            })
+            .collect();
         Ok(GddArtboardCanvasOutput {
             render,
             camera,
             artboard_size: size,
-            pick_target,
-            overlay,
+            artboards,
         })
     }
 
@@ -3852,13 +3904,21 @@ impl InspectedGddV1 {
         configuration: RenderConfig,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<RenderOutput, GddArchiveError> {
-        validate_svg_configuration(configuration, budget)
-            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
         let mut detached = NodeNetwork {
             exports: vec![NodeInput::node(selected, 0)],
             ..Default::default()
         };
         collect_layer_preview_node(network, selected, &mut detached, &mut BTreeSet::new())?;
+        Self::render_detached_saved_layer_svg(detached, configuration, budget).await
+    }
+
+    async fn render_detached_saved_layer_svg(
+        detached: NodeNetwork,
+        configuration: RenderConfig,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, GddArchiveError> {
+        validate_svg_configuration(configuration, budget)
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
         validate_saved_ellipse_radius_sources(&detached).await?;
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
@@ -6079,15 +6139,7 @@ fn project_root_layers(
     if !ids.iter().any(|(node, _)| interface.is_layer(node, &[])) {
         return Ok(Vec::new());
     }
-    // The pinned traversal assumes acyclic inputs and reserves both ends of the layer ID range.
-    if [NodeId(0), NodeId(u64::MAX)]
-        .iter()
-        .any(|node| interface.document_node(node, &[]).is_some() && interface.is_layer(node, &[]))
-        || !interface.document_network().is_acyclic()
-    {
-        return Err(GddArchiveError::InvalidRootLayerGraph);
-    }
-    interface.load_structure();
+    load_root_layer_structure(interface)?;
     let metadata = interface.document_metadata();
     let selection = interface.selected_nodes();
     let mut pending = Vec::new();
@@ -6126,6 +6178,19 @@ fn project_root_layers(
         }
     }
     Ok(layers)
+}
+
+fn load_root_layer_structure(interface: &mut NodeNetworkInterface) -> Result<(), GddArchiveError> {
+    // The pinned traversal assumes acyclic inputs and reserves both ends of the layer ID range.
+    if [NodeId(0), NodeId(u64::MAX)]
+        .iter()
+        .any(|node| interface.document_node(node, &[]).is_some() && interface.is_layer(node, &[]))
+        || !interface.document_network().is_acyclic()
+    {
+        return Err(GddArchiveError::InvalidRootLayerGraph);
+    }
+    interface.load_structure();
+    Ok(())
 }
 
 fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {
@@ -6204,6 +6269,16 @@ fn collect_layer_preview_node(
     detached: &mut NodeNetwork,
     visiting: &mut BTreeSet<NodeId>,
 ) -> Result<(), GddArchiveError> {
+    collect_saved_layer_preview_branch(source, node_id, detached, visiting, false)
+}
+
+fn collect_saved_layer_preview_branch(
+    source: &NodeNetwork,
+    node_id: NodeId,
+    detached: &mut NodeNetwork,
+    visiting: &mut BTreeSet<NodeId>,
+    include_hidden_artboards: bool,
+) -> Result<(), GddArchiveError> {
     const MAX_PREVIEW_NODES: usize = 32;
     if let Some(existing) = detached.nodes.get(&node_id) {
         if numeric_preview_inputs(existing).is_some() {
@@ -6221,8 +6296,21 @@ fn collect_layer_preview_node(
         .nodes
         .get(&node_id)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
-    let (node, profile) = checked_saved_graphic_node(source_node)
-        .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+    let (node, profile) = if include_hidden_artboards && !source_node.visible {
+        // Keep the hidden flag so the pinned compiler passes the Base through.
+        let mut visible = source_node.clone();
+        visible.visible = true;
+        let (_, profile @ SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })) =
+            checked_saved_graphic_node(&visible)
+                .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?
+        else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        (source_node.clone(), profile)
+    } else {
+        checked_saved_graphic_node(source_node)
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?
+    };
     for (index, input) in node.inputs.iter().enumerate() {
         if let NodeInput::Node {
             node_id,
@@ -6248,7 +6336,13 @@ fn collect_layer_preview_node(
                 }
                 detached.nodes.extend(branch.nodes);
             } else {
-                collect_layer_preview_node(source, *node_id, detached, visiting)?;
+                collect_saved_layer_preview_branch(
+                    source,
+                    *node_id,
+                    detached,
+                    visiting,
+                    include_hidden_artboards,
+                )?;
             }
         }
     }
@@ -10956,10 +11050,19 @@ mod tests {
                     .render_document_artboard_canvas_svg(viewport, scale, Some(camera), limits)
                     .await
                     .expect("original rendered frame");
-                let pick = canvas.pick_target.expect("Artboard render metadata");
+                let [artboard] = canvas.artboards.as_slice() else {
+                    panic!("single root Artboard");
+                };
+                let pick = artboard
+                    .pick_target
+                    .as_ref()
+                    .expect("Artboard render metadata");
                 let pane = NavigationMessageHandler::default()
                     .calculate_offset_transform(viewport.as_dvec2() / (2. * scale), &camera);
-                let overlay = canvas.overlay.expect("Artboard overlay geometry");
+                let overlay = artboard
+                    .overlay
+                    .as_ref()
+                    .expect("Artboard overlay geometry");
                 assert_eq!(overlay.name, "Artboard");
                 let expected_outline = [
                     DVec2::new(8., -12.),
@@ -11000,8 +11103,11 @@ mod tests {
                 .render_document_artboard_canvas_svg(viewport, 2., Some(camera), limits)
                 .await
                 .expect("locked Artboard remains visible");
-            assert!(canvas.pick_target.is_none());
-            assert!(canvas.overlay.is_some());
+            let [artboard] = canvas.artboards.as_slice() else {
+                panic!("single locked root Artboard");
+            };
+            assert!(artboard.pick_target.is_none());
+            assert!(artboard.overlay.is_some());
         });
     }
 
