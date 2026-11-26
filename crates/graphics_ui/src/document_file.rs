@@ -669,6 +669,7 @@ struct SavedScenePan {
 
 struct SavedSceneArtboardDraw {
     gesture: ArtboardDraw,
+    camera: PTZ,
     pane: gpui::Bounds<gpui::Pixels>,
     placement: Option<GddArtboardGeometry>,
 }
@@ -716,6 +717,17 @@ impl SavedSceneArtboardMove {
 }
 
 impl SavedSceneCanvas {
+    fn drawing_navigation(&self) -> Option<ArtboardNavigation> {
+        match self.frame {
+            SavedSceneFrame::Blank => Some(ArtboardNavigation {
+                camera: self.camera_override.unwrap_or_default(),
+                artboard_size: DVec2::ZERO,
+            }),
+            SavedSceneFrame::Ready(_) if !self.artboards.is_empty() => self.navigation,
+            _ => None,
+        }
+    }
+
     fn take_artboard_move(
         &mut self,
         window: Option<&mut Window>,
@@ -1568,6 +1580,7 @@ impl GraphiteDocumentItem {
         }
         let revision = model.revision.clone();
         let contents = model.gdd_contents().cloned();
+        let working_copy = model.working.is_some();
         let blank_working_graph = model
             .working
             .as_ref()
@@ -1578,7 +1591,7 @@ impl GraphiteDocumentItem {
             drop(canvas.take_artboard_move(Some(window), cx));
             canvas.artboard_draw = None;
         }
-        if !blank_working_graph {
+        if !working_copy {
             canvas.draw_armed = false;
         }
         if (revision_changed || target_changed)
@@ -1697,6 +1710,7 @@ impl GraphiteDocumentItem {
             || !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision)
             || SavedSceneTarget::measure(pane.size, window.scale_factor()) != Some(target)
             || canvas.pan.is_some()
+            || canvas.artboard_draw.is_some()
             || canvas.artboard_move.is_some()
         {
             return;
@@ -1733,6 +1747,7 @@ impl GraphiteDocumentItem {
             || event.modifiers.alt
             || event.modifiers.control
             || canvas.pan.is_some()
+            || canvas.artboard_draw.is_some()
             || canvas.artboard_move.is_some()
         {
             return;
@@ -1830,29 +1845,41 @@ impl GraphiteDocumentItem {
         let Some(canvas) = &mut self.scene_canvas else {
             return;
         };
-        let Some(target) = canvas.target else {
+        let Some((target, navigation)) = canvas.target.zip(canvas.drawing_navigation()) else {
             return;
         };
+        let model = self.model.read(cx);
         if !canvas.draw_armed
-            || !matches!(canvas.frame, SavedSceneFrame::Blank)
+            || canvas.pan.is_some()
             || canvas.artboard_draw.is_some()
+            || model.working.is_none()
             || self.copy_task.is_some()
             || !Arc::ptr_eq(&canvas.instance, instance)
-            || !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision)
+            || !Arc::ptr_eq(&canvas.revision, &model.revision)
             || SavedSceneTarget::measure(pane.size, window.scale_factor()) != Some(target)
             || !pane.contains(&event.position)
         {
             return;
         }
-        let navigation = ArtboardNavigation {
-            camera: canvas.camera_override.unwrap_or_default(),
-            artboard_size: DVec2::ZERO,
-        };
+        let position = event.position - pane.origin;
+        let point = DVec2::new(
+            f64::from(f32::from(position.x)),
+            f64::from(f32::from(position.y)),
+        );
+        if canvas
+            .artboards
+            .iter()
+            .filter_map(|artboard| artboard.pick_target.as_ref())
+            .any(|pick| pick.contains(point))
+        {
+            return;
+        }
         canvas.artboard_draw = Some(SavedSceneArtboardDraw {
             gesture: ArtboardDraw::new(
-                event.position - pane.origin,
+                position,
                 navigation.document_to_pane(target.logical_size()),
             ),
+            camera: navigation.camera,
             pane,
             placement: None,
         });
@@ -1919,7 +1946,9 @@ impl GraphiteDocumentItem {
         if !Arc::ptr_eq(&canvas.revision, &model.revision)
             || canvas.target != SavedSceneTarget::measure(pane.size, window.scale_factor())
             || pane != draw.pane
-            || !matches!(canvas.frame, SavedSceneFrame::Blank)
+            || canvas
+                .drawing_navigation()
+                .is_none_or(|navigation| navigation.camera != draw.camera)
             || model.working.is_none()
             || self.copy_task.is_some()
         {
@@ -1936,12 +1965,12 @@ impl GraphiteDocumentItem {
             return;
         };
         let revision = model.revision.clone();
-        canvas.camera_override = Some(canvas.camera_override.unwrap_or_default());
+        canvas.camera_override = Some(draw.camera);
         self.stage_working_snapshot(
             revision,
             async move {
                 contents
-                    .create_first_document_artboard_in_copy(placement, ARCHIVE_BUDGET)
+                    .create_document_artboard_in_copy(placement, ARCHIVE_BUDGET)
                     .await
             },
             window,
@@ -2269,6 +2298,9 @@ impl GraphiteDocumentItem {
                     .map(|placement| draw.gesture.outline(placement))
             });
         let blank = current && matches!(canvas.frame, SavedSceneFrame::Blank);
+        let can_draw = current
+            && self.model.read(cx).working.is_some()
+            && canvas.drawing_navigation().is_some();
         let moving = canvas.artboard_move.as_ref().filter(|_| current);
         let draft = moving.and_then(|moving| {
             moving
@@ -2375,7 +2407,7 @@ impl GraphiteDocumentItem {
                                 )),
                             ),
                     )
-                    .when(blank, |toolbar| {
+                    .when(can_draw, |toolbar| {
                         toolbar.child(
                             div()
                                 .debug_selector(|| "GRAPHITE-GDD-CANVAS-DRAW-ARTBOARD".into())
@@ -2390,10 +2422,13 @@ impl GraphiteDocumentItem {
                                     )
                                     .disabled(self.copy_task.is_some())
                                     .on_click(cx.listener(
-                                        |item, _, _, cx| {
+                                        |item, _, window, cx| {
                                             if let Some(canvas) = &mut item.scene_canvas {
                                                 canvas.draw_armed = !canvas.draw_armed;
+                                                canvas.pick_armed = false;
+                                                canvas.move_armed = false;
                                                 canvas.artboard_draw = None;
+                                                drop(canvas.take_artboard_move(Some(window), cx));
                                                 cx.notify();
                                             }
                                         },
@@ -2419,6 +2454,8 @@ impl GraphiteDocumentItem {
                                         if let Some(canvas) = &mut item.scene_canvas {
                                             canvas.pick_armed = !canvas.pick_armed;
                                             canvas.move_armed = false;
+                                            canvas.draw_armed = false;
+                                            canvas.artboard_draw = None;
                                             drop(canvas.take_artboard_move(Some(window), cx));
                                             cx.notify();
                                         }
@@ -2444,6 +2481,8 @@ impl GraphiteDocumentItem {
                                         if let Some(canvas) = &mut item.scene_canvas {
                                             canvas.move_armed = !canvas.move_armed;
                                             canvas.pick_armed = false;
+                                            canvas.draw_armed = false;
+                                            canvas.artboard_draw = None;
                                             drop(canvas.take_artboard_move(Some(window), cx));
                                             cx.notify();
                                         }
@@ -2514,7 +2553,7 @@ impl GraphiteDocumentItem {
                         |pane| pane.cursor(gpui::CursorStyle::ClosedHand),
                     )
                     .when(
-                        (canvas.pick_armed || canvas.move_armed || (blank && canvas.draw_armed))
+                        (canvas.pick_armed || canvas.move_armed || (can_draw && canvas.draw_armed))
                             && canvas.pan.is_none()
                             && canvas.artboard_move.is_none(),
                         |pane| pane.cursor(gpui::CursorStyle::Crosshair),
@@ -14522,7 +14561,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_gra_tool_008_2_workspace_draws_the_first_artboard_on_a_blank_canvas(
+    async fn at_gra_tool_008_2_workspace_draws_and_stacks_artboards_on_canvas(
         cx: &mut TestAppContext,
     ) {
         let blank = create_gdd_folder(621, 187, "Blank Artboard Canvas".into(), ARCHIVE_BUDGET)
@@ -14716,6 +14755,165 @@ mod tests {
             assert_eq!(board.storage_id(), address);
             assert_eq!(board.artboard_geometry(), Some(expected));
         });
+        let (pane, transform, history) = {
+            let pane = window
+                .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+                .expect("Canvas pane after redo");
+            let (transform, history) = item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let target = canvas.target.expect("measured Canvas");
+                let navigation = canvas.drawing_navigation().expect("ready Canvas");
+                let history = item
+                    .model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("working GDD")
+                    .history_len();
+                (navigation.document_to_pane(target.logical_size()), history)
+            });
+            (pane, transform, history)
+        };
+        let at = |position| {
+            let point = transform.transform_point2(position);
+            pane.origin + gpui::point(px(point.x as f32), px(point.y as f32))
+        };
+        let draw_again = |window: &mut gpui::VisualTestContext, start, end| {
+            pointer(
+                window,
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    position: at(start),
+                    button: gpui::MouseButton::Left,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+            );
+            pointer(
+                window,
+                gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                    position: at(end),
+                    pressed_button: Some(gpui::MouseButton::Left),
+                    modifiers: Default::default(),
+                }),
+            );
+            pointer(
+                window,
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    position: at(end),
+                    button: gpui::MouseButton::Left,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                }),
+            );
+            window.run_until_parked();
+            paint(window);
+        };
+        let second_geometry = GddArtboardGeometry {
+            location: DVec2::new(-10., -70.),
+            dimensions: DVec2::new(170., 140.),
+        };
+        let assert_stack = |graph: &GddGraphInspection| {
+            let root = graph
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("root");
+            let (new_front, output) = root
+                .connected_export(&graph.nodes)
+                .expect("new root Artboard");
+            assert_eq!(output, 0);
+            assert_ne!(new_front.storage_id(), address);
+            assert_eq!(new_front.artboard_geometry(), Some(second_geometry));
+            assert_eq!(
+                new_front
+                    .input_ports()
+                    .first()
+                    .and_then(|input| input.source.as_ref()),
+                Some(&GddGraphPortSource::Node {
+                    storage_id: address,
+                    output_index: 0
+                })
+            );
+            let original = graph
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == address)
+                .expect("original Artboard");
+            assert_eq!(original.artboard_geometry(), Some(expected));
+            new_front.storage_id()
+        };
+        draw_again(window, DVec2::ZERO, DVec2::new(160., 70.));
+        item.read_with(window, |item, cx| {
+            assert_eq!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("working GDD")
+                    .history_len(),
+                history
+            );
+        });
+        draw_again(window, DVec2::new(160., -70.), DVec2::new(-10., 70.));
+        let second_address = item.read_with(window, |item, cx| {
+            assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback);
+            let model = item.model.read(cx);
+            let graph = &model.working.as_ref().expect("working GDD").inspection;
+            assert!(model.gdd_contents().expect("working GDD").history_len() > history);
+            let second_address = assert_stack(graph);
+            let canvas = item.scene_canvas.as_ref().expect("Canvas after creation");
+            let navigation = canvas.navigation.expect("accepted Canvas render");
+            assert_eq!(
+                navigation.document_to_pane(canvas.target.expect("measured Canvas").logical_size()),
+                transform
+            );
+            let overlap = transform.transform_point2(DVec2::ZERO);
+            let pick = canvas
+                .artboards
+                .iter()
+                .filter_map(|board| board.pick_target.as_ref())
+                .find(|pick| pick.contains(overlap))
+                .expect("pick in overlap");
+            assert!(
+                pick.matches_node(
+                    graph
+                        .nodes
+                        .iter()
+                        .find(|node| node.storage_id() == second_address)
+                        .expect("new front")
+                )
+            );
+            second_address
+        });
+        window.dispatch_action(editor::actions::Undo);
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let graph = &item
+                .model
+                .read(cx)
+                .working
+                .as_ref()
+                .expect("working GDD")
+                .inspection;
+            let root = graph
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("root");
+            let (board, _) = root
+                .connected_export(&graph.nodes)
+                .expect("original export restored");
+            assert_eq!(board.storage_id(), address);
+            assert!(
+                !graph
+                    .nodes
+                    .iter()
+                    .any(|node| node.storage_id() == second_address)
+            );
+        });
+        window.dispatch_action(editor::actions::Redo);
+        window.run_until_parked();
+        paint(window);
         click(window, "GRAPHITE-GDD-CANVAS-BACK");
         let destination = PathBuf::from("/project/drawn-artboard.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
@@ -14725,16 +14923,7 @@ mod tests {
             .await
             .expect("reopen newly drawn Artboard");
         let graph = reopened.graph_inspection().await.expect("saved graph");
-        let root = graph
-            .networks
-            .iter()
-            .find(|network| network.parent.is_none())
-            .expect("root");
-        let (board, _) = root
-            .connected_export(&graph.nodes)
-            .expect("saved Artboard output");
-        assert_eq!(board.storage_id(), address);
-        assert_eq!(board.artboard_geometry(), Some(expected));
+        assert_eq!(assert_stack(&graph), second_address);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
             original
