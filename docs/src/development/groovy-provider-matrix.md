@@ -170,6 +170,16 @@ its method selector. Restoring the source recovers the original case
 identity. The rejected requests leave the Surefire report contents and
 modification time intact.
 
+The opt-in `cancelling_stops_a_selected_junit_over_docker` case uses the same
+offline Linux ARM64 setup. It waits for the selected Surefire test to start
+before cancelling in the shared Tests panel. Docker's local exec process can
+exit while Maven and Surefire are still running on the host. The project-host
+Task runner now stops its own process group and acknowledges the stop. The
+client confirms cancellation after that acknowledgement and terminal exit.
+The test verified that the Surefire process stopped, the test wrote no late
+completion marker, and the prior report retained its contents and modification
+time. The passing selected-test case continued to produce fresh host results.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and

@@ -1,5 +1,8 @@
 mod headless_project;
 
+#[cfg(target_os = "linux")]
+mod docker_task;
+
 #[cfg(test)]
 mod remote_editing_tests;
 
@@ -113,6 +116,16 @@ pub enum Commands {
     #[cfg(feature = "jvm-tools")]
     #[command(hide = true)]
     JavaDebugRelay { endpoint: std::net::SocketAddr },
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    DockerTaskRun {
+        identity: String,
+        #[arg(last = true, required = true, allow_hyphen_values = true)]
+        command: Vec<std::ffi::OsString>,
+    },
+    #[cfg(target_os = "linux")]
+    #[command(hide = true)]
+    DockerTaskCancel { identity: String },
     Version {
         #[arg(long, hide = true)]
         isolated_recipe_test: bool,
@@ -215,6 +228,17 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             smol::Unblock::new(std::io::stdin()),
             smol::Unblock::new(std::io::stdout()),
         )),
+        #[cfg(target_os = "linux")]
+        Commands::DockerTaskRun { identity, command } => {
+            let (program, arguments) = command
+                .split_first()
+                .context("Missing Docker Task command")?;
+            let mut command = std::process::Command::new(program);
+            command.args(arguments);
+            std::process::exit(docker_task::run(&identity, command)?);
+        }
+        #[cfg(target_os = "linux")]
+        Commands::DockerTaskCancel { identity } => docker_task::cancel(&identity),
         Commands::Version {
             isolated_recipe_test,
         } => {

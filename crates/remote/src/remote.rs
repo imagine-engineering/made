@@ -13,8 +13,8 @@ pub use remote_client::OpenWslPath;
 pub use remote_client::{
     CommandTemplate, ConnectionIdentifier, ConnectionState, Interactive, ProxyMode, RemoteArch,
     RemoteClient, RemoteClientDelegate, RemoteClientEvent, RemoteConnection,
-    RemoteConnectionOptions, RemoteOs, RemotePlatform, RemoteRequestActivity, connect,
-    has_active_connection,
+    RemoteConnectionOptions, RemoteOs, RemotePlatform, RemoteRequestActivity, RemoteTaskCommand,
+    connect, has_active_connection,
 };
 pub use remote_identity::{
     RemoteConnectionIdentity, remote_connection_identity, same_remote_connection_identity,

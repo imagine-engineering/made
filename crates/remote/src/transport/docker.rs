@@ -30,7 +30,7 @@ use sha2::{Digest as _, Sha256};
 use crate::{
     RemoteArch, RemoteClientDelegate, RemoteConnection, RemoteConnectionOptions, RemoteOs,
     RemotePlatform,
-    remote_client::{CommandTemplate, Interactive},
+    remote_client::{CommandTemplate, Interactive, RemoteTaskCommand},
     transport::parse_platform,
 };
 
@@ -1476,6 +1476,54 @@ impl RemoteConnection for DockerExecConnection {
         _forwards: Vec<(u16, String, u16)>,
     ) -> Result<CommandTemplate> {
         Err(anyhow::anyhow!("Not currently supported for docker_exec"))
+    }
+
+    fn build_managed_task_command(
+        &self,
+        program: &str,
+        args: &[String],
+        env: &HashMap<String, String>,
+        working_dir: Option<String>,
+    ) -> Result<Option<RemoteTaskCommand>> {
+        if self.connection_options.isolated_recipe_test.is_some()
+            || self.remote_platform().os != RemoteOs::Linux
+        {
+            return Ok(None);
+        }
+        let server = self
+            .remote_binary_relpath
+            .as_ref()
+            .context("Container Remote Server is unavailable for Tasks")?;
+        let server = format!(
+            "{}/{}",
+            self.remote_dir_for_server.trim_end_matches('/'),
+            server.as_unix_str(),
+        );
+        let identity = uuid::Uuid::new_v4().simple().to_string();
+        let mut launch_args = vec![
+            "docker-task-run".into(),
+            identity.clone(),
+            "--".into(),
+            program.into(),
+        ];
+        launch_args.extend_from_slice(args);
+        let launch = self.build_command(
+            Some(server.clone()),
+            &launch_args,
+            env,
+            working_dir,
+            None,
+            Interactive::Yes,
+        )?;
+        let cancel = self.build_command(
+            Some(server),
+            &["docker-task-cancel".into(), identity],
+            &HashMap::default(),
+            None,
+            None,
+            Interactive::No,
+        )?;
+        Ok(Some(RemoteTaskCommand { launch, cancel }))
     }
 
     fn build_java_debug_relay_command(

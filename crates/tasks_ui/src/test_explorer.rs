@@ -3635,7 +3635,22 @@ mod tests {
     #[gpui::test]
     #[ignore = "requires a disposable offline Linux ARM64 Docker host with cached Maven, Java 6.8.30 and the JVM Remote Server"]
     async fn selected_maven_junit_uses_docker_host_through_tests_panel(cx: &mut TestAppContext) {
-        super::jvm_workflow::selected_maven_case_through_docker_tests_panel(cx).await;
+        super::jvm_workflow::selected_maven_case_through_docker_tests_panel(
+            cx,
+            JavaTestOutcome::Pass,
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    #[gpui::test]
+    #[ignore = "requires a disposable offline Linux ARM64 Docker host with cached Maven, Java 6.8.30 and the JVM Remote Server"]
+    async fn cancelling_stops_a_selected_junit_over_docker(cx: &mut TestAppContext) {
+        super::jvm_workflow::selected_maven_case_through_docker_tests_panel(
+            cx,
+            JavaTestOutcome::CancelJavaProcess,
+        )
+        .await;
     }
 
     #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]

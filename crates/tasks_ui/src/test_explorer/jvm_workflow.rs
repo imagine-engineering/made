@@ -2131,15 +2131,65 @@ pub async fn selected_java_case_through_tests_panel_with_connection(
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-pub(super) async fn selected_maven_case_through_docker_tests_panel(cx: &mut TestAppContext) {
+pub(super) async fn selected_maven_case_through_docker_tests_panel(
+    cx: &mut TestAppContext,
+    outcome: JavaTestOutcome,
+) {
     selected_java_case_with_debug_hooks(
         cx,
         JvmTestBuildTool::Maven,
-        JavaTestOutcome::Pass,
+        outcome,
         JvmWorkflowConnection::Docker,
         None,
     )
     .await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+fn docker_maven_fixture_container() -> String {
+    let container = std::env::var("GROOVY_MAVEN_TEST_DOCKER_CONTAINER")
+        .expect("disposable Maven test container ID");
+    assert_eq!(container.len(), 64);
+    assert!(container.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    container
+}
+
+#[cfg(unix)]
+async fn selected_junit_process_running(
+    connection: JvmWorkflowConnection,
+    process_id: u32,
+) -> bool {
+    match connection {
+        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        JvmWorkflowConnection::Docker => {
+            let output = util::command::new_command("docker")
+                .args([
+                    "exec",
+                    &docker_maven_fixture_container(),
+                    "sh",
+                    "-c",
+                    "if read -r pid name state tail 2>/dev/null < \"/proc/$1/stat\" && test \"$state\" != Z; then printf running; else printf exited; fi",
+                    "groovy-maven-test",
+                    &process_id.to_string(),
+                ])
+                .output()
+                .await
+                .expect("check the selected process on Docker");
+            assert!(output.status.success(), "{:?}", output.stderr);
+            match output.stdout.as_slice() {
+                b"running" => true,
+                b"exited" => false,
+                _ => panic!("unexpected Docker process state: {:?}", output.stdout),
+            }
+        }
+        _ => util::command::new_command("/bin/kill")
+            .args(["-0", &process_id.to_string()])
+            .output()
+            .await
+            .expect("check the selected process")
+            .status
+            .success(),
+    }
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
@@ -2696,13 +2746,9 @@ async fn selected_java_case_with_debug_hooks(
         JvmWorkflowConnection::Docker => {
             use remote::{DockerConnectionOptions, RemoteConnectionOptions};
 
-            let container_id = std::env::var("GROOVY_MAVEN_TEST_DOCKER_CONTAINER")
-                .expect("disposable Maven test container ID");
-            assert_eq!(container_id.len(), 64);
-            assert!(container_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
             let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
                 name: "Groovy Maven Tests qualification".into(),
-                container_id,
+                container_id: docker_maven_fixture_container(),
                 remote_user: "root".into(),
                 ..Default::default()
             });
@@ -3855,15 +3901,7 @@ async fn selected_java_case_with_debug_hooks(
             .parse::<u32>()
             .expect("numeric selected wrapper process ID");
         #[cfg(unix)]
-        assert!(
-            util::command::new_command("/bin/kill")
-                .args(["-0", &child_pid.to_string()])
-                .output()
-                .await
-                .expect("check running selected wrapper")
-                .status
-                .success()
-        );
+        assert!(selected_junit_process_running(connection, child_pid).await);
         #[cfg(target_os = "macos")]
         if use_ssh {
             let mut ancestor = child_pid;
@@ -4122,13 +4160,8 @@ async fn selected_java_case_with_debug_hooks(
         }
         #[cfg(unix)]
         assert!(
-            !util::command::new_command("/bin/kill")
-                .args(["-0", &child_pid.to_string()])
-                .output()
-                .await
-                .expect("check terminated selected wrapper")
-                .status
-                .success()
+            !selected_junit_process_running(connection, child_pid).await,
+            "the selected Java process survived cancellation"
         );
         if matches!(
             outcome,

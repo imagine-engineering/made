@@ -123,6 +123,11 @@ pub struct CommandTemplate {
     pub env: HashMap<String, String>,
 }
 
+pub struct RemoteTaskCommand {
+    pub launch: CommandTemplate,
+    pub cancel: CommandTemplate,
+}
+
 /// Whether a command should be run with TTY allocation for interactive use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Interactive {
@@ -1408,6 +1413,18 @@ impl RemoteClient {
         self.remote_connection()
             .context("no remote connection")?
             .build_java_debug_relay_command(endpoint)
+    }
+
+    pub fn build_managed_task_command(
+        &self,
+        program: &str,
+        args: &[String],
+        env: &HashMap<String, String>,
+        working_dir: Option<String>,
+    ) -> Result<Option<RemoteTaskCommand>> {
+        self.remote_connection()
+            .context("no remote connection")?
+            .build_managed_task_command(program, args, env, working_dir)
     }
 
     pub fn upload_directory(
@@ -3554,6 +3571,15 @@ pub trait RemoteConnection: Send + Sync {
         &self,
         forwards: Vec<(u16, String, u16)>,
     ) -> Result<CommandTemplate>;
+    fn build_managed_task_command(
+        &self,
+        _program: &str,
+        _args: &[String],
+        _env: &HashMap<String, String>,
+        _working_dir: Option<String>,
+    ) -> Result<Option<RemoteTaskCommand>> {
+        Ok(None)
+    }
     fn build_java_debug_relay_command(
         &self,
         _endpoint: std::net::SocketAddr,

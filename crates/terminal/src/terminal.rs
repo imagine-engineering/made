@@ -22,7 +22,7 @@ use mappings::mouse::{
     scroll_report,
 };
 
-use async_channel::{Receiver, Sender};
+use async_channel::{Receiver, Sender, bounded};
 use collections::{HashMap, VecDeque};
 use futures::StreamExt;
 use pty_info::{ProcessIdGetter, PtyProcessInfo};
@@ -1221,6 +1221,7 @@ fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) ->
 pub struct TerminalBuilder {
     terminal: Terminal,
     events_rx: UnboundedReceiver<PtyEvent>,
+    remote_task_cancel_command: Option<util::command::Command>,
 }
 
 impl TerminalBuilder {
@@ -1264,6 +1265,7 @@ impl TerminalBuilder {
 
         let terminal = Terminal {
             task: None,
+            remote_task_cancellation: None,
             terminal_type: TerminalType::DisplayOnly,
             subprocess: None,
             completion_tx: None,
@@ -1325,6 +1327,7 @@ impl TerminalBuilder {
         TerminalBuilder {
             terminal,
             events_rx,
+            remote_task_cancel_command: None,
         }
     }
 
@@ -1730,6 +1733,7 @@ impl TerminalBuilder {
             let no_task = task.is_none();
             let terminal = Terminal {
                 task,
+                remote_task_cancellation: None,
                 terminal_type,
                 subprocess,
                 completion_tx,
@@ -1832,12 +1836,76 @@ impl TerminalBuilder {
             Ok(TerminalBuilder {
                 terminal,
                 events_rx,
+                remote_task_cancel_command: None,
             })
         };
         cx.background_spawn(fut)
     }
 
+    pub fn with_remote_task_cancellation(
+        mut self,
+        command: Option<util::command::Command>,
+    ) -> Self {
+        self.remote_task_cancel_command = command;
+        self
+    }
+
     pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
+        if let Some(mut command) = self.remote_task_cancel_command.take() {
+            let (send, receive) = bounded(1);
+            self.terminal.remote_task_cancellation = Some(RemoteTaskCancellation {
+                signal: send,
+                requested: false,
+                confirmed: false,
+            });
+            let handle = self
+                .terminal
+                .task
+                .as_ref()
+                .and_then(|task| task.structured_task.clone());
+            let terminal_id = task::StructuredTerminalId(cx.entity_id().as_u64());
+            command
+                .kill_on_drop(true)
+                .stdin(util::command::Stdio::null())
+                .stdout(util::command::Stdio::null())
+                .stderr(util::command::Stdio::null());
+            cx.spawn(async move |terminal, cx| {
+                while receive.recv().await.is_ok() {
+                    let timer = cx.background_executor().timer(Duration::from_secs(25));
+                    let result = futures::future::select(Box::pin(command.status()), timer).await;
+                    if matches!(result, futures::future::Either::Left((Ok(status), _)) if status.success()) {
+                        let terminal_finished = terminal
+                            .update(cx, |terminal, _| {
+                                if let Some(cancellation) = &mut terminal.remote_task_cancellation {
+                                    cancellation.confirmed = true;
+                                }
+                                terminal.process_finished
+                            })
+                            .unwrap_or(true);
+                        if terminal_finished && let Some(handle) = &handle {
+                            cx.update(|cx| handle.mark_cancelled(Some(terminal_id), true, cx));
+                        }
+                        break;
+                    }
+                    if terminal
+                        .update(cx, |terminal, cx| {
+                            if let Some(cancellation) = &mut terminal.remote_task_cancellation {
+                                cancellation.requested = false;
+                            }
+                            terminal.write_output(
+                                b"\nCould not confirm Task cancellation on the project host.\n",
+                                cx,
+                            );
+                        })
+                        .is_err()
+                    {
+                        log::warn!("Could not confirm cancellation for the closed remote Task");
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
         //Event loop
         self.terminal.event_loop_task = cx.spawn(async move |terminal, cx| {
             while let Some(event) = self.events_rx.next().await {
@@ -2024,6 +2092,7 @@ pub struct Terminal {
     selection_phase: SelectionPhase,
     hyperlink_regex_searches: RegexSearches,
     task: Option<TaskState>,
+    remote_task_cancellation: Option<RemoteTaskCancellation>,
     vi_mode_enabled: bool,
     is_remote_terminal: bool,
     last_mouse_move_time: Instant,
@@ -2048,6 +2117,12 @@ pub struct Terminal {
     input_log: Vec<Vec<u8>>,
     #[cfg(any(test, feature = "test-support"))]
     pty_write_log: std::cell::RefCell<Vec<Vec<u8>>>,
+}
+
+struct RemoteTaskCancellation {
+    signal: Sender<()>,
+    requested: bool,
+    confirmed: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3575,6 +3650,9 @@ impl Terminal {
         if let Some(task) = self.task()
             && task.status == TaskStatus::Running
         {
+            if self.request_remote_task_cancellation() {
+                return;
+            }
             match &self.terminal_type {
                 TerminalType::Pty { info, .. } => {
                     // First kill the foreground process group (the command running in the shell)
@@ -3591,6 +3669,16 @@ impl Terminal {
                 }
             }
         }
+    }
+
+    fn request_remote_task_cancellation(&mut self) -> bool {
+        let Some(cancellation) = &mut self.remote_task_cancellation else {
+            return false;
+        };
+        if !cancellation.requested {
+            cancellation.requested = cancellation.signal.try_send(()).is_ok();
+        }
+        true
     }
 
     pub fn can_reuse_interactive_process(&self) -> bool {
@@ -3721,6 +3809,17 @@ impl Terminal {
             self.child_exited = Some(e);
         }
         self.complete_init_command_startup_handshake();
+        if exit_status.and_then(|status| status.code()).is_none() {
+            self.request_remote_task_cancellation();
+        }
+        let remote_cancellation_requested = self
+            .remote_task_cancellation
+            .as_ref()
+            .is_some_and(|cancellation| cancellation.requested);
+        let termination_confirmed = self
+            .remote_task_cancellation
+            .as_ref()
+            .is_none_or(|cancellation| cancellation.confirmed);
         let task = match &mut self.task {
             Some(task) => task,
             None => {
@@ -3753,14 +3852,21 @@ impl Terminal {
         };
         if let Some(handle) = task.structured_task.as_ref() {
             match handle.state() {
-                task::StructuredTaskState::Cancelled { terminal_id, .. } => {
-                    handle.mark_cancelled(terminal_id, true, cx);
+                state
+                    if remote_cancellation_requested
+                        || matches!(state, task::StructuredTaskState::Cancelled { .. }) =>
+                {
+                    handle.mark_cancelled(state.terminal_id(), termination_confirmed, cx);
                 }
                 _ => {
                     if let Some(exit_status) = exit_status {
                         handle.mark_completed(exit_status, cx);
                     } else {
-                        handle.mark_cancelled(handle.state().terminal_id(), true, cx);
+                        handle.mark_cancelled(
+                            handle.state().terminal_id(),
+                            termination_confirmed,
+                            cx,
+                        );
                     }
                 }
             }
@@ -4015,6 +4121,9 @@ fn spawn_task_subprocess(
 
 impl Drop for Terminal {
     fn drop(&mut self) {
+        if !self.process_finished {
+            self.request_remote_task_cancellation();
+        }
         if let Some(subprocess) = self.subprocess.take() {
             subprocess.kill();
         }

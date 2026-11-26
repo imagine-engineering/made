@@ -754,7 +754,7 @@ impl Project {
                 check(cx).await?;
             }
             let preparation_handle = structured_task.clone();
-            let builder = project
+            let (builder, cancellation) = project
                 .update(cx, move |project, cx| {
                     anyhow::ensure!(
                         project.remote_client == remote_client
@@ -785,7 +785,8 @@ impl Project {
                         )
                     };
 
-                    let (shell, env) = {
+                    let managed_task = spawn_task.command.is_some();
+                    let (shell, env, cancellation) = {
                         let requires_shell_activation =
                             !activation_script.is_empty() && !spawn_task.windows_direct_program;
                         let to_run = requires_shell_activation.then(|| format_to_run(&spawn_task));
@@ -809,6 +810,7 @@ impl Project {
                                         env,
                                         path,
                                         remote_client,
+                                        managed_task,
                                         cx,
                                     )?
                                 }
@@ -820,6 +822,7 @@ impl Project {
                                     env,
                                     path,
                                     remote_client,
+                                    managed_task,
                                     cx,
                                 )?,
                             },
@@ -840,6 +843,7 @@ impl Project {
                                             title_override: None,
                                         },
                                         env,
+                                        None,
                                     )
                                 }
                                 _ => (
@@ -853,12 +857,13 @@ impl Project {
                                         Shell::System
                                     },
                                     env,
+                                    None,
                                 ),
                             },
                         }
                     };
                     drop(pending_launch);
-                    anyhow::Ok(TerminalBuilder::new(
+                    anyhow::Ok((TerminalBuilder::new(
                         local_path.map(|path| path.to_path_buf()),
                         task_state,
                         shell,
@@ -874,9 +879,9 @@ impl Project {
                         cx,
                         activation_script,
                         path_style,
-                    ))
-                })??
-                .await?;
+                    ), cancellation))
+                })??;
+            let builder = builder.await?.with_remote_task_cancellation(cancellation);
             project.update(cx, move |this, cx| {
                 this.register_task_terminal(builder, structured_task, cx)
             })
@@ -1053,7 +1058,9 @@ impl Project {
                     let (shell, env) = {
                         match remote_client {
                             Some(remote_client) => {
-                                create_remote_shell(None, env, path, remote_client, cx)?
+                                let (shell, env, _) =
+                                    create_remote_shell(None, env, path, remote_client, false, cx)?;
+                                (shell, env)
                             }
                             None => (settings.shell, env),
                         }
@@ -1432,8 +1439,13 @@ fn create_remote_shell(
     mut env: HashMap<String, String>,
     working_directory: Option<Arc<Path>>,
     remote_client: Entity<RemoteClient>,
+    managed_task: bool,
     cx: &mut App,
-) -> Result<(Shell, HashMap<String, String>)> {
+) -> Result<(
+    Shell,
+    HashMap<String, String>,
+    Option<util::command::Command>,
+)> {
     let isolated_recipe_test = matches!(remote_client.read(cx).connection_options(), remote::RemoteConnectionOptions::Docker(options) if options.isolated_recipe_test.is_some());
     if !isolated_recipe_test {
         insert_zed_terminal_env(&mut env, &release_channel::AppVersion::global(cx));
@@ -1444,14 +1456,31 @@ fn create_remote_shell(
         None => (None, &Vec::new()),
     };
 
-    let command = remote_client.read(cx).build_command(
-        program,
-        args.as_slice(),
-        &env,
-        working_directory.map(|path| path.display().to_string()),
-        None,
-        Interactive::Yes,
-    )?;
+    let working_directory = working_directory.map(|path| path.display().to_string());
+    let remote = remote_client.read(cx);
+    let managed = if managed_task && let Some(program) = program.as_deref() {
+        remote.build_managed_task_command(program, args, &env, working_directory.clone())?
+    } else {
+        None
+    };
+    let (command, cancellation) = match managed {
+        Some(managed) => {
+            let mut cancel = util::command::new_command(managed.cancel.program);
+            cancel.args(managed.cancel.args).envs(managed.cancel.env);
+            (managed.launch, Some(cancel))
+        }
+        None => (
+            remote.build_command(
+                program,
+                args,
+                &env,
+                working_directory,
+                None,
+                Interactive::Yes,
+            )?,
+            None,
+        ),
+    };
 
     log::debug!("Connecting to a remote server: {:?}", command.program);
     let host = remote_client.read(cx).connection_options().display_name();
@@ -1463,6 +1492,7 @@ fn create_remote_shell(
             title_override: Some(format!("{} — Terminal", host)),
         },
         command.env,
+        cancellation,
     ))
 }
 
