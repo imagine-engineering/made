@@ -1160,6 +1160,204 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_MAVEN_FALLBACK_CONTAINER with the selected pinned Kotlin alternate and offline Maven fixture"]
+    async fn docker_maven_uses_selected_kotlin_fallback(cx: &mut TestAppContext) {
+        verify_docker_kotlin_fallback(
+            "GROOVY_MAVEN_FALLBACK_CONTAINER",
+            Path::new("/workspaces/maven"),
+            cx,
+        )
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_GRADLE_FALLBACK_CONTAINER with the selected pinned Kotlin alternate and offline Gradle fixture"]
+    async fn docker_gradle_uses_selected_kotlin_fallback(cx: &mut TestAppContext) {
+        verify_docker_kotlin_fallback(
+            "GROOVY_GRADLE_FALLBACK_CONTAINER",
+            Path::new("/workspaces/gradle"),
+            cx,
+        )
+        .await;
+    }
+
+    #[cfg(unix)]
+    async fn verify_docker_kotlin_fallback(
+        container_variable: &str,
+        project_root: &Path,
+        cx: &mut TestAppContext,
+    ) {
+        use language::PointUtf16;
+        use lsp::LanguageServerSelector;
+        use std::time::{Duration, Instant};
+
+        const FALLBACK: &str = "kotlin-language-server";
+        let fallback = LanguageServerName::new_static(FALLBACK);
+        let (project, worktree) = connect_docker_jvm_project(
+            container_variable,
+            project_root,
+            &[("kotlin", "0.3.5")],
+            cx,
+        )
+        .await;
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let store = project.read_with(cx, |project, _| project.lsp_store());
+        let languages = project.read_with(cx, |project, _| project.languages().clone());
+        languages.register_fake_lsp_adapter(
+            "Kotlin",
+            FakeLspAdapter {
+                name: FALLBACK,
+                ..Default::default()
+            },
+        );
+        let greeting = rel_path("library/src/main/kotlin/evidence/Greeting.kt");
+        let probe_path = ProjectPath {
+            worktree_id,
+            path: rel_path("library/src/main/kotlin/evidence/UseGreeting.kt").into(),
+        };
+        let (probe, _probe_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp(probe_path.clone(), cx)
+            })
+            .await
+            .expect("open the remote Kotlin probe");
+        cx.run_until_parked();
+        assert_eq!(
+            store.read_with(cx, |store, _| store.language_server_statuses().count()),
+            0,
+            "the project host must wait for trust before starting the selected server"
+        );
+        trust_docker_jvm_worktree(&project, worktree_id, cx);
+        store.update(cx, |store, cx| {
+            store
+                .set_default_jvm_project_languages_enabled(true, cx)
+                .expect("attach the host's configured JVM providers");
+        });
+        let (source, _source_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp((worktree_id, greeting), cx)
+            })
+            .await
+            .expect("open the remote Kotlin declaration");
+        let mut previous = None;
+        for launch in 1..=2 {
+            let deadline = Instant::now() + Duration::from_secs(120);
+            let server_id = loop {
+                cx.run_until_parked();
+                let server = store.read_with(cx, |store, _| {
+                    assert!(store.as_local().is_none());
+                    let providers = store.language_server_statuses().collect::<Vec<_>>();
+                    assert!(providers.iter().all(|(_, status)| status.name == fallback));
+                    let [(id, _)] = providers.as_slice() else {
+                        return None;
+                    };
+                    assert!(store.language_server_for_id(*id).is_none());
+                    (Some(*id) != previous).then_some(*id)
+                });
+                if let Some(server_id) = server {
+                    let targets = store
+                        .update(cx, |store, cx| {
+                            store.definitions(&probe, PointUtf16::new(2, 29), cx)
+                        })
+                        .await
+                        .expect("connected definition request")
+                        .unwrap_or_default();
+                    if let [target] = targets.as_slice() {
+                        assert_eq!(target.target.buffer, source);
+                        target.target.buffer.read_with(cx, |buffer, _| {
+                            let file =
+                                project::File::from_dyn(buffer.file()).expect("remote source");
+                            assert_eq!(file.path.as_ref(), greeting);
+                            assert!(!file.is_local);
+                        });
+                        break server_id;
+                    }
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "fallback did not resolve Greeting.kt"
+                );
+                cx.background_executor
+                    .timer(Duration::from_millis(200))
+                    .await;
+            };
+
+            let options = store
+                .update(cx, |store, cx| {
+                    store.completions(
+                        &probe,
+                        PointUtf16::new(2, 39),
+                        CompletionContext {
+                            trigger_kind: CompletionTriggerKind::INVOKED,
+                            trigger_character: None,
+                        },
+                        cx,
+                    )
+                })
+                .await
+                .expect("connected completion request");
+            assert!(
+                options
+                    .into_iter()
+                    .flat_map(|response| response.completions)
+                    .any(
+                        |completion| matches!(&completion.source, project::CompletionSource::Lsp {
+                    server_id: provider, lsp_completion, ..
+                } if *provider == server_id && lsp_completion.label == "message()")
+                    )
+            );
+
+            for (from, to, errors_expected) in [
+                ("Greeting()", "MissingGreeting()", true),
+                ("MissingGreeting()", "Greeting()", false),
+            ] {
+                probe.update(cx, |buffer, cx| {
+                    let offset = buffer.text().rfind(from).expect("fixture constructor call");
+                    buffer.edit([(offset..offset + from.len(), to)], None, cx);
+                });
+                project
+                    .update(cx, |project, cx| project.save_buffer(probe.clone(), cx))
+                    .await
+                    .expect("save the changed remote Kotlin probe");
+                let deadline = Instant::now() + Duration::from_secs(45);
+                loop {
+                    cx.run_until_parked();
+                    let errors = project.read_with(cx, |project, cx| {
+                        project
+                            .diagnostic_summaries(false, cx)
+                            .find(|(path, id, _)| *path == probe_path && *id == server_id)
+                            .map_or(0, |(_, _, diagnostics)| diagnostics.error_count)
+                    });
+                    if (errors > 0) == errors_expected {
+                        break;
+                    }
+                    assert!(
+                        Instant::now() < deadline,
+                        "fallback diagnostic did not update"
+                    );
+                    cx.background_executor
+                        .timer(Duration::from_millis(200))
+                        .await;
+                }
+            }
+            eprintln!("Connected fallback launch {launch} passed with server {server_id}");
+            if launch == 1 {
+                previous = Some(server_id);
+                project.update(cx, |project, cx| {
+                    project.restart_language_servers_for_buffers(
+                        vec![probe.clone(), source.clone()],
+                        HashSet::from_iter([LanguageServerSelector::Name(fallback.clone())]),
+                        true,
+                        cx,
+                    );
+                });
+            }
+        }
+    }
+
+    #[cfg(unix)]
     async fn verify_docker_java_definition_opens_host_kotlin_source(
         container_variable: &str,
         project_root: &Path,

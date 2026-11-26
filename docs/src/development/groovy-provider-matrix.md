@@ -166,9 +166,26 @@ restoration, and exited with code 0. Maven used the aligned cache and
 `mvn` from Maven 3.9.16 on PATH. The Gradle 8.13 restart recorded 12
 offline wrapper invocations. The largest sampled server process-tree RSS
 was 4.12 GiB across the four launches. The sample omitted the editor and
-detached Gradle workers. This evidence covers the standalone fallback on
-Linux ARM64. App selection and full editor-and-worker memory qualification
-remain open for this cell.
+detached Gradle workers. The full editor-and-worker memory gate remains open.
+
+The connected Maven and Gradle fallback opt-ins run with the cached Kotlin
+extension `0.3.5` on a network-disabled Linux ARM64 Docker host. The
+disposable worktree selects `kotlin-language-server` and sets its binary
+override to the pinned `1.3.13` launcher. The host waits for project trust.
+The connected client resolves `Greeting.kt`, receives `message()`
+completion and observes diagnostic recovery before and after restart.
+The host starts two fallback processes in sequence, and the preferred
+server override stays unused.
+
+For these opt-ins, set `GROOVY_MAVEN_FALLBACK_CONTAINER` or
+`GROOVY_GRADLE_FALLBACK_CONTAINER` to the full ID of a fresh offline host
+with the corresponding cached fixture at `/workspaces/maven` or
+`/workspaces/gradle`. Configure the same alternate selection and binary
+override on the host. Disable the Java language server for this Kotlin-only
+check. Add `library/src/main/kotlin/evidence/UseGreeting.kt` with
+`package evidence`, a blank line and
+`fun useGreeting(): String = Greeting().message()`. Native desktop
+selection and separate-host qualification remain open.
 
 The opt-in `docker_maven_java_definition_opens_host_kotlin_source` test used
 Groovy's Docker transport from a GPUI test client to a Linux ARM64 development
