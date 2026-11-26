@@ -22,14 +22,15 @@ use graphics_core::evaluate::{
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasLayer,
-        GddArtboardCanvasPick, GddArtboardGeometry, GddArtworkTextLayout, GddCanvasArtworkHit,
-        GddCanvasRenderTarget, GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent,
-        GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddLayerBlendingChange, GddLayerGrouping,
-        GddLayerOpacityKind, GddLayerOrder, GddNumericGraphEvaluator, GddNumericImportKind,
-        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
-        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
-        inspect_gdd_folder_files, open_gdd_archive,
+        GddArtboardCanvasPick, GddArtboardGeometry, GddArtworkFill, GddArtworkTextLayout,
+        GddCanvasArtworkHit, GddCanvasRenderTarget, GddDocumentCanvasOutput, GddEllipseAxis,
+        GddExportContent, GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview,
+        GddGraphNetwork, GddGraphNode, GddGraphPortSource, GddHistoryDirection,
+        GddLayerBlendingChange, GddLayerGrouping, GddLayerOpacityKind, GddLayerOrder,
+        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
+        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
+        InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -1291,6 +1292,7 @@ struct NodeCopyForm {
     artwork_text: Entity<Editor>,
     artwork_bounds: [Entity<Editor>; 2],
     artwork_alignment: TextAlign,
+    retained_artwork_fill: Option<(StorageNodeId, graphite_core_types::Color)>,
     color: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
     layer_opacity: [Entity<Editor>; 2],
@@ -1345,6 +1347,7 @@ impl NodeCopyForm {
                 })
             }),
             artwork_alignment: TextAlign::default(),
+            retained_artwork_fill: None,
             color: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             layer_opacity: std::array::from_fn(|_| {
@@ -1622,6 +1625,7 @@ impl NodeCopyForm {
     fn select_network(&mut self, index: Option<usize>) {
         if self.active_network != index {
             self.saved_graph_viewport = ScrollHandle::new();
+            self.retained_artwork_fill = None;
         }
         self.active_network = index;
         self.selected = None;
@@ -1924,6 +1928,7 @@ enum NodeCopyChange {
     ArtboardGeometry(GddArtboardGeometry),
     ArtboardBackground([f32; 4]),
     FillColor([f32; 4]),
+    ArtworkFill(Option<graphite_core_types::Color>),
     EllipseRadius(GddEllipseAxis, f64),
     EllipseRadiusSource(GddEllipseAxis, Option<Box<GddGraphNode>>),
     SetDocumentArtboard,
@@ -2006,6 +2011,11 @@ impl NodeCopyChange {
             Self::FillColor(channels) => {
                 archive
                     .set_graph_fill_color_in_copy(node, channels, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ArtworkFill(color) => {
+                archive
+                    .set_graph_artwork_fill_in_copy(node, color, ARCHIVE_BUDGET)
                     .await
             }
             Self::EllipseRadius(axis, radius) => {
@@ -5409,6 +5419,12 @@ impl GraphiteDocumentItem {
                 form.output_preview = NodeOutputPreview::Hidden;
             }
             form.selected = Some(index);
+            if form
+                .retained_artwork_fill
+                .is_some_and(|(id, _)| id != node.storage_id())
+            {
+                form.retained_artwork_fill = None;
+            }
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
             if let Some(value) = node.numeric_input() {
@@ -7684,6 +7700,43 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn change_artwork_fill(&mut self, enabled: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        let model = self.model.read(cx);
+        if self.copy_task.is_some()
+            || model.working.is_none()
+            || !Arc::ptr_eq(&form.revision, &model.revision)
+        {
+            return;
+        }
+        let Some(layer) = form.selected_node().cloned() else {
+            return;
+        };
+        let color = match (enabled, layer.artwork_fill()) {
+            (false, Some(GddArtworkFill::Solid(color))) => {
+                form.retained_artwork_fill = Some((layer.storage_id(), color));
+                None
+            }
+            (true, Some(GddArtworkFill::Disabled)) => Some(
+                form.retained_artwork_fill
+                    .filter(|(id, _)| *id == layer.storage_id())
+                    .map(|(_, color)| color)
+                    .unwrap_or(graphite_core_types::Color::BLACK),
+            ),
+            _ => return,
+        };
+        self.apply_graph_edit(
+            GraphiteCopy::EditNode {
+                node: Box::new(layer),
+                change: NodeCopyChange::ArtworkFill(color),
+            },
+            window,
+            cx,
+        );
+    }
+
     fn change_graph_color(
         &mut self,
         color: SavedGraphColor,
@@ -9558,6 +9611,20 @@ impl GraphiteDocumentItem {
                             .when(working && selected.fill_color().is_some(), |panel| {
                                 panel.child(self.render_graph_color(form, SavedGraphColor::Fill, working, cx))
                             })
+                            .when_some(selected.artwork_fill().filter(|_| working), |panel, fill| {
+                                panel.child(
+                                    div().debug_selector(|| "GRAPHITE-GDD-ARTWORK-FILL-ENABLED".into()).child(
+                                        Switch::new("graphite-gdd-artwork-fill-enabled", ToggleState::from(matches!(fill, GddArtworkFill::Solid(_))))
+                                            .label("Fill enabled")
+                                            .label_position(SwitchLabelPosition::End)
+                                            .tab_index(0isize)
+                                            .disabled(self.copy_task.is_some())
+                                            .on_click(cx.listener(|item, choice: &ToggleState, window, cx| {
+                                                item.change_artwork_fill(choice.selected(), window, cx);
+                                            })),
+                                    ),
+                                )
+                            })
                             .when(selected.ellipse_radii().is_some(), |panel| {
                                 panel.child(self.render_ellipse_radii(form, working, cx))
                             })
@@ -10052,6 +10119,7 @@ impl GraphiteDocumentItem {
                             | NodeCopyChange::BooleanInput(_)
                             | NodeCopyChange::ArtboardGeometry(_)
                             | NodeCopyChange::FillColor(_)
+                            | NodeCopyChange::ArtworkFill(_)
                             | NodeCopyChange::ArtboardBackground(_)
                             | NodeCopyChange::EllipseRadius(_, _)
                             | NodeCopyChange::EllipseRadiusSource(_, _),
@@ -16403,6 +16471,7 @@ mod tests {
             }
             paint(window);
         };
+        let mut expected_fill_id = *fill_id;
         if glyphs {
             let original = snapshot(window);
             let before_text =
@@ -16468,6 +16537,64 @@ mod tests {
             window.run_until_parked();
             assert!(before_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
             window.dispatch_action(editor::actions::Redo);
+            window.run_until_parked();
+            assert!(red_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
+            select(window, *merge_id);
+            let toggle = "GRAPHITE-GDD-ARTWORK-FILL-ENABLED";
+            click(window, toggle);
+            let removed = snapshot(window);
+            let graph = removed
+                .graph_nodes()
+                .await
+                .expect("saved glyph layer without Fill");
+            let merge_fill = |nodes: &[GddGraphNode]| {
+                nodes
+                    .iter()
+                    .find(|node| node.storage_id() == *merge_id)
+                    .expect("same saved artwork layer")
+                    .artwork_fill()
+            };
+            assert_eq!(merge_fill(&graph), Some(GddArtworkFill::Disabled));
+            assert!(graph.iter().all(|node| node.storage_id() != *fill_id));
+            let unpainted = artwork_image(window);
+            assert!(unpainted.as_bytes(0) != red_pixels.as_bytes(0));
+            window.dispatch_action(editor::actions::Undo);
+            window.run_until_parked();
+            assert!(red_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
+            window.dispatch_action(editor::actions::Redo);
+            window.run_until_parked();
+            assert!(unpainted.as_bytes(0) == artwork_image(window).as_bytes(0));
+            click(window, toggle);
+            let graph = snapshot(window)
+                .graph_nodes()
+                .await
+                .expect("restored glyph paint");
+            assert_eq!(
+                merge_fill(&graph),
+                Some(GddArtworkFill::Solid(graphite_core_types::Color::RED))
+            );
+            expected_fill_id = graph
+                .iter()
+                .find(|node| node.fill_color().is_some())
+                .expect("new source Fill")
+                .storage_id();
+            assert_ne!(expected_fill_id, *fill_id);
+            assert!(red_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
+            click(window, toggle);
+            select(window, *text_id);
+            select(window, *merge_id);
+            click(window, toggle);
+            let graph = snapshot(window)
+                .graph_nodes()
+                .await
+                .expect("source working paint");
+            assert_eq!(
+                merge_fill(&graph),
+                Some(GddArtworkFill::Solid(graphite_core_types::Color::BLACK))
+            );
+            window.dispatch_action(editor::actions::Undo);
+            window.run_until_parked();
+            window.dispatch_action(editor::actions::Undo);
             window.run_until_parked();
             assert!(red_pixels.as_bytes(0) == artwork_image(window).as_bytes(0));
             select(window, *text_id);
@@ -16668,7 +16795,7 @@ mod tests {
         if glyphs {
             let fill = graph
                 .iter()
-                .find(|node| node.storage_id() == *fill_id)
+                .find(|node| node.storage_id() == expected_fill_id)
                 .expect("same reopened Fill");
             assert_eq!(fill.fill_color(), Some(graphite_core_types::Color::RED));
         }

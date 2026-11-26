@@ -252,6 +252,8 @@ pub enum GddArchiveError {
     UnsupportedGraphFillColor,
     #[error("Enter finite sRGB fill channels between 0 and 1.")]
     InvalidGraphFillColor,
+    #[error("Select an editable Graphite text layer with an eligible Fill chain.")]
+    UnsupportedArtworkFill,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
@@ -1059,6 +1061,17 @@ enum SavedColorInput {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GddArtworkFill {
+    Disabled,
+    Solid(Color),
+}
+
+struct SavedArtworkFillChain {
+    outline: NodeId,
+    fill: Option<(NodeId, Color)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GddArtboardGeometry {
     pub location: DVec2,
     pub dimensions: DVec2,
@@ -1157,6 +1170,7 @@ pub struct GddGraphNode {
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
     fill_color: Option<Color>,
+    artwork_fill: Option<GddArtworkFill>,
     can_delete_in_copy: bool,
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
@@ -1403,6 +1417,10 @@ impl GddGraphNode {
 
     pub fn fill_color(&self) -> Option<Color> {
         self.fill_color
+    }
+
+    pub fn artwork_fill(&self) -> Option<GddArtworkFill> {
+        self.artwork_fill
     }
 
     pub fn name(&self) -> &str {
@@ -1927,6 +1945,7 @@ impl InspectedGddV1 {
                     artboard_geometry: None,
                     artboard_background: None,
                     fill_color: None,
+                    artwork_fill: None,
                     can_delete_in_copy: false,
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
@@ -2187,6 +2206,19 @@ impl InspectedGddV1 {
                 }
                 if matches!(profile, SavedGraphicProfile::Fill) {
                     node.fill_color = hidden_graph_color(document, fill::PaintInput::INDEX);
+                }
+                if matches!(
+                    profile,
+                    SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge)
+                ) {
+                    node.artwork_fill =
+                        saved_artwork_fill_chain(interface.document_network(), node.local_id).map(
+                            |chain| {
+                                chain.fill.map_or(GddArtworkFill::Disabled, |(_, color)| {
+                                    GddArtworkFill::Solid(color)
+                                })
+                            },
+                        );
                 }
                 if node.interpolation_parameter_name().is_some() {
                     node.boolean_input = hidden_graph_boolean(&document.inputs, 2, "Reverse");
@@ -7449,6 +7481,209 @@ impl InspectedGddV1 {
             .await
     }
 
+    pub async fn set_graph_artwork_fill_in_copy(
+        &self,
+        layer: &GddGraphNode,
+        color: Option<Color>,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::network::PINNED_ORDER;
+
+        self.check_node_edit_target(layer)?;
+        if !layer.network_path.is_empty() || layer.artwork_fill().is_none() {
+            return Err(GddArchiveError::UnsupportedArtworkFill);
+        }
+        if color.is_some_and(|color| {
+            !color
+                .to_gamma_srgb_channels()
+                .into_iter()
+                .all(f32::is_finite)
+        }) {
+            return Err(GddArchiveError::InvalidGraphFillColor);
+        }
+        let path = &[][..];
+        let mut original = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut original)?;
+        if !original.is_layer(&layer.local_id, path) {
+            return Err(GddArchiveError::UnsupportedArtworkFill);
+        }
+        let source_layer = LayerNodeIdentifier::new(layer.local_id, &original);
+        if original
+            .selected_nodes()
+            .layer_locked(source_layer, &original)
+        {
+            return Err(GddArchiveError::LockedLayerStructure);
+        }
+        let chain = saved_artwork_fill_chain(original.document_network(), layer.local_id)
+            .filter(|chain| chain.fill.is_some() != color.is_some())
+            .ok_or(GddArchiveError::UnsupportedArtworkFill)?;
+        let connector = InputConnector::node_at_index(layer.local_id, LAYER_CONTENT_INPUT);
+        let mut interface = original.clone();
+        let mut expected = original.document_network().clone();
+        let mut previous_layout = graph_port_edit_layout(&original, [path])?;
+        let fill_id = if let Some(color) = color {
+            let mut responses = VecDeque::new();
+            ModifyInputsContext::new_with_layer(source_layer, &mut interface, &mut responses)
+                .ok_or(GddArchiveError::UnsupportedArtworkFill)?
+                .fill_color_set(Some(color));
+            let linked = saved_artwork_fill_chain(interface.document_network(), layer.local_id)
+                .filter(|updated| updated.outline == chain.outline)
+                .and_then(|updated| updated.fill)
+                .filter(|(_, actual)| *actual == color)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let fill = interface
+                .document_node(&linked.0, path)
+                .filter(|fill| {
+                    hidden_graph_color(fill, fill::BackupColorInput::INDEX) == Some(color)
+                })
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            if expected.nodes.insert(linked.0, fill.clone()).is_some() {
+                return Err(GddArchiveError::GraphNodeIdentityCollision);
+            }
+            linked.0
+        } else {
+            let (fill_id, _) = chain.fill.ok_or(GddArchiveError::UnsupportedArtworkFill)?;
+            interface.delete_nodes(vec![fill_id], true, path);
+            expected.nodes.remove(&fill_id);
+            previous_layout.remove(&(path, fill_id));
+            fill_id
+        };
+        let wire = NodeInput::node(
+            if color.is_some() {
+                fill_id
+            } else {
+                chain.outline
+            },
+            0,
+        );
+        *expected
+            .nodes
+            .get_mut(&layer.local_id)
+            .and_then(|node| node.inputs.get_mut(LAYER_CONTENT_INPUT))
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)? = wire.clone();
+        let expected_layout = graph_port_edit_layout(&interface, [path])?;
+        let mut existing_layout = expected_layout.clone();
+        if color.is_some() {
+            existing_layout.remove(&(path, fill_id));
+        }
+        if interface.document_network().nodes != expected.nodes
+            || interface.document_network().exports != expected.exports
+            || existing_layout != previous_layout
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        if color.is_some() {
+            let template = interface
+                .create_node_template(&fill_id, path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            return self
+                .save_added_graph_node(
+                    interface,
+                    path,
+                    fill_id,
+                    template,
+                    Some(GraphWireInsertion {
+                        consumer: layer.storage_id,
+                        input: connector,
+                    }),
+                    budget,
+                )
+                .await;
+        }
+        let (removed, outline) = {
+            let storage_id = |id| {
+                original
+                    .node_metadata(&id, path)
+                    .and_then(|node| node.persistent_metadata.storage_id)
+                    .map(StorageNodeId)
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)
+            };
+            (storage_id(fill_id)?, storage_id(chain.outline)?)
+        };
+        let pinned_order = interface.ordered_pinned_nodes(path);
+        let order_changed = pinned_order != original.ordered_pinned_nodes(path);
+        let mut edits = vec![
+            write_graph_connector(path, connector, wire),
+            EditorDelta::Graph(RuntimeDelta::RemoveNode {
+                network_path: path.to_vec(),
+                node_id: fill_id,
+            }),
+        ];
+        if order_changed {
+            let order = interface
+                .network_metadata(path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?
+                .persistent_metadata
+                .pinned_node_order
+                .clone();
+            edits.push(EditorDelta::NetworkMetadata {
+                network_path: path.to_vec(),
+                change: NetworkMetadataChange::PinnedOrder(order),
+            });
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &original, &edits)?;
+        let removed_node = owner
+            .registry()
+            .node_instances
+            .get(&removed)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let graphite_document_graph_storage::Implementation::ProtoNode(declaration) =
+            removed_node.implementation()
+        else {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        };
+        let mut reconnected = false;
+        let mut deleted = false;
+        let mut declaration_removed = false;
+        let mut order_updates = 0;
+        if !batch.ops.iter().all(|op| match op {
+            RegistryDelta::ChangeNodeInput {
+                id,
+                index,
+                new_input:
+                    graphite_document_graph_storage::NodeInput::Node {
+                        id: upstream,
+                        index: 0,
+                    },
+            } if *id == layer.storage_id
+                && usize::try_from(*index).ok() == Some(LAYER_CONTENT_INPUT)
+                && *upstream == outline =>
+            {
+                !std::mem::replace(&mut reconnected, true)
+            }
+            RegistryDelta::RemoveNode { id, snapshot } if *id == removed => {
+                !std::mem::replace(&mut deleted, true) && removed_node.value_equal(snapshot)
+            }
+            RegistryDelta::RemoveResource { id, snapshot } if id == declaration => {
+                !std::mem::replace(&mut declaration_removed, true)
+                    && owner.registry().resources.get(id) == Some(snapshot)
+            }
+            RegistryDelta::ChangeNetworkAttribute { id, delta }
+                if *id == layer.network_id && delta.key == PINNED_ORDER =>
+            {
+                order_updates += 1;
+                true
+            }
+            _ => false,
+        }) || !reconnected
+            || !deleted
+            || order_updates != usize::from(order_changed)
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.document_network().nodes != expected.nodes
+            || actual.document_network().exports != expected.exports
+            || graph_port_edit_layout(&actual, [path])? != expected_layout
+            || actual.ordered_pinned_nodes(path) != pinned_order
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
     async fn set_literal_graph_color_in_copy(
         &self,
         node: &GddGraphNode,
@@ -9864,6 +10099,73 @@ fn collect_layer_preview_node(
     visiting: &mut BTreeSet<NodeId>,
 ) -> Result<(), GddArchiveError> {
     collect_saved_layer_preview_branch(source, node_id, detached, visiting, false)
+}
+
+fn saved_artwork_fill_chain(network: &NodeNetwork, layer: NodeId) -> Option<SavedArtworkFillChain> {
+    let source_at = |document: &DocumentNode, index| match document.inputs.get(index)? {
+        NodeInput::Node {
+            node_id,
+            output_index: 0,
+        } => Some(*node_id),
+        _ => None,
+    };
+    let layer = network.nodes.get(&layer)?;
+    if !matches!(
+        checked_saved_graphic_node(layer)?.1,
+        SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge)
+    ) {
+        return None;
+    }
+    let source = source_at(layer, LAYER_CONTENT_INPUT)?;
+    let document = network.nodes.get(&source)?;
+    let (outline, fill) = match checked_saved_graphic_node(document)?.1 {
+        SavedGraphicProfile::Fill => {
+            if network
+                .exports
+                .iter()
+                .any(|input| input.as_node() == Some(source))
+                || network
+                    .nodes
+                    .values()
+                    .flat_map(|node| &node.inputs)
+                    .filter(|input| input.as_node() == Some(source))
+                    .take(2)
+                    .count()
+                    != 1
+            {
+                return None;
+            }
+            let color = hidden_graph_color(document, fill::PaintInput::INDEX)?;
+            (
+                source_at(document, fill::ContentInput::INDEX)?,
+                Some((source, color)),
+            )
+        }
+        SavedGraphicProfile::TextOutline => (source, None),
+        _ => return None,
+    };
+    let document = network.nodes.get(&outline)?;
+    if !matches!(
+        checked_saved_graphic_node(document)?.1,
+        SavedGraphicProfile::TextOutline
+    ) {
+        return None;
+    }
+    let source = network
+        .nodes
+        .get(&source_at(document, text_to_vector::StringInput::INDEX)?)?;
+    let text = match checked_saved_graphic_node(source)?.1 {
+        SavedGraphicProfile::Text => source,
+        SavedGraphicProfile::RepeatArray => network
+            .nodes
+            .get(&source_at(source, repeat_array::ContentInput::INDEX)?)?,
+        _ => return None,
+    };
+    matches!(
+        checked_saved_graphic_node(text)?.1,
+        SavedGraphicProfile::Text
+    )
+    .then_some(SavedArtworkFillChain { outline, fill })
 }
 
 fn collect_saved_layer_preview_branch(
@@ -16896,6 +17198,96 @@ mod tests {
                     )
                     .await
                     .expect("assemble the saved converter artwork");
+            }
+            if glyphs && !mapped {
+                let nodes = graph.graph_nodes().await.expect("painted text layer");
+                let layer = find(&nodes, *merge_id);
+                assert_eq!(
+                    layer.artwork_fill(),
+                    Some(GddArtworkFill::Solid(Color::BLACK))
+                );
+                let locked = graph
+                    .edit_root_layer_in_copy(&layer, GddRootLayerChange::Locked(true), budget())
+                    .await
+                    .expect("lock the painted layer");
+                let locked_nodes = locked.graph_nodes().await.expect("current locked layer");
+                assert!(matches!(
+                    locked
+                        .set_graph_artwork_fill_in_copy(
+                            &find(&locked_nodes, *merge_id),
+                            None,
+                            budget()
+                        )
+                        .await,
+                    Err(GddArchiveError::LockedLayerStructure)
+                ));
+                let without_fill = graph
+                    .set_graph_artwork_fill_in_copy(&layer, None, budget())
+                    .await
+                    .expect("source Fill removal keeps the glyph outlines");
+                let nodes = without_fill
+                    .graph_nodes()
+                    .await
+                    .expect("unpainted glyph outlines");
+                assert!(nodes.iter().all(|node| node.storage_id != *fill_id));
+                assert_eq!(
+                    find(&nodes, *merge_id).artwork_fill(),
+                    Some(GddArtworkFill::Disabled)
+                );
+                assert!(matches!(
+                    without_fill
+                        .set_graph_artwork_fill_in_copy(&layer, Some(Color::RED), budget())
+                        .await,
+                    Err(GddArchiveError::StaleGraphNode)
+                ));
+                let undone = without_fill
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await
+                    .expect("one interaction restores the original Fill");
+                assert!(
+                    undone
+                        .document
+                        .registry()
+                        .value_equal(graph.document.registry())
+                );
+                let bytes: Arc<[u8]> = without_fill
+                    .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                    .expect("persist the unpainted outlines")
+                    .into();
+                let reopened = open_gdd_zip(&bytes, budget())
+                    .await
+                    .expect("reopen disabled fill");
+                let nodes = reopened
+                    .graph_nodes()
+                    .await
+                    .expect("editable unpainted glyph layer");
+                assert_eq!(
+                    find(&nodes, *merge_id).artwork_fill(),
+                    Some(GddArtworkFill::Disabled)
+                );
+                let restored = reopened
+                    .set_graph_artwork_fill_in_copy(
+                        &find(&nodes, *merge_id),
+                        Some(Color::RED),
+                        budget(),
+                    )
+                    .await
+                    .expect("pinned source Fill insertion");
+                let nodes = restored.graph_nodes().await.expect("restored glyph paint");
+                assert_eq!(
+                    find(&nodes, *merge_id).artwork_fill(),
+                    Some(GddArtworkFill::Solid(Color::RED))
+                );
+                assert_eq!(find(&nodes, *text_id).artwork_text(), Some("Lorem ipsum"));
+                let undo = restored
+                    .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                    .await
+                    .expect("one interaction removes the newly added Fill");
+                assert!(
+                    undo.document
+                        .registry()
+                        .value_equal(without_fill.document.registry())
+                );
             }
 
             for sample in ["", "Graphite", "Cafe\u{301}", "Καφέ"] {
