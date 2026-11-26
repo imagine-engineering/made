@@ -72,6 +72,15 @@ Both modules reimported after watched POM changes. The Maven view's
 Refresh Dependencies action restored the current navigation metadata, and the
 editor checks then passed again.
 
+The reimport follow-up reproduced a watched Maven POM update that ended
+with JDTLS `ProjectStatus: OK` and no classpath-change notification. Groovy
+now uses that status to requery stale Java project metadata. The pinned
+mounted regression waits for both providers' new snapshot generations and
+then opens `Greeting.kt` through F12's editor action without a panel refresh.
+An independent replay of the guarded Maven reload command failed with only
+Maven's offline settings file configured and succeeded with
+`java.import.maven.offline.enabled` set in JDTLS.
+
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
 The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean

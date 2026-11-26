@@ -314,6 +314,11 @@ refresh. They do not grant trust, prove full synchronization or provide a
 remote fallback. **Cancel selected import** applies only to this panel's
 current import.
 
+For **Reload Maven projects** and **Apply saved Maven selection**, set
+`java.import.maven.offline.enabled` to `true` under the project host's
+`lsp.jdtls.settings` and use a populated Maven cache. This configures JDTLS's
+Maven importer. The Maven wrapper's `-o` flag configures command-line builds.
+
 The scoped Gradle provider uses a cached Gradle installation for **Synchronize
 metadata**. In your host's `lsp.jdtls.settings`, set
 `java.import.gradle.home` to the absolute installation directory, set

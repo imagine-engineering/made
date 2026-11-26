@@ -8,7 +8,7 @@ use gpui::{App, Context, Entity, Task, WeakEntity};
 use language::{Buffer, PointUtf16, ToOffset as _};
 use lsp::{LanguageServer, LanguageServerId};
 use rpc::proto;
-use util::paths::UrlExt as _;
+use util::{ResultExt as _, paths::UrlExt as _};
 
 use crate::jvm_project::{JdtlsImportedBuildKind, KotlinBuildSystem, KotlinWorkspaceDependency};
 use crate::project_settings::ProjectSettings;
@@ -389,6 +389,27 @@ pub(super) fn register_notifications(
                     }
                     Some("OK") => {
                         pending_import_failure.store(0, Ordering::Release);
+                        lsp_store
+                            .update(cx, |store, cx| {
+                                let worktree_id = store
+                                    .language_server_statuses
+                                    .get(&server_id)
+                                    .and_then(|status| status.worktree);
+                                if let Some(worktree_id) = worktree_id
+                                    && store.jdtls_project_snapshot(worktree_id).is_some_and(
+                                        |(snapshot, current)| {
+                                            snapshot.server_id == server_id && !current
+                                        },
+                                    )
+                                {
+                                    store.schedule_jdtls_project_refresh(
+                                        server_id,
+                                        worktree_id,
+                                        cx,
+                                    );
+                                }
+                            })
+                            .log_err();
                         None
                     }
                     _ => None,

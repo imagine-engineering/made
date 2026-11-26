@@ -160,6 +160,7 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
     let kotlin_state = tempfile::tempdir().expect("isolated Kotlin state");
     let settings = serde_json::json!({
         "import": {"maven": {"enabled": true}},
+        "configuration": {"updateBuildConfiguration": "automatic"},
         "jdt": {"ls": {"kotlinSupport": {"enabled": true}}}
     });
     let (project, worktree_id, _java_state) =
@@ -279,6 +280,58 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
             });
             refresh_at = Instant::now() + Duration::from_secs(5);
         }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
+    let (java_generation, kotlin_generation) = store.read_with(cx, |store, _| {
+        (
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("Java import")
+                .0
+                .generation,
+            store
+                .kotlin_workspace_snapshot(worktree_id)
+                .expect("Kotlin import")
+                .0
+                .generation,
+        )
+    });
+    let pom = root.join("library/pom.xml");
+    let contents = std::fs::read_to_string(&pom).expect("library POM");
+    std::fs::write(
+        pom,
+        format!("{contents}\n<!-- Reimport without a classpath change. -->\n"),
+    )
+    .expect("edit the disposable POM");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        cx.run_until_parked();
+        let snapshots = store.read_with(cx, |store, _| {
+            (
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .map(|(snapshot, current)| (snapshot.generation, current)),
+                store
+                    .kotlin_workspace_snapshot(worktree_id)
+                    .map(|(snapshot, current)| (snapshot.generation, current)),
+            )
+        });
+        if snapshots
+            .0
+            .is_some_and(|(generation, current)| current && generation > java_generation)
+            && snapshots
+                .1
+                .is_some_and(|(generation, current)| current && generation > kotlin_generation)
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Maven provider facts did not refresh after reimport: {snapshots:?}"
+        );
         cx.background_executor
             .timer(Duration::from_millis(100))
             .await;
