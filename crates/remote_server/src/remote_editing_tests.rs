@@ -3117,6 +3117,17 @@ mod jvm_tools_runtime_tests {
             cx: &mut TestAppContext,
             server_cx: &mut TestAppContext,
         ) -> Self {
+            Self::new_with_http_client(maven, scoped, Arc::new(BlockedHttpClient), cx, server_cx)
+                .await
+        }
+
+        async fn new_with_http_client(
+            maven: bool,
+            scoped: bool,
+            http_client: Arc<dyn http_client::HttpClient>,
+            cx: &mut TestAppContext,
+            server_cx: &mut TestAppContext,
+        ) -> Self {
             cx.update(|cx| {
                 let settings = SettingsStore::test(cx);
                 cx.set_global(settings);
@@ -3232,7 +3243,7 @@ mod jvm_tools_runtime_tests {
                     crate::HeadlessAppState {
                         session,
                         fs: fs.clone(),
-                        http_client: Arc::new(BlockedHttpClient),
+                        http_client,
                         node_runtime: NodeRuntime::unavailable(),
                         languages,
                         extension_host_proxy: Arc::new(ExtensionHostProxy::new()),
@@ -3524,6 +3535,81 @@ mod jvm_tools_runtime_tests {
                 .contains("Could not reach the official Kotlin LSP release from the project host"),
             "{error:#}"
         );
+    }
+
+    #[gpui::test]
+    async fn remote_kotlin_release_check_returns_only_the_hosts_standalone_archive(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        let extension = match std::env::consts::OS {
+            "macos" => "sit",
+            "linux" => "tar.gz",
+            "windows" => "win.zip",
+            _ => return,
+        };
+        let (host_suffix, other_suffix) = match std::env::consts::ARCH {
+            "aarch64" => ("-aarch64", ""),
+            "x86_64" => ("", "-aarch64"),
+            _ => return,
+        };
+        let requests = Arc::new(AtomicUsize::new(0));
+        let host_http = FakeHttpClient::create({
+            let requests = requests.clone();
+            move |request| {
+                assert_ne!(request.uri().host(), Some("download.jetbrains.com"));
+                let response = if request.uri()
+                    == "https://api.github.com/repos/Kotlin/kotlin-lsp/releases/latest"
+                {
+                    assert_eq!(request.method(), http_client::Method::GET);
+                    let suffix = match requests.fetch_add(1, Ordering::SeqCst) {
+                        0 => other_suffix,
+                        1 => host_suffix,
+                        _ => panic!("extra Kotlin release metadata request"),
+                    };
+                    let archive = format!(
+                        "https://download.jetbrains.com/language-server/kotlin-server/271.2085.0/kotlin-server-271.2085.0{suffix}.{extension}"
+                    );
+                    let body = json!({
+                        "tag_name": "kotlin-lsp/v271.2085.0",
+                        "body": format!("**Standalone Kotlin LSP Archive**\n* [Download]({archive}) | [SHA-256]({archive}.sha256)"),
+                    });
+                    http_client::Response::builder().body(body.to_string().into())
+                } else {
+                    http_client::Response::builder()
+                        .status(404)
+                        .body(Default::default())
+                };
+                async move { Ok(response?) }
+            }
+        });
+        let mut fixture = GroovyRemoteWorkspaceFixture::new_with_http_client(
+            true, true, host_http, cx, server_cx,
+        )
+        .await;
+        let store = fixture
+            .project
+            .read_with(cx, |project, _| project.lsp_store());
+        store.read_with(cx, |store, _| {
+            assert!(store.supports_kotlin_lsp_release_check())
+        });
+        assert!(
+            store
+                .update(cx, |store, cx| store.check_kotlin_lsp_release(cx))
+                .is_err()
+        );
+        assert_eq!(requests.load(Ordering::SeqCst), 0);
+        fixture.trust(cx, server_cx);
+        for expected in [None, Some(semver::Version::new(271, 2085, 0))] {
+            let release = store
+                .update(cx, |store, cx| store.check_kotlin_lsp_release(cx))
+                .expect("trusted direct host release check")
+                .await
+                .expect("host release metadata response");
+            assert_eq!(release, expected);
+        }
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        fixture.assert_client_has_no_provider(cx);
     }
 
     #[gpui::test]

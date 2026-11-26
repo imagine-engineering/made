@@ -69,10 +69,10 @@ the latest official standalone build for the project host. A newer compatible
 archive provides an **Open Kotlin LSP release** action. The check reads release
 metadata. You choose whether to download and install a server.
 
-For SSH, WSL, and container projects, install the standalone server on the
-project host. Set or update `lsp.kotlin-lsp.binary.path` to that executable and
-restart the language server. The check preserves your current provider and
-binary override.
+For SSH, WSL, and container projects, the check is available while connected
+directly to the project host. Install the standalone server there, set or
+update `lsp.kotlin-lsp.binary.path` to that executable, and restart the
+language server. The check preserves your current provider and binary override.
 
 For a standalone qualification run, obtain the macOS ARM64 archive from the
 official release. `script/test-groovy-kotlin-provider.py --approved-archive

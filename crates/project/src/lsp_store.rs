@@ -5394,7 +5394,11 @@ fn merge_call_hierarchy_calls(responses: Vec<CallHierarchyCalls>) -> CallHierarc
 
 impl LspStore {
     pub fn supports_kotlin_lsp_release_check(&self) -> bool {
-        cfg!(feature = "jvm-tools") && !self.isolated_recipe_test
+        #[cfg(feature = "jvm-tools")]
+        return !self.isolated_recipe_test
+            && (self.as_local().is_some() || self.remote_kotlin_release_connection().is_some());
+        #[cfg(not(feature = "jvm-tools"))]
+        false
     }
 
     pub fn check_kotlin_lsp_release(
@@ -24937,6 +24941,39 @@ mod tests {
         assert_eq!(ordinary_restarts, 1);
         fixture.assert_accepted(false, cx);
         assert!(fixture.take_intents().is_empty());
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn kotlin_release_check_tracks_the_direct_host_connection(cx: &mut gpui::TestAppContext) {
+        let fixture = RemoteJvmClientFixture::new(cx).await;
+        fixture._local.read_with(cx, |project, cx| {
+            assert!(
+                project
+                    .lsp_store()
+                    .read(cx)
+                    .supports_kotlin_lsp_release_check()
+            );
+        });
+        fixture.store.update(cx, |store, cx| {
+            store.remote_jvm_connection_state_changed(true, cx);
+            assert!(
+                !store.supports_kotlin_lsp_release_check(),
+                "a shared project cannot check the release"
+            );
+            let LspStoreMode::Remote(remote) = &mut store.mode else {
+                panic!("remote fixture");
+            };
+            remote.upstream_project_id = proto::REMOTE_SERVER_PROJECT_ID;
+            assert!(store.supports_kotlin_lsp_release_check());
+            store.remote_jvm_connection_state_changed(false, cx);
+            assert!(
+                !store.supports_kotlin_lsp_release_check(),
+                "a disconnected host cannot check the release"
+            );
+            store.remote_jvm_connection_state_changed(true, cx);
+            assert!(store.supports_kotlin_lsp_release_check());
+        });
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]

@@ -128,21 +128,16 @@ impl LspStore {
         Ok(())
     }
 
-    fn remote_kotlin_release_client(&self, cx: &App) -> Result<(&rpc::AnyProtoClient, u64)> {
-        self.ensure_kotlin_release_check_scope(cx)?;
-        let remote = self
-            .as_remote()
-            .filter(|remote| {
-                remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
-                    && remote.jvm_consumers.connected
-            })
-            .context("Connect directly to the Kotlin project host to check for a release")?;
+    pub(super) fn remote_kotlin_release_connection(&self) -> Option<(&rpc::AnyProtoClient, u64)> {
+        let remote = self.as_remote().filter(|remote| {
+            remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                && remote.jvm_consumers.connected
+        })?;
         let client = remote
             .upstream_client
             .as_ref()
-            .filter(|client| !client.is_via_collab())
-            .context("Kotlin LSP release checks require a direct project host connection")?;
-        Ok((client, remote.jvm_consumers.generation))
+            .filter(|client| !client.is_via_collab())?;
+        Some((client, remote.jvm_consumers.generation))
     }
 
     pub(super) fn check_kotlin_lsp_release_on_host(
@@ -158,7 +153,9 @@ impl LspStore {
                 Ok(release)
             }));
         }
-        let (client, generation) = self.remote_kotlin_release_client(cx)?;
+        let (client, generation) = self
+            .remote_kotlin_release_connection()
+            .context("Connect directly to the Kotlin project host to check for a release")?;
         let client = client.clone();
         Ok(cx.spawn(async move |store, cx| {
             let request = client.request(proto::CheckKotlinLspRelease {
@@ -175,7 +172,11 @@ impl LspStore {
                 }
             };
             store.read_with(cx, |store, cx| {
-                let (current, current_generation) = store.remote_kotlin_release_client(cx)?;
+                store.ensure_kotlin_release_check_scope(cx)?;
+                let (current, current_generation) =
+                    store.remote_kotlin_release_connection().context(
+                        "Connect directly to the Kotlin project host to check for a release",
+                    )?;
                 ensure!(
                     current.is_same_instance(&client) && generation == current_generation,
                     "The Kotlin project host changed during the release check"
