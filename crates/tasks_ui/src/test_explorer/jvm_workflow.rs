@@ -569,7 +569,11 @@ async fn assert_fixture_task(
                 pane.read(cx).items().find_map(|item| {
                     let view = item.downcast::<TerminalView>()?;
                     let terminal = view.read(cx).terminal();
-                    terminal.read(cx).task().map(|_| terminal.clone())
+                    let task = terminal.read(cx).task()?;
+                    (!task.structured_task.as_ref().is_some_and(|handle| {
+                        matches!(handle.state(), task::StructuredTaskState::Cancelled { .. })
+                    }))
+                    .then(|| terminal.clone())
                 })
             })
         });
@@ -632,18 +636,33 @@ async fn cached_gradle_ordered_operations_keep_declared_options(cx: &mut TestApp
 #[gpui::test]
 #[ignore = "requires an offline Linux ARM64 Docker host with the Gradle fixture and pinned JDTLS model support"]
 async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut TestAppContext) {
-    run_docker_gradle_ordered_operations(true, cx).await;
+    run_docker_gradle_ordered_operations(DockerGradleRun::Restart, cx).await;
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 #[gpui::test]
 #[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
 async fn docker_gradle_ordered_operations_run_on_a_cold_host(cx: &mut TestAppContext) {
-    run_docker_gradle_ordered_operations(false, cx).await;
+    run_docker_gradle_ordered_operations(DockerGradleRun::Cold, cx).await;
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppContext) {
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
+async fn docker_gradle_ordered_operations_cancel_on_host(cx: &mut TestAppContext) {
+    run_docker_gradle_ordered_operations(DockerGradleRun::Cancel, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DockerGradleRun {
+    Restart,
+    Cold,
+    Cancel,
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut TestAppContext) {
     use jvm_ui::ShowGradle;
     use language_tools::language_tool_tree::{ExpandAll, status_message};
     use rpc::proto;
@@ -652,6 +671,7 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
     const FIRST: &str = ":application:parityArguments";
     const SECOND: &str = ":application:check";
     const MESSAGE: &str = "host value $ZED_FILE :library:help";
+    let restart = run == DockerGradleRun::Restart;
     let fixture = cached_jvm_fixture_path("GROOVY_GRADLE_ORDERED_DOCKER_ROOT");
     let report = fixture.join("application/build/test-results/test/TEST-evidence.GreetingTest.xml");
     assert!(!report.exists(), "start with a fresh Gradle workspace");
@@ -904,6 +924,28 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
     }
 
     let terminal_panel = mount_fixture_terminal(&workspace, cx).await;
+    if run == DockerGradleRun::Cancel {
+        for path in [":application:parityWait", SECOND] {
+            select_fixture_gradle_task(&workspace, &panel, path, None, cx);
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            assert_eq!(
+                panel.read_with(cx, |panel, _| panel
+                    .operation_notice_for_test()
+                    .map(str::to_owned)),
+                Some("Operation added. Inspect the ordered list before running it.".into())
+            );
+        }
+        focus_control(
+            cx,
+            "Run ordered offline operations on the current project host through Tasks",
+        );
+        press_enter(cx);
+        assert_cancelled_gradle_queue(&terminal_panel, &fixture, &report, cx).await;
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
+        });
+        dispatch_graph_action(cx, "groovy_dependencies_panel::ClearOrderedOperations");
+    }
     select_fixture_gradle_task(&workspace, &panel, FIRST, Some("message"), cx);
     let option = format!("--message={MESSAGE}");
     type_fixture_options(
@@ -1017,6 +1059,7 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
         cx,
     )
     .await;
+    assert!(transcript.contains("finished successfully"), "{transcript}");
     let first = transcript
         .find(&format!("GROOVY_PARITY_MESSAGE={MESSAGE}"))
         .expect("Gradle received the exact declared option");
@@ -1041,6 +1084,100 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
     );
     eprintln!(
         "Connected Dependencies ran both tasks in one offline Task on {hostname}:\n{transcript}"
+    );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn assert_cancelled_gradle_queue(
+    terminal_panel: &Entity<terminal_view::terminal_panel::TerminalPanel>,
+    fixture: &std::path::Path,
+    report: &std::path::Path,
+    cx: &mut VisualTestContext,
+) {
+    const START_MARKER: &str = "GROOVY_PARITY_WAIT_STARTED";
+    let witness = fixture.join("application/build/qualification/parity-wait-state");
+    let deadline = Instant::now() + Duration::from_secs(45);
+    let (terminal, handle) = loop {
+        cx.run_until_parked();
+        if witness.is_file() {
+            let running = terminal_panel.read_with(cx, |panel, cx| {
+                panel.panes().into_iter().find_map(|pane| {
+                    pane.read(cx).items().find_map(|item| {
+                        let view = item.downcast::<terminal_view::TerminalView>()?;
+                        let terminal = view.read(cx).terminal();
+                        let state = terminal.read(cx);
+                        let handle = state.task()?.structured_task.as_ref()?;
+                        (matches!(handle.state(), task::StructuredTaskState::Running { .. })
+                            && state.get_content().contains(START_MARKER))
+                        .then(|| (terminal.clone(), handle.clone()))
+                    })
+                })
+            });
+            if let Some(running) = running {
+                break running;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the ordered Gradle Task did not start on the host"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    let started = std::fs::read_to_string(&witness).expect("read live Gradle worker witness");
+    let worker = started
+        .trim_end()
+        .strip_prefix("started ")
+        .expect("live Gradle Task marker");
+    assert!(worker.parse::<u32>().is_ok());
+    assert!(
+        cx.update(|_, cx| handle.cancel(cx)),
+        "cancel the running workspace Task"
+    );
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        cx.run_until_parked();
+        if matches!(
+            handle.state(),
+            task::StructuredTaskState::Cancelled {
+                termination_confirmed: true,
+                ..
+            }
+        ) && std::fs::read_to_string(&witness)
+            .expect("read stopped Gradle worker witness")
+            .ends_with("stopped\n")
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Gradle cancellation did not stop the host Task: {:?}",
+            handle.state()
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    assert_eq!(
+        std::fs::read_to_string(&witness).expect("final Gradle worker witness"),
+        format!("started {worker}\nstopped\n")
+    );
+    let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+    assert!(transcript.contains("cancelled"), "{transcript}");
+    assert!(
+        !transcript
+            .lines()
+            .any(|line| line.starts_with("> Task :application:check")),
+        "{transcript}"
+    );
+    assert!(
+        !report.exists(),
+        "the skipped second operation wrote a report"
+    );
+    eprintln!(
+        "Connected Gradle cancelled Task {:?} while worker {worker} was active",
+        handle.task_id()
     );
 }
 
@@ -2472,6 +2609,9 @@ async fn run_maven_goal_fixture(
         cx,
     )
     .await;
+    if host_shell.is_some() {
+        assert!(transcript.contains("finished successfully"), "{transcript}");
+    }
     match run {
         MavenGoalRun::ResolveSources { cached } => {
             let (_, artifacts) = transcript

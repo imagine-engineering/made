@@ -52,8 +52,16 @@ tasks.register("parityFailure") {
 tasks.register("parityWait") {
     group = "groovy parity"
     doLast {
+        val witness = layout.buildDirectory.file("qualification/parity-wait-state").get().asFile
+        witness.parentFile.mkdirs()
+        witness.writeText("started ${ProcessHandle.current().pid()}\n")
         println("GROOVY_PARITY_WAIT_STARTED")
-        Thread.sleep(60000)
+        try {
+            Thread.sleep(60000)
+        } finally {
+            witness.appendText("stopped\n")
+        }
+        witness.appendText("completed\n")
     }
 }
 

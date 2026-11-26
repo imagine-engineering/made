@@ -967,6 +967,7 @@ impl Workspace {
                     env: plan.environment.clone().into_iter().collect(),
                     literal_command: true,
                     literal_prefix_args: plan.arguments.len(),
+                    show_summary: true,
                     ..Default::default()
                 };
                 let handle = StructuredTaskHandle::new(task.id.clone());
