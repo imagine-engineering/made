@@ -317,10 +317,13 @@ projects** to apply the host's effective Gradle selection in offline mode, then
 use **Synchronize metadata** again to load tasks and configurations. Both
 actions rely on the project host's cached Gradle installation and dependencies.
 
-For **Reload Maven projects** and **Apply saved Maven selection**, set
-`java.import.maven.offline.enabled` to `true` under the project host's
-`lsp.jdtls.settings` and use a populated Maven cache. This configures JDTLS's
-Maven importer. The Maven wrapper's `-o` flag configures command-line builds.
+**Reload Maven projects** is available on trusted direct connections. It
+reimports the host's effective Maven roots, then refreshes the project data.
+**Refresh Dependencies** reads current data without reimporting the build.
+Set `java.import.maven.offline.enabled` to `true` under the project host's
+`lsp.jdtls.settings` and use a populated Maven cache. The same JDTLS setting
+applies to local **Apply saved Maven selection**. The Maven wrapper's `-o`
+flag configures command-line builds.
 
 The scoped Gradle provider uses a cached Gradle installation for **Synchronize
 metadata**. In your host's `lsp.jdtls.settings`, set

@@ -892,6 +892,13 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
         &serde_json::to_string(&[&option]).expect("option JSON"),
     );
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+    panel.read_with(cx, |panel, _| {
+        assert_eq!(
+            panel.operation_notice_for_test(),
+            Some("Operation added. Inspect the ordered list before running it."),
+            "the first Gradle operation must be admitted with its options"
+        );
+    });
     select_fixture_gradle_task(&workspace, &panel, SECOND, None, cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
@@ -2153,9 +2160,86 @@ async fn run_maven_goal_fixture(
     )
     .await;
 
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    if host_shell.is_some() {
+        use rpc::proto;
+
+        let remote_client = project.read_with(cx, |project, cx| {
+            project
+                .remote_client()
+                .expect("Maven project host")
+                .read(cx)
+                .proto_client()
+        });
+        for (version, reason) in [
+            (1, "JVM project ownership changed"),
+            (
+                2,
+                "Maven reimport requires a current direct Groovy connection",
+            ),
+        ] {
+            let error = remote_client
+                .request(proto::ReimportRemoteMavenProjects {
+                    project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                    protocol_version: version,
+                    session_generation: 0,
+                    worktree_id: worktree_id.to_proto(),
+                })
+                .await
+                .expect_err("reimport must deny stale or incompatible Maven requests");
+            assert!(error.to_string().contains(reason), "{error:#}");
+        }
+    }
+
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
     let terminal_panel = mount_fixture_terminal(&workspace, cx).await;
     show_ready_maven_view(&lsp_store, worktree_id, cx).await;
+    if host_shell.is_some() {
+        let previous_generation = lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("initial Maven import")
+                .0
+                .generation
+        });
+        focus_control(cx, "Reload Maven projects offline on the project host");
+        press_enter(cx);
+        let deadline = Instant::now() + Duration::from_secs(180);
+        loop {
+            cx.run_until_parked();
+            let notice = panel.read_with(cx, |panel, _| {
+                panel.build_phase_notice_for_test().map(str::to_owned)
+            });
+            let current = lsp_store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current && snapshot.generation > previous_generation
+                    })
+            });
+            if current
+                && notice.as_deref()
+                    == Some("Maven projects reimported. Refreshing host project facts.")
+            {
+                break;
+            }
+            if let Some(message) = notice.as_deref() {
+                assert!(
+                    message.starts_with("Reimporting Maven projects")
+                        || message.starts_with("Maven projects reimported"),
+                    "{message}"
+                );
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the refreshed Maven generation was not published: {notice:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        show_ready_maven_view(&lsp_store, worktree_id, cx).await;
+    }
     cx.dispatch_action(ExpandAll);
     let select_goal = |cx: &mut VisualTestContext, goal| {
         workspace.update_in(cx, |workspace, window, cx| {

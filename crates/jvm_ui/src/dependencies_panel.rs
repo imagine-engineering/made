@@ -23,7 +23,7 @@ use project::{
         KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
-    task_inventory::{MavenSettingsFile, TaskSourceKind},
+    task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
     trusted_worktrees::TrustedWorktrees,
 };
 use task::{TaskContext, VariableName};
@@ -693,7 +693,7 @@ pub struct DependenciesPanel {
     build_phase_token: Option<project::jvm_project::ProviderRefreshToken>,
     build_phase_waiter: Option<gpui::Task<()>>,
     build_phase_notice: Option<String>,
-    remote_gradle_reimport_pending: bool,
+    remote_build_reimport_pending: bool,
     graph_search: Entity<Editor>,
     graph_inspection: Option<GraphInspection>,
     graph_pin: Option<GraphPin>,
@@ -3053,6 +3053,11 @@ impl DependenciesPanel {
         self.build_phase_notice.as_deref()
     }
 
+    #[cfg(feature = "test-support")]
+    pub fn operation_notice_for_test(&self) -> Option<&str> {
+        self.operation_notice.as_deref()
+    }
+
     pub async fn load(
         workspace: WeakEntity<Workspace>,
         mut cx: AsyncWindowContext,
@@ -3135,7 +3140,7 @@ impl DependenciesPanel {
                     build_phase_token: None,
                     build_phase_waiter: None,
                     build_phase_notice: None,
-                    remote_gradle_reimport_pending: false,
+                    remote_build_reimport_pending: false,
                     graph_search,
                     graph_inspection: None,
                     graph_pin: None,
@@ -4865,7 +4870,7 @@ impl DependenciesPanel {
         let mut local_without_snapshot = 0;
         let mut remote_without_snapshot = 0;
         let mut remote_gradle_needs_metadata = false;
-        let selected_gradle_worktree = self.selected_gradle_worktree();
+        let selected_build_worktree_id = self.selected_build_worktree_id();
         let restricted_worktrees = trusted_worktrees
             .read(cx)
             .restricted_worktrees(&worktree_store, cx)
@@ -4895,7 +4900,7 @@ impl DependenciesPanel {
             let jdtls_snapshot = lsp_store.jdtls_project_snapshot(worktree.id());
             if self.view == BuildToolView::Gradle
                 && !worktree.is_local()
-                && selected_gradle_worktree.is_none_or(|selected| selected == worktree.id())
+                && selected_build_worktree_id.is_none_or(|selected| selected == worktree.id())
                 && let Some((snapshot, true)) = jdtls_snapshot
             {
                 remote_gradle_needs_metadata |= snapshot
@@ -5051,7 +5056,7 @@ impl DependenciesPanel {
             }
         }
         let can_load_remote_gradle_metadata = remote_gradle_needs_metadata
-            && lsp_store.can_synchronize_remote_gradle_metadata(selected_gradle_worktree, cx);
+            && lsp_store.can_synchronize_remote_gradle_metadata(selected_build_worktree_id, cx);
         if !inspection_current {
             self.graph_inspection = None;
         }
@@ -5325,7 +5330,7 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
-    fn selected_gradle_worktree(&self) -> Option<settings::WorktreeId> {
+    fn selected_build_worktree_id(&self) -> Option<settings::WorktreeId> {
         self.host
             .selected()
             .and_then(|id| self.navigation.get(id))
@@ -5333,10 +5338,10 @@ impl DependenciesPanel {
     }
 
     fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
-        if self.remote_gradle_reimport_pending {
+        if self.remote_build_reimport_pending {
             return;
         }
-        let selected_worktree = self.selected_gradle_worktree();
+        let selected_worktree = self.selected_build_worktree_id();
         let lsp_store = self.project.read(cx).lsp_store();
         if self.project.read(cx).is_remote() {
             match lsp_store.update(cx, |store, cx| {
@@ -5865,7 +5870,7 @@ impl DependenciesPanel {
 
     fn apply_saved_build_selection(&mut self, maven: bool, cx: &mut Context<Self>) {
         if !maven && self.project.read(cx).is_remote() {
-            self.reimport_remote_gradle_projects(cx);
+            self.reimport_remote_build_projects(JvmBuildTool::Gradle, cx);
             return;
         }
         let action = if maven {
@@ -5876,24 +5881,37 @@ impl DependenciesPanel {
         self.run_build_import(action, cx);
     }
 
-    fn reimport_remote_gradle_projects(&mut self, cx: &mut Context<Self>) {
-        if self.remote_gradle_reimport_pending || self.host_unavailable(cx) {
+    fn reload_maven_projects(&mut self, cx: &mut Context<Self>) {
+        if self.project.read(cx).is_remote() {
+            self.reimport_remote_build_projects(JvmBuildTool::Maven, cx);
+        } else {
+            self.run_build_import(BuildImport::ReloadMaven, cx);
+        }
+    }
+
+    fn reimport_remote_build_projects(&mut self, tool: JvmBuildTool, cx: &mut Context<Self>) {
+        if self.remote_build_reimport_pending || self.host_unavailable(cx) {
             return;
         }
-        let worktree_id = self.selected_gradle_worktree();
+        let worktree_id = self.selected_build_worktree_id();
         match self.project.read(cx).lsp_store().update(cx, |store, cx| {
-            store.reimport_remote_gradle_projects(worktree_id, cx)
+            store.reimport_remote_build_projects(tool, worktree_id, cx)
         }) {
             Ok(import) => {
-                self.remote_gradle_reimport_pending = true;
-                self.build_phase_notice =
-                    Some("Reimporting Gradle projects offline on the project host.".into());
+                self.remote_build_reimport_pending = true;
+                self.build_phase_notice = Some(format!(
+                    "Reimporting {} projects offline on the project host.",
+                    tool.name()
+                ));
                 cx.spawn(async move |panel, cx| {
                     let result = import.await;
                     panel.update(cx, |panel, cx| {
-                        panel.remote_gradle_reimport_pending = false;
+                        panel.remote_build_reimport_pending = false;
                         panel.build_phase_notice = Some(match result {
-                            Ok(()) => "Gradle projects reimported. Use Synchronize metadata to load tasks and configurations.".into(),
+                            Ok(()) => match tool {
+                                JvmBuildTool::Maven => "Maven projects reimported. Refreshing host project facts.".into(),
+                                JvmBuildTool::Gradle => "Gradle projects reimported. Use Synchronize metadata to load tasks and configurations.".into(),
+                            },
                             Err(error) => error.to_string(),
                         });
                         cx.notify();
@@ -8624,9 +8642,33 @@ impl Render for DependenciesPanel {
                 .read(cx)
                 .lsp_store()
                 .read(cx)
-                .can_synchronize_remote_gradle_metadata(self.selected_gradle_worktree(), cx);
+                .can_synchronize_remote_gradle_metadata(self.selected_build_worktree_id(), cx);
         let can_use_remote_gradle_actions =
-            has_remote_gradle_scope && !self.remote_gradle_reimport_pending;
+            has_remote_gradle_scope && !self.remote_build_reimport_pending;
+        let has_remote_maven_scope = remote_project
+            && !self.host_unavailable(cx)
+            && self
+                .project
+                .read(cx)
+                .lsp_store()
+                .read(cx)
+                .can_reimport_remote_build_projects(
+                    JvmBuildTool::Maven,
+                    self.selected_build_worktree_id(),
+                    cx,
+                );
+        let can_reload_maven = if remote_project {
+            has_remote_maven_scope && !self.remote_build_reimport_pending
+        } else {
+            can_apply_build_selection
+        };
+        let reload_maven_label = match (remote_project, has_remote_maven_scope) {
+            (false, _) => "Reload selected or provider-default Maven projects on the local host",
+            (true, true) => "Reload Maven projects offline on the project host",
+            (true, false) => {
+                "Maven reimport requires a trusted direct connection to the project host"
+            }
+        };
         let can_synchronize_gradle = !remote_project || can_use_remote_gradle_actions;
         let synchronize_gradle_label = match (remote_project, has_remote_gradle_scope) {
             (false, _) => {
@@ -8912,10 +8954,10 @@ impl Render for DependenciesPanel {
                                         )
                                         .shape(ui::IconButtonShape::Square)
                                         .tab_index(0_isize)
-                                        .aria_label("Reload selected or provider-default Maven projects on the local host")
+                                        .aria_label(reload_maven_label)
                                         .tooltip(Tooltip::text("Reload Maven projects"))
-                                        .disabled(!can_apply_build_selection)
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadMaven, cx))),
+                                        .disabled(!can_reload_maven)
+                                        .on_click(cx.listener(|panel, _, _, cx| panel.reload_maven_projects(cx))),
                                     )
                                     .child(
                                         IconButton::new(
@@ -9072,9 +9114,9 @@ impl Render for DependenciesPanel {
                     ))
                     .when(self.view == BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
                         Button::new("groovy-reload-maven-projects", "Reload Maven projects")
-                            .aria_label("Reload selected or provider-default Maven projects on the local host")
-                            .disabled(!can_apply_build_selection).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadMaven, cx)))
+                            .aria_label(reload_maven_label)
+                            .disabled(!can_reload_maven).tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.reload_maven_projects(cx)))
                     ))
                     .when(self.view == BuildToolView::Dependencies, |header| header.child(
                         Button::new("groovy-reload-all-builds", "Reload all builds")
@@ -14032,6 +14074,10 @@ mod tests {
                             view != BuildToolView::Gradle,
                         ),
                         (
+                            "Maven reimport requires a trusted direct connection to the project host",
+                            view == BuildToolView::Maven,
+                        ),
+                        (
                             "Gradle reimport requires a trusted direct connection to the project host",
                             view != BuildToolView::Maven,
                         ),
@@ -14067,7 +14113,7 @@ mod tests {
                 panel.build_phase_notice = None;
                 panel.apply_saved_build_selection(maven, cx);
                 assert!(panel.build_phase_token.is_none() && panel.build_phase_waiter.is_none());
-                assert!(!panel.remote_gradle_reimport_pending);
+                assert!(!panel.remote_build_reimport_pending);
                 assert!(
                     panel
                         .build_phase_notice

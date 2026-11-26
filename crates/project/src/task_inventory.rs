@@ -56,6 +56,13 @@ pub enum JvmBuildTool {
 }
 
 impl JvmBuildTool {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Maven => "Maven",
+            Self::Gradle => "Gradle",
+        }
+    }
+
     fn wrapper(self, path_style: PathStyle) -> (&'static str, &'static str) {
         match (self, path_style) {
             (Self::Maven, PathStyle::Unix) => ("mvnw", "./mvnw"),

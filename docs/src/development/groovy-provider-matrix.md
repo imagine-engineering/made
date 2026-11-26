@@ -215,6 +215,13 @@ settings paths in JDTLS initialization, before the first Maven import.
 Explicit values in `lsp.jdtls.initialization_options.settings` take precedence
 during initialization.
 
+On a trusted direct Maven connection, **Reload Maven projects** runs the
+host's effective reactor selection offline and waits for current Java project
+data. The mounted Docker Tasks fixture activates the control with Enter,
+observes one provider reimport and a newer project generation, and then runs
+the ordered Maven Help goals. Stale session and incompatible request versions
+are refused before reimport.
+
 The opt-in `docker_gradle_java_definition_opens_host_kotlin_source` test
 uses the same Docker transport with the offline Gradle 8.13 reactor. Both
 providers identify the current application and library as Gradle modules.

@@ -573,7 +573,8 @@ message Envelope {
     SynchronizeRemoteGradleMetadata synchronize_remote_gradle_metadata = 538;
     CheckKotlinLspRelease check_kotlin_lsp_release = 539;
     KotlinLspReleaseResponse kotlin_lsp_release_response = 540;
-    ReimportRemoteGradleProjects reimport_remote_gradle_projects = 541; // current max
+    ReimportRemoteGradleProjects reimport_remote_gradle_projects = 541;
+    ReimportRemoteMavenProjects reimport_remote_maven_projects = 542; // current max
   }
 
   reserved 87 to 88;
