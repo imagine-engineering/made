@@ -1241,7 +1241,7 @@ fn composition_configuration(
     ))
 }
 
-fn validate_vector_geometry(
+pub(crate) fn validate_vector_geometry(
     vector: &Vector,
     transform: DAffine2,
     logical: DAffine2,

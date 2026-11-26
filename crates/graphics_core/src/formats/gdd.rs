@@ -29,6 +29,7 @@ use graphite_document_graph_storage::{
 pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
+    graph_operation::transform_utils::get_current_transform,
     node_graph::document_node_definitions::{DocumentNodeDefinition, resolve_proto_node_type},
     utility_types::{
         document_metadata::LayerNodeIdentifier,
@@ -69,9 +70,11 @@ use graphite_std::{
     Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
     transform::Footprint,
+    transform_nodes::transform,
     vector_nodes::{
         fill,
         generator_nodes::{ellipse, rectangle},
+        stroke,
     },
 };
 use zip::ZipArchive;
@@ -87,7 +90,7 @@ use crate::evaluate::{
 use crate::registry::{
     ARTBOARD_NODE_IDENTIFIER, ARTBOARD_NODE_NAME, CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME,
     MERGE_NODE_IDENTIFIER, MERGE_NODE_NAME, artboard_node_definition, custom_node_definition,
-    merge_node_definition,
+    merge_node_definition, path_node_definition,
 };
 
 mod xz;
@@ -271,9 +274,7 @@ pub enum GddArchiveError {
     GraphNumericPreviewBudget,
     #[error("Graphite could not evaluate the selected node. {0}")]
     GraphNumericPreviewEvaluation(String),
-    #[error(
-        "Graphite preview requires a saved root Merge or Artboard with supported filled shapes."
-    )]
+    #[error("Graphite preview requires a saved root Merge or Artboard with supported artwork.")]
     UnsupportedGraphLayerPreview,
     #[error("The saved layer graph exceeds the preview budget.")]
     GraphLayerPreviewBudget,
@@ -811,6 +812,9 @@ pub enum GddGraphLayerPreview {
 #[derive(Clone, Copy)]
 enum SavedGraphicProfile {
     Rectangle,
+    Path,
+    Transform,
+    Stroke,
     Ellipse([f64; 2]),
     EllipseList,
     EllipseWired,
@@ -3945,6 +3949,7 @@ impl InspectedGddV1 {
     ) -> Result<RenderOutput, GddArchiveError> {
         validate_svg_configuration(configuration, budget)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
+        validate_saved_path_modifications(&detached)?;
         validate_saved_ellipse_radius_sources(&detached).await?;
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
@@ -6414,6 +6419,37 @@ fn valid_saved_ellipse_radius_value(value: &TaggedValue) -> bool {
     }
 }
 
+fn validate_saved_path_modifications(network: &NodeNetwork) -> Result<(), GddArchiveError> {
+    for node in network.nodes.values() {
+        let [_, modification] = node.inputs.as_slice() else {
+            continue;
+        };
+        let Some(TaggedValue::VectorModification(modification)) = modification.as_value() else {
+            continue;
+        };
+        if serde_json::to_writer(
+            BoundedArchive {
+                bytes: Cursor::new(Vec::new()),
+                limit: (MAX_PREVIEW_VALUES * 256) as u64,
+            },
+            modification,
+        )
+        .is_err()
+        {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        let mut vector = Vector::default();
+        modification.apply(&mut vector);
+        if vector.point_domain.ids().len() + vector.segment_domain.ids().len() > MAX_PREVIEW_VALUES
+        {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        crate::render::validate_vector_geometry(&vector, DAffine2::IDENTITY, DAffine2::IDENTITY)
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
+    }
+    Ok(())
+}
+
 async fn validate_saved_ellipse_radius_sources(
     network: &NodeNetwork,
 ) -> Result<(), GddArchiveError> {
@@ -6473,6 +6509,20 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 .filter(|(_, input)| output_wire(input))
                 .collect::<Vec<_>>();
             match node.inputs.as_slice() {
+                [_, modification]
+                    if matches!(modification, NodeInput::Value { exposed: false, .. })
+                        && matches!(
+                            modification.as_value(),
+                            Some(TaggedValue::VectorModification(_))
+                        ) =>
+                {
+                    // This profile starts with the original empty Vector input.
+                    (
+                        path_node_definition()?,
+                        vec![(1, modification)],
+                        SavedGraphicProfile::Path,
+                    )
+                }
                 [_, _] => (
                     merge_node_definition()?,
                     replacements,
@@ -6572,6 +6622,66 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 resolve_proto_node_type(fill::IDENTIFIER)?,
                 replacements,
                 SavedGraphicProfile::Fill,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &transform::IDENTIFIER =>
+        {
+            let [content, translation, rotation, scale, skew] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content)
+                || ![translation, scale, skew].iter().all(|input| {
+                    matches!(input.as_value(), Some(TaggedValue::DVec2(value)) if value.is_finite())
+                })
+                || !matches!(rotation.as_value(), Some(TaggedValue::Number(value)) if value.is_finite())
+                || !get_current_transform(&node.inputs).is_finite()
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(transform::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::Transform,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &stroke::IDENTIFIER => {
+            let [
+                content,
+                paint,
+                weight,
+                align,
+                cap,
+                join,
+                miter,
+                dash,
+                offset,
+            ] = node.inputs.as_slice()
+            else {
+                return None;
+            };
+            let positive = |input: &NodeInput| match input.as_value() {
+                Some(TaggedValue::Number(value)) if value.is_finite() && *value >= 0. => {
+                    Some(*value)
+                }
+                _ => None,
+            };
+            if !output_wire(content)
+                || !matches!(paint.as_value(), Some(TaggedValue::Color(color))
+                    if color.to_gamma_srgb_channels().into_iter().all(|channel| channel.is_finite()))
+                || !(positive(weight)? * positive(miter)?.max(1.)).is_finite()
+                || !matches!(align.as_value(), Some(TaggedValue::StrokeAlign(_)))
+                || !matches!(cap.as_value(), Some(TaggedValue::StrokeCap(_)))
+                || !matches!(join.as_value(), Some(TaggedValue::StrokeJoin(_)))
+                || !matches!(dash.as_value(), Some(TaggedValue::DashPattern(lengths)) if lengths.is_empty())
+                || !matches!(offset.as_value(), Some(TaggedValue::Number(value)) if value.is_finite())
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(stroke::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::Stroke,
             )
         }
         _ => return None,
@@ -11065,6 +11175,41 @@ mod tests {
                 Err(GddArchiveError::StaleGraphNode)
             ));
         });
+    }
+
+    #[test]
+    fn saved_path_preview_enforces_the_geometry_budget() {
+        use graphite_std::{vector::VectorModification, vector_types::kurbo::BezPath};
+
+        let path = |segments| {
+            let mut outline = BezPath::new();
+            outline.move_to((0., 0.));
+            for index in 1..=segments {
+                outline.line_to((f64::from(index), f64::from(index % 2)));
+            }
+            let modification =
+                VectorModification::create_from_vector(&Vector::from_bezpath(outline));
+            let node = path_node_definition()
+                .expect("pinned Path")
+                .node_template_input_override([
+                    None,
+                    Some(NodeInput::value(
+                        TaggedValue::VectorModification(Box::new(modification)),
+                        false,
+                    )),
+                ])
+                .into_parts()
+                .0;
+            NodeNetwork {
+                nodes: [(NodeId(10), node)].into_iter().collect(),
+                ..Default::default()
+            }
+        };
+        validate_saved_path_modifications(&path(2)).expect("admitted open Path");
+        assert!(matches!(
+            validate_saved_path_modifications(&path(1024)),
+            Err(GddArchiveError::GraphLayerPreviewBudget)
+        ));
     }
 
     #[test]

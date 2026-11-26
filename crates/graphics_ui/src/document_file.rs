@@ -14175,6 +14175,345 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_tool_008_2_workspace_renders_and_moves_the_saved_f_vector_scene(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_core_types::Color;
+        use graphite_document_graph_storage::NodeMetadataSource;
+        use graphite_editor::messages::portfolio::document::{
+            graph_operation::transform_utils::get_current_transform,
+            node_graph::document_node_definitions::{
+                resolve_network_node_type, resolve_proto_node_type,
+            },
+        };
+        use graphite_graph_craft::document::{NodeId, NodeInput, NodeNetwork, value::TaggedValue};
+        use graphite_resource::ResourceRegistry;
+        use graphite_std::{
+            Vector, transform_nodes::transform, vector::VectorModification, vector_nodes::stroke,
+            vector_types::kurbo::BezPath,
+        };
+
+        struct VectorLayers;
+        impl NodeMetadataSource for VectorLayers {
+            fn is_layer(&self, path: &[NodeId], id: NodeId) -> bool {
+                path.is_empty() && matches!(id, NodeId(1..=4))
+            }
+            fn reference(&self, path: &[NodeId]) -> Option<&str> {
+                match path {
+                    [NodeId(1)] => Some("Artboard"),
+                    [NodeId(2..=4)] => Some("Merge"),
+                    [NodeId(10)] => Some("Path"),
+                    _ => None,
+                }
+            }
+        }
+
+        let mut curve = BezPath::new();
+        curve.move_to((0., 30.));
+        curve.curve_to((14., 0.), (56., 60.), (70., 30.));
+        let curve = VectorModification::create_from_vector(&Vector::from_bezpath(curve));
+        let path = resolve_network_node_type("Path")
+            .expect("pinned Path")
+            .node_template_input_override([
+                None,
+                Some(NodeInput::value(
+                    TaggedValue::VectorModification(Box::new(curve)),
+                    false,
+                )),
+            ])
+            .into_parts()
+            .0;
+        let stroke = resolve_proto_node_type(stroke::IDENTIFIER)
+            .expect("pinned Stroke")
+            .node_template_input_override([
+                Some(NodeInput::node(NodeId(10), 0)),
+                Some(NodeInput::value(TaggedValue::Color(Color::BLUE), false)),
+                Some(NodeInput::value(TaggedValue::Number(6.), false)),
+            ])
+            .into_parts()
+            .0;
+        let transform = |source, offset, rotation, scale, skew| {
+            resolve_proto_node_type(transform::IDENTIFIER)
+                .expect("pinned Transform")
+                .node_template_input_override([
+                    Some(NodeInput::node(source, 0)),
+                    Some(NodeInput::value(TaggedValue::DVec2(offset), false)),
+                    Some(NodeInput::value(TaggedValue::Number(rotation), false)),
+                    Some(NodeInput::value(TaggedValue::DVec2(scale), false)),
+                    Some(NodeInput::value(TaggedValue::DVec2(skew), false)),
+                ])
+                .into_parts()
+                .0
+        };
+        let curve_transform = transform(
+            NodeId(11),
+            DVec2::new(28., 36.),
+            -15.,
+            DVec2::new(1., 0.75),
+            DVec2::new(8., 0.),
+        );
+        let rectangle_transform = transform(
+            NodeId(13),
+            DVec2::new(6., 8.),
+            10.,
+            DVec2::new(0.8, 1.2),
+            DVec2::ZERO,
+        );
+        let group_transform = transform(
+            NodeId(3),
+            DVec2::new(52., 48.),
+            20.,
+            DVec2::new(1.15, 0.9),
+            DVec2::new(-6., 5.),
+        );
+        let group_to_artboard = get_current_transform(&group_transform.inputs);
+        let curve_to_artboard = group_to_artboard * get_current_transform(&curve_transform.inputs);
+        let rectangle_to_artboard =
+            group_to_artboard * get_current_transform(&rectangle_transform.inputs);
+        let merge = resolve_network_node_type("Merge").expect("pinned Merge");
+        let group = |base: Option<NodeId>, content| {
+            merge
+                .node_template_input_override([
+                    base.map(|id| NodeInput::node(id, 0)),
+                    Some(NodeInput::node(content, 0)),
+                ])
+                .into_parts()
+                .0
+        };
+        let origin = DVec2::new(40., -20.);
+        let board = resolve_network_node_type("Artboard")
+            .expect("pinned Artboard")
+            .node_template_input_override([
+                None,
+                Some(NodeInput::node(NodeId(2), 0)),
+                Some(NodeInput::value(TaggedValue::DVec2(origin), false)),
+                Some(NodeInput::value(
+                    TaggedValue::DVec2(DVec2::new(220., 160.)),
+                    false,
+                )),
+            ])
+            .into_parts()
+            .0;
+        let graph = NodeNetwork {
+            nodes: [
+                (NodeId(1), board),
+                (NodeId(2), group(None, NodeId(16))),
+                (NodeId(3), group(Some(NodeId(4)), NodeId(14))),
+                (NodeId(4), group(None, NodeId(15))),
+                (NodeId(10), path),
+                (NodeId(11), stroke),
+                (NodeId(14), curve_transform),
+                (NodeId(15), rectangle_transform),
+                (NodeId(16), group_transform),
+            ]
+            .into_iter()
+            .chain(preview_rectangle(
+                NodeId(12),
+                NodeId(13),
+                28.,
+                18.,
+                Color::RED,
+            ))
+            .collect(),
+            exports: vec![NodeInput::node(NodeId(1), 0)],
+            ..Default::default()
+        };
+        let mut owner = GddV1::create_in(
+            AnyContainer::Memory(MemoryBackend::new()),
+            GddV1Layout,
+            Default::default(),
+            662,
+            "Pinned Graphite".into(),
+            "Pinned library".into(),
+        )
+        .expect("saved GDD");
+        let resources = HashMapResourceStorage::new();
+        owner
+            .commit_from_runtime(&graph, &VectorLayers, &ResourceRegistry::new(), &resources)
+            .expect("F-VECTOR source document");
+        let original: Arc<[u8]> = owner
+            .export_to_bytes(
+                ExportFormat::Zip,
+                ExportOptions::default(),
+                &resources,
+                None,
+            )
+            .await
+            .expect("source ZIP")
+            .into();
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/f-vector.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source ZIP");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open saved vector scene")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let assert_scene = |canvas: &SavedSceneCanvas, image: &RenderImage, origin: DVec2| {
+            let target = canvas.target.expect("measured Canvas");
+            let navigation = canvas.navigation.expect("fitted Artboard");
+            let pane = navigation.document_to_pane(target.logical_size());
+            let sample = |point| {
+                let position = (pane.transform_point2(origin + point) * target.scale).round();
+                let index = (position.y as usize * image.size(0).width.0 as usize
+                    + position.x as usize)
+                    * 4;
+                image
+                    .as_bytes(0)
+                    .and_then(|bytes| bytes.get(index..index + 4))
+                    .expect("sample inside Canvas")
+            };
+            assert_eq!(
+                sample(curve_to_artboard.transform_point2(DVec2::new(35., 30.))),
+                [255, 0, 0, 255]
+            );
+            assert_eq!(
+                sample(rectangle_to_artboard.transform_point2(DVec2::ZERO)),
+                [0, 0, 255, 255]
+            );
+            assert_eq!(
+                sample(curve_to_artboard.transform_point2(DVec2::new(35., 42.))),
+                [255, 255, 255, 255]
+            );
+        };
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let image = match &canvas.frame {
+                SavedSceneFrame::Ready(image) => image,
+                SavedSceneFrame::Failed(error) => panic!("F-VECTOR renderer failed: {error}"),
+                _ => panic!("rendered F-VECTOR Canvas"),
+            };
+            assert_scene(canvas, image, origin);
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        click(window, "GRAPHITE-GDD-CANVAS-MOVE-ARTBOARD");
+        let bounds = window
+            .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+            .expect("Canvas bounds");
+        let viewport = item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            canvas
+                .navigation
+                .expect("accepted viewport")
+                .document_to_pane(canvas.target.expect("measured Canvas").logical_size())
+        });
+        let at = |point| {
+            let point = viewport.transform_point2(point);
+            bounds.origin + gpui::point(px(point.x as f32), px(point.y as f32))
+        };
+        let displacement = DVec2::new(19., -14.);
+        let start = origin + DVec2::new(100., 70.);
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    position: at(start),
+                    button: gpui::MouseButton::Left,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                    position: at(start + displacement),
+                    pressed_button: Some(gpui::MouseButton::Left),
+                    modifiers: Default::default(),
+                }),
+                cx,
+            );
+        });
+        window.run_until_parked();
+        paint(window);
+        let address = item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let drag = canvas.artboard_move.as_ref().expect("F-VECTOR gesture");
+            let draft = drag
+                .draft_frame
+                .as_ref()
+                .expect("moved curve and rectangle preview");
+            assert_eq!(draft.placement.location, origin + displacement);
+            assert_scene(canvas, &draft.image, origin + displacement);
+            assert!(!item.is_dirty(cx));
+            drag.node.storage_id()
+        });
+        window.update(|window, cx| {
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    position: at(start + displacement),
+                    button: gpui::MouseButton::Left,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        });
+        for (action, expected) in [
+            (None, origin + displacement),
+            (Some(true), origin),
+            (Some(false), origin + displacement),
+        ] {
+            match action {
+                Some(true) => window.dispatch_action(editor::actions::Undo),
+                Some(false) => window.dispatch_action(editor::actions::Redo),
+                None => {}
+            }
+            window.run_until_parked();
+            paint(window);
+            item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                    panic!("committed F-VECTOR scene");
+                };
+                assert_scene(canvas, image, expected);
+            });
+        }
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        let destination = PathBuf::from("/project/f-vector-moved.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("reopened moved F-VECTOR");
+        let nodes = saved.graph_nodes().await.expect("reopened source nodes");
+        let board = nodes
+            .iter()
+            .find(|node| node.storage_id() == address)
+            .expect("same source Artboard");
+        assert_eq!(
+            board
+                .artboard_geometry()
+                .expect("Artboard geometry")
+                .location,
+            origin + displacement
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("original archive")
+                .as_slice(),
+            original.as_ref()
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_tool_008_2_workspace_picks_and_moves_artboards_in_stack_order(
         cx: &mut TestAppContext,
     ) {

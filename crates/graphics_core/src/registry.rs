@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt, sync::OnceLock};
 
 use graphite_core_types::{
-    Color, NodeIOTypes, ProtoNodeIdentifier, list,
+    Color, NodeIOTypes, ProtoNodeIdentifier, item, list,
     registry::{NODE_METADATA, NODE_REGISTRY, NodeMetadata},
 };
 use graphite_editor::messages::portfolio::document::{
@@ -19,7 +19,7 @@ use graphite_graph_craft::document::{
     NodeId, NodeInput,
     value::{DVec2, TaggedValue},
 };
-use graphite_std::{Artboard, Graphic};
+use graphite_std::{Artboard, Graphic, Vector};
 
 #[derive(Clone, Debug)]
 pub struct RegisteredNode {
@@ -87,6 +87,25 @@ pub(crate) const MERGE_NODE_NAME: &str = "Merge";
 pub(crate) const MERGE_NODE_IDENTIFIER: &str = "NETWORK:Merge";
 pub(crate) const ARTBOARD_NODE_NAME: &str = "Artboard";
 pub(crate) const ARTBOARD_NODE_IDENTIFIER: &str = "NETWORK:Artboard";
+
+pub(crate) fn path_node_definition() -> Option<&'static DocumentNodeDefinition> {
+    let definition = resolve_network_node_type("Path")?;
+    let template = &definition.node_template;
+    let NodeTemplateImplementation::Network(network) = &template.implementation else {
+        return None;
+    };
+    (template.inputs.as_slice()
+        == [
+            NodeInput::type_default(item!(Vector), true),
+            NodeInput::value(TaggedValue::VectorModification(Default::default()), false),
+        ]
+        && template.output_names.as_slice() == ["Modified"]
+        && network.reference.as_deref() == Some("Path")
+        && network.scope_injections.is_empty()
+        && network.nodes.len() == 2
+        && network.exports.as_slice() == [NodeInput::node(NodeId(1), 0)])
+    .then_some(definition)
+}
 
 pub(crate) fn custom_node_definition() -> Option<&'static DocumentNodeDefinition> {
     let definition = resolve_network_node_type(CUSTOM_NODE_NAME)?;
