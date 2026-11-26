@@ -1,3 +1,5 @@
+use std::{collections::VecDeque, time::Duration};
+
 use gpui::{
     Bounds, PathBuilder, PathStyle, Pixels, Point, Rgba, ScrollWheelEvent, Window, point, px,
 };
@@ -10,7 +12,11 @@ use graphite_editor::{
     messages::{
         input_mapper::utility_types::pointer::ScrollDelta,
         portfolio::document::utility_types::misc::PTZ,
-        prelude::NavigationMessageHandler,
+        prelude::{
+            InputPreprocessorMessageHandler, MessageHandler, NavigationMessageHandler,
+            ViewportMessage, ViewportMessageHandler,
+        },
+        tool::common_functionality::auto_panning::AutoPanning,
         tool::common_functionality::transformation_cage::{
             BoundingBoxManager, SelectedEdges, axis_align_drag,
         },
@@ -309,8 +315,12 @@ impl DocumentNavigation {
     }
 
     pub fn pan(&self, viewport_size: DVec2, delta: Point<Pixels>) -> Option<PTZ> {
+        self.pan_by(viewport_size, logical_vector(delta))
+    }
+
+    pub fn pan_by(&self, viewport_size: DVec2, delta: DVec2) -> Option<PTZ> {
         let mut camera = self.camera;
-        camera.pan += self.document_delta(viewport_size, logical_vector(delta));
+        camera.pan += self.document_delta(viewport_size, delta);
         camera.pan.is_finite().then_some(camera)
     }
 
@@ -381,7 +391,35 @@ fn artboard_outline(geometry: GddArtboardGeometry, document_to_pane: DAffine2) -
     .map(|corner| document_to_pane.transform_point2(corner))
 }
 
-fn logical_vector(point: Point<Pixels>) -> DVec2 {
+pub(crate) fn artboard_auto_pan_delta(
+    viewport_size: DVec2,
+    cursor: Point<Pixels>,
+    frame_duration: Duration,
+) -> Option<DVec2> {
+    let mut viewport = ViewportMessageHandler::default();
+    let mut responses = VecDeque::new();
+    viewport.process_message(
+        ViewportMessage::Update {
+            x: 0.,
+            y: 0.,
+            width: viewport_size.x,
+            height: viewport_size.y,
+            scale: 1.,
+        },
+        &mut responses,
+        (),
+    );
+    let mut input = InputPreprocessorMessageHandler::default();
+    input.mouse.position = logical_vector(cursor);
+    input.frame_time.advance_timestamp(frame_duration);
+    let mut auto_pan = AutoPanning::default();
+    auto_pan.setup_by_mouse_position(&input, &viewport, &[], &mut responses);
+    auto_pan
+        .shift_viewport(&input, &viewport, &mut responses)
+        .filter(|delta| delta.is_finite() && *delta != DVec2::ZERO)
+}
+
+pub(crate) fn logical_vector(point: Point<Pixels>) -> DVec2 {
     DVec2::new(f64::from(f32::from(point.x)), f64::from(f32::from(point.y)))
 }
 
