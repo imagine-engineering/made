@@ -127,6 +127,7 @@ terminal_view = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 theme = { workspace = true, features = ["test-support"] }
 theme_settings.workspace = true
+tree-sitter-java.workspace = true
 tree-sitter-typescript.workspace = true
 unindent.workspace = true
 workspace = { workspace = true, features = ["test-support"] }

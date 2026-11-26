@@ -81,6 +81,13 @@ An independent replay of the guarded Maven reload command failed with only
 Maven's offline settings file configured and succeeded with
 `java.import.maven.offline.enabled` set in JDTLS.
 
+The connected Remote Server regression uses the same cached Maven reactor
+and both pinned processes on the host side of a framed connection. A Java
+definition request from the client returns the library's `Greeting.kt` as a
+remote worktree buffer. The client sees both server statuses and owns
+neither process. This run denied external networking on macOS ARM64.
+Separate-host SSH, WSL and container journeys remain open.
+
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
 The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean

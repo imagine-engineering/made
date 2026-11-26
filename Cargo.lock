@@ -16990,6 +16990,7 @@ dependencies = [
  "theme_settings",
  "thiserror 2.0.21",
  "toml 0.8.23",
+ "tree-sitter-java",
  "tree-sitter-typescript",
  "unindent",
  "util",

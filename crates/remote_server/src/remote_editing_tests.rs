@@ -794,6 +794,240 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires the pinned launchers and a disposable offline-built Maven reactor"]
+    async fn connected_maven_java_definition_opens_host_kotlin_source(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        use language::PointUtf16;
+        use project::trusted_worktrees::{self, DbTrustedPaths};
+        use std::time::{Duration, Instant};
+
+        let fixture_path = |variable: &str| {
+            PathBuf::from(std::env::var_os(variable).expect(variable))
+                .canonicalize()
+                .expect(variable)
+        };
+        let root = fixture_path("GROOVY_MAVEN_NAVIGATION_FIXTURE");
+        let jdtls = fixture_path("GROOVY_JDTLS_LAUNCHER");
+        let java_home = fixture_path("GROOVY_LSP_JAVA_HOME");
+        let kotlin = fixture_path("GROOVY_KOTLIN_LSP");
+        let kotlin_java = fixture_path("GROOVY_KOTLIN_JAVA_HOME");
+        assert!(
+            root.join("library/target/classes/evidence/Greeting.class")
+                .is_file()
+        );
+        let state = tempfile::tempdir().expect("isolated provider state");
+        let settings = json!({"lsp": {
+            "jdtls": {
+                "binary": {"path": jdtls, "arguments": [
+                    format!("--java-executable={}/bin/java", java_home.display()),
+                    "-data", state.path().join("jdtls")],
+                    "env": {"JAVA_HOME": java_home}},
+                "initialization_options": {"extendedClientCapabilities": {"classFileContentsSupport": true}},
+                "settings": {"java": {"import": {"maven": {"enabled": true, "offline": {"enabled": true}}},
+                    "jdt": {"ls": {"kotlinSupport": {"enabled": true}}}}}
+            },
+            "kotlin-lsp": {
+                "binary": {"path": kotlin, "arguments": ["--stdio"], "env": {
+                    "JAVA_HOME": kotlin_java,
+                    "JAVA_TOOL_OPTIONS": format!("-Didea.system.path={0}/system -Didea.config.path={0}/config -Didea.log.path={0}/log", state.path().display()),
+                }}
+            }
+        }});
+        for context in [&mut *cx, &mut *server_cx] {
+            context.executor().allow_parking();
+            context.update(|cx| trusted_worktrees::init(DbTrustedPaths::default(), cx));
+        }
+        let fs = Arc::new(fs::RealFs::new(None, server_cx.executor()));
+        let (project, headless) = init_test(&fs, cx, server_cx).await;
+        for context in [&mut *cx, &mut *server_cx] {
+            context.update(|cx| {
+                cx.update_global::<SettingsStore, _>(|store, cx| {
+                    store
+                        .set_user_settings(&settings.to_string(), cx)
+                        .expect("pinned binary overrides");
+                });
+            });
+        }
+        let (host_languages, worktrees, host_store) = headless.read_with(server_cx, |host, _| {
+            (
+                host.languages.clone(),
+                host.worktree_store.clone(),
+                host.lsp_store.clone(),
+            )
+        });
+        server_cx.update(|cx| {
+            trusted_worktrees::track_worktree_trust(
+                worktrees,
+                None,
+                Some((
+                    headless.read(cx).session.clone(),
+                    client::ProjectId(proto::REMOTE_SERVER_PROJECT_ID),
+                )),
+                None,
+                cx,
+            );
+        });
+        let client_languages = project.read_with(cx, |project, _| project.languages().clone());
+        for registry in [&host_languages, &client_languages] {
+            for (language, suffix, name, grammar) in [
+                (
+                    "Java",
+                    "java",
+                    "jdtls",
+                    Some(tree_sitter_java::LANGUAGE.into()),
+                ),
+                ("Kotlin", "kt", "kotlin-lsp", None),
+            ] {
+                registry.add(Arc::new(Language::new(
+                    LanguageConfig {
+                        name: language.into(),
+                        matcher: LanguageMatcher {
+                            path_suffixes: vec![suffix.into()],
+                            ..Default::default()
+                        }
+                        .into(),
+                        ..Default::default()
+                    },
+                    grammar,
+                )));
+                registry.register_fake_lsp_adapter(
+                    language,
+                    FakeLspAdapter {
+                        name,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        let (worktree, _) = project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(&root, true, cx)
+            })
+            .await
+            .expect("connected worktree");
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let client = project.read_with(cx, |project, cx| {
+            project
+                .remote_client()
+                .expect("connected host")
+                .read(cx)
+                .proto_client()
+        });
+        client
+            .request(proto::TrustWorktrees {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                trusted_paths: vec![proto::PathTrust {
+                    content: Some(proto::path_trust::Content::WorktreeId(
+                        worktree_id.to_proto(),
+                    )),
+                }],
+            })
+            .await
+            .expect("trust the disposable host worktree");
+        let kotlin_source = rel_path("library/src/main/kotlin/evidence/Greeting.kt");
+        let (_kotlin_buffer, _kotlin_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp((worktree_id, kotlin_source), cx)
+            })
+            .await
+            .expect("open host Kotlin source");
+        let (java_buffer, _java_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp(
+                    (
+                        worktree_id,
+                        rel_path("application/src/main/java/evidence/Main.java"),
+                    ),
+                    cx,
+                )
+            })
+            .await
+            .expect("open host Java source");
+        let deadline = Instant::now() + Duration::from_secs(90);
+        let mut refresh_at = Instant::now();
+        loop {
+            cx.run_until_parked();
+            server_cx.run_until_parked();
+            let ready = host_store.read_with(server_cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current
+                            && snapshot.projects.iter().any(|project| {
+                                project
+                                    .project_references
+                                    .iter()
+                                    .any(|reference| reference == "library")
+                            })
+                    })
+                    && store
+                        .kotlin_workspace_snapshot(worktree_id)
+                        .is_some_and(|(snapshot, current)| current && snapshot.projects.len() >= 2)
+            });
+            if ready {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the pinned host providers did not publish both Maven modules"
+            );
+            if Instant::now() >= refresh_at {
+                host_store.update(server_cx, |store, cx| {
+                    store.refresh_jdtls_project(worktree_id, cx);
+                    store.refresh_kotlin_workspace(worktree_id, cx);
+                });
+                refresh_at = Instant::now() + Duration::from_secs(5);
+            }
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        let client_store = project.read_with(cx, |project, _| project.lsp_store());
+        let links = client_store
+            .update(cx, |store, cx| {
+                store.definitions(&java_buffer, PointUtf16::new(6, 22), cx)
+            })
+            .await
+            .expect("host definition request")
+            .expect("host definition response");
+        let [link] = links.as_slice() else {
+            panic!(
+                "expected one Kotlin source destination, got {}",
+                links.len()
+            );
+        };
+        link.target.buffer.read_with(cx, |buffer, _| {
+            let file = project::File::from_dyn(buffer.file()).expect("host source file");
+            assert_eq!(file.path.as_ref(), kotlin_source);
+            assert!(
+                !file.is_local,
+                "the editor received a remote worktree buffer"
+            );
+        });
+        host_store.read_with(server_cx, |store, _| {
+            assert_eq!(store.language_server_statuses().count(), 2);
+            for (id, _) in store.language_server_statuses() {
+                assert!(
+                    store
+                        .language_server_for_id(id)
+                        .and_then(|server| server.process_id())
+                        .is_some()
+                );
+            }
+        });
+        client_store.read_with(cx, |store, _| {
+            assert!(store.as_local().is_none());
+            assert_eq!(store.language_server_statuses().count(), 2);
+            for (id, _) in store.language_server_statuses() {
+                assert!(store.language_server_for_id(id).is_none());
+            }
+        });
+    }
+
+    #[cfg(unix)]
     async fn connected_jvm_process_obeys_host_trust(
         name: &'static str,
         cx: &mut TestAppContext,
