@@ -558,6 +558,28 @@ async fn assert_fixture_task(
     host_shell: Option<&str>,
     cx: &mut VisualTestContext,
 ) -> String {
+    assert_fixture_task_outcome(
+        terminal_panel,
+        root,
+        executable,
+        arguments,
+        host_shell,
+        true,
+        cx,
+    )
+    .await
+}
+
+#[cfg(all(test, unix))]
+async fn assert_fixture_task_outcome(
+    terminal_panel: &Entity<terminal_view::terminal_panel::TerminalPanel>,
+    root: &std::path::Path,
+    executable: &std::path::Path,
+    arguments: &[String],
+    host_shell: Option<&str>,
+    expected_success: bool,
+    cx: &mut VisualTestContext,
+) -> String {
     use futures::future::{Either, select};
     use terminal_view::TerminalView;
 
@@ -570,10 +592,16 @@ async fn assert_fixture_task(
                     let view = item.downcast::<TerminalView>()?;
                     let terminal = view.read(cx).terminal();
                     let task = terminal.read(cx).task()?;
-                    (!task.structured_task.as_ref().is_some_and(|handle| {
-                        matches!(handle.state(), task::StructuredTaskState::Cancelled { .. })
-                    }))
-                    .then(|| terminal.clone())
+                    let previous_task = task.structured_task.as_ref().is_some_and(|handle| {
+                        let state = handle.state();
+                        matches!(state, task::StructuredTaskState::Cancelled { .. })
+                            || (expected_success
+                                && matches!(
+                                    state,
+                                    task::StructuredTaskState::Completed { success: false, .. }
+                                ))
+                    });
+                    (!previous_task).then(|| terminal.clone())
                 })
             })
         });
@@ -614,7 +642,7 @@ async fn assert_fixture_task(
         Either::Right(_) => panic!("the build Task did not finish"),
     };
     let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
-    assert!(result.success(), "the build Task failed: {transcript}");
+    assert_eq!(result.success(), expected_success, "{transcript}");
     transcript
 }
 
@@ -654,11 +682,19 @@ async fn docker_gradle_ordered_operations_cancel_on_host(cx: &mut TestAppContext
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
+async fn docker_gradle_ordered_operations_report_failure_and_recover(cx: &mut TestAppContext) {
+    run_docker_gradle_ordered_operations(DockerGradleRun::Failure, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DockerGradleRun {
     Restart,
     Cold,
     Cancel,
+    Failure,
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
@@ -924,8 +960,13 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     }
 
     let terminal_panel = mount_fixture_terminal(&workspace, cx).await;
-    if run == DockerGradleRun::Cancel {
-        for path in [":application:parityWait", SECOND] {
+    let interrupted_task = match run {
+        DockerGradleRun::Cancel => Some(":application:parityWait"),
+        DockerGradleRun::Failure => Some(":application:parityFailure"),
+        _ => None,
+    };
+    if let Some(first_task) = interrupted_task {
+        for path in [first_task, SECOND] {
             select_fixture_gradle_task(&workspace, &panel, path, None, cx);
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             assert_eq!(
@@ -935,12 +976,57 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
                 Some("Operation added. Inspect the ordered list before running it.".into())
             );
         }
+        dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+        assert_gradle_queue_rows(&panel, [first_task, SECOND], cx);
         focus_control(
             cx,
             "Run ordered offline operations on the current project host through Tasks",
         );
         press_enter(cx);
-        assert_cancelled_gradle_queue(&terminal_panel, &fixture, &report, cx).await;
+        if run == DockerGradleRun::Cancel {
+            assert_cancelled_gradle_queue(&terminal_panel, &fixture, &report, cx).await;
+        } else {
+            let arguments = [
+                "--offline",
+                "-Dorg.gradle.java.home=/qualification/jdk17",
+                "--gradle-user-home",
+                "/qualification/gradle-home",
+                first_task,
+                SECOND,
+            ]
+            .map(str::to_owned);
+            let transcript = assert_fixture_task_outcome(
+                &terminal_panel,
+                root,
+                Path::new("/qualification/gradle/bin/gradle"),
+                &arguments,
+                Some("/bin/bash"),
+                false,
+                cx,
+            )
+            .await;
+            assert!(
+                transcript.contains("Intentional Groovy parity fixture failure"),
+                "{transcript}"
+            );
+            assert!(
+                transcript.contains("finished with exit code: 1"),
+                "{transcript}"
+            );
+            assert!(
+                !transcript
+                    .lines()
+                    .any(|line| line.starts_with("> Task :application:check")),
+                "{transcript}"
+            );
+            assert!(
+                !report.exists(),
+                "the skipped second operation wrote a report"
+            );
+            eprintln!(
+                "Connected Gradle reported the owned Task failure and skipped the queued check:\n{transcript}"
+            );
+        }
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
         });
@@ -1029,7 +1115,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     select_fixture_gradle_task(&workspace, &panel, SECOND, None, cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
-    assert_gradle_queue_rows(&panel, [FIRST, SECOND], cx);
+    assert_gradle_queue_rows(&panel, [&format!("{FIRST} (1 options)"), SECOND], cx);
     assert!(
         !report.exists(),
         "queueing operations does not start a Task"
@@ -1735,10 +1821,7 @@ fn assert_gradle_queue_rows(
             .map(|row| row.label.clone())
             .collect::<Vec<_>>()
     });
-    assert_eq!(
-        queue,
-        [format!("1. {first} (1 options)"), format!("2. {second}")]
-    );
+    assert_eq!(queue, [format!("1. {first}"), format!("2. {second}")]);
 }
 
 #[cfg(all(test, unix))]
@@ -1773,7 +1856,7 @@ async fn verify_gradle_queue(
     select_fixture_gradle_task(workspace, panel, READ, None, cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
-    assert_gradle_queue_rows(panel, [WRITE, READ], cx);
+    assert_gradle_queue_rows(panel, [&format!("{WRITE} (1 options)"), READ], cx);
     assert!(
         !output.exists(),
         "queueing operations does not start a Task"

@@ -411,6 +411,13 @@ now directs the user to **Reimport Gradle projects**, then **Synchronize
 metadata**. The offline host trace showed no configuring metadata command
 until explicit reimport restored the cached topology.
 
+The opt-in `docker_gradle_ordered_operations_report_failure_and_recover`
+case runs the fixture's failing task before `check` on the same offline host.
+The Task terminal shows the Gradle error and exit code. Gradle skips `check`,
+so it writes no JUnit report. After clearing the queue, the case runs a
+corrected ordered selection with the original literal Task option and
+verifies a fresh passing report from that host.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and
