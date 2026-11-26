@@ -794,6 +794,39 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
+    fn register_maven_navigation_languages(registry: &LanguageRegistry) {
+        for (language, suffix, name, grammar) in [
+            (
+                "Java",
+                "java",
+                "jdtls",
+                Some(tree_sitter_java::LANGUAGE.into()),
+            ),
+            ("Kotlin", "kt", "kotlin-lsp", None),
+        ] {
+            registry.add(Arc::new(Language::new(
+                LanguageConfig {
+                    name: language.into(),
+                    matcher: LanguageMatcher {
+                        path_suffixes: vec![suffix.into()],
+                        ..Default::default()
+                    }
+                    .into(),
+                    ..Default::default()
+                },
+                grammar,
+            )));
+            registry.register_fake_lsp_adapter(
+                language,
+                FakeLspAdapter {
+                    name,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    #[cfg(unix)]
     #[gpui::test]
     #[ignore = "requires the pinned launchers and a disposable offline-built Maven reactor"]
     async fn connected_maven_java_definition_opens_host_kotlin_source(
@@ -872,35 +905,7 @@ mod jvm_tools_runtime_tests {
         });
         let client_languages = project.read_with(cx, |project, _| project.languages().clone());
         for registry in [&host_languages, &client_languages] {
-            for (language, suffix, name, grammar) in [
-                (
-                    "Java",
-                    "java",
-                    "jdtls",
-                    Some(tree_sitter_java::LANGUAGE.into()),
-                ),
-                ("Kotlin", "kt", "kotlin-lsp", None),
-            ] {
-                registry.add(Arc::new(Language::new(
-                    LanguageConfig {
-                        name: language.into(),
-                        matcher: LanguageMatcher {
-                            path_suffixes: vec![suffix.into()],
-                            ..Default::default()
-                        }
-                        .into(),
-                        ..Default::default()
-                    },
-                    grammar,
-                )));
-                registry.register_fake_lsp_adapter(
-                    language,
-                    FakeLspAdapter {
-                        name,
-                        ..Default::default()
-                    },
-                );
-            }
+            register_maven_navigation_languages(registry);
         }
         let (worktree, _) = project
             .update(cx, |project, cx| {
@@ -1022,6 +1027,226 @@ mod jvm_tools_runtime_tests {
             assert!(store.as_local().is_none());
             assert_eq!(store.language_server_statuses().count(), 2);
             for (id, _) in store.language_server_statuses() {
+                assert!(store.language_server_for_id(id).is_none());
+            }
+        });
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_MAVEN_NAVIGATION_CONTAINER with pinned offline JVM providers and fixture"]
+    async fn docker_maven_java_definition_opens_host_kotlin_source(cx: &mut TestAppContext) {
+        use language::PointUtf16;
+        use project::trusted_worktrees::{self, DbTrustedPaths, PathTrust, TrustedWorktrees};
+        use remote::{
+            ConnectionIdentifier, DockerConnectionOptions, MockDelegate, RemoteArch,
+            RemoteConnectionOptions, RemoteOs,
+        };
+        use std::time::{Duration, Instant};
+
+        let container_id = std::env::var("GROOVY_MAVEN_NAVIGATION_CONTAINER")
+            .expect("disposable Linux ARM64 Maven container ID");
+        assert_eq!(container_id.len(), 64);
+        assert!(container_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        cx.executor().allow_parking();
+        init_logger();
+        cx.update(|cx| {
+            release_channel::init(semver::Version::new(1, 16, 2), cx);
+            trusted_worktrees::init(DbTrustedPaths::default(), cx);
+        });
+        let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
+            name: "Groovy JVM qualification".into(),
+            container_id,
+            remote_user: "root".into(),
+            ..Default::default()
+        });
+        let delegate = Arc::new(MockDelegate);
+        let connection = remote::connect(options, delegate.clone(), &mut cx.to_async())
+            .await
+            .expect("connect to the disposable Docker host");
+        let (_cancel, cancellation) = futures::channel::oneshot::channel();
+        let remote = cx
+            .update(|cx| {
+                RemoteClient::new(
+                    ConnectionIdentifier::Workspace(-i64::from(std::process::id()) - 1),
+                    connection,
+                    cancellation,
+                    delegate,
+                    cx,
+                )
+            })
+            .await
+            .expect("start the native Docker transport")
+            .expect("Docker transport was not cancelled");
+        let platform = remote.read_with(cx, |remote, _| remote.remote_platform());
+        assert_eq!(platform.os, RemoteOs::Linux);
+        assert_eq!(platform.arch, RemoteArch::Aarch64);
+        let rpc = remote.read_with(cx, |remote, _| remote.proto_client());
+        let extensions = rpc
+            .request(proto::SyncExtensions {
+                extensions: [("java", "6.8.30"), ("kotlin", "0.3.5")]
+                    .into_iter()
+                    .map(|(id, version)| proto::Extension {
+                        id: id.into(),
+                        version: version.into(),
+                        dev: false,
+                    })
+                    .collect(),
+            })
+            .await
+            .expect("load the fixture's cached provider extensions on the host");
+        assert!(extensions.missing_extensions.is_empty(), "{extensions:?}");
+        let project = build_project_with_worktree_trust(remote, true, cx);
+        let client_languages = project.read_with(cx, |project, _| project.languages().clone());
+        register_maven_navigation_languages(&client_languages);
+        let (worktree, _) = project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(Path::new("/workspaces/maven"), true, cx)
+            })
+            .await
+            .expect("open the container's Maven worktree");
+        worktree
+            .update(cx, |worktree, _| worktree.wait_for_snapshot(1))
+            .await
+            .expect("receive the container's initial filesystem snapshot");
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let store = project.read_with(cx, |project, _| project.lsp_store());
+        let restricted = rpc
+            .request(proto::SetJvmProjectConsumers {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                protocol_version: 1,
+                generation: 1,
+                roots: vec![ProjectPath::root_path(worktree_id).to_proto()],
+            })
+            .await
+            .expect_err("the container must reject JVM consumers before trust");
+        assert!(
+            format!("{restricted:#}").contains("Trust the current host project"),
+            "{restricted:#}"
+        );
+        assert_eq!(
+            store.read_with(cx, |store, _| store.language_server_statuses().count()),
+            0
+        );
+        let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+        cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("worktree trust"))
+            .update(cx, |trusted, cx| {
+                trusted.trust(
+                    &worktrees,
+                    HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                    cx,
+                );
+            });
+        store.update(cx, |store, cx| {
+            store
+                .set_default_jvm_project_languages_enabled(true, cx)
+                .expect("select the trusted container's default JVM providers");
+        });
+        let kotlin_source = rel_path("library/src/main/kotlin/evidence/Greeting.kt");
+        let (_kotlin_buffer, _kotlin_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp((worktree_id, kotlin_source), cx)
+            })
+            .await
+            .expect("open Kotlin source through the Docker connection");
+        let (java_buffer, _java_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp(
+                    (
+                        worktree_id,
+                        rel_path("application/src/main/java/evidence/Main.java"),
+                    ),
+                    cx,
+                )
+            })
+            .await
+            .expect("open Java source through the Docker connection");
+        let deadline = Instant::now() + Duration::from_secs(90);
+        let mut refresh_at = Instant::now();
+        let mut navigate_at = Instant::now();
+        let links = loop {
+            cx.run_until_parked();
+            let ready = store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current
+                            && snapshot.projects.iter().any(|project| {
+                                project
+                                    .project_references
+                                    .iter()
+                                    .any(|reference| reference == "library")
+                            })
+                    })
+                    && store
+                        .kotlin_workspace_snapshot(worktree_id)
+                        .is_some_and(|(snapshot, current)| current && snapshot.projects.len() >= 2)
+            });
+            if ready && Instant::now() >= navigate_at {
+                let links = store
+                    .update(cx, |store, cx| {
+                        store.definitions(&java_buffer, PointUtf16::new(6, 22), cx)
+                    })
+                    .await
+                    .expect("container definition request")
+                    .expect("container definition response");
+                if !links.is_empty() {
+                    break links;
+                }
+                navigate_at = Instant::now() + Duration::from_secs(1);
+            }
+            assert!(
+                Instant::now() < deadline,
+                "container providers did not resolve the Kotlin definition: {:?}",
+                store.read_with(cx, |store, _| (
+                    store
+                        .language_server_statuses()
+                        .map(|(_, status)| status.name.to_string())
+                        .collect::<Vec<_>>(),
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .map(|(snapshot, current)| (
+                            snapshot
+                                .projects
+                                .iter()
+                                .map(|project| project.project_references.clone())
+                                .collect::<Vec<_>>(),
+                            current
+                        )),
+                    store
+                        .kotlin_workspace_snapshot(worktree_id)
+                        .map(|(snapshot, current)| (snapshot.projects.len(), current)),
+                    store.jdtls_project_query_failed(worktree_id),
+                    store.kotlin_workspace_query_failed(worktree_id),
+                ))
+            );
+            if !ready && Instant::now() >= refresh_at {
+                store.update(cx, |store, cx| {
+                    store.refresh_jdtls_project(worktree_id, cx);
+                    store.refresh_kotlin_workspace(worktree_id, cx);
+                });
+                refresh_at = Instant::now() + Duration::from_secs(5);
+            }
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
+        let [link] = links.as_slice() else {
+            panic!(
+                "expected one Kotlin source destination, got {}",
+                links.len()
+            );
+        };
+        link.target.buffer.read_with(cx, |buffer, _| {
+            let file = project::File::from_dyn(buffer.file()).expect("remote source file");
+            assert_eq!(file.path.as_ref(), kotlin_source);
+            assert!(!file.is_local);
+        });
+        store.read_with(cx, |store, _| {
+            assert!(store.as_local().is_none());
+            let providers = store.language_server_statuses().collect::<Vec<_>>();
+            assert_eq!(providers.len(), 2);
+            for (id, _) in providers {
                 assert!(store.language_server_for_id(id).is_none());
             }
         });

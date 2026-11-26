@@ -116,8 +116,28 @@ the cached Maven and Gradle fixtures on two launches each and passed Kotlin
 completion, definition, diagnostic recovery and workspace export. The
 standalone JDTLS `1.61.0` Maven probe passed Java completion, quick fix and
 mixed-language diagnostics using Temurin `25.0.5.1+2`. Both probes used
-containers with external networking disabled. The connected Linux provider,
-Tests panel and Debug journeys still need qualification.
+containers with external networking disabled.
+
+The opt-in `docker_maven_java_definition_opens_host_kotlin_source` test used
+Groovy's Docker transport from a GPUI test client to a Linux ARM64 development
+Remote Server. The host rejected provider startup before worktree trust, then
+started the cached Java `6.8.30` and Kotlin `0.3.5` extensions with the pinned
+providers. Stock JDTLS found `Greeting.class` and returned a `jdt:` location.
+It supplied no Maven ownership for the modules, so the Kotlin source lookup
+could not run. With the existing Groovy development model companion `0.50.0`,
+JDTLS identified both Maven modules and Kotlin LSP resolved `evidence.Greeting`.
+The client received `library/src/main/kotlin/evidence/Greeting.kt` as a remote
+worktree buffer and ran neither provider process.
+
+To replay, set `GROOVY_MAVEN_NAVIGATION_CONTAINER` to the full ID of a fresh,
+network-disabled Linux ARM64 container with the offline-built default fixture
+at `/workspaces/maven`. Seed both extensions and their pinned server binaries
+on the host. Use a development Remote Server with `jvm-tools` and set
+`ZED_BUILD_REMOTE_SERVER=never` to use the prepared executable. Configure
+`lsp.jdtls.initialization_options.bundles` with the host path to the existing
+development companion, SHA-256
+`6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
+Native connected editor, Tests panel and Debug checks remain open.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
