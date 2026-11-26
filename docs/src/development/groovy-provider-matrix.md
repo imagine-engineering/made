@@ -248,9 +248,16 @@ the companion's reviewed commands available. Build actions still require the
 existing project, provider and ownership checks. The connected regression
 withheld the companion commands on both launches and passed reimport,
 synchronization and ordered Tasks after restart. The Maven navigation and
-worktree-privacy regression also passed with registration withheld. A
-separate cold-process run without restart and physical-host qualification
-remain open.
+worktree-privacy regression also passed with registration withheld.
+
+The opt-in `docker_gradle_ordered_operations_run_on_a_cold_host` case now
+covers one Java server process through synchronization and the same ordered
+Task. The offline Linux ARM64 journey passed with normal registration and
+with the callable companion's advertisement withheld. The cached proof
+preceded configuration, and the new report identified the host. A valid
+bundle with the same length and a different SHA-256 was refused: no recovery
+probe or configuring command ran. Cold starts where the companion handler
+itself is unavailable and separate physical-host qualification remain open.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java

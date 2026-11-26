@@ -624,6 +624,18 @@ async fn cached_gradle_ordered_operations_keep_declared_options(cx: &mut TestApp
 #[gpui::test]
 #[ignore = "requires an offline Linux ARM64 Docker host with the Gradle fixture and pinned JDTLS model support"]
 async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut TestAppContext) {
+    run_docker_gradle_ordered_operations(true, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
+async fn docker_gradle_ordered_operations_run_on_a_cold_host(cx: &mut TestAppContext) {
+    run_docker_gradle_ordered_operations(false, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppContext) {
     use jvm_ui::ShowGradle;
     use language_tools::language_tool_tree::{ExpandAll, status_message};
     use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
@@ -713,7 +725,12 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.dispatch_action(ShowGradle);
     let mut previous_server = None;
-    for phase in ["initial import", "provider restart"] {
+    let phases: &[_] = if restart {
+        &["initial import", "provider restart"]
+    } else {
+        &["initial import"]
+    };
+    for &phase in phases {
         let deadline = Instant::now() + Duration::from_secs(90);
         let mut refresh_at = Instant::now();
         loop {
@@ -747,7 +764,7 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
                 .timer(Duration::from_millis(100))
                 .await;
         }
-        if phase == "initial import" {
+        if restart && phase == "initial import" {
             lsp_store.update(cx, |store, cx| store.restart_all_language_servers(cx));
         }
     }
@@ -768,69 +785,73 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
         };
         assert!(rejected.to_string().contains(reason), "{rejected:#}");
     }
-    let sync_error = lsp_store
-        .update(cx, |store, cx| {
-            store.synchronize_remote_gradle_metadata(Some(worktree_id), cx)
-        })
-        .expect("the restarted project host remains admitted")
-        .await
-        .expect_err("a missing cached topology must not execute a Gradle metadata query");
-    assert!(
-        sync_error
-            .to_string()
-            .contains("Gradle metadata synchronization failed or was superseded"),
-        "{sync_error:#}"
-    );
-    let generation_before_reimport = lsp_store.read_with(cx, |store, _| {
-        store
-            .jdtls_project_snapshot(worktree_id)
-            .expect("restarted project")
-            .0
-            .generation
-    });
-    focus_control(
-        cx,
-        "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts",
-    );
-    press_enter(cx);
-    let deadline = Instant::now() + Duration::from_secs(90);
-    loop {
-        cx.run_until_parked();
-        let notice = panel.read_with(cx, |panel, _| {
-            panel.build_phase_notice_for_test().map(str::to_owned)
-        });
-        if notice
-            .as_deref()
-            .is_some_and(|notice| notice.starts_with("Gradle projects reimported."))
-            && lsp_store.read_with(cx, |store, _| {
-                store
-                    .jdtls_project_snapshot(worktree_id)
-                    .is_some_and(|(snapshot, current)| {
-                        current && snapshot.generation > generation_before_reimport
-                    })
+    if restart {
+        let sync_error = lsp_store
+            .update(cx, |store, cx| {
+                store.synchronize_remote_gradle_metadata(Some(worktree_id), cx)
             })
-        {
-            break;
-        }
+            .expect("the restarted project host remains admitted")
+            .await
+            .expect_err("a missing cached topology must not execute a Gradle metadata query");
         assert!(
-            Instant::now() < deadline,
-            "offline host reimport did not complete: {notice:?}"
+            sync_error
+                .to_string()
+                .contains("Gradle metadata synchronization failed or was superseded"),
+            "{sync_error:#}"
         );
-        cx.background_executor
-            .timer(Duration::from_millis(100))
-            .await;
+        let generation_before_reimport = lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("restarted project")
+                .0
+                .generation
+        });
+        focus_control(
+            cx,
+            "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts",
+        );
+        press_enter(cx);
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            cx.run_until_parked();
+            let notice = panel.read_with(cx, |panel, _| {
+                panel.build_phase_notice_for_test().map(str::to_owned)
+            });
+            if notice
+                .as_deref()
+                .is_some_and(|notice| notice.starts_with("Gradle projects reimported."))
+                && lsp_store.read_with(cx, |store, _| {
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .is_some_and(|(snapshot, current)| {
+                            current && snapshot.generation > generation_before_reimport
+                        })
+                })
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "offline host reimport did not complete: {notice:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
     }
     panel.read_with(cx, |panel, _| {
         let (status, rows, _) = panel.snapshot_for_test();
-        assert!(
-            status_message(&status).is_some_and(|message| {
-                message.contains("Use Synchronize metadata")
-                    && message.contains(
-                        "executes trusted build configuration scripts on the project host",
-                    )
-            }),
-            "the Gradle view should explain the host action before synchronization: {status:?}"
-        );
+        if restart {
+            assert!(
+                status_message(&status).is_some_and(|message| {
+                    message.contains("Use Synchronize metadata")
+                        && message.contains(
+                            "executes trusted build configuration scripts on the project host",
+                        )
+                }),
+                "the Gradle view should explain the host action before synchronization: {status:?}"
+            );
+        }
         assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
     });
     focus_control(
@@ -842,6 +863,15 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
     loop {
         cx.run_until_parked();
         cx.dispatch_action(ExpandAll);
+        panel.read_with(cx, |panel, _| {
+            if let Some(notice) = panel.build_phase_notice_for_test() {
+                assert!(
+                    notice.starts_with("Synchronizing Gradle metadata")
+                        || notice.starts_with("Gradle metadata synchronized."),
+                    "host metadata synchronization did not complete: {notice}"
+                );
+            }
+        });
         if !lsp_store.read_with(cx, |store, _| {
             store.jdtls_project_query_pending(worktree_id)
         }) && panel.read_with(cx, |panel, _| {
