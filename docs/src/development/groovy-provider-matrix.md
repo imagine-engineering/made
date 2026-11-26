@@ -108,8 +108,16 @@ project** Tasks completed successfully in the shared terminal. Their fresh
 JUnit reports matched the container working directory or hostname. The
 Gradle and Kotlin compiler processes ran inside the container with no matching
 Java process on the macOS client. Both containers used cached inputs and
-Docker's `none` network mode. The Linux language-provider, Tests panel and
-Debug journeys still need qualification.
+Docker's `none` network mode.
+
+Separate Linux ARM64 provider probes verified JetBrains' standalone Kotlin
+LSP `271.2085.0` archive against the publisher checksum. The server imported
+the cached Maven and Gradle fixtures on two launches each and passed Kotlin
+completion, definition, diagnostic recovery and workspace export. The
+standalone JDTLS `1.61.0` Maven probe passed Java completion, quick fix and
+mixed-language diagnostics using Temurin `25.0.5.1+2`. Both probes used
+containers with external networking disabled. The connected Linux provider,
+Tests panel and Debug journeys still need qualification.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
