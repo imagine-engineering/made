@@ -668,6 +668,47 @@ struct SavedSceneArtboardMove {
     node: GddGraphNode,
     gesture: ArtboardMove,
     outline_offset: DVec2,
+    identity: Arc<()>,
+    placement: Option<GddArtboardGeometry>,
+    draft_frame: Option<SavedSceneArtboardDraft>,
+    draft_task: Option<Task<()>>,
+    draft_error: Option<SharedString>,
+}
+
+struct SavedSceneArtboardDraft {
+    placement: GddArtboardGeometry,
+    image: Arc<RenderImage>,
+    overlay: Option<Arc<ArtboardOverlay>>,
+}
+
+impl SavedSceneArtboardMove {
+    fn retire_draft(&mut self, window: Option<&mut Window>, cx: &mut App) {
+        if let Some(draft) = self.draft_frame.take() {
+            cx.drop_image(draft.image, window);
+        }
+    }
+}
+
+impl SavedSceneCanvas {
+    fn take_artboard_move(
+        &mut self,
+        window: Option<&mut Window>,
+        cx: &mut App,
+    ) -> Option<SavedSceneArtboardMove> {
+        let mut artboard_move = self.artboard_move.take()?;
+        artboard_move.retire_draft(window, cx);
+        artboard_move.draft_task = None;
+        Some(artboard_move)
+    }
+
+    fn retire(self, window: Option<&mut Window>, cx: &mut App) {
+        let mut canvas = self;
+        let mut window = window;
+        drop(canvas.take_artboard_move(window.as_deref_mut(), cx));
+        if let SavedSceneFrame::Ready(image) = canvas.frame {
+            cx.drop_image(image, window);
+        }
+    }
 }
 
 enum SavedSceneFrame {
@@ -686,6 +727,25 @@ struct SavedSceneTarget {
 impl SavedSceneTarget {
     fn logical_size(self) -> DVec2 {
         self.resolution.as_dvec2() / self.scale
+    }
+
+    fn render_image(
+        self,
+        output: graphite_graph_craft::document::value::RenderOutput,
+        renderer: &SvgRenderer,
+    ) -> Result<Arc<RenderImage>, String> {
+        let RenderOutputType::Svg { svg, .. } = output.data else {
+            return Err("Graphite did not return an SVG Canvas frame.".to_owned());
+        };
+        crate::render::prepare_svg_bytes_at_target(
+            svg.as_bytes(),
+            self.resolution.x,
+            self.resolution.y,
+            self.scale,
+            renderer,
+            SAVED_SCENE_PIXEL_BUDGET as usize * 4,
+        )
+        .map_err(|error| error.to_string())
     }
 
     fn measure(size: gpui::Size<gpui::Pixels>, scale: f32) -> Option<Self> {
@@ -1400,17 +1460,13 @@ impl GraphiteDocumentItem {
         cx.observe_window_activation(window, |item, window, cx| {
             if !window.is_window_active() {
                 item.finish_scene_pan(true, window, cx);
-                item.cancel_scene_artboard_move(cx);
+                item.cancel_scene_artboard_move(window, cx);
             }
         })
         .detach();
         cx.on_release(|item, cx| {
-            if let Some(SavedSceneCanvas {
-                frame: SavedSceneFrame::Ready(image),
-                ..
-            }) = item.scene_canvas.take()
-            {
-                cx.drop_image(image, None);
+            if let Some(canvas) = item.scene_canvas.take() {
+                canvas.retire(None, cx);
             }
         })
         .detach();
@@ -1461,12 +1517,8 @@ impl GraphiteDocumentItem {
     }
 
     fn close_scene_canvas(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(SavedSceneCanvas {
-            frame: SavedSceneFrame::Ready(image),
-            ..
-        }) = self.scene_canvas.take()
-        {
-            cx.drop_image(image, Some(window));
+        if let Some(canvas) = self.scene_canvas.take() {
+            canvas.retire(Some(window), cx);
         }
         self.focus_handle.focus(window, cx);
         cx.notify();
@@ -1491,7 +1543,7 @@ impl GraphiteDocumentItem {
         let revision_changed = !Arc::ptr_eq(&canvas.revision, &revision);
         let target_changed = canvas.target != target;
         if revision_changed || target_changed {
-            canvas.artboard_move = None;
+            drop(canvas.take_artboard_move(Some(window), cx));
         }
         if (revision_changed || target_changed)
             && let Some(pan) = canvas.pan.take()
@@ -1548,22 +1600,11 @@ impl GraphiteDocumentItem {
                 camera: output.camera,
                 artboard_size: output.artboard_size,
             };
-            let RenderOutputType::Svg { svg, .. } = output.render.data else {
-                return Err("Graphite did not return an SVG Canvas frame.".to_owned());
-            };
-            let image = crate::render::prepare_svg_bytes_at_target(
-                svg.as_bytes(),
-                target.resolution.x,
-                target.resolution.y,
-                target.scale,
-                &renderer,
-                SAVED_SCENE_PIXEL_BUDGET as usize * 4,
-            )
-            .map_err(|error| error.to_string())?;
+            let image = target.render_image(output.render, &renderer)?;
             let overlay = output
                 .overlay
                 .map(|overlay| Arc::new(ArtboardOverlay::prepare(overlay)));
-            Ok((image, navigation, output.pick_target, overlay))
+            Ok::<_, String>((image, navigation, output.pick_target, overlay))
         });
         let request = Arc::new(());
         canvas.frame = SavedSceneFrame::Pending {
@@ -1730,7 +1771,7 @@ impl GraphiteDocumentItem {
             && canvas.camera_override.take().is_some()
         {
             canvas.pan = None;
-            canvas.artboard_move = None;
+            drop(canvas.take_artboard_move(Some(window), cx));
             canvas.navigation = None;
             let target = canvas.target;
             self.update_scene_canvas(target, true, window, cx);
@@ -1790,6 +1831,11 @@ impl GraphiteDocumentItem {
                 navigation.document_to_pane(target.logical_size()),
             ),
             outline_offset: DVec2::ZERO,
+            identity: Arc::new(()),
+            placement: None,
+            draft_frame: None,
+            draft_task: None,
+            draft_error: None,
         });
         self.focus_handle.focus(window, cx);
         cx.stop_propagation();
@@ -1800,6 +1846,7 @@ impl GraphiteDocumentItem {
         &mut self,
         instance: &Arc<()>,
         event: &gpui::MouseMoveEvent,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(canvas) = &mut self.scene_canvas else {
@@ -1814,10 +1861,10 @@ impl GraphiteDocumentItem {
             return;
         };
         if event.pressed_button != Some(gpui::MouseButton::Left) {
-            self.cancel_scene_artboard_move(cx);
+            self.cancel_scene_artboard_move(window, cx);
             return;
         }
-        let Some((_, offset)) = artboard_move
+        let Some((placement, offset)) = artboard_move
             .gesture
             .placement(event.position, event.modifiers.shift)
         else {
@@ -1825,7 +1872,101 @@ impl GraphiteDocumentItem {
         };
         artboard_move.outline_offset = offset;
         cx.stop_propagation();
+        let desired =
+            (artboard_move.node.artboard_geometry() != Some(placement)).then_some(placement);
+        if desired == artboard_move.placement {
+            return;
+        }
+        artboard_move.placement = desired;
+        artboard_move.draft_error = None;
+        if desired.is_none() {
+            artboard_move.retire_draft(Some(window), cx);
+        }
+        self.render_scene_artboard_draft(window, cx);
         cx.notify();
+    }
+
+    fn render_scene_artboard_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let Some((target, navigation)) = canvas.target.zip(canvas.navigation) else {
+            return;
+        };
+        let Some(artboard_move) = canvas.artboard_move.as_mut() else {
+            return;
+        };
+        let Some(placement) = artboard_move.placement else {
+            return;
+        };
+        if artboard_move.draft_task.is_some() {
+            return;
+        }
+        let model = self.model.read(cx);
+        let Some(contents) = model.gdd_contents().cloned() else {
+            return;
+        };
+        if !Arc::ptr_eq(&canvas.revision, &model.revision) {
+            return;
+        }
+        let revision = canvas.revision.clone();
+        let identity = artboard_move.identity.clone();
+        let node = artboard_move.node.clone();
+        let renderer = cx.svg_renderer();
+        let render = cx.background_spawn(async move {
+            let output =
+                futures::executor::block_on(contents.render_document_artboard_move_draft_svg(
+                    &node,
+                    placement.location,
+                    (target.resolution, target.scale),
+                    navigation.camera,
+                    CpuSvgEvaluationBudget {
+                        max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
+                        max_output_bytes: 64 * 1024,
+                    },
+                ))
+                .map_err(|error| error.to_string())?;
+            let image = target.render_image(output.render, &renderer)?;
+            let overlay = output
+                .overlay
+                .map(|overlay| Arc::new(ArtboardOverlay::prepare(overlay)));
+            Ok::<_, String>(SavedSceneArtboardDraft {
+                placement,
+                image,
+                overlay,
+            })
+        });
+        artboard_move.draft_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result = render.await;
+            if let Err(error) = item.update_in(cx, |item, window, cx| {
+                if !Arc::ptr_eq(&revision, &item.model.read(cx).revision) {
+                    return;
+                }
+                let Some(artboard_move) = item
+                    .scene_canvas
+                    .as_mut()
+                    .and_then(|canvas| canvas.artboard_move.as_mut())
+                else {
+                    return;
+                };
+                if !Arc::ptr_eq(&identity, &artboard_move.identity) {
+                    return;
+                }
+                artboard_move.draft_task = None;
+                if artboard_move.placement != Some(placement) {
+                    item.render_scene_artboard_draft(window, cx);
+                    return;
+                }
+                artboard_move.retire_draft(Some(window), cx);
+                match result {
+                    Ok(frame) => artboard_move.draft_frame = Some(frame),
+                    Err(error) => artboard_move.draft_error = Some(SharedString::from(error)),
+                }
+                cx.notify();
+            }) {
+                log::debug!("Graphite Canvas closed during draft rendering: {error:#}");
+            }
+        }));
     }
 
     fn finish_scene_artboard_move(
@@ -1842,7 +1983,7 @@ impl GraphiteDocumentItem {
         if !Arc::ptr_eq(&canvas.instance, instance) {
             return;
         }
-        let Some(artboard_move) = canvas.artboard_move.take() else {
+        let Some(artboard_move) = canvas.take_artboard_move(Some(window), cx) else {
             return;
         };
         cx.stop_propagation();
@@ -1875,9 +2016,9 @@ impl GraphiteDocumentItem {
         );
     }
 
-    fn cancel_scene_artboard_move(&mut self, cx: &mut Context<Self>) -> bool {
+    fn cancel_scene_artboard_move(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if let Some(canvas) = &mut self.scene_canvas
-            && canvas.artboard_move.take().is_some()
+            && canvas.take_artboard_move(Some(window), cx).is_some()
         {
             cx.notify();
             return true;
@@ -1932,12 +2073,20 @@ impl GraphiteDocumentItem {
         let move_bounds = pane_bounds.clone();
         let pick_bounds = pane_bounds.clone();
         let target = canvas.target;
-        let image = match &canvas.frame {
-            SavedSceneFrame::Ready(image)
-                if Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision) =>
-            {
-                Some(image.clone())
-            }
+        let current = Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision);
+        let draft = canvas
+            .artboard_move
+            .as_ref()
+            .filter(|_| current)
+            .and_then(|draft| {
+                draft
+                    .draft_frame
+                    .as_ref()
+                    .filter(|frame| draft.placement == Some(frame.placement))
+            });
+        let image = match (draft, &canvas.frame) {
+            (Some(frame), _) => Some(frame.image.clone()),
+            (None, SavedSceneFrame::Ready(image)) if current => Some(image.clone()),
             _ => None,
         };
         let can_move = self.copy_task.is_none()
@@ -1950,17 +2099,19 @@ impl GraphiteDocumentItem {
                 .is_some_and(|(working, pick)| working.picked_artboard(pick).is_some());
         let show_name = canvas.overlay_visible;
         let outline_offset = if canvas.move_armed && (can_move || canvas.artboard_move.is_some()) {
-            Some(
+            Some(if draft.is_some() {
+                DVec2::ZERO
+            } else {
                 canvas
                     .artboard_move
                     .as_ref()
-                    .map_or(DVec2::ZERO, |drag| drag.outline_offset),
-            )
+                    .map_or(DVec2::ZERO, |drag| drag.outline_offset)
+            })
         } else {
             (show_name && canvas.pick_armed).then_some(DVec2::ZERO)
         };
-        let overlay = canvas
-            .artboard_overlay
+        let overlay = draft
+            .map_or(&canvas.artboard_overlay, |frame| &frame.overlay)
             .as_ref()
             .filter(|_| image.is_some() && (show_name || outline_offset.is_some()))
             .cloned();
@@ -2013,11 +2164,11 @@ impl GraphiteDocumentItem {
                                 )
                                 .disabled(!canvas.pick_armed && canvas.pick_target.is_none())
                                 .on_click(cx.listener(
-                                    |item, _, _, cx| {
+                                    |item, _, window, cx| {
                                         if let Some(canvas) = &mut item.scene_canvas {
                                             canvas.pick_armed = !canvas.pick_armed;
                                             canvas.move_armed = false;
-                                            canvas.artboard_move = None;
+                                            drop(canvas.take_artboard_move(Some(window), cx));
                                             cx.notify();
                                         }
                                     },
@@ -2038,11 +2189,11 @@ impl GraphiteDocumentItem {
                                 )
                                 .disabled(!canvas.move_armed && !can_move)
                                 .on_click(cx.listener(
-                                    |item, _, _, cx| {
+                                    |item, _, window, cx| {
                                         if let Some(canvas) = &mut item.scene_canvas {
                                             canvas.move_armed = !canvas.move_armed;
                                             canvas.pick_armed = false;
-                                            canvas.artboard_move = None;
+                                            drop(canvas.take_artboard_move(Some(window), cx));
                                             cx.notify();
                                         }
                                     },
@@ -2077,6 +2228,13 @@ impl GraphiteDocumentItem {
                     .when_some(self.copy_feedback.clone(), |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
+                    .when_some(
+                        canvas
+                            .artboard_move
+                            .as_ref()
+                            .and_then(|draft| draft.draft_error.clone()),
+                        |toolbar, message| toolbar.child(Label::new(message).color(Color::Error)),
+                    )
                     .when(
                         matches!(canvas.frame, SavedSceneFrame::Failed(_)),
                         |toolbar| {
@@ -2223,7 +2381,7 @@ impl GraphiteDocumentItem {
             if phase == gpui::DispatchPhase::Capture
                 && let Err(error) = move_item.update(cx, |item, cx| {
                     item.move_scene_pan(&move_instance, event, window, cx);
-                    item.move_scene_artboard(&move_instance, event, cx);
+                    item.move_scene_artboard(&move_instance, event, window, cx);
                 })
             {
                 log::debug!("Graphite Canvas closed during pan: {error:#}");
@@ -2255,7 +2413,7 @@ impl GraphiteDocumentItem {
                         .scene_canvas
                         .as_ref()
                         .is_some_and(|canvas| Arc::ptr_eq(&canvas.instance, &instance))
-                        && item.cancel_scene_artboard_move(cx)
+                        && item.cancel_scene_artboard_move(window, cx)
                     {
                         cx.stop_propagation();
                     }
@@ -6861,13 +7019,15 @@ impl Render for GraphiteDocumentItem {
                 }
                 _ => "GraphiteGdd",
             })
-            .on_action(cx.listener(|item, _: &CancelArtboardCanvasMove, _, cx| {
-                if item.cancel_scene_artboard_move(cx) {
-                    cx.stop_propagation();
-                } else {
-                    cx.propagate();
-                }
-            }))
+            .on_action(
+                cx.listener(|item, _: &CancelArtboardCanvasMove, window, cx| {
+                    if item.cancel_scene_artboard_move(window, cx) {
+                        cx.stop_propagation();
+                    } else {
+                        cx.propagate();
+                    }
+                }),
+            )
             .on_action(
                 cx.listener(|item, _: &CancelArtboardCanvasPan, window, cx| {
                     if item
@@ -13710,22 +13870,76 @@ mod tests {
     async fn at_gra_tool_008_2_workspace_moves_the_saved_artboard_on_canvas(
         cx: &mut TestAppContext,
     ) {
-        let stage = create_gdd_folder(621, 187, "Artboard move".into(), ARCHIVE_BUDGET)
+        let mut stage = create_gdd_folder(621, 187, "Artboard move".into(), ARCHIVE_BUDGET)
             .await
-            .expect("native source")
-            .insert_root_catalog_node_in_copy("NETWORK:Artboard", [2, 0], ARCHIVE_BUDGET)
-            .await
-            .expect("pinned catalog Artboard");
+            .expect("native source");
+        let mut addresses = BTreeMap::new();
+        for (name, identifier, position) in [
+            ("Artboard", "NETWORK:Artboard", [2, 0]),
+            ("Merge", "NETWORK:Merge", [-6, 0]),
+            (
+                "Fill",
+                "PROTONODE:graphene_core::vector::FillNode",
+                [-12, 0],
+            ),
+            (
+                "Rectangle",
+                "PROTONODE:vector_nodes::generator_nodes::RectangleNode",
+                [-18, 0],
+            ),
+        ] {
+            stage = stage
+                .insert_root_catalog_node_in_copy(identifier, position, ARCHIVE_BUDGET)
+                .await
+                .expect("pinned catalog node");
+            let graph = stage
+                .graph_inspection()
+                .await
+                .expect("root scene addresses");
+            let root = graph
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("root network");
+            let node = graph
+                .nodes
+                .iter()
+                .find(|node| {
+                    node.network_id() == root.id
+                        && !addresses
+                            .values()
+                            .any(|address| *address == node.storage_id())
+                })
+                .expect("new root node");
+            addresses.insert(name, node.storage_id());
+        }
         let nodes = stage.graph_nodes().await.expect("root nodes");
         let root = nodes
             .iter()
             .find(|node| node.can_set_document_artboard())
             .expect("root Artboard");
         let address = root.storage_id();
-        let stage = stage
+        stage = stage
             .set_document_artboard_in_copy(root, ARCHIVE_BUDGET)
             .await
             .expect("document output");
+        for (target, source) in [
+            ("Fill", "Rectangle"),
+            ("Merge", "Fill"),
+            ("Artboard", "Merge"),
+        ] {
+            let nodes = stage.graph_nodes().await.expect("pinned scene nodes");
+            let find = |name| {
+                nodes
+                    .iter()
+                    .find(|node| addresses.get(name) == Some(&node.storage_id()))
+                    .expect("root scene node")
+            };
+            stage = stage
+                .connect_graphic_content_in_copy(find(target), find(source), ARCHIVE_BUDGET)
+                .await
+                .expect("pinned painted Artboard graph");
+        }
         let original = stage
             .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
             .expect("source ZIP");
@@ -13838,7 +14052,7 @@ mod tests {
         };
 
         let initial = state(window);
-        let (pane, _) = pose(window);
+        let (pane, fitted) = pose(window);
         pointer(window, down(pane.origin + gpui::point(px(2.), px(2.))));
         item.read_with(window, |item, _| {
             assert!(
@@ -13851,24 +14065,60 @@ mod tests {
         });
         pointer(window, up(pane.origin + gpui::point(px(2.), px(2.)), false));
         pointer(window, down(pane.center()));
-        pointer(
-            window,
-            drag(pane.center() + gpui::point(px(45.), px(-30.)), false),
-        );
-        item.read_with(window, |item, _| {
-            let gesture = item
-                .scene_canvas
-                .as_ref()
-                .expect("Canvas")
-                .artboard_move
-                .as_ref()
-                .expect("live draft");
-            assert_ne!(gesture.outline_offset, DVec2::ZERO);
+        window.update(|window, cx| {
+            window.dispatch_event(
+                drag(pane.center() + gpui::point(px(15.), px(-10.)), false),
+                cx,
+            );
+            window.dispatch_event(
+                drag(pane.center() + gpui::point(px(45.), px(-30.)), false),
+                cx,
+            );
         });
+        window.run_until_parked();
+        paint(window);
+        let draft_image = item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let gesture = canvas.artboard_move.as_ref().expect("live draft");
+            assert_ne!(gesture.outline_offset, DVec2::ZERO);
+            assert!(gesture.draft_error.is_none(), "{:?}", gesture.draft_error);
+            let draft = gesture
+                .draft_frame
+                .as_ref()
+                .expect("source-rendered live artwork");
+            let displacement = fitted
+                .inverse()
+                .transform_vector2(DVec2::new(45., -30.))
+                .round();
+            assert_eq!(draft.placement.location, initial.0.location + displacement);
+            assert_eq!(gesture.placement, Some(draft.placement));
+            let SavedSceneFrame::Ready(original) = &canvas.frame else {
+                panic!("committed Canvas artwork")
+            };
+            let sample = |image: &RenderImage, document_position: DVec2| {
+                let position = (fitted.transform_point2(document_position)
+                    * canvas.target.expect("measured view").scale)
+                    .round();
+                let size = image.size(0);
+                let index = (position.y as usize * size.width.0 as usize + position.x as usize) * 4;
+                image
+                    .as_bytes(0)
+                    .and_then(|bytes| bytes.get(index..index + 4))
+                    .expect("sample in Canvas artwork")
+                    .to_vec()
+            };
+            let painted = DVec2::splat(20.);
+            assert_eq!(sample(original, painted), [0, 0, 0, 255]);
+            assert_eq!(sample(&draft.image, painted + displacement), [0, 0, 0, 255]);
+            assert_eq!(sample(&draft.image, painted), [0; 4]);
+            draft.image.clone()
+        });
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&draft_image)));
         assert_eq!(state(window), initial);
         window.simulate_keystrokes("escape");
         window.run_until_parked();
         paint(window);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&draft_image)));
         pointer(window, up(pane.center(), false));
         assert_eq!(state(window), initial);
         pointer(window, down(pane.center()));

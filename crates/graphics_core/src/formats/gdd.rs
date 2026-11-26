@@ -3612,10 +3612,34 @@ impl InspectedGddV1 {
         camera: Option<PTZ>,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
+        self.render_artboard_canvas_svg((resolution, scale), camera, budget, None)
+            .await
+    }
+
+    pub async fn render_document_artboard_move_draft_svg(
+        &self,
+        node: &GddGraphNode,
+        location: DVec2,
+        viewport: (UVec2, f64),
+        camera: PTZ,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        self.render_artboard_canvas_svg(viewport, Some(camera), budget, Some((node, location)))
+            .await
+    }
+
+    async fn render_artboard_canvas_svg(
+        &self,
+        (resolution, scale): (UVec2, f64),
+        camera: Option<PTZ>,
+        budget: CpuSvgEvaluationBudget,
+        draft: Option<(&GddGraphNode, DVec2)>,
+    ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
         }
-        let graph = self.runtime_graph().await?;
+        let mut graph = self.runtime_graph().await?;
         let [
             NodeInput::Node {
                 node_id,
@@ -3625,11 +3649,36 @@ impl InspectedGddV1 {
         else {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         };
+        let node_id = *node_id;
+        if let Some((node, location)) = draft {
+            if node.local_id != node_id || !node.network_path.is_empty() {
+                return Err(GddArchiveError::UnsupportedArtboardGeometry);
+            }
+            let saved = graph
+                .network
+                .nodes
+                .get_mut(&node_id)
+                .ok_or(GddArchiveError::StaleGraphNode)?;
+            let original = GddArtboardGeometry::hidden(saved)
+                .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
+            let proposed = GddArtboardGeometry {
+                location: rounded_artboard_edit(original.location, location),
+                ..original
+            };
+            if proposed.normalized().is_none() {
+                return Err(GddArchiveError::InvalidArtboardGeometry);
+            }
+            *saved
+                .inputs
+                .get_mut(ARTBOARD_LOCATION_INPUT)
+                .ok_or(GddArchiveError::UnsupportedArtboardGeometry)? =
+                NodeInput::value(TaggedValue::DVec2(proposed.location), false);
+        }
         let Some((_, SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { origin, size }))) =
             graph
                 .network
                 .nodes
-                .get(node_id)
+                .get(&node_id)
                 .and_then(checked_saved_graphic_node)
         else {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
@@ -3662,7 +3711,6 @@ impl InspectedGddV1 {
             for_export: true,
             ..Default::default()
         };
-        let node_id = *node_id;
         let render =
             Self::render_saved_layer_svg(&graph.network, node_id, configuration, budget).await?;
         let storage_id = graph
@@ -3707,12 +3755,14 @@ impl InspectedGddV1 {
                         camera,
                     )
                 });
-                let pick = (!interface.is_locked(&node_id, &[])).then(|| GddArtboardCanvasPick {
-                    storage_id,
-                    snapshot: self.snapshot.clone(),
-                    pane_to_document,
-                    layer_to_document,
-                    targets: targets.clone(),
+                let pick = (draft.is_none() && !interface.is_locked(&node_id, &[])).then(|| {
+                    GddArtboardCanvasPick {
+                        storage_id,
+                        snapshot: self.snapshot.clone(),
+                        pane_to_document,
+                        layer_to_document,
+                        targets: targets.clone(),
+                    }
                 });
                 (pick, overlay)
             } else {
