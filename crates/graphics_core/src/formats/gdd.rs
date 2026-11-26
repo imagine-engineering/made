@@ -5213,7 +5213,29 @@ impl InspectedGddV1 {
         nodes: &[GddGraphNode],
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
-        use graphite_editor::messages::prelude::DocumentMessage;
+        self.duplicate_layers_in_copy(nodes, None, budget).await
+    }
+
+    pub async fn duplicate_root_layers_at_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        parent: Option<&GddGraphNode>,
+        insert_index: usize,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        self.duplicate_layers_in_copy(nodes, Some((parent, insert_index)), budget)
+            .await
+    }
+
+    async fn duplicate_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        placement: Option<(Option<&GddGraphNode>, usize)>,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        use graphite_editor::messages::prelude::{
+            DocumentMessage, GraphOperationMessage, Message, NodeGraphMessage, PortfolioMessage,
+        };
 
         let mut document = self.canvas_snapping_defaults();
         document.network_interface = self.runtime_graph().await?.into_interface()?;
@@ -5224,25 +5246,98 @@ impl InspectedGddV1 {
                 GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
                 error => error,
             })?;
+        let destination = placement
+            .map(|(parent, index)| {
+                let (parent, children) =
+                    self.root_layer_destination(&document, &selected, parent, index)?;
+                Ok::<_, GddArchiveError>((parent, index, children))
+            })
+            .transpose()?;
+        if let Some((parent, _, _)) = &destination
+            && document.metadata().all_layers().any(|layer| {
+                selected.contains(&layer.to_node())
+                    && layer.parent(document.metadata()) != Some(*parent)
+            })
+        {
+            document = self.render_layer_edit_geometry(&budget).await?;
+        }
         let interface = &mut document.network_interface;
         interface
             .selected_nodes_mut(&[])
             .ok_or(GddArchiveError::InvalidRootLayerGraph)?
             .set_selected_nodes(selected);
-        let count = interface.shallowest_unique_layers_sorted(&[]).len();
+        let originals = interface.shallowest_unique_layers_sorted(&[]);
+        let count = originals.len();
         let previous_tree = layer_tree_order(interface);
         let previous_nodes: BTreeSet<_> =
             interface.document_network().nodes.keys().copied().collect();
         let mut commands = VecDeque::new();
         plan_document_layer_command(
             &mut document,
-            DocumentMessage::DuplicateSelectedLayers,
+            match &destination {
+                Some((parent, index, _)) => DocumentMessage::DuplicateSelectedLayersTo {
+                    parent: *parent,
+                    insert_index: *index,
+                },
+                None => DocumentMessage::DuplicateSelectedLayers,
+            },
             &mut commands,
         );
+        let mut compensations = Vec::new();
+        let expected_siblings = if let Some((parent, index, mut children)) = destination {
+            let copies: Vec<_> = commands
+                .iter()
+                .filter_map(|command| match command {
+                    Message::Portfolio(PortfolioMessage::Document(DocumentMessage::NodeGraph(
+                        NodeGraphMessage::MoveLayerToStack {
+                            layer,
+                            parent: target,
+                            ..
+                        },
+                    ))) if *target == parent => Some(*layer),
+                    _ => None,
+                })
+                .collect();
+            if copies.len() != originals.len() {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+            let interface = &document.network_interface;
+            compensations.extend(originals.into_iter().zip(&copies).filter_map(
+                |(original, &copy)| {
+                    layer_reparenting_transform(interface, original, parent)
+                        .map(|transform| (copy, transform))
+                },
+            ));
+            commands.retain(|command| {
+                !matches!(
+                    command,
+                    Message::Portfolio(PortfolioMessage::Document(
+                        DocumentMessage::GraphOperation(GraphOperationMessage::TransformSet { .. })
+                    ))
+                )
+            });
+            drop(children.splice(index..index, copies));
+            Some((parent, children))
+        } else {
+            None
+        };
         self.finish_layer_structure_edit(
             &mut document,
             |document| {
                 apply_document_layer_commands(document, commands)?;
+                if let Some((parent, expected)) = expected_siblings
+                    && !parent.children(document.metadata()).eq(expected)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                for (layer, transform) in compensations {
+                    compensate_layer_reparenting(
+                        &mut document.network_interface,
+                        layer,
+                        transform,
+                    )?;
+                }
+                load_root_layer_structure(&mut document.network_interface)?;
                 let interface = &document.network_interface;
                 let tree = layer_tree_order(interface);
                 let new_selection: BTreeSet<_> = interface
@@ -5362,21 +5457,13 @@ impl InspectedGddV1 {
         .map(|(copy, _)| copy)
     }
 
-    pub async fn reparent_root_layers_in_copy(
+    fn root_layer_destination(
         &self,
-        nodes: &[GddGraphNode],
+        document: &DocumentMessageHandler,
+        selected: &[NodeId],
         parent: Option<&GddGraphNode>,
         insert_index: usize,
-        budget: GddArchiveBudget,
-    ) -> Result<Self, GddArchiveError> {
-        use graphite_editor::messages::prelude::{
-            DocumentMessage, Message, NodeGraphMessage, PortfolioMessage,
-        };
-
-        let mut document = self.canvas_snapping_defaults();
-        document.network_interface = self.runtime_graph().await?.into_interface()?;
-        load_root_layer_structure(&mut document.network_interface)?;
-        let selected = self.validate_layer_order_selection(&document, nodes)?;
+    ) -> Result<(LayerNodeIdentifier, Vec<LayerNodeIdentifier>), GddArchiveError> {
         let interface = &document.network_interface;
         let metadata = document.metadata();
         let root = LayerNodeIdentifier::ROOT_PARENT;
@@ -5389,13 +5476,6 @@ impl InspectedGddV1 {
                 .ok_or(GddArchiveError::InvalidLayerDestination)?;
             if interface.selected_nodes().layer_locked(parent, interface) {
                 return Err(GddArchiveError::LockedLayerStructure);
-            }
-            if parent
-                .ancestors(metadata)
-                .take_while(|&layer| layer != root)
-                .any(|layer| selected.contains(&layer.to_node()))
-            {
-                return Err(GddArchiveError::InvalidLayerDestination);
             }
             parent
         } else {
@@ -5414,9 +5494,38 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::InvalidLayerDestination);
         }
         let siblings: Vec<_> = parent.children(metadata).collect();
-        let Some((before, after)) = siblings.split_at_checked(insert_index) else {
+        if insert_index > siblings.len() {
             return Err(GddArchiveError::InvalidLayerDestination);
+        }
+        Ok((parent, siblings))
+    }
+
+    pub async fn reparent_root_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        parent: Option<&GddGraphNode>,
+        insert_index: usize,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_editor::messages::prelude::{
+            DocumentMessage, Message, NodeGraphMessage, PortfolioMessage,
         };
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self.validate_layer_order_selection(&document, nodes)?;
+        let (parent, siblings) =
+            self.root_layer_destination(&document, &selected, parent, insert_index)?;
+        let metadata = document.metadata();
+        if parent
+            .ancestors(metadata)
+            .take_while(|&layer| layer != LayerNodeIdentifier::ROOT_PARENT)
+            .any(|layer| selected.contains(&layer.to_node()))
+        {
+            return Err(GddArchiveError::InvalidLayerDestination);
+        }
+        let (before, after) = siblings.split_at(insert_index);
         let changes_parent = metadata.all_layers().any(|layer| {
             selected.contains(&layer.to_node()) && layer.parent(metadata) != Some(parent)
         });
@@ -5470,35 +5579,13 @@ impl InspectedGddV1 {
         if planned != moved {
             return Err(GddArchiveError::InvalidLayerDestination);
         }
-        // The pinned planner's local transform omits the group transform when
-        // the destination is empty. Preserve the upstream chain by compensating
-        // at the layer boundary.
-        let interface = &document.network_interface;
-        let metadata = document.metadata();
-        let parent_transform = |parent| {
-            if parent == root {
-                metadata.transform_to_viewport(parent)
-            } else {
-                metadata.transform_to_viewport_with_first_transform_node_if_group(parent, interface)
-            }
-        };
-        let destination_inverse = parent_transform(parent).inverse();
-        let compensations = moved
+        let compensations: Vec<_> = moved
             .iter()
             .filter_map(|&layer| {
-                let old_parent = layer
-                    .parent(metadata)
-                    .filter(|&old_parent| old_parent != parent)?;
-                let old_transform = metadata
-                    .upstream_footprints
-                    .get(&layer.to_node())
-                    .map_or_else(
-                        || parent_transform(old_parent),
-                        |footprint| footprint.transform,
-                    );
-                Some((layer, destination_inverse * old_transform))
+                layer_reparenting_transform(&document.network_interface, layer, parent)
+                    .map(|transform| (layer, transform))
             })
-            .collect::<Vec<_>>();
+            .collect();
         self.finish_layer_structure_edit(
             &mut document,
             |document| {
@@ -7418,6 +7505,34 @@ fn project_root_layers(
         }
     }
     Ok(layers)
+}
+
+fn layer_reparenting_transform(
+    interface: &NodeNetworkInterface,
+    layer: LayerNodeIdentifier,
+    parent: LayerNodeIdentifier,
+) -> Option<DAffine2> {
+    let metadata = interface.document_metadata();
+    let old_parent = layer
+        .parent(metadata)
+        .filter(|&old_parent| old_parent != parent)?;
+    // The pinned planner's local transform omits the group transform when
+    // the destination is empty. Compensate at the layer boundary.
+    let parent_transform = |parent| {
+        if parent == LayerNodeIdentifier::ROOT_PARENT {
+            metadata.transform_to_viewport(parent)
+        } else {
+            metadata.transform_to_viewport_with_first_transform_node_if_group(parent, interface)
+        }
+    };
+    let old_transform = metadata
+        .upstream_footprints
+        .get(&layer.to_node())
+        .map_or_else(
+            || parent_transform(old_parent),
+            |footprint| footprint.transform,
+        );
+    Some(parent_transform(parent).inverse() * old_transform)
 }
 
 fn compensate_layer_reparenting(

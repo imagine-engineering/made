@@ -8,6 +8,7 @@ use std::{
     time::Instant,
 };
 
+use crate::layers::SavedLayerPlacement;
 use anyhow::{Context as _, anyhow, ensure};
 use editor::Editor;
 use gpui::{
@@ -1205,7 +1206,7 @@ struct SavedLayerDestination {
     positions: Vec<String>,
 }
 
-struct SavedLayerMoveMenu {
+struct SavedLayerPlacementMenu {
     revision: Arc<()>,
     selected: BTreeSet<StorageNodeId>,
     destinations: Vec<SavedLayerDestination>,
@@ -5450,19 +5451,16 @@ impl GraphiteDocumentItem {
         };
         let snapshot = form.snapshot.clone();
         let revision = form.revision.clone();
-        let staged = cx.background_spawn(async move {
-            let (contents, selection) = snapshot
-                .duplicate_root_layers_in_copy(&nodes, ARCHIVE_BUDGET)
-                .await?;
-            let inspection = contents.graph_inspection().await?;
-            anyhow::Ok(PreparedWorkingSnapshot {
-                contents: Arc::new(contents),
-                inspection,
-                cut_clipboard: None,
-                layer_selection: Some(selection),
-            })
-        });
-        self.install_working_snapshot(revision, staged, window, cx);
+        self.stage_working_layer_snapshot(
+            revision,
+            async move {
+                futures::executor::block_on(
+                    snapshot.duplicate_root_layers_in_copy(&nodes, ARCHIVE_BUDGET),
+                )
+            },
+            window,
+            cx,
+        );
     }
 
     fn delete_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -5546,22 +5544,24 @@ impl GraphiteDocumentItem {
         };
         let snapshot = form.snapshot.clone();
         let revision = form.revision.clone();
-        let staged = cx.background_spawn(async move {
-            let (contents, selection) = futures::executor::block_on(
-                snapshot.group_root_layers_in_copy(&nodes, operation, ARCHIVE_BUDGET),
-            )?;
-            let inspection = contents.graph_inspection().await?;
-            anyhow::Ok(PreparedWorkingSnapshot {
-                contents: Arc::new(contents),
-                inspection,
-                cut_clipboard: None,
-                layer_selection: Some(selection),
-            })
-        });
-        self.install_working_snapshot(revision, staged, window, cx);
+        self.stage_working_layer_snapshot(
+            revision,
+            async move {
+                futures::executor::block_on(snapshot.group_root_layers_in_copy(
+                    &nodes,
+                    operation,
+                    ARCHIVE_BUDGET,
+                ))
+            },
+            window,
+            cx,
+        );
     }
 
-    fn prepare_saved_layer_destinations(form: &NodeCopyForm) -> Option<SavedLayerMoveMenu> {
+    fn prepare_saved_layer_destinations(
+        form: &NodeCopyForm,
+        placement: SavedLayerPlacement,
+    ) -> Option<SavedLayerPlacementMenu> {
         let rows = form.saved_layer_rows()?;
         let selection = form
             .selected_layer_nodes()
@@ -5607,7 +5607,8 @@ impl GraphiteDocumentItem {
             .chain(rows.into_iter().filter_map(|(index, layer)| {
                 if selected_artboards > 0
                     || !layer.accepts_children
-                    || excluded.contains(&layer.storage_id)
+                    || (placement == SavedLayerPlacement::Move
+                        && excluded.contains(&layer.storage_id))
                 {
                     return None;
                 }
@@ -5620,7 +5621,7 @@ impl GraphiteDocumentItem {
                 })
             }))
             .collect();
-        Some(SavedLayerMoveMenu {
+        Some(SavedLayerPlacementMenu {
             revision: form.revision.clone(),
             selected,
             destinations,
@@ -5629,11 +5630,12 @@ impl GraphiteDocumentItem {
 
     fn saved_layer_destination_menu(
         item: WeakEntity<Self>,
-        picker: SavedLayerMoveMenu,
+        picker: SavedLayerPlacementMenu,
+        placement: SavedLayerPlacement,
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<ContextMenu> {
-        let SavedLayerMoveMenu {
+        let SavedLayerPlacementMenu {
             revision,
             selected,
             destinations,
@@ -5648,7 +5650,10 @@ impl GraphiteDocumentItem {
             {
                 positions.push(
                     if positions.is_empty() {
-                        "Move Here"
+                        match placement {
+                            SavedLayerPlacement::Move => "Move Here",
+                            SavedLayerPlacement::Duplicate => "Duplicate Here",
+                        }
                     } else {
                         "At End"
                     }
@@ -5680,25 +5685,46 @@ impl GraphiteDocumentItem {
                                 {
                                     let snapshot = form.snapshot.clone();
                                     let parent = parent.clone();
-                                    item.stage_working_snapshot(
-                                        revision.clone(),
-                                        async move {
-                                            futures::executor::block_on(
-                                                snapshot.reparent_root_layers_in_copy(
-                                                    &nodes,
-                                                    parent.as_ref(),
-                                                    insert_index,
-                                                    ARCHIVE_BUDGET,
-                                                ),
-                                            )
-                                        },
-                                        window,
-                                        cx,
-                                    );
+                                    match placement {
+                                        SavedLayerPlacement::Move => item.stage_working_snapshot(
+                                            revision.clone(),
+                                            async move {
+                                                futures::executor::block_on(
+                                                    snapshot.reparent_root_layers_in_copy(
+                                                        &nodes,
+                                                        parent.as_ref(),
+                                                        insert_index,
+                                                        ARCHIVE_BUDGET,
+                                                    ),
+                                                )
+                                            },
+                                            window,
+                                            cx,
+                                        ),
+                                        SavedLayerPlacement::Duplicate => item
+                                            .stage_working_layer_snapshot(
+                                                revision.clone(),
+                                                async move {
+                                                    futures::executor::block_on(
+                                                        snapshot.duplicate_root_layers_at_in_copy(
+                                                            &nodes,
+                                                            parent.as_ref(),
+                                                            insert_index,
+                                                            ARCHIVE_BUDGET,
+                                                        ),
+                                                    )
+                                                },
+                                                window,
+                                                cx,
+                                            ),
+                                    }
                                 } else {
                                     item.copy_feedback = Some((
-                                        "The Graphite layer selection changed. Reopen Move To."
-                                            .into(),
+                                        format!(
+                                            "The Graphite layer selection changed. Reopen {}.",
+                                            placement.label()
+                                        )
+                                        .into(),
                                         Color::Error,
                                     ));
                                     cx.notify();
@@ -7106,6 +7132,28 @@ impl GraphiteDocumentItem {
         self.install_working_snapshot(expected, staged, window, cx);
     }
 
+    fn stage_working_layer_snapshot(
+        &mut self,
+        expected: Arc<()>,
+        edit: impl Future<Output = Result<(InspectedGddV1, Vec<StorageNodeId>), GddArchiveError>>
+        + Send
+        + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let staged = cx.background_spawn(async move {
+            let (contents, selection) = edit.await?;
+            let inspection = contents.graph_inspection().await?;
+            anyhow::Ok(PreparedWorkingSnapshot {
+                contents: Arc::new(contents),
+                inspection,
+                cut_clipboard: None,
+                layer_selection: Some(selection),
+            })
+        });
+        self.install_working_snapshot(expected, staged, window, cx);
+    }
+
     fn install_working_snapshot(
         &mut self,
         expected: Arc<()>,
@@ -7803,11 +7851,11 @@ impl GraphiteDocumentItem {
                     return None;
                 }
                 match target {
-                    SavedGraphMenuTarget::LayerParents if working => {
-                        let destinations = Self::prepare_saved_layer_destinations(form)?;
-                        Some(Self::saved_layer_destination_menu(menu_item.clone(), destinations, window, cx))
+                    SavedGraphMenuTarget::LayerParents(placement) if working => {
+                        let destinations = Self::prepare_saved_layer_destinations(form, placement)?;
+                        Some(Self::saved_layer_destination_menu(menu_item.clone(), destinations, placement, window, cx))
                     }
-                    SavedGraphMenuTarget::LayerParents => None,
+                    SavedGraphMenuTarget::LayerParents(_) => None,
                     SavedGraphMenuTarget::Background(position) => {
                         let network = Arc::new(form.clipboard_scope()?.clone());
                         let revision = form.revision.clone();
@@ -14396,6 +14444,253 @@ mod tests {
                 matches!(node.input_ports().get(1).and_then(|port| port.source.as_ref()), Some(GddGraphPortSource::Node { storage_id, .. }) if *storage_id == generator)
             );
         }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_007_1_duplicates_at_a_given_sibling_boundary(_cx: &mut TestAppContext) {
+        let bytes = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let inspection = snapshot.graph_inspection().await.expect("saved layers");
+        let node = |name| {
+            inspection
+                .nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let target = node("Inner Group");
+        let selected = [node("Gray").clone(), node("Green").clone()];
+        for (parent, position) in [(Some(target), 5), (None, 0), (Some(node("Gray")), 0)] {
+            assert!(matches!(
+                snapshot
+                    .duplicate_root_layers_at_in_copy(&selected, parent, position, ARCHIVE_BUDGET)
+                    .await,
+                Err(GddArchiveError::InvalidLayerDestination)
+            ));
+        }
+        let (installed, copies) = snapshot
+            .duplicate_root_layers_at_in_copy(&selected, Some(target), 2, ARCHIVE_BUDGET)
+            .await
+            .expect("explicit placement");
+        let inspected = installed.graph_inspection().await.expect("editable copies");
+        let root = inspected
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document scope");
+        let layers = installed
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("saved layers");
+        let children = layers
+            .iter()
+            .filter(|layer| layer.parent == Some(target.storage_id()))
+            .map(|layer| layer.storage_id)
+            .collect::<Vec<_>>();
+        let copied_node = |id| {
+            inspected
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == id)
+                .expect("saved layer identity")
+        };
+        assert_eq!(children.len(), 6);
+        assert_eq!(children[0], node("Red").storage_id());
+        assert_eq!(children[1], node("Green").storage_id());
+        assert_eq!(children[4], node("Blue Repeat").storage_id());
+        assert_eq!(children[5], node("Locked Gold").storage_id());
+        assert_eq!(
+            BTreeSet::from([children[2], children[3]]),
+            copies.into_iter().collect()
+        );
+        assert_eq!(copied_node(children[2]).display_name(), "Green");
+        assert_eq!(copied_node(children[3]).display_name(), "Gray");
+        assert!(matches!(
+            installed
+                .duplicate_root_layers_at_in_copy(
+                    std::slice::from_ref(copied_node(children[3])),
+                    Some(target),
+                    0,
+                    ARCHIVE_BUDGET
+                )
+                .await,
+            Err(GddArchiveError::StaleGraphNode)
+        ));
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_007_2_workspace_duplicates_into_a_transformed_group(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive_with_transforms(true).await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/duplicate-layers-to.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        click(window, "GRAPHITE-GDD-LAYER-DUPLICATE-TO");
+        assert!(window.debug_bounds("MENU_SUBMENU-Main Artboard").is_none());
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let canvas_bounds = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let bounds = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(_)));
+                let document = canvas
+                    .snapping_document
+                    .as_ref()
+                    .expect("source artwork geometry");
+                let metadata = document.metadata();
+                metadata
+                    .all_layers()
+                    .filter(|layer| {
+                        document
+                            .network_interface
+                            .display_name(&layer.to_node(), &[])
+                            == "Gray"
+                    })
+                    .map(|layer| {
+                        metadata
+                            .bounding_box_document(layer)
+                            .expect("rendered Gray bounds")
+                    })
+                    .collect::<Vec<_>>()
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            bounds
+        };
+        let baseline = canvas_bounds(window);
+        assert_eq!(baseline.len(), 1);
+        let tree = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native layers")
+                };
+                form.saved_layer_rows()
+                    .expect("ready layer list")
+                    .iter()
+                    .map(|(_, layer)| (layer.storage_id, layer.parent))
+                    .collect::<Vec<_>>()
+            })
+        };
+        let before = tree(window);
+        let (destination, gray, blue) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layers")
+            };
+            (
+                form.nodes[3].storage_id(),
+                form.nodes[8].storage_id(),
+                form.nodes[6].storage_id(),
+            )
+        });
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        click(window, "GRAPHITE-GDD-LAYER-DUPLICATE-TO");
+        click(
+            window,
+            "MENU_SUBMENU-Main Artboard › Outer Group › Inner Group",
+        );
+        window.simulate_keystrokes("escape");
+        window.simulate_keystrokes("escape");
+        paint(window);
+        assert_eq!(tree(window), before);
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-LAYER-DUPLICATE-TO");
+        click(
+            window,
+            "MENU_SUBMENU-Main Artboard › Outer Group › Inner Group",
+        );
+        click(window, "MENU_ITEM-Before Blue Repeat");
+        let copy = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layers")
+            };
+            let copied = form.selected_node().expect("newly selected copy");
+            assert_eq!(copied.display_name(), "Gray");
+            copied.storage_id()
+        });
+        assert_ne!(copy, gray);
+        let after = tree(window);
+        assert!(
+            after
+                .windows(2)
+                .any(|rows| rows == [(copy, Some(destination)), (blue, Some(destination))])
+        );
+        assert!(
+            after
+                .iter()
+                .copied()
+                .filter(|row| row.0 != copy)
+                .eq(before.iter().copied())
+        );
+        let bounds = canvas_bounds(window);
+        assert_eq!(bounds.len(), 2);
+        for bound in bounds {
+            assert!(
+                bound
+                    .into_iter()
+                    .zip(baseline[0])
+                    .all(|(actual, expected)| actual.abs_diff_eq(expected, 1e-8))
+            );
+        }
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(tree(window), before);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(tree(window), after);
+        let published = PathBuf::from("/project/duplicated-into-layer.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(published.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &published)
+            .await
+            .expect("saved copy");
+        let inspected = reopened
+            .graph_inspection()
+            .await
+            .expect("reopen editable graph");
+        let root = inspected
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document scope");
+        let rows = reopened
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("saved layers");
+        assert!(
+            rows.iter()
+                .map(|layer| (layer.storage_id, layer.parent))
+                .eq(after)
+        );
         assert_eq!(
             filesystem
                 .load_bytes(&source)

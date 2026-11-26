@@ -21,7 +21,7 @@ use workspace::{
     item::{Item, ItemEvent, SaveOptions},
 };
 
-use crate::layers::{SavedLayerAction, SavedLayerRow};
+use crate::layers::{SavedLayerAction, SavedLayerPlacement, SavedLayerRow};
 use crate::session::{
     AddMode, ArtboardHistoryDirection, DivideMode, GraphicsSession, UnaryNumericMode,
 };
@@ -265,7 +265,7 @@ pub(crate) enum SavedGraphMenuTarget {
     NodeInput(usize),
     Boundary(ImportOrExport),
     Background([i32; 2]),
-    LayerParents,
+    LayerParents(SavedLayerPlacement),
 }
 
 pub(crate) struct SavedGraphView<'a> {
@@ -868,6 +868,16 @@ pub(crate) fn render_saved_graph(
                         view.selected == Some(index) || view.selection.contains(&index)
                     })
             });
+            let placement_enabled = editing
+                && selected
+                && !layers.iter().any(|layer| {
+                    layer.effectively_locked
+                        && nodes_by_id
+                            .get(&layer.storage_id)
+                            .is_some_and(|&(index, _)| {
+                                view.selected == Some(index) || view.selection.contains(&index)
+                            })
+                });
             Some(
                 v_flex()
                     .gap_1()
@@ -972,28 +982,30 @@ pub(crate) fn render_saved_graph(
                                     );
                                 },
                             ))
-                            .child(crate::layers::render_saved_layer_move(
-                                editing
-                                    && selected
-                                    && !layers.iter().any(|layer| {
-                                        layer.effectively_locked
-                                            && nodes_by_id.get(&layer.storage_id).is_some_and(
-                                                |&(index, _)| {
-                                                    view.selected == Some(index)
-                                                        || view.selection.contains(&index)
-                                                },
-                                            )
-                                    }),
-                                move |window, cx| {
-                                    context_menu(SavedGraphMenuTarget::LayerParents, window, cx)
-                                },
-                            ))
                             .child(crate::layers::render_saved_layer_duplicate(
                                 editing && selected,
                                 move |window, cx| {
                                     duplicate_layers(SavedGraphAction::DuplicateLayers, window, cx)
                                 },
                             ))
+                            .children(
+                                [SavedLayerPlacement::Move, SavedLayerPlacement::Duplicate].map(
+                                    |placement| {
+                                        let menu = context_menu.clone();
+                                        crate::layers::render_saved_layer_placement(
+                                            placement,
+                                            placement_enabled,
+                                            move |window, cx| {
+                                                menu(
+                                                    SavedGraphMenuTarget::LayerParents(placement),
+                                                    window,
+                                                    cx,
+                                                )
+                                            },
+                                        )
+                                    },
+                                ),
+                            )
                             .child(crate::layers::render_saved_layer_delete(
                                 editing && selected,
                                 move |window, cx| {

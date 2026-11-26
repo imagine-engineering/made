@@ -39,17 +39,43 @@ pub(crate) fn render_saved_layer_delete(
         )
 }
 
-pub(crate) fn render_saved_layer_move(
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SavedLayerPlacement {
+    Move,
+    Duplicate,
+}
+
+impl SavedLayerPlacement {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Move => "Move To",
+            Self::Duplicate => "Duplicate To",
+        }
+    }
+}
+
+pub(crate) fn render_saved_layer_placement(
+    placement: SavedLayerPlacement,
     enabled: bool,
     menu: impl Fn(&mut Window, &mut App) -> Option<Entity<ContextMenu>> + 'static,
 ) -> impl IntoElement {
-    div()
-        .debug_selector(|| "GRAPHITE-GDD-LAYER-MOVE".into())
-        .child(
-            PopoverMenu::new("graphite-saved-layer-move-menu")
-                .trigger(Button::new("graphite-saved-layer-move", "Move To").disabled(!enabled))
-                .menu(menu),
-        )
+    let (menu_id, id, selector) = match placement {
+        SavedLayerPlacement::Move => (
+            "graphite-saved-layer-move-menu",
+            "graphite-saved-layer-move",
+            "GRAPHITE-GDD-LAYER-MOVE",
+        ),
+        SavedLayerPlacement::Duplicate => (
+            "graphite-saved-layer-duplicate-to-menu",
+            "graphite-saved-layer-duplicate-to",
+            "GRAPHITE-GDD-LAYER-DUPLICATE-TO",
+        ),
+    };
+    div().debug_selector(move || selector.into()).child(
+        PopoverMenu::new(menu_id)
+            .trigger(Button::new(id, placement.label()).disabled(!enabled))
+            .menu(menu),
+    )
 }
 
 pub(crate) fn render_saved_layer_grouping(
