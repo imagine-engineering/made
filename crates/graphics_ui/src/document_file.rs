@@ -674,6 +674,7 @@ pub(crate) struct GraphiteDocumentItem {
     saved_view: SavedViewPanel,
     scene_canvas: Option<SavedSceneCanvas>,
     canvas_render_mode: SavedSceneRenderMode,
+    canvas_graph_fade: f64,
     node_catalog: NodeCatalogPanel,
     node_copy: NodeCopyPanel,
     node_insert: Option<NodeInsertForm>,
@@ -691,7 +692,7 @@ struct SavedSceneCanvas {
     grid_options: Option<GridOptionsForm>,
     grid_frame: Option<SavedSceneGridFrame>,
     grid_task: Option<Task<()>>,
-    graph_overlay: Option<Arc<()>>,
+    graph_overlay: Option<SavedSceneGraphOverlay>,
     measurement_pointer: Option<(gpui::Point<gpui::Pixels>, bool)>,
     render_mode_task: Option<Task<()>>,
     render_mode_error: Option<SharedString>,
@@ -712,6 +713,12 @@ struct SavedSceneCanvas {
 struct SavedSceneGridFrame {
     request: CanvasGrid,
     image: Result<Option<Arc<RenderImage>>, SharedString>,
+}
+
+struct SavedSceneGraphOverlay {
+    identity: Arc<()>,
+    fade_input: Entity<Editor>,
+    fade_error: bool,
 }
 
 struct SavedScenePan {
@@ -1860,6 +1867,7 @@ impl GraphiteDocumentItem {
             saved_view: SavedViewPanel::Closed,
             scene_canvas: None,
             canvas_render_mode: SavedSceneRenderMode::default(),
+            canvas_graph_fade: 80.,
             node_catalog: NodeCatalogPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
             node_insert: None,
@@ -1950,7 +1958,16 @@ impl GraphiteDocumentItem {
         self.finish_scene_pan(true, window, cx);
         self.cancel_scene_artboard_edit(window, cx);
         if let Some(canvas) = &mut self.scene_canvas {
-            canvas.graph_overlay = Some(Arc::new(()));
+            let fade = self.canvas_graph_fade;
+            canvas.graph_overlay = Some(SavedSceneGraphOverlay {
+                identity: Arc::new(()),
+                fade_input: cx.new(|cx| {
+                    let mut input = Editor::single_line(window, cx);
+                    input.set_text(fade.to_string(), window, cx);
+                    input
+                }),
+                fade_error: false,
+            });
             canvas.grid_options = None;
             canvas.measurement_pointer = None;
             if let Some(navigation) = &mut canvas.navigation
@@ -3970,8 +3987,10 @@ impl GraphiteDocumentItem {
                                 })),
                             ),
                     )
-                    .when(graph_overlay_open, |toolbar| {
-                        toolbar.child(self.render_scene_graph_controls(cx))
+                    .when_some(canvas.graph_overlay.as_ref(), |toolbar, overlay| {
+                        toolbar
+                            .child(self.render_scene_graph_fade_control(overlay, cx))
+                            .child(self.render_scene_graph_controls(cx))
                     })
                     .when(canvas.render_mode_task.is_some(), |toolbar| {
                         toolbar.child(Label::new("Changing view mode…").color(Color::Muted))
@@ -4216,7 +4235,7 @@ impl GraphiteDocumentItem {
                         .size_full(),
                     )
                     .when_some(canvas.graph_overlay.as_ref(), |pane, overlay| {
-                        pane.child(self.render_scene_graph_overlay(overlay, target, window, cx))
+                        pane.child(self.render_scene_graph_overlay(&overlay.identity, target, window, cx))
                     }),
             )
             .children(
@@ -4225,6 +4244,97 @@ impl GraphiteDocumentItem {
                     .as_ref()
                     .map(|form| self.render_scene_grid_options(form, cx)),
             )
+    }
+
+    fn apply_scene_graph_fade(
+        &mut self,
+        identity: &Arc<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(overlay) = self
+            .scene_canvas
+            .as_mut()
+            .and_then(|canvas| canvas.graph_overlay.as_mut())
+            .filter(|overlay| Arc::ptr_eq(identity, &overlay.identity))
+        else {
+            return;
+        };
+        let text = overlay.fade_input.read(cx).text(cx);
+        let fade = text
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite());
+        overlay.fade_error = fade.is_none();
+        if let Some(fade) = fade {
+            self.canvas_graph_fade = fade.clamp(0., 100.);
+            let normalized = self.canvas_graph_fade.to_string();
+            if normalized != text {
+                overlay.fade_input.update(cx, |input, cx| {
+                    input.set_text(normalized, window, cx);
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    fn scene_graph_backdrop(&self) -> gpui::Hsla {
+        gpui::Hsla::from(gpui::rgb(0x222222)).opacity((self.canvas_graph_fade / 100.) as f32)
+    }
+
+    fn render_scene_graph_fade_control(
+        &self,
+        overlay: &SavedSceneGraphOverlay,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        let input_identity = overlay.identity.clone();
+        let button_identity = overlay.identity.clone();
+        h_flex()
+            .flex_none()
+            .gap_1()
+            .child(Label::new("Fade Artwork").size(LabelSize::Small))
+            .child(
+                div()
+                    .id("graphite-canvas-fade-percent")
+                    .debug_selector(|| "GRAPHITE-GDD-CANVAS-FADE-PERCENT".into())
+                    .aria_label("Fade Artwork percent")
+                    .w(px(52.))
+                    .px_1()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(cx.theme().colors().border)
+                    .bg(cx.theme().colors().editor_background)
+                    .on_key_down(cx.listener(
+                        move |item, event: &gpui::KeyDownEvent, window, cx| {
+                            if event.keystroke.key != "enter"
+                                || event.keystroke.modifiers != gpui::Modifiers::default()
+                            {
+                                return;
+                            }
+                            cx.stop_propagation();
+                            item.apply_scene_graph_fade(&input_identity, window, cx);
+                        },
+                    ))
+                    .child(overlay.fade_input.clone()),
+            )
+            .child(Label::new("%").size(LabelSize::Small))
+            .child(
+                div()
+                    .debug_selector(|| "GRAPHITE-GDD-CANVAS-FADE-APPLY".into())
+                    .child(Button::new("graphite-canvas-fade-apply", "Apply").on_click(
+                        cx.listener(move |item, _, window, cx| {
+                            item.apply_scene_graph_fade(&button_identity, window, cx);
+                        }),
+                    )),
+            )
+            .when(overlay.fade_error, |row| {
+                row.child(
+                    div()
+                        .debug_selector(|| "GRAPHITE-GDD-CANVAS-FADE-ERROR".into())
+                        .child(Label::new("Enter a percentage from 0 to 100.").color(Color::Error)),
+                )
+            })
     }
 
     fn render_scene_graph_controls(&self, cx: &Context<Self>) -> impl IntoElement {
@@ -4341,7 +4451,7 @@ impl GraphiteDocumentItem {
             .left_0()
             .size_full()
             .occlude()
-            .bg(gpui::Hsla::from(gpui::rgb(0x222222)).opacity(0.8))
+            .bg(self.scene_graph_backdrop())
             .child(contents)
     }
 
@@ -7347,7 +7457,7 @@ impl GraphiteDocumentItem {
             (Some(canvas), Some(expected)) => canvas
                 .graph_overlay
                 .as_ref()
-                .is_some_and(|active| Arc::ptr_eq(active, expected)),
+                .is_some_and(|active| Arc::ptr_eq(&active.identity, expected)),
             _ => false,
         }
     }
@@ -9103,6 +9213,7 @@ impl Item for GraphiteDocumentItem {
             item.embed_linked_resources = self.embed_linked_resources;
             item.embed_legacy_document = self.embed_legacy_document;
             item.canvas_render_mode = self.canvas_render_mode.clone();
+            item.canvas_graph_fade = self.canvas_graph_fade;
             item
         })))
     }
@@ -16676,7 +16787,12 @@ mod tests {
             let canvas = item.scene_canvas.as_ref().expect("document Canvas");
             (
                 network.id,
-                canvas.graph_overlay.as_ref().expect("open overlay").clone(),
+                canvas
+                    .graph_overlay
+                    .as_ref()
+                    .expect("open overlay")
+                    .identity
+                    .clone(),
             )
         });
         window.simulate_mouse_down(
@@ -16736,6 +16852,114 @@ mod tests {
                 .load_bytes(&path)
                 .await
                 .expect("same source archive")
+                .as_slice(),
+            original.as_ref()
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_012_2_workspace_fades_only_the_graph_backdrop(cx: &mut TestAppContext) {
+        let SavedVectorFixture { original, .. } = saved_vector_fixture(None, None).await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1400.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-graph-fade.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-VECTOR")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native document");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        click(window, "GRAPHITE-GDD-CANVAS-GRAPH-TOGGLE");
+        let (revision, snapshot, artwork, original_overlay) = item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            assert!(model.working.is_some());
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                panic!("accepted artwork");
+            };
+            (
+                model.revision.clone(),
+                model.gdd_contents().expect("working snapshot").clone(),
+                image.clone(),
+                canvas
+                    .graph_overlay
+                    .as_ref()
+                    .expect("graph overlay")
+                    .identity
+                    .clone(),
+            )
+        });
+        let assert_fade = |window: &gpui::VisualTestContext, percentage: f64| {
+            item.read_with(window, |item, cx| {
+                let model = item.model.read(cx);
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert!(Arc::ptr_eq(model.gdd_contents().expect("same snapshot"), &snapshot));
+                assert!(!item.is_dirty(cx));
+                assert_eq!(item.canvas_graph_fade, percentage);
+                assert_eq!(item.scene_graph_backdrop().a, (percentage / 100.) as f32);
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(frame) if Arc::ptr_eq(frame, &artwork)));
+            });
+        };
+        let enter = |window: &mut gpui::VisualTestContext, text| {
+            click(window, "GRAPHITE-GDD-CANVAS-FADE-PERCENT");
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(text);
+            paint(window);
+        };
+        assert_fade(window, 80.);
+        enter(window, "42");
+        window.simulate_keystrokes("enter");
+        paint(window);
+        assert_fade(window, 42.);
+        enter(window, "NaN");
+        click(window, "GRAPHITE-GDD-CANVAS-FADE-APPLY");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-CANVAS-FADE-ERROR")
+                .is_some()
+        );
+        assert_fade(window, 42.);
+        for (text, percentage) in [("-3", 0.), ("102", 100.), ("36.5", 36.5)] {
+            enter(window, text);
+            click(window, "GRAPHITE-GDD-CANVAS-FADE-APPLY");
+            assert!(
+                window
+                    .debug_bounds("GRAPHITE-GDD-CANVAS-FADE-ERROR")
+                    .is_none()
+            );
+            assert_fade(window, percentage);
+        }
+        click(window, "GRAPHITE-GDD-CANVAS-GRAPH-TOGGLE");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-CANVAS-FADE-PERCENT")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-CANVAS-GRAPH-TOGGLE");
+        assert_fade(window, 36.5);
+        enter(window, "25");
+        item.update_in(window, |item, window, cx| {
+            item.apply_scene_graph_fade(&original_overlay, window, cx);
+        });
+        assert_fade(window, 36.5);
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("source archive")
                 .as_slice(),
             original.as_ref()
         );
