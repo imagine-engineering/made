@@ -344,15 +344,27 @@ def validate_runtime_manifest() -> None:
             raise ValidationError(
                 f"{path} dependency {package} must be an optional workspace reference"
             )
-    unix_dependencies = (
-        manifest.get("target", {})
-        .get("cfg(unix)", {})
-        .get("dependencies", {})
-    )
-    if unix_dependencies.get("libc") != {"workspace": True}:
+    if dependencies.get("libc") != {"workspace": True}:
         raise ValidationError(
             f"{path} must inherit workspace libc for retained native-library descriptors"
         )
+    windows_target = 'cfg(target_os = "windows")'
+    targets = manifest.get("target", {})
+    windows_dependencies = targets.get(windows_target, {}).get("dependencies", {})
+    capture_dependencies = {"cap-fs-ext": "3.4.6", "cap-std": {"workspace": True}}
+    for name, declaration in capture_dependencies.items():
+        if (
+            windows_dependencies.get(name) != declaration
+            or name in dependencies
+            or any(
+                name in target.get("dependencies", {})
+                for condition, target in targets.items()
+                if condition != windows_target
+            )
+        ):
+            raise ValidationError(
+                f"{path} must declare {name} as {declaration!r} only for Windows file identity"
+            )
 
 
 def validate_production_feature_manifests() -> None:
