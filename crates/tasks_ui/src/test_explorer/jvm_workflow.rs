@@ -1094,37 +1094,10 @@ async fn assert_cancelled_gradle_queue(
     report: &std::path::Path,
     cx: &mut VisualTestContext,
 ) {
-    const START_MARKER: &str = "GROOVY_PARITY_WAIT_STARTED";
     let witness = fixture.join("application/build/qualification/parity-wait-state");
-    let deadline = Instant::now() + Duration::from_secs(45);
-    let (terminal, handle) = loop {
-        cx.run_until_parked();
-        if witness.is_file() {
-            let running = terminal_panel.read_with(cx, |panel, cx| {
-                panel.panes().into_iter().find_map(|pane| {
-                    pane.read(cx).items().find_map(|item| {
-                        let view = item.downcast::<terminal_view::TerminalView>()?;
-                        let terminal = view.read(cx).terminal();
-                        let state = terminal.read(cx);
-                        let handle = state.task()?.structured_task.as_ref()?;
-                        (matches!(handle.state(), task::StructuredTaskState::Running { .. })
-                            && state.get_content().contains(START_MARKER))
-                        .then(|| (terminal.clone(), handle.clone()))
-                    })
-                })
-            });
-            if let Some(running) = running {
-                break running;
-            }
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the ordered Gradle Task did not start on the host"
-        );
-        cx.background_executor
-            .timer(Duration::from_millis(100))
+    let (terminal, handle) =
+        running_ordered_fixture_task(terminal_panel, &witness, "GROOVY_PARITY_WAIT_STARTED", cx)
             .await;
-    };
     let started = std::fs::read_to_string(&witness).expect("read live Gradle worker witness");
     let worker = started
         .trim_end()
@@ -1163,7 +1136,7 @@ async fn assert_cancelled_gradle_queue(
         std::fs::read_to_string(&witness).expect("final Gradle worker witness"),
         format!("started {worker}\nstopped\n")
     );
-    let transcript = terminal.read_with(cx, |terminal, _| terminal.get_content());
+    let transcript = terminal.read_with(cx, |view, cx| view.terminal().read(cx).get_content());
     assert!(transcript.contains("cancelled"), "{transcript}");
     assert!(
         !transcript
@@ -1179,6 +1152,48 @@ async fn assert_cancelled_gradle_queue(
         "Connected Gradle cancelled Task {:?} while worker {worker} was active",
         handle.task_id()
     );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn running_ordered_fixture_task(
+    terminal_panel: &Entity<terminal_view::terminal_panel::TerminalPanel>,
+    witness: &std::path::Path,
+    marker: &str,
+    cx: &mut VisualTestContext,
+) -> (
+    Entity<terminal_view::TerminalView>,
+    task::StructuredTaskHandle,
+) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        cx.run_until_parked();
+        if witness.is_file() {
+            let running = terminal_panel.read_with(cx, |panel, cx| {
+                panel.panes().into_iter().find_map(|pane| {
+                    pane.read(cx).items().find_map(|item| {
+                        let view = item.downcast::<terminal_view::TerminalView>()?;
+                        let terminal = view.read(cx).terminal();
+                        let state = terminal.read(cx);
+                        let handle = state.task()?.structured_task.as_ref()?;
+                        (matches!(handle.state(), task::StructuredTaskState::Running { .. })
+                            && state.get_content().contains(marker))
+                        .then(|| (view.clone(), handle.clone()))
+                    })
+                })
+            });
+            if let Some(running) = running {
+                return running;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the ordered Task did not reach {marker:?} on the host (witness exists: {})",
+            witness.is_file()
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -2212,6 +2227,18 @@ async fn docker_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut T
     run_maven_goal_fixture(MavenGoalRun::OrderedHelp, MavenGoalConnection::Docker, cx).await;
 }
 
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires the offline Maven ordered cancellation fixture on a fresh Docker host"]
+async fn docker_maven_ordered_operations_cancel_on_host(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::OrderedCancellation,
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
 #[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires a cached Maven Dependency goal, pinned Maven wrapper and pinned JDTLS"]
@@ -2244,7 +2271,11 @@ async fn cached_maven_repository_readiness_is_reported_in_task_terminal(cx: &mut
 enum MavenGoalRun {
     EffectivePom,
     OrderedHelp,
-    ResolveSources { cached: bool },
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    OrderedCancellation,
+    ResolveSources {
+        cached: bool,
+    },
     ResolveJavadoc,
     CheckOfflineRepository,
 }
@@ -2293,6 +2324,8 @@ async fn run_maven_goal_fixture(
     let goals: &[&str] = match run {
         MavenGoalRun::EffectivePom => &["effective-pom"],
         MavenGoalRun::OrderedHelp => &["active-profiles", "effective-pom"],
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+        MavenGoalRun::OrderedCancellation => &["effective-pom"],
         MavenGoalRun::ResolveSources { .. } => &["resolve-sources"],
         MavenGoalRun::ResolveJavadoc => &["resolve"],
         MavenGoalRun::CheckOfflineRepository => &["go-offline"],
@@ -2463,18 +2496,16 @@ async fn run_maven_goal_fixture(
         show_ready_maven_view(&lsp_store, worktree_id, cx).await;
     }
     cx.dispatch_action(ExpandAll);
-    let select_goal = |cx: &mut VisualTestContext, goal| {
+    let select_operation = |cx: &mut VisualTestContext, name, row_kind| {
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.focus_panel::<DependenciesPanel>(window, cx);
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         let goal_row = panel.read_with(cx, |panel, _| {
             let (status, rows, _) = panel.snapshot_for_test();
-            let (index, row) = rows
-                .iter()
-                .enumerate()
-                .find(|(_, row)| row.label == goal && row.id.0.contains(":maven:goal:"))
-                .unwrap_or_else(|| panic!("the {goal} goal is selectable: {status:?}"));
+            let (index, row) = rows.iter().enumerate()
+                .find(|(_, row)| row.label == name && row.id.0.contains(row_kind))
+                .unwrap_or_else(|| panic!("the {name} operation is selectable: {status:?}"));
             assert!(
                 row.secondary_label.as_deref().is_some_and(|label| {
                     label.contains("offline through Tasks")
@@ -2483,7 +2514,7 @@ async fn run_maven_goal_fixture(
                 "the visible Maven goal description matches execution availability"
             );
             assert!(row.accessibility_label.contains("or Task options"));
-            let guidance = match goal {
+            let guidance = match name {
                 "resolve-sources" => Some(
                     "Check resolved sources in the Task terminal even if Maven succeeds.",
                 ),
@@ -2511,6 +2542,9 @@ async fn run_maven_goal_fixture(
         }
         cx.update(|window, cx| window.draw(cx).clear(cx));
     };
+    let select_goal = |cx: &mut VisualTestContext, goal| {
+        select_operation(cx, goal, ":maven:goal:");
+    };
     let output = fixture_root.join("target/groovy-effective.xml");
     if matches!(run, MavenGoalRun::EffectivePom | MavenGoalRun::OrderedHelp) {
         assert!(
@@ -2519,6 +2553,60 @@ async fn run_maven_goal_fixture(
         );
     }
     match run {
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+        MavenGoalRun::OrderedCancellation => {
+            assert!(
+                !output.exists(),
+                "the fixture must start without an effective POM"
+            );
+            let target = fixture_root.join("target");
+            std::fs::create_dir_all(&target).expect("create Maven output directory");
+            let wait = target.join("await-cancellation");
+            let witness = target.join("ordered-test-pid");
+            let completion = target.join("ordered-test-completed");
+            assert!(!witness.exists() && !completion.exists());
+            std::fs::write(&wait, "").expect("block the forked test before it completes");
+            select_operation(cx, "test", ":maven:phase:");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            select_goal(cx, "effective-pom");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
+            dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+            panel.read_with(cx, |panel, _| {
+                let rows = panel.snapshot_for_test().1;
+                let queue = rows
+                    .iter()
+                    .filter(|row| row.id.0.starts_with("groovy-ordered-operation:"))
+                    .map(|row| row.label.as_str())
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    queue,
+                    [
+                        "1. default: test",
+                        "2. org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom",
+                    ]
+                );
+            });
+            const RUN: &str =
+                "Run ordered offline operations on the current project host through Tasks";
+            focus_control(cx, RUN);
+            press_enter(cx);
+            assert_cancelled_maven_queue(&terminal_panel, &witness, cx).await;
+            assert!(
+                !completion.exists(),
+                "the forked test completed after cancellation"
+            );
+            assert!(
+                !output.exists(),
+                "the skipped Maven operation wrote an effective POM"
+            );
+            std::fs::remove_file(wait).expect("allow the next test to finish");
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.focus_panel::<DependenciesPanel>(window, cx);
+            });
+            dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+            focus_control(cx, RUN);
+            press_enter(cx);
+        }
         MavenGoalRun::OrderedHelp => {
             select_goal(cx, "active-profiles");
             type_fixture_options(
@@ -2599,6 +2687,10 @@ async fn run_maven_goal_fixture(
     if let Some(profile) = profile_option {
         arguments.extend(["--activate-profiles", profile].map(str::to_owned));
     }
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    if matches!(run, MavenGoalRun::OrderedCancellation) {
+        arguments.push("test".into());
+    }
     arguments.extend(coordinates);
     let transcript = assert_fixture_task(
         &terminal_panel,
@@ -2613,6 +2705,30 @@ async fn run_maven_goal_fixture(
         assert!(transcript.contains("finished successfully"), "{transcript}");
     }
     match run {
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+        MavenGoalRun::OrderedCancellation => {
+            let report =
+                fixture_root.join("target/surefire-reports/TEST-evidence.OrderedTaskTest.xml");
+            let xml = std::fs::read_to_string(report).expect("fresh Surefire report");
+            assert!(
+                xml.contains("tests=\"1\"")
+                    && xml.contains("failures=\"0\"")
+                    && xml.contains("errors=\"0\"")
+                    && xml.contains("skipped=\"0\""),
+                "{xml}"
+            );
+            assert!(output.is_file());
+            let test = transcript
+                .find("Groovy ordered Maven test started")
+                .expect("fresh Maven test");
+            let effective = transcript
+                .find("Effective-POM written to:")
+                .expect("fresh effective POM");
+            assert!(test < effective, "{transcript}");
+            eprintln!(
+                "The same connected Maven queue ran the test and wrote an effective POM after cancellation"
+            );
+        }
         MavenGoalRun::ResolveSources { cached } => {
             let (_, artifacts) = transcript
                 .split_once("The following files have been resolved:")
@@ -2679,6 +2795,69 @@ async fn run_maven_goal_fixture(
             }
         }
     }
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn assert_cancelled_maven_queue(
+    terminal_panel: &Entity<terminal_view::terminal_panel::TerminalPanel>,
+    witness: &std::path::Path,
+    cx: &mut VisualTestContext,
+) {
+    let (terminal, handle) = running_ordered_fixture_task(
+        terminal_panel,
+        witness,
+        "Groovy ordered Maven test started",
+        cx,
+    )
+    .await;
+    let worker = std::fs::read_to_string(witness)
+        .expect("read the forked Maven test PID")
+        .parse()
+        .expect("numeric Maven test PID");
+    let running = || {
+        selected_junit_process_running(
+            JvmWorkflowConnection::Docker,
+            JvmTestBuildTool::Maven,
+            worker,
+        )
+    };
+    assert!(running().await, "the Maven test must be active");
+    assert!(
+        cx.update(|_, cx| handle.cancel(cx)),
+        "cancel the running Maven Task"
+    );
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        cx.run_until_parked();
+        if matches!(
+            handle.state(),
+            task::StructuredTaskState::Cancelled {
+                termination_confirmed: true,
+                ..
+            }
+        ) && !running().await
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Maven cancellation did not stop the fork: {:?}",
+            handle.state()
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let transcript = terminal.read_with(cx, |view, cx| view.terminal().read(cx).get_content());
+    assert!(transcript.contains("cancelled"), "{transcript}");
+    assert!(
+        !transcript.contains("Effective-POM written to:"),
+        "{transcript}"
+    );
+    eprintln!(
+        "Connected Maven cancelled Task {:?} and stopped the Surefire JVM {worker}",
+        handle.task_id()
+    );
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]

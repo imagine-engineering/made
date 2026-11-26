@@ -8,8 +8,12 @@ from xml.sax.saxutils import escape
 def main():
     parser = argparse.ArgumentParser(description="Prepare an offline Maven Effective POM fixture")
     parser.add_argument("directory", type=Path)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--source-archives", action="store_true", help="prepare the source archive fixture instead"
+    )
+    mode.add_argument(
+        "--ordered-cancellation", action="store_true", help="include a cancellable Surefire test"
     )
     args = parser.parse_args()
     directory = args.directory.resolve(strict=True)
@@ -86,6 +90,51 @@ def main():
         active_profiles = (
             "<activeProfiles><activeProfile>evidence-selected</activeProfile></activeProfiles>"
         )
+    if args.ordered_cancellation:
+        pom = pom.replace(
+            "  <build>",
+            """  <dependencies><dependency>
+    <groupId>org.junit.jupiter</groupId>
+    <artifactId>junit-jupiter</artifactId>
+    <version>5.11.4</version>
+    <scope>test</scope>
+  </dependency></dependencies>
+  <build>""",
+            1,
+        ).replace(
+            "  </plugins></build>",
+            """    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-surefire-plugin</artifactId>
+      <version>3.5.2</version>
+    </plugin>
+  </plugins></build>""",
+            1,
+        )
+        test_source = project / "src/test/java/evidence/OrderedTaskTest.java"
+        test_source.parent.mkdir(parents=True)
+        test_source.write_text(r"""package evidence;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+class OrderedTaskTest {
+    @Test
+    @Timeout(60)
+    void waitsForCancellation() throws Exception {
+        Path target = Path.of("target");
+        Path wait = target.resolve("await-cancellation");
+        Files.writeString(target.resolve("ordered-test-pid"), Long.toString(ProcessHandle.current().pid()));
+        System.out.println("Groovy ordered Maven test started");
+        while (Files.exists(wait)) {
+            Thread.sleep(100);
+        }
+        Files.writeString(target.resolve("ordered-test-completed"), "completed\n");
+    }
+}
+""")
     (project / "pom.xml").write_text(pom)
     (directory / "settings with spaces.xml").write_text(
         f"<settings><offline>true</offline><localRepository>{escape(str(repository))}"
