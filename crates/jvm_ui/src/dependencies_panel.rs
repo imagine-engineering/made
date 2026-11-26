@@ -14022,8 +14022,12 @@ mod tests {
                             view != BuildToolView::Gradle,
                         ),
                         (
-                            "Gradle selection import unavailable for remote projects",
+                            "Gradle reimport requires a trusted direct connection to the project host",
                             view != BuildToolView::Maven,
+                        ),
+                        (
+                            "Gradle metadata synchronization requires a trusted direct connection to the project host",
+                            view == BuildToolView::Gradle,
                         ),
                     ] {
                         if !visible {
@@ -14041,16 +14045,26 @@ mod tests {
                 });
             }
         }
-        for maven in [true, false] {
+        for (maven, recovery) in [
+            (true, "Remote import is not supported"),
+            (
+                false,
+                "Connect directly to the Groovy project host to work with Gradle projects",
+            ),
+        ] {
             panel.update(cx, |panel, cx| {
                 assert!(panel.selected_build_worktree(cx).is_err());
+                panel.build_phase_notice = None;
                 panel.apply_saved_build_selection(maven, cx);
                 assert!(panel.build_phase_token.is_none() && panel.build_phase_waiter.is_none());
+                assert!(!panel.remote_gradle_reimport_pending);
                 assert!(
                     panel
                         .build_phase_notice
                         .as_deref()
-                        .is_some_and(|notice| notice.contains("Remote import is not supported"))
+                        .is_some_and(|notice| notice.contains(recovery)),
+                    "{:?}",
+                    panel.build_phase_notice
                 );
             });
             assert!(lsp_store.read_with(cx, |store, _| {

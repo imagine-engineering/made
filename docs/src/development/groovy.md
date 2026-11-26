@@ -395,7 +395,8 @@ as Mermaid source and identifies the limited coverage in the copied text.
 Open the diagram context menu with {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu}.
 In the analyzer and Dependencies tree, use {#kb groovy_dependencies_panel::ShowDependencyRowMenu}
 on the selected tree row or focused usage. Tab and Shift-Tab scroll the
-focused usage into view. The analyzer supports searchable tree and flat lists,
+focused usage into view. If that usage is replaced, keyboard focus returns
+to the analyzer tree. The analyzer supports searchable tree and flat lists,
 scope and conflict filters, group IDs, and a Usages pane. **Show in Dependency
 Diagram** reveals the selected occurrence in the diagram. Declaration navigation
 requires a current provider-reported location. Stale data, trust revocation,

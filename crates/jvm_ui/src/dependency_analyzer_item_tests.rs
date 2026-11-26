@@ -988,6 +988,55 @@ async fn analyzer_keyboard_reveals_and_opens_a_usage_menu(cx: &mut TestAppContex
         Some("used by org.example:consumer-22")
     );
     assert!(usage_is_visible(23));
+
+    cx.update(|window, cx| {
+        item.read(cx).focus_handle(cx).focus(window, cx);
+        window.draw(cx).clear(cx);
+    });
+    assert!(
+        (0..48).any(|_| {
+            cx.simulate_keystrokes("tab");
+            focused_label(cx).as_deref() == Some("used by org.example:left")
+        }),
+        "Tab reaches the first usage of the selected dependency"
+    );
+    item.update(cx, |item, cx| {
+        item.select_node_row(analyzer_row_id_for_node("right"), cx);
+        assert_eq!(item.selected_key(), Some("right"));
+        assert_eq!(
+            item.usages().first().map(|row| row.label.as_str()),
+            Some("used by root")
+        );
+    });
+    assert_ne!(
+        focused_label(cx).as_deref(),
+        Some("used by root"),
+        "selecting another dependency must not transfer keyboard focus to an unrelated usage"
+    );
+    assert!(cx.update(|window, cx| item.read(cx).focus_handle(cx).is_focused(window)));
+
+    assert!(
+        (0..48).any(|_| {
+            cx.simulate_keystrokes("tab");
+            focused_label(cx).as_deref() == Some("used by root")
+        }),
+        "the new usage is independently reachable by keyboard"
+    );
+    cx.simulate_keystrokes("shift-f10");
+    assert!(item.read_with(cx, |item, _| item.row_context_menu_is_deployed()));
+
+    item.update(cx, |item, cx| {
+        item.select_node_row(analyzer_row_id_for_node("leaf"), cx);
+    });
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let cancel = cx
+            .build_action("menu::Cancel", None)
+            .expect("menu cancel action");
+        window.dispatch_action(cancel, cx);
+    });
+    assert!(!item.read_with(cx, |item, _| item.row_context_menu_is_deployed()));
+    assert!(cx.update(|window, cx| item.read(cx).focus_handle(cx).is_focused(window)));
 }
 
 #[gpui::test]
@@ -1111,6 +1160,7 @@ async fn analyzer_row_menu_deploys_targets_and_dismisses(cx: &mut TestAppContext
         item.select_node_row(analyzer_row_id_for_node("leaf"), cx)
     });
     cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
         item.update(cx, |item, cx| {
             item.show_usage_context_menu(
                 0,

@@ -200,6 +200,8 @@ pub struct DependencyAnalyzerItem {
     usages: Vec<AnalyzerUsage>,
     usages_truncated: bool,
     usages_scroll: gpui::ScrollHandle,
+    usage_focus_selection: Option<String>,
+    usage_focus_invalidated: bool,
     usage_focus_handles: Vec<FocusHandle>,
     last_focused_usage: Option<usize>,
     notice: Option<String>,
@@ -883,6 +885,8 @@ impl DependencyAnalyzerItem {
             usages: Vec::new(),
             usages_truncated: false,
             usages_scroll: gpui::ScrollHandle::new(),
+            usage_focus_selection: None,
+            usage_focus_invalidated: false,
             usage_focus_handles: Vec::new(),
             last_focused_usage: None,
             notice: None,
@@ -940,6 +944,7 @@ impl DependencyAnalyzerItem {
         if receipt == self.receipt {
             return;
         }
+        self.usage_focus_invalidated = true;
         if self.selected_outside_tree {
             self.selected_key = None;
             self.selected_outside_tree = false;
@@ -953,7 +958,7 @@ impl DependencyAnalyzerItem {
             )
         });
         self.search_handle.hide(cx);
-        if let Some((menu, _, _)) = self.row_context_menu.take() {
+        if let Some((menu, _, _)) = self.row_context_menu.as_ref() {
             menu.update(cx, |_, cx| cx.emit(gpui::DismissEvent));
         }
 
@@ -1137,6 +1142,7 @@ impl DependencyAnalyzerItem {
         match derive_dependency_analyzer(project, &source.selection, Some(&scope), cx) {
             Some(derivation) => {
                 self.derivation = derivation;
+                self.usage_focus_invalidated = true;
                 self.selected_key = None;
                 self.selected_outside_tree = false;
                 self.usages.clear();
@@ -1184,6 +1190,9 @@ impl DependencyAnalyzerItem {
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        if !self.usage_focus_is_current() {
+            return;
+        }
         let Some(usage) = self.usages.get(index) else {
             return;
         };
@@ -1196,7 +1205,14 @@ impl DependencyAnalyzerItem {
         );
     }
 
+    fn usage_focus_is_current(&self) -> bool {
+        !self.usage_focus_invalidated && self.usage_focus_selection == self.selected_key
+    }
+
     fn focused_usage(&self, window: &gpui::Window) -> Option<usize> {
+        if !self.usage_focus_is_current() {
+            return None;
+        }
         self.usage_focus_handles
             .iter()
             .take(self.usages.len())
@@ -1222,7 +1238,8 @@ impl DependencyAnalyzerItem {
                 (bounds.center().y + offset.y).clamp(viewport.top(), viewport.bottom()),
             );
             self.show_usage_context_menu(index, position, window, cx);
-        } else if let Some(id) = self.host.selected().cloned()
+        } else if self.focus_handle.is_focused(window)
+            && let Some(id) = self.host.selected().cloned()
             && let Some(position) = crate::selected_dependency_row_menu_position(&self.host)
         {
             self.show_row_context_menu(id, position, window, cx);
@@ -1264,6 +1281,7 @@ impl DependencyAnalyzerItem {
             .focused(cx)
             .filter(|_| self.focus_handle.contains_focused(window, cx))
             .unwrap_or_else(|| self.focus_handle.clone());
+        let returning_to_usage = self.usage_focus_handles.contains(&return_focus);
         window.focus(&menu_focus, cx);
         let subscription = cx.subscribe_in(
             &menu,
@@ -1271,7 +1289,14 @@ impl DependencyAnalyzerItem {
             move |this, _, _: &gpui::DismissEvent, window, cx| {
                 this.row_context_menu.take();
                 if menu_focus.contains_focused(window, cx) {
-                    return_focus.focus(window, cx);
+                    if returning_to_usage
+                        && (!this.usage_focus_is_current()
+                            || !this.usage_focus_handles.contains(&return_focus))
+                    {
+                        this.focus_handle.focus(window, cx);
+                    } else {
+                        return_focus.focus(window, cx);
+                    }
                 }
                 cx.notify();
             },
@@ -1500,6 +1525,19 @@ impl Render for DependencyAnalyzerItem {
     ) -> impl gpui::IntoElement {
         use ui::prelude::*;
 
+        if !self.usage_focus_is_current() {
+            if self
+                .usage_focus_handles
+                .iter()
+                .any(|focus| focus.is_focused(window))
+            {
+                self.focus_handle.focus(window, cx);
+            }
+            self.usage_focus_handles.clear();
+            self.last_focused_usage = None;
+            self.usage_focus_selection.clone_from(&self.selected_key);
+            self.usage_focus_invalidated = false;
+        }
         self.usage_focus_handles
             .resize_with(self.usages.len(), || cx.focus_handle().tab_stop(true));
         let focused_usage = self.focused_usage(window);
