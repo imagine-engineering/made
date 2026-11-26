@@ -1281,6 +1281,7 @@ struct NodeCopyForm {
     name: Entity<Editor>,
     value: Entity<Editor>,
     position: Entity<Editor>,
+    artwork_text: Entity<Editor>,
     artboard_background: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
     layer_opacity: [Entity<Editor>; 2],
@@ -1326,6 +1327,7 @@ impl NodeCopyForm {
             name: cx.new(|cx| Editor::single_line(window, cx)),
             value: cx.new(|cx| Editor::single_line(window, cx)),
             position: cx.new(|cx| Editor::single_line(window, cx)),
+            artwork_text: cx.new(|cx| Editor::auto_height(3, 8, window, cx)),
             artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             layer_opacity: std::array::from_fn(|_| {
@@ -1848,6 +1850,7 @@ enum NetworkPortChange {
 
 enum NodeCopyChange {
     Rename(String),
+    ArtworkText(String),
     DuplicateNumeric,
     DeleteIsolated,
     GridPosition([i32; 2]),
@@ -1880,6 +1883,11 @@ impl NodeCopyChange {
             Self::Rename(name) => {
                 archive
                     .rename_graph_node_in_copy(node, name, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::ArtworkText(text) => {
+                archive
+                    .set_graph_artwork_text_in_copy(node, text, ARCHIVE_BUDGET)
                     .await
             }
             Self::DuplicateNumeric => {
@@ -5335,6 +5343,12 @@ impl GraphiteDocumentItem {
             form.selected = Some(index);
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
+            if let Some(text) = node.artwork_text() {
+                form.artwork_text.update(cx, |editor, cx| {
+                    gpui::EntityInputHandler::unmark_text(editor, window, cx);
+                    editor.set_text(text, window, cx);
+                });
+            }
             if let Some(value) = node.numeric_input() {
                 form.value.update(cx, |editor, cx| {
                     editor.set_text(value.to_string(), window, cx)
@@ -7875,7 +7889,7 @@ impl GraphiteDocumentItem {
             .as_ref()
             .is_some_and(|form| editor_focused(&form.position))
             || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
-                [&form.name, &form.value, &form.position, &form.artboard_background].into_iter().any(editor_focused)
+                [&form.name, &form.value, &form.position, &form.artwork_text, &form.artboard_background].into_iter().any(editor_focused)
                     || form.ellipse_radii.iter().any(editor_focused)
                     || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
         if field_focused || self.model.read(cx).working.is_none() {
@@ -8556,6 +8570,95 @@ impl GraphiteDocumentItem {
         }
     }
 
+    fn apply_saved_artwork_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(node) = form
+            .selected_node()
+            .filter(|node| node.artwork_text().is_some())
+        else {
+            return;
+        };
+        let composing = form.artwork_text.update(cx, |editor, cx| {
+            gpui::EntityInputHandler::marked_text_range(editor, window, cx).is_some()
+        });
+        if composing {
+            self.copy_feedback = Some((
+                "Finish the current text composition before applying it.".into(),
+                Color::Error,
+            ));
+            cx.notify();
+            return;
+        }
+        let text = form.artwork_text.read(cx).text(cx);
+        self.apply_graph_edit(
+            GraphiteCopy::EditNode {
+                node: Box::new(node.clone()),
+                change: NodeCopyChange::ArtworkText(text),
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn render_saved_artwork_text(
+        &self,
+        form: &NodeCopyForm,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
+        v_flex()
+            .gap_2()
+            .child(Label::new("Artwork text"))
+            .child(Label::new("Source default font").color(Color::Muted))
+            .child(
+                div()
+                    .id("graphite-gdd-artwork-text")
+                    .debug_selector(|| "GRAPHITE-GDD-ARTWORK-TEXT".into())
+                    .aria_label("Artwork text")
+                    .child(form.artwork_text.clone()),
+            )
+            .child(
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-ARTWORK-TEXT-APPLY".into())
+                            .child(
+                                Button::new("graphite-gdd-artwork-text-apply", "Apply Text")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.apply_saved_artwork_text(window, cx)
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-ARTWORK-TEXT-CANCEL".into())
+                            .child(
+                                Button::new("graphite-gdd-artwork-text-cancel", "Cancel")
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                                            return;
+                                        };
+                                        if let Some(text) = form
+                                            .selected_node()
+                                            .and_then(GddGraphNode::artwork_text)
+                                        {
+                                            form.artwork_text.update(cx, |editor, cx| {
+                                                gpui::EntityInputHandler::unmark_text(
+                                                    editor, window, cx,
+                                                );
+                                                editor.set_text(text, window, cx);
+                                            });
+                                        }
+                                    })),
+                            ),
+                    ),
+            )
+    }
+
     fn render_node_copy(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let label = match self.node_copy {
             NodeCopyPanel::Closed if self.model.read(cx).working.is_some() => "Open Node Editor",
@@ -9220,6 +9323,9 @@ impl GraphiteDocumentItem {
                             .when(selected.artboard_geometry().is_some(), |panel| {
                                 panel.child(self.render_artboard_geometry(form, working, cx))
                             })
+                            .when(working && selected.artwork_text().is_some(), |panel| {
+                                panel.child(self.render_saved_artwork_text(form, cx))
+                            })
                             .when(selected.artboard_background().is_some(), |panel| {
                                 panel.child(self.render_artboard_background(form, working, cx))
                             })
@@ -9683,6 +9789,10 @@ impl GraphiteDocumentItem {
                         change: NodeCopyChange::Rename(_),
                         ..
                     } => "Renamed",
+                    GraphiteCopy::EditNode {
+                        change: NodeCopyChange::ArtworkText(_),
+                        ..
+                    } => "Edited artwork text in",
                     GraphiteCopy::EditNode {
                         change: NodeCopyChange::DuplicateNumeric,
                         ..
@@ -15818,6 +15928,190 @@ mod tests {
                 .load_bytes(&source_path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r14_1_workspace_edits_saved_artwork_text(cx: &mut TestAppContext) {
+        use gpui::EntityInputHandler as _;
+        let text_id = format!(
+            "PROTONODE:{}",
+            graphite_std::text::text::IDENTIFIER.as_str()
+        );
+        let mut document = create_gdd_folder(965, 966, "Artwork Text".into(), ARCHIVE_BUDGET)
+            .await
+            .expect("blank text document");
+        let mut inserted = Vec::new();
+        for (identifier, position) in [
+            ("NETWORK:Artboard", [2, -8]),
+            ("NETWORK:Merge", [-6, 0]),
+            (text_id.as_str(), [-12, 0]),
+        ] {
+            document = document
+                .insert_root_catalog_node_in_copy(identifier, position, ARCHIVE_BUDGET)
+                .await
+                .expect(identifier);
+            let graph = document.graph_inspection().await.expect("root Text graph");
+            let root = graph
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("root network");
+            let additions = graph
+                .nodes
+                .iter()
+                .filter(|node| {
+                    node.network_id() == root.id && !inserted.contains(&node.storage_id())
+                })
+                .collect::<Vec<_>>();
+            let [node] = additions.as_slice() else {
+                panic!("one new root graph node for {identifier}");
+            };
+            inserted.push(node.storage_id());
+        }
+        let [board_id, merge_id, text_id] = inserted.as_slice() else {
+            panic!("original Artboard, Merge and Text");
+        };
+        let graph = document.graph_nodes().await.expect("text graph");
+        let board = graph
+            .iter()
+            .find(|node| node.storage_id() == *board_id && node.can_set_document_artboard())
+            .expect("source Artboard");
+        document = document
+            .set_document_artboard_in_copy(board, ARCHIVE_BUDGET)
+            .await
+            .expect("document output");
+        for (destination, source) in [(*merge_id, *text_id), (*board_id, *merge_id)] {
+            let graph = document.graph_nodes().await.expect("current text graph");
+            let find = |id: StorageNodeId| {
+                graph
+                    .iter()
+                    .find(|node| node.storage_id() == id)
+                    .expect("stable source node")
+            };
+            document = document
+                .connect_graphic_content_in_copy(find(destination), find(source), ARCHIVE_BUDGET)
+                .await
+                .expect("wire editable text");
+        }
+        let original = document
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("saved text archive");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source_path = PathBuf::from("/project/editable-text.gdd.zip");
+        filesystem
+            .write(&source_path, &original)
+            .await
+            .expect("text test file");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source_path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open artwork")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native artwork");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let editor = item.update_in(window, |item, window, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native artwork graph")
+            };
+            let index = form
+                .nodes
+                .iter()
+                .position(|node| node.artwork_text().is_some())
+                .expect("native Text");
+            let editor = form.artwork_text.clone();
+            item.select_copy_node(index, window, cx);
+            editor
+        });
+        let snapshot = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, cx| {
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("current artwork")
+                    .clone()
+            })
+        };
+        let artwork_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let image = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("artwork Canvas");
+                match &canvas.frame {
+                    SavedSceneFrame::Ready(image) => image.clone(),
+                    SavedSceneFrame::Failed(error) => panic!("text Canvas: {error}"),
+                    _ => panic!("accepted text artwork"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            image
+        };
+        paint(window);
+        let before = snapshot(window);
+        let original_image = artwork_image(window);
+        click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
+        editor.update_in(window, |editor, window, cx| {
+            editor.replace_and_mark_text_in_range(Some(0..11), "preedit", Some(0..7), window, cx);
+            assert_eq!(editor.marked_text_range(window, cx), Some(0..7));
+        });
+        assert!(Arc::ptr_eq(&snapshot(window), &before));
+        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-CANCEL");
+        assert_eq!(
+            editor.read_with(window, |editor, cx| editor.text(cx)),
+            "Lorem ipsum"
+        );
+        assert!(Arc::ptr_eq(&snapshot(window), &before));
+        click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
+        let committed = "Cafe\u{301}\nGraphite";
+        editor.update_in(window, |editor, window, cx| {
+            editor.replace_and_mark_text_in_range(Some(0..11), "Caf", Some(3..3), window, cx);
+            editor.replace_text_in_range(None, committed, window, cx);
+            assert_eq!(editor.marked_text_range(window, cx), None);
+        });
+        assert!(Arc::ptr_eq(&snapshot(window), &before));
+        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-APPLY");
+        let changed = snapshot(window);
+        let graph = changed.graph_nodes().await.expect("edited Text");
+        let text = graph
+            .iter()
+            .find(|node| node.artwork_text().is_some())
+            .expect("editable Text");
+        assert_eq!(text.artwork_text(), Some(committed));
+        assert!(original_image.as_bytes(0) != artwork_image(window).as_bytes(0));
+        window.dispatch_action(editor::actions::Undo);
+        window.run_until_parked();
+        let graph = snapshot(window).graph_nodes().await.expect("undone Text");
+        assert_eq!(
+            graph.iter().find_map(GddGraphNode::artwork_text),
+            Some("Lorem ipsum")
+        );
+        window.dispatch_action(editor::actions::Redo);
+        window.run_until_parked();
+        let path = PathBuf::from("/project/edited-artwork-text.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(path.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &path)
+            .await
+            .expect("saved artwork");
+        let graph = reopened.graph_nodes().await.expect("reopened artwork text");
+        let reopened_text = graph
+            .iter()
+            .find(|node| node.artwork_text().is_some())
+            .expect("reopened Text");
+        assert_eq!(reopened_text.storage_id(), text.storage_id());
+        assert_eq!(reopened_text.artwork_text(), Some(committed));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source_path)
+                .await
+                .expect("source bytes"),
             original
         );
     }

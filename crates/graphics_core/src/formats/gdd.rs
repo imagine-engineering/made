@@ -86,6 +86,7 @@ use graphite_std::{
     blending_nodes::{blend_mode, clipping_mask, opacity},
     graphic::item_at_index,
     repeat_nodes::repeat_array,
+    text::text as artwork_text,
     transform::Footprint,
     transform_nodes::transform,
     vector_nodes::{
@@ -240,6 +241,8 @@ pub enum GddArchiveError {
     GraphClipboardTypeMismatch(String),
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
+    #[error("Select a Graphite Text node with editable text and the source default font.")]
+    UnsupportedGraphArtworkText,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
@@ -973,6 +976,7 @@ pub enum GddGraphLayerPreview {
 #[derive(Clone, Copy)]
 enum SavedGraphicProfile {
     Rectangle,
+    Text,
     Path,
     Transform,
     Stroke,
@@ -1111,6 +1115,7 @@ pub struct GddGraphNode {
     pinned_order: Option<(usize, usize)>,
     numeric_input: Option<GddNumericInput>,
     boolean_input: Option<GddGraphBooleanInput>,
+    artwork_text: Option<String>,
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
     can_delete_in_copy: bool,
@@ -1345,6 +1350,10 @@ impl GddGraphNode {
         &self.display_name
     }
 
+    pub fn artwork_text(&self) -> Option<&str> {
+        self.artwork_text.as_deref()
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -1400,6 +1409,10 @@ impl GddGraphNode {
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
             ) if self.is_document_output => LAYER_CONTENT_INPUT,
+            (
+                SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
+                SavedGraphicProfile::Text,
+            ) => LAYER_CONTENT_INPUT,
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
                 SavedGraphicProfile::Fill,
@@ -1831,6 +1844,7 @@ impl InspectedGddV1 {
                     pinned_order: None,
                     numeric_input: None,
                     boolean_input: None,
+                    artwork_text: None,
                     artboard_geometry: None,
                     artboard_background: None,
                     can_delete_in_copy: false,
@@ -2053,6 +2067,14 @@ impl InspectedGddV1 {
             {
                 node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
+                if matches!(profile, SavedGraphicProfile::Text)
+                    && let Some(TaggedValue::String(text)) = document
+                        .inputs
+                        .get(artwork_text::TextInput::INDEX)
+                        .and_then(NodeInput::as_value)
+                {
+                    node.artwork_text = Some(text.clone());
+                }
                 node.can_preview_merge_thumbnail = acyclic
                     && matches!(
                         profile,
@@ -5514,6 +5536,38 @@ impl InspectedGddV1 {
                     .unwrap_or_default()
             });
         if updated_name.as_deref() != Some(name.as_str()) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn set_graph_artwork_text_in_copy(
+        &self,
+        node: &GddGraphNode,
+        text: String,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !matches!(node.graphic_profile, Some(SavedGraphicProfile::Text)) {
+            return Err(GddArchiveError::UnsupportedGraphArtworkText);
+        }
+        if text.len() > MAX_PREVIEW_VALUES || text.len() as u64 > budget.max_entry_bytes {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let index = artwork_text::TextInput::INDEX;
+        let connector = InputConnector::node_at_index(node.local_id, index);
+        let new = NodeInput::value(TaggedValue::String(text), false);
+        let path = &node.network_path;
+        if interface.input_from_connector(&connector, path) == Some(&new) {
+            return Err(GddArchiveError::UnchangedGraphInput);
+        }
+        interface.set_input(&connector, new.clone(), path);
+        let copy = self
+            .finish_graph_input(node, interface, index, None, budget)
+            .await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.input_from_connector(&connector, path) != Some(&new) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -9860,6 +9914,22 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 }
                 _ => return None,
             }
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &artwork_text::IDENTIFIER =>
+        {
+            let index = artwork_text::TextInput::INDEX;
+            let value = node.inputs.get(index)?;
+            if !matches!(value, NodeInput::Value { exposed: false, .. })
+                || !matches!(value.as_value(), Some(TaggedValue::String(value)) if value.len() <= MAX_PREVIEW_VALUES)
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(artwork_text::IDENTIFIER)?,
+                vec![(index, value)],
+                SavedGraphicProfile::Text,
+            )
         }
         DocumentNodeImplementation::ProtoNode(identifier)
             if identifier == &rectangle::IDENTIFIER =>
