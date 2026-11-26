@@ -19164,6 +19164,7 @@ dependencies = [
  "sha2 0.10.9",
  "sim_model",
  "sim_tensor",
+ "smol",
  "thiserror 2.0.21",
 ]
 

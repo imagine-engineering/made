@@ -1503,7 +1503,7 @@ mod tests {
             );
         }
         write_artifact(
-            "val-sampler-001.json",
+            "val-sampler-euler-slice-001.json",
             "VAL-SAMPLER-001",
             "Task 36 Euler COMFY-MODEL-0179 trajectory, callback, RNG checkpoint, boundary, and cancellation slice",
             serde_json::Value::Object(fixture_digests),
