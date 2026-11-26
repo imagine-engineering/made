@@ -3489,6 +3489,39 @@ impl InspectedGddV1 {
         selected: &[GddGraphNode],
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        self.paste_root_layers(clipboard, selected, async |_, _| Ok(()), budget)
+            .await
+    }
+
+    pub async fn paste_root_layers_in_canvas_copy(
+        &self,
+        clipboard: &str,
+        selected: &[GddGraphNode],
+        target: GddCanvasRenderTarget<'_>,
+        camera: PTZ,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        self.paste_root_layers(
+            clipboard,
+            selected,
+            async |document, layers| {
+                Self::center_pasted_canvas_layers(document, layers, target, camera).await
+            },
+            budget,
+        )
+        .await
+    }
+
+    async fn paste_root_layers(
+        &self,
+        clipboard: &str,
+        selected: &[GddGraphNode],
+        position: impl AsyncFnOnce(
+            &mut DocumentMessageHandler,
+            &[LayerNodeIdentifier],
+        ) -> Result<(), GddArchiveError>,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
         use graphite_editor::messages::prelude::*;
 
         if self.hot_log_len() != 0 {
@@ -3528,7 +3561,7 @@ impl InspectedGddV1 {
         }
         self.finish_root_layer_edit_with_resources(
             &mut document,
-            |document| {
+            async |document| {
                 let applied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     if document
                         .network_interface
@@ -3544,8 +3577,6 @@ impl InspectedGddV1 {
                 }))
                 .map_err(|_| GddArchiveError::UnsupportedLayerClipboard)?;
                 applied?;
-                // The Layers inspector has no active artwork viewport. Its Canvas
-                // opens with a fitted camera and retains the saved layer offsets.
                 let interface = &document.network_interface;
                 if layers
                     .iter()
@@ -3553,12 +3584,61 @@ impl InspectedGddV1 {
                 {
                     return Err(GddArchiveError::IncompleteGraphNodeEdit);
                 }
-                Ok(())
+                position(document, layers).await
             },
             resources,
             budget,
         )
         .await
+    }
+
+    async fn center_pasted_canvas_layers(
+        document: &mut DocumentMessageHandler,
+        layers: &[LayerNodeIdentifier],
+        target: GddCanvasRenderTarget<'_>,
+        camera: PTZ,
+    ) -> Result<(), GddArchiveError> {
+        use graphite_editor::messages::prelude::*;
+
+        let logical_size = target.resolution.as_dvec2() / target.scale;
+        let transform = document
+            .navigation_handler
+            .calculate_offset_transform(logical_size / 2., &camera);
+        if !logical_size.is_finite()
+            || logical_size.min_element() <= 0.
+            || !transform.is_finite()
+            || transform.matrix2.determinant() == 0.
+        {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        let (_, detached) = saved_canvas_network(document.network_interface.document_network())?;
+        let render = Self::render_detached_canvas(&detached, target, transform).await?;
+        set_canvas_layer_metadata(&mut document.network_interface, &render, transform);
+        document.document_ptz = camera;
+        let mut viewport = ViewportMessageHandler::default();
+        viewport.process_message(
+            ViewportMessage::Update {
+                x: 0.,
+                y: 0.,
+                width: logical_size.x,
+                height: logical_size.y,
+                scale: target.scale,
+            },
+            &mut VecDeque::new(),
+            (),
+        );
+        let commands = with_layer_portfolio(document, &viewport, |portfolio, context| {
+            let mut responses = VecDeque::new();
+            portfolio.process_message(
+                PortfolioMessage::CenterLayers {
+                    layers: layers.to_vec(),
+                },
+                &mut responses,
+                context,
+            );
+            responses
+        })?;
+        apply_document_layer_commands(document, commands)
     }
 
     async fn graph_templates_for_selection(
@@ -4348,17 +4428,7 @@ impl InspectedGddV1 {
         if let Some(ArtboardCanvasDraft::Resize(node, pick, geometry)) = draft {
             apply_document_artboard_resize(&mut interface, node, pick, geometry)?;
         }
-        let mut detached = NodeNetwork {
-            exports: vec![NodeInput::node(root, 0)],
-            ..Default::default()
-        };
-        collect_saved_layer_preview_branch(
-            interface.document_network(),
-            root,
-            &mut detached,
-            &mut BTreeSet::new(),
-            true,
-        )?;
+        let (_, mut detached) = saved_canvas_network(interface.document_network())?;
         let saved = detached
             .nodes
             .get(&root)
@@ -4665,46 +4735,10 @@ impl InspectedGddV1 {
     ) -> Box<DocumentMessageHandler> {
         let mut document = self.canvas_snapping_defaults();
         document.document_ptz = camera;
-        interface.set_document_to_viewport_transform(
-            document
-                .navigation_handler
-                .calculate_offset_transform(viewport_size / 2., &camera),
-        );
-        let metadata = &render.metadata;
-        interface.update_transforms(
-            metadata.upstream_footprints.clone(),
-            metadata.local_transforms.clone(),
-        );
-        interface.update_first_element_source_id(metadata.first_element_source_id.clone());
-        let source_layer = |id| {
-            (interface.document_network().nodes.contains_key(id) && interface.is_layer(id, &[]))
-                .then(|| LayerNodeIdentifier::new(*id, &interface))
-        };
-        let click_targets = metadata
-            .click_targets
-            .iter()
-            .filter_map(|(id, targets)| Some((source_layer(id)?, targets.clone())))
-            .collect();
-        let outlines = metadata
-            .outlines
-            .iter()
-            .filter_map(|(id, outlines)| Some((source_layer(id)?, outlines.clone())))
-            .collect();
-        let vector_data = metadata
-            .vector_data
-            .iter()
-            .filter_map(|(id, vector)| Some((source_layer(id)?, vector.clone())))
-            .collect();
-        let appearance_attributes = metadata
-            .appearance_attributes
-            .iter()
-            .filter_map(|(id, appearance)| Some((source_layer(id)?, appearance.clone())))
-            .collect();
-        interface.update_click_targets(click_targets);
-        interface.update_outlines(outlines);
-        interface.update_clip_targets(metadata.clip_targets.clone());
-        interface.update_vector_data(vector_data);
-        interface.update_appearance_attributes(appearance_attributes);
+        let transform = document
+            .navigation_handler
+            .calculate_offset_transform(viewport_size / 2., &camera);
+        set_canvas_layer_metadata(&mut interface, render, transform);
         document.network_interface = interface;
         document
     }
@@ -6498,14 +6532,19 @@ impl InspectedGddV1 {
         edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
-        self.finish_root_layer_edit_with_resources(document, edit, Vec::new(), budget)
-            .await
+        self.finish_root_layer_edit_with_resources(
+            document,
+            async |document| edit(document),
+            Vec::new(),
+            budget,
+        )
+        .await
     }
 
     async fn finish_root_layer_edit_with_resources(
         &self,
         document: &mut DocumentMessageHandler,
-        edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
+        edit: impl AsyncFnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
         imported: Vec<ClipboardResource>,
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
@@ -6532,7 +6571,7 @@ impl InspectedGddV1 {
         let imported_bytes = collect_layer_clipboard_resources(&mut resources, imported)?;
         staged.store_declarations(&imported_bytes, &budget)?;
         let collapsed = document.collapsed.clone();
-        edit(document)?;
+        edit(document).await?;
         if collapsed != document.collapsed {
             let mut settings = owner.view_settings().clone();
             settings.insert(
@@ -8474,6 +8513,31 @@ fn plan_source_layer_clipboard(
     message: graphite_editor::messages::prelude::ClipboardMessage,
 ) -> Result<VecDeque<graphite_editor::messages::prelude::Message>, GddArchiveError> {
     use graphite_editor::messages::prelude::*;
+    with_layer_portfolio(document, &Default::default(), |portfolio, context| {
+        let mut responses = VecDeque::new();
+        ClipboardMessageHandler::default().process_message(
+            message,
+            &mut responses,
+            ClipboardMessageContext {
+                portfolio,
+                current_tool: context.current_tool,
+                resource_storage: context.resource_storage,
+            },
+        );
+        responses
+    })
+}
+
+fn with_layer_portfolio<T>(
+    document: &mut DocumentMessageHandler,
+    viewport: &graphite_editor::messages::prelude::ViewportMessageHandler,
+    edit: impl FnOnce(
+        &mut graphite_editor::messages::prelude::PortfolioMessageHandler,
+        graphite_editor::messages::prelude::PortfolioMessageContext<'_>,
+    ) -> T,
+) -> Result<T, GddArchiveError> {
+    use graphite_editor::messages::prelude::*;
+
     let document_id = DocumentId(0);
     let mut portfolio = PortfolioMessageHandler::default();
     portfolio
@@ -8481,35 +8545,30 @@ fn plan_source_layer_clipboard(
         .insert(document_id, std::mem::take(document));
     let tool = graphite_editor::messages::tool::utility_types::ToolType::Select;
     let resource_storage = ResourceStorageMessageHandler::default();
+    let ipp = Default::default();
+    let preferences = Default::default();
+    let animation = Default::default();
+    let context = || PortfolioMessageContext {
+        ipp: &ipp,
+        preferences: &preferences,
+        animation: &animation,
+        current_tool: &tool,
+        reset_node_definitions_on_open: false,
+        timing_information: Default::default(),
+        viewport,
+        resource_storage: &resource_storage,
+    };
     portfolio.process_message(
         PortfolioMessage::SelectDocument { document_id },
         &mut VecDeque::new(),
-        PortfolioMessageContext {
-            ipp: &Default::default(),
-            preferences: &Default::default(),
-            animation: &Default::default(),
-            current_tool: &tool,
-            reset_node_definitions_on_open: false,
-            timing_information: Default::default(),
-            viewport: &Default::default(),
-            resource_storage: &resource_storage,
-        },
+        context(),
     );
-    let mut responses = VecDeque::new();
-    ClipboardMessageHandler::default().process_message(
-        message,
-        &mut responses,
-        ClipboardMessageContext {
-            portfolio: &mut portfolio,
-            current_tool: &tool,
-            resource_storage: &resource_storage,
-        },
-    );
+    let result = edit(&mut portfolio, context());
     *document = portfolio
         .documents
         .remove(&document_id)
         .ok_or(GddArchiveError::InvalidRootLayerGraph)?;
-    Ok(responses)
+    Ok(result)
 }
 
 fn plan_document_layer_command(
@@ -8602,6 +8661,29 @@ fn apply_document_layer_commands(
                 )
                 .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
                 context.transform_set(transform, transform_in, skip_rerender);
+            }
+            DocumentMessage::GraphOperation(GraphOperationMessage::ResizeArtboard {
+                layer,
+                location,
+                dimensions,
+            }) => {
+                if (GddArtboardGeometry {
+                    location,
+                    dimensions,
+                })
+                .normalized()
+                .is_none()
+                {
+                    return Err(GddArchiveError::InvalidArtboardGeometry);
+                }
+                let mut refresh = VecDeque::new();
+                let mut context = ModifyInputsContext::new_with_layer(
+                    layer,
+                    &mut document.network_interface,
+                    &mut refresh,
+                )
+                .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
+                context.resize_artboard(location, dimensions);
             }
             DocumentMessage::GraphOperation(GraphOperationMessage::BlendModeSet {
                 layer,
@@ -8927,6 +9009,49 @@ fn fit_canvas_camera(origin: DVec2, size: DVec2, logical_size: DVec2) -> PTZ {
     camera
         .set_zoom((logical_size / size).min_element() * VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR);
     camera
+}
+
+fn set_canvas_layer_metadata(
+    interface: &mut NodeNetworkInterface,
+    render: &RenderOutput,
+    transform: DAffine2,
+) {
+    interface.set_document_to_viewport_transform(transform);
+    let metadata = &render.metadata;
+    interface.update_transforms(
+        metadata.upstream_footprints.clone(),
+        metadata.local_transforms.clone(),
+    );
+    interface.update_first_element_source_id(metadata.first_element_source_id.clone());
+    let source_layer = |id| {
+        (interface.document_network().nodes.contains_key(id) && interface.is_layer(id, &[]))
+            .then(|| LayerNodeIdentifier::new(*id, interface))
+    };
+    let click_targets = metadata
+        .click_targets
+        .iter()
+        .filter_map(|(id, targets)| Some((source_layer(id)?, targets.clone())))
+        .collect();
+    let outlines = metadata
+        .outlines
+        .iter()
+        .filter_map(|(id, outlines)| Some((source_layer(id)?, outlines.clone())))
+        .collect();
+    let vector_data = metadata
+        .vector_data
+        .iter()
+        .filter_map(|(id, vector)| Some((source_layer(id)?, vector.clone())))
+        .collect();
+    let appearance_attributes = metadata
+        .appearance_attributes
+        .iter()
+        .filter_map(|(id, appearance)| Some((source_layer(id)?, appearance.clone())))
+        .collect();
+    interface.update_click_targets(click_targets);
+    interface.update_outlines(outlines);
+    interface.update_clip_targets(metadata.clip_targets.clone());
+    interface.update_vector_data(vector_data);
+    interface.update_appearance_attributes(appearance_attributes);
 }
 
 fn canvas_render_configuration(resolution: UVec2, scale: f64, transform: DAffine2) -> RenderConfig {
@@ -9377,6 +9502,24 @@ fn enclosing_network_inputs<'a>(root: &'a NodeNetwork, path: &[NodeId]) -> Optio
         }
         None => Some(&[]),
     }
+}
+
+fn saved_canvas_network(source: &NodeNetwork) -> Result<(NodeId, NodeNetwork), GddArchiveError> {
+    let [
+        NodeInput::Node {
+            node_id: root,
+            output_index: 0,
+        },
+    ] = source.exports.as_slice()
+    else {
+        return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+    };
+    let mut detached = NodeNetwork {
+        exports: vec![NodeInput::node(*root, 0)],
+        ..Default::default()
+    };
+    collect_saved_layer_preview_branch(source, *root, &mut detached, &mut BTreeSet::new(), true)?;
+    Ok((*root, detached))
 }
 
 fn collect_layer_preview_node(

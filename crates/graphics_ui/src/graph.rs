@@ -2380,7 +2380,7 @@ pub fn bind_keys(cx: &mut App) {
                 "ctrl-v"
             },
             PasteSavedLayers,
-            Some("GraphiteSavedLayers"),
+            Some("GraphiteSavedLayers || GraphiteCanvas"),
         ),
         gpui::KeyBinding::new(
             select_all,

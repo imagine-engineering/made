@@ -66,8 +66,8 @@ use crate::canvas::{
 use crate::canvas_grid::{CanvasGrid, GridOptionsForm};
 use crate::canvas_overlay::CanvasOverlay;
 use crate::graph::{
-    SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource, SavedGraphDragStart,
-    SavedGraphMenuTarget, SavedGraphView,
+    PasteSavedLayers, SavedGraphAction, SavedGraphBoxSelection, SavedGraphConnectionSource,
+    SavedGraphDragStart, SavedGraphMenuTarget, SavedGraphView,
 };
 use crate::node_catalog::{CatalogNodeInsert, NodeCatalog};
 
@@ -245,6 +245,7 @@ struct PreparedWorkingSnapshot {
     inspection: GddGraphInspection,
     cut_clipboard: Option<CutClipboard>,
     layer_selection: Option<Vec<StorageNodeId>>,
+    canvas_paste: Option<SavedScenePaste>,
 }
 
 enum CutClipboard {
@@ -760,6 +761,12 @@ struct SavedSceneGraphOverlay {
     fade_error: bool,
 }
 
+struct SavedScenePaste {
+    instance: Arc<()>,
+    target: SavedSceneTarget,
+    camera: PTZ,
+}
+
 enum SavedScenePick {
     Artboard(GddArtboardCanvasPick),
     Artwork {
@@ -959,6 +966,23 @@ impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
 }
 
 impl SavedSceneCanvas {
+    fn paste_target(&self) -> Option<(SavedSceneTarget, PTZ)> {
+        if self.graph_overlay.is_some()
+            || self.grid_options.is_some()
+            || self.pan.is_some()
+            || self.artboard_draw.is_some()
+            || self.artboard_drag.is_some()
+        {
+            return None;
+        }
+        let camera = match self.frame {
+            SavedSceneFrame::Ready(_) => self.navigation?.camera,
+            SavedSceneFrame::Blank => self.camera_override.unwrap_or_default(),
+            _ => return None,
+        };
+        Some((self.target?, camera))
+    }
+
     fn accept_frame(
         &mut self,
         frame: PreparedSceneFrame,
@@ -6297,6 +6321,7 @@ impl GraphiteDocumentItem {
                         inspection,
                         cut_clipboard: Some(CutClipboard::Nodes(text)),
                         layer_selection: None,
+                        canvas_paste: None,
                     })
                 });
                 self.install_working_snapshot(revision, staged, window, cx);
@@ -7124,6 +7149,7 @@ impl GraphiteDocumentItem {
                     inspection,
                     cut_clipboard: Some(CutClipboard::Layers(text)),
                     layer_selection: Some(Vec::new()),
+                    canvas_paste: None,
                 })
             });
             self.install_working_snapshot(revision, staged, window, cx);
@@ -7189,6 +7215,69 @@ impl GraphiteDocumentItem {
             window,
             cx,
         );
+    }
+
+    fn paste_scene_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(canvas) = &self.scene_canvas else {
+            return false;
+        };
+        let model = self.model.read(cx);
+        let Some((contents, working)) = model.gdd_contents().zip(model.working.as_ref()) else {
+            return false;
+        };
+        let Some((target, camera)) = canvas.paste_target() else {
+            return false;
+        };
+        let Some(text) = cx
+            .read_from_clipboard()
+            .and_then(|item| item.text())
+            .filter(|text| text.starts_with("graphite: "))
+        else {
+            return false;
+        };
+        if self.copy_task.is_some() || !Arc::ptr_eq(&canvas.revision, &model.revision) {
+            return true;
+        }
+        let storage_id = canvas
+            .artwork_hit
+            .as_ref()
+            .and_then(|hit| hit.layer_path().last().copied())
+            .or(canvas.selected_artboard);
+        let selection: Vec<_> = working
+            .inspection
+            .nodes
+            .iter()
+            .filter(|node| Some(node.storage_id()) == storage_id)
+            .cloned()
+            .collect();
+        let canvas_paste = SavedScenePaste {
+            instance: canvas.instance.clone(),
+            target,
+            camera,
+        };
+        let contents = contents.clone();
+        let revision = model.revision.clone();
+        let mode = self.canvas_render_mode.clone();
+        let staged = cx.background_spawn(async move {
+            let (contents, selection) =
+                futures::executor::block_on(contents.paste_root_layers_in_canvas_copy(
+                    &text,
+                    &selection,
+                    mode.target(target),
+                    camera,
+                    ARCHIVE_BUDGET,
+                ))?;
+            let inspection = contents.graph_inspection().await?;
+            anyhow::Ok(PreparedWorkingSnapshot {
+                contents: Arc::new(contents),
+                inspection,
+                cut_clipboard: None,
+                layer_selection: Some(selection),
+                canvas_paste: Some(canvas_paste),
+            })
+        });
+        self.install_working_snapshot(revision, staged, window, cx);
+        true
     }
 
     fn copy_graph_clipboard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -7610,6 +7699,7 @@ impl GraphiteDocumentItem {
                 inspection,
                 cut_clipboard: None,
                 layer_selection: None,
+                canvas_paste: None,
             })
         });
         self.install_working_snapshot(expected, staged, window, cx);
@@ -7632,6 +7722,7 @@ impl GraphiteDocumentItem {
                 inspection,
                 cut_clipboard: None,
                 layer_selection: Some(selection),
+                canvas_paste: None,
             })
         });
         self.install_working_snapshot(expected, staged, window, cx);
@@ -7650,6 +7741,15 @@ impl GraphiteDocumentItem {
             if let Err(error) = item.update_in(cx, |item, window, cx| {
                 item.copy_task = None;
                 let result = staged.and_then(|staged| {
+                    if let Some(paste) = &staged.canvas_paste {
+                        ensure!(
+                            item.scene_canvas.as_ref().is_some_and(|canvas|
+                                Arc::ptr_eq(&canvas.instance, &paste.instance)
+                                    && canvas.paste_target() == Some((paste.target, paste.camera))
+                            ),
+                            "The Canvas view changed before pasting Graphite layers. Try again."
+                        );
+                    }
                     if let Some(CutClipboard::Layers(text)) = &staged.cut_clipboard {
                         let model = item.model.read(cx);
                         ensure!(
@@ -7671,6 +7771,11 @@ impl GraphiteDocumentItem {
                             cx,
                         )
                     })?;
+                    if let Some(paste) = staged.canvas_paste
+                        && let Some(canvas) = &mut item.scene_canvas
+                    {
+                        canvas.camera_override = Some(paste.camera);
+                    }
                     Ok((staged.cut_clipboard, staged.layer_selection))
                 });
                 match result {
@@ -10309,6 +10414,13 @@ impl Render for GraphiteDocumentItem {
             }))
             .on_action(cx.listener(|item, _: &editor::actions::Redo, window, cx| {
                 item.route_working_history(GddHistoryDirection::Redo, window, cx);
+            }))
+            .on_action(cx.listener(|item, _: &PasteSavedLayers, window, cx| {
+                if item.paste_scene_layers(window, cx) {
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
             }))
             .size_full();
         if let Some(canvas) = &self.scene_canvas {
@@ -15211,6 +15323,153 @@ mod tests {
                 .load_bytes(&path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_032_2_workspace_centers_offscreen_artboard_paste(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive().await;
+        let source = open_gdd_archive(&original.clone().into(), ARCHIVE_BUDGET)
+            .await
+            .expect("source document");
+        let source_layer = source
+            .graph_nodes()
+            .await
+            .expect("source layers")
+            .into_iter()
+            .find(|node| node.display_name() == "Second Artboard")
+            .expect("source Artboard");
+        let source_geometry = source_layer.artboard_geometry().expect("source geometry");
+        let clipboard = source
+            .copy_root_layers_to_clipboard(
+                std::slice::from_ref(&source_layer),
+                None,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("editable clipboard Artboard");
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/paste-in-canvas.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source file");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let mut camera = PTZ::default();
+        camera.pan = DVec2::new(1000., 700.);
+        item.update_in(window, |item, window, cx| {
+            let canvas = item.scene_canvas.as_mut().expect("Canvas");
+            let target = canvas.target.expect("measured Canvas");
+            canvas.selected_artboard = Some(source_layer.storage_id());
+            canvas.camera_override = Some(camera);
+            item.update_scene_canvas(Some(target), true, window, cx);
+            item.focus_handle.focus(window, cx);
+        });
+        window.run_until_parked();
+        paint(window);
+        let (target, navigation) = item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let navigation = canvas.navigation.expect("rendered Canvas");
+            assert_eq!(navigation.camera, camera);
+            (canvas.target.expect("measured Canvas"), navigation)
+        });
+        let center = target.logical_size() / 2.;
+        let to_pane = navigation.document_to_pane(target.logical_size());
+        assert!(
+            to_pane
+                .transform_point2(source_geometry.location)
+                .distance(center)
+                > target.logical_size().max_element()
+        );
+        window.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string(clipboard.clone())));
+        saved_graph_shortcut(window, "v");
+        let pasted = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let working = item.model.read(cx).working.as_ref().expect("working graph");
+            let layer = working
+                .inspection
+                .nodes
+                .iter()
+                .find(|layer| {
+                    layer.display_name() == "Second Artboard"
+                        && layer.storage_id() != source_layer.storage_id()
+                })
+                .expect("pasted Artboard");
+            let geometry = layer.artboard_geometry().expect("pasted geometry");
+            assert_eq!(geometry.dimensions, source_geometry.dimensions);
+            let pasted_center = geometry.location + geometry.dimensions / 2.;
+            let observed = to_pane.transform_point2(pasted_center);
+            assert!(
+                observed.distance(center) <= 1.,
+                "pasted center {observed:?}, viewport center {center:?}, geometry {geometry:?}"
+            );
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert_eq!(canvas.navigation.expect("updated Canvas").camera, camera);
+            (layer.storage_id(), geometry)
+        });
+        window.dispatch_action(editor::actions::Undo);
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let working = item.model.read(cx).working.as_ref().expect("working graph");
+            assert!(
+                !working
+                    .inspection
+                    .nodes
+                    .iter()
+                    .any(|node| node.storage_id() == pasted.0)
+            );
+        });
+        window.dispatch_action(editor::actions::Redo);
+        window.run_until_parked();
+        paint(window);
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        let destination = PathBuf::from("/project/centered-paste.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved centered paste");
+        let nodes = reopened.graph_nodes().await.expect("saved layers");
+        assert_eq!(
+            nodes
+                .iter()
+                .find(|node| node.storage_id() == pasted.0)
+                .and_then(GddGraphNode::artboard_geometry),
+            Some(pasted.1)
+        );
+        assert_eq!(
+            nodes
+                .iter()
+                .find(|node| node.storage_id() == source_layer.storage_id())
+                .and_then(GddGraphNode::artboard_geometry),
+            Some(source_geometry)
+        );
+        window.update(|_, cx| {
+            assert_eq!(
+                cx.read_from_clipboard().and_then(|item| item.text()),
+                Some(clipboard)
+            );
+        });
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source bytes"),
             original
         );
     }
