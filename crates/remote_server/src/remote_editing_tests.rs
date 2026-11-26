@@ -794,7 +794,7 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
-    fn register_maven_navigation_languages(registry: &LanguageRegistry) {
+    fn register_jvm_navigation_languages(registry: &LanguageRegistry) {
         for (language, suffix, name, grammar) in [
             (
                 "Java",
@@ -905,7 +905,7 @@ mod jvm_tools_runtime_tests {
         });
         let client_languages = project.read_with(cx, |project, _| project.languages().clone());
         for registry in [&host_languages, &client_languages] {
-            register_maven_navigation_languages(registry);
+            register_jvm_navigation_languages(registry);
         }
         let (worktree, _) = project
             .update(cx, |project, cx| {
@@ -1033,8 +1033,9 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
-    async fn connect_docker_maven_project(
+    async fn connect_docker_jvm_project(
         container_variable: &str,
+        project_root: &Path,
         installed_extensions: &[(&str, &str)],
         cx: &mut TestAppContext,
     ) -> (Entity<Project>, Entity<worktree::Worktree>) {
@@ -1097,13 +1098,13 @@ mod jvm_tools_runtime_tests {
         assert!(extensions.missing_extensions.is_empty(), "{extensions:?}");
         let project = build_project_with_worktree_trust(remote, true, cx);
         let client_languages = project.read_with(cx, |project, _| project.languages().clone());
-        register_maven_navigation_languages(&client_languages);
+        register_jvm_navigation_languages(&client_languages);
         let (worktree, _) = project
             .update(cx, |project, cx| {
-                project.find_or_create_worktree(Path::new("/workspaces/maven"), true, cx)
+                project.find_or_create_worktree(project_root, true, cx)
             })
             .await
-            .expect("open the container's Maven worktree");
+            .expect("open the container's JVM worktree");
         worktree
             .update(cx, |worktree, _| worktree.wait_for_snapshot(1))
             .await
@@ -1112,7 +1113,7 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
-    fn trust_docker_maven_worktree(
+    fn trust_docker_jvm_worktree(
         project: &Entity<Project>,
         worktree_id: settings::WorktreeId,
         cx: &mut TestAppContext,
@@ -1134,11 +1135,49 @@ mod jvm_tools_runtime_tests {
     #[gpui::test]
     #[ignore = "requires GROOVY_MAVEN_NAVIGATION_CONTAINER with pinned offline JVM providers and fixture"]
     async fn docker_maven_java_definition_opens_host_kotlin_source(cx: &mut TestAppContext) {
-        use language::PointUtf16;
+        verify_docker_java_definition_opens_host_kotlin_source(
+            "GROOVY_MAVEN_NAVIGATION_CONTAINER",
+            Path::new("/workspaces/maven"),
+            project::jvm_project::JdtlsImportedBuildKind::Maven,
+            language::PointUtf16::new(6, 22),
+            cx,
+        )
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_GRADLE_NAVIGATION_CONTAINER with pinned offline JVM providers and fixture"]
+    async fn docker_gradle_java_definition_opens_host_kotlin_source(cx: &mut TestAppContext) {
+        verify_docker_java_definition_opens_host_kotlin_source(
+            "GROOVY_GRADLE_NAVIGATION_CONTAINER",
+            Path::new("/workspaces/gradle"),
+            project::jvm_project::JdtlsImportedBuildKind::Gradle,
+            language::PointUtf16::new(4, 33),
+            cx,
+        )
+        .await;
+    }
+
+    #[cfg(unix)]
+    async fn verify_docker_java_definition_opens_host_kotlin_source(
+        container_variable: &str,
+        project_root: &Path,
+        build_kind: project::jvm_project::JdtlsImportedBuildKind,
+        greeting_reference: language::PointUtf16,
+        cx: &mut TestAppContext,
+    ) {
+        use project::jvm_project::{JdtlsImportedBuildKind, KotlinBuildSystem};
         use std::time::{Duration, Instant};
 
-        let (project, worktree) = connect_docker_maven_project(
-            "GROOVY_MAVEN_NAVIGATION_CONTAINER",
+        let kotlin_build_system = match build_kind {
+            JdtlsImportedBuildKind::Maven => KotlinBuildSystem::Maven,
+            JdtlsImportedBuildKind::Gradle => KotlinBuildSystem::Gradle,
+            JdtlsImportedBuildKind::Unknown => panic!("the fixture must use a known build system"),
+        };
+        let (project, worktree) = connect_docker_jvm_project(
+            container_variable,
+            project_root,
             &[("java", "6.8.30"), ("kotlin", "0.3.5")],
             cx,
         )
@@ -1169,7 +1208,7 @@ mod jvm_tools_runtime_tests {
             store.read_with(cx, |store, _| store.language_server_statuses().count()),
             0
         );
-        trust_docker_maven_worktree(&project, worktree_id, cx);
+        trust_docker_jvm_worktree(&project, worktree_id, cx);
         store.update(cx, |store, cx| {
             store
                 .set_default_jvm_project_languages_enabled(true, cx)
@@ -1204,21 +1243,34 @@ mod jvm_tools_runtime_tests {
                     .jdtls_project_snapshot(worktree_id)
                     .is_some_and(|(snapshot, current)| {
                         current
-                            && snapshot.projects.iter().any(|project| {
-                                project
-                                    .project_references
-                                    .iter()
-                                    .any(|reference| reference == "library")
+                            && ["application", "library"].iter().all(|module| {
+                                snapshot.projects.iter().any(|project| {
+                                    project.module_root.path.as_ref() == rel_path(module)
+                                        && project.imported_build_kind == build_kind
+                                        && (*module != "application"
+                                            || project
+                                                .project_references
+                                                .iter()
+                                                .any(|reference| reference == "library"))
+                                })
                             })
                     })
-                    && store
-                        .kotlin_workspace_snapshot(worktree_id)
-                        .is_some_and(|(snapshot, current)| current && snapshot.projects.len() >= 2)
+                    && store.kotlin_workspace_snapshot(worktree_id).is_some_and(
+                        |(snapshot, current)| {
+                            current
+                                && ["application", "library"].iter().all(|module| {
+                                    snapshot.projects.iter().any(|project| {
+                                        project.module_root.path.as_ref() == rel_path(module)
+                                            && project.build_system == kotlin_build_system
+                                    })
+                                })
+                        },
+                    )
             });
             if ready && Instant::now() >= navigate_at {
                 let links = store
                     .update(cx, |store, cx| {
-                        store.definitions(&java_buffer, PointUtf16::new(6, 22), cx)
+                        store.definitions(&java_buffer, greeting_reference, cx)
                     })
                     .await
                     .expect("container definition request")
@@ -1242,13 +1294,27 @@ mod jvm_tools_runtime_tests {
                             snapshot
                                 .projects
                                 .iter()
-                                .map(|project| project.project_references.clone())
+                                .map(|project| (
+                                    project.module_root.path.clone(),
+                                    project.imported_build_kind,
+                                    project.project_references.clone(),
+                                ))
                                 .collect::<Vec<_>>(),
                             current
                         )),
                     store
                         .kotlin_workspace_snapshot(worktree_id)
-                        .map(|(snapshot, current)| (snapshot.projects.len(), current)),
+                        .map(|(snapshot, current)| (
+                            snapshot
+                                .projects
+                                .iter()
+                                .map(|project| (
+                                    project.module_root.path.clone(),
+                                    project.build_system,
+                                ))
+                                .collect::<Vec<_>>(),
+                            current,
+                        )),
                     store.jdtls_project_query_failed(worktree_id),
                     store.kotlin_workspace_query_failed(worktree_id),
                 ))
@@ -1283,7 +1349,9 @@ mod jvm_tools_runtime_tests {
                 assert!(store.language_server_for_id(id).is_none());
             }
         });
-        verify_docker_dependency_path_revocation(&project, worktree_id, cx).await;
+        if build_kind == JdtlsImportedBuildKind::Maven {
+            verify_docker_dependency_path_revocation(&project, worktree_id, cx).await;
+        }
     }
 
     #[cfg(unix)]
@@ -1447,9 +1515,13 @@ mod jvm_tools_runtime_tests {
         };
         use std::time::{Duration, Instant};
 
-        let (project, worktree) =
-            connect_docker_maven_project("GROOVY_JAVA_DEBUG_CONTAINER", &[("java", "6.8.30")], cx)
-                .await;
+        let (project, worktree) = connect_docker_jvm_project(
+            "GROOVY_JAVA_DEBUG_CONTAINER",
+            Path::new("/workspaces/maven"),
+            &[("java", "6.8.30")],
+            cx,
+        )
+        .await;
         cx.update(dap::transport::use_real_transport_for_test);
         let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
         let source = rel_path("application/src/main/java/evidence/DebugMain.java");
@@ -1491,7 +1563,7 @@ mod jvm_tools_runtime_tests {
             denied.to_string().contains("Trust the project"),
             "{denied:#}"
         );
-        trust_docker_maven_worktree(&project, worktree_id, cx);
+        trust_docker_jvm_worktree(&project, worktree_id, cx);
 
         let (java_buffer, _java_handle) = project
             .update(cx, |project, cx| {

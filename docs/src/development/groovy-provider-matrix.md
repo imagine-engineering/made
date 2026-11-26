@@ -177,13 +177,32 @@ on the host. Use a development Remote Server with `jvm-tools` and set
 development companion, SHA-256
 `6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
 
-The same connected Dependencies panel removes a module when the host marks
-its paths private. The host reports the privacy change with the worktree
-update. Groovy discards the older Java and Kotlin snapshots for that
-worktree and requests fresh filtered facts. In the offline Docker fixture,
-marking the Maven library private removed its rows and navigation targets
-while the application remained visible. Restoring the settings recovered
-both providers' library rows without a manual refresh.
+The opt-in `docker_gradle_java_definition_opens_host_kotlin_source` test
+uses the same Docker transport with the offline Gradle 8.13 reactor. Both
+providers identify the current application and library as Gradle modules.
+JDTLS reports the application's dependency on the library, and the client
+receives the library's `Greeting.kt` as a remote buffer when it requests
+Go to Definition on the Java `Greeting` reference. The host denies provider
+startup before project trust. The connected client owns neither provider
+process.
+
+To replay, set `GROOVY_GRADLE_NAVIGATION_CONTAINER` to the full ID of a
+fresh, network-disabled Linux ARM64 container with the offline-built
+fixture at `/workspaces/gradle`. Use the same pinned extensions, servers,
+companion and Remote Server setup as for Maven. In the disposable project's
+JDTLS settings, select the cached Gradle 8.13 distribution, enable offline
+Gradle import and Kotlin support, and select the build JDK separately from
+the JDTLS launcher JDK. Supply those settings in
+`lsp.jdtls.initialization_options.settings` as well as `lsp.jdtls.settings`
+so the first import uses them before the live configuration notification.
+
+The connected Maven test also checks that the Dependencies panel removes a
+module when the host marks its paths private. The host reports the privacy
+change with the worktree update. Groovy discards the older Java and Kotlin
+snapshots for that worktree and requests fresh filtered facts. In the offline
+Docker fixture, marking the Maven library private removed its rows and
+navigation targets while the application remained visible. Restoring the
+settings recovered both providers' library rows without a manual refresh.
 
 The opt-in `selected_maven_junit_uses_docker_host_through_tests_panel` case
 loads the shared Tests panel and selects `GreetingTest.messageIsAvailable`.
