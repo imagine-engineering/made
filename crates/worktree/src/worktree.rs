@@ -459,7 +459,8 @@ enum ScanState {
 }
 
 struct UpdateObservationState {
-    snapshots_tx: mpsc::UnboundedSender<(LocalSnapshot, UpdatedEntriesSet)>,
+    snapshots_tx: mpsc::UnboundedSender<(LocalSnapshot, UpdatedEntriesSet, bool)>,
+    direct: bool,
     resume_updates: watch::Sender<()>,
     _maintain_remote_snapshot: Task<Option<()>>,
 }
@@ -468,6 +469,7 @@ struct UpdateObservationState {
 pub enum Event {
     LocalSettingsInvalidated(Vec<Arc<RelPath>>),
     UpdatedEntries(UpdatedEntriesSet),
+    PathPrivacyChanged,
     UpdatedGitRepositories(UpdatedGitRepositoriesSet),
     UpdatedRootRepoCommonDir {
         old: Option<Arc<SanitizedPath>>,
@@ -709,6 +711,7 @@ impl Worktree {
                         let old_root_repo_common_dir = this.snapshot.root_repo_common_dir.clone();
                         let old_root_repo_is_linked_worktree =
                             this.snapshot.root_repo_is_linked_worktree;
+                        let mut path_privacy_changed = false;
                         let mut changed_entries: Vec<(Arc<RelPath>, ProjectEntryId, PathChange)> =
                             Vec::new();
                         {
@@ -718,6 +721,7 @@ impl Worktree {
                             // contains them, and the wire format only carries their ids).
                             let old_snapshot = mem::replace(&mut this.snapshot, lock.0.clone());
                             for update in lock.1.drain(..) {
+                                path_privacy_changed |= update.path_privacy_changed;
                                 for entry_id in &update.removed_entries {
                                     let entry_id = ProjectEntryId::from_proto(*entry_id);
                                     if let Some(entry) = old_snapshot.entry_for_id(entry_id) {
@@ -749,6 +753,9 @@ impl Worktree {
 
                         if !changed_entries.is_empty() {
                             cx.emit(Event::UpdatedEntries(changed_entries.into()));
+                        }
+                        if path_privacy_changed {
+                            cx.emit(Event::PathPrivacyChanged);
                         }
                         let is_first_update = !this.received_initial_update;
                         this.received_initial_update = true;
@@ -1545,12 +1552,25 @@ impl LocalWorktree {
                 != new_snapshot.root_repo_is_linked_worktree;
         let old_root_repo_common_dir =
             root_repo_metadata_changed.then(|| self.snapshot.root_repo_common_dir.clone());
-        self.snapshot = new_snapshot;
-
-        if let Some(share) = self.update_observer.as_mut() {
+        let old_snapshot = mem::replace(&mut self.snapshot, new_snapshot);
+        if let Some(share) = self.update_observer.as_ref() {
+            let path_privacy_changed = share.direct
+                && entry_changes.iter().any(|(path, _, _)| {
+                    old_snapshot
+                        .entry_for_path(path)
+                        .is_some_and(|entry| entry.is_private)
+                        != self
+                            .snapshot
+                            .entry_for_path(path)
+                            .is_some_and(|entry| entry.is_private)
+                });
             share
                 .snapshots_tx
-                .unbounded_send((self.snapshot.clone(), entry_changes.clone()))
+                .unbounded_send((
+                    self.snapshot.clone(),
+                    entry_changes.clone(),
+                    path_privacy_changed,
+                ))
                 .ok();
         }
 
@@ -2550,20 +2570,27 @@ impl LocalWorktree {
 
         let (resume_updates_tx, mut resume_updates_rx) = watch::channel::<()>();
         let (snapshots_tx, mut snapshots_rx) =
-            mpsc::unbounded::<(LocalSnapshot, UpdatedEntriesSet)>();
+            mpsc::unbounded::<(LocalSnapshot, UpdatedEntriesSet, bool)>();
         snapshots_tx
-            .unbounded_send((self.snapshot(), Arc::default()))
+            .unbounded_send((self.snapshot(), Arc::default(), false))
             .ok();
 
         let worktree_id = self.id.to_proto();
         let _maintain_remote_snapshot = cx.background_spawn(async move {
             let mut is_first = true;
-            while let Some((snapshot, entry_changes)) = snapshots_rx.next().await {
+            while let Some((snapshot, entry_changes, path_privacy_changed)) =
+                snapshots_rx.next().await
+            {
                 let update = if is_first {
                     is_first = false;
                     snapshot.build_initial_update(project_id, worktree_id)
                 } else {
-                    snapshot.build_update(project_id, worktree_id, entry_changes)
+                    snapshot.build_update(
+                        project_id,
+                        worktree_id,
+                        entry_changes,
+                        path_privacy_changed,
+                    )
                 };
 
                 for update in proto::split_worktree_update(update) {
@@ -2586,6 +2613,7 @@ impl LocalWorktree {
 
         self.update_observer = Some(UpdateObservationState {
             snapshots_tx,
+            direct: project_id == proto::REMOTE_SERVER_PROJECT_ID,
             resume_updates: resume_updates_tx,
             _maintain_remote_snapshot,
         });
@@ -2964,6 +2992,7 @@ impl Snapshot {
             removed_entries: Vec::new(),
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
+            path_privacy_changed: false,
             // Sent in separate messages.
             updated_repositories: Vec::new(),
             removed_repositories: Vec::new(),
@@ -3331,6 +3360,7 @@ impl LocalSnapshot {
         project_id: u64,
         worktree_id: u64,
         entry_changes: UpdatedEntriesSet,
+        path_privacy_changed: bool,
     ) -> proto::UpdateWorktree {
         let mut updated_entries = Vec::new();
         let mut removed_entries = Vec::new();
@@ -3362,6 +3392,7 @@ impl LocalSnapshot {
             removed_entries,
             scan_id: self.scan_id as u64,
             is_last_update: self.completed_scan_id == self.scan_id,
+            path_privacy_changed,
             // Sent in separate messages.
             updated_repositories: Vec::new(),
             removed_repositories: Vec::new(),

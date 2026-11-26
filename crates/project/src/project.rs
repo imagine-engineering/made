@@ -4908,7 +4908,8 @@ impl Project {
                 self.on_worktree_released(*id, cx);
             }
             WorktreeStoreEvent::WorktreeOrderChanged => cx.emit(Event::WorktreeOrderChanged),
-            WorktreeStoreEvent::WorktreeUpdateSent(_) => {}
+            WorktreeStoreEvent::WorktreeUpdateSent(_)
+            | WorktreeStoreEvent::WorktreePathPrivacyChanged(_) => {}
             WorktreeStoreEvent::WorktreeUpdatedEntries(worktree_id, changes) => {
                 self.client()
                     .telemetry()

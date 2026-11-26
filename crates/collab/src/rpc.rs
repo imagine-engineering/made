@@ -1792,6 +1792,7 @@ fn notify_rejoined_projects(
                 removed_entries: worktree.removed_entries,
                 scan_id: worktree.scan_id,
                 is_last_update: worktree.completed_scan_id == worktree.scan_id,
+                path_privacy_changed: false,
                 updated_repositories: worktree.updated_repositories,
                 removed_repositories: worktree.removed_repositories,
             };
@@ -2256,6 +2257,7 @@ async fn join_project(
             removed_entries: Default::default(),
             scan_id: worktree.scan_id,
             is_last_update: worktree.scan_id == worktree.completed_scan_id,
+            path_privacy_changed: false,
             updated_repositories: worktree.legacy_repository_entries.into_values().collect(),
             removed_repositories: Default::default(),
         };

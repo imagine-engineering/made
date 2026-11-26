@@ -4612,6 +4612,7 @@ impl CargoWorkspaceStore {
                 .iter()
                 .any(|(path, _, _)| is_cargo_workspace_input(path)),
             WorktreeStoreEvent::WorktreeUpdatedGitRepositories(_, _)
+            | WorktreeStoreEvent::WorktreePathPrivacyChanged(_)
             | WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(_)
             | WorktreeStoreEvent::WorktreeUpdateSent(_) => false,
             WorktreeStoreEvent::WorktreeAdded(_)

@@ -1288,6 +1288,7 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             removed_entries,
             scan_id: message.scan_id,
             is_last_update: done && message.is_last_update,
+            path_privacy_changed: done && message.path_privacy_changed,
             updated_repositories,
             removed_repositories,
         })
@@ -1374,6 +1375,29 @@ impl LspQuery {
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn worktree_privacy_change_is_sent_after_the_entry_chunks() {
+        let update = UpdateWorktree {
+            path_privacy_changed: true,
+            is_last_update: true,
+            updated_entries: (0..=MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE)
+                .map(|index| Entry {
+                    id: index as u64,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        };
+        let chunks = split_worktree_update(update).collect::<Vec<_>>();
+        let [first, last] = chunks.as_slice() else {
+            panic!("expected two worktree chunks");
+        };
+        assert!(!first.path_privacy_changed);
+        assert!(!first.is_last_update);
+        assert!(last.path_privacy_changed);
+        assert!(last.is_last_update);
+    }
 
     fn collaboration_policy_request() -> GetCollaborationFilePolicy {
         GetCollaborationFilePolicy {

@@ -5971,6 +5971,7 @@ impl LspStore {
                         this.update_local_worktree_language_servers(&worktree, changes, cx);
                     }
                     worktree::Event::LocalSettingsInvalidated(_)
+                    | worktree::Event::PathPrivacyChanged
                     | worktree::Event::UpdatedGitRepositories(_)
                     | worktree::Event::DeletedEntry(_)
                     | worktree::Event::Deleted
@@ -6070,6 +6071,12 @@ impl LspStore {
                     self.schedule_jvm_reload(*worktree_id, changes, cx);
                 }
             }
+            #[cfg(feature = "jvm-tools")]
+            WorktreeStoreEvent::WorktreePathPrivacyChanged(worktree_id) => {
+                self.refresh_remote_jvm_paths(*worktree_id, cx);
+            }
+            #[cfg(not(feature = "jvm-tools"))]
+            WorktreeStoreEvent::WorktreePathPrivacyChanged(_) => {}
             WorktreeStoreEvent::WorktreeReleased(..)
             | WorktreeStoreEvent::WorktreeOrderChanged
             | WorktreeStoreEvent::WorktreeUpdatedGitRepositories(..)
@@ -15665,6 +15672,30 @@ impl LspStore {
         });
         self.kotlin_workspace_refresh_tasks
             .insert(worktree_id, refresh);
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn refresh_remote_jvm_paths(&mut self, worktree_id: WorktreeId, cx: &mut Context<Self>) {
+        if !self.as_remote().is_some_and(|remote| {
+            remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                && remote
+                    .upstream_client
+                    .as_ref()
+                    .is_some_and(|client| !client.is_via_collab())
+        }) {
+            return;
+        }
+        if let Some(state) = self.jdtls_projects.get_mut(&worktree_id) {
+            state.invalidate_worktree(worktree_id);
+            self.jdtls_refresh_tasks.remove(&worktree_id);
+            self.refresh_jdtls_project(worktree_id, cx);
+        }
+        if let Some(state) = self.kotlin_workspace_projects.get_mut(&worktree_id) {
+            state.invalidate_worktree(worktree_id);
+            self.kotlin_workspace_refresh_tasks.remove(&worktree_id);
+            self.refresh_kotlin_workspace(worktree_id, cx);
+        }
+        cx.notify();
     }
 
     #[cfg(feature = "jvm-tools")]

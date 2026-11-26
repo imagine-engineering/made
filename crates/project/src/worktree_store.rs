@@ -227,6 +227,7 @@ pub enum WorktreeStoreEvent {
     WorktreeOrderChanged,
     WorktreeUpdateSent(Entity<Worktree>),
     WorktreeUpdatedEntries(WorktreeId, UpdatedEntriesSet),
+    WorktreePathPrivacyChanged(WorktreeId),
     WorktreeUpdatedGitRepositories(WorktreeId, UpdatedGitRepositoriesSet),
     WorktreeDeletedEntry(WorktreeId, ProjectEntryId),
     WorktreeUpdatedRootRepoCommonDir(WorktreeId),
@@ -987,6 +988,9 @@ impl WorktreeStore {
                         worktree_id,
                         changes.clone(),
                     ));
+                }
+                worktree::Event::PathPrivacyChanged => {
+                    cx.emit(WorktreeStoreEvent::WorktreePathPrivacyChanged(worktree_id));
                 }
                 worktree::Event::UpdatedGitRepositories(set) => {
                     cx.emit(WorktreeStoreEvent::WorktreeUpdatedGitRepositories(

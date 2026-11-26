@@ -1283,6 +1283,158 @@ mod jvm_tools_runtime_tests {
                 assert!(store.language_server_for_id(id).is_none());
             }
         });
+        verify_docker_dependency_path_revocation(&project, worktree_id, cx).await;
+    }
+
+    #[cfg(unix)]
+    async fn verify_docker_dependency_path_revocation(
+        project: &Entity<Project>,
+        worktree_id: settings::WorktreeId,
+        cx: &mut TestAppContext,
+    ) {
+        use std::time::{Duration, Instant};
+
+        let container_id = std::env::var("GROOVY_MAVEN_NAVIGATION_CONTAINER")
+            .expect("disposable navigation container");
+        let settings_path = "/workspaces/maven/.zed/settings.json";
+        let original_settings = util::command::new_command("docker")
+            .args(["exec", &container_id, "cat", settings_path])
+            .output()
+            .await
+            .expect("read the Docker fixture settings");
+        assert!(original_settings.status.success());
+        let original_settings =
+            String::from_utf8(original_settings.stdout).expect("Docker fixture settings are UTF-8");
+        let mut private_settings: serde_json::Value =
+            serde_json::from_str(&original_settings).expect("Docker fixture settings are JSON");
+        assert!(private_settings.get("private_files").is_none());
+        private_settings["private_files"] = serde_json::json!(["library"]);
+        let private_settings = private_settings.to_string();
+        let write_settings = |contents: &str| {
+            let mut command = util::command::new_command("docker");
+            command.args([
+                "exec",
+                &container_id,
+                "sh",
+                "-ec",
+                "printf '%s' \"$1\" > \"$2.groovy-test\"; mv \"$2.groovy-test\" \"$2\"",
+                "groovy-docker-privacy",
+                contents,
+                settings_path,
+            ]);
+            command
+        };
+
+        cx.update(|cx| {
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+            editor::init(cx);
+            jvm_ui::init(cx);
+        });
+        let (window, cx) = cx.add_window_view(|window, cx| {
+            workspace::MultiWorkspace::test_new(project.clone(), window, cx)
+        });
+        let workspace = window.read_with(cx, |window, _| window.workspace().clone());
+        let async_cx = cx.update(|window, cx| window.to_async(cx));
+        let panel = jvm_ui::DependenciesPanel::load(workspace.downgrade(), async_cx)
+            .await
+            .expect("connected Docker Dependencies panel");
+        panel.update_in(cx, |panel, window, cx| {
+            panel.set_active(true, window, cx);
+        });
+        let client = project.read_with(cx, |project, cx| {
+            project
+                .remote_client()
+                .expect("Docker connection")
+                .read(cx)
+                .proto_client()
+        });
+        for library_visible in [true, false, true] {
+            if !library_visible {
+                let output = write_settings(&private_settings)
+                    .output()
+                    .await
+                    .expect("update host worktree privacy");
+                assert!(output.status.success(), "{:?}", output.stderr);
+            }
+            let deadline = Instant::now() + Duration::from_secs(30);
+            let matched = loop {
+                cx.run_until_parked();
+                let matched =
+                    panel.read_with(cx, |panel, _| {
+                        let (status, rows, navigation) = panel.snapshot_for_test();
+                        let has_module = |provider: &str, name: &str| {
+                            rows.iter().any(|row| {
+                                row.accessibility_label.starts_with(provider)
+                                    && row.accessibility_label.contains(name)
+                            })
+                        };
+                        let has_library_path = navigation
+                            .values()
+                            .any(|target| target.path.starts_with(rel_path("library")));
+                        has_module("JDTLS module ", "application")
+                            && has_module("Kotlin LSP module ", "application")
+                            && has_module("JDTLS module ", "library") == library_visible
+                            && has_module("Kotlin LSP module ", "library") == library_visible
+                            && has_library_path == library_visible
+                            && (library_visible
+                                || matches!(
+                            status,
+                            language_tools::language_tool_tree::LanguageToolTreeStatus::Partial(_)
+                        ))
+                    });
+                if matched || Instant::now() >= deadline {
+                    break matched;
+                }
+                cx.background_executor
+                    .timer(Duration::from_millis(100))
+                    .await;
+            };
+            if !library_visible {
+                let (java, kotlin) = futures::join!(
+                    client.request(proto::GetJdtlsProjectSnapshot {
+                        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                        worktree_id: worktree_id.to_proto(),
+                        protocol_version: project::jvm_project::JDTLS_SNAPSHOT_PROTOCOL_VERSION,
+                        request_id: u64::MAX,
+                    }),
+                    client.request(proto::GetKotlinWorkspaceSnapshot {
+                        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                        worktree_id: worktree_id.to_proto(),
+                        protocol_version: 1,
+                        request_id: u64::MAX,
+                    })
+                );
+                let restored = write_settings(&original_settings)
+                    .output()
+                    .await
+                    .expect("restore the fixture's visible paths");
+                assert!(restored.status.success(), "{:?}", restored.stderr);
+                let java = java.expect("Java snapshot with library private");
+                let kotlin = kotlin.expect("Kotlin snapshot with library private");
+                let java_roots = java
+                    .projects
+                    .iter()
+                    .map(|project| project.module_root.as_str())
+                    .collect::<Vec<_>>();
+                let kotlin_roots = kotlin
+                    .projects
+                    .iter()
+                    .map(|project| project.module_root.as_str())
+                    .collect::<Vec<_>>();
+                eprintln!(
+                    "Docker worktree with library private: Java {java_roots:?}, Kotlin {kotlin_roots:?}; Dependencies matched {matched}"
+                );
+                assert!(java.partial && kotlin.partial);
+                assert!(
+                    java_roots.contains(&"application") && kotlin_roots.contains(&"application")
+                );
+                assert!(!java_roots.contains(&"library") && !kotlin_roots.contains(&"library"));
+            }
+            assert!(
+                matched,
+                "Docker Dependencies did not reflect library visibility {library_visible}"
+            );
+        }
     }
 
     #[cfg(unix)]

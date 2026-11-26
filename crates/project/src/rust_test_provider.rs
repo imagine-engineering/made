@@ -4396,6 +4396,7 @@ fn rust_test_input_changed(event: &WorktreeStoreEvent) -> bool {
         | WorktreeStoreEvent::WorktreeOrderChanged
         | WorktreeStoreEvent::WorktreeDeletedEntry(_, _) => true,
         WorktreeStoreEvent::WorktreeUpdatedGitRepositories(_, _)
+        | WorktreeStoreEvent::WorktreePathPrivacyChanged(_)
         | WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(_)
         | WorktreeStoreEvent::WorktreeUpdateSent(_) => false,
     }

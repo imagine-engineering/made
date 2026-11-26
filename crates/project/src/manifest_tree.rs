@@ -60,6 +60,7 @@ impl WorktreeRoots {
                         this.roots.remove(&path);
                     }
                     WorktreeEvent::LocalSettingsInvalidated(_)
+                    | WorktreeEvent::PathPrivacyChanged
                     | WorktreeEvent::Deleted
                     | WorktreeEvent::UpdatedRootRepoCommonDir { .. } => {}
                 }

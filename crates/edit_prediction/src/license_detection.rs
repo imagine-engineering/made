@@ -318,6 +318,7 @@ impl LicenseDetectionWatcher {
                     }
                 }
                 worktree::Event::LocalSettingsInvalidated(_)
+                | worktree::Event::PathPrivacyChanged
                 | worktree::Event::DeletedEntry(_)
                 | worktree::Event::UpdatedGitRepositories(_)
                 | worktree::Event::UpdatedRootRepoCommonDir { .. }

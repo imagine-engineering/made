@@ -138,6 +138,14 @@ on the host. Use a development Remote Server with `jvm-tools` and set
 development companion, SHA-256
 `6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
 
+The same connected Dependencies panel removes a module when the host marks
+its paths private. The host reports the privacy change with the worktree
+update. Groovy discards the older Java and Kotlin snapshots for that
+worktree and requests fresh filtered facts. In the offline Docker fixture,
+marking the Maven library private removed its rows and navigation targets
+while the application remained visible. Restoring the settings recovered
+both providers' library rows without a manual refresh.
+
 The opt-in `selected_maven_junit_uses_docker_host_through_tests_panel` case
 loads the shared Tests panel and selects `GreetingTest.messageIsAvailable`.
 The Task terminal runs the cached Maven wrapper on a separate Linux ARM64
