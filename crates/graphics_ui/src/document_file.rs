@@ -24,10 +24,11 @@ use graphics_core::formats::{
         GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
         GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddLayerOrder, GddNumericGraphEvaluator,
-        GddNumericImportKind, GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer,
-        GddRootLayerChange, GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId,
-        create_gdd_folder, inspect_gdd_folder_files, open_gdd_archive,
+        GddGraphPortSource, GddHistoryDirection, GddLayerGrouping, GddLayerOrder,
+        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
+        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
+        InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
+        open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -212,6 +213,7 @@ struct PreparedWorkingSnapshot {
     contents: Arc<InspectedGddV1>,
     inspection: GddGraphInspection,
     cut_clipboard: Option<String>,
+    layer_selection: Option<Vec<StorageNodeId>>,
 }
 
 impl GddWorkingCopy {
@@ -1367,6 +1369,20 @@ impl NodeCopyForm {
             layers
                 .iter()
                 .filter_map(|layer| Some((*nodes_by_id.get(&layer.storage_id)?, layer)))
+                .collect(),
+        )
+    }
+
+    fn selected_layer_nodes(&self) -> Option<Vec<GddGraphNode>> {
+        let rows = self
+            .saved_layer_rows()
+            .filter(|_| self.pending_canvas_source.is_none())?;
+        Some(
+            rows.into_iter()
+                .filter(|(index, _)| {
+                    self.selected == Some(*index) || self.node_selection.contains(index)
+                })
+                .filter_map(|(index, _)| self.nodes.get(index).cloned())
                 .collect(),
         )
     }
@@ -5361,6 +5377,9 @@ impl GraphiteDocumentItem {
                 self.edit_canvas_layer(index, change, window, cx);
             }
             SavedGraphAction::ReorderLayers(order) => self.reorder_saved_layers(order, window, cx),
+            SavedGraphAction::GroupLayers(operation) => {
+                self.group_saved_layers(operation, window, cx)
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -5414,22 +5433,12 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
-        let Some(rows) = form
-            .saved_layer_rows()
-            .filter(|_| form.pending_canvas_source.is_none())
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty())
         else {
             return;
         };
-        let nodes: Vec<_> = rows
-            .into_iter()
-            .filter(|(index, _)| {
-                form.selected == Some(*index) || form.node_selection.contains(index)
-            })
-            .filter_map(|(index, _)| form.nodes.get(index).cloned())
-            .collect();
-        if nodes.is_empty() {
-            return;
-        }
         let snapshot = form.snapshot.clone();
         let revision = form.revision.clone();
         self.stage_working_snapshot(
@@ -5444,6 +5453,41 @@ impl GraphiteDocumentItem {
             window,
             cx,
         );
+    }
+
+    fn group_saved_layers(
+        &mut self,
+        operation: GddLayerGrouping,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty() || matches!(operation, GddLayerGrouping::Empty))
+        else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        let staged = cx.background_spawn(async move {
+            let (contents, selection) = futures::executor::block_on(
+                snapshot.group_root_layers_in_copy(&nodes, operation, ARCHIVE_BUDGET),
+            )?;
+            let inspection = contents.graph_inspection().await?;
+            anyhow::Ok(PreparedWorkingSnapshot {
+                contents: Arc::new(contents),
+                inspection,
+                cut_clipboard: None,
+                layer_selection: Some(selection),
+            })
+        });
+        self.install_working_snapshot(revision, staged, window, cx);
     }
 
     fn edit_canvas_layer(
@@ -5636,6 +5680,7 @@ impl GraphiteDocumentItem {
                         contents: Arc::new(contents),
                         inspection,
                         cut_clipboard: Some(text),
+                        layer_selection: None,
                     })
                 });
                 self.install_working_snapshot(revision, staged, window, cx);
@@ -6830,6 +6875,7 @@ impl GraphiteDocumentItem {
                 contents: Arc::new(contents),
                 inspection,
                 cut_clipboard: None,
+                layer_selection: None,
             })
         });
         self.install_working_snapshot(expected, staged, window, cx);
@@ -6845,7 +6891,7 @@ impl GraphiteDocumentItem {
         self.copy_feedback = None;
         self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
             let staged = staged.await;
-            if let Err(error) = item.update_in(cx, |item, _, cx| {
+            if let Err(error) = item.update_in(cx, |item, window, cx| {
                 item.copy_task = None;
                 let result = staged.and_then(|staged| {
                     item.model.update(cx, |model, cx| {
@@ -6856,10 +6902,14 @@ impl GraphiteDocumentItem {
                             cx,
                         )
                     })?;
-                    Ok(staged.cut_clipboard)
+                    Ok((staged.cut_clipboard, staged.layer_selection))
                 });
                 match result {
-                    Ok(clipboard) => {
+                    Ok((clipboard, selection)) => {
+                        if let Some(selection) = selection {
+                            item.update_working_inspection(window, cx);
+                            item.select_layer_storage_ids(&selection, window, cx);
+                        }
                         if let Some(text) = clipboard {
                             cx.write_to_clipboard(ClipboardItem::new_string(text));
                             item.copy_feedback =
@@ -6877,6 +6927,31 @@ impl GraphiteDocumentItem {
             }
         }));
         cx.notify();
+    }
+
+    fn select_layer_storage_ids(
+        &mut self,
+        selection: &[StorageNodeId],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let NodeCopyPanel::Ready(form) = &mut self.node_copy else {
+            return;
+        };
+        form.node_selection = form
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| selection.contains(&node.storage_id()))
+            .map(|(index, _)| index)
+            .collect();
+        form.layer_selection_anchor = form.node_selection.first().copied();
+        if let Some(index) = form.layer_selection_anchor {
+            self.select_copy_node(index, window, cx);
+        } else {
+            form.selected = None;
+            form.output_preview = NodeOutputPreview::Hidden;
+        }
     }
 
     fn move_working_history(
@@ -13709,6 +13784,169 @@ mod tests {
                 .load_bytes(&path)
                 .await
                 .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_r11_2_workspace_groups_and_ungroups_editable_f_layers(cx: &mut TestAppContext) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/grouping-layers.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-NEW");
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let layer_tree = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native source graph")
+                };
+                form.saved_layer_rows()
+                    .expect("native Layers rows")
+                    .into_iter()
+                    .map(|(_, layer)| (layer.storage_id, layer.parent))
+                    .collect::<Vec<_>>()
+            })
+        };
+        let base = layer_tree(window);
+        let artboard = base.first().expect("main Artboard layer").0;
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-7");
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-GROUP");
+        assert_eq!(layer_tree(window), base);
+        item.read_with(window, |item, cx| {
+            assert!(
+                item.copy_feedback
+                    .as_ref()
+                    .is_some_and(|(message, _)| message.contains("Unlock the Graphite layers"))
+            );
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-0");
+        let selected = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native selection")
+                };
+                form.selected_node()
+                    .expect("selected source layer")
+                    .storage_id()
+            })
+        };
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-NEW");
+        let empty = selected(window);
+        let empty_tree = layer_tree(window);
+        assert_eq!(empty_tree.len(), base.len() + 1);
+        assert!(empty_tree.contains(&(empty, Some(artboard))));
+        assert!(!empty_tree.iter().any(|(_, parent)| *parent == Some(empty)));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(layer_tree(window), base);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(layer_tree(window), empty_tree);
+        click(window, "GRAPHITE-GDD-UNDO");
+        let canvas_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let image = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                let SavedSceneFrame::Ready(frame) = &canvas.frame else {
+                    panic!("accepted Canvas artwork")
+                };
+                frame.clone()
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            image
+        };
+        let before = canvas_image(window);
+        let extend = if cfg!(target_os = "macos") {
+            gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            }
+        } else {
+            gpui::Modifiers {
+                control: true,
+                ..Default::default()
+            }
+        };
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-6",
+            gpui::MouseButton::Left,
+            extend,
+        );
+        let (green, blue) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native source graph")
+            };
+            (
+                form.nodes.get(5).expect("clipped Green").storage_id(),
+                form.nodes.get(6).expect("Blue Repeat").storage_id(),
+            )
+        });
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-GROUP");
+        let group = selected(window);
+        let grouped = layer_tree(window);
+        let children = grouped
+            .iter()
+            .filter(|(_, parent)| *parent == Some(group))
+            .map(|(layer, _)| *layer)
+            .collect::<Vec<_>>();
+        assert_eq!(children, [green, blue]);
+        assert_eq!(grouped.len(), base.len() + 1);
+        assert!(before.as_bytes(0) == canvas_image(window).as_bytes(0));
+        let destination = PathBuf::from("/project/grouped-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved group");
+        let inspection = reopened.graph_inspection().await.expect("editable graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document network");
+        let geometry = reopened.graph_geometry(root).await.expect("saved geometry");
+        assert_eq!(
+            geometry
+                .root_layers
+                .expect("saved source hierarchy")
+                .into_iter()
+                .map(|layer| (layer.storage_id, layer.parent))
+                .collect::<Vec<_>>(),
+            grouped
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-LAYER-GROUPING-UNGROUP");
+        assert_eq!(layer_tree(window), base);
+        assert!(before.as_bytes(0) == canvas_image(window).as_bytes(0));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(layer_tree(window), grouped);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(layer_tree(window), base);
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("source ZIP"),
             original
         );
     }

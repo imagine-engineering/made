@@ -337,6 +337,10 @@ pub enum GddArchiveError {
     UnchangedLayerOrder,
     #[error("Unlock the selected Graphite layers and their destination before reordering.")]
     LockedLayerOrder,
+    #[error("Unlock the Graphite layers and their destination before changing the hierarchy.")]
+    LockedLayerStructure,
+    #[error("The requested Graphite operation leaves the layer hierarchy unchanged.")]
+    UnchangedLayerStructure,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -663,6 +667,13 @@ pub enum GddLayerOrder {
     Front,
     Back,
     Reverse,
+}
+
+#[derive(Clone, Copy)]
+pub enum GddLayerGrouping {
+    Empty,
+    Group,
+    Ungroup,
 }
 
 #[derive(Clone)]
@@ -5175,26 +5186,117 @@ impl InspectedGddV1 {
                 .iter()
                 .any(|layer| layer.parent(document.metadata()) != Some(parent));
             if changes_parent {
-                let viewport = GddCanvasRenderTarget {
-                    resolution: UVec2::splat(256),
-                    scale: 1.,
-                    budget: CpuSvgEvaluationBudget {
-                        max_viewport_pixels: 256 * 256,
-                        max_output_bytes: budget.max_entry_bytes.min(8 * 1024 * 1024) as usize,
-                    },
-                    raster: None,
-                };
-                document = self
-                    .render_document_canvas(viewport, None)
-                    .await?
-                    .snapping_document
-                    .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
+                document = self.render_layer_edit_geometry(&budget).await?;
                 select(&mut document)?;
             }
-            plan_document_layer_move(&mut document, message, &mut commands);
+            plan_document_layer_command(&mut document, message, &mut commands);
         } else {
             document.selected_layers_reverse(&mut commands);
         }
+        self.finish_layer_structure_edit(
+            &mut document,
+            commands,
+            budget,
+            GddArchiveError::UnchangedLayerOrder,
+        )
+        .await
+        .map(|(copy, _)| copy)
+    }
+
+    pub async fn group_root_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        operation: GddLayerGrouping,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        use graphite_editor::messages::{
+            portfolio::document::utility_types::misc::GroupFolderType, prelude::DocumentMessage,
+        };
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = if nodes.is_empty() && matches!(operation, GddLayerGrouping::Empty) {
+            Vec::new()
+        } else {
+            self.validate_layer_order_selection(&document, nodes)
+                .map_err(|error| match error {
+                    GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                    error => error,
+                })?
+        };
+        let mut selected_parents = BTreeSet::new();
+        let metadata = document.metadata();
+        for layer in metadata
+            .all_layers()
+            .filter(|layer| selected.contains(&layer.to_node()))
+        {
+            if !matches!(operation, GddLayerGrouping::Empty)
+                && document
+                    .network_interface
+                    .is_artboard(&layer.to_node(), &[])
+            {
+                return Err(GddArchiveError::UnsupportedRootLayerEdit);
+            }
+            if let Some(parent) = layer.parent(metadata) {
+                selected_parents
+                    .insert((parent != LayerNodeIdentifier::ROOT_PARENT).then(|| parent.to_node()));
+            }
+        }
+        if matches!(operation, GddLayerGrouping::Ungroup)
+            || (matches!(operation, GddLayerGrouping::Group) && selected_parents.len() > 1)
+        {
+            document = self.render_layer_edit_geometry(&budget).await?;
+        }
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        let mut commands = VecDeque::new();
+        let message = match operation {
+            GddLayerGrouping::Empty => DocumentMessage::CreateEmptyFolder,
+            GddLayerGrouping::Group => DocumentMessage::GroupSelectedLayers {
+                group_folder_type: GroupFolderType::Layer,
+            },
+            GddLayerGrouping::Ungroup => DocumentMessage::UngroupSelectedLayers,
+        };
+        plan_document_layer_command(&mut document, message, &mut commands);
+        self.finish_layer_structure_edit(
+            &mut document,
+            commands,
+            budget,
+            GddArchiveError::UnchangedLayerStructure,
+        )
+        .await
+    }
+
+    async fn render_layer_edit_geometry(
+        &self,
+        budget: &GddArchiveBudget,
+    ) -> Result<Box<DocumentMessageHandler>, GddArchiveError> {
+        let viewport = GddCanvasRenderTarget {
+            resolution: UVec2::splat(256),
+            scale: 1.,
+            budget: CpuSvgEvaluationBudget {
+                max_viewport_pixels: 256 * 256,
+                max_output_bytes: budget.max_entry_bytes.min(8 * 1024 * 1024) as usize,
+            },
+            raster: None,
+        };
+        self.render_document_canvas(viewport, None)
+            .await?
+            .snapping_document
+            .ok_or(GddArchiveError::UnsupportedRootLayerEdit)
+    }
+
+    async fn finish_layer_structure_edit(
+        &self,
+        document: &mut DocumentMessageHandler,
+        commands: VecDeque<graphite_editor::messages::prelude::Message>,
+        budget: GddArchiveBudget,
+        unchanged: GddArchiveError,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
         let (owner, staged) = self.fork_working_copy(&budget).await?;
         let resources = owner
             .registry()
@@ -5212,10 +5314,10 @@ impl InspectedGddV1 {
         };
         let baseline = convert(&document.network_interface)?;
         let before = layer_tree_order(&document.network_interface);
-        apply_document_layer_moves(&mut document.network_interface, commands)?;
+        apply_document_layer_commands(document, commands)?;
         let after = layer_tree_order(&document.network_interface);
         if before == after {
-            return Err(GddArchiveError::UnchangedLayerOrder);
+            return Err(unchanged);
         }
         let converted = convert(&document.network_interface)?;
         // A diff between source projections keeps unrelated registry attributes and resources in the GDD.
@@ -5231,14 +5333,25 @@ impl InspectedGddV1 {
             },
         };
         let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
-        let mut actual = copy.runtime_graph().await?.into_interface()?;
+        let actual = copy.runtime_graph().await?;
+        let selected = document.network_interface.selected_nodes();
+        let selection = actual
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.network_path.is_empty()
+                    && selected.selected_nodes_ref().contains(&node.local_id)
+            })
+            .map(|node| node.storage_id)
+            .collect();
+        let mut actual = actual.into_interface()?;
         load_root_layer_structure(&mut actual)?;
         if layer_tree_order(&actual) != after
             || !converted.registry.value_equal(&convert(&actual)?.registry)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
-        Ok(copy)
+        Ok((copy, selection))
     }
 
     fn validate_layer_order_selection(
@@ -6964,7 +7077,7 @@ fn layer_tree_order(
         .collect()
 }
 
-fn plan_document_layer_move(
+fn plan_document_layer_command(
     document: &mut DocumentMessageHandler,
     message: graphite_editor::messages::prelude::DocumentMessage,
     commands: &mut VecDeque<graphite_editor::messages::prelude::Message>,
@@ -6993,12 +7106,12 @@ fn plan_document_layer_move(
     );
 }
 
-fn apply_document_layer_moves(
-    interface: &mut NodeNetworkInterface,
-    commands: VecDeque<graphite_editor::messages::prelude::Message>,
+fn apply_document_layer_commands(
+    document: &mut DocumentMessageHandler,
+    mut commands: VecDeque<graphite_editor::messages::prelude::Message>,
 ) -> Result<(), GddArchiveError> {
     use graphite_editor::messages::prelude::*;
-    for command in commands {
+    while let Some(command) = commands.pop_front() {
         let Message::Portfolio(PortfolioMessage::Document(command)) = command else {
             return Err(GddArchiveError::UnsupportedRootLayerEdit);
         };
@@ -7008,26 +7121,7 @@ fn apply_document_layer_moves(
                 parent,
                 insert_index,
             }) => {
-                let metadata = interface.document_metadata();
-                if parent != LayerNodeIdentifier::ROOT_PARENT {
-                    if interface.selected_nodes().layer_locked(parent, interface) {
-                        return Err(GddArchiveError::LockedLayerOrder);
-                    }
-                    if parent.ancestors(metadata).any(|ancestor| ancestor == layer) {
-                        return Err(GddArchiveError::UnsupportedRootLayerEdit);
-                    }
-                }
-                let previous = parent.children(metadata).position(|child| child == layer);
-                let expected =
-                    insert_index - usize::from(previous.is_some_and(|index| index < insert_index));
-                if previous == Some(expected) {
-                    continue;
-                }
-                interface.move_layer_to_stack(layer, parent, insert_index, &[]);
-                load_root_layer_structure(interface)?;
-                if parent.children(interface.document_metadata()).nth(expected) != Some(layer) {
-                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
-                }
+                move_source_layer(&mut document.network_interface, layer, parent, insert_index)?;
             }
             DocumentMessage::GraphOperation(GraphOperationMessage::TransformSet {
                 layer,
@@ -7039,17 +7133,166 @@ fn apply_document_layer_moves(
                     return Err(GddArchiveError::UnsupportedRootLayerEdit);
                 }
                 let mut refresh = VecDeque::new();
-                let mut context =
-                    ModifyInputsContext::new_with_layer(layer, interface, &mut refresh)
-                        .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
+                let mut context = ModifyInputsContext::new_with_layer(
+                    layer,
+                    &mut document.network_interface,
+                    &mut refresh,
+                )
+                .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
                 context.transform_set(transform, transform_in, skip_rerender);
             }
+            DocumentMessage::GraphOperation(GraphOperationMessage::NewCustomLayer {
+                id,
+                nodes,
+                mut parent,
+                mut insert_index,
+            }) => {
+                let interface = &mut document.network_interface;
+                if !nodes.is_empty()
+                    || matches!(id, NodeId(0) | NodeId(u64::MAX))
+                    || interface.document_node(&id, &[]).is_some()
+                {
+                    return Err(GddArchiveError::UnsupportedRootLayerEdit);
+                }
+                // The source routes a non-artboard root insertion into the first Artboard.
+                if parent == LayerNodeIdentifier::ROOT_PARENT
+                    && let Some(artboard) = parent.children(interface.document_metadata()).next()
+                    && interface.is_artboard(&artboard.to_node(), &[])
+                {
+                    parent = artboard;
+                    insert_index = 0;
+                }
+                let mut refresh = VecDeque::new();
+                let layer = ModifyInputsContext::new(interface, &mut refresh).create_layer(id);
+                move_source_layer(interface, layer, parent, insert_index)?;
+            }
+            DocumentMessage::NodeGraph(NodeGraphMessage::SelectedNodesSet { nodes }) => {
+                document
+                    .network_interface
+                    .selected_nodes_mut(&[])
+                    .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+                    .set_selected_nodes(nodes);
+            }
+            DocumentMessage::MoveSelectedLayersToGroup { parent } => {
+                let group_parent = parent
+                    .parent(document.metadata())
+                    .ok_or(GddArchiveError::UnsupportedRootLayerEdit)?;
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                let metadata = document.metadata();
+                let parent_transform = if group_parent == LayerNodeIdentifier::ROOT_PARENT {
+                    metadata.document_to_viewport
+                } else {
+                    metadata.transform_to_viewport(group_parent)
+                };
+                let mut planned = VecDeque::new();
+                for message in nested {
+                    if let Message::Portfolio(PortfolioMessage::Document(
+                        DocumentMessage::NodeGraph(NodeGraphMessage::MoveLayerToStack {
+                            layer,
+                            ..
+                        }),
+                    )) = &message
+                        && layer.parent(metadata) != Some(group_parent)
+                    {
+                        let layer = *layer;
+                        planned.push_back(message);
+                        planned.push_back(
+                            GraphOperationMessage::TransformSet {
+                                layer,
+                                transform: parent_transform.inverse()
+                                    * metadata.transform_to_viewport(layer),
+                                transform_in: TransformIn::Local,
+                                skip_rerender: false,
+                            }
+                            .into(),
+                        );
+                    } else {
+                        planned.push_back(message);
+                    }
+                }
+                planned.append(&mut commands);
+                commands = planned;
+            }
+            DocumentMessage::UngroupLayer { layer } => {
+                if layer.parent(document.metadata()).is_none() {
+                    return Err(GddArchiveError::UnsupportedRootLayerEdit);
+                }
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                nested.append(&mut commands);
+                commands = nested;
+            }
+            DocumentMessage::NodeGraph(NodeGraphMessage::DeleteNodes {
+                node_ids,
+                delete_children: true,
+            }) => {
+                let interface = &mut document.network_interface;
+                for id in &node_ids {
+                    if !interface.is_layer(id, &[]) || interface.is_artboard(id, &[]) {
+                        return Err(GddArchiveError::UnsupportedRootLayerEdit);
+                    }
+                    let folder = LayerNodeIdentifier::new(*id, interface);
+                    if folder.has_children(interface.document_metadata()) {
+                        return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                    }
+                    if interface.selected_nodes().layer_locked(folder, interface) {
+                        return Err(GddArchiveError::LockedLayerStructure);
+                    }
+                }
+                interface.delete_nodes(node_ids.clone(), true, &[]);
+                load_root_layer_structure(interface)?;
+                if node_ids
+                    .iter()
+                    .any(|id| interface.document_node(id, &[]).is_some())
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+            }
             DocumentMessage::AddTransaction
+            | DocumentMessage::DocumentStructureChanged
             | DocumentMessage::NodeGraph(
-                NodeGraphMessage::RunDocumentGraph | NodeGraphMessage::SendGraph,
+                NodeGraphMessage::RunDocumentGraph
+                | NodeGraphMessage::SendGraph
+                | NodeGraphMessage::SelectedNodesUpdated,
             ) => {}
             _ => return Err(GddArchiveError::UnsupportedRootLayerEdit),
         }
+    }
+    Ok(())
+}
+
+fn move_source_layer(
+    interface: &mut NodeNetworkInterface,
+    layer: LayerNodeIdentifier,
+    parent: LayerNodeIdentifier,
+    insert_index: usize,
+) -> Result<(), GddArchiveError> {
+    let metadata = interface.document_metadata();
+    if parent != LayerNodeIdentifier::ROOT_PARENT {
+        if interface.selected_nodes().layer_locked(parent, interface) {
+            return Err(GddArchiveError::LockedLayerStructure);
+        }
+        if parent.ancestors(metadata).any(|ancestor| ancestor == layer) {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        }
+    }
+    if layer
+        .parent(metadata)
+        .is_some_and(|previous| previous != parent)
+        && interface.selected_nodes().layer_locked(layer, interface)
+    {
+        return Err(GddArchiveError::LockedLayerStructure);
+    }
+    let previous = parent.children(metadata).position(|child| child == layer);
+    let expected = insert_index - usize::from(previous.is_some_and(|index| index < insert_index));
+    if previous == Some(expected) {
+        return Ok(());
+    }
+    interface.move_layer_to_stack(layer, parent, insert_index, &[]);
+    load_root_layer_structure(interface)?;
+    if parent.children(interface.document_metadata()).nth(expected) != Some(layer) {
+        return Err(GddArchiveError::IncompleteGraphNodeEdit);
     }
     Ok(())
 }

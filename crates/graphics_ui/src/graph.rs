@@ -7,7 +7,7 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-    GddLayerOrder, GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
+    GddLayerGrouping, GddLayerOrder, GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
 };
 use std::{
     cell::Cell,
@@ -160,6 +160,7 @@ pub(crate) enum SavedGraphAction {
         change: GddRootLayerChange,
     },
     ReorderLayers(GddLayerOrder),
+    GroupLayers(GddLayerGrouping),
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -831,7 +832,7 @@ pub(crate) fn render_saved_graph(
         });
     let root_layers = match (&geometry.root_layers, view.overlay_size) {
         (_, Some(_)) => None,
-        (Ok(layers), None) if layers.is_empty() => None,
+        (_, None) if view.network.parent.is_some() => None,
         (Ok(layers), None) => {
             let mut collapsed_depth = None;
             let layers_focus = view.layer_focus.clone();
@@ -851,16 +852,15 @@ pub(crate) fn render_saved_graph(
             let keyboard_deselect = dispatch.clone();
             let keyboard_parent = dispatch.clone();
             let reorder_layers = dispatch.clone();
-            let can_reorder = view.working
-                && view.can_start_connection
-                && can_select
-                && layers.iter().any(|layer| {
-                    nodes_by_id
-                        .get(&layer.storage_id)
-                        .is_some_and(|&(index, _)| {
-                            view.selected == Some(index) || view.selection.contains(&index)
-                        })
-                });
+            let group_layers = dispatch.clone();
+            let editing = view.working && view.can_start_connection && can_select;
+            let selected = layers.iter().any(|layer| {
+                nodes_by_id
+                    .get(&layer.storage_id)
+                    .is_some_and(|&(index, _)| {
+                        view.selected == Some(index) || view.selection.contains(&index)
+                    })
+            });
             Some(
                 v_flex()
                     .gap_1()
@@ -926,12 +926,32 @@ pub(crate) fn render_saved_graph(
                                     ),
                             ),
                     )
-                    .child(crate::layers::render_saved_layer_order(
-                        can_reorder,
-                        move |order, window, cx| {
-                            reorder_layers(SavedGraphAction::ReorderLayers(order), window, cx);
-                        },
-                    ))
+                    .child(
+                        h_flex()
+                            .gap_2()
+                            .flex_wrap()
+                            .child(crate::layers::render_saved_layer_order(
+                                editing && selected,
+                                move |order, window, cx| {
+                                    reorder_layers(
+                                        SavedGraphAction::ReorderLayers(order),
+                                        window,
+                                        cx,
+                                    );
+                                },
+                            ))
+                            .child(crate::layers::render_saved_layer_grouping(
+                                editing,
+                                selected,
+                                move |operation, window, cx| {
+                                    group_layers(
+                                        SavedGraphAction::GroupLayers(operation),
+                                        window,
+                                        cx,
+                                    );
+                                },
+                            )),
+                    )
                     .children(layers.iter().enumerate().filter_map(|(position, layer)| {
                         if collapsed_depth.is_some_and(|depth| layer.depth > depth) {
                             return None;

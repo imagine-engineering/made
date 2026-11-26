@@ -1,5 +1,7 @@
 use gpui::{App, Window};
-use graphics_core::formats::gdd::{GddLayerOrder, GddRootLayer, GddRootLayerChange};
+use graphics_core::formats::gdd::{
+    GddLayerGrouping, GddLayerOrder, GddRootLayer, GddRootLayerChange,
+};
 use std::collections::BTreeSet;
 use ui::{Button, ButtonStyle, Color, Label, LabelSize, TintColor, prelude::*};
 
@@ -7,6 +9,34 @@ pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
     ToggleExpansion { recursive: bool },
+}
+
+pub(crate) fn render_saved_layer_grouping(
+    editing: bool,
+    selected: bool,
+    dispatch: impl Fn(GddLayerGrouping, &mut Window, &mut App) + Clone + 'static,
+) -> impl IntoElement {
+    h_flex().gap_2().flex_wrap().children(
+        [
+            ("NEW", "New Group", GddLayerGrouping::Empty),
+            ("GROUP", "Group", GddLayerGrouping::Group),
+            ("UNGROUP", "Ungroup", GddLayerGrouping::Ungroup),
+        ]
+        .into_iter()
+        .map(move |(id, label, operation)| {
+            let dispatch = dispatch.clone();
+            div()
+                .debug_selector(move || format!("GRAPHITE-GDD-LAYER-GROUPING-{id}"))
+                .child(
+                    Button::new(format!("graphite-saved-layer-grouping-{id}"), label)
+                        .disabled(
+                            !(editing
+                                && (selected || matches!(operation, GddLayerGrouping::Empty))),
+                        )
+                        .on_click(move |_, window, cx| dispatch(operation, window, cx)),
+                )
+        }),
+    )
 }
 
 pub(crate) fn render_saved_layer_order(
