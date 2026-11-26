@@ -2217,7 +2217,7 @@ mod tests {
         let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join("projects")
-            .join("sim")
+            .join("comfy")
             .join("ComfyUI-Frontend/src/scripts/metadata/__fixtures__")
             .join(file_name);
         fs::read(&fixture_path).unwrap_or_else(|error| {

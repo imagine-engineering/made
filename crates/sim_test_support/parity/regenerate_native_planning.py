@@ -1940,7 +1940,7 @@ def base_tasks() -> list[dict[str, object]]:
                 "crates/sim_test_support/tests/native_foundation.rs",
                 "target/comfy-parity/val-domain-008.json",
                 "target/comfy-parity/val-recovery-005.json",
-                "target/comfy-parity/val-metadata-001.json",
+                "target/sim-parity/val-metadata-001.json",
                 "crates/sim_test_support/parity/regenerate_native_planning.py",
                 "crates/sim_test_support/parity/ownership-policy.json",
                 "crates/sim_test_support/parity/catalogs/authoritative-ownership.csv",
