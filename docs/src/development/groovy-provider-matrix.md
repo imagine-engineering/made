@@ -78,10 +78,12 @@ denied. The normal editor action on the Java `Greeting` reference opened
 `library/src/main/kotlin/evidence/Greeting.kt`. To replay the opt-in test with
 `tasks_ui/jvm-workflow-test-support`, set `GROOVY_MAVEN_NAVIGATION_FIXTURE` to a
 fresh, offline-built copy of `crates/project/test_data/groovy_jvm_maven`
-omitting the `cycle-*` and `parity-*` directories. Supply the two cached
-launchers and their Java homes via `GROOVY_JDTLS_LAUNCHER`,
-`GROOVY_LSP_JAVA_HOME`, `GROOVY_KOTLIN_LSP`, and `GROOVY_KOTLIN_JAVA_HOME`.
-Both providers need access to the populated Maven repository.
+omitting the `cycle-*` and `parity-*` directories. Supply the pinned Groovy
+JDTLS companion via `GROOVY_MAVEN_MODEL_JAR` so the test can verify which
+imported modules Maven owns. Set `GROOVY_JDTLS_LAUNCHER`,
+`GROOVY_LSP_JAVA_HOME`, `GROOVY_KOTLIN_LSP`, and `GROOVY_KOTLIN_JAVA_HOME`
+to the cached launchers and their Java homes. Both providers need access
+to the populated Maven repository and cached Maven wrapper distribution.
 
 The Maven diagnostic follow-up traced `Greeting.class` in both
 `library/target/classes` and the library JAR. The baseline JDTLS import and

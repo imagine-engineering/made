@@ -149,22 +149,28 @@ async fn start_cached_fixture_jdtls(
 
 #[cfg(all(test, unix))]
 #[gpui::test]
-#[ignore = "requires the pinned JDTLS and Kotlin launchers and the cached default Maven fixture"]
+#[ignore = "requires pinned JDTLS, its Groovy Maven companion, Kotlin LSP and the cached Maven fixture"]
 async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppContext) {
     use editor::{MultiBufferOffset, SelectionEffects, actions::GoToDefinition};
     use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher, LocalFile as _};
+    use project::jvm_project::JdtlsImportedBuildKind;
 
     let root = cached_jvm_fixture_path("GROOVY_MAVEN_NAVIGATION_FIXTURE");
     let kotlin = cached_jvm_fixture_path("GROOVY_KOTLIN_LSP");
     let kotlin_java = cached_jvm_fixture_path("GROOVY_KOTLIN_JAVA_HOME");
     let kotlin_state = tempfile::tempdir().expect("isolated Kotlin state");
     let settings = serde_json::json!({
-        "import": {"maven": {"enabled": true}},
+        "import": {"maven": {"enabled": true, "offline": {"enabled": true}}},
         "configuration": {"updateBuildConfiguration": "automatic"},
         "jdt": {"ls": {"kotlinSupport": {"enabled": true}}}
     });
-    let (project, worktree_id, _java_state) =
-        start_cached_fixture_jdtls(&root, settings, &[], cx).await;
+    let (project, worktree_id, _java_state) = start_cached_fixture_jdtls(
+        &root,
+        settings,
+        &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+        cx,
+    )
+    .await;
     cx.update(|cx| {
         editor::init(cx);
         cx.update_global::<SettingsStore, _>(|store, cx| {
@@ -231,10 +237,11 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
                 .is_some_and(|(snapshot, current)| {
                     current
                         && snapshot.projects.iter().any(|project| {
-                            project
-                                .project_references
-                                .iter()
-                                .any(|reference| reference == "library")
+                            project.imported_build_kind == JdtlsImportedBuildKind::Maven
+                                && project
+                                    .project_references
+                                    .iter()
+                                    .any(|reference| reference == "library")
                         })
                 })
                 && store
@@ -256,6 +263,7 @@ async fn cached_maven_go_to_definition_opens_kotlin_source(cx: &mut TestAppConte
                             .iter()
                             .map(|project| (
                                 project.module_root.clone(),
+                                project.imported_build_kind,
                                 project.project_references.clone()
                             ))
                             .collect::<Vec<_>>(),
