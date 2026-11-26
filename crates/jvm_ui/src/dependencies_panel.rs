@@ -240,6 +240,7 @@ const VIEW_STATE_KEY: &str = "GroovyBuildViewState";
 const VIEW_STATE_VERSION: u32 = 11;
 const MAX_VIEW_STATE_BYTES: usize = 4096;
 const MAX_GRAPH_SEARCH_BYTES: usize = 512;
+const MAX_GRAPH_SELECTION_SET_MEMBERS: usize = 8;
 const BASIC_MAVEN_PHASES: &[&str] = &[
     "clean", "validate", "compile", "test", "package", "verify", "install", "deploy", "site",
 ];
@@ -3411,21 +3412,31 @@ impl DependenciesPanel {
         &self,
         selection: &GraphSelection,
         node: Option<&str>,
+        members: &[String],
     ) -> (usize, bool, bool) {
         let selection_set = self.graph_selection_set.first();
         let owns_selection_set = selection_set.is_some_and(|member| member.selection == *selection);
         let matching_pin = self.graph_pin.as_ref().is_some_and(|pin| {
             pin.selection == *selection && node.is_some_and(|node| node != pin.node)
         });
-        (
-            if owns_selection_set {
-                self.graph_selection_set.len()
-            } else {
-                0
-            },
-            matching_pin,
-            selection_set.is_none() || owns_selection_set,
-        )
+        let set_len = if owns_selection_set {
+            self.graph_selection_set.len()
+        } else {
+            0
+        };
+        let additions = members
+            .iter()
+            .filter(|node| {
+                !self
+                    .graph_selection_set
+                    .iter()
+                    .any(|member| &member.node == *node)
+            })
+            .count();
+        let can_add_to_set = (selection_set.is_none() || owns_selection_set)
+            && additions > 0
+            && set_len + additions <= MAX_GRAPH_SELECTION_SET_MEMBERS;
+        (set_len, matching_pin, can_add_to_set)
     }
 
     fn selected_graph_inspection(
@@ -3589,7 +3600,6 @@ impl DependenciesPanel {
         nodes: Vec<String>,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        const MAX_SET_MEMBERS: usize = 8;
         anyhow::ensure!(
             current_dependency_graph_contains(
                 self.project.read(cx),
@@ -3615,8 +3625,8 @@ impl DependenciesPanel {
             .filter(|node| retained.insert(node.clone()))
             .collect::<Vec<_>>();
         anyhow::ensure!(
-            retained.len() <= MAX_SET_MEMBERS,
-            "The selection set holds at most {MAX_SET_MEMBERS} dependencies. Remove the selection or clear the set before adding more."
+            retained.len() <= MAX_GRAPH_SELECTION_SET_MEMBERS,
+            "The selection set holds at most {MAX_GRAPH_SELECTION_SET_MEMBERS} dependencies. Remove the selection or clear the set before adding more."
         );
         self.graph_notice = None;
         self.graph_selection_set
@@ -4388,12 +4398,11 @@ impl DependenciesPanel {
         });
         let (set_len, paths_to_pin, can_add_to_set) =
             inspection.as_ref().map_or((0, false, false), |inspection| {
-                let (count, has_pin, accepts) = self
-                    .diagram_comparison_availability(&inspection.selection, Some(&inspection.node));
-                let is_member = self.graph_selection_set.iter().any(|member| {
-                    member.selection == inspection.selection && member.node == inspection.node
-                });
-                (count, has_pin, accepts && count < 8 && !is_member)
+                self.diagram_comparison_availability(
+                    &inspection.selection,
+                    Some(&inspection.node),
+                    std::slice::from_ref(&inspection.node),
+                )
             });
         let has_inspection = self.graph_inspection.is_some();
         if !is_operation_row
@@ -16727,6 +16736,7 @@ mod tests {
                 .expect("diagram tab item");
             use crate::dependency_diagram_menu::{
                 DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
+                stage_dependency_diagram_target,
             };
             let (root, node, original_selection, viewport) =
                 diagram_item.read_with(cx, |item, cx| {
@@ -16953,11 +16963,33 @@ mod tests {
                     canvas.selection = BTreeSet::from([root.clone(), node.clone()]);
                     cx.notify();
                 });
+                let menu_target =
+                    stage_dependency_diagram_target(Some(&root), &item.canvas().read(cx).selection);
+                item.canvas().update(cx, |canvas, cx| {
+                    assert!(canvas.select_node(&node, false, false));
+                    cx.notify();
+                });
+                let stale_target = stage_dependency_diagram_target(
+                    Some(&root),
+                    &BTreeSet::from([root.clone(), "retired-node".into()]),
+                );
+                assert!(!item.context_menu_snapshot(&stale_target, cx).can_add_to_set);
                 item.inspect_canvas_target(
                     DependencyDiagramMenuCommand::AddToSelectionSet,
-                    &DependencyDiagramContextTarget::Selection(root.clone()),
+                    &stale_target,
                     cx,
                 );
+                assert!(panel.read(cx).graph_selection_set.is_empty());
+                item.inspect_canvas_target(
+                    DependencyDiagramMenuCommand::AddToSelectionSet,
+                    &menu_target,
+                    cx,
+                );
+                assert_eq!(
+                    item.canvas().read(cx).selection,
+                    BTreeSet::from([node.clone()])
+                );
+                assert!(!item.context_menu_snapshot(&menu_target, cx).can_add_to_set);
                 item.inspect_canvas_target(
                     DependencyDiagramMenuCommand::InspectSelectionSet,
                     &target,
@@ -16966,6 +16998,11 @@ mod tests {
             });
             panel.read_with(cx, |panel, _| {
                 assert_eq!(panel.graph_pin.as_ref().map(|pin| &pin.node), Some(&root));
+                assert_eq!(
+                    panel.graph_selection_set.len(),
+                    2,
+                    "the menu adds its staged selection even if the canvas selection changes"
+                );
                 let inspection = panel
                     .graph_inspection
                     .as_ref()

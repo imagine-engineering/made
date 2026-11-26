@@ -5,7 +5,10 @@
 //! controls use, and dispatch handlers re-check availability so a command
 //! invoked on an unsupported target is rejected instead of dispatched.
 
-use std::sync::Mutex;
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use crate::dependencies_panel::{
     AddGraphSelectionToSet, ClearGraphInspection, ClearGraphSelectionSet,
@@ -26,7 +29,10 @@ pub enum DependencyDiagramContextTarget {
     /// Blank canvas: the menu operates on the view.
     Canvas,
     /// A secondary-click inside the multi-selection preserves the selection.
-    Selection(String),
+    Selection {
+        node: String,
+        members: Arc<[String]>,
+    },
     /// A secondary-click on an unselected node targets that node.
     Node(String),
 }
@@ -96,7 +102,15 @@ impl DependencyDiagramContextTarget {
     pub(crate) fn node(&self) -> Option<&str> {
         match self {
             Self::Canvas => None,
-            Self::Node(node) | Self::Selection(node) => Some(node),
+            Self::Node(node) | Self::Selection { node, .. } => Some(node),
+        }
+    }
+
+    pub(crate) fn comparison_nodes(&self) -> &[String] {
+        match self {
+            Self::Canvas => &[],
+            Self::Node(node) => std::slice::from_ref(node),
+            Self::Selection { members, .. } => members,
         }
     }
 }
@@ -106,11 +120,14 @@ impl DependencyDiagramContextTarget {
 /// selection, and a blank-canvas click acts on the view.
 pub fn stage_dependency_diagram_target(
     hit_node: Option<&str>,
-    selection: &std::collections::BTreeSet<String>,
+    selection: &BTreeSet<String>,
 ) -> DependencyDiagramContextTarget {
     match hit_node {
         Some(node) if selection.len() > 1 && selection.contains(node) => {
-            DependencyDiagramContextTarget::Selection(node.to_owned())
+            DependencyDiagramContextTarget::Selection {
+                node: node.to_owned(),
+                members: selection.iter().cloned().collect(),
+            }
         }
         Some(node) => DependencyDiagramContextTarget::Node(node.to_owned()),
         None => DependencyDiagramContextTarget::Canvas,
@@ -387,7 +404,6 @@ fn add_menu_command(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeSet;
 
     fn selection_with(node: &str) -> BTreeSet<String> {
         let mut selection = BTreeSet::new();
@@ -409,7 +425,10 @@ mod tests {
                 Some("n1"),
                 &BTreeSet::from(["n1".into(), "n2".into()])
             ),
-            DependencyDiagramContextTarget::Selection("n1".into())
+            DependencyDiagramContextTarget::Selection {
+                node: "n1".into(),
+                members: ["n1".into(), "n2".into()].into(),
+            }
         );
         // A blank-canvas click acts on the view.
         assert_eq!(
@@ -546,7 +565,10 @@ mod tests {
     fn analyzer_diagram_linkage_all_usages_targets_dependencies(cx: &mut gpui::TestAppContext) {
         let _ = cx;
         let node = DependencyDiagramContextTarget::Node("n1".into());
-        let selection = DependencyDiagramContextTarget::Selection("n1".into());
+        let selection = stage_dependency_diagram_target(
+            Some("n1"),
+            &BTreeSet::from(["n1".into(), "n2".into()]),
+        );
         let canvas = DependencyDiagramContextTarget::Canvas;
         let snapshot = DependencyDiagramMenuSnapshot {
             has_admitted_node: true,

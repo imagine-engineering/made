@@ -786,22 +786,24 @@ impl DependencyDiagramItem {
         let Some(panel) = source.panel.upgrade() else {
             return DependencyDiagramMenuSnapshot::default();
         };
-        let (selection_set_len, has_matching_pin, accepts_set) = panel
+        let members = target.comparison_nodes();
+        let (selection_set_len, has_matching_pin, can_add_to_set) = panel
             .read(cx)
-            .diagram_comparison_availability(&source.selection, target.node());
+            .diagram_comparison_availability(&source.selection, target.node(), members);
+        let is_admitted = |id: &str| {
+            canvas
+                .graph
+                .node(id)
+                .is_some_and(|node| node.has_provider_identity())
+        };
         let maven_scope = self.scope.maven_scope();
         DependencyDiagramMenuSnapshot {
             selection_set_len,
             has_inspection: !canvas.inspected.is_empty(),
             has_source: true,
-            has_admitted_node: target.node().is_some_and(|id| {
-                canvas
-                    .graph
-                    .node(id)
-                    .is_some_and(|node| node.has_provider_identity())
-            }),
+            has_admitted_node: target.node().is_some_and(is_admitted),
             has_matching_pin,
-            can_add_to_set: accepts_set && selection_set_len < 8,
+            can_add_to_set: can_add_to_set && members.iter().all(|node| is_admitted(node)),
             has_conflict_origins: target.node().is_some_and(|node| {
                 self.receipt
                     .as_ref()
@@ -890,13 +892,12 @@ impl DependencyDiagramItem {
                 ));
             }
             DependencyDiagramMenuCommand::AddToSelectionSet => {
-                let nodes = if matches!(target, DependencyDiagramContextTarget::Selection(_)) {
-                    self.canvas.read(cx).selection.iter().cloned().collect()
-                } else {
-                    vec![node.to_owned()]
-                };
                 source.panel.update(cx, |panel, cx| {
-                    panel.add_graph_nodes_to_set(&source.selection, nodes, cx)
+                    panel.add_graph_nodes_to_set(
+                        &source.selection,
+                        target.comparison_nodes().to_vec(),
+                        cx,
+                    )
                 })??;
                 return Ok(Some(
                     "Selected dependencies added to the comparison set.".into(),
@@ -2691,6 +2692,10 @@ mod tests {
         ));
         cx.simulate_keystrokes("shift-tab");
         assert!(overview_block_has_focus(cx, label));
+        let selection_target = DependencyDiagramContextTarget::Selection {
+            node: "c1".into(),
+            members: ["c1".into(), "c2".into()].into(),
+        };
         cx.update(|window, cx| {
             let keystroke = gpui::Keystroke::parse("shift-f10").expect("context-menu key");
             window.dispatch_event(
@@ -2706,10 +2711,7 @@ mod tests {
             assert_eq!(item.canvas.read(cx).focus.as_deref(), Some("c2"));
             let staged = item.context_state.invocation.lock().expect("staged menu");
             let invocation = staged.as_ref().expect("keyboard menu invocation");
-            assert_eq!(
-                invocation.target,
-                DependencyDiagramContextTarget::Selection("c1".into())
-            );
+            assert_eq!(invocation.target, selection_target);
             let position = invocation.screen_position;
             assert!(
                 (overview_origin.x..overview_origin.x + STRUCTURE_OVERVIEW_SIZE.width)
@@ -2738,10 +2740,7 @@ mod tests {
         };
         let viewport = cx.update(|_, cx| item.read(cx).canvas.read(cx).viewport.clone());
         for (click, expected_target) in [
-            (
-                overview_node_center("c1", cx),
-                DependencyDiagramContextTarget::Selection("c1".into()),
-            ),
+            (overview_node_center("c1", cx), selection_target),
             (
                 overview_node_center("root", cx),
                 DependencyDiagramContextTarget::Node("root".into()),
