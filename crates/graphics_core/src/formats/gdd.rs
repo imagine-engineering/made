@@ -243,6 +243,8 @@ pub enum GddArchiveError {
     UnchangedGraphNodeName,
     #[error("Select a Graphite Text node with editable text and the source default font.")]
     UnsupportedGraphArtworkText,
+    #[error("Enter a finite artwork font size of at least 1 px.")]
+    InvalidArtworkFontSize,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
@@ -1116,6 +1118,7 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
     boolean_input: Option<GddGraphBooleanInput>,
     artwork_text: Option<String>,
+    artwork_font_size: Option<f64>,
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
     can_delete_in_copy: bool,
@@ -1352,6 +1355,10 @@ impl GddGraphNode {
 
     pub fn artwork_text(&self) -> Option<&str> {
         self.artwork_text.as_deref()
+    }
+
+    pub fn artwork_font_size(&self) -> Option<f64> {
+        self.artwork_font_size
     }
 
     pub fn name(&self) -> &str {
@@ -1845,6 +1852,7 @@ impl InspectedGddV1 {
                     numeric_input: None,
                     boolean_input: None,
                     artwork_text: None,
+                    artwork_font_size: None,
                     artboard_geometry: None,
                     artboard_background: None,
                     can_delete_in_copy: false,
@@ -2068,12 +2076,10 @@ impl InspectedGddV1 {
                 node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
                 if matches!(profile, SavedGraphicProfile::Text)
-                    && let Some(TaggedValue::String(text)) = document
-                        .inputs
-                        .get(artwork_text::TextInput::INDEX)
-                        .and_then(NodeInput::as_value)
+                    && let Some((text, size)) = saved_artwork_text_literals(document)
                 {
-                    node.artwork_text = Some(text.clone());
+                    node.artwork_text = Some(text.to_owned());
+                    node.artwork_font_size = Some(size);
                 }
                 node.can_preview_merge_thumbnail = acyclic
                     && matches!(
@@ -5548,26 +5554,69 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
+        let size = node
+            .artwork_font_size()
+            .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
+        self.set_graph_artwork_text_and_size_in_copy(node, text, size, budget)
+            .await
+    }
+
+    pub async fn set_graph_artwork_text_and_size_in_copy(
+        &self,
+        node: &GddGraphNode,
+        text: String,
+        size: f64,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
         if !matches!(node.graphic_profile, Some(SavedGraphicProfile::Text)) {
             return Err(GddArchiveError::UnsupportedGraphArtworkText);
         }
         if text.len() > MAX_PREVIEW_VALUES || text.len() as u64 > budget.max_entry_bytes {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
+        if !valid_artwork_font_size(size) {
+            return Err(GddArchiveError::InvalidArtworkFontSize);
+        }
+        validate_artwork_text_layout(&text, size)?;
         let mut interface = self.runtime_graph().await?.into_interface()?;
-        let index = artwork_text::TextInput::INDEX;
-        let connector = InputConnector::node_at_index(node.local_id, index);
-        let new = NodeInput::value(TaggedValue::String(text), false);
         let path = &node.network_path;
-        if interface.input_from_connector(&connector, path) == Some(&new) {
+        let inputs = [
+            (artwork_text::TextInput::INDEX, TaggedValue::String(text)),
+            (artwork_text::SizeInput::INDEX, TaggedValue::Number(size)),
+        ];
+        let mut edits = Vec::with_capacity(inputs.len());
+        let mut changed_indices = BTreeSet::new();
+        let inputs = inputs.map(|(index, value)| {
+            let connector = InputConnector::node_at_index(node.local_id, index);
+            (index, connector, NodeInput::value(value, false))
+        });
+        for (index, connector, input) in &inputs {
+            if interface.input_from_connector(connector, path) != Some(input) {
+                interface.set_input(connector, input.clone(), path);
+                edits.push(write_graph_connector(path, *connector, input.clone()));
+                changed_indices.insert(*index);
+            }
+        }
+        if edits.is_empty() {
             return Err(GddArchiveError::UnchangedGraphInput);
         }
-        interface.set_input(&connector, new.clone(), path);
-        let copy = self
-            .finish_graph_input(node, interface, index, None, budget)
-            .await?;
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        if batch.ops.len() != edits.len()
+            || batch.ops.iter().any(|edit| {
+                !matches!(edit, RegistryDelta::ChangeNodeInput { id, index, .. }
+                    if *id == node.storage_id && usize::try_from(*index).ok()
+                        .is_some_and(|index| changed_indices.remove(&index)))
+            })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
         let actual = copy.runtime_graph().await?.into_interface()?;
-        if actual.input_from_connector(&connector, path) != Some(&new) {
+        if inputs.iter().any(|(_, connector, input)| {
+            actual.input_from_connector(connector, path) != Some(input)
+        }) {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -9680,9 +9729,61 @@ fn valid_saved_ellipse_radius_value(value: &TaggedValue) -> bool {
     }
 }
 
+fn valid_artwork_font_size(size: f64) -> bool {
+    size >= 1. && (size as f32).is_finite()
+}
+
+fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, f64)> {
+    let [
+        Some(text @ NodeInput::Value { exposed: false, .. }),
+        Some(size @ NodeInput::Value { exposed: false, .. }),
+    ] = [
+        artwork_text::TextInput::INDEX,
+        artwork_text::SizeInput::INDEX,
+    ]
+    .map(|index| node.inputs.get(index))
+    else {
+        return None;
+    };
+    let (TaggedValue::String(text), TaggedValue::Number(size)) =
+        (text.as_value()?, size.as_value()?)
+    else {
+        return None;
+    };
+    (text.len() <= MAX_PREVIEW_VALUES && valid_artwork_font_size(*size))
+        .then_some((text.as_str(), *size))
+}
+
+fn validate_artwork_text_layout(text: &str, size: f64) -> Result<(), GddArchiveError> {
+    use graphite_core_types::{ATTR_FONT, ATTR_FONT_SIZE, list::Item};
+
+    let source = Item::new_from_element(text.to_owned())
+        .with_attribute(
+            ATTR_FONT,
+            graphite_std::text::FALLBACK_FONT_RESOURCE.clone(),
+        )
+        .with_attribute(ATTR_FONT_SIZE, size);
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::render::validate_text_item(&source, DAffine2::IDENTITY)
+    }))
+    .map_err(|_| {
+        GddArchiveError::GraphLayerPreviewEvaluation(
+            "Graphite could not measure the artwork text at this font size.".into(),
+        )
+    })?
+    .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
+}
+
 fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveError> {
     validate_saved_repeat_work(network)?;
     for node in network.nodes.values() {
+        if matches!(&node.implementation, DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &artwork_text::IDENTIFIER)
+        {
+            let (text, size) = saved_artwork_text_literals(node)
+                .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
+            validate_artwork_text_layout(text, size)?;
+        }
         let [_, modification] = node.inputs.as_slice() else {
             continue;
         };
@@ -9918,16 +10019,15 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
         DocumentNodeImplementation::ProtoNode(identifier)
             if identifier == &artwork_text::IDENTIFIER =>
         {
-            let index = artwork_text::TextInput::INDEX;
-            let value = node.inputs.get(index)?;
-            if !matches!(value, NodeInput::Value { exposed: false, .. })
-                || !matches!(value.as_value(), Some(TaggedValue::String(value)) if value.len() <= MAX_PREVIEW_VALUES)
-            {
-                return None;
-            }
+            saved_artwork_text_literals(node)?;
+            let text = artwork_text::TextInput::INDEX;
+            let size = artwork_text::SizeInput::INDEX;
             (
                 resolve_proto_node_type(artwork_text::IDENTIFIER)?,
-                vec![(index, value)],
+                vec![
+                    (text, node.inputs.get(text)?),
+                    (size, node.inputs.get(size)?),
+                ],
                 SavedGraphicProfile::Text,
             )
         }

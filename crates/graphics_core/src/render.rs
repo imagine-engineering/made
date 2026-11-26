@@ -524,7 +524,10 @@ fn seal_composition_layers(
     Ok(sealed)
 }
 
-fn validate_text_item(item: &Item<String>, logical: DAffine2) -> Result<(), CpuSvgSceneError> {
+pub(crate) fn validate_text_item(
+    item: &Item<String>,
+    logical: DAffine2,
+) -> Result<(), CpuSvgSceneError> {
     let transform = composition_attributes(item.attributes(), CompositionAttributeProfile::Text)?;
     let final_transform = logical * transform;
     if !final_transform.is_finite() {
