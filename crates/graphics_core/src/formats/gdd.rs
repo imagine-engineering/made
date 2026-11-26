@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     fmt,
     io::{self, Cursor, Read, Seek, SeekFrom, Write},
     ops::{Bound, Deref},
@@ -29,8 +29,13 @@ use graphite_document_graph_storage::{
 pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
-    graph_operation::transform_utils::get_current_transform,
-    node_graph::document_node_definitions::{DocumentNodeDefinition, resolve_proto_node_type},
+    graph_operation::{
+        transform_utils::get_current_transform,
+        utility_types::{ModifyInputsContext, TransformIn},
+    },
+    node_graph::document_node_definitions::{
+        DefinitionIdentifier, DocumentNodeDefinition, resolve_proto_node_type,
+    },
     utility_types::{
         document_metadata::LayerNodeIdentifier,
         misc::PTZ,
@@ -440,12 +445,15 @@ impl GddArtboardCanvasOverlay {
     }
 }
 
+#[derive(Clone)]
 pub struct GddArtboardCanvasPick {
     storage_id: StorageNodeId,
     snapshot: Arc<()>,
     pane_to_document: DAffine2,
     layer_to_document: DAffine2,
     targets: Vec<Arc<graphite_std::vector::click_target::ClickTarget>>,
+    bounds: Option<[DVec2; 2]>,
+    child_transforms: Vec<(NodeId, DAffine2)>,
 }
 
 impl GddArtboardCanvasPick {
@@ -461,6 +469,20 @@ impl GddArtboardCanvasPick {
     pub fn matches_node(&self, node: &GddGraphNode) -> bool {
         self.storage_id == node.storage_id && Arc::ptr_eq(&self.snapshot, &node.snapshot)
     }
+
+    pub fn resize_bounds(&self) -> Option<[DVec2; 2]> {
+        self.bounds
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ArtboardCanvasDraft<'a> {
+    Move(&'a GddGraphNode, DVec2),
+    Resize(
+        &'a GddGraphNode,
+        &'a GddArtboardCanvasPick,
+        GddArtboardGeometry,
+    ),
 }
 
 pub struct GddNetworkView {
@@ -3725,8 +3747,32 @@ impl InspectedGddV1 {
         budget: CpuSvgEvaluationBudget,
     ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
         self.check_node_edit_target(node)?;
-        self.render_artboard_canvas_svg(viewport, Some(camera), budget, Some((node, location)))
-            .await
+        self.render_artboard_canvas_svg(
+            viewport,
+            Some(camera),
+            budget,
+            Some(ArtboardCanvasDraft::Move(node, location)),
+        )
+        .await
+    }
+
+    pub async fn render_document_artboard_resize_draft_svg(
+        &self,
+        node: &GddGraphNode,
+        pick: &GddArtboardCanvasPick,
+        geometry: GddArtboardGeometry,
+        viewport: (UVec2, f64),
+        camera: PTZ,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        self.render_artboard_canvas_svg(
+            viewport,
+            Some(camera),
+            budget,
+            Some(ArtboardCanvasDraft::Resize(node, pick, geometry)),
+        )
+        .await
     }
 
     async fn render_artboard_canvas_svg(
@@ -3734,7 +3780,7 @@ impl InspectedGddV1 {
         (resolution, scale): (UVec2, f64),
         camera: Option<PTZ>,
         budget: CpuSvgEvaluationBudget,
-        draft: Option<(&GddGraphNode, DVec2)>,
+        draft: Option<ArtboardCanvasDraft<'_>>,
     ) -> Result<GddArtboardCanvasOutput, GddArchiveError> {
         if self.hot_log_len() != 0 {
             return Err(GddArchiveError::PendingGraphEdits);
@@ -3757,6 +3803,9 @@ impl InspectedGddV1 {
             .map(|entry| (entry.local_id, entry.storage_id))
             .collect();
         let mut interface = graph.into_interface()?;
+        if let Some(ArtboardCanvasDraft::Resize(node, pick, geometry)) = draft {
+            apply_document_artboard_resize(&mut interface, node, pick, geometry)?;
+        }
         let mut detached = NodeNetwork {
             exports: vec![NodeInput::node(root, 0)],
             ..Default::default()
@@ -3787,7 +3836,7 @@ impl InspectedGddV1 {
         } else {
             Vec::new()
         };
-        if let Some((node, location)) = draft {
+        if let Some(ArtboardCanvasDraft::Move(node, location)) = draft {
             if !node.network_path.is_empty()
                 || !boards.contains(&node.local_id)
                 || interface.is_locked(&node.local_id, &[])
@@ -3863,6 +3912,13 @@ impl InspectedGddV1 {
         let render = Self::render_detached_saved_layer_svg(detached, configuration, budget).await?;
         let pane_to_document = transform.inverse();
         let metadata = &render.metadata;
+        if draft.is_none() && !boards.is_empty() {
+            interface.set_document_to_viewport_transform(transform);
+            interface.update_transforms(
+                metadata.upstream_footprints.clone(),
+                metadata.local_transforms.clone(),
+            );
+        }
         let artboards = boards
             .into_iter()
             .map(|id| {
@@ -3906,12 +3962,24 @@ impl InspectedGddV1 {
                     )
                 });
                 let pick_target = (draft.is_none() && !interface.is_locked(&id, &[])).then(|| {
+                    let document = interface.document_metadata();
+                    let child_transforms = LayerNodeIdentifier::new(id, &interface)
+                        .children(document)
+                        .map(|child| {
+                            (
+                                child.to_node(),
+                                document.downstream_transform_to_document(child),
+                            )
+                        })
+                        .collect();
                     GddArtboardCanvasPick {
                         storage_id,
                         snapshot: self.snapshot.clone(),
                         pane_to_document,
                         layer_to_document,
                         targets: targets.clone(),
+                        bounds,
+                        child_transforms,
                     }
                 });
                 GddArtboardCanvasLayer {
@@ -5080,6 +5148,184 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn resize_document_artboard_in_copy(
+        &self,
+        node: &GddGraphNode,
+        pick: &GddArtboardCanvasPick,
+        geometry: GddArtboardGeometry,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_document_graph_storage::attr::node::ui::{IS_LAYER, POSITION};
+
+        self.check_node_edit_target(node)?;
+        let path = &[][..];
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let previous = interface.document_network().clone();
+        let previous_layout = graph_port_edit_layout(&interface, [path])?;
+        let transforms = apply_document_artboard_resize(&mut interface, node, pick, geometry)?;
+        let expected = interface.document_network();
+        let layout = graph_port_edit_layout(&interface, [path])?;
+        if previous.exports != expected.exports {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let mut detached = NodeNetwork::default();
+        collect_saved_layer_preview_branch(
+            expected,
+            expected
+                .exports
+                .first()
+                .and_then(NodeInput::as_node)
+                .ok_or(GddArchiveError::UnsupportedDocumentArtboard)?,
+            &mut detached,
+            &mut BTreeSet::new(),
+            true,
+        )?;
+        let mut edits = Vec::new();
+        let added: BTreeSet<_> = transforms
+            .iter()
+            .copied()
+            .filter(|id| !previous.nodes.contains_key(id))
+            .collect();
+        if expected.nodes.len() != previous.nodes.len() + added.len() {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        for id in &added {
+            let transform = expected
+                .nodes
+                .get(id)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let metadata = interface
+                .node_metadata(id, path)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            edits.push(EditorDelta::Graph(RuntimeDelta::AddNode {
+                network_path: Vec::new(),
+                node_id: *id,
+                node: Box::new(transform.clone()),
+            }));
+            edits.push(EditorDelta::NodeMetadataSnapshot {
+                network_path: Vec::new(),
+                node_id: *id,
+                metadata: Box::new(metadata.persistent_metadata.clone()),
+            });
+        }
+        let mut positions = BTreeSet::new();
+        let mut inputs = BTreeSet::new();
+        for (&id, before) in &previous.nodes {
+            let after = expected
+                .nodes
+                .get(&id)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let metadata = interface
+                .node_metadata(&id, path)
+                .map(|metadata| &metadata.persistent_metadata)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let storage = metadata
+                .storage_id
+                .map(StorageNodeId)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            let before_position = previous_layout
+                .get(&(path, id))
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+            if before_position != &metadata.node_type_metadata {
+                if std::mem::discriminant(before_position)
+                    != std::mem::discriminant(&metadata.node_type_metadata)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                positions.insert(storage);
+                edits.push(EditorDelta::NodeMetadata {
+                    network_path: Vec::new(),
+                    node_id: id,
+                    change: NodeMetadataChange::NodeType(metadata.node_type_metadata.clone()),
+                });
+            }
+            let mut verified = before.clone();
+            for (index, (old, new)) in verified.inputs.iter_mut().zip(&after.inputs).enumerate() {
+                if old == new {
+                    continue;
+                }
+                let artboard_input = id == node.local_id
+                    && [ARTBOARD_LOCATION_INPUT, ARTBOARD_DIMENSIONS_INPUT].contains(&index);
+                let transform_input = transforms.contains(&id) && (1..=4).contains(&index);
+                let inserted_wire = new
+                    .as_node()
+                    .filter(|source| added.contains(source))
+                    .and_then(|source| expected.nodes.get(&source))
+                    .and_then(|source| source.inputs.first())
+                    == Some(old);
+                if !artboard_input && !transform_input && !inserted_wire {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                *old = new.clone();
+                inputs.insert((storage, index));
+                edits.push(write_graph_connector(
+                    path,
+                    InputConnector::node_at_index(id, index),
+                    new.clone(),
+                ));
+            }
+            if &verified != after {
+                return Err(GddArchiveError::IncompleteGraphNodeEdit);
+            }
+        }
+        if edits.is_empty() {
+            return Err(GddArchiveError::UnchangedGraphInput);
+        }
+        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let mut batch = prepare_graph_node_edit(&owner, &interface, &edits)?;
+        let inserted: BTreeSet<_> = batch
+            .ops
+            .iter()
+            .filter_map(|op| match op {
+                RegistryDelta::AddNode { id, node }
+                    if node.network() == ROOT_NETWORK
+                        && !owner.registry().node_instances.contains_key(id) =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .collect();
+        batch.ops.retain(|op| {
+            !matches!(
+                op, RegistryDelta::ChangeNodeAttribute { id, delta }
+                    if delta.key == IS_LAYER && positions.contains(id)
+            )
+        });
+        if inserted.len() != added.len()
+            || !batch.ops.iter().all(|op| match op {
+                RegistryDelta::AddNode { id, .. }
+                | RegistryDelta::ChangeNodeInputAttribute { id, .. } => inserted.contains(id),
+                RegistryDelta::ChangeNodeAttribute { id, delta } => {
+                    inserted.contains(id) || (delta.key == POSITION && positions.remove(id))
+                }
+                RegistryDelta::ChangeNodeInput { id, index, .. } => usize::try_from(*index)
+                    .ok()
+                    .is_some_and(|index| inputs.remove(&(*id, index))),
+                RegistryDelta::AddResource { entry, .. } => {
+                    entry.has_embedded_source()
+                        && entry
+                            .hash
+                            .is_some_and(|hash| batch.declarations.bytes.contains_key(&hash))
+                }
+                _ => false,
+            })
+            || !positions.is_empty()
+            || !inputs.is_empty()
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        let copy = finish_graph_node_edit(owner, staged, batch, &budget).await?;
+        let actual = copy.runtime_graph().await?.into_interface()?;
+        if actual.document_network().nodes != expected.nodes
+            || actual.document_network().exports != expected.exports
+            || graph_port_edit_layout(&actual, [path])? != layout
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
     pub async fn set_artboard_background_in_copy(
         &self,
         node: &GddGraphNode,
@@ -6242,6 +6488,128 @@ fn load_root_layer_structure(interface: &mut NodeNetworkInterface) -> Result<(),
     }
     interface.load_structure();
     Ok(())
+}
+
+fn apply_document_artboard_resize(
+    interface: &mut NodeNetworkInterface,
+    node: &GddGraphNode,
+    pick: &GddArtboardCanvasPick,
+    geometry: GddArtboardGeometry,
+) -> Result<BTreeSet<NodeId>, GddArchiveError> {
+    let path = &[][..];
+    let id = node.local_id;
+    if !node.network_path.is_empty()
+        || !pick.matches_node(node)
+        || !interface.is_artboard(&id, path)
+        || !interface.is_layer(&id, path)
+        || !interface.is_visible(&id, path)
+        || interface.is_locked(&id, path)
+        || interface
+            .document_node(&id, path)
+            .and_then(GddArtboardGeometry::hidden)
+            != node.artboard_geometry()
+        || node.artboard_geometry().is_none()
+    {
+        return Err(GddArchiveError::UnsupportedArtboardGeometry);
+    }
+    if geometry.normalized().is_none()
+        || geometry.location != geometry.location.round()
+        || geometry.dimensions != geometry.dimensions.round()
+        || geometry.dimensions.min_element() < 0.
+    {
+        return Err(GddArchiveError::InvalidArtboardGeometry);
+    }
+    let [original_origin, _] = pick
+        .bounds
+        .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
+    load_root_layer_structure(interface)?;
+    let layer = LayerNodeIdentifier::new(id, interface);
+    let structure = interface.document_metadata();
+    if layer.parent(structure) != Some(LayerNodeIdentifier::ROOT_PARENT)
+        || !layer
+            .children(structure)
+            .map(LayerNodeIdentifier::to_node)
+            .eq(pick.child_transforms.iter().map(|(id, _)| *id))
+    {
+        return Err(GddArchiveError::UnsupportedArtboardGeometry);
+    }
+    let translation = original_origin.round() - geometry.location;
+    let mut responses = VecDeque::new();
+    ModifyInputsContext::new_with_layer(layer, interface, &mut responses)
+        .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?
+        .resize_artboard(geometry.location, geometry.dimensions);
+    if interface
+        .document_node(&id, path)
+        .and_then(GddArtboardGeometry::hidden)
+        != Some(geometry)
+    {
+        return Err(GddArchiveError::IncompleteGraphNodeEdit);
+    }
+    let mut transforms = BTreeSet::new();
+    if translation == DVec2::ZERO {
+        return Ok(transforms);
+    }
+    let definition = DefinitionIdentifier::ProtoNode(transform::IDENTIFIER);
+    for &(id, downstream_to_document) in &pick.child_transforms {
+        let local_translation = downstream_to_document
+            .inverse()
+            .transform_vector2(translation);
+        if !local_translation.is_finite() {
+            return Err(GddArchiveError::InvalidArtboardGeometry);
+        }
+        let child = LayerNodeIdentifier::new(id, interface);
+        let previous_id =
+            ModifyInputsContext::locate_node_in_layer_chain(&definition, child, interface);
+        let previous_transform = match previous_id {
+            Some(id) => {
+                let node = interface
+                    .document_node(&id, path)
+                    .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?;
+                if !matches!(
+                    checked_saved_graphic_node(node),
+                    Some((_, SavedGraphicProfile::Transform))
+                ) {
+                    return Err(GddArchiveError::UnsupportedArtboardGeometry);
+                }
+                get_current_transform(&node.inputs)
+            }
+            None => DAffine2::IDENTITY,
+        };
+        let delta = DAffine2::from_translation(local_translation);
+        let expected = delta * previous_transform;
+        if !expected.is_finite() {
+            return Err(GddArchiveError::InvalidArtboardGeometry);
+        }
+        if previous_id.is_none() && expected.abs_diff_eq(DAffine2::IDENTITY, 1e-6) {
+            continue;
+        }
+        ModifyInputsContext::new_with_layer(child, interface, &mut responses)
+            .ok_or(GddArchiveError::UnsupportedArtboardGeometry)?
+            .transform_change_with_parent(delta, TransformIn::Local, DAffine2::IDENTITY, true);
+        let transform =
+            ModifyInputsContext::locate_node_in_layer_chain(&definition, child, interface)
+                .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        let actual = interface
+            .document_node(&transform, path)
+            .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+        if previous_id.is_some_and(|id| id != transform)
+            || !transforms.insert(transform)
+            || !matches!(
+                checked_saved_graphic_node(actual),
+                Some((_, SavedGraphicProfile::Transform))
+            )
+            || !get_current_transform(&actual.inputs)
+                .to_cols_array()
+                .into_iter()
+                .zip(expected.to_cols_array())
+                .all(|(actual, expected)| {
+                    (actual - expected).abs() <= 1e-9 * expected.abs().max(1.)
+                })
+        {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+    }
+    Ok(transforms)
 }
 
 fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {
@@ -11174,6 +11542,165 @@ mod tests {
                 other.export_document_artboard_svg(node, limits).await,
                 Err(GddArchiveError::StaleGraphNode)
             ));
+        });
+    }
+
+    #[test]
+    fn at_gra_tool_008_1_resize_inserts_the_source_child_transform_and_preserves_history() {
+        use graphite_document_graph_storage::NodeMetadataSource;
+        use graphite_resource::ResourceRegistry;
+
+        struct ResizeLayers;
+        impl NodeMetadataSource for ResizeLayers {
+            fn is_layer(&self, path: &[NodeId], id: NodeId) -> bool {
+                path.is_empty() && matches!(id, NodeId(1 | 2))
+            }
+            fn reference(&self, path: &[NodeId]) -> Option<&str> {
+                match path {
+                    [NodeId(1)] => Some(ARTBOARD_NODE_NAME),
+                    [NodeId(2)] => Some(MERGE_NODE_NAME),
+                    _ => None,
+                }
+            }
+        }
+
+        futures::executor::block_on(async {
+            let artboard = artboard_node_definition()
+                .expect("pinned Artboard")
+                .node_template_input_override([
+                    None,
+                    Some(NodeInput::node(NodeId(2), 0)),
+                    Some(NodeInput::value(
+                        TaggedValue::DVec2(DVec2::new(20., 10.)),
+                        false,
+                    )),
+                    Some(NodeInput::value(
+                        TaggedValue::DVec2(DVec2::new(90., 60.)),
+                        false,
+                    )),
+                ])
+                .into_parts()
+                .0;
+            let layer = merge_node_definition()
+                .expect("pinned Merge")
+                .node_template_input_override([None, Some(NodeInput::node(NodeId(3), 0))])
+                .into_parts()
+                .0;
+            let paint = resolve_proto_node_type(fill::IDENTIFIER)
+                .expect("pinned Fill")
+                .node_template_input_override([
+                    Some(NodeInput::node(NodeId(4), 0)),
+                    Some(NodeInput::value(TaggedValue::Color(Color::BLACK), false)),
+                ])
+                .into_parts()
+                .0;
+            let rectangle = resolve_proto_node_type(rectangle::IDENTIFIER)
+                .expect("pinned Rectangle")
+                .node_template_input_override([
+                    None,
+                    Some(NodeInput::value(TaggedValue::Number(20.), false)),
+                    Some(NodeInput::value(TaggedValue::Number(16.), false)),
+                ])
+                .into_parts()
+                .0;
+            let network = NodeNetwork {
+                nodes: [
+                    (NodeId(1), artboard),
+                    (NodeId(2), layer),
+                    (NodeId(3), paint),
+                    (NodeId(4), rectangle),
+                ]
+                .into_iter()
+                .collect(),
+                exports: vec![NodeInput::node(NodeId(1), 0)],
+                ..Default::default()
+            };
+            let mut owner = document();
+            let resources = HashMapResourceStorage::new();
+            owner
+                .commit_from_runtime(
+                    &network,
+                    &ResizeLayers,
+                    &ResourceRegistry::new(),
+                    &resources,
+                )
+                .expect("saved source chain without a Transform");
+            let zip: Arc<[u8]> = owner
+                .export_to_bytes(
+                    ExportFormat::Zip,
+                    ExportOptions::default(),
+                    &resources,
+                    None,
+                )
+                .await
+                .expect("source ZIP")
+                .into();
+            let source = open_gdd_zip(&zip, budget()).await.expect("open source");
+            let nodes = source.graph_nodes().await.expect("original stored nodes");
+            let board = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(1) && node.network_path.is_empty())
+                .expect("original Artboard");
+            let frame = source
+                .render_document_artboard_canvas_svg(
+                    UVec2::new(160, 120),
+                    1.,
+                    Some(PTZ::default()),
+                    CpuSvgEvaluationBudget {
+                        max_viewport_pixels: 160 * 120,
+                        max_output_bytes: 64 * 1024,
+                    },
+                )
+                .await
+                .expect("source Canvas");
+            let pick = frame
+                .artboards
+                .first()
+                .and_then(|board| board.pick_target.as_ref())
+                .expect("rendered Artboard pick");
+            let geometry = GddArtboardGeometry {
+                location: DVec2::new(10., 2.),
+                dimensions: DVec2::new(100., 68.),
+            };
+            let resized = source
+                .resize_document_artboard_in_copy(board, pick, geometry, budget())
+                .await
+                .expect("resize with a compensating Transform");
+            let graph = resized.runtime_graph().await.expect("saved resized graph");
+            let [inserted] = graph
+                .network
+                .nodes
+                .iter()
+                .filter(|(id, _)| !network.nodes.contains_key(id))
+                .collect::<Vec<_>>()[..]
+            else {
+                panic!("one source Transform was added")
+            };
+            assert_eq!(
+                get_current_transform(&inserted.1.inputs),
+                DAffine2::from_translation(DVec2::new(10., 8.))
+            );
+            assert_eq!(graph.network.exports, network.exports);
+            let undone = resized
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("undo the entire resize");
+            assert!(
+                undone
+                    .document
+                    .registry()
+                    .value_equal(source.document.registry())
+            );
+            let redone = undone
+                .move_history_in_copy(GddHistoryDirection::Redo, budget())
+                .await
+                .expect("redo the entire resize");
+            assert!(
+                redone
+                    .document
+                    .registry()
+                    .value_equal(resized.document.registry())
+            );
         });
     }
 

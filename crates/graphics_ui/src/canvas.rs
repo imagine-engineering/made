@@ -9,8 +9,11 @@ use graphite_editor::{
     },
     messages::{
         input_mapper::utility_types::pointer::ScrollDelta,
-        portfolio::document::utility_types::misc::PTZ, prelude::NavigationMessageHandler,
-        tool::common_functionality::transformation_cage::axis_align_drag,
+        portfolio::document::utility_types::misc::PTZ,
+        prelude::NavigationMessageHandler,
+        tool::common_functionality::transformation_cage::{
+            BoundingBoxManager, SelectedEdges, axis_align_drag,
+        },
     },
 };
 use graphite_graph_craft::document::value::{DAffine2, DVec2};
@@ -153,15 +156,7 @@ impl ArtboardDraw {
     }
 
     pub fn outline(&self, geometry: GddArtboardGeometry) -> [DVec2; 4] {
-        let first = geometry.location;
-        let last = first + geometry.dimensions.max(DVec2::ONE);
-        [
-            first,
-            DVec2::new(last.x, first.y),
-            last,
-            DVec2::new(first.x, last.y),
-        ]
-        .map(|corner| self.document_to_pane.transform_point2(corner))
+        artboard_outline(geometry, self.document_to_pane)
     }
 }
 
@@ -169,6 +164,69 @@ pub(crate) struct ArtboardMove {
     start: DVec2,
     geometry: GddArtboardGeometry,
     document_to_pane: DAffine2,
+}
+
+pub(crate) struct ArtboardResize {
+    edges: SelectedEdges,
+    start: Point<Pixels>,
+    pane_origin: Point<Pixels>,
+    document_to_pane: DAffine2,
+}
+
+impl ArtboardResize {
+    pub fn at_edge(
+        bounds: [DVec2; 2],
+        start: Point<Pixels>,
+        pane_origin: Point<Pixels>,
+        document_to_pane: DAffine2,
+    ) -> Option<Self> {
+        let cage = BoundingBoxManager {
+            bounds,
+            transform: document_to_pane,
+            ..Default::default()
+        };
+        let (top, bottom, left, right) =
+            cage.check_selected_edges(logical_vector(start - pane_origin))?;
+        Some(Self {
+            edges: SelectedEdges::new(top, bottom, left, right, bounds),
+            start,
+            pane_origin,
+            document_to_pane,
+        })
+    }
+
+    pub fn placement(
+        &self,
+        position: Point<Pixels>,
+        constrain: bool,
+        centered: bool,
+    ) -> Option<GddArtboardGeometry> {
+        if position == self.start {
+            return None;
+        }
+        let center = centered.then(|| {
+            let [first, last] = self.edges.bounds;
+            self.document_to_pane.transform_point2((first + last) / 2.)
+        });
+        let (first, size) = self.edges.new_size(
+            logical_vector(position - self.pane_origin),
+            self.document_to_pane,
+            center,
+            constrain,
+            None,
+        );
+        let last = first + size;
+        let location = first.min(last).round();
+        let dimensions = size.abs().round();
+        (location.is_finite() && dimensions.is_finite()).then_some(GddArtboardGeometry {
+            location,
+            dimensions,
+        })
+    }
+
+    pub fn outline(&self, geometry: GddArtboardGeometry) -> [DVec2; 4] {
+        artboard_outline(geometry, self.document_to_pane)
+    }
 }
 
 impl ArtboardMove {
@@ -311,6 +369,18 @@ impl ArtboardNavigation {
     }
 }
 
+fn artboard_outline(geometry: GddArtboardGeometry, document_to_pane: DAffine2) -> [DVec2; 4] {
+    let first = geometry.location;
+    let last = first + geometry.dimensions.max(DVec2::ONE);
+    [
+        first,
+        DVec2::new(last.x, first.y),
+        last,
+        DVec2::new(first.x, last.y),
+    ]
+    .map(|corner| document_to_pane.transform_point2(corner))
+}
+
 fn logical_vector(point: Point<Pixels>) -> DVec2 {
     DVec2::new(f64::from(f32::from(point.x)), f64::from(f32::from(point.y)))
 }
@@ -319,6 +389,35 @@ fn logical_vector(point: Point<Pixels>) -> DVec2 {
 mod tests {
     use super::*;
     use graphite_std::vector_types::kurbo::Shape;
+
+    #[test]
+    fn artboard_resize_applies_source_edge_flip_aspect_and_center_rules() {
+        let bounds = [DVec2::ZERO, DVec2::splat(40.)];
+        let transform = DAffine2::from_scale(DVec2::splat(2.));
+        let pane = point(px(50.), px(30.));
+        let at = |x: f32, y: f32| pane + point(px(2. * x), px(2. * y));
+        assert!(ArtboardResize::at_edge(bounds, at(20., 20.), pane, transform).is_none());
+        let corner = at(40., 40.);
+        let resize =
+            ArtboardResize::at_edge(bounds, corner, pane, transform).expect("source corner");
+        assert_eq!(resize.placement(corner, false, false), None);
+        assert_eq!(
+            resize.placement(at(50., 43.), true, true),
+            Some(GddArtboardGeometry {
+                location: DVec2::splat(-10.),
+                dimensions: DVec2::splat(60.),
+            }),
+        );
+        let resize = ArtboardResize::at_edge(bounds, at(40., 20.), pane, transform)
+            .expect("source right edge");
+        assert_eq!(
+            resize.placement(at(-8., 20.), false, false),
+            Some(GddArtboardGeometry {
+                location: DVec2::new(-8., 0.),
+                dimensions: DVec2::new(8., 40.),
+            }),
+        );
+    }
 
     #[test]
     fn at_gra_view_014_1_prepares_the_source_artboard_label_path() {
