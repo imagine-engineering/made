@@ -625,7 +625,7 @@ async fn cached_gradle_ordered_operations_keep_declared_options(cx: &mut TestApp
 #[ignore = "requires an offline Linux ARM64 Docker host with the Gradle fixture and pinned JDTLS model support"]
 async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut TestAppContext) {
     use jvm_ui::ShowGradle;
-    use language_tools::language_tool_tree::ExpandAll;
+    use language_tools::language_tool_tree::{ExpandAll, status_message};
     use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
     use remote::{DockerConnectionOptions, RemoteConnectionOptions};
     use std::path::Path;
@@ -710,6 +710,7 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
         cx.run_until_parked();
         if lsp_store.read_with(cx, |store, cx| {
             store.can_synchronize_remote_gradle_metadata(Some(worktree_id), cx)
+                && !store.jdtls_project_query_pending(worktree_id)
                 && store
                     .jdtls_project_snapshot(worktree_id)
                     .is_some_and(|(snapshot, current)| {
@@ -749,6 +750,19 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
             .timer(Duration::from_millis(100))
             .await;
     }
+    panel.read_with(cx, |panel, _| {
+        let (status, rows, _) = panel.snapshot_for_test();
+        assert!(
+            status_message(&status).is_some_and(|message| {
+                message.contains("Use Synchronize metadata")
+                    && message.contains(
+                        "executes trusted build configuration scripts on the project host",
+                    )
+            }),
+            "the Gradle view should explain the host action before synchronization: {status:?}"
+        );
+        assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
+    });
     focus_control(
         cx,
         "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts",
@@ -759,11 +773,18 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
         cx.run_until_parked();
         cx.dispatch_action(ExpandAll);
         if panel.read_with(cx, |panel, _| {
-            let (_, rows, _) = panel.snapshot_for_test();
-            [FIRST, SECOND].into_iter().all(|path| {
+            let (status, rows, _) = panel.snapshot_for_test();
+            let tasks_available = [FIRST, SECOND].into_iter().all(|path| {
                 rows.iter()
                     .any(|row| row.label == path && row.id.0.contains(":gradle-task:"))
-            })
+            });
+            if tasks_available {
+                assert!(
+                    status_message(&status)
+                        .is_none_or(|message| !message.contains("Use Synchronize metadata"))
+                );
+            }
+            tasks_available
         }) {
             break;
         }

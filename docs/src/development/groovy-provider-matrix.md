@@ -207,7 +207,11 @@ extension and the prepared JVM Remote Server on the host. Run the opt-in
 
 The opt-in `docker_gradle_ordered_operations_run_through_dependencies` case
 opens the mounted Dependencies panel on a fresh offline Linux ARM64 Gradle
-project. It synchronizes metadata on the host, adds `parityArguments` with
+project. Before synchronization, the Gradle view explains which action loads
+tasks and configurations and that it runs trusted build configuration scripts
+on the project host. The case checks that no task rows appear until the user
+invokes that action and that the prompt clears when the tasks are available.
+It synchronizes metadata on the host, adds `parityArguments` with
 its declared `--message` option, then adds `check`. The terminal runs one
 offline Task using the host's Gradle installation, Java 17 and bash. The
 option arrives as a literal argument and `check` follows it, producing a
@@ -219,10 +223,15 @@ fresh fixture named by `GROOVY_GRADLE_ORDERED_DOCKER_ROOT` at
 `/workspaces/gradle` and supply the container ID in
 `GROOVY_GRADLE_TEST_DOCKER_CONTAINER`. In other
 runs, JDTLS installed the same companion during LSP initialization but
-did not advertise its commands. After a provider restart, Buildship also
+did not advertise its commands. Fresh standalone protocol probes replaying the
+recorded initialization options advertised all 22 Gradle companion commands
+and returned cached topology. A control with no companion rejected the
+topology command. After a provider restart, Buildship also
 returned imported projects with unknown cached topology. Groovy refused the
-scoped metadata query in that state. Standard companion startup and restart
-recovery still require qualification.
+scoped metadata query in that state. In the standalone probe, an explicit
+offline selected reimport restored the three cached project identities. The
+connected recovery workflow and standard companion startup still require
+qualification.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java

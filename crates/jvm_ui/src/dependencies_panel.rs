@@ -18,10 +18,10 @@ use language_tools::language_tool_tree::{
 use project::{
     Project, ProjectPath, WorktreeId,
     jvm_project::{
-        GradleAnnotationProcessorOutput, GradleProject, JdtlsProjectMembership,
-        JdtlsProjectSnapshot, JvmBuildOperation, JvmBuildOperationReceipt, KotlinBuildSystem,
-        KotlinWorkspaceDependency, KotlinWorkspaceSnapshot, MavenOperationOptions,
-        MavenOperationProfile, MavenReactorFailurePolicy,
+        GradleAnnotationProcessorOutput, GradleProject, JdtlsImportedBuildKind,
+        JdtlsProjectMembership, JdtlsProjectSnapshot, JvmBuildOperation, JvmBuildOperationReceipt,
+        KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
+        MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
     task_inventory::{MavenSettingsFile, TaskSourceKind},
     trusted_worktrees::TrustedWorktrees,
@@ -4848,6 +4848,8 @@ impl DependenciesPanel {
         let mut remote_worktrees = 0;
         let mut local_without_snapshot = 0;
         let mut remote_without_snapshot = 0;
+        let mut remote_gradle_needs_metadata = false;
+        let selected_gradle_worktree = self.selected_gradle_worktree();
         let restricted_worktrees = trusted_worktrees
             .read(cx)
             .restricted_worktrees(&worktree_store, cx)
@@ -4875,6 +4877,20 @@ impl DependenciesPanel {
             let kotlin_pending = lsp_store.kotlin_workspace_query_pending(worktree.id());
             let kotlin_snapshot = lsp_store.kotlin_workspace_snapshot(worktree.id());
             let jdtls_snapshot = lsp_store.jdtls_project_snapshot(worktree.id());
+            if self.view == BuildToolView::Gradle
+                && !worktree.is_local()
+                && selected_gradle_worktree.is_none_or(|selected| selected == worktree.id())
+                && let Some((snapshot, true)) = jdtls_snapshot
+            {
+                remote_gradle_needs_metadata |= snapshot
+                    .projects
+                    .iter()
+                    .any(|module| module.imported_build_kind == JdtlsImportedBuildKind::Gradle)
+                    && !snapshot
+                        .projects
+                        .iter()
+                        .any(|module| module.gradle.is_some());
+            }
             let (projections, omitted_stale) = provider_projections_for_view(
                 jdtls_snapshot,
                 kotlin_snapshot,
@@ -5018,6 +5034,8 @@ impl DependenciesPanel {
                 roots.append(&mut rows);
             }
         }
+        let can_load_remote_gradle_metadata = remote_gradle_needs_metadata
+            && lsp_store.can_synchronize_remote_gradle_metadata(selected_gradle_worktree, cx);
         if !inspection_current {
             self.graph_inspection = None;
         }
@@ -5111,6 +5129,13 @@ impl DependenciesPanel {
             )
         } else if query_pending && roots.is_empty() {
             LanguageToolProviderStatus::Loading
+        } else if !stale && can_load_remote_gradle_metadata {
+            let message = "Use Synchronize metadata to load Gradle tasks and configurations. This executes trusted build configuration scripts on the project host.".into();
+            if roots.is_empty() {
+                LanguageToolProviderStatus::Empty(message)
+            } else {
+                LanguageToolProviderStatus::Partial(message)
+            }
         } else if local_worktrees == 0
             && remote_without_snapshot == remote_worktrees
             && remote_worktrees > 0
@@ -5144,7 +5169,7 @@ impl DependenciesPanel {
             LanguageToolProviderStatus::Empty(if local_worktrees > 0 {
                 "Gradle metadata unavailable. Open Java source, check Language Servers, then use Synchronize metadata; this executes trusted build configuration scripts.".into()
             } else {
-                "Gradle metadata unavailable on the project host. Remote metadata synchronization is not yet supported.".into()
+                "Gradle metadata is unavailable. Check Language Servers and the connection to the project host, then refresh.".into()
             })
         } else if partial {
             LanguageToolProviderStatus::Partial(
@@ -8554,7 +8579,9 @@ impl Render for DependenciesPanel {
             (true, true) => {
                 "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts"
             }
-            (true, false) => "Gradle metadata synchronization unavailable for remote projects",
+            (true, false) => {
+                "Gradle metadata synchronization requires a trusted direct connection to the project host"
+            }
         };
         let can_cancel_import = self.build_phase_is_pending(cx);
         let can_inspect_graph = self
