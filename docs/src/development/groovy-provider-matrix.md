@@ -153,6 +153,15 @@ host. The test creates its own reactor within that mount and uses the same
 prepared development Remote Server. The container's JDK and Maven wrapper
 environment must point to the host installations.
 
+The same connected Tests case checks Java test authorization on the Linux
+ARM64 host. The host returns a typed mismatch for an incompatible discovery
+version and rejects an incompatible action request. Saving a method rename
+through the connected editor invalidates the prior discovery. Refreshing
+Tests still leaves the old report display-only because the host cannot verify
+its method selector. Restoring the source recovers the original case
+identity. The rejected requests leave the Surefire report contents and
+modification time intact.
+
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
 extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and

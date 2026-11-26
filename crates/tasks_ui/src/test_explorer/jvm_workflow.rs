@@ -2142,6 +2142,188 @@ pub(super) async fn selected_maven_case_through_docker_tests_panel(cx: &mut Test
     .await;
 }
 
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn verify_docker_maven_test_authority(
+    project: &Entity<Project>,
+    worktree_id: WorktreeId,
+    selection: &TestExplorerSelection,
+    cx: &mut VisualTestContext,
+) {
+    use project::jvm_test_provider::JVM_TEST_DISCOVERY_PROTOCOL_VERSION;
+    use rpc::proto;
+    use util::rel_path::RelPath;
+
+    let (client, provider, worktree) = project.read_with(cx, |project, cx| {
+        (
+            project
+                .remote_client()
+                .expect("Docker connection")
+                .read(cx)
+                .proto_client(),
+            project
+                .jvm_test_provider_store()
+                .expect("Java test provider")
+                .clone(),
+            project
+                .worktree_store()
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .expect("Docker worktree"),
+        )
+    });
+    let snapshot = provider
+        .update(cx, |provider, cx| provider.refresh(cx))
+        .await
+        .expect("current Docker test discovery");
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == selection.node_id)
+    );
+    let discovery_generation = snapshot.discovery_generation.0;
+    let scope = vec![worktree_id.to_proto()];
+    let mismatch = client
+        .request(proto::GetJvmTestDiscovery {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            protocol_version: u32::MAX,
+            worktree_ids: scope.clone(),
+            request_id: u64::MAX,
+        })
+        .await
+        .expect("typed Docker discovery mismatch");
+    assert_eq!(
+        mismatch.protocol_version,
+        JVM_TEST_DISCOVERY_PROTOCOL_VERSION
+    );
+    assert_eq!(mismatch.request_id, u64::MAX);
+    assert_eq!(mismatch.discovery_generation, 0);
+    assert_eq!(
+        mismatch.status,
+        proto::StructuredProviderStatus::Mismatch as i32
+    );
+    assert_eq!(
+        mismatch.diagnostic.as_deref(),
+        Some("Java test discovery protocol mismatch")
+    );
+    let mut action = proto::ResolveJvmTestAction {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        protocol_version: u32::MAX,
+        discovery_generation,
+        node_id: selection.node_id.0.clone(),
+        failed_run_id: None,
+        worktree_ids: scope,
+        report_maximum_bytes: None,
+        requested_run_id: None,
+    };
+    let error = client
+        .request(action.clone())
+        .await
+        .expect_err("Docker host must reject an incompatible action");
+    assert!(
+        error
+            .to_string()
+            .contains("Java test action protocol mismatch"),
+        "{error}"
+    );
+    action.protocol_version = JVM_TEST_DISCOVERY_PROTOCOL_VERSION;
+
+    let path = RelPath::from_unix_str("application/src/test/java/evidence/GreetingTest.java")
+        .expect("relative Java source path");
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_buffer((worktree_id, path), cx)
+        })
+        .await
+        .expect("Docker worktree Java test buffer");
+    let source_mtime = |cx: &VisualTestContext| {
+        worktree.read_with(cx, |worktree, _| {
+            worktree
+                .snapshot()
+                .entry_for_path(path)
+                .expect("Java source entry")
+                .mtime
+        })
+    };
+    let original_mtime = source_mtime(cx);
+    buffer.update(cx, |buffer, cx| {
+        let start = buffer
+            .text()
+            .find("messageIsAvailable()")
+            .expect("verified Java method");
+        buffer.edit(
+            [(start..start + "messageIsAvailable".len(), "renamedTest")],
+            None,
+            cx,
+        );
+    });
+    project
+        .update(cx, |project, cx| project.save_buffer(buffer.clone(), cx))
+        .await
+        .expect("save the renamed Java method on Docker");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while source_mtime(cx) == original_mtime {
+        cx.run_until_parked();
+        assert!(
+            Instant::now() < deadline,
+            "host Java source change must reach the client"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(50))
+            .await;
+    }
+    let error = client
+        .request(action.clone())
+        .await
+        .expect_err("Docker host must reject discovery from before the saved edit");
+    assert!(
+        error.to_string().contains("stale discovery generation"),
+        "{error}"
+    );
+
+    let snapshot = provider
+        .update(cx, |provider, cx| provider.refresh(cx))
+        .await
+        .expect("rediscover after the host edit");
+    assert_ne!(snapshot.discovery_generation.0, discovery_generation);
+    action.discovery_generation = snapshot.discovery_generation.0;
+    let error = client
+        .request(action)
+        .await
+        .expect_err("an old report cannot authorize a renamed Java test");
+    assert!(
+        error.to_string().contains("no verified method selector"),
+        "{error}"
+    );
+
+    buffer.update(cx, |buffer, cx| {
+        buffer.undo(cx).expect("restore the Java test method");
+    });
+    project
+        .update(cx, |project, cx| project.save_buffer(buffer.clone(), cx))
+        .await
+        .expect("save the restored Java method on Docker");
+    let snapshot = provider
+        .update(cx, |provider, cx| provider.refresh(cx))
+        .await
+        .expect("rediscover after restoring the test");
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .any(|node| node.id == selection.node_id)
+    );
+    assert!(
+        !snapshot
+            .diagnostic
+            .as_deref()
+            .is_some_and(|message| message.contains("display-only"))
+    );
+    eprintln!(
+        "Docker rejected mismatched protocols and stale Java source, then recovered discovery"
+    );
+}
+
 async fn selected_java_case_with_debug_hooks(
     cx: &mut TestAppContext,
     build_tool: JvmTestBuildTool,
@@ -4222,6 +4404,20 @@ async fn selected_java_case_with_debug_hooks(
         assert!(fresh_report.contains(r#"name="os.arch" value="aarch64""#));
         assert!(fresh_report.contains(r#"name="user.dir" value="/workspaces/tests/"#));
         eprintln!("Selected Maven case passed in Linux ARM64 with host-produced Surefire XML");
+        let report_mtime = std::fs::metadata(&report)
+            .and_then(|metadata| metadata.modified())
+            .expect("Docker Surefire report time");
+        verify_docker_maven_test_authority(&project, worktree_id, &selection, cx).await;
+        assert_eq!(
+            std::fs::read_to_string(&report).expect("retained report"),
+            fresh_report
+        );
+        assert_eq!(
+            std::fs::metadata(&report)
+                .and_then(|metadata| metadata.modified())
+                .expect("retained report time"),
+            report_mtime,
+        );
     }
     if should_fail {
         assert!(fresh_report.contains("<failure"));
