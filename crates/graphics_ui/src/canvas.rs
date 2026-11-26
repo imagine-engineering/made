@@ -297,12 +297,12 @@ fn paint_overlay_path(builder: PathBuilder, color: Rgba, window: &mut Window) {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct ArtboardNavigation {
+pub(crate) struct DocumentNavigation {
     pub camera: PTZ,
-    pub artboard_size: DVec2,
+    pub document_size: DVec2,
 }
 
-impl ArtboardNavigation {
+impl DocumentNavigation {
     pub fn document_to_pane(&self, viewport_size: DVec2) -> DAffine2 {
         NavigationMessageHandler::default()
             .calculate_offset_transform(viewport_size / 2., &self.camera)
@@ -350,7 +350,7 @@ impl ArtboardNavigation {
                 } else {
                     original_zoom / factor
                 };
-                let coverage_per_zoom = (self.artboard_size / viewport_size).max_element();
+                let coverage_per_zoom = (self.document_size / viewport_size).max_element();
                 let minimum_zoom = VIEWPORT_ZOOM_MIN_FRACTION_COVER / coverage_per_zoom;
                 camera.set_zoom(zoom.max(minimum_zoom));
                 let anchor = logical_vector(event.position - pane.origin);
