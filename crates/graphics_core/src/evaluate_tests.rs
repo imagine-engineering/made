@@ -9,6 +9,96 @@ use std::{collections::HashSet, error::Error, time::Duration};
 type TestResult = Result<(), Box<dyn Error>>;
 
 #[test]
+fn at_gra_node_262_3_ellipse_ranked_geometry_and_handles_match_the_pinned_source() {
+    use graphite_core_types::NodeParameter as _;
+    use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+    use graphite_std::{Vector, vector_nodes::generator_nodes::ellipse};
+    use graphite_vector_types::vector::{algorithms::shapes, misc::HandleId};
+
+    let graph = |horizontal, vertical| {
+        let mut template = resolve_proto_node_type(ellipse::IDENTIFIER)
+            .expect("pinned Ellipse definition")
+            .default_node_template();
+        template.normalize_stored_types();
+        for (index, value) in [
+            (ellipse::RadiusXInput::INDEX, horizontal),
+            (ellipse::RadiusYInput::INDEX, vertical),
+        ] {
+            *template.inputs.get_mut(index).expect("pinned radius slot") =
+                NodeInput::value(value, false);
+        }
+        let node_id = NodeId(27);
+        NodeNetwork {
+            nodes: [(node_id, template.into_parts().0)].into_iter().collect(),
+            exports: vec![NodeInput::node(node_id, 0)],
+            ..Default::default()
+        }
+    };
+
+    block_on(async {
+        let radii = [[32.5, 17.25], [0., 9.5], [-12.75, 9.5]];
+        let mut items = List::new();
+        for [radius_x, radius_y] in radii {
+            let evaluator = NumericGraphEvaluator::prepare(graph(
+                TaggedValue::Number(radius_x),
+                TaggedValue::Number(radius_y),
+            ))
+            .await
+            .expect("compiled item constructor")
+            .0;
+            assert_eq!(
+                evaluator.output_type(),
+                Some(graphite_std::future!(Item<Vector>)),
+            );
+            let item: Item<Vector> = evaluator
+                .tree()
+                .eval(evaluator.output(), Context::default())
+                .await
+                .expect("typed item output");
+            let source_radius = DVec2::new(radius_x, radius_y);
+            let source =
+                Vector::from_bezpath(shapes::ellipse_bezpath(-source_radius, source_radius));
+            let vector = item.element();
+            assert_eq!(vector.point_domain, source.point_domain);
+            assert_eq!(vector.segment_domain, source.segment_domain);
+            let segments = vector.segment_domain.ids();
+            assert_eq!(segments.len(), 4);
+            assert_eq!(
+                vector.colinear_manipulators,
+                segments
+                    .iter()
+                    .zip(segments.iter().cycle().skip(1))
+                    .map(|(segment, next)| { [HandleId::end(*segment), HandleId::primary(*next)] })
+                    .collect::<Vec<_>>(),
+            );
+            items.push(item);
+        }
+        for (horizontal, vertical, expected) in [
+            (vec![32.5, 0., -12.75], vec![17.25, 9.5], items),
+            (vec![32.5], Vec::new(), List::new()),
+        ] {
+            let evaluator = NumericGraphEvaluator::prepare(graph(
+                TaggedValue::Numbers(horizontal),
+                TaggedValue::Numbers(vertical),
+            ))
+            .await
+            .expect("compiled mapped constructor")
+            .0;
+            assert_eq!(
+                evaluator.output_type(),
+                Some(graphite_std::future!(List<Vector>)),
+            );
+            let actual: List<Vector> = evaluator
+                .tree()
+                .eval(evaluator.output(), Context::default())
+                .await
+                .expect("typed list output");
+            assert_eq!(actual, expected);
+        }
+    });
+}
+
+#[test]
 fn at_gra_node_101_103_113_2_rounding_keeps_pinned_values_types_and_attributes() -> TestResult {
     use UnaryNumericOperation::{Ceiling, Floor, Round};
 

@@ -785,6 +785,7 @@ pub enum GddGraphLayerPreview {
 enum SavedGraphicProfile {
     Rectangle,
     Ellipse([f64; 2]),
+    EllipseList,
     Fill,
     Layer(GddGraphLayerPreview),
 }
@@ -800,6 +801,7 @@ const ARTBOARD_LOCATION_INPUT: usize = 2;
 const ARTBOARD_DIMENSIONS_INPUT: usize = 3;
 const ARTBOARD_BACKGROUND_INPUT: usize = 4;
 const ARTBOARD_CLIP_INPUT: usize = 5;
+const MAX_PREVIEW_VALUES: usize = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GddArtboardGeometry {
@@ -1148,7 +1150,9 @@ impl GddGraphNode {
         let index = match (self.graphic_profile?, source.graphic_profile?) {
             (
                 SavedGraphicProfile::Fill,
-                SavedGraphicProfile::Rectangle | SavedGraphicProfile::Ellipse(_),
+                SavedGraphicProfile::Rectangle
+                | SavedGraphicProfile::Ellipse(_)
+                | SavedGraphicProfile::EllipseList,
             ) => fill::ContentInput::INDEX,
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
@@ -5951,21 +5955,32 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &ellipse::IDENTIFIER => {
-            let read_radius = |index: usize| {
-                let input = node.inputs.get(index)?;
-                match input.as_non_exposed_value()? {
-                    TaggedValue::Number(value) if valid_saved_ellipse_radius(*value) => {
-                        Some(((index, input), *value))
-                    }
-                    _ => None,
+            let horizontal = node.inputs.get(ellipse::RadiusXInput::INDEX)?;
+            let vertical = node.inputs.get(ellipse::RadiusYInput::INDEX)?;
+            let profile = match (
+                horizontal.as_non_exposed_value()?,
+                vertical.as_non_exposed_value()?,
+            ) {
+                (TaggedValue::Number(x), TaggedValue::Number(y))
+                    if valid_saved_ellipse_radius(*x) && valid_saved_ellipse_radius(*y) =>
+                {
+                    SavedGraphicProfile::Ellipse([*x, *y])
                 }
+                (TaggedValue::Numbers(x), TaggedValue::Numbers(y))
+                    if x.len().max(y.len()) <= MAX_PREVIEW_VALUES
+                        && x.iter().chain(y).copied().all(valid_saved_ellipse_radius) =>
+                {
+                    SavedGraphicProfile::EllipseList
+                }
+                _ => return None,
             };
-            let (horizontal, radius_x) = read_radius(ellipse::RadiusXInput::INDEX)?;
-            let (vertical, radius_y) = read_radius(ellipse::RadiusYInput::INDEX)?;
             (
                 resolve_proto_node_type(ellipse::IDENTIFIER)?,
-                Vec::from([horizontal, vertical]),
-                SavedGraphicProfile::Ellipse([radius_x, radius_y]),
+                Vec::from([
+                    (ellipse::RadiusXInput::INDEX, horizontal),
+                    (ellipse::RadiusYInput::INDEX, vertical),
+                ]),
+                profile,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -6286,7 +6301,6 @@ fn is_trigonometric_proto(identifier: &ProtoNodeIdentifier) -> bool {
 }
 
 fn preview_numeric_value(value: &TaggedValue) -> Result<GddNumericValue, GddArchiveError> {
-    const MAX_PREVIEW_VALUES: usize = 1024;
     match value {
         TaggedValue::Number(value) if value.is_finite() => Ok(GddNumericValue::Number(*value)),
         TaggedValue::Integer(value) => Ok(GddNumericValue::Integer(*value)),
@@ -10686,6 +10700,27 @@ mod tests {
             .get_mut(ellipse::RadiusYInput::INDEX)
             .expect("vertical radius") = NodeInput::value(TaggedValue::Number(25.), true);
         assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+
+        *ellipse_node
+            .inputs
+            .get_mut(ellipse::RadiusXInput::INDEX)
+            .expect("horizontal radius") =
+            NodeInput::value(TaggedValue::Numbers(vec![32.5, 0.]), false);
+        for (value, exposed) in [
+            (TaggedValue::Number(25.), false),
+            (TaggedValue::Numbers(vec![25.]), true),
+            (TaggedValue::Numbers(vec![f64::MAX]), false),
+            (
+                TaggedValue::Numbers(vec![25.; MAX_PREVIEW_VALUES + 1]),
+                false,
+            ),
+        ] {
+            *ellipse_node
+                .inputs
+                .get_mut(ellipse::RadiusYInput::INDEX)
+                .expect("vertical radius") = NodeInput::value(value, exposed);
+            assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+        }
     }
 
     #[test]
@@ -10773,6 +10808,197 @@ mod tests {
                 archive.folder_files().expect("source files"),
                 original_files
             );
+        });
+    }
+
+    #[test]
+    fn at_gra_node_262_3_reopens_and_renders_the_saved_list_constructor() {
+        use graphite_graph_craft::document::value::RenderOutputType;
+        use graphite_resource::ResourceRegistry;
+
+        let shape_id = NodeId(15);
+        let paint_id = NodeId(20);
+        let merge_id = NodeId(25);
+        let board_id = NodeId(30);
+        let mut shape = resolve_proto_node_type(ellipse::IDENTIFIER)
+            .expect("pinned Ellipse definition")
+            .default_node_template();
+        let mut paint = resolve_proto_node_type(fill::IDENTIFIER)
+            .expect("pinned Fill definition")
+            .default_node_template();
+        paint.normalize_stored_types();
+        let loose_paint = paint.clone().into_parts().0;
+        let mut merge = merge_node_definition()
+            .expect("pinned Merge")
+            .default_node_template();
+        let mut board = artboard_node_definition()
+            .expect("pinned Artboard")
+            .default_node_template();
+        for (node, index, source) in [
+            (&mut paint, fill::ContentInput::INDEX, shape_id),
+            (&mut merge, LAYER_CONTENT_INPUT, paint_id),
+            (&mut board, LAYER_CONTENT_INPUT, merge_id),
+        ] {
+            *node
+                .inputs
+                .get_mut(index)
+                .expect("pinned Content connector") = NodeInput::node(source, 0);
+            node.normalize_stored_types();
+        }
+        *board
+            .inputs
+            .get_mut(ARTBOARD_DIMENSIONS_INPUT)
+            .expect("pinned Dimensions") =
+            NodeInput::value(TaggedValue::DVec2(DVec2::splat(128.)), false);
+        shape.normalize_stored_types();
+        let paint = paint.into_parts().0;
+        let merge = merge.into_parts().0;
+        let board = board.into_parts().0;
+        let output_budget = CpuSvgEvaluationBudget {
+            max_viewport_pixels: 128 * 128,
+            max_output_bytes: 64 * 1024,
+        };
+        let configuration = RenderConfig {
+            viewport: Footprint {
+                resolution: UVec2::splat(128),
+                ..Footprint::DEFAULT
+            },
+            scale: 1.,
+            export_format: SvgExportFormat::Svg,
+            for_export: true,
+            ..Default::default()
+        };
+
+        futures::executor::block_on(async {
+            for (vertical, expected_paths) in [(vec![17.25, 9.5], 3), (Vec::new(), 0)] {
+                let mut shape = shape.clone();
+                for (index, values) in [
+                    (ellipse::RadiusXInput::INDEX, vec![32.5, 0., -12.75]),
+                    (ellipse::RadiusYInput::INDEX, vertical),
+                ] {
+                    *shape.inputs.get_mut(index).expect("pinned list radius") =
+                        NodeInput::value(TaggedValue::Numbers(values), false);
+                }
+                let source = NodeNetwork {
+                    nodes: [
+                        (shape_id, shape.into_parts().0),
+                        (paint_id, paint.clone()),
+                        (merge_id, merge.clone()),
+                        (board_id, board.clone()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    exports: vec![NodeInput::node(board_id, 0)],
+                    ..Default::default()
+                };
+                let expected = evaluate_cpu_svg(&source, configuration, output_budget, None)
+                    .await
+                    .expect("pinned unmodified source graph renders");
+                let mut unconnected = source.clone();
+                unconnected.nodes.insert(paint_id, loose_paint.clone());
+                let resources = HashMapResourceStorage::new();
+                let mut owner = document();
+                owner
+                    .commit_from_runtime(
+                        &unconnected,
+                        &NoMetadata,
+                        &ResourceRegistry::new(),
+                        &resources,
+                    )
+                    .expect("save the original list inputs with an unwired Fill");
+                let zip: Arc<[u8]> = owner
+                    .export_to_bytes(
+                        ExportFormat::Zip,
+                        ExportOptions::default(),
+                        &resources,
+                        None,
+                    )
+                    .await
+                    .expect("source ZIP")
+                    .into();
+                let loose = open_gdd_zip(&zip, budget())
+                    .await
+                    .expect("open exact saved list graph");
+                let nodes = loose.graph_nodes().await.expect("original graph addresses");
+                let find = |id| {
+                    nodes
+                        .iter()
+                        .find(|node| node.local_id == id && node.network_path.is_empty())
+                        .expect("original root node")
+                };
+                let connected = loose
+                    .connect_graphic_content_in_copy(find(paint_id), find(shape_id), budget())
+                    .await
+                    .expect("connect the list output to the original Fill Content port");
+                assert_eq!(connected.history_len(), loose.history_len() + 1);
+                let zip: Arc<[u8]> = connected
+                    .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                    .expect("save connected list graph")
+                    .into();
+                let saved = open_gdd_zip(&zip, budget())
+                    .await
+                    .expect("reopen connected list graph");
+                let graph = saved.runtime_graph().await.expect("saved runtime graph");
+                assert_eq!(graph.network.nodes, source.nodes);
+                assert_eq!(graph.network.exports, source.exports);
+                let graph_nodes = saved.graph_nodes().await.expect("saved graph addresses");
+                let board = graph_nodes
+                    .iter()
+                    .find(|node| node.local_id == board_id && node.network_path.is_empty())
+                    .expect("saved Artboard");
+                let shape = graph_nodes
+                    .iter()
+                    .find(|node| node.local_id == shape_id && node.network_path.is_empty())
+                    .expect("saved Ellipse list");
+                assert!(matches!(
+                    shape.graphic_profile,
+                    Some(SavedGraphicProfile::EllipseList)
+                ));
+                assert!(shape.ellipse_radii().is_none());
+                let rendered = saved
+                    .export_document_artboard_svg(board, output_budget)
+                    .await
+                    .expect("render saved list through Artboard export");
+                let (
+                    RenderOutputType::Svg { svg, image_data },
+                    RenderOutputType::Svg {
+                        svg: expected_svg,
+                        image_data: expected_images,
+                    },
+                ) = (rendered.data, expected.data)
+                else {
+                    panic!("source CPU SVG outputs");
+                };
+                let normalize_clip_id = |svg: &str| {
+                    let (_, definition) = svg
+                        .split_once("<clipPath id=\"")
+                        .expect("Artboard clip definition");
+                    let (id, _) = definition.split_once('"').expect("generated clip ID");
+                    assert!(svg.contains(&format!("clip-path=\"url(#{id})\"")));
+                    // Each source render assigns its own clip ID.
+                    svg.replace(id, "artboard-test-clip")
+                };
+                assert_eq!(normalize_clip_id(&svg), normalize_clip_id(&expected_svg));
+                assert!(image_data.is_empty() && expected_images.is_empty());
+                assert_eq!(
+                    svg.matches("fill=\"#000000\"").count(),
+                    expected_paths,
+                    "{svg}"
+                );
+                let canvas = saved
+                    .render_document_artboard_canvas_svg(UVec2::splat(128), 1., None, output_budget)
+                    .await
+                    .expect("render the saved list through the Canvas entry point");
+                let RenderOutputType::Svg { svg, image_data } = canvas.render.data else {
+                    panic!("Artboard Canvas SVG");
+                };
+                assert_eq!(
+                    svg.matches("fill=\"#000000\"").count(),
+                    expected_paths,
+                    "{svg}"
+                );
+                assert!(image_data.is_empty());
+            }
         });
     }
 
