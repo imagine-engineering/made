@@ -245,6 +245,8 @@ pub enum GddArchiveError {
     UnsupportedGraphArtworkText,
     #[error("Enter a finite artwork font size of at least 1 px.")]
     InvalidArtworkFontSize,
+    #[error("Enter finite artwork bounds of at least 1 px, or leave them empty.")]
+    InvalidArtworkTextBounds,
     #[error("The Graphite node already has the requested pin state.")]
     UnchangedGraphNodePin,
     #[error("The selected Graphite node cannot move in that direction in pinned order.")]
@@ -1021,7 +1023,22 @@ const ARTBOARD_BACKGROUND_INPUT: usize = 4;
 const ARTBOARD_CLIP_INPUT: usize = 5;
 const ELLIPSE_RADIUS_INPUTS: [usize; 2] =
     [ellipse::RadiusXInput::INDEX, ellipse::RadiusYInput::INDEX];
+const ARTWORK_TEXT_INPUTS: [usize; 6] = [
+    artwork_text::TextInput::INDEX,
+    artwork_text::SizeInput::INDEX,
+    artwork_text::HasMaxWidthInput::INDEX,
+    artwork_text::MaxWidthInput::INDEX,
+    artwork_text::HasMaxHeightInput::INDEX,
+    artwork_text::MaxHeightInput::INDEX,
+];
 const MAX_PREVIEW_VALUES: usize = 1024;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GddArtworkTextLayout {
+    pub size: f64,
+    pub max_width: Option<f64>,
+    pub max_height: Option<f64>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GddArtboardGeometry {
@@ -1118,7 +1135,7 @@ pub struct GddGraphNode {
     numeric_input: Option<GddNumericInput>,
     boolean_input: Option<GddGraphBooleanInput>,
     artwork_text: Option<String>,
-    artwork_font_size: Option<f64>,
+    artwork_text_layout: Option<GddArtworkTextLayout>,
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
     can_delete_in_copy: bool,
@@ -1358,7 +1375,11 @@ impl GddGraphNode {
     }
 
     pub fn artwork_font_size(&self) -> Option<f64> {
-        self.artwork_font_size
+        self.artwork_text_layout.map(|layout| layout.size)
+    }
+
+    pub fn artwork_text_layout(&self) -> Option<GddArtworkTextLayout> {
+        self.artwork_text_layout
     }
 
     pub fn name(&self) -> &str {
@@ -1852,7 +1873,7 @@ impl InspectedGddV1 {
                     numeric_input: None,
                     boolean_input: None,
                     artwork_text: None,
-                    artwork_font_size: None,
+                    artwork_text_layout: None,
                     artboard_geometry: None,
                     artboard_background: None,
                     can_delete_in_copy: false,
@@ -2076,10 +2097,10 @@ impl InspectedGddV1 {
                 node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
                 if matches!(profile, SavedGraphicProfile::Text)
-                    && let Some((text, size)) = saved_artwork_text_literals(document)
+                    && let Some((text, layout)) = saved_artwork_text_literals(document)
                 {
                     node.artwork_text = Some(text.to_owned());
-                    node.artwork_font_size = Some(size);
+                    node.artwork_text_layout = Some(layout);
                 }
                 node.can_preview_merge_thumbnail = acyclic
                     && matches!(
@@ -5569,28 +5590,74 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
+        let mut layout = node
+            .artwork_text_layout()
+            .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
+        layout.size = size;
+        self.set_graph_artwork_text_layout_in_copy(node, text, layout, budget)
+            .await
+    }
+
+    pub async fn set_graph_artwork_text_layout_in_copy(
+        &self,
+        node: &GddGraphNode,
+        text: String,
+        layout: GddArtworkTextLayout,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
         if !matches!(node.graphic_profile, Some(SavedGraphicProfile::Text)) {
             return Err(GddArchiveError::UnsupportedGraphArtworkText);
         }
         if text.len() > MAX_PREVIEW_VALUES || text.len() as u64 > budget.max_entry_bytes {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
-        if !valid_artwork_font_size(size) {
+        if !valid_artwork_text_dimension(layout.size) {
             return Err(GddArchiveError::InvalidArtworkFontSize);
         }
-        validate_artwork_text_layout(&text, size)?;
+        if [layout.max_width, layout.max_height]
+            .into_iter()
+            .flatten()
+            .any(|bound| !valid_artwork_text_dimension(bound))
+        {
+            return Err(GddArchiveError::InvalidArtworkTextBounds);
+        }
+        validate_artwork_text_layout(&text, layout)?;
         let mut interface = self.runtime_graph().await?.into_interface()?;
         let path = &node.network_path;
-        let inputs = [
-            (artwork_text::TextInput::INDEX, TaggedValue::String(text)),
-            (artwork_text::SizeInput::INDEX, TaggedValue::Number(size)),
+        let current = interface
+            .document_node(&node.local_id, path)
+            .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
+        let stored_bound = |index| match saved_artwork_text_input(current, index) {
+            Some(TaggedValue::Number(bound)) => Ok(*bound),
+            _ => Err(GddArchiveError::UnsupportedGraphArtworkText),
+        };
+        let values = [
+            TaggedValue::String(text),
+            TaggedValue::Number(layout.size),
+            TaggedValue::Bool(layout.max_width.is_some()),
+            TaggedValue::Number(
+                layout
+                    .max_width
+                    .unwrap_or(stored_bound(artwork_text::MaxWidthInput::INDEX)?),
+            ),
+            TaggedValue::Bool(layout.max_height.is_some()),
+            TaggedValue::Number(
+                layout
+                    .max_height
+                    .unwrap_or(stored_bound(artwork_text::MaxHeightInput::INDEX)?),
+            ),
         ];
-        let mut edits = Vec::with_capacity(inputs.len());
+        let mut edits = Vec::with_capacity(values.len());
         let mut changed_indices = BTreeSet::new();
-        let inputs = inputs.map(|(index, value)| {
-            let connector = InputConnector::node_at_index(node.local_id, index);
-            (index, connector, NodeInput::value(value, false))
-        });
+        let inputs = ARTWORK_TEXT_INPUTS
+            .into_iter()
+            .zip(values)
+            .map(|(index, value)| {
+                let connector = InputConnector::node_at_index(node.local_id, index);
+                (index, connector, NodeInput::value(value, false))
+            })
+            .collect::<Vec<_>>();
         for (index, connector, input) in &inputs {
             if interface.input_from_connector(connector, path) != Some(input) {
                 interface.set_input(connector, input.clone(), path);
@@ -9729,46 +9796,71 @@ fn valid_saved_ellipse_radius_value(value: &TaggedValue) -> bool {
     }
 }
 
-fn valid_artwork_font_size(size: f64) -> bool {
+fn valid_artwork_text_dimension(size: f64) -> bool {
     size >= 1. && (size as f32).is_finite()
 }
 
-fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, f64)> {
-    let [
-        Some(text @ NodeInput::Value { exposed: false, .. }),
-        Some(size @ NodeInput::Value { exposed: false, .. }),
-    ] = [
-        artwork_text::TextInput::INDEX,
-        artwork_text::SizeInput::INDEX,
-    ]
-    .map(|index| node.inputs.get(index))
-    else {
+fn saved_artwork_text_input(node: &DocumentNode, index: usize) -> Option<&TaggedValue> {
+    let input @ NodeInput::Value { exposed: false, .. } = node.inputs.get(index)? else {
         return None;
     };
-    let (TaggedValue::String(text), TaggedValue::Number(size)) =
-        (text.as_value()?, size.as_value()?)
-    else {
-        return None;
-    };
-    (text.len() <= MAX_PREVIEW_VALUES && valid_artwork_font_size(*size))
-        .then_some((text.as_str(), *size))
+    input.as_value()
 }
 
-fn validate_artwork_text_layout(text: &str, size: f64) -> Result<(), GddArchiveError> {
-    use graphite_core_types::{ATTR_FONT, ATTR_FONT_SIZE, list::Item};
+fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, GddArtworkTextLayout)> {
+    let [
+        Some(TaggedValue::String(text)),
+        Some(TaggedValue::Number(size)),
+        Some(TaggedValue::Bool(has_width)),
+        Some(TaggedValue::Number(width)),
+        Some(TaggedValue::Bool(has_height)),
+        Some(TaggedValue::Number(height)),
+    ] = ARTWORK_TEXT_INPUTS.map(|index| saved_artwork_text_input(node, index))
+    else {
+        return None;
+    };
+    (text.len() <= MAX_PREVIEW_VALUES
+        && valid_artwork_text_dimension(*size)
+        && width.is_finite()
+        && height.is_finite()
+        && (!has_width || valid_artwork_text_dimension(*width))
+        && (!has_height || valid_artwork_text_dimension(*height)))
+    .then_some((
+        text.as_str(),
+        GddArtworkTextLayout {
+            size: *size,
+            max_width: has_width.then_some(*width),
+            max_height: has_height.then_some(*height),
+        },
+    ))
+}
 
-    let source = Item::new_from_element(text.to_owned())
+fn validate_artwork_text_layout(
+    text: &str,
+    layout: GddArtworkTextLayout,
+) -> Result<(), GddArchiveError> {
+    use graphite_core_types::{
+        ATTR_FONT, ATTR_FONT_SIZE, ATTR_MAX_HEIGHT, ATTR_MAX_WIDTH, list::Item,
+    };
+
+    let mut source = Item::new_from_element(text.to_owned())
         .with_attribute(
             ATTR_FONT,
             graphite_std::text::FALLBACK_FONT_RESOURCE.clone(),
         )
-        .with_attribute(ATTR_FONT_SIZE, size);
+        .with_attribute(ATTR_FONT_SIZE, layout.size);
+    if let Some(width) = layout.max_width {
+        source.set_attribute(ATTR_MAX_WIDTH, width);
+    }
+    if let Some(height) = layout.max_height {
+        source.set_attribute(ATTR_MAX_HEIGHT, height);
+    }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         crate::render::validate_text_item(&source, DAffine2::IDENTITY)
     }))
     .map_err(|_| {
         GddArchiveError::GraphLayerPreviewEvaluation(
-            "Graphite could not measure the artwork text at this font size.".into(),
+            "Graphite could not measure the requested artwork text layout.".into(),
         )
     })?
     .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
@@ -9780,9 +9872,9 @@ fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveEr
         if matches!(&node.implementation, DocumentNodeImplementation::ProtoNode(identifier)
             if identifier == &artwork_text::IDENTIFIER)
         {
-            let (text, size) = saved_artwork_text_literals(node)
+            let (text, layout) = saved_artwork_text_literals(node)
                 .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
-            validate_artwork_text_layout(text, size)?;
+            validate_artwork_text_layout(text, layout)?;
         }
         let [_, modification] = node.inputs.as_slice() else {
             continue;
@@ -10020,14 +10112,12 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             if identifier == &artwork_text::IDENTIFIER =>
         {
             saved_artwork_text_literals(node)?;
-            let text = artwork_text::TextInput::INDEX;
-            let size = artwork_text::SizeInput::INDEX;
             (
                 resolve_proto_node_type(artwork_text::IDENTIFIER)?,
-                vec![
-                    (text, node.inputs.get(text)?),
-                    (size, node.inputs.get(size)?),
-                ],
+                ARTWORK_TEXT_INPUTS
+                    .into_iter()
+                    .map(|index| Some((index, node.inputs.get(index)?)))
+                    .collect::<Option<Vec<_>>>()?,
                 SavedGraphicProfile::Text,
             )
         }

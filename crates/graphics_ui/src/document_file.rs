@@ -22,9 +22,9 @@ use graphics_core::evaluate::{
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasLayer,
-        GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
-        GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
-        GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
+        GddArtboardCanvasPick, GddArtboardGeometry, GddArtworkTextLayout, GddCanvasArtworkHit,
+        GddCanvasRenderTarget, GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent,
+        GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
         GddGraphPortSource, GddHistoryDirection, GddLayerBlendingChange, GddLayerGrouping,
         GddLayerOpacityKind, GddLayerOrder, GddNumericGraphEvaluator, GddNumericImportKind,
         GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
@@ -1282,6 +1282,7 @@ struct NodeCopyForm {
     value: Entity<Editor>,
     position: Entity<Editor>,
     artwork_text: Entity<Editor>,
+    artwork_bounds: [Entity<Editor>; 2],
     artboard_background: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
     layer_opacity: [Entity<Editor>; 2],
@@ -1328,6 +1329,13 @@ impl NodeCopyForm {
             value: cx.new(|cx| Editor::single_line(window, cx)),
             position: cx.new(|cx| Editor::single_line(window, cx)),
             artwork_text: cx.new(|cx| Editor::auto_height(3, 8, window, cx)),
+            artwork_bounds: std::array::from_fn(|_| {
+                cx.new(|cx| {
+                    let mut editor = Editor::single_line(window, cx);
+                    editor.set_placeholder_text("Auto", window, cx);
+                    editor
+                })
+            }),
             artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             layer_opacity: std::array::from_fn(|_| {
@@ -1362,6 +1370,37 @@ impl NodeCopyForm {
             saved_graph_drag_start: Default::default(),
             saved_graph_box_selection: Default::default(),
             pending_canvas_source: None,
+        }
+    }
+
+    fn reset_artwork_text(
+        &self,
+        node: &GddGraphNode,
+        window: &mut Window,
+        cx: &mut Context<GraphiteDocumentItem>,
+    ) {
+        let (Some(text), Some(layout)) = (node.artwork_text(), node.artwork_text_layout()) else {
+            return;
+        };
+        self.artwork_text.update(cx, |editor, cx| {
+            gpui::EntityInputHandler::unmark_text(editor, window, cx);
+            editor.set_text(text, window, cx);
+        });
+        self.value.update(cx, |editor, cx| {
+            editor.set_text(layout.size.to_string(), window, cx);
+        });
+        for (editor, bound) in self
+            .artwork_bounds
+            .iter()
+            .zip([layout.max_width, layout.max_height])
+        {
+            editor.update(cx, |editor, cx| {
+                editor.set_text(
+                    bound.map(|value| value.to_string()).unwrap_or_default(),
+                    window,
+                    cx,
+                );
+            });
         }
     }
 
@@ -1852,7 +1891,7 @@ enum NodeCopyChange {
     Rename(String),
     ArtworkText {
         text: String,
-        size: f64,
+        layout: GddArtworkTextLayout,
     },
     DuplicateNumeric,
     DeleteIsolated,
@@ -1888,9 +1927,9 @@ impl NodeCopyChange {
                     .rename_graph_node_in_copy(node, name, ARCHIVE_BUDGET)
                     .await
             }
-            Self::ArtworkText { text, size } => {
+            Self::ArtworkText { text, layout } => {
                 archive
-                    .set_graph_artwork_text_and_size_in_copy(node, text, size, ARCHIVE_BUDGET)
+                    .set_graph_artwork_text_layout_in_copy(node, text, layout, ARCHIVE_BUDGET)
                     .await
             }
             Self::DuplicateNumeric => {
@@ -5346,17 +5385,7 @@ impl GraphiteDocumentItem {
             form.selected = Some(index);
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
-            if let Some(text) = node.artwork_text() {
-                form.artwork_text.update(cx, |editor, cx| {
-                    gpui::EntityInputHandler::unmark_text(editor, window, cx);
-                    editor.set_text(text, window, cx);
-                });
-            }
-            if let Some(size) = node.artwork_font_size() {
-                form.value.update(cx, |editor, cx| {
-                    editor.set_text(size.to_string(), window, cx)
-                });
-            }
+            form.reset_artwork_text(node, window, cx);
             if let Some(value) = node.numeric_input() {
                 form.value.update(cx, |editor, cx| {
                     editor.set_text(value.to_string(), window, cx)
@@ -7898,6 +7927,7 @@ impl GraphiteDocumentItem {
             .is_some_and(|form| editor_focused(&form.position))
             || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
                 [&form.name, &form.value, &form.position, &form.artwork_text, &form.artboard_background].into_iter().any(editor_focused)
+                    || form.artwork_bounds.iter().any(editor_focused)
                     || form.ellipse_radii.iter().any(editor_focused)
                     || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
         if field_focused || self.model.read(cx).working.is_none() {
@@ -8608,10 +8638,32 @@ impl GraphiteDocumentItem {
             cx.notify();
             return;
         };
+        let bounds = form.artwork_bounds.each_ref().map(|input| {
+            let value = input.read(cx).text(cx);
+            let value = value.trim();
+            (!value.is_empty())
+                .then(|| value.parse::<f64>())
+                .transpose()
+        });
+        let [Ok(max_width), Ok(max_height)] = bounds else {
+            self.copy_feedback = Some((
+                GddArchiveError::InvalidArtworkTextBounds.to_string().into(),
+                Color::Error,
+            ));
+            cx.notify();
+            return;
+        };
         self.apply_graph_edit(
             GraphiteCopy::EditNode {
                 node: Box::new(node.clone()),
-                change: NodeCopyChange::ArtworkText { text, size },
+                change: NodeCopyChange::ArtworkText {
+                    text,
+                    layout: GddArtworkTextLayout {
+                        size,
+                        max_width,
+                        max_height,
+                    },
+                },
             },
             window,
             cx,
@@ -8644,6 +8696,25 @@ impl GraphiteDocumentItem {
                     .aria_label("Artwork text")
                     .child(form.artwork_text.clone()),
             )
+            .children(
+                [
+                    ("Max width (px)", "GRAPHITE-GDD-ARTWORK-MAX-WIDTH"),
+                    ("Max height (px)", "GRAPHITE-GDD-ARTWORK-MAX-HEIGHT"),
+                ]
+                .into_iter()
+                .zip(&form.artwork_bounds)
+                .enumerate()
+                .map(|(index, ((label, selector), input))| {
+                    h_flex().gap_2().child(Label::new(label)).child(
+                        div()
+                            .id(("graphite-gdd-artwork-bound", index))
+                            .debug_selector(move || selector.into())
+                            .aria_label(label)
+                            .w_24()
+                            .child(input.clone()),
+                    )
+                }),
+            )
             .child(
                 h_flex()
                     .gap_2()
@@ -8668,19 +8739,8 @@ impl GraphiteDocumentItem {
                                         let NodeCopyPanel::Ready(form) = &item.node_copy else {
                                             return;
                                         };
-                                        if let Some(node) = form.selected_node()
-                                            && let Some(text) = node.artwork_text()
-                                            && let Some(size) = node.artwork_font_size()
-                                        {
-                                            form.artwork_text.update(cx, |editor, cx| {
-                                                gpui::EntityInputHandler::unmark_text(
-                                                    editor, window, cx,
-                                                );
-                                                editor.set_text(text, window, cx);
-                                            });
-                                            form.value.update(cx, |editor, cx| {
-                                                editor.set_text(size.to_string(), window, cx)
-                                            });
+                                        if let Some(node) = form.selected_node() {
+                                            form.reset_artwork_text(node, window, cx);
                                         }
                                     })),
                             ),
@@ -15962,7 +16022,9 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_r14_1_at_gra_text_006_workspace_edits_saved_artwork_text(cx: &mut TestAppContext) {
+    async fn at_r14_1_at_gra_text_003_at_gra_text_006_workspace_edits_saved_artwork_text(
+        cx: &mut TestAppContext,
+    ) {
         use gpui::EntityInputHandler as _;
         let text_id = format!(
             "PROTONODE:{}",
@@ -16091,18 +16153,36 @@ mod tests {
                 .expect("editable Text")
                 .clone()
         };
-        let enter_size = |window: &mut gpui::VisualTestContext, size| {
-            click(window, "GRAPHITE-GDD-ARTWORK-FONT-SIZE");
+        let enter_value = |window: &mut gpui::VisualTestContext, selector, value: &str| {
+            click(window, selector);
             window.dispatch_action(editor::actions::SelectAll);
-            window.simulate_input(size);
+            if value.is_empty() {
+                window.simulate_keystrokes("backspace");
+            } else {
+                window.simulate_input(value);
+            }
             paint(window);
         };
-        assert_eq!(
-            initial_text(&before.graph_nodes().await.expect("initial Text")).artwork_font_size(),
-            Some(24.)
-        );
-        enter_size(window, "0");
-        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-APPLY");
+        let size_field = "GRAPHITE-GDD-ARTWORK-FONT-SIZE";
+        let width_field = "GRAPHITE-GDD-ARTWORK-MAX-WIDTH";
+        let height_field = "GRAPHITE-GDD-ARTWORK-MAX-HEIGHT";
+        let apply = "GRAPHITE-GDD-ARTWORK-TEXT-APPLY";
+        let layout = |window: &gpui::VisualTestContext| {
+            let snapshot = snapshot(window);
+            async move {
+                initial_text(&snapshot.graph_nodes().await.expect("current Text"))
+                    .artwork_text_layout()
+                    .expect("editable layout")
+            }
+        };
+        let automatic = GddArtworkTextLayout {
+            size: 24.,
+            max_width: None,
+            max_height: None,
+        };
+        assert_eq!(layout(window).await, automatic);
+        enter_value(window, size_field, "0");
+        click(window, apply);
         assert!(Arc::ptr_eq(&snapshot(window), &before));
         item.read_with(window, |item, _| {
             assert!(
@@ -16111,8 +16191,8 @@ mod tests {
                     .is_some_and(|(message, _)| message.contains("at least 1 px"))
             );
         });
-        enter_size(window, "72");
-        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-APPLY");
+        enter_value(window, size_field, "72");
+        click(window, apply);
         let resized = initial_text(&snapshot(window).graph_nodes().await.expect("resized Text"));
         assert_eq!(resized.artwork_text(), Some("Lorem ipsum"));
         assert_eq!(resized.artwork_font_size(), Some(72.));
@@ -16125,6 +16205,24 @@ mod tests {
             initial_text(&before.graph_nodes().await.expect("restored Text")).artwork_font_size(),
             Some(24.)
         );
+        enter_value(window, width_field, "-5");
+        click(window, apply);
+        assert!(Arc::ptr_eq(&snapshot(window), &before));
+        enter_value(window, width_field, "68");
+        click(window, apply);
+        assert_eq!(layout(window).await.max_width, Some(68.));
+        let wrapped = artwork_image(window);
+        assert!(wrapped.as_bytes(0) != original_image.as_bytes(0));
+        enter_value(window, height_field, "30");
+        click(window, apply);
+        assert_eq!(layout(window).await.max_height, Some(30.));
+        assert!(wrapped.as_bytes(0) != artwork_image(window).as_bytes(0));
+        enter_value(window, width_field, "");
+        enter_value(window, height_field, "");
+        click(window, apply);
+        assert_eq!(layout(window).await, automatic);
+        assert!(original_image.as_bytes(0) == artwork_image(window).as_bytes(0));
+        let before = snapshot(window);
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
         editor.update_in(window, |editor, window, cx| {
             editor.replace_and_mark_text_in_range(Some(0..11), "preedit", Some(0..7), window, cx);
@@ -16145,8 +16243,10 @@ mod tests {
             assert_eq!(editor.marked_text_range(window, cx), None);
         });
         assert!(Arc::ptr_eq(&snapshot(window), &before));
-        enter_size(window, "48");
-        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-APPLY");
+        enter_value(window, size_field, "48");
+        enter_value(window, width_field, "180");
+        enter_value(window, height_field, "70");
+        click(window, apply);
         let changed = snapshot(window);
         let graph = changed.graph_nodes().await.expect("edited Text");
         let text = graph
@@ -16155,6 +16255,12 @@ mod tests {
             .expect("editable Text");
         assert_eq!(text.artwork_text(), Some(committed));
         assert_eq!(text.artwork_font_size(), Some(48.));
+        let edited_layout = GddArtworkTextLayout {
+            size: 48.,
+            max_width: Some(180.),
+            max_height: Some(70.),
+        };
+        assert_eq!(text.artwork_text_layout(), Some(edited_layout));
         assert!(original_image.as_bytes(0) != artwork_image(window).as_bytes(0));
         window.dispatch_action(editor::actions::Undo);
         window.run_until_parked();
@@ -16163,7 +16269,7 @@ mod tests {
             graph.iter().find_map(GddGraphNode::artwork_text),
             Some("Lorem ipsum")
         );
-        assert_eq!(initial_text(&graph).artwork_font_size(), Some(24.));
+        assert_eq!(initial_text(&graph).artwork_text_layout(), Some(automatic));
         window.dispatch_action(editor::actions::Redo);
         window.run_until_parked();
         let path = PathBuf::from("/project/edited-artwork-text.gdd");
@@ -16180,7 +16286,7 @@ mod tests {
             .expect("reopened Text");
         assert_eq!(reopened_text.storage_id(), text.storage_id());
         assert_eq!(reopened_text.artwork_text(), Some(committed));
-        assert_eq!(reopened_text.artwork_font_size(), Some(48.));
+        assert_eq!(reopened_text.artwork_text_layout(), Some(edited_layout));
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)
