@@ -94,6 +94,14 @@ remote worktree buffer. The client sees both server statuses and owns
 neither process. This run denied external networking on macOS ARM64.
 Separate-host SSH, WSL and container journeys remain open.
 
+The Maven `3.9.16` and Gradle `8.13` fixture wrappers also ran in separate
+Linux ARM64 containers using checksum-verified Temurin `17.0.21+9`, isolated
+populated caches, and Docker's `none` network mode. Both compiled the Kotlin
+library and ran `evidence.GreetingTest.messageIsAvailable` with one passing
+JUnit XML result. Gradle also generated and compiled the fixture's Java
+source. These were standalone wrapper runs. The connected Groovy Task and
+provider journeys on Linux ARM64 still need qualification.
+
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 
 The former macOS ARM64 Kotlin LSP pin `263.4702.0` failed to start. A clean
