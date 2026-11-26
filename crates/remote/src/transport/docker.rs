@@ -1478,6 +1478,33 @@ impl RemoteConnection for DockerExecConnection {
         Err(anyhow::anyhow!("Not currently supported for docker_exec"))
     }
 
+    fn build_java_debug_relay_command(
+        &self,
+        endpoint: std::net::SocketAddr,
+    ) -> Result<Option<CommandTemplate>> {
+        anyhow::ensure!(
+            self.connection_options.isolated_recipe_test.is_none(),
+            "Container Java Debug is unavailable in recipe tests"
+        );
+        anyhow::ensure!(
+            endpoint.ip().is_loopback() && endpoint.port() != 0,
+            "Container Java Debug requires a loopback adapter endpoint"
+        );
+        let server = self
+            .remote_binary_relpath
+            .as_ref()
+            .context("Container Remote Server is unavailable for Java Debug")?;
+        self.build_command(
+            Some(server.display(self.path_style()).into_owned()),
+            &["java-debug-relay".into(), endpoint.to_string()],
+            &HashMap::default(),
+            Some(self.remote_dir_for_server.clone()),
+            None,
+            Interactive::No,
+        )
+        .map(Some)
+    }
+
     fn connection_options(&self) -> RemoteConnectionOptions {
         RemoteConnectionOptions::Docker(self.connection_options.clone())
     }

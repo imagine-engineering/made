@@ -110,6 +110,9 @@ pub enum Commands {
         #[arg(long)]
         process_id: u32,
     },
+    #[cfg(feature = "jvm-tools")]
+    #[command(hide = true)]
+    JavaDebugRelay { endpoint: std::net::SocketAddr },
     Version {
         #[arg(long, hide = true)]
         isolated_recipe_test: bool,
@@ -206,6 +209,12 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        #[cfg(feature = "jvm-tools")]
+        Commands::JavaDebugRelay { endpoint } => smol::block_on(relay_java_debug_adapter(
+            endpoint,
+            smol::Unblock::new(std::io::stdin()),
+            smol::Unblock::new(std::io::stdout()),
+        )),
         Commands::Version {
             isolated_recipe_test,
         } => {
@@ -236,6 +245,47 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+#[cfg(feature = "jvm-tools")]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The stdio relay runs outside GPUI"
+)]
+async fn relay_java_debug_adapter(
+    endpoint: std::net::SocketAddr,
+    mut input: impl smol::io::AsyncRead + Unpin,
+    mut output: impl smol::io::AsyncWrite + Unpin,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+
+    anyhow::ensure!(
+        endpoint.ip().is_loopback() && endpoint.port() != 0,
+        "Java Debug requires a loopback adapter endpoint"
+    );
+    let mut adapter = smol::net::TcpStream::connect(endpoint)
+        .await
+        .context("Could not connect to the Java Debug adapter in the container")?;
+    let mut writer = adapter.clone();
+    let send = async move {
+        smol::io::copy(&mut input, &mut writer).await?;
+        writer.shutdown(std::net::Shutdown::Write)?;
+        // Java Debug can keep its socket open after DAP disconnect. Allow final events to drain.
+        smol::Timer::after(std::time::Duration::from_secs(2)).await;
+        Ok(())
+    };
+    let receive = async move {
+        let mut buffer = [0; 8192];
+        loop {
+            let count = adapter.read(&mut buffer).await?;
+            if count == 0 {
+                return Ok(());
+            }
+            output.write_all(&buffer[..count]).await?;
+            output.flush().await?;
+        }
+    };
+    smol::future::race(send, receive).await
 }
 
 pub static VERSION: LazyLock<String> = LazyLock::new(|| match *RELEASE_CHANNEL {
@@ -1846,6 +1896,47 @@ fn is_file_in_use(file_name: &OsStr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "jvm-tools")]
+    #[test]
+    fn java_debug_relay_keeps_the_adapter_reply_after_input_closes() -> anyhow::Result<()> {
+        use std::net::{Ipv4Addr, Shutdown};
+
+        smol::block_on(async {
+            let listener = smol::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+            let mut output = futures::io::Cursor::new(Vec::new());
+            let relay = relay_java_debug_adapter(
+                listener.local_addr()?,
+                futures::io::Cursor::new(b"debug request"),
+                &mut output,
+            );
+            let adapter = async {
+                let (mut stream, _) = listener.accept().await?;
+                let mut request = Vec::new();
+                stream.read_to_end(&mut request).await?;
+                assert_eq!(request, b"debug request");
+                stream.write_all(b"debug response").await?;
+                stream.shutdown(Shutdown::Write)?;
+                Ok::<_, anyhow::Error>(())
+            };
+            futures::try_join!(relay, adapter)?;
+            assert_eq!(output.into_inner(), b"debug response");
+            Ok(())
+        })
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    #[test]
+    fn java_debug_relay_rejects_an_adapter_outside_loopback() -> anyhow::Result<()> {
+        let error = smol::block_on(relay_java_debug_adapter(
+            "192.0.2.1:5005".parse()?,
+            futures::io::Cursor::new(Vec::<u8>::new()),
+            futures::io::Cursor::new(Vec::new()),
+        ))
+        .expect_err("the relay must reject non-loopback addresses before connecting");
+        assert!(error.to_string().contains("loopback"));
+        Ok(())
+    }
 
     fn doctor_restart_fixture_paths(root: &Path) -> ServerPaths {
         ServerPaths {

@@ -1033,19 +1033,17 @@ mod jvm_tools_runtime_tests {
     }
 
     #[cfg(unix)]
-    #[gpui::test]
-    #[ignore = "requires GROOVY_MAVEN_NAVIGATION_CONTAINER with pinned offline JVM providers and fixture"]
-    async fn docker_maven_java_definition_opens_host_kotlin_source(cx: &mut TestAppContext) {
-        use language::PointUtf16;
-        use project::trusted_worktrees::{self, DbTrustedPaths, PathTrust, TrustedWorktrees};
+    async fn connect_docker_maven_project(
+        container_variable: &str,
+        installed_extensions: &[(&str, &str)],
+        cx: &mut TestAppContext,
+    ) -> (Entity<Project>, Entity<worktree::Worktree>) {
+        use project::trusted_worktrees::{self, DbTrustedPaths};
         use remote::{
             ConnectionIdentifier, DockerConnectionOptions, MockDelegate, RemoteArch,
             RemoteConnectionOptions, RemoteOs,
         };
-        use std::time::{Duration, Instant};
-
-        let container_id = std::env::var("GROOVY_MAVEN_NAVIGATION_CONTAINER")
-            .expect("disposable Linux ARM64 Maven container ID");
+        let container_id = std::env::var(container_variable).expect(container_variable);
         assert_eq!(container_id.len(), 64);
         assert!(container_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
         cx.executor().allow_parking();
@@ -1084,8 +1082,9 @@ mod jvm_tools_runtime_tests {
         let rpc = remote.read_with(cx, |remote, _| remote.proto_client());
         let extensions = rpc
             .request(proto::SyncExtensions {
-                extensions: [("java", "6.8.30"), ("kotlin", "0.3.5")]
-                    .into_iter()
+                extensions: installed_extensions
+                    .iter()
+                    .copied()
                     .map(|(id, version)| proto::Extension {
                         id: id.into(),
                         version: version.into(),
@@ -1109,6 +1108,48 @@ mod jvm_tools_runtime_tests {
             .update(cx, |worktree, _| worktree.wait_for_snapshot(1))
             .await
             .expect("receive the container's initial filesystem snapshot");
+        (project, worktree)
+    }
+
+    #[cfg(unix)]
+    fn trust_docker_maven_worktree(
+        project: &Entity<Project>,
+        worktree_id: settings::WorktreeId,
+        cx: &mut TestAppContext,
+    ) {
+        use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
+
+        let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+        cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("worktree trust"))
+            .update(cx, |trusted, cx| {
+                trusted.trust(
+                    &worktrees,
+                    HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                    cx,
+                );
+            });
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_MAVEN_NAVIGATION_CONTAINER with pinned offline JVM providers and fixture"]
+    async fn docker_maven_java_definition_opens_host_kotlin_source(cx: &mut TestAppContext) {
+        use language::PointUtf16;
+        use std::time::{Duration, Instant};
+
+        let (project, worktree) = connect_docker_maven_project(
+            "GROOVY_MAVEN_NAVIGATION_CONTAINER",
+            &[("java", "6.8.30"), ("kotlin", "0.3.5")],
+            cx,
+        )
+        .await;
+        let rpc = project.read_with(cx, |project, cx| {
+            project
+                .remote_client()
+                .expect("Docker client")
+                .read(cx)
+                .proto_client()
+        });
         let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
         let store = project.read_with(cx, |project, _| project.lsp_store());
         let restricted = rpc
@@ -1128,15 +1169,7 @@ mod jvm_tools_runtime_tests {
             store.read_with(cx, |store, _| store.language_server_statuses().count()),
             0
         );
-        let worktrees = project.read_with(cx, |project, _| project.worktree_store());
-        cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("worktree trust"))
-            .update(cx, |trusted, cx| {
-                trusted.trust(
-                    &worktrees,
-                    HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
-                    cx,
-                );
-            });
+        trust_docker_maven_worktree(&project, worktree_id, cx);
         store.update(cx, |store, cx| {
             store
                 .set_default_jvm_project_languages_enabled(true, cx)
@@ -1250,6 +1283,192 @@ mod jvm_tools_runtime_tests {
                 assert!(store.language_server_for_id(id).is_none());
             }
         });
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_JAVA_DEBUG_CONTAINER with the pinned offline Maven and Java Debug fixture"]
+    async fn docker_maven_java_debug_stops_at_host_source(cx: &mut TestAppContext) {
+        use project::debugger::{
+            breakpoint_store::{Breakpoint, BreakpointEditAction, BreakpointWithPosition},
+            session::{SessionQuirks, ThreadId, ThreadStatus},
+        };
+        use std::time::{Duration, Instant};
+
+        let (project, worktree) =
+            connect_docker_maven_project("GROOVY_JAVA_DEBUG_CONTAINER", &[("java", "6.8.30")], cx)
+                .await;
+        cx.update(dap::transport::use_real_transport_for_test);
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let source = rel_path("application/src/main/java/evidence/DebugMain.java");
+        let source_path = ProjectPath {
+            worktree_id,
+            path: source.into(),
+        };
+        let definition = DebugTaskDefinition {
+            label: "Debug Maven Java main".into(),
+            adapter: "Java".into(),
+            config: json!({
+                "request": "launch",
+                "mainClass": "evidence.DebugMain",
+                "projectName": "application",
+                "classPaths": ["/workspaces/maven/application/target/classes"],
+                "cwd": "/workspaces/maven",
+                "stopOnEntry": false,
+                "console": "internalConsole",
+            }),
+            tcp_connection: None,
+        };
+        let rpc = project.read_with(cx, |project, cx| {
+            project
+                .remote_client()
+                .expect("Docker client")
+                .read(cx)
+                .proto_client()
+        });
+        let denied = rpc
+            .request(proto::GetDebugAdapterBinary {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                session_id: 1,
+                worktree_id: worktree_id.to_proto(),
+                definition: Some(definition.to_proto()),
+            })
+            .await
+            .expect_err("the Docker project host must reject untrusted Java Debug");
+        assert!(
+            denied.to_string().contains("Trust the project"),
+            "{denied:#}"
+        );
+        trust_docker_maven_worktree(&project, worktree_id, cx);
+
+        let (java_buffer, _java_handle) = project
+            .update(cx, |project, cx| {
+                project.open_buffer_with_lsp((worktree_id, source), cx)
+            })
+            .await
+            .expect("open the current Docker Java source");
+        let store = project.read_with(cx, |project, _| project.lsp_store());
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            cx.run_until_parked();
+            if store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current
+                            && snapshot.projects.iter().any(|project| {
+                                project.module_root.path.as_ref() == rel_path("application")
+                                    && project.membership.is_imported()
+                            })
+                    })
+            }) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "JDTLS did not import the Docker Maven application"
+            );
+            store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            cx.background_executor
+                .timer(Duration::from_millis(500))
+                .await;
+        }
+
+        project
+            .read_with(cx, |project, _| project.breakpoint_store())
+            .update(cx, |breakpoints, cx| {
+                let position = java_buffer
+                    .read(cx)
+                    .snapshot()
+                    .anchor_after(Point::new(6, 0));
+                breakpoints.toggle_breakpoint(
+                    java_buffer.clone(),
+                    BreakpointWithPosition {
+                        position,
+                        bp: Breakpoint::new_standard(),
+                    },
+                    BreakpointEditAction::Toggle,
+                    cx,
+                );
+            });
+        let dap_store = project.read_with(cx, |project, _| project.dap_store());
+        let session = dap_store.update(cx, |store, cx| {
+            store.new_session(
+                Some(definition.label.clone()),
+                definition.adapter.clone(),
+                task::SharedTaskContext::default(),
+                None,
+                SessionQuirks::default(),
+                cx,
+            )
+        });
+        dap_store
+            .update(cx, |store, cx| {
+                store.boot_session(session.clone(), definition, worktree, cx)
+            })
+            .await
+            .expect("launch the installed Java adapter through Groovy's connected Debug session");
+        session.read_with(cx, |session, _| {
+            let client = session.adapter_client().expect("started Java Debug client");
+            assert!(client.binary().connection.is_none());
+            assert!(
+                client
+                    .binary()
+                    .arguments
+                    .iter()
+                    .any(|argument| argument == "java-debug-relay")
+            );
+        });
+
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let thread = loop {
+            cx.run_until_parked();
+            let frame = session.update(cx, |session, cx| {
+                if !session.any_stopped_thread() {
+                    return None;
+                }
+                let thread = session
+                    .threads(cx)
+                    .into_iter()
+                    .find(|(_, status)| *status == ThreadStatus::Stopped)?
+                    .0;
+                let thread = ThreadId(thread.id);
+                session
+                    .stack_frames(thread, cx)
+                    .ok()?
+                    .into_iter()
+                    .find_map(|frame| {
+                        let frame_path = frame.dap.source?.path?;
+                        let mapped = project.read(cx).find_project_path(frame_path, cx)?;
+                        (mapped == source_path
+                            && frame.dap.line == 7
+                            && frame.dap.name.contains("DebugMain.main"))
+                        .then_some(thread)
+                    })
+            });
+            if let Some(thread) = frame {
+                break thread;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "connected Java Debug did not stop at DebugMain.java:7"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
+        eprintln!("Connected Docker Debug stopped at /workspaces/maven/{source}:7");
+        session.update(cx, |session, cx| session.continue_thread(thread, cx));
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !session.read_with(cx, |session, _| session.is_terminated()) {
+            assert!(
+                Instant::now() < deadline,
+                "connected Java Debug did not terminate after Continue"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
     }
 
     #[cfg(unix)]

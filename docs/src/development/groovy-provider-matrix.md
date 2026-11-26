@@ -153,13 +153,24 @@ host. The test creates its own reactor within that mount and uses the same
 prepared development Remote Server. The container's JDK and Maven wrapper
 environment must point to the host installations.
 
-The separate Java Debug probe passed on Linux ARM64 with JDTLS `1.61.0` and
-Java Debug `0.53.2`. The real debugger verified the breakpoint at
-`DebugMain.java:7` and returned its exact source frame through the host-local
-DAP connection. Connected Debug remains open because the existing Docker
-transport rejects the port-forward command used for an adapter listening on
-the container's loopback interface. Native connected editor and Tests panel
-checks still need a desktop replay.
+Groovy's connected Debug session also passed through Docker from the GPUI
+test client. The project host refused Debug before trust. The cached Java
+extension `6.8.30` launched JDTLS `1.61.0` through its Linux ARM64 proxy and
+loaded Java Debug `0.53.2`. After trust, the adapter verified
+`DebugMain.java:7` and the client mapped the stopped frame to the Maven
+worktree. Continue terminated the debuggee. DAP used a stdio relay to the
+container's loopback adapter socket. The container published no ports and
+had external networking disabled.
+
+To replay `docker_maven_java_debug_stops_at_host_source`, set
+`GROOVY_JAVA_DEBUG_CONTAINER` to the full container ID. Use the default
+offline-built Maven fixture at `/workspaces/maven` and stage the pinned
+Java extension, proxy, and Debug JAR on the project host. Configure the
+extension's `jdtls_launcher`, `lsp_proxy_path`, and `java_debug_jar`
+settings so it runs its normal debugger setup. If overriding the
+initialization `bundles` list to include the Groovy model companion,
+include the Debug JAR in that list as well. Native connected editor, Tests
+panel, and Debug checks still need a desktop replay.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 

@@ -881,6 +881,8 @@ impl DapStore {
                 })
             }
             DapStoreMode::Remote(remote) => {
+                #[cfg(feature = "jvm-tools")]
+                let java_adapter = definition.adapter.0.as_ref() == "Java";
                 let request = remote
                     .upstream_client
                     .request(proto::GetDebugAdapterBinary {
@@ -894,6 +896,26 @@ impl DapStore {
                 cx.spawn(async move |_, cx| {
                     let response = request.await?;
                     let binary = DebugAdapterBinary::from_proto(response)?;
+
+                    #[cfg(feature = "jvm-tools")]
+                    if java_adapter
+                        && binary.command.is_none()
+                        && let Some(connection) = &binary.connection
+                        && let Some(command) = remote.read_with(cx, |remote, _| {
+                            let endpoint =
+                                std::net::SocketAddr::new(connection.host, connection.port);
+                            remote.build_java_debug_relay_command(endpoint)
+                        })?
+                    {
+                        return Ok(DebugAdapterBinary {
+                            command: Some(command.program),
+                            arguments: command.args,
+                            envs: command.env,
+                            cwd: None,
+                            connection: None,
+                            request_args: binary.request_args,
+                        });
+                    }
 
                     let port_forwarding;
                     let connection;

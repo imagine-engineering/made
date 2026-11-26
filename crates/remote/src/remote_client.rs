@@ -1401,6 +1401,15 @@ impl RemoteClient {
         connection.build_forward_ports_command(forwards)
     }
 
+    pub fn build_java_debug_relay_command(
+        &self,
+        endpoint: std::net::SocketAddr,
+    ) -> Result<Option<CommandTemplate>> {
+        self.remote_connection()
+            .context("no remote connection")?
+            .build_java_debug_relay_command(endpoint)
+    }
+
     pub fn upload_directory(
         &self,
         src_path: PathBuf,
@@ -3545,6 +3554,12 @@ pub trait RemoteConnection: Send + Sync {
         &self,
         forwards: Vec<(u16, String, u16)>,
     ) -> Result<CommandTemplate>;
+    fn build_java_debug_relay_command(
+        &self,
+        _endpoint: std::net::SocketAddr,
+    ) -> Result<Option<CommandTemplate>> {
+        Ok(None)
+    }
     fn connection_options(&self) -> RemoteConnectionOptions;
     fn path_style(&self) -> PathStyle;
     /// The remote platform (OS and architecture), detected during connection setup.
