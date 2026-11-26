@@ -296,6 +296,8 @@ pub enum GddArchiveError {
     InvalidEllipseRadius,
     #[error("Enter a different Ellipse radius.")]
     UnchangedEllipseRadius,
+    #[error("Graphite could not use radius source {node:?}. {reason}")]
+    InvalidEllipseRadiusSource { node: NodeId, reason: String },
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -786,6 +788,7 @@ enum SavedGraphicProfile {
     Rectangle,
     Ellipse([f64; 2]),
     EllipseList,
+    EllipseWired,
     Fill,
     Layer(GddGraphLayerPreview),
 }
@@ -801,6 +804,8 @@ const ARTBOARD_LOCATION_INPUT: usize = 2;
 const ARTBOARD_DIMENSIONS_INPUT: usize = 3;
 const ARTBOARD_BACKGROUND_INPUT: usize = 4;
 const ARTBOARD_CLIP_INPUT: usize = 5;
+const ELLIPSE_RADIUS_INPUTS: [usize; 2] =
+    [ellipse::RadiusXInput::INDEX, ellipse::RadiusYInput::INDEX];
 const MAX_PREVIEW_VALUES: usize = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1152,7 +1157,8 @@ impl GddGraphNode {
                 SavedGraphicProfile::Fill,
                 SavedGraphicProfile::Rectangle
                 | SavedGraphicProfile::Ellipse(_)
-                | SavedGraphicProfile::EllipseList,
+                | SavedGraphicProfile::EllipseList
+                | SavedGraphicProfile::EllipseWired,
             ) => fill::ContentInput::INDEX,
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
@@ -3685,6 +3691,7 @@ impl InspectedGddV1 {
             ..Default::default()
         };
         collect_layer_preview_node(network, selected, &mut detached, &mut BTreeSet::new())?;
+        validate_saved_ellipse_radius_sources(&detached).await?;
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
@@ -5854,7 +5861,10 @@ fn collect_layer_preview_node(
     visiting: &mut BTreeSet<NodeId>,
 ) -> Result<(), GddArchiveError> {
     const MAX_PREVIEW_NODES: usize = 32;
-    if detached.nodes.contains_key(&node_id) {
+    if let Some(existing) = detached.nodes.get(&node_id) {
+        if numeric_preview_inputs(existing).is_some() {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        }
         return Ok(());
     }
     if !visiting.insert(node_id) {
@@ -5867,15 +5877,35 @@ fn collect_layer_preview_node(
         .nodes
         .get(&node_id)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
-    let (node, _) = checked_saved_graphic_node(source_node)
+    let (node, profile) = checked_saved_graphic_node(source_node)
         .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
-    for input in &node.inputs {
+    for (index, input) in node.inputs.iter().enumerate() {
         if let NodeInput::Node {
             node_id,
             output_index: 0,
         } = input
         {
-            collect_layer_preview_node(source, *node_id, detached, visiting)?;
+            if matches!(profile, SavedGraphicProfile::EllipseWired)
+                && ELLIPSE_RADIUS_INPUTS.contains(&index)
+            {
+                let branch = numeric_preview_network(source, *node_id, &[]).map_err(|error| {
+                    GddArchiveError::InvalidEllipseRadiusSource {
+                        node: *node_id,
+                        reason: error.to_string(),
+                    }
+                })?;
+                let additional = branch
+                    .nodes
+                    .keys()
+                    .filter(|id| !detached.nodes.contains_key(id))
+                    .count();
+                if detached.nodes.len() + visiting.len() + additional > MAX_PREVIEW_NODES {
+                    return Err(GddArchiveError::GraphLayerPreviewBudget);
+                }
+                detached.nodes.extend(branch.nodes);
+            } else {
+                collect_layer_preview_node(source, *node_id, detached, visiting)?;
+            }
         }
     }
     visiting.remove(&node_id);
@@ -5886,6 +5916,57 @@ fn collect_layer_preview_node(
 fn valid_saved_ellipse_radius(radius: f64) -> bool {
     // The source forms the diameter by subtracting the two opposite radii.
     (radius * 2.).is_finite()
+}
+
+fn valid_saved_ellipse_radius_list(radii: &[f64]) -> bool {
+    radii.len() <= MAX_PREVIEW_VALUES && radii.iter().copied().all(valid_saved_ellipse_radius)
+}
+
+fn valid_saved_ellipse_radius_value(value: &TaggedValue) -> bool {
+    match value {
+        TaggedValue::Number(radius) => valid_saved_ellipse_radius(*radius),
+        TaggedValue::Numbers(radii) => valid_saved_ellipse_radius_list(radii),
+        _ => false,
+    }
+}
+
+async fn validate_saved_ellipse_radius_sources(
+    network: &NodeNetwork,
+) -> Result<(), GddArchiveError> {
+    let source_ids: BTreeSet<_> = network
+        .nodes
+        .values()
+        .filter(|node| {
+            matches!(
+                &node.implementation,
+                DocumentNodeImplementation::ProtoNode(identifier) if *identifier == ellipse::IDENTIFIER
+            )
+        })
+        .flat_map(|node| {
+            ELLIPSE_RADIUS_INPUTS.into_iter().filter_map(|index| {
+                let NodeInput::Node { node_id, output_index: 0 } = node.inputs.get(index)? else {
+                    return None;
+                };
+                Some(*node_id)
+            })
+        })
+        .collect();
+    for node in source_ids {
+        let source_error = |reason| GddArchiveError::InvalidEllipseRadiusSource { node, reason };
+        let branch = numeric_preview_network(network, node, &[])
+            .map_err(|error| source_error(error.to_string()))?;
+        let evaluator = NumericGraphEvaluator::prepare(branch)
+            .await
+            .map_err(|error| source_error(error.to_string()))?;
+        let value = evaluator.evaluate().await.map_err(source_error)?;
+        if !valid_saved_ellipse_radius_value(&value) {
+            return Err(source_error(
+                "Expected finite pixel radii with finite diameters within the preview limit."
+                    .into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, SavedGraphicProfile)> {
@@ -5958,19 +6039,28 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             let horizontal = node.inputs.get(ellipse::RadiusXInput::INDEX)?;
             let vertical = node.inputs.get(ellipse::RadiusYInput::INDEX)?;
             let profile = match (
-                horizontal.as_non_exposed_value()?,
-                vertical.as_non_exposed_value()?,
+                horizontal.as_non_exposed_value(),
+                vertical.as_non_exposed_value(),
             ) {
-                (TaggedValue::Number(x), TaggedValue::Number(y))
+                (Some(TaggedValue::Number(x)), Some(TaggedValue::Number(y)))
                     if valid_saved_ellipse_radius(*x) && valid_saved_ellipse_radius(*y) =>
                 {
                     SavedGraphicProfile::Ellipse([*x, *y])
                 }
-                (TaggedValue::Numbers(x), TaggedValue::Numbers(y))
-                    if x.len().max(y.len()) <= MAX_PREVIEW_VALUES
-                        && x.iter().chain(y).copied().all(valid_saved_ellipse_radius) =>
+                (Some(TaggedValue::Numbers(x)), Some(TaggedValue::Numbers(y)))
+                    if valid_saved_ellipse_radius_list(x) && valid_saved_ellipse_radius_list(y) =>
                 {
                     SavedGraphicProfile::EllipseList
+                }
+                _ if [horizontal, vertical].into_iter().any(output_wire)
+                    && [horizontal, vertical].into_iter().all(|input| {
+                        output_wire(input)
+                            || input
+                                .as_non_exposed_value()
+                                .is_some_and(valid_saved_ellipse_radius_value)
+                    }) =>
+                {
+                    SavedGraphicProfile::EllipseWired
                 }
                 _ => return None,
             };
@@ -10812,14 +10902,17 @@ mod tests {
     }
 
     #[test]
-    fn at_gra_node_262_3_reopens_and_renders_the_saved_list_constructor() {
+    fn at_gra_node_262_3_reopens_and_renders_literal_and_wired_ellipse_radii() {
         use graphite_graph_craft::document::value::RenderOutputType;
+        use graphite_math_nodes::absolute_value;
         use graphite_resource::ResourceRegistry;
 
         let shape_id = NodeId(15);
         let paint_id = NodeId(20);
         let merge_id = NodeId(25);
         let board_id = NodeId(30);
+        let horizontal_source = NodeId(35);
+        let vertical_source = NodeId(40);
         let mut shape = resolve_proto_node_type(ellipse::IDENTIFIER)
             .expect("pinned Ellipse definition")
             .default_node_template();
@@ -10868,20 +10961,29 @@ mod tests {
             for_export: true,
             ..Default::default()
         };
+        let mut numeric = resolve_proto_node_type(absolute_value::IDENTIFIER)
+            .expect("pinned Absolute Value definition")
+            .default_node_template();
+        numeric.normalize_stored_types();
+        let numeric = numeric.into_parts().0;
 
         futures::executor::block_on(async {
-            for (vertical, expected_paths) in [(vec![17.25, 9.5], 3), (Vec::new(), 0)] {
+            let list = || TaggedValue::Numbers(vec![32.5, 0., -12.75]);
+            for (horizontal, vertical, expected_paths, wired) in [
+                (list(), TaggedValue::Numbers(vec![17.25, 9.5]), 3, false),
+                (list(), TaggedValue::Numbers(Vec::new()), 0, false),
+                (list(), TaggedValue::Numbers(vec![17.25, 9.5]), 3, true),
+                (list(), TaggedValue::Numbers(Vec::new()), 0, true),
+                (
+                    TaggedValue::Number(-32.5),
+                    TaggedValue::Number(17.25),
+                    1,
+                    true,
+                ),
+            ] {
                 let mut shape = shape.clone();
-                for (index, values) in [
-                    (ellipse::RadiusXInput::INDEX, vec![32.5, 0., -12.75]),
-                    (ellipse::RadiusYInput::INDEX, vertical),
-                ] {
-                    *shape.inputs.get_mut(index).expect("pinned list radius") =
-                        NodeInput::value(TaggedValue::Numbers(values), false);
-                }
-                let source = NodeNetwork {
+                let mut source = NodeNetwork {
                     nodes: [
-                        (shape_id, shape.into_parts().0),
                         (paint_id, paint.clone()),
                         (merge_id, merge.clone()),
                         (board_id, board.clone()),
@@ -10891,6 +10993,25 @@ mod tests {
                     exports: vec![NodeInput::node(board_id, 0)],
                     ..Default::default()
                 };
+                for (index, source_id, value) in [
+                    (ellipse::RadiusXInput::INDEX, horizontal_source, horizontal),
+                    (ellipse::RadiusYInput::INDEX, vertical_source, vertical),
+                ] {
+                    let literal = NodeInput::value(value, false);
+                    let radius = if wired {
+                        let mut node = numeric.clone();
+                        *node
+                            .inputs
+                            .get_mut(absolute_value::ValueInput::INDEX)
+                            .expect("pinned Value slot") = literal;
+                        source.nodes.insert(source_id, node);
+                        NodeInput::node(source_id, 0)
+                    } else {
+                        literal
+                    };
+                    *shape.inputs.get_mut(index).expect("pinned radius") = radius;
+                }
+                source.nodes.insert(shape_id, shape.into_parts().0);
                 let expected = evaluate_cpu_svg(&source, configuration, output_budget, None)
                     .await
                     .expect("pinned unmodified source graph renders");
@@ -10951,8 +11072,9 @@ mod tests {
                     .find(|node| node.local_id == shape_id && node.network_path.is_empty())
                     .expect("saved Ellipse list");
                 assert!(matches!(
-                    shape.graphic_profile,
-                    Some(SavedGraphicProfile::EllipseList)
+                    (shape.graphic_profile, wired),
+                    (Some(SavedGraphicProfile::EllipseList), false)
+                        | (Some(SavedGraphicProfile::EllipseWired), true)
                 ));
                 assert!(shape.ellipse_radii().is_none());
                 let rendered = saved
@@ -10998,6 +11120,28 @@ mod tests {
                     "{svg}"
                 );
                 assert!(image_data.is_empty());
+                if wired && expected_paths == 1 {
+                    for invalid_input in [
+                        NodeInput::value(TaggedValue::Number(f64::MAX), false),
+                        NodeInput::value(TaggedValue::DVec2(DVec2::ONE), false),
+                        NodeInput::node(horizontal_source, 0),
+                        NodeInput::node(paint_id, 0),
+                    ] {
+                        let mut invalid = graph.network.clone();
+                        let numeric = invalid
+                            .nodes
+                            .get_mut(&horizontal_source)
+                            .expect("stored Radius X source");
+                        *numeric
+                            .inputs
+                            .get_mut(absolute_value::ValueInput::INDEX)
+                            .expect("numeric Value slot") = invalid_input;
+                        assert!(matches!(
+                            InspectedGddV1::render_saved_layer_svg(&invalid, board_id, configuration, output_budget).await,
+                            Err(GddArchiveError::InvalidEllipseRadiusSource { node, .. }) if node == horizontal_source
+                        ));
+                    }
+                }
             }
         });
     }
