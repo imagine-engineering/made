@@ -1,9 +1,10 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::Read as _,
+    net::{Ipv4Addr, TcpListener},
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context as _, Result, bail, ensure};
@@ -60,10 +61,12 @@ pub const MAX_JUNIT_SOURCE_BYTES: usize = 1024 * 1024;
 pub const MAX_JUNIT_SOURCE_TOTAL_BYTES: usize = 16 * 1024 * 1024;
 pub const JVM_TEST_DISCOVERY_PROTOCOL_VERSION: u32 = 1;
 pub const JVM_TEST_BOUNDED_ACTION_PROTOCOL_VERSION: u32 = 2;
+pub const JVM_TEST_DEBUG_PROTOCOL_VERSION: u32 = 1;
 const MAX_REMOTE_JVM_WORKTREES: usize = 128;
 const MAX_REMOTE_JVM_RUNS: usize = 32;
 const MAX_REMOTE_JVM_FIELD_BYTES: usize = 1024;
 const MAX_REMOTE_JVM_PLAN_BYTES: usize = 8192;
+const JVM_TEST_DEBUG_AUTHORIZATION_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_JUNIT_XML_DEPTH: usize = 32;
 const MAX_JUNIT_FIELD_BYTES: usize = 1_024;
 const JVM_TASK_SPAWN_FAILURE: &str =
@@ -127,6 +130,26 @@ pub struct JvmSelectedTestDebugPlan {
     pub source_root: Arc<RelPath>,
 }
 
+impl JvmSelectedTestDebugPlan {
+    pub fn configure_maven_port(&mut self, port: u16) -> Result<()> {
+        ensure!(
+            self.build_tool == JvmTestBuildTool::Maven && port != 0,
+            "A dedicated Java test Debug port requires Maven"
+        );
+        let argument = self
+            .template
+            .args
+            .last_mut()
+            .filter(|argument| argument.as_str() == "-Dmaven.surefire.debug")
+            .context("The selected Maven test did not have its Surefire Debug argument")?;
+        *argument = format!(
+            "-Dmaven.surefire.debug=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:{port}"
+        );
+        self.debug_port = port;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct JvmRemoteTestActionPlan {
     pub run_id: StructuredRunId,
@@ -184,6 +207,15 @@ struct AuthorizedRemoteJvmRun {
     report_maximum_bytes: Option<usize>,
 }
 
+struct AuthorizedRemoteJvmDebug {
+    id: u64,
+    node_id: StructuredNodeId,
+    discovery_generation: DiscoveryGeneration,
+    plan: JvmSelectedTestDebugPlan,
+    created_at: Instant,
+    preflighted: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum JvmTestBuildTool {
     Maven,
@@ -215,6 +247,7 @@ pub struct JvmTestProviderStore {
     active_remote_requests: HashMap<(proto::PeerId, u64), AbortHandle>,
     cancelled_remote_requests: HashSet<(proto::PeerId, u64)>,
     authorized_remote_runs: HashMap<(proto::PeerId, StructuredRunId), AuthorizedRemoteJvmRun>,
+    authorized_remote_debug: HashMap<proto::PeerId, AuthorizedRemoteJvmDebug>,
     remote_lifecycle_tx: Option<mpsc::UnboundedSender<proto::UpdateJvmTestRun>>,
     _remote_lifecycle_task: Task<()>,
     #[cfg(any(test, feature = "test-support"))]
@@ -236,6 +269,7 @@ impl JvmTestProviderStore {
         client.add_entity_request_handler(Self::handle_get_discovery);
         client.add_entity_request_handler(Self::handle_cancel_discovery);
         client.add_entity_request_handler(Self::handle_resolve_action);
+        client.add_entity_request_handler(Self::handle_resolve_debug);
         client.add_entity_request_handler(Self::handle_update_run);
     }
 
@@ -521,6 +555,158 @@ impl JvmTestProviderStore {
             }
         }
         response
+    }
+
+    async fn handle_resolve_debug(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::ResolveJvmTestDebug>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::JvmTestDebugPlanResponse> {
+        let request = envelope.payload;
+        ensure!(
+            cfg!(unix)
+                && request.project_id == proto::REMOTE_SERVER_PROJECT_ID
+                && envelope.original_sender_id.is_none()
+                && request.protocol_version == JVM_TEST_DEBUG_PROTOCOL_VERSION,
+            "Selected Java test Debug requires a compatible direct Groovy project host"
+        );
+        validate_remote_jvm_field("Java test node ID", &request.node_id)?;
+        let peer = envelope.sender_id;
+        let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        let node_id = StructuredNodeId(request.node_id);
+        let generation = DiscoveryGeneration(request.discovery_generation);
+        this.update(&mut cx, |store, cx| {
+            ensure!(
+                store.remote.is_none(),
+                "Selected Java test Debug reached a client proxy"
+            );
+            let same_selection = "The selected Java test Debug authorization changed; refresh Tests and select the case again";
+            let mut authorization = if request.authorization == 0 {
+                ensure!(!request.check_readiness, "{same_selection}");
+                store.authorized_remote_debug.retain(|_, plan| {
+                    plan.created_at.elapsed() < JVM_TEST_DEBUG_AUTHORIZATION_TIMEOUT
+                });
+                ensure!(
+                    store.authorized_remote_debug.contains_key(&peer)
+                        || store.authorized_remote_debug.len() < MAX_REMOTE_JVM_RUNS,
+                    "Too many pending remote Java test Debug sessions"
+                );
+                None
+            } else {
+                ensure!(
+                    store
+                        .authorized_remote_debug
+                        .get(&peer)
+                        .is_some_and(|plan| plan.id == request.authorization),
+                    "{same_selection}"
+                );
+                store.authorized_remote_debug.remove(&peer)
+            };
+            store.ensure_host_action_trusted(worktree_id, cx)?;
+            ensure!(
+                !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                "Trust the project before debugging the selected Java test"
+            );
+            ensure!(
+                cx.try_global::<dap::DapRegistry>()
+                    .and_then(|registry| registry.adapter("Java"))
+                    .is_some(),
+                "The approved Java Debug adapter is unavailable on the project host; install the Java extension there before debugging"
+            );
+            let mut plan = store.plan_selected_case_debug(&node_id, generation, cx)?;
+            ensure!(plan.worktree_id == worktree_id, "{same_selection}");
+            let visible_source = store
+                .worktree_store
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .is_some_and(|worktree| {
+                    let worktree = worktree.read(cx);
+                    worktree.as_local().is_some_and(|local| {
+                        !local.is_path_private(&plan.source_root)
+                            && local.snapshot().entry_for_path(&plan.source_root).is_some_and(
+                                |entry| entry.is_dir() && !entry.is_external && !entry.is_private,
+                            )
+                    })
+                });
+            ensure!(
+                visible_source,
+                "The selected Java test source directory is unavailable; refresh Tests"
+            );
+            let announces_port = plan.build_tool == JvmTestBuildTool::Gradle;
+            if !announces_port {
+                let port = match &authorization {
+                    Some(previous) => previous.plan.debug_port,
+                    None => TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+                        .context("Could not allocate a Java test Debug port on the project host")?
+                        .local_addr()?
+                        .port(),
+                };
+                plan.configure_maven_port(port)?;
+            }
+            let ready;
+            let id;
+            match authorization.as_mut() {
+                None => {
+                    store.next_run_id = store.next_run_id.wrapping_add(1).max(1);
+                    id = store.next_run_id;
+                    authorization = Some(AuthorizedRemoteJvmDebug {
+                        id,
+                        node_id: node_id.clone(),
+                        discovery_generation: generation,
+                        plan: plan.clone(),
+                        created_at: Instant::now(),
+                        preflighted: false,
+                    });
+                    ready = false;
+                }
+                Some(previous) => {
+                    ensure!(
+                        previous.created_at.elapsed() < JVM_TEST_DEBUG_AUTHORIZATION_TIMEOUT
+                            && previous.node_id == node_id
+                            && previous.discovery_generation == generation
+                            && previous.plan == plan
+                            && previous.preflighted == request.check_readiness,
+                        "{same_selection}"
+                    );
+                    id = previous.id;
+                    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, plan.debug_port));
+                    ready = match listener {
+                        Ok(_) => false,
+                        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => true,
+                        Err(error) => {
+                            return Err(error).context("Could not check the Java test Debug port on the project host");
+                        }
+                    };
+                    if !request.check_readiness {
+                        ensure!(!ready, "The Java test Debug port is already in use on the project host");
+                        previous.preflighted = true;
+                    }
+                }
+            }
+            validate_remote_jvm_template(&plan.template)?;
+            let template_json = serde_json::to_string(&plan.template)?;
+            ensure!(
+                template_json.len() <= MAX_REMOTE_JVM_PLAN_BYTES,
+                "Remote Java test Debug plan exceeds the supported limit"
+            );
+            let source_root = plan.source_root.as_unix_str();
+            validate_remote_jvm_field("Java test source directory", source_root)?;
+            if !ready && let Some(authorization) = authorization {
+                store.authorized_remote_debug.insert(peer, authorization);
+            }
+            Ok(proto::JvmTestDebugPlanResponse {
+                protocol_version: JVM_TEST_DEBUG_PROTOCOL_VERSION,
+                discovery_generation: generation.0,
+                node_id: node_id.0,
+                worktree_id: worktree_id.to_proto(),
+                authorization: id,
+                template_json,
+                source_root: source_root.to_owned(),
+                port: u32::from(plan.debug_port),
+                announces_port,
+                ready,
+            })
+        })
     }
 
     fn ensure_bounded_remote_run_idle(&self, cx: &gpui::App) -> Result<()> {
@@ -1651,6 +1837,7 @@ impl JvmTestProviderStore {
             active_remote_requests: HashMap::new(),
             cancelled_remote_requests: HashSet::new(),
             authorized_remote_runs: HashMap::new(),
+            authorized_remote_debug: HashMap::new(),
             remote_lifecycle_tx: None,
             _remote_lifecycle_task: Task::ready(()),
             #[cfg(any(test, feature = "test-support"))]
@@ -1754,6 +1941,7 @@ impl JvmTestProviderStore {
             active_remote_requests: HashMap::new(),
             cancelled_remote_requests: HashSet::new(),
             authorized_remote_runs: HashMap::new(),
+            authorized_remote_debug: HashMap::new(),
             remote_lifecycle_tx: Some(remote_lifecycle_tx),
             _remote_lifecycle_task: remote_lifecycle_task,
             #[cfg(any(test, feature = "test-support"))]
@@ -1775,6 +1963,7 @@ impl JvmTestProviderStore {
         }
         self.cancelled_remote_requests.clear();
         self.authorized_remote_runs.clear();
+        self.authorized_remote_debug.clear();
         self.run_handles.clear();
     }
 
@@ -1943,6 +2132,7 @@ impl JvmTestProviderStore {
         self.generation = self.generation.wrapping_add(1);
         self.selectors.clear();
         self.authorized_remote_runs.clear();
+        self.authorized_remote_debug.clear();
         cx.notify();
     }
 

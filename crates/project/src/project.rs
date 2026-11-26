@@ -3006,17 +3006,7 @@ impl Project {
                 Some(plan.debug_port)
             } else {
                 if let Some(port) = _maven_port {
-                    let option = plan
-                        .template
-                        .args
-                        .last_mut()
-                        .filter(|option| option.as_str() == "-Dmaven.surefire.debug")
-                        .context(
-                            "The selected Maven test did not have its Surefire Debug argument",
-                        )?;
-                    *option = format!(
-                        "-Dmaven.surefire.debug=-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=127.0.0.1:{port}"
-                    );
+                    plan.configure_maven_port(port)?;
                 }
                 None
             };

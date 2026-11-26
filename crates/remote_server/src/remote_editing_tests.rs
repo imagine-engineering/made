@@ -7497,6 +7497,271 @@ mod jvm_tools_runtime_tests {
         });
     }
 
+    #[cfg(unix)]
+    #[gpui::test]
+    async fn remote_java_debug_plan_confines_port_and_stale_selection(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        use dap::adapters::{DapDelegate, DebugAdapter, DebugAdapterBinary, DebugAdapterName};
+        use project::jvm_test_provider::JVM_TEST_DEBUG_PROTOCOL_VERSION;
+        use std::net::{Ipv4Addr, TcpListener};
+
+        struct InstalledJavaAdapter;
+
+        #[async_trait::async_trait(?Send)]
+        impl DebugAdapter for InstalledJavaAdapter {
+            fn name(&self) -> DebugAdapterName {
+                "Java".into()
+            }
+
+            fn dap_schema(&self) -> serde_json::Value {
+                serde_json::Value::Null
+            }
+
+            async fn config_from_zed_format(
+                &self,
+                _: task::ZedDebugConfig,
+            ) -> anyhow::Result<task::DebugScenario> {
+                panic!("planning never configures or starts the adapter")
+            }
+
+            async fn get_binary(
+                &self,
+                _: &Arc<dyn DapDelegate>,
+                _: &DebugTaskDefinition,
+                _: Option<PathBuf>,
+                _: Option<Vec<String>>,
+                _: Option<HashMap<String, String>>,
+                _: &mut gpui::AsyncApp,
+            ) -> anyhow::Result<DebugAdapterBinary> {
+                panic!("planning never starts the adapter")
+            }
+        }
+
+        let fs = FakeFs::new(server_cx.executor());
+        fs.insert_tree(
+            path!("/jvm"),
+            json!({
+                "pom.xml": "<project/>",
+                "mvnw": "#!/bin/sh\n",
+                "src": { "test": { "java": {
+                    "GreetingTest.java": "class GreetingTest { @Test messageIsAvailable() {} }"
+                } } },
+                "target": { "surefire-reports": {
+                    "TEST-GreetingTest.xml": "<testsuite><testcase classname=\"GreetingTest\" name=\"messageIsAvailable\"/></testsuite>"
+                } }
+            }),
+        )
+        .await;
+        let (project, headless) = init_test(&fs, cx, server_cx).await;
+        let java = Language::new(
+            LanguageConfig {
+                name: "Java".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["java".into()],
+                    ..Default::default()
+                }
+                .into(),
+                ..Default::default()
+            },
+            Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+        )
+        .with_queries(LanguageQueries {
+            runnables: Some(Cow::Borrowed(
+                "(program (class_declaration name: (type_identifier) @java_class_name body: (class_body (decorator (identifier) @annotation_name) (method_definition name: (property_identifier) @run @java_method_name))) @_ (#set! tag \"java-test-method\"))",
+            )),
+            ..Default::default()
+        })
+        .expect("fixture Java runnable query");
+        headless.update(server_cx, |headless, cx| {
+            headless.languages.add(Arc::new(java));
+            project::trusted_worktrees::init(HashMap::default(), cx);
+            project::trusted_worktrees::track_worktree_trust(
+                headless.worktree_store.clone(),
+                None,
+                None,
+                None,
+                cx,
+            );
+        });
+        let (worktree, _) = project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(path!("/jvm"), true, cx)
+            })
+            .await
+            .expect("remote Java worktree");
+        cx.run_until_parked();
+        server_cx.run_until_parked();
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id().to_proto());
+        let (client, provider) = project.read_with(cx, |project, cx| {
+            (
+                project
+                    .remote_client()
+                    .expect("remote connection")
+                    .read(cx)
+                    .proto_client(),
+                project
+                    .jvm_test_provider_store()
+                    .expect("remote Java provider")
+                    .clone(),
+            )
+        });
+        let mut request = proto::ResolveJvmTestDebug {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            protocol_version: JVM_TEST_DEBUG_PROTOCOL_VERSION,
+            worktree_id,
+            discovery_generation: 0,
+            node_id: "unresolved-case".to_owned(),
+            authorization: 0,
+            check_readiness: false,
+        };
+        assert!(
+            client
+                .request(proto::ResolveJvmTestDebug {
+                    protocol_version: u32::MAX,
+                    ..request.clone()
+                })
+                .await
+                .is_err()
+        );
+        let untrusted = client
+            .request(request.clone())
+            .await
+            .expect_err("host trust required");
+        assert!(untrusted.to_string().contains("Trust the project"));
+        client
+            .request(proto::TrustWorktrees {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                trusted_paths: vec![proto::PathTrust {
+                    content: Some(proto::path_trust::Content::WorktreeId(worktree_id)),
+                }],
+            })
+            .await
+            .expect("trust the host worktree");
+        let missing_adapter = client
+            .request(request.clone())
+            .await
+            .expect_err("missing adapter");
+        assert!(
+            missing_adapter
+                .to_string()
+                .contains("adapter is unavailable on the project host")
+        );
+        server_cx.update(|cx| DapRegistry::global(cx).add_adapter(Arc::new(InstalledJavaAdapter)));
+        cx.run_until_parked();
+        server_cx.run_until_parked();
+        let snapshot = provider
+            .update(cx, |provider, cx| provider.refresh(cx))
+            .await
+            .expect("current host Java discovery");
+        request.discovery_generation = snapshot.discovery_generation.0;
+        request.node_id = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.kind == StructuredNodeKind::Case)
+            .expect("connected Java case")
+            .id
+            .0
+            .clone();
+        assert!(
+            client
+                .request(proto::ResolveJvmTestDebug {
+                    discovery_generation: request.discovery_generation.wrapping_add(1),
+                    ..request.clone()
+                })
+                .await
+                .expect_err("future Java discovery is unavailable")
+                .to_string()
+                .contains("stale discovery")
+        );
+        let plan = client
+            .request(request.clone())
+            .await
+            .expect("host-authorized Debug plan");
+        assert_eq!(plan.source_root, "src/test/java");
+        assert_eq!(plan.worktree_id, worktree_id);
+        assert!(!plan.announces_port && !plan.ready && plan.authorization != 0);
+        let template = serde_json::from_str::<task::TaskTemplate>(&plan.template_json)
+            .expect("validated host Task template");
+        assert_eq!(template.command, "./mvnw");
+        assert!(template.args.iter().any(|argument| {
+            argument.starts_with("-Dmaven.surefire.debug=-agentlib:jdwp=")
+                && argument.ends_with(&format!("address=127.0.0.1:{}", plan.port))
+        }));
+
+        request.authorization = plan.authorization;
+        assert_eq!(
+            client
+                .request(request.clone())
+                .await
+                .expect("host preflight"),
+            plan
+        );
+        request.check_readiness = true;
+        assert_eq!(
+            client
+                .request(request.clone())
+                .await
+                .expect("unused host port"),
+            plan
+        );
+        let port = u16::try_from(plan.port).expect("bounded Debug port");
+        let listener =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, port)).expect("host loopback listener");
+        assert!(
+            client
+                .request(request.clone())
+                .await
+                .expect("bound host port")
+                .ready
+        );
+        assert!(
+            client.request(request.clone()).await.is_err(),
+            "a used authorization cannot be replayed"
+        );
+        drop(listener);
+        request.authorization = client
+            .request(proto::ResolveJvmTestDebug {
+                authorization: 0,
+                check_readiness: false,
+                ..request.clone()
+            })
+            .await
+            .expect("fresh host authorization")
+            .authorization;
+        request.check_readiness = false;
+        client
+            .request(proto::RestrictWorktrees {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                worktree_ids: vec![worktree_id],
+            })
+            .await
+            .expect("restrict the authorized worktree");
+        assert!(client.request(request.clone()).await.is_err());
+        client
+            .request(proto::TrustWorktrees {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                trusted_paths: vec![proto::PathTrust {
+                    content: Some(proto::path_trust::Content::WorktreeId(worktree_id)),
+                }],
+            })
+            .await
+            .expect("restore host trust");
+        assert!(
+            client.request(request).await.is_err(),
+            "trust never revives a stale authorization"
+        );
+        headless.read_with(server_cx, |headless, cx| {
+            let store = headless.structured_execution_store.read(cx);
+            let provider = store
+                .state()
+                .provider(&StructuredProviderId("jvm-junit".into()))
+                .expect("host Java discovery");
+            assert!(provider.current_run.is_none());
+        });
+    }
+
     #[gpui::test]
     async fn doctor_jvm_reproduction_acknowledges_limit_and_preserves_active_work(
         cx: &mut TestAppContext,

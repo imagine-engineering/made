@@ -574,7 +574,9 @@ message Envelope {
     CheckKotlinLspRelease check_kotlin_lsp_release = 539;
     KotlinLspReleaseResponse kotlin_lsp_release_response = 540;
     ReimportRemoteGradleProjects reimport_remote_gradle_projects = 541;
-    ReimportRemoteMavenProjects reimport_remote_maven_projects = 542; // current max
+    ReimportRemoteMavenProjects reimport_remote_maven_projects = 542;
+    ResolveJvmTestDebug resolve_jvm_test_debug = 543;
+    JvmTestDebugPlanResponse jvm_test_debug_plan_response = 544; // current max
   }
 
   reserved 87 to 88;

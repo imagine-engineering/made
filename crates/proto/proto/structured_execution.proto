@@ -51,6 +51,29 @@ message JvmTestActionPlanResponse {
   optional uint64 report_maximum_bytes = 7;
 }
 
+message ResolveJvmTestDebug {
+  uint64 project_id = 1;
+  uint32 protocol_version = 2;
+  uint64 discovery_generation = 3;
+  string node_id = 4;
+  uint64 worktree_id = 5;
+  uint64 authorization = 6;
+  bool check_readiness = 7;
+}
+
+message JvmTestDebugPlanResponse {
+  uint32 protocol_version = 1;
+  uint64 discovery_generation = 2;
+  string node_id = 3;
+  uint64 worktree_id = 4;
+  uint64 authorization = 5;
+  string template_json = 6;
+  string source_root = 7;
+  uint32 port = 8;
+  bool announces_port = 9;
+  bool ready = 10;
+}
+
 message UpdateJvmTestRun {
   uint64 project_id = 1;
   uint32 protocol_version = 2;
