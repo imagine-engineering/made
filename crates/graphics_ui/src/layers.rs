@@ -13,6 +13,19 @@ pub(crate) enum SavedLayerAction {
     ToggleExpansion { recursive: bool },
 }
 
+pub(crate) fn render_saved_layer_delete(
+    enabled: bool,
+    dispatch: impl Fn(&mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-DELETE".into())
+        .child(
+            Button::new("graphite-saved-layer-delete", "Delete")
+                .disabled(!enabled)
+                .on_click(move |_, window, cx| dispatch(window, cx)),
+        )
+}
+
 pub(crate) fn render_saved_layer_move(
     enabled: bool,
     menu: impl Fn(&mut Window, &mut App) -> Option<Entity<ContextMenu>> + 'static,

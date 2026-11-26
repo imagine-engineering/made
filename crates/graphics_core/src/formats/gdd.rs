@@ -5208,6 +5208,93 @@ impl InspectedGddV1 {
         .map(|(copy, _)| copy)
     }
 
+    pub async fn delete_root_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_editor::messages::prelude::{
+            DocumentMessage, Message, NodeGraphMessage, PortfolioMessage,
+        };
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self
+            .validate_layer_order_selection(&document, nodes)
+            .map_err(|error| match error {
+                GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                error => error,
+            })?;
+        let interface = &mut document.network_interface;
+        interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        let selected = interface.shallowest_unique_layers_sorted(&[]);
+        let removed: BTreeSet<_> = selected
+            .iter()
+            .flat_map(|layer| {
+                std::iter::once(*layer).chain(layer.descendants(interface.document_metadata()))
+            })
+            .collect();
+        if removed
+            .iter()
+            .any(|&layer| interface.selected_nodes().layer_locked(layer, interface))
+        {
+            return Err(GddArchiveError::LockedLayerStructure);
+        }
+        let deleted: BTreeSet<_> = removed.iter().map(|layer| layer.to_node()).collect();
+        let expected: Vec<_> = layer_tree_order(interface)
+            .into_iter()
+            .filter(|(node, _)| !deleted.contains(node))
+            .collect();
+        let mut commands = VecDeque::new();
+        plan_document_layer_command(
+            &mut document,
+            DocumentMessage::DeleteSelectedLayers,
+            &mut commands,
+        );
+        if !matches!(
+            commands.pop_front(),
+            Some(Message::Portfolio(PortfolioMessage::Document(
+                DocumentMessage::NodeGraph(NodeGraphMessage::DeleteSelectedNodes {
+                    delete_children: true
+                }),
+            )))
+        ) || !commands.is_empty()
+        {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        }
+        self.finish_layer_structure_edit(
+            &mut document,
+            |document| {
+                let interface = &mut document.network_interface;
+                interface.delete_nodes(
+                    selected
+                        .into_iter()
+                        .map(LayerNodeIdentifier::to_node)
+                        .collect(),
+                    true,
+                    &[],
+                );
+                load_root_layer_structure(interface)?;
+                if layer_tree_order(interface) != expected
+                    || deleted
+                        .iter()
+                        .any(|node| interface.document_node(node, &[]).is_some())
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                Ok(())
+            },
+            budget,
+            GddArchiveError::UnchangedLayerStructure,
+        )
+        .await
+        .map(|(copy, _)| copy)
+    }
+
     pub async fn reparent_root_layers_in_copy(
         &self,
         nodes: &[GddGraphNode],

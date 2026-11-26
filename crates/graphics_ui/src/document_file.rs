@@ -5382,6 +5382,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
             SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
             SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
+            SavedGraphAction::DeleteLayers => self.delete_saved_layers(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
                 self.toggle_saved_layer_expansion(index, recursive, cx);
             }
@@ -5431,6 +5432,33 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn delete_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty())
+        else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .delete_root_layers_in_copy(&nodes, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
     }
 
     fn reorder_saved_layers(
@@ -14137,6 +14165,213 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_008_1_validates_recursive_deletion(_cx: &mut TestAppContext) {
+        let archive = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&archive.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = snapshot.graph_nodes().await.expect("original graph");
+        let inner = nodes
+            .iter()
+            .find(|node| node.display_name() == "Inner Group")
+            .expect("nested group");
+        let locked = nodes
+            .iter()
+            .find(|node| node.display_name() == "Locked Gold")
+            .expect("locked child");
+        assert!(matches!(
+            snapshot
+                .delete_root_layers_in_copy(std::slice::from_ref(inner), ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let unlocked = snapshot
+            .edit_root_layer_in_copy(locked, GddRootLayerChange::Locked(false), ARCHIVE_BUDGET)
+            .await
+            .expect("explicit unlock");
+        let refreshed = unlocked.graph_nodes().await.expect("unlocked graph");
+        let current = refreshed
+            .iter()
+            .find(|node| node.storage_id() == inner.storage_id())
+            .expect("same group");
+        let deleted = unlocked
+            .delete_root_layers_in_copy(std::slice::from_ref(current), ARCHIVE_BUDGET)
+            .await
+            .expect("recursive layer deletion");
+        let inspection = deleted
+            .graph_inspection()
+            .await
+            .expect("editable surviving graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root graph");
+        let layers = deleted
+            .graph_geometry(root)
+            .await
+            .expect("renderable hierarchy")
+            .root_layers
+            .expect("source hierarchy");
+        let remaining = layers
+            .iter()
+            .map(|layer| {
+                inspection
+                    .nodes
+                    .iter()
+                    .find(|node| node.storage_id() == layer.storage_id)
+                    .expect("same retained layer")
+                    .display_name()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            remaining,
+            ["Main Artboard", "Outer Group", "Gray", "Second Artboard"]
+        );
+        assert!(!inspection.nodes.iter().any(|node| matches!(
+            node.display_name(),
+            "Inner Group" | "Blue Repeat" | "Repeat Array" | "Locked Gold"
+        )));
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_008_2_workspace_deletes_layers_with_one_undo(cx: &mut TestAppContext) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/delete-layers.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        window.simulate_keystrokes("backspace");
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let layer_ids = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native layer list")
+                };
+                form.saved_layer_rows()
+                    .expect("ready source layers")
+                    .iter()
+                    .map(|(_, layer)| layer.storage_id)
+                    .collect::<Vec<_>>()
+            })
+        };
+        let before = layer_ids(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-3");
+        window.simulate_keystrokes("delete");
+        window.run_until_parked();
+        paint(window);
+        assert_eq!(layer_ids(window), before);
+        item.read_with(window, |item, cx| {
+            assert!(
+                item.copy_feedback
+                    .as_ref()
+                    .is_some_and(|(message, _)| message.contains("Unlock"))
+            );
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        let (repeat, generator) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layer list")
+            };
+            let repeat = form.selected_node().expect("selected Blue Repeat");
+            let Some(GddGraphPortSource::Node { storage_id, .. }) = repeat
+                .input_ports()
+                .get(1)
+                .and_then(|port| port.source.as_ref())
+            else {
+                panic!("source Repeat Array")
+            };
+            (repeat.storage_id(), *storage_id)
+        });
+        let extend = gpui::Modifiers {
+            platform: cfg!(target_os = "macos"),
+            control: !cfg!(target_os = "macos"),
+            ..Default::default()
+        };
+        click_saved_graph(
+            window,
+            "GRAPHITE-GDD-SAVED-LAYER-4",
+            gpui::MouseButton::Left,
+            extend,
+        );
+        let red = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layer list")
+            };
+            form.nodes[4].storage_id()
+        });
+        window.simulate_keystrokes("backspace");
+        window.run_until_parked();
+        paint(window);
+        let removed = [red, repeat, generator];
+        let after: Vec<_> = before
+            .iter()
+            .copied()
+            .filter(|node| !removed.contains(node))
+            .collect();
+        assert_eq!(layer_ids(window), after);
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(layer_ids(window), before);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(layer_ids(window), after);
+        let destination = PathBuf::from("/project/deleted-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved deletion");
+        let nodes = reopened
+            .graph_nodes()
+            .await
+            .expect("editable surviving graph");
+        assert!(
+            nodes
+                .iter()
+                .all(|node| !removed.contains(&node.storage_id()))
+        );
+        assert!(
+            nodes
+                .iter()
+                .flat_map(GddGraphNode::input_ports)
+                .all(|port| match &port.source {
+                    Some(GddGraphPortSource::Node { storage_id, .. }) =>
+                        !removed.contains(storage_id),
+                    Some(GddGraphPortSource::UnavailableNode { .. }) => false,
+                    _ => true,
+                })
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }

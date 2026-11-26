@@ -151,6 +151,7 @@ pub(crate) enum SavedGraphAction {
     SelectAllLayers,
     DeselectLayers,
     SelectParentLayers,
+    DeleteLayers,
     ToggleLayerExpansion {
         index: usize,
         recursive: bool,
@@ -852,6 +853,8 @@ pub(crate) fn render_saved_graph(
             let keyboard_select = dispatch.clone();
             let keyboard_deselect = dispatch.clone();
             let keyboard_parent = dispatch.clone();
+            let delete_layers = dispatch.clone();
+            let keyboard_delete = dispatch.clone();
             let reorder_layers = dispatch.clone();
             let group_layers = dispatch.clone();
             let editing = view.working && view.can_start_connection && can_select;
@@ -888,6 +891,13 @@ pub(crate) fn render_saved_graph(
                     .on_action(move |_: &SelectParentSavedLayers, window, cx| {
                         if can_select {
                             keyboard_parent(SavedGraphAction::SelectParentLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &DeleteSavedLayers, window, cx| {
+                        if editing && selected {
+                            keyboard_delete(SavedGraphAction::DeleteLayers, window, cx);
                         } else {
                             cx.propagate();
                         }
@@ -966,6 +976,12 @@ pub(crate) fn render_saved_graph(
                                     }),
                                 move |window, cx| {
                                     context_menu(SavedGraphMenuTarget::LayerParents, window, cx)
+                                },
+                            ))
+                            .child(crate::layers::render_saved_layer_delete(
+                                editing && selected,
+                                move |window, cx| {
+                                    delete_layers(SavedGraphAction::DeleteLayers, window, cx)
                                 },
                             )),
                     )
@@ -2110,6 +2126,8 @@ pub fn bind_keys(cx: &mut App) {
         ),
         gpui::KeyBinding::new(deselect, DeselectSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("alt-a", DeselectSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new("delete", DeleteSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new("backspace", DeleteSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("escape", CancelSavedGraphBox, Some("GraphiteBoxSelection")),
         gpui::KeyBinding::new("tab", FocusNextArtboardControl, Some("GraphiteArtboard")),
         gpui::KeyBinding::new(
@@ -2144,6 +2162,8 @@ actions!(
         DeselectSavedLayers,
         /// Selects the parent layers of the current Layers selection.
         SelectParentSavedLayers,
+        /// Deletes selected editable layers in the focused Graphite Layers view.
+        DeleteSavedLayers,
         /// Shows the original imported image in the focused Graphite item.
         ShowOriginalImage,
         /// Inverts the focused imported image with the original Graphite node.
