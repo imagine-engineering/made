@@ -167,6 +167,7 @@ pub(crate) enum SavedGraphAction {
     GroupLayers(GddLayerGrouping),
     ApplyLayerOpacity(GddLayerOpacityKind),
     ToggleLayerClipping(usize),
+    ToggleLayerRepresentation,
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -439,6 +440,33 @@ pub(crate) fn render_saved_graph(
     let dispatch_box = dispatch.clone();
     let can_start_box = view.pending_source.is_none();
     let active_box = view.box_selection.get();
+    let selected_geometry: Vec<_> = geometry
+        .nodes
+        .iter()
+        .filter(|node| {
+            nodes_by_id
+                .get(&node.storage_id)
+                .is_some_and(|&(index, _)| {
+                    view.selected == Some(index) || view.selection.contains(&index)
+                })
+        })
+        .collect();
+    let can_toggle_representation = view.working
+        && view.can_start_connection
+        && view.pending_source.is_none()
+        && !selected_geometry.is_empty()
+        && selected_geometry
+            .iter()
+            .all(|node| node.can_toggle_layer_representation);
+    let representation_label = if selected_geometry.iter().all(|node| node.is_layer) {
+        "Show as Node"
+    } else if selected_geometry.iter().all(|node| !node.is_layer) {
+        "Show as Layer"
+    } else {
+        "Toggle Layer / Node"
+    };
+    let graph_toggle_representation = dispatch.clone();
+    let button_toggle_representation = dispatch.clone();
     let graph = div()
         .id("graphite-saved-graph")
         .track_focus(view.focus)
@@ -459,6 +487,17 @@ pub(crate) fn render_saved_graph(
         .w(px(width as f32))
         .flex_none()
         .h(px(height as f32))
+        .on_action(move |_: &ToggleSavedLayerRepresentation, window, cx| {
+            if can_toggle_representation {
+                graph_toggle_representation(
+                    SavedGraphAction::ToggleLayerRepresentation,
+                    window,
+                    cx,
+                );
+            } else {
+                cx.propagate();
+            }
+        })
         .on_mouse_down(MouseButton::Left, move |event, window, cx| {
             graph_focus.focus(window, cx);
             if can_start_box && let Some(origin) = start_origin.get() {
@@ -861,6 +900,7 @@ pub(crate) fn render_saved_graph(
             let keyboard_select = dispatch.clone();
             let keyboard_deselect = dispatch.clone();
             let keyboard_parent = dispatch.clone();
+            let layer_toggle_representation = dispatch.clone();
             let duplicate_layers = dispatch.clone();
             let keyboard_duplicate = dispatch.clone();
             let delete_layers = dispatch.clone();
@@ -925,6 +965,17 @@ pub(crate) fn render_saved_graph(
                     .on_action(move |_: &DuplicateSavedLayers, window, cx| {
                         if editing && selected {
                             keyboard_duplicate(SavedGraphAction::DuplicateLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &ToggleSavedLayerRepresentation, window, cx| {
+                        if can_toggle_representation {
+                            layer_toggle_representation(
+                                SavedGraphAction::ToggleLayerRepresentation,
+                                window,
+                                cx,
+                            );
                         } else {
                             cx.propagate();
                         }
@@ -1123,6 +1174,22 @@ pub(crate) fn render_saved_graph(
                 .overflow_x_scroll()
                 .track_scroll(view.viewport)
                 .child(graph),
+        )
+        .when(
+            view.overlay_size.is_none() && view.working && !selected_geometry.is_empty(),
+            |panel| {
+                panel.child(crate::layers::render_saved_layer_representation(
+                    representation_label,
+                    can_toggle_representation,
+                    move |window, cx| {
+                        button_toggle_representation(
+                            SavedGraphAction::ToggleLayerRepresentation,
+                            window,
+                            cx,
+                        )
+                    },
+                ))
+            },
         )
         .children(root_layers)
         .when(
@@ -2198,6 +2265,16 @@ pub fn bind_keys(cx: &mut App) {
         ),
         gpui::KeyBinding::new(deselect, DeselectSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("alt-a", DeselectSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new(
+            "alt-l",
+            ToggleSavedLayerRepresentation,
+            Some("GraphiteSavedGraph"),
+        ),
+        gpui::KeyBinding::new(
+            "alt-l",
+            ToggleSavedLayerRepresentation,
+            Some("GraphiteSavedLayers"),
+        ),
         gpui::KeyBinding::new(duplicate, DuplicateSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new(
             alternate_duplicate,
@@ -2244,6 +2321,8 @@ actions!(
         DuplicateSavedLayers,
         /// Deletes selected editable layers in the focused Graphite Layers view.
         DeleteSavedLayers,
+        /// Switches the selected nodes between layer and node forms.
+        ToggleSavedLayerRepresentation,
         /// Shows the original imported image in the focused Graphite item.
         ShowOriginalImage,
         /// Inverts the focused imported image with the original Graphite node.

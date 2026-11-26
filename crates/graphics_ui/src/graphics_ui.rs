@@ -1,3 +1,6 @@
+// The pinned GPU resource types exceed rustc's default trait-resolution depth.
+#![recursion_limit = "256"]
+
 pub mod image_preview;
 pub mod interop;
 pub mod resources;

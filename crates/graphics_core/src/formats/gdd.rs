@@ -359,6 +359,8 @@ pub enum GddArchiveError {
     UnsupportedLayerBlendMode,
     #[error("Choose an unlocked Graphite layer with a sibling below it to use clipping.")]
     UnsupportedLayerClipping,
+    #[error("Choose Graphite nodes in one network that can switch between layer and node forms.")]
+    UnsupportedLayerRepresentation,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -661,6 +663,7 @@ pub struct GddGraphNodeGeometry {
     pub primary_output: Option<[f64; 2]>,
     click_target: Option<graphite_std::vector::click_target::ClickTarget>,
     pub is_layer: bool,
+    pub can_toggle_layer_representation: bool,
 }
 
 pub struct GddRootLayer {
@@ -1698,6 +1701,8 @@ impl InspectedGddV1 {
         } else {
             Ok(Vec::new())
         };
+        let can_change_layer_layout =
+            root_layers.is_ok() && (!path.is_empty() || interface.document_network().is_acyclic());
         let nodes = ids
             .iter()
             .filter_map(|(local_id, storage_id)| {
@@ -1720,6 +1725,8 @@ impl InspectedGddV1 {
                             .node_click_targets(local_id, path)
                             .map(|targets| targets.node_click_target.clone()),
                         is_layer: interface.is_layer(local_id, path),
+                        can_toggle_layer_representation: can_change_layer_layout
+                            && layer_representation_target(&interface, *local_id, path).is_ok(),
                     })
             })
             .collect();
@@ -5193,6 +5200,55 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn toggle_graph_layer_representation_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        let path = nodes
+            .first()
+            .ok_or(GddArchiveError::UnsupportedLayerRepresentation)?
+            .network_path
+            .as_slice();
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let interface = &document.network_interface;
+        let mut targets = BTreeMap::new();
+        for node in nodes {
+            self.check_node_edit_target(node)?;
+            if node.network_path.as_slice() != path || targets.contains_key(&node.local_id) {
+                return Err(GddArchiveError::UnsupportedLayerRepresentation);
+            }
+            targets.insert(
+                node.local_id,
+                layer_representation_target(interface, node.local_id, path)?,
+            );
+        }
+        self.finish_root_layer_edit(
+            &mut document,
+            |document| {
+                let interface = &mut document.network_interface;
+                let original = interface.document_network().clone();
+                for (&node, &is_layer) in &targets {
+                    interface.set_to_node_or_layer(&node, path, is_layer);
+                }
+                load_root_layer_structure(interface)?;
+                if interface.document_network() != &original
+                    || targets
+                        .iter()
+                        .any(|(node, &is_layer)| interface.is_layer(node, path) != is_layer)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                Ok(())
+            },
+            budget,
+        )
+        .await
+        .map(|(copy, _)| copy)
+    }
+
     pub async fn edit_root_layer_blending_in_copy(
         &self,
         nodes: &[GddGraphNode],
@@ -7735,6 +7791,45 @@ fn layer_accepts_children(layer: LayerNodeIdentifier, interface: &NodeNetworkInt
                         .is_some_and(|input| input.as_value().is_some())
                 })
             })
+}
+
+fn layer_representation_target(
+    interface: &NodeNetworkInterface,
+    node: NodeId,
+    path: &[NodeId],
+) -> Result<bool, GddArchiveError> {
+    if matches!(node, NodeId(0) | NodeId(u64::MAX)) {
+        return Err(GddArchiveError::UnsupportedLayerRepresentation);
+    }
+    if interface.is_locked(&node, path)
+        || path
+            .iter()
+            .enumerate()
+            .any(|(depth, owner)| interface.is_locked(owner, &path[..depth]))
+    {
+        return Err(GddArchiveError::LockedLayerStructure);
+    }
+    let is_layer = interface.is_layer(&node, path);
+    if path.is_empty() {
+        let owning_layer = if is_layer {
+            Some(node)
+        } else {
+            interface.downstream_layer_for_chain_node(&node, path)
+        };
+        if owning_layer.is_some_and(|owner| {
+            !matches!(owner, NodeId(0) | NodeId(u64::MAX))
+                && interface.is_layer(&owner, path)
+                && interface
+                    .selected_nodes()
+                    .layer_locked(LayerNodeIdentifier::new(owner, interface), interface)
+        }) {
+            return Err(GddArchiveError::LockedLayerStructure);
+        }
+    }
+    if !is_layer && !interface.is_eligible_to_be_layer(&node, path) {
+        return Err(GddArchiveError::UnsupportedLayerRepresentation);
+    }
+    Ok(!is_layer)
 }
 
 fn layer_supports_blending(layer: LayerNodeIdentifier, interface: &NodeNetworkInterface) -> bool {

@@ -5467,6 +5467,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::ToggleLayerClipping(index) => {
                 self.toggle_saved_layer_clipping(index, window, cx)
             }
+            SavedGraphAction::ToggleLayerRepresentation => {
+                self.toggle_saved_layer_representation(window, cx)
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -5545,6 +5548,46 @@ impl GraphiteDocumentItem {
             async move {
                 snapshot
                     .edit_root_layer_opacity_in_copy(&nodes, kind, percent, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn toggle_saved_layer_representation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(network) = form
+            .clipboard_scope()
+            .filter(|_| form.pending_canvas_source.is_none())
+        else {
+            return;
+        };
+        let nodes: Vec<_> = form
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(index, node)| {
+                node.network_id() == network.id
+                    && (form.selected == Some(*index) || form.node_selection.contains(index))
+            })
+            .map(|(_, node)| node.clone())
+            .collect();
+        if nodes.is_empty() {
+            return;
+        }
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .toggle_graph_layer_representation_in_copy(&nodes, ARCHIVE_BUDGET)
                     .await
             },
             window,
@@ -14477,6 +14520,201 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_025_1_switches_representation_without_rewiring(_cx: &mut TestAppContext) {
+        let bytes = layer_order_archive().await;
+        let source = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let original = source.graph_inspection().await.expect("source graph");
+        let choose = |name| {
+            original
+                .nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let gray = choose("Gray");
+        let locked = choose("Locked Gold");
+        assert!(matches!(
+            source
+                .toggle_graph_layer_representation_in_copy(
+                    &[gray.clone(), locked.clone()],
+                    ARCHIVE_BUDGET
+                )
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let shown_as_node = source
+            .toggle_graph_layer_representation_in_copy(std::slice::from_ref(gray), ARCHIVE_BUDGET)
+            .await
+            .expect("source representation");
+        let edited = shown_as_node
+            .graph_inspection()
+            .await
+            .expect("unchanged source nodes");
+        let connections = |inspection: &GddGraphInspection| {
+            inspection
+                .nodes
+                .iter()
+                .map(|node| {
+                    (
+                        node.storage_id(),
+                        node.input_ports()
+                            .iter()
+                            .map(|port| port.source.clone())
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>()
+        };
+        assert_eq!(connections(&original), connections(&edited));
+        let root = edited
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root scope");
+        let geometry = shown_as_node
+            .graph_geometry(root)
+            .await
+            .expect("new representation");
+        assert!(
+            geometry
+                .nodes
+                .iter()
+                .any(|node| node.storage_id == gray.storage_id() && !node.is_layer)
+        );
+        assert!(matches!(
+            shown_as_node
+                .toggle_graph_layer_representation_in_copy(
+                    std::slice::from_ref(gray),
+                    ARCHIVE_BUDGET
+                )
+                .await,
+            Err(GddArchiveError::StaleGraphNode)
+        ));
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_025_2_workspace_toggles_the_same_saved_node(cx: &mut TestAppContext) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/layer-representation.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        window.simulate_keystrokes("alt-l");
+        assert!(window.debug_bounds("GRAPHITE-GDD-SAVED-LAYER-8").is_some());
+        item.read_with(window, |item, cx| assert!(!item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let canvas_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let frame = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                match &canvas.frame {
+                    SavedSceneFrame::Ready(frame) => frame.clone(),
+                    SavedSceneFrame::Failed(error) => panic!("Canvas render failed: {error}"),
+                    _ => panic!("accepted Canvas artwork"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            frame
+        };
+        let before = canvas_image(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        let gray = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native graph")
+            };
+            form.selected_node().expect("selected Gray").storage_id()
+        });
+        let assert_representation = |window: &gpui::VisualTestContext, is_layer| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native graph")
+                };
+                let SavedGraphPanel::Ready(geometry) = &form.saved_graph else {
+                    panic!("ready saved graph")
+                };
+                let represented = geometry
+                    .nodes
+                    .iter()
+                    .find(|node| node.storage_id == gray)
+                    .expect("same Gray source node");
+                assert_eq!(represented.is_layer, is_layer);
+                assert_eq!(
+                    form.saved_layer_rows()
+                        .expect("saved layer rows")
+                        .iter()
+                        .any(|(_, layer)| layer.storage_id == gray),
+                    is_layer
+                );
+                assert_eq!(
+                    form.selected_node().expect("same selection").storage_id(),
+                    gray
+                );
+            });
+        };
+        assert_representation(window, true);
+        window.simulate_keystrokes("alt-l");
+        window.run_until_parked();
+        paint(window);
+        assert_representation(window, false);
+        assert!(before.as_bytes(0) == canvas_image(window).as_bytes(0));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_representation(window, true);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_representation(window, false);
+        let destination = PathBuf::from("/project/saved-node-representation.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved representation");
+        let inspection = reopened.graph_inspection().await.expect("editable graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document scope");
+        let geometry = reopened
+            .graph_geometry(root)
+            .await
+            .expect("reopened geometry");
+        assert!(
+            geometry
+                .nodes
+                .iter()
+                .any(|node| node.storage_id == gray && !node.is_layer)
+        );
+        paint(window);
+        click(window, "GRAPHITE-GDD-LAYER-REPRESENTATION");
+        assert_representation(window, true);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }

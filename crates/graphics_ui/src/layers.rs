@@ -16,6 +16,20 @@ pub(crate) enum SavedLayerAction {
     ToggleClipping,
 }
 
+pub(crate) fn render_saved_layer_representation(
+    label: &'static str,
+    enabled: bool,
+    dispatch: impl Fn(&mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-REPRESENTATION".into())
+        .child(
+            Button::new("graphite-saved-layer-representation", label)
+                .disabled(!enabled)
+                .on_click(move |_, window, cx| dispatch(window, cx)),
+        )
+}
+
 pub(crate) fn render_saved_layer_blend_mode(
     mode: Option<BlendMode>,
     menu: impl Fn(&mut Window, &mut App) -> Option<Entity<ContextMenu>> + 'static,
