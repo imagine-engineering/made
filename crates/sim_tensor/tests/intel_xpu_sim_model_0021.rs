@@ -5,10 +5,10 @@ use sim_types::{NativeBackendBinding, NativeBackendBindingStatus};
 
 #[test]
 fn generated_xpu_semantic_adapter_is_feature_registered() {
-    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_intel_xpu_comfy_model_0021"));
+    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_intel_xpu_sim_model_0021"));
     assert_eq!(
         std::any::type_name::<XpuTensorBackend>(),
-        "sim_tensor::generated_backend_intel_xpu_comfy_model_0021::XpuTensorBackend"
+        "sim_tensor::generated_backend_intel_xpu_sim_model_0021::XpuTensorBackend"
     );
 }
 

@@ -7,7 +7,7 @@ use sim_types::{DeviceKind, NativeBackendBindingStatus};
 
 #[test]
 fn npu_adapter_has_a_feature_gated_generated_root_edge() {
-    assert!(GENERATED_MODULES.contains(&"ops/backend_huawei_ascend_npu_comfy_model_0019"));
+    assert!(GENERATED_MODULES.contains(&"ops/backend_huawei_ascend_npu_sim_model_0019"));
     assert_ne!(
         std::mem::size_of::<
             sim_tensor::generated_backend_huawei_ascend_npu_sim_model_0019::NpuTensorBackend,

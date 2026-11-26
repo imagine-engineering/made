@@ -5,10 +5,10 @@ use sim_types::{NativeBackendBinding, NativeBackendBindingStatus};
 
 #[test]
 fn generated_directml_semantic_adapter_is_feature_registered() {
-    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_directml_comfy_model_0018"));
+    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_directml_sim_model_0018"));
     assert_eq!(
         std::any::type_name::<DirectMlTensorBackend>(),
-        "sim_tensor::generated_backend_directml_comfy_model_0018::DirectMlTensorBackend"
+        "sim_tensor::generated_backend_directml_sim_model_0018::DirectMlTensorBackend"
     );
 }
 

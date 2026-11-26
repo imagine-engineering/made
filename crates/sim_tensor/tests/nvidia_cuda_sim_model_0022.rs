@@ -5,10 +5,10 @@ use sim_types::{NativeBackendBinding, NativeBackendBindingStatus};
 
 #[test]
 fn generated_cuda_semantic_adapter_is_feature_registered() {
-    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_nvidia_cuda_comfy_model_0022"));
+    assert!(sim_tensor::GENERATED_MODULES.contains(&"ops/backend_nvidia_cuda_sim_model_0022"));
     assert_eq!(
         std::any::type_name::<CudaTensorBackend>(),
-        "sim_tensor::generated_backend_nvidia_cuda_comfy_model_0022::CudaTensorBackend"
+        "sim_tensor::generated_backend_nvidia_cuda_sim_model_0022::CudaTensorBackend"
     );
 }
 

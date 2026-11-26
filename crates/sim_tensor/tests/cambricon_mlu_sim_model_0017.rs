@@ -7,7 +7,7 @@ use sim_types::{DeviceKind, NativeBackendBindingStatus};
 
 #[test]
 fn mlu_adapter_has_a_feature_gated_generated_root_edge() {
-    assert!(GENERATED_MODULES.contains(&"ops/backend_cambricon_mlu_comfy_model_0017"));
+    assert!(GENERATED_MODULES.contains(&"ops/backend_cambricon_mlu_sim_model_0017"));
     assert_ne!(
         std::mem::size_of::<
             sim_tensor::generated_backend_cambricon_mlu_sim_model_0017::MluTensorBackend,
