@@ -5208,6 +5208,73 @@ impl InspectedGddV1 {
         .map(|(copy, _)| copy)
     }
 
+    pub async fn duplicate_root_layers_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        use graphite_editor::messages::prelude::DocumentMessage;
+
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self
+            .validate_layer_order_selection(&document, nodes)
+            .map_err(|error| match error {
+                GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                error => error,
+            })?;
+        let interface = &mut document.network_interface;
+        interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        let count = interface.shallowest_unique_layers_sorted(&[]).len();
+        let previous_tree = layer_tree_order(interface);
+        let previous_nodes: BTreeSet<_> =
+            interface.document_network().nodes.keys().copied().collect();
+        let mut commands = VecDeque::new();
+        plan_document_layer_command(
+            &mut document,
+            DocumentMessage::DuplicateSelectedLayers,
+            &mut commands,
+        );
+        self.finish_layer_structure_edit(
+            &mut document,
+            |document| {
+                apply_document_layer_commands(document, commands)?;
+                let interface = &document.network_interface;
+                let tree = layer_tree_order(interface);
+                let new_selection: BTreeSet<_> = interface
+                    .selected_nodes()
+                    .selected_nodes_ref()
+                    .iter()
+                    .copied()
+                    .collect();
+                if new_selection.len() != count
+                    || new_selection
+                        .iter()
+                        .any(|node| previous_nodes.contains(node))
+                    || tree
+                        .iter()
+                        .filter(|(node, _)| new_selection.contains(node))
+                        .count()
+                        != count
+                    || !tree
+                        .into_iter()
+                        .filter(|(node, _)| previous_nodes.contains(node))
+                        .eq(previous_tree)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                Ok(())
+            },
+            budget,
+            GddArchiveError::UnchangedLayerStructure,
+        )
+        .await
+    }
+
     pub async fn delete_root_layers_in_copy(
         &self,
         nodes: &[GddGraphNode],
@@ -7425,6 +7492,33 @@ fn apply_document_layer_commands(
             return Err(GddArchiveError::UnsupportedRootLayerEdit);
         };
         match command {
+            DocumentMessage::NodeGraph(NodeGraphMessage::AddNodes { mut nodes, new_ids }) => {
+                let interface = &mut document.network_interface;
+                let template_ids: BTreeSet<_> = nodes.iter().map(|(node, _)| *node).collect();
+                let inserted: BTreeSet<_> = new_ids.values().copied().collect();
+                if nodes.is_empty()
+                    || template_ids.len() != nodes.len()
+                    || inserted.len() != nodes.len()
+                    || !new_ids.keys().all(|node| template_ids.contains(node))
+                    || inserted.iter().any(|node| {
+                        matches!(node, NodeId(0) | NodeId(u64::MAX))
+                            || interface.document_node(node, &[]).is_some()
+                    })
+                {
+                    return Err(GddArchiveError::GraphNodeIdentityCollision);
+                }
+                for (_, template) in &mut nodes {
+                    template.normalize_stored_types();
+                }
+                interface.insert_node_group(nodes, new_ids, &[]);
+                load_root_layer_structure(interface)?;
+                if inserted
+                    .iter()
+                    .any(|node| interface.document_node(node, &[]).is_none())
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+            }
             DocumentMessage::NodeGraph(NodeGraphMessage::MoveLayerToStack {
                 layer,
                 parent,

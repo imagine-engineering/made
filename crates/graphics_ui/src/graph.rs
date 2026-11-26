@@ -151,6 +151,7 @@ pub(crate) enum SavedGraphAction {
     SelectAllLayers,
     DeselectLayers,
     SelectParentLayers,
+    DuplicateLayers,
     DeleteLayers,
     ToggleLayerExpansion {
         index: usize,
@@ -853,6 +854,8 @@ pub(crate) fn render_saved_graph(
             let keyboard_select = dispatch.clone();
             let keyboard_deselect = dispatch.clone();
             let keyboard_parent = dispatch.clone();
+            let duplicate_layers = dispatch.clone();
+            let keyboard_duplicate = dispatch.clone();
             let delete_layers = dispatch.clone();
             let keyboard_delete = dispatch.clone();
             let reorder_layers = dispatch.clone();
@@ -898,6 +901,13 @@ pub(crate) fn render_saved_graph(
                     .on_action(move |_: &DeleteSavedLayers, window, cx| {
                         if editing && selected {
                             keyboard_delete(SavedGraphAction::DeleteLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &DuplicateSavedLayers, window, cx| {
+                        if editing && selected {
+                            keyboard_duplicate(SavedGraphAction::DuplicateLayers, window, cx);
                         } else {
                             cx.propagate();
                         }
@@ -976,6 +986,12 @@ pub(crate) fn render_saved_graph(
                                     }),
                                 move |window, cx| {
                                     context_menu(SavedGraphMenuTarget::LayerParents, window, cx)
+                                },
+                            ))
+                            .child(crate::layers::render_saved_layer_duplicate(
+                                editing && selected,
+                                move |window, cx| {
+                                    duplicate_layers(SavedGraphAction::DuplicateLayers, window, cx)
                                 },
                             ))
                             .child(crate::layers::render_saved_layer_delete(
@@ -2113,10 +2129,10 @@ pub fn open_numeric_document(
 }
 
 pub fn bind_keys(cx: &mut App) {
-    let (select_all, deselect) = if cfg!(target_os = "macos") {
-        ("cmd-a", "cmd-shift-a")
+    let (select_all, deselect, duplicate, alternate_duplicate) = if cfg!(target_os = "macos") {
+        ("cmd-a", "cmd-shift-a", "cmd-d", "cmd-j")
     } else {
-        ("ctrl-a", "ctrl-shift-a")
+        ("ctrl-a", "ctrl-shift-a", "ctrl-d", "ctrl-j")
     };
     cx.bind_keys([
         gpui::KeyBinding::new(
@@ -2126,6 +2142,12 @@ pub fn bind_keys(cx: &mut App) {
         ),
         gpui::KeyBinding::new(deselect, DeselectSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("alt-a", DeselectSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new(duplicate, DuplicateSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new(
+            alternate_duplicate,
+            DuplicateSavedLayers,
+            Some("GraphiteSavedLayers"),
+        ),
         gpui::KeyBinding::new("delete", DeleteSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("backspace", DeleteSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("escape", CancelSavedGraphBox, Some("GraphiteBoxSelection")),
@@ -2162,6 +2184,8 @@ actions!(
         DeselectSavedLayers,
         /// Selects the parent layers of the current Layers selection.
         SelectParentSavedLayers,
+        /// Duplicates the selected editable layers in their current stacks.
+        DuplicateSavedLayers,
         /// Deletes selected editable layers in the focused Graphite Layers view.
         DeleteSavedLayers,
         /// Shows the original imported image in the focused Graphite item.

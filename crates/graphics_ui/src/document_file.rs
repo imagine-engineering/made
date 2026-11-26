@@ -5382,6 +5382,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
             SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
             SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
+            SavedGraphAction::DuplicateLayers => self.duplicate_saved_layers(window, cx),
             SavedGraphAction::DeleteLayers => self.delete_saved_layers(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
                 self.toggle_saved_layer_expansion(index, recursive, cx);
@@ -5432,6 +5433,36 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn duplicate_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|nodes| !nodes.is_empty())
+        else {
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        let staged = cx.background_spawn(async move {
+            let (contents, selection) = snapshot
+                .duplicate_root_layers_in_copy(&nodes, ARCHIVE_BUDGET)
+                .await?;
+            let inspection = contents.graph_inspection().await?;
+            anyhow::Ok(PreparedWorkingSnapshot {
+                contents: Arc::new(contents),
+                inspection,
+                cut_clipboard: None,
+                layer_selection: Some(selection),
+            })
+        });
+        self.install_working_snapshot(revision, staged, window, cx);
     }
 
     fn delete_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -14165,6 +14196,211 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_006_1_duplicates_the_editable_source_subtree(_cx: &mut TestAppContext) {
+        let bytes = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let before = snapshot.graph_nodes().await.expect("source layers");
+        let original = before
+            .iter()
+            .find(|node| node.display_name() == "Inner Group")
+            .expect("source group");
+        let locked = before
+            .iter()
+            .find(|node| node.display_name() == "Locked Gold")
+            .expect("locked source");
+        assert!(matches!(
+            snapshot
+                .duplicate_root_layers_in_copy(std::slice::from_ref(locked), ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let (copy, selected) = snapshot
+            .duplicate_root_layers_in_copy(std::slice::from_ref(original), ARCHIVE_BUDGET)
+            .await
+            .expect("duplicate source group");
+        let [new_group] = selected.as_slice() else {
+            panic!("one new group selected")
+        };
+        let original_nodes: BTreeSet<_> = before.iter().map(GddGraphNode::storage_id).collect();
+        assert!(!original_nodes.contains(new_group));
+        let inspection = copy.graph_inspection().await.expect("editable copies");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("root scope");
+        let layers = copy
+            .graph_geometry(root)
+            .await
+            .expect("copied hierarchy")
+            .root_layers
+            .expect("root layers");
+        let children = |parent| {
+            layers
+                .iter()
+                .filter(move |layer| layer.parent == Some(parent))
+                .map(|layer| layer.storage_id)
+                .collect::<Vec<_>>()
+        };
+        let originals = children(original.storage_id());
+        let copies = children(*new_group);
+        assert_eq!(originals.len(), 4);
+        assert_eq!(copies.len(), originals.len());
+        let node = |id| {
+            inspection
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == id)
+                .expect("source graph node")
+        };
+        for (original, copied) in originals.into_iter().zip(copies) {
+            assert!(!original_nodes.contains(&copied));
+            assert_eq!(node(original).display_name(), node(copied).display_name());
+            let Some(GddGraphPortSource::Node { storage_id, .. }) = node(copied)
+                .input_ports()
+                .get(1)
+                .and_then(|port| port.source.as_ref())
+            else {
+                panic!("editable copied content")
+            };
+            assert!(!original_nodes.contains(storage_id));
+        }
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_006_2_workspace_duplicates_the_selected_layer(cx: &mut TestAppContext) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/duplicate-layers.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        click(window, "GRAPHITE-GDD-LAYER-DUPLICATE");
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        let layer_ids = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native layer list")
+                };
+                form.saved_layer_rows()
+                    .expect("source layers")
+                    .iter()
+                    .map(|(_, layer)| layer.storage_id)
+                    .collect::<Vec<_>>()
+            })
+        };
+        let before = layer_ids(window);
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        let (source_layer, source_generator) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layer list")
+            };
+            let layer = form.selected_node().expect("selected source repeat");
+            let Some(GddGraphPortSource::Node { storage_id, .. }) = layer
+                .input_ports()
+                .get(1)
+                .and_then(|port| port.source.as_ref())
+            else {
+                panic!("source Repeat Array")
+            };
+            (layer.storage_id(), *storage_id)
+        });
+        window.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-d"
+        } else {
+            "ctrl-d"
+        });
+        window.run_until_parked();
+        paint(window);
+        let (copied_layer, copied_generator) = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layer list")
+            };
+            let layer = form.selected_node().expect("selected copy");
+            assert_eq!(layer.display_name(), "Blue Repeat");
+            let Some(GddGraphPortSource::Node { storage_id, .. }) = layer
+                .input_ports()
+                .get(1)
+                .and_then(|port| port.source.as_ref())
+            else {
+                panic!("editable Repeat Array copy")
+            };
+            (layer.storage_id(), *storage_id)
+        });
+        assert_ne!(copied_layer, source_layer);
+        assert_ne!(copied_generator, source_generator);
+        let after = layer_ids(window);
+        assert!(
+            after
+                .windows(2)
+                .any(|pair| pair == [copied_layer, source_layer])
+        );
+        assert!(
+            after
+                .iter()
+                .copied()
+                .filter(|&id| id != copied_layer)
+                .eq(before.iter().copied())
+        );
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(layer_ids(window), before);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(layer_ids(window), after);
+        let destination = PathBuf::from("/project/duplicated-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved duplication");
+        let nodes = reopened
+            .graph_nodes()
+            .await
+            .expect("reopened editable graph");
+        for (layer, generator) in [
+            (source_layer, source_generator),
+            (copied_layer, copied_generator),
+        ] {
+            let node = nodes
+                .iter()
+                .find(|node| node.storage_id() == layer)
+                .expect("saved layer identity");
+            assert!(
+                matches!(node.input_ports().get(1).and_then(|port| port.source.as_ref()), Some(GddGraphPortSource::Node { storage_id, .. }) if *storage_id == generator)
+            );
+        }
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }

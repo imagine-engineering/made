@@ -13,6 +13,19 @@ pub(crate) enum SavedLayerAction {
     ToggleExpansion { recursive: bool },
 }
 
+pub(crate) fn render_saved_layer_duplicate(
+    enabled: bool,
+    dispatch: impl Fn(&mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-DUPLICATE".into())
+        .child(
+            Button::new("graphite-saved-layer-duplicate", "Duplicate")
+                .disabled(!enabled)
+                .on_click(move |_, window, cx| dispatch(window, cx)),
+        )
+}
+
 pub(crate) fn render_saved_layer_delete(
     enabled: bool,
     dispatch: impl Fn(&mut Window, &mut App) + 'static,
