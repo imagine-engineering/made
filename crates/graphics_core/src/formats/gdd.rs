@@ -21,10 +21,10 @@ use graphite_document_format::{
     io::path_for,
     manifest::{FORMAT_MAGIC, SUPPORTED_FORMAT_VERSION},
 };
+pub use graphite_document_graph_storage::NodeId as StorageNodeId;
 use graphite_document_graph_storage::{
-    AttributesRead, NetworkId, NetworkMetadataEntry, NoMetadata, NodeId as StorageNodeId,
-    NodeMetadataEntry, PeerId, ROOT_NETWORK, Registry, RegistryDelta, from_runtime,
-    to_runtime::ConversionError,
+    AttributesRead, NetworkId, NetworkMetadataEntry, NoMetadata, NodeMetadataEntry, PeerId,
+    ROOT_NETWORK, Registry, RegistryDelta, from_runtime, to_runtime::ConversionError,
 };
 pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
@@ -466,6 +466,10 @@ pub struct GddArtboardCanvasPick {
 }
 
 impl GddArtboardCanvasPick {
+    pub fn storage_id(&self) -> StorageNodeId {
+        self.storage_id
+    }
+
     pub fn contains(&self, pane_point: DVec2) -> bool {
         let document_point = self.pane_to_document.transform_point2(pane_point);
         document_point.is_finite()
@@ -4004,7 +4008,7 @@ impl InspectedGddV1 {
             .collect();
         let has_canvas_geometry = can_draw_artboard
             || artboards.iter().any(|board| board.pick_target.is_some())
-            || matches!(draft, Some(ArtboardCanvasDraft::Move(..)));
+            || draft.is_some();
         Ok(GddDocumentCanvasOutput {
             snapping_document: has_canvas_geometry
                 .then(|| self.canvas_snapping_document(interface, &render, camera, logical_size)),

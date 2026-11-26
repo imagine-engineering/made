@@ -18,6 +18,7 @@ use graphite_editor::messages::{
     tool::common_functionality::{
         measure,
         snapping::{SnapData, SnapManager},
+        transformation_cage::BoundingBoxManager,
     },
 };
 use graphite_graph_craft::document::value::DVec2;
@@ -40,6 +41,11 @@ const SNAP_BUDGET: OverlayBudget = OverlayBudget {
 const MEASUREMENT_BUDGET: OverlayBudget = OverlayBudget {
     paths: 8192,
     segments: 262_144,
+};
+
+const ARTBOARD_CAGE_BUDGET: OverlayBudget = OverlayBudget {
+    paths: 128,
+    segments: 4096,
 };
 
 pub(crate) fn source_overlay_context(
@@ -95,6 +101,34 @@ struct OverlayPath {
 pub(crate) struct CanvasOverlay(Vec<OverlayPath>);
 
 impl CanvasOverlay {
+    pub fn for_artboard_cage(
+        document: &DocumentMessageHandler,
+        selected: LayerNodeIdentifier,
+        viewport_size: DVec2,
+        scale: f64,
+        visibility: OverlaysVisibilitySettings,
+    ) -> Result<Option<Self>> {
+        let metadata = document.metadata();
+        let Some(bounds) = metadata.bounding_box_document(selected) else {
+            return Ok(None);
+        };
+        let transform = metadata.document_to_viewport;
+        ensure!(
+            transform.inverse().is_finite() && bounds.iter().all(|corner| corner.is_finite()),
+            "Invalid Graphite Artboard cage geometry",
+        );
+        let mut cage = BoundingBoxManager {
+            bounds,
+            transform,
+            ..Default::default()
+        };
+        let mut context = source_overlay_context(viewport_size, scale, visibility)?;
+        cage.render_overlays(&mut context, true);
+        let scene = context.take_scene();
+        let cage = Self::decode(scene.encoding(), scale, &ARTBOARD_CAGE_BUDGET)?;
+        Ok((!cage.is_empty()).then_some(cage))
+    }
+
     pub fn for_artboard_measurement(
         document: &DocumentMessageHandler,
         selected: LayerNodeIdentifier,

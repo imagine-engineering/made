@@ -23,8 +23,8 @@ use graphics_core::formats::{
         GddGraphGeometry, GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
         GddGraphPortSource, GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind,
         GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
-        GddSavedView, ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
+        inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -690,6 +690,7 @@ struct SavedSceneCanvas {
     move_armed: bool,
     resize_armed: bool,
     draw_armed: bool,
+    selected_artboard: Option<StorageNodeId>,
     artboard_draw: Option<SavedSceneArtboardDraw>,
     artboard_drag: Option<SavedSceneArtboardDrag>,
     artboard_view: Option<SavedSceneArtboardView>,
@@ -806,7 +807,7 @@ struct SavedSceneArtboardDraft {
     request: SavedSceneArtboardRender,
     image: Arc<RenderImage>,
     artboards: Vec<SavedSceneArtboard>,
-    measurement_document: Option<Box<DocumentMessageHandler>>,
+    source_document: Option<Box<DocumentMessageHandler>>,
 }
 
 struct SavedSceneArtboard {
@@ -918,6 +919,20 @@ impl SavedSceneCanvas {
         (placement.is_some()
             || (camera != view.initial.camera && matches!(self.frame, SavedSceneFrame::Ready(_))))
         .then_some(SavedSceneArtboardRender { placement, camera })
+    }
+
+    fn artboard_overlay_document(&self) -> Option<&DocumentMessageHandler> {
+        match self.artboard_render_request() {
+            Some(desired) => self
+                .artboard_view
+                .as_ref()?
+                .draft_frame
+                .as_ref()
+                .filter(|draft| draft.request == desired)?
+                .source_document
+                .as_deref(),
+            None => self.snapping_document.as_deref(),
+        }
     }
 
     fn take_artboard_view(
@@ -1759,6 +1774,7 @@ impl GraphiteDocumentItem {
             move_armed: false,
             resize_armed: false,
             draw_armed: false,
+            selected_artboard: None,
             artboard_draw: None,
             artboard_drag: None,
             artboard_view: None,
@@ -2507,6 +2523,7 @@ impl GraphiteDocumentItem {
         else {
             return;
         };
+        canvas.selected_artboard = Some(pick.storage_id());
         canvas.artboard_drag = Some(SavedSceneArtboardDrag {
             node: node.clone(),
             artboard_index,
@@ -2785,7 +2802,7 @@ impl GraphiteDocumentItem {
             Ok::<_, String>(SavedSceneArtboardDraft {
                 request,
                 image,
-                measurement_document: output.snapping_document,
+                source_document: output.snapping_document,
                 artboards: output
                     .artboards
                     .into_iter()
@@ -3250,6 +3267,59 @@ impl GraphiteDocumentItem {
             )
     }
 
+    fn scene_overlay_artboard<'canvas>(
+        &self,
+        canvas: &'canvas SavedSceneCanvas,
+    ) -> Option<(usize, &'canvas GddArtboardCanvasPick)> {
+        let picked = match &self.node_copy {
+            NodeCopyPanel::Ready(form) => form.selected_node(),
+            _ => None,
+        };
+        canvas
+            .artboards
+            .iter()
+            .enumerate()
+            .find_map(|(index, board)| {
+                let target = board.pick_target.as_ref()?;
+                let selected = match canvas.selected_artboard {
+                    Some(storage_id) => target.storage_id() == storage_id,
+                    None => picked.is_some_and(|picked| target.matches_node(picked)),
+                };
+                selected.then_some((index, target))
+            })
+    }
+
+    fn scene_transform_cage(&self, instance: &Arc<()>, cx: &App) -> Option<(usize, CanvasOverlay)> {
+        let canvas = self.scene_canvas.as_ref()?;
+        let model = self.model.read(cx);
+        if !Arc::ptr_eq(instance, &canvas.instance)
+            || !Arc::ptr_eq(&canvas.revision, &model.revision)
+            || canvas.artboard_draw.is_some()
+            || !matches!(canvas.frame, SavedSceneFrame::Ready(_))
+        {
+            return None;
+        }
+        let visibility = canvas.overlay_visibility(model)?;
+        if !visibility.transform_cage() {
+            return None;
+        }
+        let (index, selected) = self.scene_overlay_artboard(canvas)?;
+        let target = canvas.target?;
+        match CanvasOverlay::for_artboard_cage(
+            canvas.artboard_overlay_document()?,
+            selected.source_layer(),
+            target.logical_size(),
+            target.scale,
+            visibility,
+        ) {
+            Ok(cage) => cage.map(|cage| (index, cage)),
+            Err(error) => {
+                log::debug!("Unable to draw Graphite Artboard transform cage: {error:#}");
+                None
+            }
+        }
+    }
+
     fn scene_quick_measurement(
         &self,
         instance: &Arc<()>,
@@ -3269,6 +3339,10 @@ impl GraphiteDocumentItem {
             || canvas.pan.is_some()
             || canvas.grid_options.is_some()
             || canvas.artboard_draw.is_some()
+            || canvas
+                .artboard_drag
+                .as_ref()
+                .is_some_and(|drag| matches!(drag.gesture, SavedSceneArtboardGesture::Resize(..)))
             || !matches!(canvas.frame, SavedSceneFrame::Ready(_))
         {
             return None;
@@ -3278,37 +3352,10 @@ impl GraphiteDocumentItem {
             return None;
         }
         let target = canvas.target?;
-        let (selected, document) = if let Some(drag) = &canvas.artboard_drag {
-            if matches!(drag.gesture, SavedSceneArtboardGesture::Resize(..)) {
-                return None;
-            }
-            let document = match canvas.artboard_render_request() {
-                Some(desired) => canvas
-                    .artboard_view
-                    .as_ref()?
-                    .draft_frame
-                    .as_ref()
-                    .filter(|draft| draft.request == desired)?
-                    .measurement_document
-                    .as_deref()?,
-                None => canvas.snapping_document.as_deref()?,
-            };
-            (&drag.node, document)
-        } else {
-            let NodeCopyPanel::Ready(form) = &self.node_copy else {
-                return None;
-            };
-            (form.selected_node()?, canvas.snapping_document.as_deref()?)
-        };
-        let layer = canvas
-            .artboards
-            .iter()
-            .filter_map(|board| board.pick_target.as_ref())
-            .find(|pick| pick.matches_node(selected))?
-            .source_layer();
+        let (_, selected) = self.scene_overlay_artboard(canvas)?;
         match CanvasOverlay::for_artboard_measurement(
-            document,
-            layer,
+            canvas.artboard_overlay_document()?,
+            selected.source_layer(),
             logical_vector(position - pane.origin),
             target.logical_size(),
             target.scale,
@@ -3336,7 +3383,7 @@ impl GraphiteDocumentItem {
         let capture_instance = instance.clone();
         let pick_instance = instance.clone();
         let capture_item = item.clone();
-        let measurement_item = item.clone();
+        let artboard_overlay_item = item.clone();
         let pane_bounds = Rc::new(Cell::new(None));
         let scroll_bounds = pane_bounds.clone();
         let pan_bounds = pane_bounds.clone();
@@ -3468,7 +3515,7 @@ impl GraphiteDocumentItem {
                 if let Some(overlay) = &board.overlay
                     && (show_name || outline_offset.is_some())
                 {
-                    overlays.push((overlay.clone(), outline_offset));
+                    overlays.push((index, overlay.clone(), outline_offset));
                 }
             }
         }
@@ -3742,10 +3789,12 @@ impl GraphiteDocumentItem {
                                 if target == measured
                                     && gesture_pane.is_none_or(|pane| pane == bounds)
                                 {
-                                    let measurement = measurement_item
-                                        .read_with(cx, |item, cx| item.scene_quick_measurement(&instance, bounds, window, cx))
-                                        .ok()
-                                        .flatten();
+                                    let (cage, measurement) = artboard_overlay_item
+                                        .read_with(cx, |item, cx| (
+                                            item.scene_transform_cage(&instance, cx),
+                                            item.scene_quick_measurement(&instance, bounds, window, cx),
+                                        ))
+                                        .unwrap_or_default();
                                     if refresh_grid {
                                         window.defer(cx, move |window, cx| {
                                             if let Err(error) = item.update(cx, |item, cx| {
@@ -3755,7 +3804,7 @@ impl GraphiteDocumentItem {
                                             }
                                         });
                                     }
-                                    return (image, grid_image, overlays, edit_outline, snap_guides, measurement);
+                                    return (image, grid_image, overlays, edit_outline, snap_guides, cage, measurement);
                                 }
                                 window.defer(cx, move |window, cx| {
                                     if let Err(error) = item.update(cx, |item, cx| {
@@ -3781,10 +3830,10 @@ impl GraphiteDocumentItem {
                                         );
                                     }
                                 });
-                                (None, None, Vec::new(), None, None, None)
+                                (None, None, Vec::new(), None, None, None, None)
                             },
                             move |bounds,
-                                  (image, grid_image, overlays, edit_outline, snap_guides, measurement),
+                                  (image, grid_image, overlays, edit_outline, snap_guides, cage, measurement),
                                   window,
                                   _| {
                                 Self::capture_scene_gestures(
@@ -3822,17 +3871,17 @@ impl GraphiteDocumentItem {
                                 }
                                 if !overlays.is_empty() {
                                     window.paint_layer(bounds, |window| {
-                                        for (overlay, outline_offset) in overlays {
+                                        for (index, overlay, outline_offset) in overlays {
                                             overlay.paint(
                                                 bounds.origin + image_offset,
                                                 show_name,
-                                                outline_offset,
+                                                outline_offset.filter(|_| cage.as_ref().is_none_or(|(selected, _)| index != *selected)),
                                                 window,
                                             );
                                         }
                                     });
                                 }
-                                if edit_outline.is_some() || snap_guides.is_some() || measurement.is_some() {
+                                if edit_outline.is_some() || snap_guides.is_some() || cage.is_some() || measurement.is_some() {
                                     window.with_content_mask(
                                         Some(gpui::ContentMask { bounds }),
                                         |window| {
@@ -3842,6 +3891,9 @@ impl GraphiteDocumentItem {
                                                     bounds.origin,
                                                     window,
                                                 );
+                                            }
+                                            if let Some((_, cage)) = cage {
+                                                cage.paint(bounds.origin, window);
                                             }
                                             if let Some(guides) = snap_guides {
                                                 guides.paint(bounds.origin, window);
@@ -15780,6 +15832,52 @@ mod tests {
         rectangle_to_artboard: DAffine2,
     }
 
+    fn assert_artboard_cage_handles(
+        cage: &CanvasOverlay,
+        bounds: [DVec2; 2],
+        transform: DAffine2,
+        target: SavedSceneTarget,
+    ) {
+        let size = target.logical_size().as_uvec2();
+        let mut pixels = tiny_skia::Pixmap::new(size.x, size.y).expect("Canvas overlay dimensions");
+        cage.rasterize(&mut pixels)
+            .expect("paint source cage paths");
+        let sample = |point| {
+            let point = transform.transform_point2(point).round().as_uvec2();
+            pixels.pixel(point.x, point.y).expect("visible cage sample")
+        };
+        let [minimum, maximum] = bounds;
+        let center = minimum.midpoint(maximum);
+        let mut visible_handles = 0;
+        for handle in [
+            minimum,
+            DVec2::new(center.x, minimum.y),
+            DVec2::new(maximum.x, minimum.y),
+            DVec2::new(minimum.x, center.y),
+            DVec2::new(maximum.x, center.y),
+            DVec2::new(minimum.x, maximum.y),
+            DVec2::new(center.x, maximum.y),
+            maximum,
+        ] {
+            let projected = transform.transform_point2(handle);
+            if projected.cmplt(DVec2::ONE).any()
+                || projected.cmpge(size.as_dvec2() - DVec2::ONE).any()
+            {
+                continue;
+            }
+            visible_handles += 1;
+            let pixel = sample(handle);
+            assert!(
+                pixel.red() > 200 && pixel.green() > 200 && pixel.blue() > 200,
+                "expected a white source handle at {projected:?}, got {pixel:?}"
+            );
+        }
+        assert!(visible_handles >= 3);
+        let outline = sample(DVec2::new((minimum.x + center.x) / 2., maximum.y));
+        assert!(outline.alpha() > 0 && outline.blue() > outline.red());
+        assert_eq!(sample(center).alpha(), 0);
+    }
+
     async fn saved_vector_fixture(
         visibility: Option<OverlaysVisibilitySettings>,
         extra_artboard: Option<GddArtboardGeometry>,
@@ -16051,6 +16149,15 @@ mod tests {
                 .expect("picked source Artboard")
                 .storage_id()
         });
+        let export_artboard = |window: &mut gpui::VisualTestContext, destination: &str| {
+            let destination = PathBuf::from(destination);
+            click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
+            window.simulate_new_path_selection(|_| Some(destination.clone()));
+            window.run_until_parked();
+            paint(window);
+            destination
+        };
+        let hidden_svg = export_artboard(window, "/project/f-vector-cage-hidden.svg");
         click(window, open);
         click(window, pick);
         click(window, "GRAPHITE-GDD-CANVAS-GRID");
@@ -16095,6 +16202,7 @@ mod tests {
                 assert_eq!(settings.all(), master);
                 assert_eq!(settings.artboard_name(), name);
                 assert_eq!(settings.transform_cage(), cage);
+                assert_eq!(item.scene_transform_cage(&canvas.instance, cx).is_some(), cage);
                 let NodeCopyPanel::Ready(form) = &item.node_copy else {
                     panic!("selection retained");
                 };
@@ -16112,6 +16220,31 @@ mod tests {
             click(window, selector);
         };
         check_view(window, true, true, true);
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let (index, cage) = item
+                .scene_transform_cage(&canvas.instance, cx)
+                .expect("selected cage");
+            assert_eq!(
+                canvas
+                    .artboards
+                    .get(index)
+                    .and_then(|board| board.pick_target.as_ref())
+                    .map(GddArtboardCanvasPick::storage_id),
+                Some(selected_address)
+            );
+            let target = canvas.target.expect("Canvas target");
+            let transform = canvas
+                .navigation
+                .expect("accepted navigation")
+                .document_to_pane(target.logical_size());
+            assert_artboard_cage_handles(
+                &cage,
+                [origin, origin + DVec2::new(220., 160.)],
+                transform,
+                target,
+            );
+        });
         toggle_overlay(window, "MENU_ITEM-Artboard Name");
         check_view(window, true, false, true);
         toggle_overlay(window, "MENU_ITEM-Transform Cage");
@@ -16153,6 +16286,36 @@ mod tests {
             );
             assert!(!item.is_dirty(cx));
         });
+        click(window, open);
+        toggle_overlay(window, "MENU_ITEM-Transform Cage");
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            assert!(item.scene_transform_cage(&canvas.instance, cx).is_some());
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        let visible_svg = export_artboard(window, "/project/f-vector-cage-visible.svg");
+        let artwork_svg = |bytes: &[u8]| {
+            let svg = std::str::from_utf8(bytes).expect("source SVG");
+            // Graphite generates a fresh clip path identifier for each export.
+            let (_, clip) = svg
+                .split_once("<clipPath id=\"")
+                .expect("Artboard clipping");
+            let (id, _) = clip.split_once('"').expect("clip path id");
+            assert!(
+                id.strip_prefix("artboard-")
+                    .is_some_and(|suffix| suffix.parse::<u64>().is_ok())
+            );
+            svg.replace(id, "artboard-fixture-clip")
+        };
+        let hidden = filesystem
+            .load_bytes(&hidden_svg)
+            .await
+            .expect("export with cage hidden");
+        let shown = filesystem
+            .load_bytes(&visible_svg)
+            .await
+            .expect("export with cage shown");
+        assert!(artwork_svg(&hidden) == artwork_svg(&shown));
         assert_eq!(
             filesystem.load_bytes(&path).await.expect("source ZIP"),
             original.as_ref()
@@ -16824,7 +16987,7 @@ mod tests {
                 .expect("source pick")
                 .source_layer();
             let moved_bounds = draft
-                .measurement_document
+                .source_document
                 .as_ref()
                 .expect("measurement geometry from the rendered move draft")
                 .metadata()
@@ -16833,6 +16996,19 @@ mod tests {
             let [minimum, maximum] = moved_bounds;
             assert!(minimum.abs_diff_eq(origin + displacement, 1e-9));
             assert!(maximum.abs_diff_eq(origin + displacement + DVec2::new(220., 160.), 1e-9));
+            let (_, cage) = item
+                .scene_transform_cage(&canvas.instance, cx)
+                .expect("move draft cage");
+            let document = draft
+                .source_document
+                .as_ref()
+                .expect("matching source document");
+            assert_artboard_cage_handles(
+                &cage,
+                moved_bounds,
+                document.metadata().document_to_viewport,
+                canvas.target.expect("Canvas target"),
+            );
             assert_scene(canvas, &draft.image, origin + displacement);
             assert!(!item.is_dirty(cx));
             drag.node.storage_id()
@@ -16925,6 +17101,19 @@ mod tests {
             assert!(view.draft_error.is_none(), "{:?}", view.draft_error);
             let draft = view.draft_frame.as_ref().expect("resized Canvas draft");
             assert_eq!(draft.request.placement, Some(resized));
+            let (_, cage) = item
+                .scene_transform_cage(&canvas.instance, cx)
+                .expect("resize draft cage");
+            let document = draft
+                .source_document
+                .as_ref()
+                .expect("matching source document");
+            assert_artboard_cage_handles(
+                &cage,
+                [resized.location, resized.location + resized.dimensions],
+                document.metadata().document_to_viewport,
+                canvas.target.expect("Canvas target"),
+            );
             assert_scene(canvas, &draft.image, moved_origin);
             let model = item.model.read(cx);
             let board = model
@@ -16986,6 +17175,17 @@ mod tests {
                 let SavedSceneFrame::Ready(image) = &canvas.frame else {
                     panic!("rendered resized F-VECTOR");
                 };
+                let (index, _) = item
+                    .scene_transform_cage(&canvas.instance, cx)
+                    .expect("retained cage after history step");
+                assert_eq!(
+                    canvas
+                        .artboards
+                        .get(index)
+                        .and_then(|board| board.pick_target.as_ref())
+                        .map(GddArtboardCanvasPick::storage_id),
+                    Some(address)
+                );
                 assert_scene(canvas, image, moved_origin);
                 let model = item.model.read(cx);
                 let board = model
