@@ -660,10 +660,7 @@ impl DependencyDiagramItem {
         if !self.receipt_is_current(cx) {
             return;
         }
-        let graph = &self.canvas.read(cx).graph;
-        let needs_projection =
-            self.source.is_some() && (graph.truncated || graph.node(id).is_none());
-        let revealed = (!needs_projection || self.project_node_neighbourhood(id, cx))
+        let revealed = self.ensure_node_neighbourhood(id, cx)
             && self.canvas.update(cx, |canvas, cx| {
                 let revealed = canvas.reveal_node(id);
                 if revealed {
@@ -675,6 +672,16 @@ impl DependencyDiagramItem {
             "The dependency is no longer part of the admitted graph; refresh the diagram and retry".into()
         });
         cx.notify();
+    }
+
+    fn ensure_node_neighbourhood(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        let graph = &self.canvas.read(cx).graph;
+        let node_present = graph.node(id).is_some();
+        if self.source.is_some() && (graph.truncated || !node_present) {
+            self.project_node_neighbourhood(id, cx)
+        } else {
+            node_present
+        }
     }
 
     fn project_node_neighbourhood(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
@@ -991,10 +998,7 @@ impl DependencyDiagramItem {
     }
 
     pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        if !self.receipt_is_current(cx)
-            || (self.canvas.read(cx).graph.node(id).is_none()
-                && !self.project_node_neighbourhood(id, cx))
-        {
+        if !self.receipt_is_current(cx) || !self.ensure_node_neighbourhood(id, cx) {
             return false;
         }
         self.canvas.update(cx, |canvas, cx| {

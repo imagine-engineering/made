@@ -15394,6 +15394,11 @@ mod tests {
                                                 unresolved["from"] = parent;
                                                 unresolved["requested"]["module"] = serde_json::json!("growth-unresolved");
                                                 edges.push(unresolved);
+                                                let mut late_edge = edge_template;
+                                                late_edge["from"] = serde_json::json!(["module", "evidence", "growth-dependency-0", "1.0"]).to_string().into();
+                                                late_edge["requested"]["module"] = "growth-dependency-240".into();
+                                                late_edge["selected"] = serde_json::json!(["module", "evidence", "growth-dependency-240", "1.0"]).to_string().into();
+                                                edges.push(late_edge);
                                             }
                                             response["projects"][0]["graphJson"] = serde_json::json!(graph.to_string());
                                         }
@@ -15833,11 +15838,29 @@ mod tests {
                 use crate::dependency_diagram_menu::{
                     DependencyDiagramContextTarget, DependencyDiagramMenuCommand,
                 };
+                use crate::dependency_graph_canvas::CanvasState;
                 use project::Fs as _;
 
                 let target = r#"["module","evidence","growth-dependency-279","1.0"]"#;
                 let parent = r#"["module","evidence","growth-dependency-278","1.0"]"#;
                 let unresolved = "unresolved:1";
+                let visible = r#"["module","evidence","growth-dependency-0","1.0"]"#;
+                let neighbour = r#"["module","evidence","growth-dependency-240","1.0"]"#;
+                let assert_visible_neighbourhood = |canvas: &CanvasState| {
+                    assert_eq!(canvas.selection, BTreeSet::from([visible.to_owned()]));
+                    assert_eq!(canvas.focus.as_deref(), Some(visible));
+                    assert!(
+                        canvas.graph.node(neighbour).is_some(),
+                        "the already visible dependency brings its late neighbour into view"
+                    );
+                    assert!(canvas.graph.edges.iter().any(|edge| {
+                        edge.from == visible
+                            && edge.to == neighbour
+                            && edge.variant == CanvasEdgeVariant::Dependency
+                    }));
+                    assert!(canvas.graph.nodes.len() <= MAX_CANVAS_NODES);
+                    assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
+                };
                 panel.update(cx, |panel, cx| panel.show_dependency_diagram(cx));
                 let diagram = workspace
                     .read_with(cx, |workspace, cx| {
@@ -15849,6 +15872,8 @@ mod tests {
                     assert!(graph.truncated);
                     assert!(graph.node(target).is_none());
                     assert!(graph.node(unresolved).is_none());
+                    assert!(graph.node(visible).is_some());
+                    assert!(graph.node(neighbour).is_none());
                 });
                 let diagram_search = "Search dependency diagram nodes";
                 let preview_search = "Search dependency preview nodes";
@@ -15929,6 +15954,15 @@ mod tests {
                 search_and_confirm(
                     cx,
                     diagram_search,
+                    "growth-dependency-0",
+                    "evidence:growth-dependency-0:1.0",
+                );
+                diagram.read_with(cx, |item, cx| {
+                    assert_visible_neighbourhood(item.canvas().read(cx));
+                });
+                search_and_confirm(
+                    cx,
+                    diagram_search,
                     "growth-unresolved",
                     "evidence:growth-unresolved:1.0",
                 );
@@ -15979,7 +16013,19 @@ mod tests {
                 cx.simulate_resize(gpui::size(gpui::px(480.), gpui::px(360.)));
                 let preview = open_preview(cx);
                 preview.read_with(cx, |popup, cx| {
-                    assert!(popup.canvas().read(cx).graph.node(unresolved).is_none());
+                    let graph = &popup.canvas().read(cx).graph;
+                    assert!(graph.node(unresolved).is_none());
+                    assert!(graph.node(visible).is_some());
+                    assert!(graph.node(neighbour).is_none());
+                });
+                search_and_confirm(
+                    cx,
+                    preview_search,
+                    "growth-dependency-0",
+                    "evidence:growth-dependency-0:1.0",
+                );
+                preview.read_with(cx, |popup, cx| {
+                    assert_visible_neighbourhood(popup.canvas().read(cx));
                 });
                 search_and_confirm(
                     cx,
@@ -16177,6 +16223,16 @@ mod tests {
                     fs.load_bytes(&saved_image).await.expect("saved image"),
                     expected_svg.as_bytes()
                 );
+                diagram.read_with(cx, |item, cx| {
+                    let graph = &item.canvas().read(cx).graph;
+                    assert!(graph.node(visible).is_some());
+                    assert!(graph.node(neighbour).is_none());
+                });
+                analyzer.update(cx, |item, cx| item.show_in_dependency_diagram(visible, cx));
+                cx.run_until_parked();
+                diagram.read_with(cx, |item, cx| {
+                    assert_visible_neighbourhood(item.canvas().read(cx));
+                });
                 export_image(cx);
                 let revoked_preview = open_preview(cx);
                 open_search(cx, preview_search);

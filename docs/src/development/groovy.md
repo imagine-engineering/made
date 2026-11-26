@@ -369,10 +369,10 @@ the menu for the focused overview dependency. Secondary-click any dependency
 block to open its menu while keeping the current selection. Secondary-click
 empty overview space for view and layout commands.
 Search includes dependencies beyond the initial canvas view, including
-Gradle requests that failed to resolve. Choosing one brings the occurrence
-and its immediate connections into the bounded view of the graph. Search ranks
-exact dependency coordinates ahead of partial matches. In the analyzer you can
-paste a full coordinate even when group IDs are hidden.
+Gradle requests that failed to resolve. Choosing a result brings its immediate
+connections into the bounded view even when the dependency is already drawn.
+Search ranks exact dependency coordinates ahead of partial matches. In the
+analyzer you can paste a full coordinate even when group IDs are hidden.
 The temporary diagram preview offers the same search. Escape closes the
 search first, then closes the preview and returns to the workspace.
 On a larger graph, **Copy Diagram Source** copies the current bounded canvas

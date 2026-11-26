@@ -386,21 +386,14 @@ fn assemble_canvas_graph(
     focus: Option<&str>,
 ) -> CanvasGraph {
     let mut truncated = nodes.len() > MAX_CANVAS_NODES;
-    let outside_window = focus.filter(|focus| {
-        nodes
-            .iter()
-            .skip(MAX_CANVAS_NODES)
-            .any(|node| node.id == *focus)
-    });
+    let focus = focus.filter(|focus| nodes.iter().any(|node| node.id == *focus));
     if truncated {
         let mut retained = HashSet::new();
         if let Some(root) = nodes.iter().find(|node| node.kind == CanvasNodeKind::Root) {
             retained.insert(root.id.clone());
         }
-        if let Some(focus) = focus.filter(|focus| nodes.iter().any(|node| node.id == *focus)) {
+        if let Some(focus) = focus {
             retained.insert(focus.to_owned());
-        }
-        if let Some(focus) = outside_window {
             for neighbour in edges.iter().filter_map(|edge| {
                 if edge.to == focus {
                     Some(&edge.from)
@@ -426,7 +419,7 @@ fn assemble_canvas_graph(
         nodes.retain(|node| retained.remove(&node.id));
     }
     if edges.len() > MAX_CANVAS_EDGES {
-        if let Some(focus) = outside_window {
+        if let Some(focus) = focus {
             let touches_focus = |edge: &CanvasEdge| edge.from == focus || edge.to == focus;
             let focus_budget = edges
                 .iter()
@@ -1946,6 +1939,77 @@ mod tests {
         assert!(graph.truncated);
         assert!(graph.nodes.len() <= MAX_CANVAS_NODES);
         assert!(graph.edges.len() <= MAX_CANVAS_EDGES);
+    }
+
+    #[test]
+    fn dependency_canvas_focus_keeps_neighbours_beyond_the_node_limit() {
+        let mut fixture = gradle_fixture();
+        for index in fixture.components.len()..MAX_CANVAS_NODES {
+            let id = format!("filler-{index}");
+            fixture.components.push(gradle_component_json(&id, &id));
+        }
+        fixture.components.extend([
+            gradle_component_json("late-parent", "late-parent"),
+            gradle_component_json("late-child", "late-child"),
+        ]);
+        let first_incident_index = fixture.edges.len();
+        fixture.edges.extend([
+            gradle_edge_json("late-parent", "left", "c1"),
+            gradle_edge_json("c1", "late-child", "late-child"),
+        ]);
+        let overview = canvas_graph_from_gradle(&fixture, None);
+        assert!(overview.node("c1").is_some());
+        assert!(overview.node("late-parent").is_none());
+        assert!(overview.node("late-child").is_none());
+
+        let graph = canvas_graph_from_gradle(&fixture, Some("c1"));
+        assert!(graph.truncated);
+        assert_eq!(graph.nodes.len(), MAX_CANVAS_NODES);
+        assert!(graph.node("root").is_some());
+        assert!(
+            graph.node("late-parent").is_some(),
+            "the visible dependency needs its late incoming neighbour"
+        );
+        assert!(graph.node("late-child").is_some());
+        assert!(graph.edges.iter().any(|edge| edge.from == "late-parent"
+            && edge.to == "c1"
+            && edge.provider_index == first_incident_index));
+        assert!(graph.edges.iter().any(|edge| edge.from == "c1"
+            && edge.to == "late-child"
+            && edge.provider_index == first_incident_index + 1));
+    }
+
+    #[test]
+    fn dependency_canvas_focus_keeps_edges_when_only_the_edge_limit_is_exceeded() {
+        let mut fixture = gradle_fixture();
+        fixture.edges = (0..MAX_CANVAS_EDGES)
+            .map(|index| gradle_edge_json("root", &format!("requested-{index}"), "c2"))
+            .collect();
+        fixture.edges.push(gradle_edge_json("c1", "shared", "c3"));
+        let overview = canvas_graph_from_gradle(&fixture, None);
+        assert_eq!(overview.nodes.len(), fixture.components.len());
+        assert!(overview.truncated);
+        assert_eq!(overview.edges.len(), MAX_CANVAS_EDGES);
+        assert!(
+            overview
+                .edges
+                .iter()
+                .all(|edge| edge.provider_index < MAX_CANVAS_EDGES)
+        );
+
+        let graph = canvas_graph_from_gradle(&fixture, Some("c1"));
+        assert!(graph.truncated);
+        assert!(
+            graph
+                .nodes
+                .iter()
+                .map(|node| &node.id)
+                .eq(overview.nodes.iter().map(|node| &node.id))
+        );
+        assert_eq!(graph.edges.len(), MAX_CANVAS_EDGES);
+        let edge = graph.edges.last().expect("provider edge stays in order");
+        assert_eq!(edge.provider_index, MAX_CANVAS_EDGES);
+        assert_eq!((edge.from.as_str(), edge.to.as_str()), ("c1", "c3"));
     }
 
     #[test]
