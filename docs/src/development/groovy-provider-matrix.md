@@ -137,7 +137,29 @@ on the host. Use a development Remote Server with `jvm-tools` and set
 `lsp.jdtls.initialization_options.bundles` with the host path to the existing
 development companion, SHA-256
 `6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e`.
-Native connected editor, Tests panel and Debug checks remain open.
+
+The opt-in `selected_maven_junit_uses_docker_host_through_tests_panel` case
+loads the shared Tests panel and selects `GreetingTest.messageIsAvailable`.
+The Task terminal runs the cached Maven wrapper on a separate Linux ARM64
+container and the connected client receives one passing case. Fresh Surefire
+XML identifies Linux ARM64 and the host fixture directory. The snapshot
+contains the completed run, while the run history stays on the host.
+
+For this Tests replay, set `GROOVY_MAVEN_TEST_DOCKER_CONTAINER` to the full
+container ID. Bind the directory named by `GROOVY_MAVEN_TEST_DOCKER_ROOT` to
+`/workspaces/tests`, with an offline Maven cache at
+`/qualification/maven-cache` and the cached Java `6.8.30` extension on the
+host. The test creates its own reactor within that mount and uses the same
+prepared development Remote Server. The container's JDK and Maven wrapper
+environment must point to the host installations.
+
+The separate Java Debug probe passed on Linux ARM64 with JDTLS `1.61.0` and
+Java Debug `0.53.2`. The real debugger verified the breakpoint at
+`DebugMain.java:7` and returned its exact source frame through the host-local
+DAP connection. Connected Debug remains open because the existing Docker
+transport rejects the port-forward command used for an adapter listening on
+the container's loopback interface. Native connected editor and Tests panel
+checks still need a desktop replay.
 
 ## Previous Kotlin pin and fallback evidence — 2026-11-24
 

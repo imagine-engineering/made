@@ -39,7 +39,7 @@ pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkf
         cx,
         JvmTestBuildTool::Gradle,
         JavaTestOutcome::CombinedGradleWorkflow,
-        false,
+        JvmWorkflowConnection::Local,
         Some(hooks),
     )
     .await;
@@ -1971,8 +1971,22 @@ pub async fn run_cached_selected_java_debug(
         hooks,
         JvmWorkflowDebugHooks::SelectedJavaTest { .. }
     ));
-    selected_java_case_with_debug_hooks(cx, build_tool, JavaTestOutcome::Pass, false, Some(hooks))
-        .await;
+    selected_java_case_with_debug_hooks(
+        cx,
+        build_tool,
+        JavaTestOutcome::Pass,
+        JvmWorkflowConnection::Local,
+        Some(hooks),
+    )
+    .await;
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum JvmWorkflowConnection {
+    Local,
+    Ssh,
+    #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+    Docker,
 }
 
 #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
@@ -1981,11 +1995,7 @@ async fn selected_junit_ssh_project(
     app_state: Arc<workspace::AppState>,
     cx: &mut TestAppContext,
 ) -> gpui::Entity<Project> {
-    use remote::{
-        ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, SshConnectionOptions,
-    };
-
-    cx.update(|cx| release_channel::init(semver::Version::new(0, 0, 0), cx));
+    use remote::{RemoteConnectionOptions, SshConnectionOptions};
     let server =
         std::env::var("ZED_COPY_REMOTE_SERVER").expect("explicit current JVM server binary");
     assert!(std::path::Path::new(&server).is_absolute() && std::path::Path::new(&server).is_file());
@@ -2016,16 +2026,30 @@ async fn selected_junit_ssh_project(
         nickname: None,
         upload_binary_over_ssh: true,
     });
+    selected_junit_remote_project(root, app_state, options, "6.8.27", cx).await
+}
+
+#[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+async fn selected_junit_remote_project(
+    root: &std::path::Path,
+    app_state: Arc<workspace::AppState>,
+    options: remote::RemoteConnectionOptions,
+    java_extension_version: &str,
+    cx: &mut TestAppContext,
+) -> gpui::Entity<Project> {
+    use remote::{ConnectionIdentifier, RemoteClient};
+
+    cx.update(|cx| release_channel::init(semver::Version::new(0, 0, 0), cx));
     let delegate = Arc::new(remote::MockDelegate);
     let connection = remote::connect(options, delegate.clone(), &mut cx.to_async())
         .await
-        .expect("normal loopback SSH connection");
+        .expect("connect to the disposable JVM project host");
     let identifier = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("fixture clock")
         .as_micros()
         % 1_000_000_000;
-    eprintln!("Groovy SSH fixture workspace identifier: {identifier}");
+    eprintln!("Groovy remote fixture workspace identifier: {identifier}");
     let (_cancellation, cancelled) = futures::channel::oneshot::channel();
     let client = cx
         .update(|cx| {
@@ -2038,14 +2062,14 @@ async fn selected_junit_ssh_project(
             )
         })
         .await
-        .expect("SSH client startup")
+        .expect("remote client startup")
         .expect("uncancelled fixture connection");
     let extensions = client
         .update(cx, |client, _| {
             client.proto_client().request(rpc::proto::SyncExtensions {
                 extensions: vec![rpc::proto::Extension {
                     id: "java".into(),
-                    version: "6.8.27".into(),
+                    version: java_extension_version.into(),
                     dev: false,
                 }],
             })
@@ -2073,7 +2097,7 @@ async fn selected_junit_ssh_project(
             project.find_or_create_worktree(root, true, cx)
         })
         .await
-        .expect("actual SSH JVM worktree");
+        .expect("connected JVM worktree");
     project
         .read_with(cx, |project, cx| {
             project.worktree_store().read(cx).wait_for_initial_scan()
@@ -2098,14 +2122,31 @@ pub async fn selected_java_case_through_tests_panel_with_connection(
     outcome: JavaTestOutcome,
     use_ssh: bool,
 ) {
-    selected_java_case_with_debug_hooks(cx, build_tool, outcome, use_ssh, None).await;
+    let connection = if use_ssh {
+        JvmWorkflowConnection::Ssh
+    } else {
+        JvmWorkflowConnection::Local
+    };
+    selected_java_case_with_debug_hooks(cx, build_tool, outcome, connection, None).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+pub(super) async fn selected_maven_case_through_docker_tests_panel(cx: &mut TestAppContext) {
+    selected_java_case_with_debug_hooks(
+        cx,
+        JvmTestBuildTool::Maven,
+        JavaTestOutcome::Pass,
+        JvmWorkflowConnection::Docker,
+        None,
+    )
+    .await;
 }
 
 async fn selected_java_case_with_debug_hooks(
     cx: &mut TestAppContext,
     build_tool: JvmTestBuildTool,
     outcome: JavaTestOutcome,
-    use_ssh: bool,
+    connection: JvmWorkflowConnection,
     debug_hooks: Option<JvmWorkflowDebugHooks>,
 ) {
     use std::{borrow::Cow, path::Path};
@@ -2117,6 +2158,8 @@ async fn selected_java_case_with_debug_hooks(
     use language::{Language, LanguageConfig, LanguageMatcher, LanguageQueries};
     use project::trusted_worktrees::PathTrust;
 
+    let use_ssh = connection == JvmWorkflowConnection::Ssh;
+    let connected = connection != JvmWorkflowConnection::Local;
     let use_gradle = build_tool == JvmTestBuildTool::Gradle;
     let with_real_providers = outcome == JavaTestOutcome::CombinedGradleWorkflow;
     let debug_selected = matches!(
@@ -2124,7 +2167,7 @@ async fn selected_java_case_with_debug_hooks(
         Some(JvmWorkflowDebugHooks::SelectedJavaTest { .. })
     );
     let should_fail = outcome == JavaTestOutcome::FailAndRerun || with_real_providers;
-    assert!(!with_real_providers || (use_gradle && !use_ssh));
+    assert!(!with_real_providers || (use_gradle && !connected));
     let passing_assertion = if use_gradle {
         "assertEquals(\"Hello from Kotlin\", new Greeting().message())"
     } else {
@@ -2211,7 +2254,14 @@ async fn selected_java_case_with_debug_hooks(
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../project/test_data")
         .join(fixture_name);
-    let root = tempfile::tempdir().expect("temporary JVM worktree");
+    let root = match connection {
+        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        JvmWorkflowConnection::Docker => {
+            tempfile::tempdir_in(cached_jvm_fixture_path("GROOVY_MAVEN_TEST_DOCKER_ROOT"))
+        }
+        _ => tempfile::tempdir(),
+    }
+    .expect("temporary JVM worktree");
     let project_root = if with_real_providers || debug_selected {
         // Providers canonicalize macOS's /var symlink in workspace exports.
         root.path()
@@ -2441,7 +2491,7 @@ async fn selected_java_case_with_debug_hooks(
 
     cx.update(|cx| project::trusted_worktrees::init(collections::HashMap::default(), cx));
 
-    if use_ssh {
+    if connected {
         std::fs::create_dir_all(root.path().join(".zed")).expect("remote fixture settings");
         std::fs::write(
             root.path().join(".zed/settings.json"),
@@ -2449,22 +2499,51 @@ async fn selected_java_case_with_debug_hooks(
         )
         .expect("isolate selected Task evidence from provider import");
     }
-    let project = if use_ssh {
-        #[cfg(target_os = "macos")]
-        {
-            selected_junit_ssh_project(root.path(), app_state, cx).await
+    let project = match connection {
+        JvmWorkflowConnection::Ssh => {
+            #[cfg(target_os = "macos")]
+            {
+                selected_junit_ssh_project(root.path(), app_state, cx).await
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                panic!("the opt-in loopback SSH fixture is currently macOS-only")
+            }
         }
-        #[cfg(not(target_os = "macos"))]
-        {
-            panic!("the opt-in loopback SSH fixture is currently macOS-only")
+        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        JvmWorkflowConnection::Docker => {
+            use remote::{DockerConnectionOptions, RemoteConnectionOptions};
+
+            let container_id = std::env::var("GROOVY_MAVEN_TEST_DOCKER_CONTAINER")
+                .expect("disposable Maven test container ID");
+            assert_eq!(container_id.len(), 64);
+            assert!(container_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
+            let options = RemoteConnectionOptions::Docker(DockerConnectionOptions {
+                name: "Groovy Maven Tests qualification".into(),
+                container_id,
+                remote_user: "root".into(),
+                ..Default::default()
+            });
+            let host_root = Path::new("/workspaces/tests").join(
+                root.path()
+                    .file_name()
+                    .expect("disposable Maven fixture name"),
+            );
+            std::fs::write(
+                root.path().join(".mvn/maven.config"),
+                "--offline\n-Dmaven.repo.local=/qualification/maven-cache/repository\n",
+            )
+            .expect("isolated offline Maven configuration");
+            selected_junit_remote_project(&host_root, app_state, options, "6.8.30", cx).await
         }
-    } else {
-        Project::test(
-            Arc::new(fs::RealFs::new(None, cx.executor())),
-            [project_root.as_path()],
-            cx,
-        )
-        .await
+        JvmWorkflowConnection::Local => {
+            Project::test(
+                Arc::new(fs::RealFs::new(None, cx.executor())),
+                [project_root.as_path()],
+                cx,
+            )
+            .await
+        }
     };
     let languages = project.read_with(cx, |project, _| project.languages().clone());
     let java = Language::new(
@@ -3477,7 +3556,7 @@ async fn selected_java_case_with_debug_hooks(
         }
     });
     cx.run_until_parked();
-    if use_ssh || with_real_providers {
+    if connected || with_real_providers {
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
         loop {
             let ready = tests_panel.read_with(cx, |panel, _| {
@@ -4121,7 +4200,8 @@ async fn selected_java_case_with_debug_hooks(
             .completed_runs
             .len()
     });
-    assert_eq!(run_count, 1);
+    // Connected snapshots carry the latest completed run. The history stays on the host.
+    assert_eq!(run_count, usize::from(!connected));
     if !use_gradle {
         assert!(terminal_output.contains("Tests run: 1"));
     }
@@ -4136,6 +4216,13 @@ async fn selected_java_case_with_debug_hooks(
     }));
     let fresh_report = std::fs::read_to_string(&report).expect("fresh JUnit report");
     assert!(fresh_report.contains("messageIsAvailable"));
+    #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+    if connection == JvmWorkflowConnection::Docker {
+        assert!(fresh_report.contains(r#"name="os.name" value="Linux""#));
+        assert!(fresh_report.contains(r#"name="os.arch" value="aarch64""#));
+        assert!(fresh_report.contains(r#"name="user.dir" value="/workspaces/tests/"#));
+        eprintln!("Selected Maven case passed in Linux ARM64 with host-produced Surefire XML");
+    }
     if should_fail {
         assert!(fresh_report.contains("<failure"));
         let first_run_id = completed.id.clone();
