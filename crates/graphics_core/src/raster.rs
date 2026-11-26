@@ -8,6 +8,7 @@ use graphite_core_types::{
     value::ClonedNode,
 };
 use graphite_raster_types::{CPU, Raster};
+use graphite_std::{Graphic, graphic::FlattenRasterNode};
 use graphite_vector_types::Gradient;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,6 +21,14 @@ impl fmt::Display for RasterEvaluationError {
 }
 
 impl std::error::Error for RasterEvaluationError {}
+
+pub fn evaluate_flatten_raster(
+    content: List<Graphic>,
+) -> Result<List<Raster<CPU>>, RasterEvaluationError> {
+    let node = FlattenRasterNode::new(FutureWrapperNode::new(ClonedNode::new(content)));
+    futures::executor::block_on(AssertUnwindSafe(node.eval(())).catch_unwind())
+        .map_err(|_| RasterEvaluationError)
+}
 
 pub fn evaluate_invert_cpu(
     input: Item<Raster<CPU>>,
@@ -533,6 +542,80 @@ mod tests {
                 "expected gamma channel {expected}, got {actual}"
             );
         }
+    }
+
+    #[test]
+    fn at_gra_node_141_2_flattens_nested_rasters_in_source_order() {
+        use graphite_core_types::list::{ATTR_OPACITY, ATTR_TRANSFORM};
+        use graphite_glam::{DAffine2, DVec2};
+        use graphite_std::Graphic;
+
+        let small = image_item(
+            2,
+            2,
+            &[
+                [1., 0., 0., 1.],
+                [0., 1., 0., 0.5],
+                [0., 0., 1., 0.25],
+                [0., 0., 0., 0.],
+            ],
+        );
+        let wide = image_item(257, 2, &[[0.25, 0.5, 0.75, 0.125]; 514]);
+        let parent_transform = DAffine2::from_translation(DVec2::new(5., 7.));
+        let child_transform = DAffine2::from_scale(DVec2::new(3., 2.));
+        let branch: List<Graphic> = [
+            Item::new_from_element(Graphic::from(Color::GREEN)),
+            Item::new_from_element(Graphic::from(wide.clone()))
+                .with_attribute(ATTR_TRANSFORM, child_transform)
+                .with_attribute(ATTR_OPACITY, 0.5_f64),
+        ]
+        .into_iter()
+        .collect();
+        let content = [
+            Item::new_from_element(Graphic::from(small.clone())),
+            Item::new_from_element(Graphic::from(branch))
+                .with_attribute(ATTR_TRANSFORM, parent_transform)
+                .with_attribute(ATTR_OPACITY, 0.75_f64),
+        ]
+        .into_iter()
+        .collect();
+        let output = evaluate_flatten_raster(content).expect("pinned Flatten Raster");
+        assert_eq!(output.len(), 2);
+        assert_eq!(output.element(0), Some(small.element()));
+        assert_eq!(output.element(1), Some(wide.element()));
+        assert_eq!(
+            output.attribute::<DAffine2>(ATTR_TRANSFORM, 1),
+            Some(&(parent_transform * child_transform))
+        );
+        assert_eq!(output.attribute::<f64>(ATTR_OPACITY, 1), Some(&0.375));
+        assert!(
+            evaluate_flatten_raster(List::new_from_element(Graphic::from(Color::BLUE)))
+                .expect("no raster content")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn at_gra_node_141_3_preserves_reopened_raster_pixels_and_dimensions() {
+        let original = image_item(
+            2,
+            2,
+            &[
+                [1., 0., 0., 1.],
+                [0., 1., 0., 0.5],
+                [0., 0., 1., 0.25],
+                [0., 0., 0., 0.],
+            ],
+        );
+        let encoded =
+            serde_json::to_vec(original.element()).expect("pinned CPU raster serialization");
+        let restored: Raster<CPU> =
+            serde_json::from_slice(&encoded).expect("pinned CPU raster reload");
+        let output = evaluate_flatten_raster(List::new_from_element(Graphic::from(restored)))
+            .expect("evaluate the reopened fixture");
+        let image = output.element(0).expect("one reopened raster").data();
+        assert_eq!([image.width, image.height], [2, 2]);
+        assert_eq!(image.data, original.element().data().data);
     }
 
     #[test]

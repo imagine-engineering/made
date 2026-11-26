@@ -254,6 +254,69 @@ mod tests {
     use graphite_vector_types::Gradient;
 
     #[test]
+    fn at_gra_node_141_1_joins_the_pinned_flatten_raster_contract() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::NodeNetwork;
+        use graphite_std::graphic::flatten_raster;
+
+        let identifier = flatten_raster::IDENTIFIER;
+        assert_eq!(
+            identifier.as_str(),
+            "graphic_nodes::graphic::FlattenRasterNode"
+        );
+        let registered = registered_node(identifier.as_str()).expect("pinned source registration");
+        assert_eq!(registered.metadata.display_name, "Flatten Raster");
+        assert_eq!(registered.metadata.category, "Raster");
+        assert_eq!(registered.signatures.len(), 1);
+        let signature = &registered.signatures[0];
+        assert_eq!(
+            signature,
+            &NodeIOTypes::new(
+                concrete!(Context<'static>),
+                Type::Future(Box::new(concrete!(List<Raster<CPU>>))),
+                vec![fn_type_fut!(Context<'static>, List<Graphic>)],
+            )
+        );
+        let definition = resolve_proto_node_type(identifier).expect("native catalog template");
+        let template = definition.default_node_template();
+        assert_eq!(
+            template.inputs,
+            [NodeInput::type_default(list!(Graphic), true)]
+        );
+        let [port] = template.input_metadata.as_slice() else {
+            panic!("one pinned content input");
+        };
+        assert_eq!(port.persistent_metadata.input_name, "Content");
+        assert!(template.output_names.is_empty());
+        let id = NodeId(1);
+        let graph = NodeNetwork {
+            nodes: [(id, template.into_parts().0)].into_iter().collect(),
+            exports: vec![NodeInput::node(id, 0)],
+            ..Default::default()
+        };
+        let bytes = serde_json::to_vec(&graph).expect("persisted source graph");
+        let mut reopened: NodeNetwork =
+            serde_json::from_slice(&bytes).expect("reopened source graph");
+        let output = crate::evaluate::typecheck_detached_ranked_network(
+            reopened.clone(),
+            &[concrete!(Raster<CPU>)],
+            "Expected the pinned CPU raster list.",
+        )
+        .expect("type-check the reopened source graph");
+        assert_eq!(output.output.nested_type(), &list!(Raster<CPU>));
+        reopened.nodes.get_mut(&id).expect("saved node").inputs[0] =
+            NodeInput::value(TaggedValue::Integer(42), false);
+        assert!(
+            crate::evaluate::typecheck_detached_ranked_network(
+                reopened,
+                &[concrete!(Raster<CPU>)],
+                "Expected the pinned CPU raster list."
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn at_gra_node_280_1_joins_the_pinned_empty_custom_network() {
         let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
         let groups = catalog.search("Custom Node");
