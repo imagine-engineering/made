@@ -91,11 +91,15 @@ impl CanvasOverlay {
         viewport_size: DVec2,
         scale: f64,
     ) -> Result<Option<Self>> {
-        if manager.indicator_pos().is_none() || !document.overlays_visibility_settings.all() {
+        if manager.indicator_pos().is_none() {
             return Ok(None);
         }
-        let mut context =
-            source_overlay_context(viewport_size, scale, document.overlays_visibility_settings)?;
+        // The Canvas gates painting so an active snap can reappear without pointer movement.
+        let visibility = OverlaysVisibilitySettings {
+            all: true,
+            ..document.overlays_visibility_settings
+        };
+        let mut context = source_overlay_context(viewport_size, scale, visibility)?;
         let viewport = context.viewport;
         let input = InputPreprocessorMessageHandler::default();
         manager.draw_overlays(SnapData::new(document, &input, &viewport), &mut context);
@@ -446,12 +450,10 @@ mod tests {
         assert!(guides.0.len() >= 3);
         assert!(guides.0.iter().all(|guide| guide.color == blue));
         document.overlays_visibility_settings.all = false;
-        assert!(
-            CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)
-                .expect("hidden overlays")
-                .is_none()
-        );
-        document.overlays_visibility_settings.all = true;
+        let hidden = CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)
+            .expect("admitted source paths with overlays hidden")
+            .expect("retained distribution guides");
+        assert!(hidden == guides);
         manager.clear_indicator();
         assert!(
             CanvasOverlay::for_gesture(&mut manager, &document, viewport, 1.5)

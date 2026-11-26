@@ -31,6 +31,7 @@ use graphics_core::formats::{
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
+    overlays::utility_types::OverlaysVisibilitySettings,
     utility_types::misc::{PTZ, SnappingState},
 };
 use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, UVec2};
@@ -51,9 +52,9 @@ use workspace::{
 
 use crate::canvas::{
     ArtboardDragSnap, ArtboardDraw, ArtboardMove, ArtboardOverlay, ArtboardResize,
-    CANVAS_SNAP_ENABLED, CanvasSnapFlag, DocumentNavigation, artboard_auto_pan_delta,
-    artboard_outline, canvas_snap_groups, logical_vector, paint_artboard_outline,
-    set_artboard_snap_camera,
+    CANVAS_OVERLAY_OPTIONS, CANVAS_OVERLAYS_ALL, CANVAS_SNAP_ENABLED, CanvasOverlayFlag,
+    CanvasSnapFlag, DocumentNavigation, artboard_auto_pan_delta, artboard_outline,
+    canvas_snap_groups, logical_vector, paint_artboard_outline, set_artboard_snap_camera,
 };
 use crate::canvas_grid::{CanvasGrid, GridOptionsForm};
 use crate::canvas_overlay::CanvasOverlay;
@@ -78,6 +79,8 @@ actions!(
         ToggleCanvasSnapping,
         /// Toggles the document grid for the active Graphite Canvas.
         ToggleCanvasGrid,
+        /// Toggles all overlays for the active Graphite Canvas.
+        ToggleCanvasOverlays,
     ]
 );
 
@@ -188,6 +191,7 @@ pub(crate) struct GraphiteDocumentProjectItem {
     revision: Arc<()>,
     working: Option<GddWorkingCopy>,
     snapping_preferences: Option<Arc<SnappingState>>,
+    overlay_preferences: Option<OverlaysVisibilitySettings>,
     grid_visible: Option<bool>,
     grid_options_edited: bool,
 }
@@ -382,6 +386,7 @@ impl project::ProjectItem for GraphiteDocumentProjectItem {
                 revision: Arc::new(()),
                 working: None,
                 snapping_preferences: None,
+                overlay_preferences: None,
                 grid_visible: None,
                 grid_options_edited: false,
             }))
@@ -534,6 +539,7 @@ async fn open_folder_item(
             revision: Arc::new(()),
             working: None,
             snapping_preferences: None,
+            overlay_preferences: None,
             grid_visible: None,
             grid_options_edited: false,
         });
@@ -688,7 +694,6 @@ struct SavedSceneCanvas {
     artboard_view: Option<SavedSceneArtboardView>,
     artboards: Vec<SavedSceneArtboard>,
     can_draw_artboard: bool,
-    overlay_visible: bool,
     frame: SavedSceneFrame,
 }
 
@@ -819,10 +824,21 @@ impl From<GddArtboardCanvasLayer> for SavedSceneArtboard {
 }
 
 impl SavedSceneCanvas {
-    fn grid_request(&self, visible: Option<bool>) -> Option<CanvasGrid> {
+    fn overlay_visibility(
+        &self,
+        model: &GraphiteDocumentProjectItem,
+    ) -> Option<OverlaysVisibilitySettings> {
         let document = self.snapping_document.as_ref()?;
-        if !visible.unwrap_or(self.source_grid_visible)
-            || !document.overlays_visibility_settings.all()
+        Some(
+            model
+                .overlay_preferences
+                .unwrap_or(document.overlays_visibility_settings),
+        )
+    }
+
+    fn grid_request(&self, model: &GraphiteDocumentProjectItem) -> Option<CanvasGrid> {
+        if !model.grid_visible.unwrap_or(self.source_grid_visible)
+            || !self.overlay_visibility(model)?.all()
         {
             return None;
         }
@@ -1731,7 +1747,6 @@ impl GraphiteDocumentItem {
             artboard_view: None,
             artboards: Vec::new(),
             can_draw_artboard: false,
-            overlay_visible: true,
             frame: SavedSceneFrame::Empty,
         });
         self.focus_handle.focus(window, cx);
@@ -1817,6 +1832,35 @@ impl GraphiteDocumentItem {
         let visible = model.grid_visible.unwrap_or(canvas.source_grid_visible);
         self.model.update(cx, |model, cx| {
             model.grid_visible = Some(!visible);
+            cx.notify();
+        });
+        true
+    }
+
+    fn toggle_scene_overlay(
+        &self,
+        instance: &Arc<()>,
+        revision: &Arc<()>,
+        flag: CanvasOverlayFlag,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let model = self.model.read(cx);
+        let Some(mut visibility) = self
+            .scene_canvas
+            .as_ref()
+            .filter(|canvas| {
+                Arc::ptr_eq(instance, &canvas.instance)
+                    && Arc::ptr_eq(revision, &canvas.revision)
+                    && Arc::ptr_eq(revision, &model.revision)
+            })
+            .and_then(|canvas| canvas.overlay_visibility(model))
+        else {
+            return false;
+        };
+        let visible = flag(&mut visibility);
+        *visible = !*visible;
+        self.model.update(cx, |model, cx| {
+            model.overlay_preferences = Some(visibility);
             cx.notify();
         });
         true
@@ -1936,7 +1980,7 @@ impl GraphiteDocumentItem {
         {
             return;
         }
-        let Some(request) = canvas.grid_request(model.grid_visible) else {
+        let Some(request) = canvas.grid_request(model) else {
             canvas.retire_grid_frame(Some(window), cx);
             return;
         };
@@ -1969,7 +2013,7 @@ impl GraphiteDocumentItem {
                 canvas.grid_task = None;
                 let model = item.model.read(cx);
                 if Arc::ptr_eq(&canvas.revision, &model.revision)
-                    && canvas.grid_request(model.grid_visible).as_ref() == Some(&request)
+                    && canvas.grid_request(model).as_ref() == Some(&request)
                 {
                     canvas.retire_grid_frame(Some(window), cx);
                     canvas.grid_frame = Some(SavedSceneGridFrame { request, image });
@@ -3031,6 +3075,46 @@ impl GraphiteDocumentItem {
         )
     }
 
+    fn render_scene_overlays_control(
+        &self,
+        canvas: &SavedSceneCanvas,
+        mut visibility: OverlaysVisibilitySettings,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let item = cx.weak_entity();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (label, flag) in CANVAS_OVERLAY_OPTIONS {
+                let item = item.clone();
+                let instance = canvas.instance.clone();
+                let revision = canvas.revision.clone();
+                menu = menu.toggleable_entry(
+                    label,
+                    *flag(&mut visibility),
+                    IconPosition::Start,
+                    None,
+                    move |_, cx| {
+                        if let Err(error) = item.update(cx, |item, cx| {
+                            item.toggle_scene_overlay(&instance, &revision, flag, cx);
+                        }) {
+                            log::debug!(
+                                "Graphite Canvas closed before changing overlays: {error:#}"
+                            );
+                        }
+                    },
+                );
+            }
+            menu
+        });
+        div()
+            .debug_selector(|| "GRAPHITE-GDD-CANVAS-OVERLAYS".into())
+            .child(DropdownMenu::new(
+                "graphite-gdd-canvas-overlays",
+                "Overlays",
+                menu,
+            ))
+    }
+
     fn render_scene_grid_options(
         &self,
         form: &GridOptionsForm,
@@ -3170,9 +3254,17 @@ impl GraphiteDocumentItem {
         let target = canvas.target;
         let model = self.model.read(cx);
         let current = Arc::ptr_eq(&canvas.revision, &model.revision);
-        let grid_request = current
-            .then(|| canvas.grid_request(model.grid_visible))
-            .flatten();
+        let visibility = current.then(|| canvas.overlay_visibility(model)).flatten();
+        let show_overlays = visibility
+            .as_ref()
+            .is_some_and(OverlaysVisibilitySettings::all);
+        let show_name = visibility
+            .as_ref()
+            .is_some_and(OverlaysVisibilitySettings::artboard_name);
+        let show_cage = visibility
+            .as_ref()
+            .is_some_and(OverlaysVisibilitySettings::transform_cage);
+        let grid_request = current.then(|| canvas.grid_request(model)).flatten();
         let grid_ready = canvas
             .grid_frame
             .as_ref()
@@ -3202,7 +3294,7 @@ impl GraphiteDocumentItem {
             && canvas.drawing_navigation().is_some();
         let view = canvas.artboard_view.as_ref().filter(|_| current);
         let snap_guides = view
-            .filter(|_| canvas.overlay_visible)
+            .filter(|_| show_overlays)
             .and_then(|view| view.snap_guides.clone());
         let draft = view
             .zip(canvas.artboard_render_request())
@@ -3226,7 +3318,8 @@ impl GraphiteDocumentItem {
             .and_then(|drag| drag.placement);
         let edit_outline = drawing
             .and_then(|draw| draw.placement)
-            .or(resize_outline)
+            .or(resize_outline.filter(|_| show_cage))
+            .filter(|_| show_overlays)
             .zip(transform)
             .map(|(placement, transform)| artboard_outline(placement, transform));
         let image = match (draft, &canvas.frame) {
@@ -3250,7 +3343,6 @@ impl GraphiteDocumentItem {
         let can_move = working.is_some_and(|working| {
             pick_targets().any(|pick| working.picked_artboard(pick).is_some())
         });
-        let show_name = canvas.overlay_visible;
         let mut overlays = Vec::new();
         if image.is_some() {
             for (index, board) in draft
@@ -3258,7 +3350,9 @@ impl GraphiteDocumentItem {
                 .iter()
                 .enumerate()
             {
-                let outline_offset = if let Some(moving) = moving {
+                let outline_offset = if !show_cage {
+                    None
+                } else if let Some(moving) = moving {
                     (moving.artboard_index == index
                         && (draft.is_some()
                             || matches!(moving.gesture, SavedSceneArtboardGesture::Move(_))))
@@ -3272,7 +3366,7 @@ impl GraphiteDocumentItem {
                         .pick_target
                         .as_ref()
                         .filter(|pick| {
-                            (show_name && canvas.pick_armed)
+                            canvas.pick_armed
                                 || ((canvas.move_armed || canvas.resize_armed)
                                     && working.is_some_and(|working| {
                                         working.picked_artboard(pick).is_some()
@@ -3293,6 +3387,8 @@ impl GraphiteDocumentItem {
             _ => None,
         };
         let view_controls = self.render_scene_view_controls(canvas, window, cx);
+        let overlay_control = visibility
+            .map(|visibility| self.render_scene_overlays_control(canvas, visibility, window, cx));
         v_flex()
             .size_full()
             .relative()
@@ -3444,28 +3540,7 @@ impl GraphiteDocumentItem {
                                 )),
                             ),
                     )
-                    .child(
-                        div()
-                            .debug_selector(|| "GRAPHITE-GDD-CANVAS-ARTBOARD-OVERLAYS".into())
-                            .child(
-                                Button::new(
-                                    "graphite-gdd-canvas-artboard-overlays",
-                                    if canvas.overlay_visible {
-                                        "Hide Artboard Overlays"
-                                    } else {
-                                        "Show Artboard Overlays"
-                                    },
-                                )
-                                .on_click(cx.listener(
-                                    |item, _, _, cx| {
-                                        if let Some(canvas) = &mut item.scene_canvas {
-                                            canvas.overlay_visible = !canvas.overlay_visible;
-                                            cx.notify();
-                                        }
-                                    },
-                                )),
-                            ),
-                    )
+                    .children(overlay_control)
                     .when_some(message, |toolbar, (message, color)| {
                         toolbar.child(Label::new(message).color(color))
                     })
@@ -3480,7 +3555,7 @@ impl GraphiteDocumentItem {
                             draft
                                 .draft_error
                                 .clone()
-                                .or_else(|| draft.snap_guide_error.clone())
+                                .or_else(|| draft.snap_guide_error.clone().filter(|_| show_overlays))
                         }),
                         |toolbar, message| toolbar.child(Label::new(message).color(Color::Error)),
                     )
@@ -8378,6 +8453,20 @@ impl Render for GraphiteDocumentItem {
             .on_action(cx.listener(|item, _: &ToggleCanvasGrid, _, cx| {
                 if let Some(canvas) = &item.scene_canvas
                     && item.toggle_scene_grid(&canvas.instance, &canvas.revision, cx)
+                {
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            }))
+            .on_action(cx.listener(|item, _: &ToggleCanvasOverlays, _, cx| {
+                if let Some(canvas) = &item.scene_canvas
+                    && item.toggle_scene_overlay(
+                        &canvas.instance,
+                        &canvas.revision,
+                        CANVAS_OVERLAYS_ALL,
+                        cx,
+                    )
                 {
                     cx.stop_propagation();
                 } else {
@@ -15558,7 +15647,9 @@ mod tests {
         rectangle_to_artboard: DAffine2,
     }
 
-    async fn saved_vector_fixture() -> SavedVectorFixture {
+    async fn saved_vector_fixture(
+        visibility: Option<OverlaysVisibilitySettings>,
+    ) -> SavedVectorFixture {
         use graphite_core_types::Color;
         use graphite_document_graph_storage::NodeMetadataSource;
         use graphite_editor::messages::portfolio::document::{
@@ -15712,6 +15803,15 @@ mod tests {
         owner
             .commit_from_runtime(&graph, &VectorLayers, &ResourceRegistry::new(), &resources)
             .expect("F-VECTOR source document");
+        if let Some(visibility) = visibility {
+            use graphite_document_graph_storage::{attr::session::doc::OVERLAYS, to_value};
+            owner
+                .set_view_settings(BTreeMap::from([(
+                    OVERLAYS.into(),
+                    to_value(&visibility).expect("pinned overlay settings"),
+                )]))
+                .expect("persist source overlay settings");
+        }
         let original = owner
             .export_to_bytes(
                 ExportFormat::Zip,
@@ -15731,12 +15831,190 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn at_gra_view_009_2_workspace_changes_f_vector_overlays_without_losing_selection(
+        cx: &mut TestAppContext,
+    ) {
+        let SavedVectorFixture {
+            original, origin, ..
+        } = saved_vector_fixture(Some(OverlaysVisibilitySettings {
+            all: false,
+            ..Default::default()
+        }))
+        .await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.update(|_, cx| {
+            let bindings =
+                settings::KeymapFile::load_asset(crate::DEFAULT_GRAPHITE_KEYMAP_PATH, None, cx)
+                    .expect("Graphite keymap");
+            cx.bind_keys(bindings);
+        });
+        window.simulate_resize(gpui::size(px(1160.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-overlays.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source ZIP");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        let open = "GRAPHITE-GDD-OPEN-CANVAS";
+        let pick = "GRAPHITE-GDD-CANVAS-PICK";
+        let artboard_center = |window: &mut gpui::VisualTestContext| {
+            let pane = window
+                .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+                .expect("Canvas pane");
+            let center = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("ready canvas");
+                let target = canvas.target.expect("measured viewport");
+                canvas
+                    .navigation
+                    .expect("accepted camera")
+                    .document_to_pane(target.logical_size())
+                    .transform_point2(origin + DVec2::new(110., 80.))
+            });
+            pane.origin + gpui::point(px(center.x as f32), px(center.y as f32))
+        };
+        click(window, open);
+        let first_instance = item.read_with(window, |item, _| {
+            item.scene_canvas.as_ref().expect("Canvas").instance.clone()
+        });
+        click(window, pick);
+        let center = artboard_center(window);
+        window.simulate_click(center, Default::default());
+        window.run_until_parked();
+        paint(window);
+        let selected_address = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("source inspector selection");
+            };
+            form.selected_node()
+                .expect("picked source Artboard")
+                .storage_id()
+        });
+        click(window, open);
+        click(window, pick);
+        click(window, "GRAPHITE-GDD-CANVAS-GRID");
+        item.read_with(window, |item, cx| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas after selection");
+            assert!(
+                !canvas
+                    .overlay_visibility(item.model.read(cx))
+                    .expect("loaded source overlay settings")
+                    .all()
+            );
+            assert!(canvas.grid_frame.is_none());
+        });
+        window.simulate_keystrokes("alt-o");
+        window.run_until_parked();
+        paint(window);
+        let (base, revision, artwork, grid) = item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            let canvas = item.scene_canvas.as_ref().expect("Canvas after selection");
+            let SavedSceneFrame::Ready(artwork) = &canvas.frame else {
+                panic!("accepted F-VECTOR");
+            };
+            let frame = canvas.grid_frame.as_ref().expect("visible grid");
+            let grid = frame
+                .image
+                .as_ref()
+                .expect("grid did render")
+                .as_ref()
+                .expect("grid image");
+            (
+                model.gdd_contents().expect("saved F-VECTOR").clone(),
+                model.revision.clone(),
+                artwork.clone(),
+                grid.clone(),
+            )
+        });
+        let check_view = |window: &gpui::VisualTestContext, master, name, cage| {
+            item.read_with(window, |item, cx| {
+                let model = item.model.read(cx);
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let settings = canvas.overlay_visibility(model).expect("accepted overlays");
+                assert_eq!(settings.all(), master);
+                assert_eq!(settings.artboard_name(), name);
+                assert_eq!(settings.transform_cage(), cage);
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("selection retained");
+                };
+                assert_eq!(form.selected_node().map(GddGraphNode::storage_id), Some(selected_address));
+                assert!(canvas.pick_armed);
+                assert!(matches!(&canvas.frame, SavedSceneFrame::Ready(frame) if Arc::ptr_eq(frame, &artwork)));
+                assert!(Arc::ptr_eq(&model.revision, &revision));
+                assert!(Arc::ptr_eq(model.gdd_contents().expect("F-VECTOR snapshot"), &base));
+                assert!(!item.is_dirty(cx));
+                assert!(!item.can_save(cx));
+            });
+        };
+        let toggle_overlay = |window: &mut gpui::VisualTestContext, selector| {
+            click(window, "GRAPHITE-GDD-CANVAS-OVERLAYS");
+            click(window, selector);
+        };
+        check_view(window, true, true, true);
+        toggle_overlay(window, "MENU_ITEM-Artboard Name");
+        check_view(window, true, false, true);
+        toggle_overlay(window, "MENU_ITEM-Transform Cage");
+        check_view(window, true, false, false);
+        toggle_overlay(window, "MENU_ITEM-Artboard Name");
+        check_view(window, true, true, false);
+        assert!(window.update(|window, _| window.has_image_atlas_entry(&grid)));
+        toggle_overlay(window, "MENU_ITEM-All Overlays");
+        window.run_until_parked();
+        paint(window);
+        check_view(window, false, false, false);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&grid)));
+        window.simulate_keystrokes("alt-o");
+        window.run_until_parked();
+        paint(window);
+        check_view(window, true, true, false);
+        item.update_in(window, |item, _, cx| {
+            assert!(!item.toggle_scene_overlay(
+                &first_instance,
+                &revision,
+                CANVAS_OVERLAYS_ALL,
+                cx
+            ));
+        });
+        check_view(window, true, true, false);
+        toggle_overlay(window, "MENU_ITEM-Artboard Name");
+        let center = artboard_center(window);
+        window.simulate_click(center, Default::default());
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("Artboard can still be picked with hidden overlays");
+            };
+            assert!(item.scene_canvas.is_none());
+            assert_eq!(
+                form.selected_node().map(GddGraphNode::storage_id),
+                Some(selected_address)
+            );
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem.load_bytes(&path).await.expect("source ZIP"),
+            original.as_ref()
+        );
+    }
+
+    #[gpui::test]
     async fn at_gra_view_007_2_workspace_applies_and_saves_f_vector_grid_options(
         cx: &mut TestAppContext,
     ) {
         use graphite_editor::messages::portfolio::document::utility_types::misc::GridType;
 
-        let SavedVectorFixture { original, .. } = saved_vector_fixture().await;
+        let SavedVectorFixture { original, .. } = saved_vector_fixture(None).await;
         let (workspace, window) = native_workspace(cx).await;
         window.simulate_resize(gpui::size(px(1160.), px(1050.)));
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -15893,7 +16171,7 @@ mod tests {
             origin,
             curve_to_artboard,
             rectangle_to_artboard,
-        } = saved_vector_fixture().await;
+        } = saved_vector_fixture(None).await;
         let (workspace, window) = native_workspace(cx).await;
         window.simulate_resize(gpui::size(px(1160.), px(1050.)));
         let filesystem = workspace.read_with(window, |workspace, cx| {
@@ -18121,10 +18399,15 @@ mod tests {
             assert!(!item.is_dirty(cx));
         });
         for visible in [false, true] {
-            click(window, "GRAPHITE-GDD-CANVAS-ARTBOARD-OVERLAYS");
+            click(window, "GRAPHITE-GDD-CANVAS-OVERLAYS");
+            click(window, "MENU_ITEM-Artboard Name");
             item.read_with(window, |item, cx| {
                 let canvas = item.scene_canvas.as_ref().expect("Artboard Canvas");
-                assert_eq!(canvas.overlay_visible, visible);
+                let visibility = canvas
+                    .overlay_visibility(item.model.read(cx))
+                    .expect("overlay settings");
+                assert_eq!(visibility.artboard_name(), visible);
+                assert!(visibility.transform_cage());
                 let [artboard] = canvas.artboards.as_slice() else {
                     panic!("one Artboard on Canvas");
                 };

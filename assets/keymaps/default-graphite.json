@@ -9,6 +9,7 @@
     "context": "GraphiteCanvas",
     "bindings": {
       "alt-g": "graphite::ToggleCanvasGrid",
+      "alt-o": "graphite::ToggleCanvasOverlays",
       "alt-s": "graphite::ToggleCanvasSnapping"
     }
   },

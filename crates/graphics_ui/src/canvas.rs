@@ -14,6 +14,7 @@ use graphite_editor::{
         input_mapper::utility_types::{keyboard::Key, pointer::ScrollDelta},
         portfolio::document::{
             DocumentMessageHandler,
+            overlays::utility_types::OverlaysVisibilitySettings,
             utility_types::{
                 document_metadata::LayerNodeIdentifier,
                 misc::{
@@ -47,6 +48,16 @@ pub(crate) type CanvasSnapFlag = for<'state> fn(&'state mut SnappingState) -> &'
 type CanvasSnapOption = (&'static str, CanvasSnapFlag, &'static str);
 
 pub(crate) const CANVAS_SNAP_ENABLED: CanvasSnapFlag = |state| &mut state.snapping_enabled;
+
+pub(crate) type CanvasOverlayFlag = fn(&mut OverlaysVisibilitySettings) -> &mut bool;
+
+pub(crate) const CANVAS_OVERLAYS_ALL: CanvasOverlayFlag = |settings| &mut settings.all;
+
+pub(crate) const CANVAS_OVERLAY_OPTIONS: [(&str, CanvasOverlayFlag); 3] = [
+    ("All Overlays", CANVAS_OVERLAYS_ALL),
+    ("Artboard Name", |settings| &mut settings.artboard_name),
+    ("Transform Cage", |settings| &mut settings.transform_cage),
+];
 
 pub(crate) fn canvas_snap_groups() -> [(&'static str, &'static [CanvasSnapOption]); 3] {
     const OTHER: [CanvasSnapOption; 3] = [
