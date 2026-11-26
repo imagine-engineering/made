@@ -57,7 +57,11 @@ use graphite_editor::messages::portfolio::document::{
 };
 use graphite_editor::{
     consts::VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
-    messages::{clipboard::utility_types::ClipboardItem, prelude::NavigationMessageHandler},
+    messages::{
+        clipboard::utility_types::ClipboardItem,
+        prelude::NavigationMessageHandler,
+        tool::common_functionality::graph_modification_utils::{get_fill, get_opacity},
+    },
 };
 use graphite_glam::{DAffine2, DVec2, IVec2, UVec2};
 use graphite_graph_craft::application_io::resource::{
@@ -75,7 +79,7 @@ use graphite_math_nodes::modulo;
 use graphite_std::{
     Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
-    blending_nodes::clipping_mask,
+    blending_nodes::{clipping_mask, opacity},
     repeat_nodes::repeat_array,
     transform::Footprint,
     transform_nodes::transform,
@@ -343,6 +347,12 @@ pub enum GddArchiveError {
     UnchangedLayerStructure,
     #[error("Choose a valid Graphite parent and insertion position for the selected layers.")]
     InvalidLayerDestination,
+    #[error("Enter a layer opacity percentage between 0 and 100.")]
+    InvalidLayerOpacity,
+    #[error("Choose a Graphite layer that supports opacity.")]
+    UnsupportedLayerOpacity,
+    #[error("The selected Graphite layers already have that opacity.")]
+    UnchangedLayerOpacity,
     #[error("The Graphite copy could not save the addressed node's change.")]
     IncompleteGraphNodeEdit,
     #[error("This Graphite document already contains a different legacy document.")]
@@ -656,7 +666,29 @@ pub struct GddRootLayer {
     pub effectively_locked: bool,
     pub accepts_children: bool,
     pub is_artboard: bool,
+    pub opacity: Option<GddLayerOpacity>,
     pub select_all_eligible: bool,
+}
+
+#[derive(Clone, Copy)]
+pub struct GddLayerOpacity {
+    pub overall: f64,
+    pub fill: f64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GddLayerOpacityKind {
+    Overall,
+    Fill,
+}
+
+impl GddLayerOpacity {
+    pub fn percent(self, kind: GddLayerOpacityKind) -> f64 {
+        match kind {
+            GddLayerOpacityKind::Overall => self.overall,
+            GddLayerOpacityKind::Fill => self.fill,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -922,6 +954,7 @@ enum SavedGraphicProfile {
     EllipseWired,
     Fill,
     ClippingMask,
+    Opacity,
     RepeatArray,
     Layer(GddGraphLayerPreview),
 }
@@ -5145,6 +5178,128 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn edit_root_layer_opacity_in_copy(
+        &self,
+        nodes: &[GddGraphNode],
+        kind: GddLayerOpacityKind,
+        percent: f64,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        use graphite_editor::messages::prelude::{
+            DocumentMessage, GraphOperationMessage, Message, PortfolioMessage,
+        };
+
+        if !(0. ..=100.).contains(&percent) {
+            return Err(GddArchiveError::InvalidLayerOpacity);
+        }
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selected = self
+            .validate_layer_order_selection(&document, nodes)
+            .map_err(|error| match error {
+                GddArchiveError::LockedLayerOrder => GddArchiveError::LockedLayerStructure,
+                error => error,
+            })?;
+        let interface = &document.network_interface;
+        let updates: BTreeMap<_, _> = document
+            .metadata()
+            .all_layers()
+            .filter(|layer| {
+                selected.contains(&layer.to_node()) && !interface.is_artboard(&layer.to_node(), &[])
+            })
+            .map(|layer| {
+                source_layer_opacity(layer, interface)
+                    .map(|value| (layer, value))
+                    .ok_or(GddArchiveError::UnsupportedLayerOpacity)
+            })
+            .collect::<Result<_, _>>()?;
+        if updates.is_empty() {
+            return Err(GddArchiveError::UnsupportedLayerOpacity);
+        }
+        if updates.values().all(|value| value.percent(kind) == percent) {
+            return Err(GddArchiveError::UnchangedLayerOpacity);
+        }
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selected);
+        let mut commands = VecDeque::new();
+        let normalized = percent / 100.;
+        let message = match kind {
+            GddLayerOpacityKind::Overall => DocumentMessage::SetOpacityForSelectedLayers {
+                opacity: normalized,
+            },
+            GddLayerOpacityKind::Fill => {
+                DocumentMessage::SetFillForSelectedLayers { fill: normalized }
+            }
+        };
+        plan_document_layer_command(&mut document, message, &mut commands);
+        self.finish_root_layer_edit(
+            &mut document,
+            |document| {
+                let interface = &mut document.network_interface;
+                let previous = layer_tree_order(interface);
+                let mut applied = BTreeSet::new();
+                for command in commands {
+                    let Message::Portfolio(PortfolioMessage::Document(
+                        DocumentMessage::GraphOperation(operation),
+                    )) = command
+                    else {
+                        return Err(GddArchiveError::UnsupportedLayerOpacity);
+                    };
+                    let layer = match operation {
+                        GraphOperationMessage::OpacitySet { layer, .. }
+                        | GraphOperationMessage::BlendingFillSet { layer, .. } => layer,
+                        _ => return Err(GddArchiveError::UnsupportedLayerOpacity),
+                    };
+                    if !updates.contains_key(&layer) || !applied.insert(layer) {
+                        return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                    }
+                    let mut refresh = VecDeque::new();
+                    let mut context =
+                        ModifyInputsContext::new_with_layer(layer, interface, &mut refresh)
+                            .ok_or(GddArchiveError::UnsupportedLayerOpacity)?;
+                    match operation {
+                        GraphOperationMessage::OpacitySet { opacity, .. }
+                            if kind == GddLayerOpacityKind::Overall =>
+                        {
+                            context.opacity_set(opacity)
+                        }
+                        GraphOperationMessage::BlendingFillSet { fill, .. }
+                            if kind == GddLayerOpacityKind::Fill =>
+                        {
+                            context.opacity_fill_set(fill)
+                        }
+                        _ => return Err(GddArchiveError::UnsupportedLayerOpacity),
+                    }
+                }
+                load_root_layer_structure(interface)?;
+                if applied.len() != updates.len() || layer_tree_order(interface) != previous {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                let other = match kind {
+                    GddLayerOpacityKind::Overall => GddLayerOpacityKind::Fill,
+                    GddLayerOpacityKind::Fill => GddLayerOpacityKind::Overall,
+                };
+                for (layer, before) in updates {
+                    let actual = source_layer_opacity(layer, interface)
+                        .ok_or(GddArchiveError::UnsupportedLayerOpacity)?;
+                    if (actual.percent(kind) - percent).abs() > f64::EPSILON * 100.
+                        || actual.percent(other) != before.percent(other)
+                    {
+                        return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                    }
+                }
+                Ok(())
+            },
+            budget,
+        )
+        .await
+        .map(|(copy, _)| copy)
+    }
+
     pub async fn reorder_root_layers_in_copy(
         &self,
         nodes: &[GddGraphNode],
@@ -5716,6 +5871,27 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
         unchanged: GddArchiveError,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        self.finish_root_layer_edit(
+            document,
+            |document| {
+                let before = layer_tree_order(&document.network_interface);
+                edit(document)?;
+                if before == layer_tree_order(&document.network_interface) {
+                    return Err(unchanged);
+                }
+                Ok(())
+            },
+            budget,
+        )
+        .await
+    }
+
+    async fn finish_root_layer_edit(
+        &self,
+        document: &mut DocumentMessageHandler,
+        edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
         let (owner, staged) = self.fork_working_copy(&budget).await?;
         let resources = owner
             .registry()
@@ -5732,12 +5908,8 @@ impl InspectedGddV1 {
             .map_err(GddArchiveError::GraphNodePreparation)
         };
         let baseline = convert(&document.network_interface)?;
-        let before = layer_tree_order(&document.network_interface);
         edit(document)?;
         let after = layer_tree_order(&document.network_interface);
-        if before == after {
-            return Err(unchanged);
-        }
         let converted = convert(&document.network_interface)?;
         // A diff between source projections keeps unrelated registry attributes and resources in the GDD.
         let ops = graphite_document_graph_storage::delta::compute_deltas(
@@ -7454,6 +7626,20 @@ fn layer_accepts_children(layer: LayerNodeIdentifier, interface: &NodeNetworkInt
             })
 }
 
+fn source_layer_opacity(
+    layer: LayerNodeIdentifier,
+    interface: &NodeNetworkInterface,
+) -> Option<GddLayerOpacity> {
+    let node = layer.to_node();
+    if interface.is_artboard(&node, &[]) || !interface.layer_hosts_blending_nodes(&node, &[]) {
+        return None;
+    }
+    Some(GddLayerOpacity {
+        overall: get_opacity(layer, interface).unwrap_or(100.),
+        fill: get_fill(layer, interface).unwrap_or(100.),
+    })
+}
+
 fn project_root_layers(
     interface: &mut NodeNetworkInterface,
     ids: &[(NodeId, StorageNodeId)],
@@ -7492,6 +7678,7 @@ fn project_root_layers(
             effectively_locked,
             accepts_children: !effectively_locked && layer_accepts_children(layer, interface),
             is_artboard,
+            opacity: source_layer_opacity(layer, interface),
             select_all_eligible: !is_artboard
                 && selection.layer_visible(layer, interface)
                 && !effectively_locked,
@@ -8503,6 +8690,24 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 resolve_proto_node_type(clipping_mask::IDENTIFIER)?,
                 node.inputs.iter().enumerate().collect(),
                 SavedGraphicProfile::ClippingMask,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &opacity::IDENTIFIER => {
+            let [content, has_opacity, opacity_value, has_fill, fill_value] =
+                node.inputs.as_slice()
+            else {
+                return None;
+            };
+            if !output_wire(content)
+                || [has_opacity, has_fill].into_iter().any(|input| !matches!(input.as_value(), Some(TaggedValue::Bool(_))))
+                || [opacity_value, fill_value].into_iter().any(|input| !matches!(input.as_value(), Some(TaggedValue::Number(value)) if (0. ..=100.).contains(value)))
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(opacity::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::Opacity,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier)

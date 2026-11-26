@@ -25,10 +25,10 @@ use graphics_core::formats::{
         GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
         GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddGraphPortSource, GddHistoryDirection, GddLayerGrouping, GddLayerOrder,
-        GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue, GddPinnedNodeMove,
-        GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView, ImportOrExport,
-        InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
+        GddGraphPortSource, GddHistoryDirection, GddLayerGrouping, GddLayerOpacityKind,
+        GddLayerOrder, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
+        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
+        ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
         open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
@@ -1224,6 +1224,7 @@ struct NodeCopyForm {
     position: Entity<Editor>,
     artboard_background: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
+    layer_opacity: [Entity<Editor>; 2],
     output_preview: NodeOutputPreview,
     document_run: NodeOutputPreview,
     document_run_evaluator: Option<Arc<GddNumericGraphEvaluator>>,
@@ -1268,6 +1269,13 @@ impl NodeCopyForm {
             position: cx.new(|cx| Editor::single_line(window, cx)),
             artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
+            layer_opacity: std::array::from_fn(|_| {
+                cx.new(|cx| {
+                    let mut editor = Editor::single_line(window, cx);
+                    editor.set_placeholder_text("Mixed", window, cx);
+                    editor
+                })
+            }),
             output_preview: NodeOutputPreview::Hidden,
             document_run: NodeOutputPreview::Hidden,
             document_run_evaluator: None,
@@ -1398,6 +1406,46 @@ impl NodeCopyForm {
                 .filter_map(|(index, _)| self.nodes.get(index).cloned())
                 .collect(),
         )
+    }
+
+    fn selected_layer_opacity(&self) -> Option<[Option<f64>; 2]> {
+        let selection = self
+            .saved_layer_rows()?
+            .into_iter()
+            .filter(|(index, _)| {
+                self.selected == Some(*index) || self.node_selection.contains(index)
+            })
+            .map(|(_, layer)| layer);
+        let mut values = None;
+        for layer in selection {
+            if layer.effectively_locked {
+                return None;
+            }
+            if layer.is_artboard {
+                continue;
+            }
+            let opacity = layer.opacity?;
+            let [overall, fill] = values.unwrap_or([Some(opacity.overall), Some(opacity.fill)]);
+            values = Some([
+                overall.filter(|value| *value == opacity.overall),
+                fill.filter(|value| *value == opacity.fill),
+            ]);
+        }
+        values
+    }
+
+    fn refresh_layer_opacity(&self, window: &mut Window, cx: &mut App) {
+        if let Some(values) = self.selected_layer_opacity() {
+            for (input, value) in self.layer_opacity.iter().zip(values) {
+                input.update(cx, |input, cx| {
+                    input.set_text(
+                        value.map_or_else(String::new, |value| value.to_string()),
+                        window,
+                        cx,
+                    )
+                });
+            }
+        }
     }
 
     fn selected_graph_nodes(&self) -> Vec<GddGraphNode> {
@@ -5213,6 +5261,7 @@ impl GraphiteDocumentItem {
                     });
                 }
             }
+            form.refresh_layer_opacity(window, cx);
             cx.notify();
         }
     }
@@ -5279,6 +5328,7 @@ impl GraphiteDocumentItem {
                             Ok(geometry) => SavedGraphPanel::Ready(geometry),
                             Err(error) => SavedGraphPanel::Failed(error.to_string().into()),
                         };
+                        form.refresh_layer_opacity(window, cx);
                         if focus_overlay && matches!(form.saved_graph, SavedGraphPanel::Ready(_)) {
                             form.saved_graph_focus.focus(window, cx);
                         }
@@ -5395,6 +5445,9 @@ impl GraphiteDocumentItem {
             SavedGraphAction::GroupLayers(operation) => {
                 self.group_saved_layers(operation, window, cx)
             }
+            SavedGraphAction::ApplyLayerOpacity(kind) => {
+                self.apply_saved_layer_opacity(kind, window, cx)
+            }
             SavedGraphAction::ConnectExport(index) => {
                 if form.pending_canvas_source.is_none() && self.copy_task.is_none() {
                     self.connect_network_export(index, window, cx);
@@ -5434,6 +5487,50 @@ impl GraphiteDocumentItem {
                 }
             }
         }
+    }
+
+    fn apply_saved_layer_opacity(
+        &mut self,
+        kind: GddLayerOpacityKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(nodes) = form
+            .selected_layer_nodes()
+            .filter(|_| form.selected_layer_opacity().is_some())
+        else {
+            return;
+        };
+        let input = match kind {
+            GddLayerOpacityKind::Overall => &form.layer_opacity[0],
+            GddLayerOpacityKind::Fill => &form.layer_opacity[1],
+        };
+        let Ok(percent) = input.read(cx).text(cx).trim().parse::<f64>() else {
+            self.copy_feedback = Some((
+                GddArchiveError::InvalidLayerOpacity.to_string().into(),
+                Color::Error,
+            ));
+            cx.notify();
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .edit_root_layer_opacity_in_copy(&nodes, kind, percent, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
     }
 
     fn duplicate_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -7805,6 +7902,7 @@ impl GraphiteDocumentItem {
                 viewport: &form.saved_graph_viewport,
                 focus: &form.saved_graph_focus,
                 layer_focus: &form.saved_layers_focus,
+                layer_opacity: form.selected_layer_opacity().is_some().then_some(&form.layer_opacity),
                 selected: form.selected,
                 selection: &form.node_selection,
                 collapsed_layers: &form.collapsed_layers,
@@ -14244,6 +14342,275 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_021_1_and_at_gra_layer_022_1_edit_independent_percentages(
+        _cx: &mut TestAppContext,
+    ) {
+        let bytes = layer_order_archive().await;
+        let snapshot = open_gdd_archive(&bytes.into(), ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let before = snapshot
+            .graph_inspection()
+            .await
+            .expect("source inspection");
+        let find = |name| {
+            before
+                .nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let source = find("Blue Repeat");
+        let locked = find("Locked Gold");
+        for (layer, percent) in [(source, f64::NAN), (source, 101.)] {
+            assert!(matches!(
+                snapshot
+                    .edit_root_layer_opacity_in_copy(
+                        std::slice::from_ref(layer),
+                        GddLayerOpacityKind::Fill,
+                        percent,
+                        ARCHIVE_BUDGET
+                    )
+                    .await,
+                Err(GddArchiveError::InvalidLayerOpacity)
+            ));
+        }
+        assert!(matches!(
+            snapshot
+                .edit_root_layer_opacity_in_copy(
+                    std::slice::from_ref(locked),
+                    GddLayerOpacityKind::Overall,
+                    60.,
+                    ARCHIVE_BUDGET
+                )
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let filled = snapshot
+            .edit_root_layer_opacity_in_copy(
+                std::slice::from_ref(source),
+                GddLayerOpacityKind::Fill,
+                32.,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("independent source Fill");
+        let filled_nodes = filled.graph_nodes().await.expect("editable fill");
+        let target = filled_nodes
+            .iter()
+            .find(|node| node.storage_id() == source.storage_id())
+            .expect("same target identity");
+        let both = filled
+            .edit_root_layer_opacity_in_copy(
+                std::slice::from_ref(target),
+                GddLayerOpacityKind::Overall,
+                47.,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("independent source Opacity");
+        for (snapshot, expected) in [
+            (&*snapshot, [100., 100.]),
+            (&filled, [100., 32.]),
+            (&both, [47., 32.]),
+        ] {
+            let inspection = snapshot.graph_inspection().await.expect("saved inspection");
+            let root = inspection
+                .networks
+                .iter()
+                .find(|network| network.parent.is_none())
+                .expect("document scope");
+            let layers = snapshot
+                .graph_geometry(root)
+                .await
+                .expect("source geometry")
+                .root_layers
+                .expect("saved layers");
+            let opacity = layers
+                .iter()
+                .find(|layer| layer.storage_id == source.storage_id())
+                .expect("repeat layer")
+                .opacity
+                .expect("editable percentages");
+            assert_eq!([opacity.overall, opacity.fill], expected);
+            assert_eq!(layers.len(), 9);
+        }
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_021_2_and_at_gra_layer_022_2_workspace_edits_layer_opacity(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/layer-opacity.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-LAYER-OPACITY-PERCENT")
+                .is_none()
+        );
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-7");
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-LAYER-OPACITY-PERCENT")
+                .is_none()
+        );
+        let select_repeat =
+            |window: &mut gpui::VisualTestContext| click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        select_repeat(window);
+        let canvas_image = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let frame = item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+                match &canvas.frame {
+                    SavedSceneFrame::Ready(frame) => frame.clone(),
+                    SavedSceneFrame::Failed(error) => panic!("Canvas render failed: {error}"),
+                    _ => panic!("accepted artwork"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+            frame
+        };
+        let baseline = canvas_image(window);
+        select_repeat(window);
+        let layer = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers")
+            };
+            form.selected_node().expect("repeat layer").storage_id()
+        });
+        let values = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native Layers")
+                };
+                let (_, layer) = form
+                    .saved_layer_rows()
+                    .expect("saved layers")
+                    .into_iter()
+                    .find(|(_, row)| row.storage_id == layer)
+                    .expect("same Repeat layer");
+                let opacity = layer.opacity.expect("opacity inputs");
+                [opacity.overall, opacity.fill]
+            })
+        };
+        let enter = |window: &mut gpui::VisualTestContext, selector, text| {
+            click(window, selector);
+            window.dispatch_action(editor::actions::SelectAll);
+            window.simulate_input(text);
+            paint(window);
+        };
+        enter(window, "GRAPHITE-GDD-LAYER-OPACITY-PERCENT", "100");
+        window.simulate_keystrokes("backspace");
+        item.read_with(window, |item, cx| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers")
+            };
+            assert_eq!(form.layer_opacity[0].read(cx).text(cx), "10");
+            assert!(!item.is_dirty(cx));
+        });
+        enter(window, "GRAPHITE-GDD-LAYER-OPACITY-PERCENT", "NaN");
+        click(window, "GRAPHITE-GDD-LAYER-OPACITY-APPLY");
+        assert_eq!(values(window), [100., 100.]);
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(
+                item.copy_feedback
+                    .as_ref()
+                    .is_some_and(|(message, _)| message.contains("percentage"))
+            );
+        });
+        enter(window, "GRAPHITE-GDD-LAYER-OPACITY-PERCENT", "60");
+        window.simulate_keystrokes("enter");
+        window.run_until_parked();
+        paint(window);
+        assert_eq!(values(window), [60., 100.]);
+        let dimmed = canvas_image(window);
+        assert!(baseline.as_bytes(0) != dimmed.as_bytes(0));
+        select_repeat(window);
+        enter(window, "GRAPHITE-GDD-LAYER-FILL-OPACITY-PERCENT", "30");
+        click(window, "GRAPHITE-GDD-LAYER-FILL-OPACITY-APPLY");
+        assert_eq!(values(window), [60., 30.]);
+        assert!(dimmed.as_bytes(0) != canvas_image(window).as_bytes(0));
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert_eq!(values(window), [60., 100.]);
+        click(window, "GRAPHITE-GDD-REDO");
+        assert_eq!(values(window), [60., 30.]);
+        let destination = PathBuf::from("/project/edited-layer-opacity.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved opacity");
+        let inspection = reopened.graph_inspection().await.expect("editable graph");
+        assert_eq!(
+            inspection
+                .nodes
+                .iter()
+                .filter(|node| node.display_name() == "Opacity")
+                .count(),
+            1
+        );
+        assert!(
+            inspection
+                .nodes
+                .iter()
+                .any(|node| node.display_name() == "Repeat Array")
+        );
+        assert!(
+            inspection
+                .nodes
+                .iter()
+                .any(|node| node.display_name() == "Clipping Mask")
+        );
+        let root = inspection
+            .networks
+            .iter()
+            .find(|network| network.parent.is_none())
+            .expect("document network");
+        let layers = reopened
+            .graph_geometry(root)
+            .await
+            .expect("saved geometry")
+            .root_layers
+            .expect("saved layers");
+        let opacity = layers
+            .iter()
+            .find(|row| row.storage_id == layer)
+            .expect("same saved layer")
+            .opacity
+            .expect("saved percentages");
+        assert_eq!([opacity.overall, opacity.fill], [60., 30.]);
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("source archive"),
             original
         );
     }

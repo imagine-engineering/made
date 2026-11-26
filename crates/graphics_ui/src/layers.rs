@@ -1,6 +1,7 @@
+use editor::Editor;
 use gpui::{App, Entity, Window};
 use graphics_core::formats::gdd::{
-    GddLayerGrouping, GddLayerOrder, GddRootLayer, GddRootLayerChange,
+    GddLayerGrouping, GddLayerOpacityKind, GddLayerOrder, GddRootLayer, GddRootLayerChange,
 };
 use std::collections::BTreeSet;
 use ui::{
@@ -11,6 +12,52 @@ pub(crate) enum SavedLayerAction {
     Select { extend: bool, range: bool },
     Edit(GddRootLayerChange),
     ToggleExpansion { recursive: bool },
+}
+
+pub(crate) fn render_saved_layer_opacity(
+    kind: GddLayerOpacityKind,
+    input: &Entity<Editor>,
+    cx: &App,
+    dispatch: impl Fn(&mut Window, &mut App) + Clone + 'static,
+) -> impl IntoElement {
+    let (id, label) = match kind {
+        GddLayerOpacityKind::Overall => ("OPACITY", "Opacity"),
+        GddLayerOpacityKind::Fill => ("FILL-OPACITY", "Fill Opacity"),
+    };
+    let enter = dispatch.clone();
+    h_flex()
+        .gap_1()
+        .child(Label::new(label).size(LabelSize::Small))
+        .child(
+            div()
+                .id(format!("graphite-saved-layer-{id}-percent"))
+                .debug_selector(move || format!("GRAPHITE-GDD-LAYER-{id}-PERCENT"))
+                .aria_label(format!("{label} percent"))
+                .w(gpui::px(56.))
+                .px_1()
+                .rounded_md()
+                .border_1()
+                .border_color(cx.theme().colors().border)
+                .bg(cx.theme().colors().editor_background)
+                .on_key_down(move |event, window, cx| {
+                    if event.keystroke.key == "enter"
+                        && event.keystroke.modifiers == gpui::Modifiers::default()
+                    {
+                        cx.stop_propagation();
+                        enter(window, cx);
+                    }
+                })
+                .child(input.clone()),
+        )
+        .child(Label::new("%").size(LabelSize::Small))
+        .child(
+            div()
+                .debug_selector(move || format!("GRAPHITE-GDD-LAYER-{id}-APPLY"))
+                .child(
+                    Button::new(format!("graphite-saved-layer-{id}-apply"), "Apply")
+                        .on_click(move |_, window, cx| dispatch(window, cx)),
+                ),
+        )
 }
 
 pub(crate) fn render_saved_layer_duplicate(

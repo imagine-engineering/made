@@ -7,7 +7,8 @@ use gpui::{
 use graphics_core::evaluate::UnaryNumericOperation;
 use graphics_core::formats::gdd::{
     GddGraphGeometry, GddGraphInputPort, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-    GddLayerGrouping, GddLayerOrder, GddResolvedNumericPorts, GddRootLayerChange, ImportOrExport,
+    GddLayerGrouping, GddLayerOpacityKind, GddLayerOrder, GddResolvedNumericPorts,
+    GddRootLayerChange, ImportOrExport,
 };
 use std::{
     cell::Cell,
@@ -163,6 +164,7 @@ pub(crate) enum SavedGraphAction {
     },
     ReorderLayers(GddLayerOrder),
     GroupLayers(GddLayerGrouping),
+    ApplyLayerOpacity(GddLayerOpacityKind),
     ToggleSource(SavedGraphConnectionSource),
     ConnectExport(usize),
     DisconnectInput(usize),
@@ -273,6 +275,7 @@ pub(crate) struct SavedGraphView<'a> {
     pub viewport: &'a ScrollHandle,
     pub focus: &'a FocusHandle,
     pub layer_focus: &'a FocusHandle,
+    pub layer_opacity: Option<&'a [Entity<Editor>; 2]>,
     pub selected: Option<usize>,
     pub selection: &'a BTreeSet<usize>,
     pub collapsed_layers: &'a BTreeSet<usize>,
@@ -1013,6 +1016,30 @@ pub(crate) fn render_saved_graph(
                                 },
                             )),
                     )
+                    .when_some(view.layer_opacity.filter(|_| editing), |panel, inputs| {
+                        panel.child(
+                            h_flex().gap_2().flex_wrap().children(
+                                [GddLayerOpacityKind::Overall, GddLayerOpacityKind::Fill]
+                                    .into_iter()
+                                    .zip(inputs)
+                                    .map(|(kind, input)| {
+                                        let dispatch = dispatch.clone();
+                                        crate::layers::render_saved_layer_opacity(
+                                            kind,
+                                            input,
+                                            cx,
+                                            move |window, cx| {
+                                                dispatch(
+                                                    SavedGraphAction::ApplyLayerOpacity(kind),
+                                                    window,
+                                                    cx,
+                                                )
+                                            },
+                                        )
+                                    }),
+                            ),
+                        )
+                    })
                     .children(layers.iter().enumerate().filter_map(|(position, layer)| {
                         if collapsed_depth.is_some_and(|depth| layer.depth > depth) {
                             return None;
