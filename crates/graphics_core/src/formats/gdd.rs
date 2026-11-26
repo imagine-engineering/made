@@ -98,8 +98,8 @@ use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
     CanvasGpuRenderer, CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
     NumericGraphPreparationError, UnaryNumericOperation, evaluate_cpu_svg,
-    typecheck_detached_numeric_network, typecheck_detached_ranked_network,
-    validate_svg_configuration,
+    evaluate_merge_thumbnail, typecheck_detached_numeric_network,
+    typecheck_detached_ranked_network, validate_svg_configuration,
 };
 
 use crate::registry::{
@@ -1101,6 +1101,7 @@ pub struct GddGraphNode {
     can_duplicate_in_copy: bool,
     can_preview_numeric_output: bool,
     graphic_profile: Option<SavedGraphicProfile>,
+    can_preview_merge_thumbnail: bool,
     is_document_output: bool,
     can_set_document_artboard: bool,
     can_supply_numeric_export: bool,
@@ -1357,6 +1358,10 @@ impl GddGraphNode {
             Some(SavedGraphicProfile::Layer(preview)) if self.is_document_output => Some(preview),
             _ => None,
         }
+    }
+
+    pub fn can_preview_merge_thumbnail(&self) -> bool {
+        self.can_preview_merge_thumbnail
     }
 
     pub fn can_set_document_artboard(&self) -> bool {
@@ -1805,6 +1810,7 @@ impl InspectedGddV1 {
                     can_duplicate_in_copy: false,
                     can_preview_numeric_output: false,
                     graphic_profile: None,
+                    can_preview_merge_thumbnail: false,
                     is_document_output: false,
                     can_set_document_artboard: false,
                     can_supply_numeric_export: false,
@@ -1945,6 +1951,7 @@ impl InspectedGddV1 {
         let mut pinned_indexes = BTreeMap::new();
         let mut wired_nodes = BTreeMap::new();
         let document_exports = &interface.document_network().exports;
+        let acyclic = interface.document_network().is_acyclic();
         let empty_document_output = empty_document_output(document_exports);
         let document_output_node = match document_exports.as_slice() {
             [
@@ -2019,6 +2026,14 @@ impl InspectedGddV1 {
             {
                 node.graphic_profile = Some(profile);
                 node.is_document_output = document_output_node == Some(node.local_id);
+                node.can_preview_merge_thumbnail = acyclic
+                    && matches!(
+                        profile,
+                        SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge)
+                    )
+                    && !node.is_document_output
+                    && interface.is_layer(&node.local_id, path)
+                    && interface.connected_to_output(&node.local_id, path);
                 if matches!(
                     profile,
                     SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. })
@@ -3863,6 +3878,73 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         }
         Self::render_saved_layer_svg(&graph.network, selected, configuration, budget).await
+    }
+
+    pub async fn render_merge_thumbnail_svg(
+        &self,
+        node: &GddGraphNode,
+        resolution: UVec2,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<String, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        if !node.can_preview_merge_thumbnail() {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        }
+        let graph = self.runtime_graph().await?;
+        let owner = node.local_id;
+        let (mut layer, SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge)) = graph
+            .network
+            .nodes
+            .get(&owner)
+            .and_then(checked_saved_graphic_node)
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?
+        else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        let DocumentNodeImplementation::Network(subgraph) = &layer.implementation else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        let monitor = subgraph
+            .nodes
+            .iter()
+            .find_map(|(&id, node)| {
+                matches!(&node.implementation, DocumentNodeImplementation::ProtoNode(identifier)
+                if *identifier == graphite_std::memo::monitor::IDENTIFIER)
+                .then_some(id)
+            })
+            .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
+        let [base, content] = layer.inputs.as_mut_slice() else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        // The saved layer retains its original reflection path. Its sibling stack
+        // is outside the monitor and need not be evaluated for the thumbnail.
+        *base = NodeInput::type_default(
+            Type::Item(Box::new(graphite_core_types::concrete!(
+                graphite_std::Graphic
+            ))),
+            true,
+        );
+        let mut detached = NodeNetwork {
+            exports: vec![NodeInput::node(owner, 0)],
+            ..Default::default()
+        };
+        if let Some(content) = content.as_node() {
+            collect_layer_preview_node(
+                &graph.network,
+                content,
+                &mut detached,
+                &mut BTreeSet::from([owner]),
+            )?;
+        }
+        detached.nodes.insert(owner, layer);
+        let configuration = canvas_render_configuration(resolution, 1., DAffine2::IDENTITY);
+        validate_svg_configuration(configuration, budget)
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
+        validate_saved_graphic_work(&detached)?;
+        validate_saved_ellipse_radius_sources(&detached).await?;
+        evaluate_merge_thumbnail(&detached, configuration, budget, owner, monitor)
+            .await
+            .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
     }
 
     pub async fn render_document_canvas_svg(

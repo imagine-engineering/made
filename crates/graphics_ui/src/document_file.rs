@@ -122,6 +122,7 @@ const GRAPHITE_NUMERIC_OPERATIONS: [UnaryNumericOperation; 5] = [
 ];
 
 const LAYER_PREVIEW_SIZE: u32 = 128;
+const LAYER_THUMBNAIL_SIZE: UVec2 = UVec2::new(96, 64);
 const SAVED_SCENE_PIXEL_BUDGET: u32 = 16 * 1024 * 1024;
 
 async fn preview_layer_image(
@@ -172,6 +173,34 @@ async fn preview_layer_image(
         configuration.scale,
         renderer,
         (LAYER_PREVIEW_SIZE * LAYER_PREVIEW_SIZE * 4) as usize,
+    )
+    .map_err(|error| error.to_string())
+}
+
+async fn preview_merge_thumbnail(
+    contents: &InspectedGddV1,
+    node: &GddGraphNode,
+    renderer: &SvgRenderer,
+) -> Result<Arc<RenderImage>, String> {
+    let UVec2 {
+        x: width,
+        y: height,
+    } = LAYER_THUMBNAIL_SIZE;
+    let budget = CpuSvgEvaluationBudget {
+        max_viewport_pixels: width * height,
+        max_output_bytes: 64 * 1024,
+    };
+    let svg = contents
+        .render_merge_thumbnail_svg(node, LAYER_THUMBNAIL_SIZE, budget)
+        .await
+        .map_err(|error| error.to_string())?;
+    crate::render::prepare_svg_bytes_at_target(
+        svg.as_bytes(),
+        width,
+        height,
+        1.,
+        renderer,
+        (width * height * 4) as usize,
     )
     .map_err(|error| error.to_string())
 }
@@ -1538,6 +1567,24 @@ struct PortRenameForm {
     kind: NetworkPortKind,
     index: usize,
     name: Entity<Editor>,
+}
+
+enum SavedNodePreview {
+    Numeric,
+    DocumentLayer(GddGraphLayerPreview),
+    MergeThumbnail,
+}
+
+impl SavedNodePreview {
+    fn for_node(node: &GddGraphNode) -> Option<Self> {
+        if let Some(layer) = node.layer_preview() {
+            Some(Self::DocumentLayer(layer))
+        } else if node.can_preview_merge_thumbnail() {
+            Some(Self::MergeThumbnail)
+        } else {
+            node.can_preview_numeric_output().then_some(Self::Numeric)
+        }
+    }
 }
 
 enum NodeOutputPreview {
@@ -6820,9 +6867,9 @@ impl GraphiteDocumentItem {
             cx.notify();
             return;
         }
-        let Some(node) = form
+        let Some((node, preview)) = form
             .selected_node()
-            .filter(|node| node.can_preview_numeric_output() || node.layer_preview().is_some())
+            .and_then(|node| Some((node, SavedNodePreview::for_node(node)?)))
         else {
             return;
         };
@@ -6837,19 +6884,22 @@ impl GraphiteDocumentItem {
         let node = node.clone();
         let contents = contents.clone();
         let revision = form.revision.clone();
-        let layer = node
-            .layer_preview()
-            .map(|preview| (preview, cx.svg_renderer()));
+        let renderer = cx.svg_renderer();
         let evaluation = cx.background_spawn(async move {
-            if let Some((preview, renderer)) = layer {
-                futures::executor::block_on(preview_layer_image(
-                    &contents, &node, preview, &renderer,
-                ))
-                .map(NodeOutputPreview::ReadyImage)
-            } else {
-                futures::executor::block_on(contents.preview_graph_numeric_output(&node))
-                    .map(NodeOutputPreview::Ready)
-                    .map_err(|error| error.to_string())
+            match preview {
+                SavedNodePreview::DocumentLayer(preview) => futures::executor::block_on(
+                    preview_layer_image(&contents, &node, preview, &renderer),
+                )
+                .map(NodeOutputPreview::ReadyImage),
+                SavedNodePreview::MergeThumbnail => futures::executor::block_on(
+                    preview_merge_thumbnail(&contents, &node, &renderer),
+                )
+                .map(NodeOutputPreview::ReadyImage),
+                SavedNodePreview::Numeric => {
+                    futures::executor::block_on(contents.preview_graph_numeric_output(&node))
+                        .map(NodeOutputPreview::Ready)
+                        .map_err(|error| error.to_string())
+                }
             }
         });
         let request = Arc::new(());
@@ -7096,25 +7146,37 @@ impl GraphiteDocumentItem {
 
     fn render_node_output_preview(
         preview: &NodeOutputPreview,
-        layer: Option<GddGraphLayerPreview>,
+        kind: SavedNodePreview,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let (button_id, selector, result_selector, image_selector, name) = match layer {
-            Some(GddGraphLayerPreview::Merge) => (
+        let resolution = if matches!(kind, SavedNodePreview::MergeThumbnail) {
+            LAYER_THUMBNAIL_SIZE
+        } else {
+            UVec2::splat(LAYER_PREVIEW_SIZE)
+        };
+        let (button_id, selector, result_selector, image_selector, name) = match kind {
+            SavedNodePreview::DocumentLayer(GddGraphLayerPreview::Merge) => (
                 "graphite-gdd-preview-merge",
                 "GRAPHITE-GDD-PREVIEW-MERGE",
                 "GRAPHITE-GDD-MERGE-RESULT",
                 "GRAPHITE-GDD-MERGE-IMAGE",
                 "Merge",
             ),
-            Some(GddGraphLayerPreview::Artboard { .. }) => (
+            SavedNodePreview::DocumentLayer(GddGraphLayerPreview::Artboard { .. }) => (
                 "graphite-gdd-preview-artboard",
                 "GRAPHITE-GDD-PREVIEW-ARTBOARD",
                 "GRAPHITE-GDD-ARTBOARD-RESULT",
                 "GRAPHITE-GDD-ARTBOARD-IMAGE",
                 "Artboard",
             ),
-            None => (
+            SavedNodePreview::MergeThumbnail => (
+                "graphite-gdd-preview-layer-thumbnail",
+                "GRAPHITE-GDD-PREVIEW-LAYER-THUMBNAIL",
+                "GRAPHITE-GDD-LAYER-THUMBNAIL-RESULT",
+                "GRAPHITE-GDD-LAYER-THUMBNAIL-IMAGE",
+                "Layer Thumbnail",
+            ),
+            SavedNodePreview::Numeric => (
                 "graphite-gdd-preview-numeric",
                 "GRAPHITE-GDD-PREVIEW-NUMERIC",
                 "GRAPHITE-GDD-NUMERIC-RESULT",
@@ -7128,8 +7190,8 @@ impl GraphiteDocumentItem {
                 format!("Hide {name} Preview")
             }
             NodeOutputPreview::Failed(_) => format!("Retry {name} Preview"),
-            _ if layer.is_some() => format!("Preview Saved {name}"),
-            _ => "Preview Saved Output".to_owned(),
+            _ if matches!(kind, SavedNodePreview::Numeric) => "Preview Saved Output".to_owned(),
+            _ => format!("Preview Saved {name}"),
         };
         v_flex()
             .gap_2()
@@ -7156,7 +7218,8 @@ impl GraphiteDocumentItem {
                     panel.child(
                         div()
                             .debug_selector(move || image_selector.into())
-                            .size(px(LAYER_PREVIEW_SIZE as f32))
+                            .w(px(resolution.x as f32))
+                            .h(px(resolution.y as f32))
                             .child(img(ImageSource::Render(image)).size_full()),
                     )
                 },
@@ -8936,8 +8999,8 @@ impl GraphiteDocumentItem {
                                     ),
                                 )
                             })
-                            .when(selected.can_preview_numeric_output() || selected.layer_preview().is_some(), |panel| {
-                                panel.child(Self::render_node_output_preview(&form.output_preview, selected.layer_preview(), cx))
+                            .when_some(SavedNodePreview::for_node(selected), |panel, preview| {
+                                panel.child(Self::render_node_output_preview(&form.output_preview, preview, cx))
                             })
                             .when(matches!(selected.layer_preview(), Some(GddGraphLayerPreview::Artboard { .. })), |panel| {
                                 let node = Box::new(selected.clone());
@@ -14520,6 +14583,242 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_026_1_reads_the_saved_merge_monitor(_cx: &mut TestAppContext) {
+        let bytes = layer_order_archive().await.into();
+        let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = source.graph_nodes().await.expect("source nodes");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let layer = find("Blue Repeat");
+        let budget = CpuSvgEvaluationBudget {
+            max_viewport_pixels: LAYER_THUMBNAIL_SIZE.x * LAYER_THUMBNAIL_SIZE.y,
+            max_output_bytes: 64 * 1024,
+        };
+        assert!(layer.can_preview_merge_thumbnail());
+        let svg = source
+            .render_merge_thumbnail_svg(layer, LAYER_THUMBNAIL_SIZE, budget)
+            .await
+            .expect("editable repeating graphics from the saved Merge monitor");
+        assert!(svg.starts_with("<svg "));
+        assert!(matches!(
+            source
+                .render_merge_thumbnail_svg(find("Repeat Array"), LAYER_THUMBNAIL_SIZE, budget)
+                .await,
+            Err(GddArchiveError::UnsupportedGraphLayerPreview)
+        ));
+        let reopened = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("independent snapshot");
+        assert!(matches!(
+            reopened
+                .render_merge_thumbnail_svg(layer, LAYER_THUMBNAIL_SIZE, budget)
+                .await,
+            Err(GddArchiveError::StaleGraphNode)
+        ));
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_026_2_workspace_previews_the_same_procedural_layer_after_reorder(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::portfolio::document::utility_types::document_metadata::LayerNodeIdentifier;
+        use graphite_graph_craft::document::NodeId;
+
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/merge-layer-ownership.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native document");
+        let source = item.read_with(window, |item, cx| {
+            item.model
+                .read(cx)
+                .gdd_contents()
+                .expect("source snapshot")
+                .clone()
+        });
+        let nodes = source.graph_nodes().await.expect("source scene nodes");
+        let ancestry: Vec<_> = ["Main Artboard", "Outer Group", "Inner Group", "Blue Repeat"]
+            .into_iter()
+            .map(|name| {
+                nodes
+                    .iter()
+                    .find(|node| node.display_name() == name)
+                    .expect(name)
+                    .storage_id()
+            })
+            .collect();
+        let pick_repeated_layer = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+            let pane = window
+                .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+                .expect("Canvas pane");
+            let point = item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let document = canvas
+                    .snapping_document
+                    .as_ref()
+                    .expect("native source metadata");
+                let layer = LayerNodeIdentifier::new(NodeId(50), &document.network_interface);
+                assert_eq!(
+                    document
+                        .metadata()
+                        .click_targets(layer)
+                        .expect("generated targets")
+                        .len(),
+                    3
+                );
+                let [min, max] = document
+                    .metadata()
+                    .bounding_box_viewport(layer)
+                    .expect("procedural bounds");
+                let model = item.model.read(cx);
+                let contents = model.gdd_contents().expect("active document");
+                // The repeat touches the artboard boundary. Pick the interior
+                // of a generated instance in the accepted source viewport.
+                let point = [0.5, 0.86, 0.14]
+                    .into_iter()
+                    .flat_map(|x| {
+                        [0.75, 0.6, 0.5, 0.4, 0.25]
+                            .into_iter()
+                            .map(move |y| min + (max - min) * DVec2::new(x, y))
+                    })
+                    .find(|point| {
+                        contents
+                            .hit_test_canvas_artwork(document, *point)
+                            .is_some_and(|hit| hit.layer_path() == ancestry)
+                    })
+                    .unwrap_or_else(|| {
+                        panic!("visible repeated instance within {min:?} to {max:?}")
+                    });
+                pane.origin + gpui::point(px(point.x as f32), px(point.y as f32))
+            });
+            click_graph_point(
+                window,
+                point,
+                gpui::MouseButton::Left,
+                gpui::Modifiers::default(),
+            );
+            item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas remains open");
+                let hit = canvas
+                    .artwork_hit
+                    .as_ref()
+                    .expect("native generated artwork hit");
+                assert_eq!(hit.layer_path(), ancestry);
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("source node selection")
+                };
+                assert!(hit.matches_node(form.selected_node().expect("selected Merge")));
+            });
+            click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        };
+        let thumbnail = |window: &mut gpui::VisualTestContext| {
+            click(window, "GRAPHITE-GDD-PREVIEW-LAYER-THUMBNAIL");
+            let image = item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("source node selection")
+                };
+                match &form.output_preview {
+                    NodeOutputPreview::ReadyImage(image) => image.clone(),
+                    NodeOutputPreview::Failed(error) => panic!("thumbnail failed: {error}"),
+                    _ => panic!("ready thumbnail"),
+                }
+            });
+            click(window, "GRAPHITE-GDD-PREVIEW-LAYER-THUMBNAIL");
+            image
+        };
+        paint(window);
+        pick_repeated_layer(window);
+        let before = thumbnail(window);
+        let width = LAYER_THUMBNAIL_SIZE.x as usize;
+        let y = LAYER_THUMBNAIL_SIZE.y as usize / 2;
+        let middle = &before.as_bytes(0).expect("bitmap")[y * width * 4..(y + 1) * width * 4];
+        let blue = middle
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| pixel[0] > 200 && pixel[1] < 10 && pixel[2] < 10 && pixel[3] > 200);
+        assert_eq!(
+            std::iter::once(false)
+                .chain(blue.clone())
+                .zip(blue)
+                .filter(|&(previous, next)| !previous && next)
+                .count(),
+            3
+        );
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(Arc::ptr_eq(
+                item.model.read(cx).gdd_contents().expect("source snapshot"),
+                &source
+            ));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        click(window, "GRAPHITE-GDD-LAYER-ORDER-RAISE");
+        let edited = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            item.model.read(cx).revision.clone()
+        });
+        pick_repeated_layer(window);
+        assert_eq!(thumbnail(window).as_bytes(0), before.as_bytes(0));
+        item.read_with(window, |item, cx| {
+            assert!(Arc::ptr_eq(&item.model.read(cx).revision, &edited))
+        });
+        click(window, "GRAPHITE-GDD-UNDO");
+        pick_repeated_layer(window);
+        assert_eq!(thumbnail(window).as_bytes(0), before.as_bytes(0));
+        click(window, "GRAPHITE-GDD-REDO");
+        let saved_path = PathBuf::from("/project/merge-layer-ownership.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(saved_path.clone()));
+        window.run_until_parked();
+        let saved = read_graphite_folder(filesystem.as_ref(), &saved_path)
+            .await
+            .expect("saved graph");
+        let saved_nodes = saved.graph_nodes().await.expect("saved source nodes");
+        let saved_layer = saved_nodes
+            .iter()
+            .find(|node| Some(&node.storage_id()) == ancestry.last())
+            .expect("same saved layer");
+        let reopened = item.read_with(window, |_, cx| cx.svg_renderer());
+        assert_eq!(
+            preview_merge_thumbnail(&saved, saved_layer, &reopened)
+                .await
+                .expect("reopened monitor")
+                .as_bytes(0),
+            before.as_bytes(0)
+        );
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }

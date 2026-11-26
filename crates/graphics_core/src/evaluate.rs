@@ -3,10 +3,11 @@ use std::{fmt, future::Future, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
 use futures::FutureExt as _;
 use graphite_core_types::{
     Color, Context, Node, Type,
-    list::{Item, List},
+    list::{Item, List, NodeIdPath},
     ops::Convert as _,
+    render_complexity::RenderComplexity as _,
 };
-use graphite_glam::{DAffine2, DVec2};
+use graphite_glam::{DAffine2, DVec2, UVec2};
 use graphite_graph_craft::{
     application_io::{
         PlatformApplicationIo, PlatformEditorApi,
@@ -26,11 +27,15 @@ use graphite_interpreted_executor::{
 use graphite_math_nodes::{NthRoot, SafeDivide};
 use graphite_raster_types::Raster;
 use graphite_std::{
-    ATTR_TRANSFORM, Artboard, Graphic,
+    ATTR_EDITOR_LAYER_PATH, ATTR_TRANSFORM, Artboard, Graphic,
     application_io::{ApplicationIo as _, ExportFormat, GetEditorPreferences, RenderConfig},
+    bounds::RenderBoundingBox,
     memo::IORecord,
     platform_application_io::{decode_image, editor_api, resource},
-    transform::Footprint,
+    renderer::{
+        Render as _, RenderParams, RenderSvgSegmentList as _, SvgRender, graphic_list_bounding_box,
+    },
+    transform::{Footprint, RenderQuality},
     transform_nodes::replace_transform,
     vector_types::vector::style::RenderMode,
 };
@@ -698,6 +703,8 @@ pub enum CpuSvgEvaluationError {
     UnexpectedOutput,
     SourceDecodeFailed,
     UnexpectedDecodedImage,
+    UnexpectedLayerMonitor,
+    LayerThumbnailComplexity,
     OutputBudgetExceeded,
     SourcePanic(String),
 }
@@ -723,6 +730,11 @@ impl fmt::Display for CpuSvgEvaluationError {
             }
             Self::UnexpectedDecodedImage => formatter
                 .write_str("The evaluated image disagrees with its admitted source contract."),
+            Self::UnexpectedLayerMonitor => formatter
+                .write_str("Graphite could not verify the saved layer's thumbnail monitor."),
+            Self::LayerThumbnailComplexity => {
+                formatter.write_str("The layer is too complex for a Graphite thumbnail.")
+            }
             Self::OutputBudgetExceeded => {
                 formatter.write_str("The generated SVG exceeds the supplied output budget.")
             }
@@ -1171,7 +1183,7 @@ pub(crate) async fn evaluate_cpu_svg(
             storage.store(input.source.encoded_bytes().as_ref());
             application_io.inject_resource_proxy(Box::new(storage));
         }
-        let output = execute_source_render(
+        let (output, _) = execute_source_render(
             network,
             configuration,
             budget,
@@ -1189,6 +1201,83 @@ pub(crate) async fn evaluate_cpu_svg(
             return Err(CpuSvgEvaluationError::OutputBudgetExceeded);
         }
         Ok(output)
+    })
+    .catch_unwind()
+    .await
+    .unwrap_or_else(|payload| Err(source_render_panic(payload)))
+}
+
+pub(crate) async fn evaluate_merge_thumbnail(
+    network: &NodeNetwork,
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+    owner: NodeId,
+    monitor: NodeId,
+) -> Result<String, CpuSvgEvaluationError> {
+    AssertUnwindSafe(async {
+        let (_, executor) = execute_source_render(
+            network,
+            configuration,
+            budget,
+            Arc::new(PlatformApplicationIo::default()),
+            None,
+        )
+        .await?;
+        let observed = executor
+            .introspect(&[owner, monitor])
+            .map_err(|_| CpuSvgEvaluationError::UnexpectedLayerMonitor)?;
+        let content = &observed
+            .downcast_ref::<IORecord<Context<'static>, List<Graphic>>>()
+            .ok_or(CpuSvgEvaluationError::UnexpectedLayerMonitor)?
+            .output;
+        let owner_path = NodeIdPath::from(vec![owner]);
+        if (0..content.len()).any(|index| {
+            content.attribute::<NodeIdPath>(ATTR_EDITOR_LAYER_PATH, index) != Some(&owner_path)
+        }) {
+            return Err(CpuSvgEvaluationError::UnexpectedLayerMonitor);
+        }
+        if content.render_complexity() > 1000 {
+            return Err(CpuSvgEvaluationError::LayerThumbnailComplexity);
+        }
+        let bounds = match graphic_list_bounding_box(content, DAffine2::IDENTITY) {
+            RenderBoundingBox::Rectangle(bounds) if bounds[0] != bounds[1] => bounds,
+            _ => [DVec2::ZERO, DVec2::ONE],
+        };
+        let size = bounds[1] - bounds[0];
+        let center = bounds[0] + size / 2.;
+        let half_extent = DVec2::new(size.x.max(size.y * 1.5), size.y.max(size.x / 1.5)) / 2.;
+        let [min, max] = [center - half_extent, center + half_extent];
+        if !min.is_finite() || !max.is_finite() || (max - min).min_element() <= 0. {
+            return Err(CpuSvgEvaluationError::UnexpectedLayerMonitor);
+        }
+        let mut render = SvgRender::new();
+        content.render_svg(
+            &mut render,
+            &RenderParams {
+                footprint: Footprint {
+                    transform: DAffine2::from_translation(min),
+                    resolution: UVec2::new((max.x - min.x) as u32, (max.y - min.y) as u32),
+                    quality: RenderQuality::Full,
+                },
+                thumbnail: true,
+                ..Default::default()
+            },
+        );
+        render.format_svg(min, max);
+        let resolution = configuration.viewport.resolution;
+        // Native rasterization needs explicit dimensions to fit the source viewBox.
+        let svg = render.svg.to_svg_string().replacen(
+            "<svg ",
+            &format!(
+                r#"<svg width="{}" height="{}" "#,
+                resolution.x, resolution.y
+            ),
+            1,
+        );
+        if svg.len() > budget.max_output_bytes {
+            return Err(CpuSvgEvaluationError::OutputBudgetExceeded);
+        }
+        Ok(svg)
     })
     .catch_unwind()
     .await
@@ -1214,7 +1303,7 @@ async fn execute_source_render(
     budget: CpuSvgEvaluationBudget,
     application_io: Arc<PlatformApplicationIo>,
     encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
-) -> Result<RenderOutput, CpuSvgEvaluationError> {
+) -> Result<(RenderOutput, DynamicExecutor), CpuSvgEvaluationError> {
     let api = Arc::new(PlatformEditorApi {
         application_io: Some(application_io),
         editor_preferences: Box::new(SvgPreferences(budget.max_viewport_pixels)),
@@ -1245,7 +1334,7 @@ async fn execute_source_render(
         validate_decoded_image(&executor, node, input)?;
     }
     match value {
-        TaggedValue::RenderOutput(output) => Ok(output),
+        TaggedValue::RenderOutput(output) => Ok((output, executor)),
         _ => Err(CpuSvgEvaluationError::UnexpectedOutput),
     }
 }
@@ -1308,7 +1397,7 @@ impl CanvasGpuRenderer {
             return Err(CanvasGpuError::ViewportBudgetExceeded);
         }
         AssertUnwindSafe(async {
-            let RenderOutput { data, metadata } = execute_source_render(
+            let (RenderOutput { data, metadata }, _) = execute_source_render(
                 network,
                 configuration,
                 budget,
