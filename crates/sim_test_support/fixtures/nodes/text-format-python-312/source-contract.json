@@ -2,7 +2,7 @@
   "schema_version": 1,
   "task": 413,
   "source": {
-    "file": "sim_extras/nodes_string.py",
+    "file": "comfy_extras/nodes_string.py",
     "sha256": "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1",
     "class": "StringFormat",
     "class_line": 9,

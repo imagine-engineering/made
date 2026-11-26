@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import unicodedata
 
 SOURCE_SHA = "bb01963178f28efc6e3a9578aecb89f53f8265e89c0518da92ec21c4955e85f1"
-SOURCE_PATH = Path("/home/asvegah/repos/sim/projects/sim/ComfyUI/sim_extras/nodes_string.py")
+SOURCE_PATH = Path(__file__).resolve().parents[5] / "projects/comfy/ComfyUI/comfy_extras/nodes_string.py"
 TABLE_NAME = "PYTHON_UNICODE_15_NONPRINTABLE_RANGES"
 
 
@@ -98,7 +98,7 @@ def generate():
     return {
         "schema_version": 1,
         "task": 413,
-        "source": {"file": "sim_extras/nodes_string.py", "sha256": SOURCE_SHA, "class": "StringFormat", "class_line": original.lineno, "unchanged_class_ast_sha256": hashlib.sha256(ast.dump(original, include_attributes=True).encode()).hexdigest()},
+        "source": {"file": "comfy_extras/nodes_string.py", "sha256": SOURCE_SHA, "class": "StringFormat", "class_line": original.lineno, "unchanged_class_ast_sha256": hashlib.sha256(ast.dump(original, include_attributes=True).encode()).hexdigest()},
         "source_execution": "Unchanged original StringFormat class AST, real Python str.format/repr/ascii/isprintable; descriptor annotations and NodeOutput wrapper captured only",
         "environment": {"python": platform.python_version(), "unicode_data": unicodedata.unidata_version},
         "scalar_scope": {"count": count, "excluded_surrogate_range": [0xD800, 0xDFFF], "printability_bitmap_sha256": bitmap.hexdigest(), "repr_framed_sha256": representations["repr"].hexdigest(), "ascii_framed_sha256": representations["ascii"].hexdigest(), "framing": "For each ascending valid scalar: little-endian u32 codepoint, little-endian u32 UTF-8 output byte count, UTF-8 original output"},
