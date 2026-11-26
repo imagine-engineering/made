@@ -835,6 +835,15 @@ impl GddArtboardGeometry {
         })
     }
 
+    pub fn translated(self, delta: DVec2) -> Option<Self> {
+        let translated = Self {
+            location: rounded_artboard_edit(self.location, self.location + delta),
+            ..self
+        };
+        translated.normalized()?;
+        Some(translated)
+    }
+
     fn read(document: &DocumentNode) -> Option<Self> {
         let Some(TaggedValue::DVec2(location)) =
             document.inputs.get(ARTBOARD_LOCATION_INPUT)?.as_value()
@@ -876,6 +885,19 @@ impl GddArtboardGeometry {
             && (origin + size).is_finite())
         .then_some((origin, size))
     }
+}
+
+fn rounded_artboard_edit(original: DVec2, entered: DVec2) -> DVec2 {
+    // The pinned integer widgets round edits while untouched legacy coordinates stay exact.
+    DVec2::from_array([(original.x, entered.x), (original.y, entered.y)].map(
+        |(original, entered)| {
+            if original.to_bits() == entered.to_bits() {
+                original
+            } else {
+                entered.round()
+            }
+        },
+    ))
 }
 
 #[derive(Clone)]
@@ -4705,21 +4727,9 @@ impl InspectedGddV1 {
         let same_vector = |left: DVec2, right: DVec2| {
             left.to_array().map(f64::to_bits) == right.to_array().map(f64::to_bits)
         };
-        let rounded_edit = |original: DVec2, entered: DVec2| {
-            // The pinned integer widgets round edited values, while legacy literals remain exact.
-            DVec2::from_array([(original.x, entered.x), (original.y, entered.y)].map(
-                |(original, entered)| {
-                    if original.to_bits() == entered.to_bits() {
-                        original
-                    } else {
-                        entered.round()
-                    }
-                },
-            ))
-        };
         let proposed = GddArtboardGeometry {
-            location: rounded_edit(previous.location, requested.location),
-            dimensions: rounded_edit(previous.dimensions, requested.dimensions),
+            location: rounded_artboard_edit(previous.location, requested.location),
+            dimensions: rounded_artboard_edit(previous.dimensions, requested.dimensions),
         };
         if proposed.normalized().is_none() {
             return Err(GddArchiveError::InvalidArtboardGeometry);

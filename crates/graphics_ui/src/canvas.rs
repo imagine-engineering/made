@@ -1,7 +1,7 @@
 use gpui::{
     Bounds, PathBuilder, PathStyle, Pixels, Point, Rgba, ScrollWheelEvent, Window, point, px,
 };
-use graphics_core::formats::gdd::GddArtboardCanvasOverlay;
+use graphics_core::formats::gdd::{GddArtboardCanvasOverlay, GddArtboardGeometry};
 use graphite_editor::{
     consts::{
         COLOR_OVERLAY_BLUE, COLOR_OVERLAY_GRAY, VIEWPORT_SCROLL_RATE,
@@ -10,6 +10,7 @@ use graphite_editor::{
     messages::{
         input_mapper::utility_types::pointer::ScrollDelta,
         portfolio::document::utility_types::misc::PTZ, prelude::NavigationMessageHandler,
+        tool::common_functionality::transformation_cage::axis_align_drag,
     },
 };
 use graphite_graph_craft::document::value::{DAffine2, DVec2};
@@ -67,18 +68,25 @@ impl ArtboardOverlay {
         }
     }
 
-    pub fn paint(&self, origin: Point<Pixels>, outline_visible: bool, window: &mut Window) {
-        if let Ok(color) = Rgba::try_from(COLOR_OVERLAY_GRAY) {
+    pub fn paint(
+        &self,
+        origin: Point<Pixels>,
+        show_name: bool,
+        outline_offset: Option<DVec2>,
+        window: &mut Window,
+    ) {
+        if show_name && let Ok(color) = Rgba::try_from(COLOR_OVERLAY_GRAY) {
             for path in &self.name_paths {
                 if let Some(builder) = name_path_builder(path, origin) {
                     paint_overlay_path(builder, color, window);
                 }
             }
         }
-        if outline_visible
+        if let Some(offset) = outline_offset
             && let Ok(color) = Rgba::try_from(COLOR_OVERLAY_BLUE)
-            && let [Some(first), Some(second), Some(third), Some(fourth)] =
-                self.outline.map(|corner| pane_point(corner, origin))
+            && let [Some(first), Some(second), Some(third), Some(fourth)] = self
+                .outline
+                .map(|corner| pane_point(corner + offset, origin))
         {
             let mut outline = PathBuilder::stroke(px(1.));
             outline.move_to(first);
@@ -88,6 +96,44 @@ impl ArtboardOverlay {
             outline.close();
             paint_overlay_path(outline, color, window);
         }
+    }
+}
+
+pub(crate) struct ArtboardMove {
+    start: DVec2,
+    geometry: GddArtboardGeometry,
+    document_to_pane: DAffine2,
+}
+
+impl ArtboardMove {
+    pub fn new(
+        start: Point<Pixels>,
+        geometry: GddArtboardGeometry,
+        document_to_pane: DAffine2,
+    ) -> Self {
+        Self {
+            start: logical_vector(start),
+            geometry,
+            document_to_pane,
+        }
+    }
+
+    pub fn placement(
+        &self,
+        position: Point<Pixels>,
+        constrain: bool,
+    ) -> Option<(GddArtboardGeometry, DVec2)> {
+        let position =
+            axis_align_drag(constrain, DVec2::ZERO, logical_vector(position), self.start);
+        let delta = self
+            .document_to_pane
+            .inverse()
+            .transform_vector2(position - self.start);
+        let geometry = self.geometry.translated(delta)?;
+        let offset = self
+            .document_to_pane
+            .transform_vector2(geometry.location - self.geometry.location);
+        Some((geometry, offset))
     }
 }
 

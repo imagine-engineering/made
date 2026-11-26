@@ -10,5 +10,11 @@
     "bindings": {
       "escape": "graphite::CancelArtboardCanvasPan"
     }
+  },
+  {
+    "context": "GraphiteCanvasArtboardMove",
+    "bindings": {
+      "escape": "graphite::CancelArtboardCanvasMove"
+    }
   }
 ]
