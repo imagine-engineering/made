@@ -317,6 +317,87 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_142_1_joins_the_pinned_mask_contract() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_graph_craft::document::NodeNetwork;
+        use graphite_raster_nodes::std_nodes::mask;
+
+        let identifier = mask::IDENTIFIER;
+        assert_eq!(identifier.as_str(), "raster_nodes::std_nodes::MaskNode");
+        let registered = registered_node(identifier.as_str()).expect("pinned source registration");
+        assert_eq!(registered.metadata.display_name, "Mask");
+        assert_eq!(registered.metadata.category, "Raster");
+        assert_eq!(registered.signatures.len(), 2);
+        assert_eq!(
+            registered.signatures.into_iter().collect::<HashSet<_>>(),
+            HashSet::from([
+                NodeIOTypes::new(
+                    concrete!(Context<'static>),
+                    Type::Future(Box::new(concrete!(Item<Raster<CPU>>))),
+                    vec![
+                        fn_type_fut!(Context<'static>, Item<Raster<CPU>>),
+                        fn_type_fut!(Context<'static>, Item<Raster<CPU>>),
+                    ],
+                ),
+                NodeIOTypes::new(
+                    concrete!(Context<'static>),
+                    Type::Future(Box::new(concrete!(List<Raster<CPU>>))),
+                    vec![
+                        fn_type_fut!(Context<'static>, List<Raster<CPU>>),
+                        fn_type_fut!(Context<'static>, List<Raster<CPU>>),
+                    ],
+                ),
+            ])
+        );
+        let definition = resolve_proto_node_type(identifier).expect("native catalog template");
+        let template = definition.default_node_template();
+        assert_eq!(
+            template.inputs,
+            [
+                NodeInput::type_default(item!(Raster<CPU>), true),
+                NodeInput::type_default(item!(Raster<CPU>), true),
+            ]
+        );
+        let [image, stencil] = template.input_metadata.as_slice() else {
+            panic!("ordered image and stencil inputs");
+        };
+        assert_eq!(image.persistent_metadata.input_name, "Image");
+        assert_eq!(stencil.persistent_metadata.input_name, "Stencil");
+        assert!(template.output_names.is_empty());
+        let id = NodeId(1);
+        let graph = NodeNetwork {
+            nodes: [(id, template.into_parts().0)].into_iter().collect(),
+            exports: vec![NodeInput::node(id, 0)],
+            ..Default::default()
+        };
+        let bytes = serde_json::to_vec(&graph).expect("saved source graph");
+        let mut reopened: NodeNetwork =
+            serde_json::from_slice(&bytes).expect("reopened source graph");
+        let elements = [concrete!(Raster<CPU>)];
+        for rank in [item!(Raster<CPU>), list!(Raster<CPU>)] {
+            reopened.nodes.get_mut(&id).expect("saved node").inputs =
+                vec![NodeInput::type_default(rank.clone(), true); 2];
+            let output = crate::evaluate::typecheck_detached_ranked_network(
+                reopened.clone(),
+                &elements,
+                "Expected the pinned CPU raster output.",
+            )
+            .expect("type-check the reopened source graph");
+            assert_eq!(output.output.nested_type(), &rank);
+        }
+        reopened.nodes.get_mut(&id).expect("saved node").inputs[1] =
+            NodeInput::value(TaggedValue::Integer(42), true);
+        assert!(
+            crate::evaluate::typecheck_detached_ranked_network(
+                reopened,
+                &elements,
+                "Expected the pinned CPU raster output.",
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn at_gra_node_280_1_joins_the_pinned_empty_custom_network() {
         let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
         let groups = catalog.search("Custom Node");

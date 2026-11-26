@@ -30,6 +30,30 @@ pub fn evaluate_flatten_raster(
         .map_err(|_| RasterEvaluationError)
 }
 
+pub fn evaluate_mask_cpu(
+    image: Item<Raster<CPU>>,
+    stencil: Item<Raster<CPU>>,
+) -> Result<Item<Raster<CPU>>, RasterEvaluationError> {
+    let node = graphite_raster_nodes::std_nodes::MaskNode::new(
+        FutureWrapperNode::new(ClonedNode::new(image)),
+        FutureWrapperNode::new(ClonedNode::new(stencil)),
+    );
+    futures::executor::block_on(AssertUnwindSafe(node.eval(())).catch_unwind())
+        .map_err(|_| RasterEvaluationError)
+}
+
+pub fn evaluate_mask_cpu_list(
+    images: List<Raster<CPU>>,
+    stencils: List<Raster<CPU>>,
+) -> Result<List<Raster<CPU>>, RasterEvaluationError> {
+    let node = graphite_raster_nodes::std_nodes::MaskNodeMapped::new(
+        FutureWrapperNode::new(ClonedNode::new(images)),
+        FutureWrapperNode::new(ClonedNode::new(stencils)),
+    );
+    futures::executor::block_on(AssertUnwindSafe(node.eval(())).catch_unwind())
+        .map_err(|_| RasterEvaluationError)
+}
+
 pub fn evaluate_invert_cpu(
     input: Item<Raster<CPU>>,
 ) -> Result<Item<Raster<CPU>>, RasterEvaluationError> {
@@ -616,6 +640,112 @@ mod tests {
         let image = output.element(0).expect("one reopened raster").data();
         assert_eq!([image.width, image.height], [2, 2]);
         assert_eq!(image.data, original.element().data().data);
+    }
+
+    #[test]
+    fn at_gra_node_142_2_masks_luminance_and_preserves_image_geometry() {
+        use graphite_core_types::list::{ATTR_OPACITY, ATTR_TRANSFORM};
+        use graphite_glam::{DAffine2, DVec2};
+
+        let transform = DAffine2::from_translation(DVec2::new(8., 16.))
+            * DAffine2::from_scale(DVec2::new(2., 4.));
+        let image = image_item(
+            2,
+            2,
+            &[
+                [1., 0., 0., 1.],
+                [0., 1., 0., 0.5],
+                [0., 0., 1., 0.25],
+                [1., 1., 0., 1.],
+            ],
+        )
+        .with_attribute(ATTR_TRANSFORM, transform)
+        .with_attribute(ATTR_OPACITY, 0.75_f64);
+        let stencil = image_item(
+            2,
+            2,
+            &[
+                [0., 0., 0., 1.],
+                [1., 1., 1., 0.25],
+                [1., 1., 1., 0.5],
+                [0., 0., 0., 1.],
+            ],
+        )
+        .with_attribute(ATTR_TRANSFORM, transform);
+        let output = evaluate_mask_cpu(image.clone(), stencil).expect("pinned CPU Mask");
+        assert_eq!(output.attributes(), image.attributes());
+        let raster = output.element().data();
+        assert_eq!([raster.width, raster.height], [2, 2]);
+        for (pixel, channels) in raster.data.iter().zip([
+            [1., 0., 0., 0.],
+            [0., 1., 0., 0.5],
+            [0., 0., 1., 0.25],
+            [1., 1., 0., 0.],
+        ]) {
+            assert_gamma_channels(pixel, channels);
+        }
+        assert_eq!(raster.data.len(), 4);
+
+        for absent_stencil in [
+            Item::default(),
+            image_item(1, 1, &[[0., 0., 0., 1.]]).with_attribute(ATTR_TRANSFORM, DAffine2::ZERO),
+        ] {
+            let unchanged =
+                evaluate_mask_cpu(image.clone(), absent_stencil).expect("source empty stencil");
+            assert_eq!(unchanged, image);
+        }
+    }
+
+    #[test]
+    fn at_gra_node_142_3_reopens_masked_raster_across_a_tile_boundary() {
+        use graphite_raster_types::Bitmap;
+
+        let mut stencil_samples = [[0., 0., 0., 1.]; 514];
+        stencil_samples[255] = [1., 1., 1., 1.];
+        stencil_samples[257 + 256] = [1., 1., 1., 1.];
+        let image = image_item(257, 2, &[[0.25, 0.5, 0.75, 0.75]; 514]);
+        let stencil = image_item(257, 2, &stencil_samples);
+        let output = evaluate_mask_cpu(image.clone(), stencil.clone()).expect("wide source Mask");
+        let restore = |input: &Item<Raster<CPU>>| {
+            let bytes = serde_json::to_vec(input.element()).expect("save the source raster");
+            Item::new_from_element(
+                serde_json::from_slice::<Raster<CPU>>(&bytes).expect("reopen the source raster"),
+            )
+        };
+        let reopened =
+            evaluate_mask_cpu(restore(&image), restore(&stencil)).expect("reopened Mask");
+        assert_eq!(output, reopened);
+        let raster = reopened.element().data();
+        assert_eq!([raster.width, raster.height], [257, 2]);
+        for (x, y, alpha) in [(255, 0, 0.75), (256, 0, 0.), (255, 1, 0.), (256, 1, 0.75)] {
+            let pixel = raster.get_pixel(x, y).expect("present tile boundary pixel");
+            assert_gamma_channels(&pixel, [0.25, 0.5, 0.75, alpha]);
+        }
+    }
+
+    #[test]
+    fn at_gra_node_142_2_mapped_mask_reuses_the_final_stencil() {
+        use graphite_core_types::list::ATTR_OPACITY;
+
+        let first = image_item(1, 1, &[[1., 0., 0., 1.]]).with_attribute(ATTR_OPACITY, 0.75_f64);
+        let second = image_item(1, 1, &[[0., 0., 1., 0.5]]).with_attribute(ATTR_OPACITY, 0.25_f64);
+        let stencil = image_item(1, 1, &[[0., 0., 0., 1.]]);
+        let images: List<_> = [first.clone(), second.clone()].into_iter().collect();
+        let stencils: List<_> = [stencil.clone()].into_iter().collect();
+        let output =
+            evaluate_mask_cpu_list(images.clone(), stencils.clone()).expect("pinned mapped Mask");
+        assert_eq!(output.len(), 2);
+        for (index, image) in [first, second].into_iter().enumerate() {
+            let expected = evaluate_mask_cpu(image, stencil.clone()).expect("source item Mask");
+            assert_eq!(output.clone_item(index), Some(expected));
+        }
+        for (images, stencils) in [(images, List::new()), (List::new(), stencils)] {
+            assert!(
+                evaluate_mask_cpu_list(images, stencils)
+                    .expect("empty ranked input")
+                    .is_empty()
+            );
+        }
     }
 
     #[test]
