@@ -2267,6 +2267,54 @@ async fn cached_maven_repository_readiness_is_reported_in_task_terminal(cx: &mut
     run_cached_maven_goals(MavenGoalRun::CheckOfflineRepository, cx).await;
 }
 
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Docker Maven fixture with the cached sources classifier"]
+async fn docker_maven_reports_cached_sources(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::ResolveSources { cached: true },
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Docker Maven fixture without the sources classifier"]
+async fn docker_maven_reports_missing_sources(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::ResolveSources { cached: false },
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Docker Maven fixture with the cached Javadoc classifier"]
+async fn docker_maven_reports_cached_javadoc(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::ResolveJavadoc,
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Docker Maven fixture with a populated repository"]
+async fn docker_maven_reports_offline_repository_readiness(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::CheckOfflineRepository,
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
 #[cfg(all(test, unix))]
 enum MavenGoalRun {
     EffectivePom,
@@ -2667,7 +2715,15 @@ async fn run_maven_goal_fixture(
                     r#"["-Partifact-javadocs"]"#,
                 );
             }
-            dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+            if host_shell.is_some() {
+                focus_control(
+                    cx,
+                    "Run selected offline build operation through Tasks on the project host",
+                );
+                press_enter(cx);
+            } else {
+                dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
+            }
         }
     }
     let mut arguments = [
@@ -2761,11 +2817,15 @@ async fn run_maven_goal_fixture(
                 .expect("Maven's unresolved artifact report");
             assert!(resolved.contains("org.apache.commons:commons-lang3:jar:javadoc:3.17.0"));
             assert!(transcript.contains("BUILD SUCCESS"));
+            eprintln!("Mounted Maven reported the cached Javadoc classifier in the offline Task");
         }
         MavenGoalRun::CheckOfflineRepository => {
             assert!(transcript.contains("Resolved plugin: maven-dependency-plugin-3.10.0.jar"));
             assert!(transcript.contains("Resolved dependency: commons-lang3-3.17.0.jar"));
             assert!(transcript.contains("BUILD SUCCESS"));
+            eprintln!(
+                "Mounted Maven reported the cached plugin and dependency in the offline Task"
+            );
         }
         MavenGoalRun::EffectivePom | MavenGoalRun::OrderedHelp => {
             let effective = std::fs::read_to_string(output).expect("generated effective POM");

@@ -317,6 +317,19 @@ JDTLS to use `/qualification/state/settings with spaces.xml` and an offline
 Maven 3.9.16 cache on the host, with the same pinned providers and matching
 Remote Server as the other connected tests.
 
+The connected Maven artifact checks use the same host settings and Task
+terminal. **Run selected offline operation** runs the exact provider goal
+for cached sources, Javadoc, or repository readiness. The missing-source
+fixture completed `resolve-sources` and reported the missing artifact in
+the terminal. No source archive appeared in that host's cache.
+
+For these opt-ins, bind the generated source-archive fixture at
+`/workspaces/maven` and set `GROOVY_MAVEN_SOURCE_ROOT` to its mounted
+directory. Use a fresh offline cache for each case and leave out the
+`commons-lang3` sources JAR for `docker_maven_reports_missing_sources`.
+The Javadoc check selects the fixture's `artifact-javadocs` profile through
+**Task options** before running the provider's `resolve` goal.
+
 The same connected Tests panel ran one selected Gradle `8.13` JUnit case on
 an offline Linux ARM64 host. The report named the container and contained a
 fresh result. Rerun Failed retained the case identity and returned a new
