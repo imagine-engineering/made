@@ -86,6 +86,7 @@ const GRAPHITE_NUMERIC_OPERATIONS: [UnaryNumericOperation; 5] = [
 ];
 
 const LAYER_PREVIEW_SIZE: u32 = 128;
+const SAVED_SCENE_PIXEL_BUDGET: u32 = 16 * 1024 * 1024;
 
 async fn preview_layer_image(
     contents: &InspectedGddV1,
@@ -614,9 +615,48 @@ pub(crate) struct GraphiteDocumentItem {
     embed_linked_resources: bool,
     embed_legacy_document: bool,
     saved_view: SavedViewPanel,
+    scene_canvas: Option<SavedSceneCanvas>,
     node_catalog: NodeCatalogPanel,
     node_copy: NodeCopyPanel,
     node_insert: Option<NodeInsertForm>,
+}
+
+struct SavedSceneCanvas {
+    instance: Arc<()>,
+    revision: Arc<()>,
+    target: Option<SavedSceneTarget>,
+    frame: SavedSceneFrame,
+}
+
+enum SavedSceneFrame {
+    Empty,
+    Pending { request: Arc<()>, _task: Task<()> },
+    Ready(Arc<RenderImage>),
+    Failed(SharedString),
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct SavedSceneTarget {
+    resolution: UVec2,
+    scale: f64,
+}
+
+impl SavedSceneTarget {
+    fn measure(size: gpui::Size<gpui::Pixels>, scale: f32) -> Option<Self> {
+        let scale = f64::from(scale);
+        let resolution = (DVec2::new(
+            f64::from(f32::from(size.width)),
+            f64::from(f32::from(size.height)),
+        ) * scale)
+            .round();
+        if scale <= 0. || !resolution.is_finite() || resolution.min_element() < 1. {
+            return None;
+        }
+        Some(Self {
+            resolution: resolution.as_uvec2(),
+            scale,
+        })
+    }
 }
 
 struct NodeInsertForm {
@@ -1286,9 +1326,22 @@ impl GraphiteDocumentItem {
     ) -> Self {
         let subscription = cx.observe_in(&model, window, |item, _, window, cx| {
             item.update_working_inspection(window, cx);
+            if let Some(target) = item.scene_canvas.as_ref().and_then(|canvas| canvas.target) {
+                item.update_scene_canvas(Some(target), false, window, cx);
+            }
             cx.emit(ItemEvent::UpdateTab);
             cx.notify();
         });
+        cx.on_release(|item, cx| {
+            if let Some(SavedSceneCanvas {
+                frame: SavedSceneFrame::Ready(image),
+                ..
+            }) = item.scene_canvas.take()
+            {
+                cx.drop_image(image, None);
+            }
+        })
+        .detach();
         Self {
             model,
             _model_subscription: subscription,
@@ -1300,10 +1353,244 @@ impl GraphiteDocumentItem {
             embed_linked_resources: false,
             embed_legacy_document: false,
             saved_view: SavedViewPanel::Closed,
+            scene_canvas: None,
             node_catalog: NodeCatalogPanel::Closed,
             node_copy: NodeCopyPanel::Closed,
             node_insert: None,
         }
+    }
+
+    fn open_scene_canvas(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let model = self.model.read(cx);
+        if self.scene_canvas.is_some()
+            || model
+                .gdd_contents()
+                .is_none_or(|contents| contents.hot_log_len() != 0)
+        {
+            return;
+        }
+        self.scene_canvas = Some(SavedSceneCanvas {
+            instance: Arc::new(()),
+            revision: model.revision.clone(),
+            target: None,
+            frame: SavedSceneFrame::Empty,
+        });
+        self.focus_handle.focus(window, cx);
+        cx.notify();
+    }
+
+    fn close_scene_canvas(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(SavedSceneCanvas {
+            frame: SavedSceneFrame::Ready(image),
+            ..
+        }) = self.scene_canvas.take()
+        {
+            cx.drop_image(image, Some(window));
+        }
+        self.focus_handle.focus(window, cx);
+        cx.notify();
+    }
+
+    fn update_scene_canvas(
+        &mut self,
+        target: Option<SavedSceneTarget>,
+        retry: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(canvas) = &mut self.scene_canvas else {
+            return;
+        };
+        let model = self.model.read(cx);
+        if !retry && canvas.target == target && Arc::ptr_eq(&canvas.revision, &model.revision) {
+            return;
+        }
+        let revision = model.revision.clone();
+        let contents = model.gdd_contents().cloned();
+        canvas.revision = revision.clone();
+        canvas.target = target;
+        if let SavedSceneFrame::Ready(image) =
+            std::mem::replace(&mut canvas.frame, SavedSceneFrame::Empty)
+        {
+            cx.drop_image(image, Some(window));
+        }
+        let Some((target, contents)) = target.zip(contents) else {
+            cx.notify();
+            return;
+        };
+        if target.resolution.max_element() > 8192
+            || u64::from(target.resolution.x) * u64::from(target.resolution.y)
+                > u64::from(SAVED_SCENE_PIXEL_BUDGET)
+        {
+            canvas.frame = SavedSceneFrame::Failed(
+                "The Canvas exceeds its pixel budget. Resize the pane to try again.".into(),
+            );
+            cx.notify();
+            return;
+        }
+        let renderer = cx.svg_renderer();
+        let render = cx.background_spawn(async move {
+            let output = futures::executor::block_on(contents.render_document_artboard_canvas_svg(
+                target.resolution,
+                target.scale,
+                CpuSvgEvaluationBudget {
+                    max_viewport_pixels: SAVED_SCENE_PIXEL_BUDGET,
+                    max_output_bytes: 64 * 1024,
+                },
+            ))
+            .map_err(|error| match error {
+                GddArchiveError::UnsupportedGraphLayerPreview => {
+                    "Connect a supported Artboard to the document output to view the Canvas."
+                        .to_owned()
+                }
+                error => error.to_string(),
+            })?;
+            let RenderOutputType::Svg { svg, .. } = output.data else {
+                return Err("Graphite did not return an SVG Canvas frame.".to_owned());
+            };
+            crate::render::prepare_svg_bytes_at_target(
+                svg.as_bytes(),
+                target.resolution.x,
+                target.resolution.y,
+                target.scale,
+                &renderer,
+                SAVED_SCENE_PIXEL_BUDGET as usize * 4,
+            )
+            .map_err(|error| error.to_string())
+        });
+        let request = Arc::new(());
+        canvas.frame = SavedSceneFrame::Pending {
+            request: request.clone(),
+            _task: cx.spawn(async move |item, cx| {
+                let result = render.await;
+                if let Err(error) = item.update(cx, |item, cx| {
+                    let Some(canvas) = &mut item.scene_canvas else {
+                        return;
+                    };
+                    if !Arc::ptr_eq(&revision, &item.model.read(cx).revision)
+                        || !matches!(&canvas.frame, SavedSceneFrame::Pending { request: pending, .. } if Arc::ptr_eq(pending, &request))
+                    {
+                        return;
+                    }
+                    canvas.frame = match result {
+                        Ok(image) => SavedSceneFrame::Ready(image),
+                        Err(error) => SavedSceneFrame::Failed(error.into()),
+                    };
+                    cx.notify();
+                }) {
+                    log::debug!("Graphite Canvas closed: {error:#}");
+                }
+            }),
+        };
+        cx.notify();
+    }
+
+    fn render_scene_canvas(
+        &self,
+        canvas: &SavedSceneCanvas,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let item = cx.entity().downgrade();
+        let instance = canvas.instance.clone();
+        let target = canvas.target;
+        let image = match &canvas.frame {
+            SavedSceneFrame::Ready(image)
+                if Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision) =>
+            {
+                Some(image.clone())
+            }
+            _ => None,
+        };
+        let message = match &canvas.frame {
+            SavedSceneFrame::Pending { .. } => Some(("Rendering Canvas…".into(), Color::Muted)),
+            SavedSceneFrame::Failed(error) => Some((error.clone(), Color::Error)),
+            _ => None,
+        };
+        v_flex()
+            .size_full()
+            .child(
+                h_flex()
+                    .h_9()
+                    .px_2()
+                    .gap_2()
+                    .child(
+                        div()
+                            .debug_selector(|| "GRAPHITE-GDD-CANVAS-BACK".into())
+                            .child(
+                                Button::new("graphite-gdd-canvas-back", "Back to Inspector")
+                                    .on_click(cx.listener(|item, _, window, cx| {
+                                        item.close_scene_canvas(window, cx)
+                                    })),
+                            ),
+                    )
+                    .when_some(message, |toolbar, (message, color)| {
+                        toolbar.child(Label::new(message).color(color))
+                    })
+                    .when(
+                        matches!(canvas.frame, SavedSceneFrame::Failed(_)),
+                        |toolbar| {
+                            toolbar.child(
+                                Button::new("graphite-gdd-canvas-retry", "Retry").on_click(
+                                    cx.listener(move |item, _, window, cx| {
+                                        item.update_scene_canvas(target, true, window, cx);
+                                    }),
+                                ),
+                            )
+                        },
+                    ),
+            )
+            .child(
+                div()
+                    .id("graphite-gdd-document-canvas")
+                    .relative()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .bg(cx.theme().colors().editor_background)
+                    .aria_label("Graphite Document Canvas")
+                    .debug_selector(|| "GRAPHITE-GDD-DOCUMENT-CANVAS".into())
+                    .child(
+                        gpui::canvas(
+                            move |bounds, window, cx| {
+                                let measured =
+                                    SavedSceneTarget::measure(bounds.size, window.scale_factor());
+                                if target == measured {
+                                    return image;
+                                }
+                                window.defer(cx, move |window, cx| {
+                                    if let Err(error) = item.update(cx, |item, cx| {
+                                        if item.scene_canvas.as_ref().is_some_and(|canvas| {
+                                            Arc::ptr_eq(&canvas.instance, &instance)
+                                        }) {
+                                            item.update_scene_canvas(measured, false, window, cx);
+                                        }
+                                    }) {
+                                        log::debug!(
+                                            "Graphite Canvas closed before layout: {error:#}"
+                                        );
+                                    }
+                                });
+                                None
+                            },
+                            |bounds, image, window, _| {
+                                if let Some(image) = image
+                                    && let Err(error) = window.paint_image(
+                                        bounds,
+                                        bounds,
+                                        gpui::Corners::default(),
+                                        image,
+                                        0,
+                                        false,
+                                    )
+                                {
+                                    log::warn!("Graphite Canvas frame was not painted: {error:#}");
+                                }
+                            },
+                        )
+                        .absolute()
+                        .size_full(),
+                    ),
+            )
     }
 
     fn update_working_inspection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -3431,7 +3718,7 @@ impl GraphiteDocumentItem {
             .as_ref()
             .is_some_and(|form| editor_focused(&form.position))
             || matches!(&self.node_copy, NodeCopyPanel::Ready(form) if
-                [&form.name, &form.value, &form.position].into_iter().any(editor_focused)
+                [&form.name, &form.value, &form.position, &form.artboard_background].into_iter().any(editor_focused)
                     || form.port_rename.as_ref().is_some_and(|rename| editor_focused(&rename.name)));
         if field_focused || self.model.read(cx).working.is_none() {
             cx.propagate();
@@ -5604,24 +5891,51 @@ impl Render for GraphiteDocumentItem {
             .on_action(cx.listener(|item, _: &editor::actions::Redo, window, cx| {
                 item.route_working_history(GddHistoryDirection::Redo, window, cx);
             }))
-            .size_full()
+            .size_full();
+        if let Some(canvas) = &self.scene_canvas {
+            return view
+                .child(self.render_scene_canvas(canvas, cx))
+                .into_any_element();
+        }
+        let view = view
             .p_6()
             .gap_2()
             .overflow_y_scroll()
             .child(Label::new(model.name.clone()).size(LabelSize::Large))
             .child(
-                div().debug_selector(|| "GRAPHITE-SAVE-COPY".into()).child(
-                    Button::new("graphite-save-copy", "Save a Copy")
-                        .disabled(self.copy_task.is_some())
-                        .on_click(cx.listener(|item, _, window, cx| {
-                            item.save_copy(GraphiteCopy::Original, window, cx)
-                        })),
-                ),
+                h_flex()
+                    .gap_2()
+                    .child(
+                        div().debug_selector(|| "GRAPHITE-SAVE-COPY".into()).child(
+                            Button::new("graphite-save-copy", "Save a Copy")
+                                .disabled(self.copy_task.is_some())
+                                .on_click(cx.listener(|item, _, window, cx| {
+                                    item.save_copy(GraphiteCopy::Original, window, cx)
+                                })),
+                        ),
+                    )
+                    .when(
+                        model
+                            .gdd_contents()
+                            .is_some_and(|contents| contents.hot_log_len() == 0),
+                        |toolbar| {
+                            toolbar.child(
+                                div()
+                                    .debug_selector(|| "GRAPHITE-GDD-OPEN-CANVAS".into())
+                                    .child(
+                                        Button::new("graphite-gdd-open-canvas", "Open Canvas")
+                                            .on_click(cx.listener(|item, _, window, cx| {
+                                                item.open_scene_canvas(window, cx)
+                                            })),
+                                    ),
+                            )
+                        },
+                    ),
             )
             .when_some(self.copy_feedback.clone(), |view, (message, color)| {
                 view.child(Label::new(message).color(color))
             });
-        match &model.document {
+        let view = match &model.document {
             InspectedDocument::Gdd { contents } => {
                 let manifest = contents.manifest();
                 let recovery = contents.recovery();
@@ -5909,7 +6223,8 @@ impl Render for GraphiteDocumentItem {
                         )
                     })
             }
-        }
+        };
+        view.into_any_element()
     }
 }
 
@@ -12436,6 +12751,48 @@ mod tests {
             .downcast::<GraphiteDocumentItem>()
             .expect("native Inspector");
         paint(window);
+        let canvas_frame = |window: &mut gpui::VisualTestContext, color: [u8; 4]| {
+            window.run_until_parked();
+            paint(window);
+            let (target, image) = item.read_with(window, |item, cx| {
+                let canvas = item.scene_canvas.as_ref().expect("open document Canvas");
+                assert!(Arc::ptr_eq(&canvas.revision, &item.model.read(cx).revision));
+                let SavedSceneFrame::Ready(image) = &canvas.frame else {
+                    panic!("the measured Canvas has no frame");
+                };
+                (canvas.target.expect("measured pane"), image.clone())
+            });
+            let bounds = window
+                .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+                .expect("native Canvas bounds");
+            let scale = window.update(|window, _| window.scale_factor());
+            assert!(SavedSceneTarget::measure(bounds.size, scale) == Some(target));
+            let width = target.resolution.x as usize;
+            let height = target.resolution.y as usize;
+            let bytes = image.as_bytes(0).expect("native BGRA frame");
+            let center = (height / 2 * width + width / 2) * 4;
+            assert_eq!(bytes.get(center..center + 4), Some(color.as_slice()));
+            assert_eq!(bytes.get(..4), Some([0; 4].as_slice()));
+            assert_eq!(image.size(0).width.0, target.resolution.x as i32);
+            assert_eq!(image.size(0).height.0, target.resolution.y as i32);
+            assert!(window.update(|window, _| window.has_image_atlas_entry(&image)));
+            (target.resolution, image)
+        };
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (initial_viewport, initial_frame) = canvas_frame(window, [255; 4]);
+        assert!(initial_viewport.min_element() > LAYER_PREVIEW_SIZE);
+        item.read_with(window, |item, cx| {
+            assert!(matches!(item.node_copy, NodeCopyPanel::Closed));
+            assert!(!item.is_dirty(cx));
+        });
+        window.simulate_resize(gpui::size(px(1030.), px(1400.)));
+        paint(window);
+        let (resized_viewport, resized_frame) = canvas_frame(window, [255; 4]);
+        assert!(resized_viewport.x < initial_viewport.x);
+        assert!(!Arc::ptr_eq(&initial_frame, &resized_frame));
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&initial_frame)));
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&resized_frame)));
         click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
         choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
         let read_geometry = |window: &gpui::VisualTestContext| {
@@ -12500,6 +12857,15 @@ mod tests {
         assert_eq!(read_geometry(window), (address, expected));
         click(window, "GRAPHITE-GDD-REDO");
         assert_eq!(read_background(window), red);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let (_, red_frame) = canvas_frame(window, [0, 0, 255, 255]);
+        window.dispatch_action(editor::actions::Undo);
+        let (_, white_frame) = canvas_frame(window, [255; 4]);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&red_frame)));
+        window.dispatch_action(editor::actions::Redo);
+        canvas_frame(window, [0, 0, 255, 255]);
+        assert!(!window.update(|window, _| window.has_image_atlas_entry(&white_frame)));
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
         let exported = PathBuf::from("/project/changed-artboard-bounds.svg");
         click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
         window.simulate_new_path_selection(|_| Some(exported.clone()));
@@ -12694,6 +13060,45 @@ mod tests {
         assert_eq!(painting, [0, 0, 0, 255]);
         assert_eq!(background, [255, 255, 255, 255]);
         click(window, preview);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        window.run_until_parked();
+        paint(window);
+        item.read_with(window, |item, _| {
+            let Some(SavedSceneCanvas {
+                frame: SavedSceneFrame::Ready(image),
+                ..
+            }) = &item.scene_canvas
+            else {
+                panic!("fitted document Canvas");
+            };
+            let size = image.size(0);
+            let width = size.width.0 as usize;
+            let height = size.height.0 as usize;
+            let pixels = image.as_bytes(0).expect("Canvas pixels");
+            let sample = |x, y| {
+                let offset = (y * width + x) * 4;
+                pixels.get(offset..offset + 4).expect("pixel in Canvas")
+            };
+            let left = (0..width)
+                .find(|&column| sample(column, height / 2)[3] != 0)
+                .expect("left Artboard edge");
+            let right = (0..width)
+                .rfind(|&column| sample(column, height / 2)[3] != 0)
+                .expect("right Artboard edge");
+            let top = (0..height)
+                .find(|&row| sample(width / 2, row)[3] != 0)
+                .expect("top Artboard edge");
+            let bottom = (0..height)
+                .rfind(|&row| sample(width / 2, row)[3] != 0)
+                .expect("bottom Artboard edge");
+            let canvas_scale = (right - left + 1) as f64 / 1920.;
+            assert!(((bottom - top + 1) as f64 - canvas_scale * 1080.).abs() <= 2.);
+            let inset = (20. * canvas_scale).round() as usize;
+            assert_eq!(sample(left + inset, top + inset), painting.as_slice());
+            assert_eq!(sample(width / 2, height / 2), background.as_slice());
+            assert_eq!(sample(0, 0), [0; 4]);
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
         let svg_path = PathBuf::from("/project/default-artboard.svg");
         click(window, "GRAPHITE-GDD-EXPORT-ARTBOARD-SVG");
         window.simulate_new_path_selection(|_| Some(svg_path.clone()));

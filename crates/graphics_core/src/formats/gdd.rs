@@ -26,7 +26,6 @@ use graphite_document_graph_storage::{
     NodeMetadataEntry, PeerId, ROOT_NETWORK, Registry, RegistryDelta, from_runtime,
     to_runtime::ConversionError,
 };
-use graphite_editor::messages::clipboard::utility_types::ClipboardItem;
 pub use graphite_editor::messages::portfolio::document::utility_types::network_interface::ImportOrExport;
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
@@ -48,7 +47,11 @@ use graphite_editor::messages::portfolio::document::{
         },
     },
 };
-use graphite_glam::{DAffine2, DVec2, IVec2};
+use graphite_editor::{
+    consts::VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
+    messages::{clipboard::utility_types::ClipboardItem, prelude::NavigationMessageHandler},
+};
+use graphite_glam::{DAffine2, DVec2, IVec2, UVec2};
 use graphite_graph_craft::application_io::resource::{
     HashMapResourceStorage, ResourceHash, ResourceStorage,
 };
@@ -3452,18 +3455,78 @@ impl InspectedGddV1 {
         if graph.network.exports != [NodeInput::node(selected, 0)] {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         }
+        Self::render_saved_layer_svg(&graph.network, selected, configuration, budget).await
+    }
+
+    pub async fn render_document_artboard_canvas_svg(
+        &self,
+        resolution: UVec2,
+        scale: f64,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, GddArchiveError> {
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        let graph = self.runtime_graph().await?;
+        let [
+            NodeInput::Node {
+                node_id,
+                output_index: 0,
+            },
+        ] = graph.network.exports.as_slice()
+        else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        let Some((_, SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { origin, size }))) =
+            graph
+                .network
+                .nodes
+                .get(node_id)
+                .and_then(checked_saved_graphic_node)
+        else {
+            return Err(GddArchiveError::UnsupportedGraphLayerPreview);
+        };
+        let logical_size = resolution.as_dvec2() / scale;
+        if !logical_size.is_finite() || logical_size.min_element() <= 0. {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
+        let center = origin + size / 2.;
+        let mut camera = PTZ::default();
+        if center.abs().max_element() > 0.5 {
+            camera.pan = -center;
+        }
+        camera.set_zoom(
+            (logical_size / size).min_element() * VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
+        );
+        let transform = NavigationMessageHandler::default()
+            .calculate_offset_transform(logical_size / 2., &camera);
+        let configuration = RenderConfig {
+            viewport: Footprint {
+                transform,
+                resolution,
+                ..Footprint::DEFAULT
+            },
+            scale,
+            export_format: SvgExportFormat::Svg,
+            for_export: true,
+            ..Default::default()
+        };
+        Self::render_saved_layer_svg(&graph.network, *node_id, configuration, budget).await
+    }
+
+    async fn render_saved_layer_svg(
+        network: &NodeNetwork,
+        selected: NodeId,
+        configuration: RenderConfig,
+        budget: CpuSvgEvaluationBudget,
+    ) -> Result<RenderOutput, GddArchiveError> {
         validate_svg_configuration(configuration, budget)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
         let mut detached = NodeNetwork {
             exports: vec![NodeInput::node(selected, 0)],
             ..Default::default()
         };
-        collect_layer_preview_node(
-            &graph.network,
-            selected,
-            &mut detached,
-            &mut BTreeSet::new(),
-        )?;
+        collect_layer_preview_node(network, selected, &mut detached, &mut BTreeSet::new())?;
         evaluate_cpu_svg(&detached, configuration, budget, None)
             .await
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
@@ -10017,6 +10080,34 @@ mod tests {
                 output.metadata.local_transforms.get(&board_id),
                 Some(&DAffine2::from_translation(DVec2::new(8., -12.)))
             );
+            let viewport = UVec2::new(160, 80);
+            let canvas = archive
+                .render_document_artboard_canvas_svg(
+                    viewport,
+                    2.,
+                    CpuSvgEvaluationBudget {
+                        max_viewport_pixels: viewport.x * viewport.y,
+                        ..limits
+                    },
+                )
+                .await
+                .expect("render the document Artboard into a scaled pane");
+            let RenderOutputType::Svg { svg, image_data } = canvas.data else {
+                panic!("source Canvas output")
+            };
+            assert!(image_data.is_empty());
+            assert!(svg.contains(r#"viewBox="0 0 80 40" width="80" height="40""#));
+            assert!(svg.contains("<clipPath"));
+            assert_eq!(
+                canvas.metadata.local_transforms.get(&board_id),
+                output.metadata.local_transforms.get(&board_id)
+            );
+            assert!(matches!(
+                archive
+                    .render_document_artboard_canvas_svg(viewport, 2., limits)
+                    .await,
+                Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
+            ));
             assert!(matches!(
                 archive
                     .export_document_artboard_svg(
@@ -10045,6 +10136,19 @@ mod tests {
             let initial = create_gdd_folder(621, 992, "Document output".into(), budget())
                 .await
                 .expect("source folder");
+            assert!(matches!(
+                initial
+                    .render_document_artboard_canvas_svg(
+                        UVec2::new(80, 40),
+                        1.,
+                        CpuSvgEvaluationBudget {
+                            max_viewport_pixels: 80 * 40,
+                            max_output_bytes: 64 * 1024,
+                        },
+                    )
+                    .await,
+                Err(GddArchiveError::UnsupportedGraphLayerPreview)
+            ));
             let staged = initial
                 .insert_root_catalog_node_in_copy(ARTBOARD_NODE_IDENTIFIER, [3, -2], budget())
                 .await
