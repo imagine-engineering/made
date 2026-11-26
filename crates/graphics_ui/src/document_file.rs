@@ -16091,6 +16091,15 @@ mod tests {
     async fn at_r14_1_at_gra_text_003_at_gra_text_006_at_gra_text_007_at_gra_node_195_workspace_edits_saved_artwork_text(
         cx: &mut TestAppContext,
     ) {
+        check_workspace_artwork_text(cx, false).await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_195_workspace_edits_mapped_artwork_text(cx: &mut TestAppContext) {
+        check_workspace_artwork_text(cx, true).await;
+    }
+
+    async fn check_workspace_artwork_text(cx: &mut TestAppContext, mapped: bool) {
         use gpui::EntityInputHandler as _;
         let text_id = format!(
             "PROTONODE:{}",
@@ -16104,6 +16113,10 @@ mod tests {
             "PROTONODE:{}",
             graphite_std::vector_nodes::fill::IDENTIFIER.as_str()
         );
+        let repeat_id = format!(
+            "PROTONODE:{}",
+            graphite_std::repeat_nodes::repeat_array::IDENTIFIER.as_str()
+        );
         let mut document = create_gdd_folder(965, 966, "Artwork Text".into(), ARCHIVE_BUDGET)
             .await
             .expect("blank text document");
@@ -16114,7 +16127,10 @@ mod tests {
             (fill_id.as_str(), [-12, 0]),
             (converter_id.as_str(), [-18, 0]),
             (text_id.as_str(), [-24, 0]),
-        ] {
+        ]
+        .into_iter()
+        .chain(mapped.then_some((repeat_id.as_str(), [-21, 3])))
+        {
             document = document
                 .insert_root_catalog_node_in_copy(identifier, position, ARCHIVE_BUDGET)
                 .await
@@ -16137,9 +16153,30 @@ mod tests {
             };
             inserted.push(node.storage_id());
         }
-        let [board_id, merge_id, fill_id, converter_id, text_id] = inserted.as_slice() else {
+        let [
+            board_id,
+            merge_id,
+            fill_id,
+            converter_id,
+            text_id,
+            remaining @ ..,
+        ] = inserted.as_slice()
+        else {
             panic!("original Artboard, Merge, Fill, converter and Text");
         };
+        let repeat_id = remaining.first().copied();
+        let initial_content = if mapped { "Hi Go" } else { "Lorem ipsum" };
+        if mapped {
+            let graph = document.graph_nodes().await.expect("repeated text graph");
+            let text = graph
+                .iter()
+                .find(|node| node.storage_id() == *text_id)
+                .expect("source Text");
+            document = document
+                .set_graph_artwork_text_in_copy(text, initial_content.into(), ARCHIVE_BUDGET)
+                .await
+                .expect("editable repeat fixture within the Canvas output budget");
+        }
         let graph = document.graph_nodes().await.expect("text graph");
         let board = graph
             .iter()
@@ -16188,12 +16225,15 @@ mod tests {
             "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-2",
             "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-3",
             "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-4",
+            "GRAPHITE-GDD-GRAPHIC-CONTENT-SOURCE-5",
         ];
-        for (target, source) in [
-            (*converter_id, *text_id),
+        let string_source = repeat_id.unwrap_or(*text_id);
+        let connections = repeat_id.into_iter().map(|repeat_id| (repeat_id, *text_id));
+        for (target, source) in connections.chain([
+            (*converter_id, string_source),
             (*fill_id, *converter_id),
             (*merge_id, *fill_id),
-        ] {
+        ]) {
             let source_index = item.update_in(window, |item, window, cx| {
                 let NodeCopyPanel::Ready(form) = &item.node_copy else {
                     panic!("native vector text graph");
@@ -16307,7 +16347,7 @@ mod tests {
         enter_value(window, size_field, "72");
         click(window, apply);
         let resized = initial_text(&snapshot(window).graph_nodes().await.expect("resized Text"));
-        assert_eq!(resized.artwork_text(), Some("Lorem ipsum"));
+        assert_eq!(resized.artwork_text(), Some(initial_content));
         assert_eq!(resized.artwork_font_size(), Some(72.));
         assert!(original_image.as_bytes(0) != artwork_image(window).as_bytes(0));
         window.dispatch_action(editor::actions::Undo);
@@ -16321,9 +16361,10 @@ mod tests {
         enter_value(window, width_field, "-5");
         click(window, apply);
         assert!(Arc::ptr_eq(&snapshot(window), &before));
-        enter_value(window, width_field, "68");
+        let wrap_width = if mapped { 36. } else { 68. };
+        enter_value(window, width_field, &wrap_width.to_string());
         click(window, apply);
-        assert_eq!(layout(window).await.max_width, Some(68.));
+        assert_eq!(layout(window).await.max_width, Some(wrap_width));
         let wrapped = artwork_image(window);
         assert!(wrapped.as_bytes(0) != original_image.as_bytes(0));
         enter_value(window, height_field, "30");
@@ -16384,20 +16425,36 @@ mod tests {
         let before = snapshot(window);
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
         editor.update_in(window, |editor, window, cx| {
-            editor.replace_and_mark_text_in_range(Some(0..11), "preedit", Some(0..7), window, cx);
+            editor.replace_and_mark_text_in_range(
+                Some(0..initial_content.len()),
+                "preedit",
+                Some(0..7),
+                window,
+                cx,
+            );
             assert_eq!(editor.marked_text_range(window, cx), Some(0..7));
         });
         assert!(Arc::ptr_eq(&snapshot(window), &before));
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT-CANCEL");
         assert_eq!(
             editor.read_with(window, |editor, cx| editor.text(cx)),
-            "Lorem ipsum"
+            initial_content
         );
         assert!(Arc::ptr_eq(&snapshot(window), &before));
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
-        let committed = "Cafe\u{301}\nGraphite";
+        let committed = if mapped {
+            "I\u{301}\nA"
+        } else {
+            "Cafe\u{301}\nGraphite"
+        };
         editor.update_in(window, |editor, window, cx| {
-            editor.replace_and_mark_text_in_range(Some(0..11), "Caf", Some(3..3), window, cx);
+            editor.replace_and_mark_text_in_range(
+                Some(0..initial_content.len()),
+                "Caf",
+                Some(3..3),
+                window,
+                cx,
+            );
             editor.replace_text_in_range(None, committed, window, cx);
             assert_eq!(editor.marked_text_range(window, cx), None);
         });
@@ -16429,7 +16486,7 @@ mod tests {
         let graph = snapshot(window).graph_nodes().await.expect("undone Text");
         assert_eq!(
             graph.iter().find_map(GddGraphNode::artwork_text),
-            Some("Lorem ipsum")
+            Some(initial_content)
         );
         assert_eq!(initial_text(&graph).artwork_text_layout(), Some(automatic));
         window.dispatch_action(editor::actions::Redo);
@@ -16456,8 +16513,19 @@ mod tests {
         assert!(matches!(
             reopened_converter.input_ports().first().and_then(|port| port.source.as_ref()),
             Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
-                if *storage_id == *text_id
+                if *storage_id == string_source
         ));
+        if let Some(repeat_id) = repeat_id {
+            let repeat = graph
+                .iter()
+                .find(|node| node.storage_id() == repeat_id)
+                .expect("same saved Repeat Array");
+            assert!(matches!(
+                repeat.input_ports().first().and_then(|port| port.source.as_ref()),
+                Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
+                    if *storage_id == *text_id
+            ));
+        }
         assert_eq!(
             filesystem
                 .load_bytes(&source_path)

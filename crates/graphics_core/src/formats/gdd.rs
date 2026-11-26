@@ -994,6 +994,7 @@ enum SavedGraphicProfile {
     Opacity,
     BlendMode,
     RepeatArray,
+    RepeatArrayText,
     InterpolationBlend,
     InterpolationMorph,
     OriginsToPolyline,
@@ -1430,8 +1431,12 @@ impl GddGraphNode {
             return None;
         }
         let index = match (self.graphic_profile?, source.graphic_profile?) {
-            (SavedGraphicProfile::TextToVector, SavedGraphicProfile::Text) => {
-                text_to_vector::StringInput::INDEX
+            (
+                SavedGraphicProfile::TextToVector,
+                SavedGraphicProfile::Text | SavedGraphicProfile::RepeatArrayText,
+            ) => text_to_vector::StringInput::INDEX,
+            (SavedGraphicProfile::RepeatArray, SavedGraphicProfile::Text) => {
+                repeat_array::ContentInput::INDEX
             }
             (
                 SavedGraphicProfile::Fill,
@@ -2121,7 +2126,19 @@ impl InspectedGddV1 {
                 && let Some(document) = interface.document_node(&node.local_id, path)
                 && let Some((_, profile)) = checked_saved_graphic_node(document)
             {
-                node.graphic_profile = Some(profile);
+                let is_text_array = matches!(profile, SavedGraphicProfile::RepeatArray)
+                    && document
+                        .inputs
+                        .get(repeat_array::ContentInput::INDEX)
+                        .and_then(NodeInput::as_node)
+                        .and_then(|source| interface.document_node(&source, path))
+                        .and_then(checked_saved_graphic_node)
+                        .is_some_and(|(_, source)| matches!(source, SavedGraphicProfile::Text));
+                node.graphic_profile = Some(if is_text_array {
+                    SavedGraphicProfile::RepeatArrayText
+                } else {
+                    profile
+                });
                 node.is_document_output = document_output_node == Some(node.local_id);
                 if matches!(profile, SavedGraphicProfile::Text)
                     && let Some((text, layout)) = saved_artwork_text_literals(document)
@@ -5048,7 +5065,10 @@ impl InspectedGddV1 {
         if interface.input_from_connector(&connector, path) != Some(&wire) {
             return Err(GddArchiveError::UnsupportedGraphContentConnection);
         }
-        let mut detached = NodeNetwork::default();
+        let mut detached = NodeNetwork {
+            exports: vec![NodeInput::node(node.local_id, 0)],
+            ..Default::default()
+        };
         collect_layer_preview_node(
             interface.document_network(),
             node.local_id,
@@ -5091,11 +5111,18 @@ impl InspectedGddV1 {
         };
         if let Some(converter) = converter {
             let (id, proto) = upstream_proto(converter, text_to_vector::StringInput::INDEX)?;
+            chain.insert(id);
+            let (id, proto) = if *proto == repeat_array::IDENTIFIER {
+                upstream_proto(id, repeat_array::ContentInput::INDEX)?
+            } else {
+                (id, proto)
+            };
             if *proto != artwork_text::IDENTIFIER {
                 return Err(GddArchiveError::UnsupportedGraphContentConnection);
             }
             chain.insert(id);
         }
+        validate_saved_repeat_work(&detached)?;
         let updated_layout = graph_port_edit_layout(&interface, [path])?;
         let copy = if layout == updated_layout {
             self.finish_graph_input(node, interface, input_index, None, budget)
@@ -9982,8 +10009,8 @@ fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveErr
     fn cost(
         network: &NodeNetwork,
         node_id: NodeId,
-        calculated: &mut BTreeMap<NodeId, usize>,
-    ) -> Result<usize, GddArchiveError> {
+        calculated: &mut BTreeMap<NodeId, (usize, usize)>,
+    ) -> Result<(usize, usize), GddArchiveError> {
         if let Some(&cost) = calculated.get(&node_id) {
             return Ok(cost);
         }
@@ -9992,9 +10019,22 @@ fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveErr
             .get(&node_id)
             .ok_or(GddArchiveError::UnsupportedGraphLayerPreview)?;
         let mut work = 1_usize;
+        let mut text_bytes = match &node.implementation {
+            DocumentNodeImplementation::ProtoNode(identifier)
+                if *identifier == artwork_text::IDENTIFIER =>
+            {
+                saved_artwork_text_literals(node)
+                    .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?
+                    .0
+                    .len()
+            }
+            _ => 0,
+        };
         for input in &node.inputs {
             if let Some(upstream) = input.as_node() {
-                work = work.saturating_add(cost(network, upstream, calculated)?);
+                let (upstream_work, upstream_text_bytes) = cost(network, upstream, calculated)?;
+                work = work.saturating_add(upstream_work);
+                text_bytes = text_bytes.saturating_add(upstream_text_bytes);
             } else if let Some(TaggedValue::Numbers(values)) = input.as_value() {
                 work = work.max(values.len());
             }
@@ -10005,15 +10045,19 @@ fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveErr
             else {
                 return Err(GddArchiveError::UnsupportedGraphLayerPreview);
             };
-            work = work.saturating_mul(
-                usize::try_from(*count).map_err(|_| GddArchiveError::GraphLayerPreviewBudget)?,
-            );
+            let count =
+                usize::try_from(*count).map_err(|_| GddArchiveError::GraphLayerPreviewBudget)?;
+            work = work.saturating_mul(count);
+            text_bytes = text_bytes.saturating_mul(count);
+            if text_bytes > MAX_PREVIEW_VALUES {
+                return Err(GddArchiveError::GraphLayerPreviewBudget);
+            }
         }
         if work > MAX_PREVIEW_VALUES {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
-        calculated.insert(node_id, work);
-        Ok(work)
+        calculated.insert(node_id, (work, text_bytes));
+        Ok((work, text_bytes))
     }
     let mut calculated = BTreeMap::new();
     for node in network.exports.iter().filter_map(NodeInput::as_node) {
@@ -10392,8 +10436,7 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             let [content, direction, angle, count] = node.inputs.as_slice() else {
                 return None;
             };
-            if !output_wire(content)
-                || !matches!(direction.as_value(), Some(TaggedValue::DVec2(value)) if value.is_finite())
+            if !matches!(direction.as_value(), Some(TaggedValue::DVec2(value)) if value.is_finite())
                 || !matches!(angle.as_value(), Some(TaggedValue::Number(value)) if value.to_radians().is_finite())
                 || !matches!(count.as_value(), Some(TaggedValue::Integer(value))
                     if (1..=MAX_PREVIEW_VALUES as i64).contains(value))
@@ -10402,7 +10445,13 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             }
             (
                 resolve_proto_node_type(repeat_array::IDENTIFIER)?,
-                node.inputs.iter().enumerate().collect(),
+                node.inputs
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, _)| {
+                        *index != repeat_array::ContentInput::INDEX || output_wire(content)
+                    })
+                    .collect(),
                 SavedGraphicProfile::RepeatArray,
             )
         }
@@ -16486,10 +16535,24 @@ mod tests {
 
     #[test]
     fn at_gra_node_195_2_3_saved_text_to_vector_matches_the_source_outline() {
-        use graphite_core_types::{ATTR_FONT_SIZE, ATTR_TRANSFORM, Context, item, list::Item};
+        check_saved_text_to_vector(false);
+    }
+
+    #[test]
+    fn at_gra_node_195_2_3_saved_mapped_text_to_vector_keeps_source_order() {
+        check_saved_text_to_vector(true);
+    }
+
+    fn check_saved_text_to_vector(mapped: bool) {
+        use graphite_core_types::{
+            ATTR_FONT_SIZE, ATTR_TRANSFORM, Context, Node, item, list,
+            list::{Item, List},
+            registry::FutureWrapperNode,
+            value::ClonedNode,
+        };
         use graphite_graph_craft::{graphene_compiler::Compiler, proto::TypingContext};
         use graphite_interpreted_executor::dynamic_executor::BorrowTree;
-        use graphite_std::text::shape_text_item;
+        use graphite_std::text::{TextToVectorNode, TextToVectorNodeMapped};
 
         futures::executor::block_on(async {
             let mut graph = create_gdd_folder(622, 993, "Vector text".into(), budget())
@@ -16547,6 +16610,28 @@ mod tests {
                     .expect("saved identity")
                     .clone()
             };
+            let repeat_id = if mapped {
+                graph = graph
+                    .insert_root_catalog_node_in_copy(
+                        &format!("PROTONODE:{}", repeat_array::IDENTIFIER.as_str()),
+                        [-9, 0],
+                        budget(),
+                    )
+                    .await
+                    .expect("original Repeat Array");
+                let nodes = graph.graph_nodes().await.expect("saved String list node");
+                Some(
+                    nodes
+                        .iter()
+                        .find(|node| {
+                            matches!(node.graphic_profile, Some(SavedGraphicProfile::RepeatArray))
+                        })
+                        .expect("admitted disconnected Repeat Array")
+                        .storage_id,
+                )
+            } else {
+                None
+            };
             let nodes = graph
                 .graph_nodes()
                 .await
@@ -16555,9 +16640,40 @@ mod tests {
                 .set_document_artboard_in_copy(&find(&nodes, *board_id), budget())
                 .await
                 .expect("active Artboard");
+            if let Some(repeat_id) = repeat_id {
+                let nodes = graph.graph_nodes().await.expect("unwired String list");
+                let oversized = graph
+                    .set_graph_artwork_text_in_copy(
+                        &find(&nodes, *text_id),
+                        "a".repeat(220),
+                        budget(),
+                    )
+                    .await
+                    .expect("one text source fits its layout budget");
+                let oversized_nodes = oversized.graph_nodes().await.expect("expanded text");
+                assert!(matches!(
+                    oversized
+                        .connect_graphic_content_in_copy(
+                            &find(&oversized_nodes, repeat_id),
+                            &find(&oversized_nodes, *text_id),
+                            budget(),
+                        )
+                        .await,
+                    Err(GddArchiveError::GraphLayerPreviewBudget)
+                ));
+                graph = graph
+                    .connect_graphic_content_in_copy(
+                        &find(&nodes, repeat_id),
+                        &find(&nodes, *text_id),
+                        budget(),
+                    )
+                    .await
+                    .expect("produce List<String> from the pinned Repeat Array");
+            }
+            let string_source = repeat_id.unwrap_or(*text_id);
             let nodes = graph.graph_nodes().await.expect("scoped saved addresses");
             let converter = find(&nodes, *converter_id);
-            let text = find(&nodes, *text_id);
+            let string_node = find(&nodes, string_source);
             assert!(matches!(
                 graph
                     .connect_graphic_content_in_copy(
@@ -16569,9 +16685,9 @@ mod tests {
                 Err(GddArchiveError::UnsupportedGraphContentConnection)
             ));
             let linked = graph
-                .connect_graphic_content_in_copy(&converter, &text, budget())
+                .connect_graphic_content_in_copy(&converter, &string_node, budget())
                 .await
-                .expect("wire styled Item<String> to the original String input");
+                .expect("wire styled text to the original String input");
             assert_eq!(linked.history_len(), graph.history_len() + 1);
             let undone = linked
                 .move_history_in_copy(GddHistoryDirection::Undo, budget())
@@ -16585,7 +16701,7 @@ mod tests {
             );
             assert!(matches!(
                 linked
-                    .connect_graphic_content_in_copy(&converter, &text, budget())
+                    .connect_graphic_content_in_copy(&converter, &string_node, budget())
                     .await,
                 Err(GddArchiveError::StaleGraphNode)
             ));
@@ -16630,7 +16746,7 @@ mod tests {
                 assert!(matches!(
                     converter.input_ports.first().and_then(|port| port.source.as_ref()),
                     Some(GddGraphPortSource::Node { storage_id, output_index: 0 })
-                        if storage_id == text_id
+                        if *storage_id == string_source
                 ));
                 let source = reopened.runtime_graph().await.expect("rebuild saved graph");
                 let mut branch = NodeNetwork {
@@ -16657,38 +16773,73 @@ mod tests {
                 types
                     .update(&proto)
                     .expect("resolve the exact source signature");
+                let expected_type = if mapped { list!(Vector) } else { item!(Vector) };
                 assert_eq!(
                     types
                         .type_of(output)
                         .expect("pinned vector output")
                         .return_value
                         .nested_type(),
-                    &item!(Vector)
+                    &expected_type
                 );
                 let tree = BorrowTree::new(proto, &types)
                     .await
                     .expect("original source constructors");
-                let actual: Item<Vector> = tree
-                    .eval(output, Context::default())
-                    .await
-                    .expect("typed vector");
+                let actual = if mapped {
+                    let items: List<Vector> = tree
+                        .eval(output, Context::default())
+                        .await
+                        .expect("typed list of vectors");
+                    items.into_iter().collect::<Vec<_>>()
+                } else {
+                    vec![
+                        tree.eval(output, Context::default())
+                            .await
+                            .expect("typed vector"),
+                    ]
+                };
+                assert_eq!(actual.len(), if mapped { 5 } else { 1 });
                 let styled =
                     Item::new_from_element(sample.to_owned()).with_attribute(ATTR_FONT_SIZE, 32.);
-                let expected = shape_text_item(&styled, false)
-                    .into_iter()
-                    .next()
-                    .unwrap_or_default();
-                assert_eq!(
-                    actual.element().stroke_bezpath_iter().collect::<Vec<_>>(),
-                    expected.element().stroke_bezpath_iter().collect::<Vec<_>>(),
-                    "original outline for {sample:?}"
-                );
-                assert_eq!(
-                    actual.attribute::<DAffine2>(ATTR_TRANSFORM),
-                    expected.attribute::<DAffine2>(ATTR_TRANSFORM)
-                );
-                if !sample.is_empty() {
-                    assert!(actual.element().stroke_bezpath_iter().next().is_some());
+                let expected = if mapped {
+                    let inputs: List<String> = (0..5)
+                        .map(|index| {
+                            styled.clone().with_attribute(
+                                ATTR_TRANSFORM,
+                                DAffine2::from_translation(DVec2::splat(f64::from(index) * 25.)),
+                            )
+                        })
+                        .collect();
+                    TextToVectorNodeMapped::new(FutureWrapperNode::new(ClonedNode::new(inputs)))
+                        .eval(Context::default())
+                        .await
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![
+                        TextToVectorNode::new(FutureWrapperNode::new(ClonedNode::new(styled)))
+                            .eval(Context::default())
+                            .await,
+                    ]
+                };
+                assert_eq!(actual.len(), expected.len());
+                for (index, (actual, expected)) in actual.into_iter().zip(expected).enumerate() {
+                    assert_eq!(
+                        actual.element().stroke_bezpath_iter().collect::<Vec<_>>(),
+                        expected.element().stroke_bezpath_iter().collect::<Vec<_>>(),
+                        "original outline for {sample:?} at index {index}"
+                    );
+                    assert_eq!(
+                        actual.attribute::<DAffine2>(ATTR_TRANSFORM),
+                        expected.attribute::<DAffine2>(ATTR_TRANSFORM)
+                    );
+                    assert_eq!(
+                        actual.attribute::<f64>(ATTR_FONT_SIZE),
+                        expected.attribute::<f64>(ATTR_FONT_SIZE)
+                    );
+                    if !sample.is_empty() {
+                        assert!(actual.element().stroke_bezpath_iter().next().is_some());
+                    }
                 }
             }
         });
