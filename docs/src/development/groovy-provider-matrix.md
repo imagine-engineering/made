@@ -294,6 +294,12 @@ terminal independently confirms the Surefire process stopped. The test
 rejected the old discovery, kept the existing XML unchanged, and ran the
 same test from fresh discovery to produce a new passing run and report.
 
+The opt-in `disconnecting_stops_a_selected_gradle_junit_over_docker` case
+interrupts a running Gradle test after Gradle has removed its previous XML.
+The reconnected host confirms cancellation of the original run. **Refresh
+Tests** verifies the interrupted case against saved source and gives it a
+new discovery generation. Running that case writes a fresh passing report.
+
 The opt-in `docker_maven_help_goals_run_in_queue_order_with_task_options`
 case opens the connected Maven view on an offline Linux ARM64 host. A direct
 connection with current Task authority can start or join a read-only refresh

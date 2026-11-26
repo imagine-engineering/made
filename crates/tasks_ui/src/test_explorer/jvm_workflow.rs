@@ -5074,7 +5074,8 @@ async fn selected_java_case_with_debug_hooks(
                 .cloned()
                 .expect("stopped Java run")
         });
-        let task_exited_before_cancellation = outcome == JavaTestOutcome::DisconnectJavaProcess
+        let task_exited_before_cancellation = !use_docker
+            && outcome == JavaTestOutcome::DisconnectJavaProcess
             && stopped_run.phase == project::structured_execution::StructuredRunPhase::Completed;
         if task_exited_before_cancellation {
             assert_eq!(stopped_run.summary.passed, 0);
@@ -5259,7 +5260,78 @@ async fn selected_java_case_with_debug_hooks(
                         && run.events.is_empty()
                 })
         }));
-        if outcome == JavaTestOutcome::DisconnectJavaProcess {
+        let recover_reportless_gradle = use_docker && use_gradle && report_removed_while_running;
+        if outcome == JavaTestOutcome::DisconnectJavaProcess || recover_reportless_gradle {
+            if use_docker {
+                let host_run = structured
+                    .update(cx, |store, cx| {
+                        store.refresh_provider(
+                            StructuredProviderId(JVM_JUNIT_PROVIDER_ID.into()),
+                            cx,
+                        )
+                    })
+                    .await
+                    .expect("query the reconnected host's test result")
+                    .current_run
+                    .expect("the host retains the interrupted run");
+                assert_eq!(host_run.id, stopped_run.id);
+                assert_eq!(
+                    host_run.phase,
+                    project::structured_execution::StructuredRunPhase::Cancelled
+                );
+                assert_eq!(host_run.summary.cancelled, 1);
+                assert_eq!(host_run.summary.passed, 0);
+                eprintln!("The project host confirmed cancelled run {:?}", host_run.id);
+            }
+            if recover_reportless_gradle {
+                assert!(!report.exists(), "Gradle recovery must start without XML");
+                let source = util::rel_path::RelPath::from_unix_str(
+                    "application/src/test/java/evidence/GreetingTest.java",
+                )
+                .expect("relative Gradle test source");
+                let buffer = project
+                    .update(cx, |project, cx| {
+                        project.open_buffer((worktree_id, source), cx)
+                    })
+                    .await
+                    .expect("open the host test source");
+                buffer.update(cx, |buffer, cx| {
+                    let start = buffer
+                        .text()
+                        .find("messageIsAvailable()")
+                        .expect("interrupted test method");
+                    buffer.edit(
+                        [(start..start + "messageIsAvailable".len(), "renamedTest")],
+                        None,
+                        cx,
+                    );
+                });
+                project
+                    .update(cx, |project, cx| project.save_buffer(buffer.clone(), cx))
+                    .await
+                    .expect("save the renamed Gradle method");
+                let renamed = provider
+                    .update(cx, |provider, cx| provider.refresh(cx))
+                    .await
+                    .expect("refresh after renaming the reportless test");
+                assert!(
+                    !renamed
+                        .nodes
+                        .iter()
+                        .any(|node| node.id == selection.node_id),
+                    "the old method cannot be rediscovered from the interrupted run alone"
+                );
+                buffer.update(cx, |buffer, cx| {
+                    buffer.undo(cx).expect("restore the interrupted method");
+                });
+                project
+                    .update(cx, |project, cx| project.save_buffer(buffer, cx))
+                    .await
+                    .expect("save the restored Gradle method");
+                eprintln!(
+                    "Gradle recovery refused the renamed source before the method was restored"
+                );
+            }
             tests_panel.update(cx, |panel, cx| panel.discover(cx));
             let deadline = std::time::Instant::now() + Duration::from_secs(30);
             while std::time::Instant::now() < deadline {

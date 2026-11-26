@@ -94,6 +94,9 @@ pub struct JunitReportVersion {
     digest: [u8; 32],
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct JunitReportBaseline(Option<JunitReportVersion>);
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct JvmTestSelector {
     pub scope_path: ProjectPath,
@@ -175,7 +178,7 @@ impl JvmRemoteTestActionPlan {
 
 struct AuthorizedRemoteJvmRun {
     plan: JvmSelectedTestPlan,
-    previous_report: Option<JunitReportVersion>,
+    previous_report: Option<JunitReportBaseline>,
     task_id: Option<TaskId>,
     pending_cancel_confirmation: bool,
     report_maximum_bytes: Option<usize>,
@@ -204,6 +207,7 @@ pub struct JvmTestProviderStore {
     closed: bool,
     disconnected: bool,
     selectors: HashMap<StructuredNodeId, JvmTestSelector>,
+    interrupted_gradle_case: Option<JvmVerifiedCase>,
     run_handles: HashMap<StructuredRunId, StructuredTaskHandle>,
     current_remote_discovery: Option<DiscoveryGeneration>,
     active_remote_request_id: Option<u64>,
@@ -417,12 +421,9 @@ impl JvmTestProviderStore {
             Ok::<_, anyhow::Error>(plan)
         })?;
         let previous_report = this
-            .update(&mut cx, |store, cx| {
-                store.capture_report_version_with_limit(
-                    &plan,
-                    report_maximum_bytes.unwrap_or(MAX_JUNIT_DISCOVERY_BYTES),
-                    cx,
-                )
+            .update(&mut cx, |store, cx| match report_maximum_bytes {
+                Some(maximum) => store.capture_report_version_with_limit(&plan, maximum, cx),
+                None => store.capture_report_version(&plan, cx),
             })
             .await;
         let previous_report = match previous_report {
@@ -1223,8 +1224,8 @@ impl JvmTestProviderStore {
         &self,
         plan: &JvmSelectedTestPlan,
         cx: &mut Context<Self>,
-    ) -> Task<Result<JunitReportVersion>> {
-        self.capture_report_version_with_limit(plan, MAX_JUNIT_DISCOVERY_BYTES, cx)
+    ) -> Task<Result<JunitReportBaseline>> {
+        self.capture_report_baseline(plan, MAX_JUNIT_DISCOVERY_BYTES, true, cx)
     }
 
     pub fn capture_report_version_with_limit(
@@ -1232,7 +1233,17 @@ impl JvmTestProviderStore {
         plan: &JvmSelectedTestPlan,
         maximum_bytes: usize,
         cx: &mut Context<Self>,
-    ) -> Task<Result<JunitReportVersion>> {
+    ) -> Task<Result<JunitReportBaseline>> {
+        self.capture_report_baseline(plan, maximum_bytes, false, cx)
+    }
+
+    fn capture_report_baseline(
+        &self,
+        plan: &JvmSelectedTestPlan,
+        maximum_bytes: usize,
+        allow_recovery: bool,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<JunitReportBaseline>> {
         let prepared = (|| {
             ensure!(
                 (1..=MAX_JUNIT_DISCOVERY_BYTES).contains(&maximum_bytes),
@@ -1260,6 +1271,11 @@ impl JvmTestProviderStore {
             Ok(value) => value,
             Err(error) => return Task::ready(Err(error)),
         };
+        let allow_missing = allow_recovery
+            && self
+                .interrupted_gradle_case
+                .as_ref()
+                .is_some_and(|case| case.matches_selector(&plan.selector));
         let plan = plan.clone();
         cx.background_spawn(async move {
             let reports = collect_junit_reports_with_budget(
@@ -1272,15 +1288,18 @@ impl JvmTestProviderStore {
             )
             .await?
             .0;
-            let (_, version) = matching_junit_case(&reports, &plan.selector)?;
-            Ok(version.clone())
+            match find_junit_case(&reports, &plan.selector)? {
+                Some((_, version)) => Ok(JunitReportBaseline(Some(version.clone()))),
+                None if allow_missing => Ok(JunitReportBaseline(None)),
+                None => bail!("The selected Java test has no matching JUnit report"),
+            }
         })
     }
 
     pub fn register_run_handle(
         &mut self,
         plan: JvmSelectedTestPlan,
-        previous_report: JunitReportVersion,
+        previous_report: JunitReportBaseline,
         handle: StructuredTaskHandle,
         cx: &mut Context<Self>,
     ) -> Result<StructuredRunId> {
@@ -1296,7 +1315,7 @@ impl JvmTestProviderStore {
     pub fn register_run_handle_with_limit(
         &mut self,
         plan: JvmSelectedTestPlan,
-        previous_report: JunitReportVersion,
+        previous_report: JunitReportBaseline,
         handle: StructuredTaskHandle,
         maximum_bytes: usize,
         cx: &mut Context<Self>,
@@ -1404,7 +1423,7 @@ impl JvmTestProviderStore {
         &mut self,
         run_id: &StructuredRunId,
         plan: &JvmSelectedTestPlan,
-        previous_report: &JunitReportVersion,
+        previous_report: &JunitReportBaseline,
         event: &StructuredTaskLifecycleEvent,
         maximum_bytes: usize,
         cx: &mut Context<Self>,
@@ -1423,7 +1442,7 @@ impl JvmTestProviderStore {
         &mut self,
         run_id: &StructuredRunId,
         plan: &JvmSelectedTestPlan,
-        previous_report: &JunitReportVersion,
+        previous_report: &JunitReportBaseline,
         event: &StructuredTaskLifecycleEvent,
         maximum_bytes: usize,
         cx: &mut Context<Self>,
@@ -1444,6 +1463,15 @@ impl JvmTestProviderStore {
                 anyhow::Ok(())
             }),
             StructuredTaskState::Cancelled { .. } | StructuredTaskState::SpawnError { .. } => {
+                if matches!(
+                    event.state,
+                    StructuredTaskState::Cancelled {
+                        termination_confirmed: true,
+                        ..
+                    }
+                ) {
+                    self.remember_interrupted_gradle_case(Some(run_id), cx);
+                }
                 self.structured_store.update(cx, |store, cx| {
                     store.apply_task_lifecycle(&provider_id, run_id, event, cx)?;
                     anyhow::Ok(())
@@ -1481,9 +1509,11 @@ impl JvmTestProviderStore {
                         )
                         .await?
                         .0;
-                        Ok::<_, anyhow::Error>(
-                            fresh_junit_case(&reports, &plan.selector, &previous_report)?.clone(),
-                        )
+                        let case = match &previous_report.0 {
+                            Some(version) => fresh_junit_case(&reports, &plan.selector, version)?,
+                            None => matching_junit_case(&reports, &plan.selector)?.0,
+                        };
+                        Ok::<_, anyhow::Error>(case.clone())
                     }
                     .await;
                     this.update(cx, |provider, cx| {
@@ -1519,6 +1549,14 @@ impl JvmTestProviderStore {
         {
             log::debug!("Ignored an obsolete Java test result");
             return Ok(());
+        }
+        if result.is_ok()
+            && self
+                .interrupted_gradle_case
+                .as_ref()
+                .is_some_and(|case| case.matches_selector(&plan.selector))
+        {
+            self.interrupted_gradle_case = None;
         }
         self.structured_store.update(cx, |store, cx| {
             let project_generation = store.state().project_generation();
@@ -1605,6 +1643,7 @@ impl JvmTestProviderStore {
             closed: false,
             disconnected: false,
             selectors: HashMap::new(),
+            interrupted_gradle_case: None,
             run_handles: HashMap::new(),
             current_remote_discovery: None,
             active_remote_request_id: None,
@@ -1707,6 +1746,7 @@ impl JvmTestProviderStore {
             closed: false,
             disconnected: false,
             selectors: HashMap::new(),
+            interrupted_gradle_case: None,
             run_handles: HashMap::new(),
             current_remote_discovery: None,
             active_remote_request_id: None,
@@ -1728,6 +1768,7 @@ impl JvmTestProviderStore {
 
     pub fn close(&mut self, cx: &mut Context<Self>) {
         self.closed = true;
+        self.interrupted_gradle_case = None;
         self.invalidate(cx);
         for (_, abort) in self.active_remote_requests.drain() {
             abort.abort();
@@ -1760,6 +1801,7 @@ impl JvmTestProviderStore {
     }
 
     pub fn native_transport_disconnected(&mut self, cx: &mut Context<Self>) {
+        self.remember_interrupted_gradle_case(None, cx);
         for (_, abort) in self.active_remote_requests.drain() {
             abort.abort();
         }
@@ -1769,6 +1811,53 @@ impl JvmTestProviderStore {
             "Connection to the Java test Task client was interrupted; refresh Tests before running again",
             cx,
         );
+    }
+
+    fn remember_interrupted_gradle_case(
+        &mut self,
+        confirmed_run: Option<&StructuredRunId>,
+        cx: &gpui::App,
+    ) {
+        let provider_id = StructuredProviderId(JVM_JUNIT_PROVIDER_ID.to_string());
+        let interrupted = self
+            .structured_store
+            .read(cx)
+            .state()
+            .provider(&provider_id)
+            .and_then(|snapshot| {
+                let run = snapshot.current_run.as_ref()?;
+                match confirmed_run {
+                    Some(id)
+                        if *id == run.id
+                            && matches!(
+                                run.phase,
+                                StructuredRunPhase::Running | StructuredRunPhase::Cancelled
+                            ) => {}
+                    None if run.phase == StructuredRunPhase::Running => {}
+                    _ => return None,
+                }
+                let [node_id] = run.scope_node_ids.as_slice() else {
+                    return None;
+                };
+                let selector = self.selectors.get(node_id)?;
+                if !matches!(
+                    selector.scope_path.path.file_name(),
+                    Some("build.gradle" | "build.gradle.kts")
+                ) {
+                    return None;
+                }
+                let node = snapshot.nodes.iter().find(|node| node.id == *node_id)?;
+                Some(JvmVerifiedCase {
+                    scope_path: selector.scope_path.clone(),
+                    module_path: selector.module_path.clone(),
+                    class_name: selector.class_name.clone(),
+                    display_name: node.label.clone(),
+                    method_name: selector.method_name.clone(),
+                })
+            });
+        if interrupted.is_some() {
+            self.interrupted_gradle_case = interrupted;
+        }
     }
 
     fn invalidate_with_reason(
@@ -1969,10 +2058,18 @@ impl JvmTestProviderStore {
         let fs = self.worktree_store.read(cx).fs();
         let structured_store = self.structured_store.clone();
         let buffer_store = self.buffer_store.upgrade();
+        let recovery_case = self.interrupted_gradle_case.clone();
         cx.spawn(async move |this, cx| {
             let fs = fs.context("The Java test project host has no local filesystem")?;
             let buffer_store = buffer_store.context("The Java test project buffer store has closed")?;
             let (scopes, visible_sources) = scopes?;
+            let recovery_case = recovery_case.filter(|case| {
+                scopes.iter().any(|scope| {
+                    scope.manifest == case.scope_path
+                        && scope.module_path == case.module_path
+                        && scope.build_tool == JvmTestBuildTool::Gradle
+                })
+            });
             let mut reports = Vec::new();
             let mut remaining_bytes = MAX_JUNIT_DISCOVERY_BYTES;
             let mut total_cases = 0usize;
@@ -2010,9 +2107,29 @@ impl JvmTestProviderStore {
                     }
                 }
             }
-            let (verified_cases, skipped_sources) =
-                verify_report_sources(&reports, &visible_sources, &buffer_store, cx).await;
-            let discovery = JvmTestDiscovery::from_reports(&reports, generation, &verified_cases)?;
+            let recovery_case = recovery_case.filter(|interrupted| {
+                total_cases < MAX_JUNIT_CASES
+                    && !reports.iter().any(|report| {
+                        report.scope_path == interrupted.scope_path
+                            && report.module_path == interrupted.module_path
+                            && report.cases.iter().any(|case| {
+                                case.class_name == interrupted.class_name
+                                    && simple_method_name(&case.display_name) == Some(interrupted.method_name.as_str())
+                            })
+                    })
+            });
+            let (verified_cases, skipped_sources) = verify_report_sources(
+                &reports,
+                recovery_case.as_ref(),
+                &visible_sources,
+                &buffer_store,
+                cx,
+            )
+            .await;
+            let recovered = recovery_case.as_ref().filter(|case| verified_cases.contains(*case));
+            let discovery = JvmTestDiscovery::from_reports_and_recovered_case(
+                &reports, generation, &verified_cases, recovered,
+            )?;
             let mut snapshot = discovery.snapshot;
             let display_only_cases = snapshot
                 .nodes
@@ -2026,6 +2143,12 @@ impl JvmTestProviderStore {
                 snapshot.status = StructuredProviderStatus::Stale;
                 snapshot.diagnostic = Some(
                     "Test names come from JUnit reports; only tests run in this session have verified results"
+                        .to_string(),
+                );
+            }
+            if recovered.is_some() && reports.is_empty() {
+                snapshot.diagnostic = Some(
+                    "The interrupted Gradle test was verified from saved source. Run it to produce a fresh JUnit report."
                         .to_string(),
                 );
             }
@@ -2171,7 +2294,7 @@ fn filter_visible_report_cases(
         let scope_path = &report.scope_path;
         let module_path = &report.module_path;
         report.cases.retain(|case| {
-            source_path_for_case(scope_path, module_path, case)
+            source_path_for_case(scope_path, module_path, &case.class_name)
                 .is_some_and(|path| visible_sources.contains_key(&path))
         });
     }
@@ -2181,9 +2304,9 @@ fn filter_visible_report_cases(
 fn source_path_for_case(
     scope_path: &ProjectPath,
     module_path: &str,
-    case: &JunitCase,
+    class_name: &str,
 ) -> Option<ProjectPath> {
-    let class_name = case.class_name.split('$').next()?;
+    let class_name = class_name.split('$').next()?;
     let module = if module_path == "." {
         "".to_string()
     } else {
@@ -2202,21 +2325,25 @@ fn source_path_for_case(
 
 async fn verify_report_sources(
     reports: &[JunitReport],
+    recovery_case: Option<&JvmVerifiedCase>,
     visible_sources: &HashMap<ProjectPath, u64>,
     buffer_store: &Entity<BufferStore>,
     cx: &mut gpui::AsyncApp,
 ) -> (HashSet<JvmVerifiedCase>, usize) {
-    let mut cases_by_source: HashMap<ProjectPath, Vec<(usize, usize)>> = HashMap::new();
-    for (report_index, report) in reports.iter().enumerate() {
-        for (case_index, case) in report.cases.iter().enumerate() {
-            if let Some(source_path) =
-                source_path_for_case(&report.scope_path, &report.module_path, case)
-            {
-                cases_by_source
-                    .entry(source_path)
-                    .or_default()
-                    .push((report_index, case_index));
-            }
+    let candidates = report_cases(reports)
+        .map(|(identity, _)| identity)
+        .chain(recovery_case.map(JvmTestCaseIdentity::from));
+    let mut cases_by_source: HashMap<ProjectPath, Vec<JvmTestCaseIdentity<'_>>> = HashMap::new();
+    for candidate in candidates {
+        if let Some(source_path) = source_path_for_case(
+            candidate.scope_path,
+            candidate.module_path,
+            candidate.class_name,
+        ) {
+            cases_by_source
+                .entry(source_path)
+                .or_default()
+                .push(candidate);
         }
     }
     let mut sources: Vec<_> = cases_by_source.into_iter().collect();
@@ -2235,7 +2362,7 @@ async fn verify_report_sources(
         .timer(Duration::from_secs(5))
         .boxed()
         .shared();
-    for (source_path, case_indices) in sources {
+    for (source_path, cases) in sources {
         if opened_sources >= MAX_JUNIT_SOURCE_FILES {
             skipped_sources += 1;
             continue;
@@ -2320,11 +2447,8 @@ async fn verify_report_sources(
         }
         let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
         for runnable in snapshot.runnable_ranges(0..snapshot.len()) {
-            for (report_index, case_index) in &case_indices {
-                let report = &reports[*report_index];
-                let case = &report.cases[*case_index];
-                if let Some(verified) = verify_junit_runnable(report, case, &source_path, &runnable)
-                {
+            for case in &cases {
+                if let Some(verified) = verify_java_test_source(*case, &source_path, &runnable) {
                     verified_cases.insert(verified);
                 }
             }
@@ -2391,6 +2515,14 @@ pub fn matching_junit_case<'a>(
     reports: &'a [JunitReport],
     selector: &JvmTestSelector,
 ) -> Result<(&'a JunitCase, &'a JunitReportVersion)> {
+    find_junit_case(reports, selector)?
+        .context("The selected Java test has no matching JUnit report")
+}
+
+fn find_junit_case<'a>(
+    reports: &'a [JunitReport],
+    selector: &JvmTestSelector,
+) -> Result<Option<(&'a JunitCase, &'a JunitReportVersion)>> {
     let mut matches = reports
         .iter()
         .filter(|report| {
@@ -2407,15 +2539,15 @@ pub fn matching_junit_case<'a>(
                 })
                 .map(move |case| (case, report.version.as_ref()))
         });
-    let (case, version) = matches
-        .next()
-        .context("The selected Java test has no matching JUnit report")?;
+    let Some((case, version)) = matches.next() else {
+        return Ok(None);
+    };
     ensure!(
         matches.next().is_none(),
         "The selected Java test has ambiguous JUnit reports"
     );
     let version = version.context("The selected JUnit report has no host file version")?;
-    Ok((case, version))
+    Ok(Some((case, version)))
 }
 
 pub fn fresh_junit_case<'a>(
@@ -2791,13 +2923,76 @@ pub struct JvmVerifiedCase {
     pub method_name: String,
 }
 
+impl JvmVerifiedCase {
+    fn matches_selector(&self, selector: &JvmTestSelector) -> bool {
+        self.scope_path == selector.scope_path
+            && self.module_path == selector.module_path
+            && self.class_name == selector.class_name
+            && self.method_name == selector.method_name
+    }
+}
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+struct JvmTestCaseIdentity<'a> {
+    scope_path: &'a ProjectPath,
+    module_path: &'a str,
+    class_name: &'a str,
+    display_name: &'a str,
+}
+
+impl<'a> From<&'a JvmVerifiedCase> for JvmTestCaseIdentity<'a> {
+    fn from(case: &'a JvmVerifiedCase) -> Self {
+        Self {
+            scope_path: &case.scope_path,
+            module_path: &case.module_path,
+            class_name: &case.class_name,
+            display_name: &case.display_name,
+        }
+    }
+}
+
+fn report_cases(
+    reports: &[JunitReport],
+) -> impl Iterator<Item = (JvmTestCaseIdentity<'_>, &JunitCase)> {
+    reports.iter().flat_map(|report| {
+        report.cases.iter().map(move |case| {
+            (
+                JvmTestCaseIdentity {
+                    scope_path: &report.scope_path,
+                    module_path: &report.module_path,
+                    class_name: &case.class_name,
+                    display_name: &case.display_name,
+                },
+                case,
+            )
+        })
+    })
+}
+
 pub fn verify_junit_runnable(
     report: &JunitReport,
     case: &JunitCase,
     source_path: &ProjectPath,
     runnable: &RunnableRange,
 ) -> Option<JvmVerifiedCase> {
-    if source_path.worktree_id != report.scope_path.worktree_id
+    verify_java_test_source(
+        JvmTestCaseIdentity {
+            scope_path: &report.scope_path,
+            module_path: &report.module_path,
+            class_name: &case.class_name,
+            display_name: &case.display_name,
+        },
+        source_path,
+        runnable,
+    )
+}
+
+fn verify_java_test_source(
+    case: JvmTestCaseIdentity<'_>,
+    source_path: &ProjectPath,
+    runnable: &RunnableRange,
+) -> Option<JvmVerifiedCase> {
+    if source_path.worktree_id != case.scope_path.worktree_id
         || runnable.runnable.language.name() != LanguageName::new("Java")
         || !runnable
             .runnable
@@ -2821,7 +3016,7 @@ pub fn verify_junit_runnable(
             .all(|segment| !segment.is_empty() && simple_method_name(segment) == Some(segment)))
         || simple_method_name(class) != Some(class.as_str())
         || simple_method_name(method) != Some(method.as_str())
-        || simple_method_name(&case.display_name) != Some(method.as_str())
+        || simple_method_name(case.display_name) != Some(method.as_str())
     {
         return None;
     }
@@ -2833,10 +3028,10 @@ pub fn verify_junit_runnable(
     if case.class_name != qualified_class {
         return None;
     }
-    let module_prefix = if report.module_path == "." {
+    let module_prefix = if case.module_path == "." {
         String::new()
     } else {
-        format!("{}/", report.module_path)
+        format!("{}/", case.module_path)
     };
     let package_path = if package.is_empty() {
         String::new()
@@ -2848,10 +3043,10 @@ pub fn verify_junit_runnable(
         return None;
     }
     Some(JvmVerifiedCase {
-        scope_path: report.scope_path.clone(),
-        module_path: report.module_path.clone(),
+        scope_path: case.scope_path.clone(),
+        module_path: case.module_path.to_owned(),
         class_name: qualified_class,
-        display_name: case.display_name.clone(),
+        display_name: case.display_name.to_owned(),
         method_name: method.clone(),
     })
 }
@@ -3025,6 +3220,15 @@ impl JvmTestDiscovery {
         generation: DiscoveryGeneration,
         verified_cases: &HashSet<JvmVerifiedCase>,
     ) -> Result<Self> {
+        Self::from_reports_and_recovered_case(reports, generation, verified_cases, None)
+    }
+
+    fn from_reports_and_recovered_case(
+        reports: &[JunitReport],
+        generation: DiscoveryGeneration,
+        verified_cases: &HashSet<JvmVerifiedCase>,
+        recovered_case: Option<&JvmVerifiedCase>,
+    ) -> Result<Self> {
         let provider_id = StructuredProviderId(JVM_JUNIT_PROVIDER_ID.to_string());
         let root_id = StructuredNodeId(JVM_JUNIT_PROVIDER_ID.to_string());
         let mut nodes = vec![StructuredNode {
@@ -3042,29 +3246,36 @@ impl JvmTestDiscovery {
         let mut groups = BTreeMap::new();
         let mut suites = BTreeMap::new();
         let mut counts = HashMap::new();
-        for report in reports {
-            for case in &report.cases {
-                *counts
-                    .entry((
-                        &report.scope_path,
-                        &report.module_path,
-                        &case.class_name,
-                        &case.display_name,
-                    ))
-                    .or_insert(0usize) += 1;
-            }
+        let cases = || {
+            report_cases(reports)
+                .map(|(identity, case)| (identity, Some(case)))
+                .chain(recovered_case.map(|case| (JvmTestCaseIdentity::from(case), None)))
+        };
+        let mut case_count = 0;
+        for (identity, _) in cases() {
+            *counts.entry(identity).or_insert(0usize) += 1;
+            case_count += 1;
         }
+        ensure!(
+            case_count <= MAX_JUNIT_CASES,
+            "JUnit discovery contains more than {MAX_JUNIT_CASES} cases"
+        );
         let mut occurrences = HashMap::new();
-        for report in reports {
-            let group_key = (&report.scope_path, report.module_path.as_str());
+        for (identity, result) in cases() {
+            let JvmTestCaseIdentity {
+                scope_path,
+                module_path,
+                class_name,
+                display_name,
+            } = identity;
             let group_id = groups
-                .entry(group_key)
+                .entry((scope_path, module_path))
                 .or_insert_with(|| {
                     let id = node_id(&[
                         "module",
-                        &report.scope_path.worktree_id.to_string(),
-                        report.scope_path.path.as_unix_str(),
-                        &report.module_path,
+                        &scope_path.worktree_id.to_string(),
+                        scope_path.path.as_unix_str(),
+                        module_path,
                     ]);
                     nodes.push(StructuredNode {
                         experimental_feature: None,
@@ -3072,98 +3283,84 @@ impl JvmTestDiscovery {
                         debug_capability: None,
                         id: id.clone(),
                         parent_id: Some(root_id.clone()),
-                        label: report.module_path.clone(),
+                        label: module_path.to_owned(),
                         kind: StructuredNodeKind::Group,
-                        path: Some(report.scope_path.clone()),
+                        path: Some(scope_path.clone()),
                     });
                     id
                 })
                 .clone();
-            for case in &report.cases {
-                if results.len() >= MAX_JUNIT_CASES {
-                    bail!("JUnit discovery contains more than {MAX_JUNIT_CASES} cases");
+            let suite_id = suites
+                .entry((scope_path, module_path, class_name))
+                .or_insert_with(|| {
+                    let id = node_id(&[
+                        "suite",
+                        &scope_path.worktree_id.to_string(),
+                        scope_path.path.as_unix_str(),
+                        module_path,
+                        class_name,
+                    ]);
+                    nodes.push(StructuredNode {
+                        experimental_feature: None,
+                        experimental_feature_enabled: None,
+                        debug_capability: None,
+                        id: id.clone(),
+                        parent_id: Some(group_id),
+                        label: class_name.to_owned(),
+                        kind: StructuredNodeKind::Suite,
+                        path: None,
+                    });
+                    id
+                })
+                .clone();
+            let occurrence = occurrences.entry(identity).or_insert(0usize);
+            let case_id = node_id(&[
+                "case",
+                &scope_path.worktree_id.to_string(),
+                scope_path.path.as_unix_str(),
+                module_path,
+                class_name,
+                display_name,
+                &occurrence.to_string(),
+            ]);
+            *occurrence += 1;
+            nodes.push(StructuredNode {
+                experimental_feature: None,
+                experimental_feature_enabled: None,
+                debug_capability: Some(StructuredDebugCapability::Supported),
+                id: case_id.clone(),
+                parent_id: Some(suite_id),
+                label: display_name.to_owned(),
+                kind: StructuredNodeKind::Case,
+                path: None,
+            });
+            if counts.get(&identity) == Some(&1)
+                && let Some(method_name) = simple_method_name(display_name)
+            {
+                let verified_case = JvmVerifiedCase {
+                    scope_path: scope_path.clone(),
+                    module_path: module_path.to_owned(),
+                    class_name: class_name.to_owned(),
+                    display_name: display_name.to_owned(),
+                    method_name: method_name.to_owned(),
+                };
+                if verified_cases.contains(&verified_case) {
+                    selectors.insert(
+                        case_id.clone(),
+                        JvmTestSelector {
+                            scope_path: verified_case.scope_path,
+                            module_path: verified_case.module_path,
+                            class_name: verified_case.class_name,
+                            method_name: verified_case.method_name,
+                        },
+                    );
                 }
-                let suite_key = (
-                    &report.scope_path,
-                    report.module_path.as_str(),
-                    case.class_name.as_str(),
-                );
-                let suite_id = suites
-                    .entry(suite_key)
-                    .or_insert_with(|| {
-                        let id = node_id(&[
-                            "suite",
-                            &report.scope_path.worktree_id.to_string(),
-                            report.scope_path.path.as_unix_str(),
-                            &report.module_path,
-                            &case.class_name,
-                        ]);
-                        nodes.push(StructuredNode {
-                            experimental_feature: None,
-                            experimental_feature_enabled: None,
-                            debug_capability: None,
-                            id: id.clone(),
-                            parent_id: Some(group_id.clone()),
-                            label: case.class_name.clone(),
-                            kind: StructuredNodeKind::Suite,
-                            path: None,
-                        });
-                        id
-                    })
-                    .clone();
-                let key = (
-                    &report.scope_path,
-                    &report.module_path,
-                    &case.class_name,
-                    &case.display_name,
-                );
-                let occurrence = occurrences.entry(key).or_insert(0usize);
-                let case_id = node_id(&[
-                    "case",
-                    &report.scope_path.worktree_id.to_string(),
-                    report.scope_path.path.as_unix_str(),
-                    &report.module_path,
-                    &case.class_name,
-                    &case.display_name,
-                    &occurrence.to_string(),
-                ]);
-                *occurrence += 1;
-                nodes.push(StructuredNode {
-                    experimental_feature: None,
-                    experimental_feature_enabled: None,
-                    debug_capability: Some(StructuredDebugCapability::Supported),
-                    id: case_id.clone(),
-                    parent_id: Some(suite_id),
-                    label: case.display_name.clone(),
-                    kind: StructuredNodeKind::Case,
-                    path: None,
-                });
-                if counts.get(&key) == Some(&1)
-                    && let Some(method_name) = simple_method_name(&case.display_name)
-                {
-                    let verified_case = JvmVerifiedCase {
-                        scope_path: report.scope_path.clone(),
-                        module_path: report.module_path.clone(),
-                        class_name: case.class_name.clone(),
-                        display_name: case.display_name.clone(),
-                        method_name: method_name.to_string(),
-                    };
-                    if verified_cases.contains(&verified_case) {
-                        selectors.insert(
-                            case_id.clone(),
-                            JvmTestSelector {
-                                scope_path: verified_case.scope_path,
-                                module_path: verified_case.module_path,
-                                class_name: verified_case.class_name,
-                                method_name: verified_case.method_name,
-                            },
-                        );
-                    }
-                }
+            }
+            if let Some(case) = result {
                 results.push((case_id, case.state, case.message.clone()));
             }
         }
-        let status = if results.is_empty() {
+        let status = if case_count == 0 {
             StructuredProviderStatus::Empty
         } else {
             StructuredProviderStatus::Current

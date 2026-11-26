@@ -527,6 +527,12 @@ completion and a fresh matching JUnit report. Save edited test source before
 refreshing. Display-only, parameterized, ambiguous, or unsupported dynamic
 cases do not gain a runnable selector merely from their display names.
 
+Gradle can remove the previous test report when a selected run begins. If
+that run is cancelled or its host connection is interrupted, **Refresh
+Tests** can recover the same case after verifying the current saved method
+on the project host. The rerun needs its own matching JUnit report to show a
+verified result.
+
 For SSH actions, trust must be available on the project host at authorization
 and lifecycle updates. If the host reports that trust is unavailable, reconnect
 and refresh Tests; restoring host trust does not revive an expired action

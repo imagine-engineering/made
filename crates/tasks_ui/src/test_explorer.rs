@@ -3694,6 +3694,18 @@ mod tests {
     #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
     #[gpui::test]
     #[ignore = "requires a disposable offline Linux ARM64 Docker host with cached Gradle, Java 6.8.30 and the JVM Remote Server"]
+    async fn disconnecting_stops_a_selected_gradle_junit_over_docker(cx: &mut TestAppContext) {
+        super::jvm_workflow::selected_java_case_through_docker_tests_panel(
+            cx,
+            JvmTestBuildTool::Gradle,
+            JavaTestOutcome::DisconnectJavaProcess,
+        )
+        .await;
+    }
+
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    #[gpui::test]
+    #[ignore = "requires a disposable offline Linux ARM64 Docker host with cached Gradle, Java 6.8.30 and the JVM Remote Server"]
     async fn rerunning_a_failed_gradle_junit_over_docker(cx: &mut TestAppContext) {
         super::jvm_workflow::selected_java_case_through_docker_tests_panel(
             cx,
