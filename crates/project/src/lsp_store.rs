@@ -926,7 +926,15 @@ impl LocalLspStore {
                     }
 
                     #[cfg(feature = "jvm-tools")]
-                    jvm_controls.apply_initialization(&mut initialization_options)?;
+                    {
+                        if server_name.as_ref() == "jdtls" {
+                            jdtls_ext::apply_gradle_import_settings_at_startup(
+                                &workspace_config,
+                                &mut initialization_options,
+                            );
+                        }
+                        jvm_controls.apply_initialization(&mut initialization_options)?;
+                    }
 
                     #[cfg(feature = "jvm-tools")]
                     if matches!(language_name.as_ref(), "Java" | "Kotlin") {
@@ -28171,6 +28179,90 @@ mod tests {
                 .store
                 .read_with(cx, |store, _| store.pending_jvm_triggers.is_empty())
         );
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn jdtls_initializes_with_the_effective_gradle_build_jdk(cx: &mut gpui::TestAppContext) {
+        let mut fixture = ProjectLanguageFixture::new(cx).await;
+        let languages = fixture
+            .project
+            .read_with(cx, |project, _| project.languages().clone());
+        languages.remove_lsp_adapter(
+            &fixture.language.name(),
+            &LanguageServerName::new_static("jdtls"),
+        );
+        let (initialized, initialization) = futures::channel::oneshot::channel();
+        let initialized = Arc::new(std::sync::Mutex::new(Some(initialized)));
+        fixture.servers = languages.register_fake_lsp(
+            "Java",
+            language::FakeLspAdapter {
+                name: "jdtls",
+                initialization_options: Some(serde_json::json!({
+                    "bundles": ["fixture-bundle"],
+                    "settings": {"java": {"autobuild": {"enabled": false}}},
+                })),
+                initializer: Some(Box::new(move |server| {
+                    let initialized = initialized.clone();
+                    server.set_request_handler::<lsp::request::Initialize, _, _>(
+                        move |parameters, _| {
+                            initialized
+                                .lock()
+                                .expect("JDTLS initialization sender")
+                                .take()
+                                .expect("first JDTLS initialization")
+                                .send(parameters)
+                                .expect("record JDTLS initialization");
+                            async {
+                                Ok(lsp::InitializeResult {
+                                    capabilities: Default::default(),
+                                    server_info: None,
+                                })
+                            }
+                        },
+                    );
+                })),
+                ..Default::default()
+            },
+        );
+        let build_jdk = serde_json::json!("/fixture/gradle-jdk");
+        let live_configuration = serde_json::json!({
+            "java": {"import": {"gradle": {"java": {"home": build_jdk}}}},
+            "java.import.gradle.offline.enabled": true,
+        });
+        languages.register_fake_lsp_adapter(
+            "Kotlin",
+            language::FakeLspAdapter {
+                name: "gradle-java-home-contributor",
+                additional_workspace_configuration: HashMap::from_iter([(
+                    LanguageServerName::new_static("jdtls"),
+                    live_configuration.clone(),
+                )]),
+                ..Default::default()
+            },
+        );
+        fixture.trust(cx, true);
+        fixture.register(cx).expect("start Java provider");
+        let mut server = fixture.servers.next().await.expect("Java provider");
+        let options = initialization
+            .await
+            .expect("JDTLS initialization request")
+            .initialization_options
+            .expect("JDTLS initialization options");
+        assert_eq!(
+            options["settings"]["java.import.gradle.java.home"], build_jdk,
+            "JDTLS needs the build JDK in its first import settings"
+        );
+        assert_eq!(
+            options["settings"]["java.import.gradle.offline.enabled"],
+            true
+        );
+        assert_eq!(options["bundles"], serde_json::json!(["fixture-bundle"]));
+        assert_eq!(options["settings"]["java"]["autobuild"]["enabled"], false);
+        let notification = server
+            .receive_notification::<lsp::notification::DidChangeConfiguration>()
+            .await;
+        assert_eq!(notification.settings, live_configuration);
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]

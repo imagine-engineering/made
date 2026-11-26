@@ -192,9 +192,10 @@ fixture at `/workspaces/gradle`. Use the same pinned extensions, servers,
 companion and Remote Server setup as for Maven. In the disposable project's
 JDTLS settings, select the cached Gradle 8.13 distribution, enable offline
 Gradle import and Kotlin support, and select the build JDK separately from
-the JDTLS launcher JDK. Supply those settings in
-`lsp.jdtls.initialization_options.settings` as well as `lsp.jdtls.settings`
-so the first import uses them before the live configuration notification.
+the JDTLS launcher JDK. Groovy sends these Gradle import preferences from
+`lsp.jdtls.settings` at initialization so they apply to the first import.
+An explicit value in `lsp.jdtls.initialization_options.settings` takes
+precedence during initialization.
 
 The connected Maven test also checks that the Dependencies panel removes a
 module when the host marks its paths private. The host reports the privacy

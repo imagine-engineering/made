@@ -29,6 +29,19 @@ const MAX_JDTLS_CLASSPATH_ENTRIES: usize = 512;
 const MAX_KOTLIN_WORKSPACE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_KOTLIN_LIBRARIES: usize = 4096;
 
+pub(crate) fn jdtls_preference<'a>(preferences: &'a Value, key: &str) -> Option<&'a Value> {
+    preferences
+        .get(key)
+        .filter(|value| !value.is_null())
+        .or_else(|| jdtls_nested_preference(preferences, key))
+        .filter(|value| !value.is_null())
+}
+
+pub(crate) fn jdtls_nested_preference<'a>(preferences: &'a Value, key: &str) -> Option<&'a Value> {
+    key.split('.')
+        .try_fold(preferences, |value, part| value.get(part))
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct JvmBuildSelectionIntent<'a> {
     pub maven: Option<MavenSelectionIntent<'a>>,

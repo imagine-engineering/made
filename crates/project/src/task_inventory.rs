@@ -35,6 +35,8 @@ use text::{BufferId, Point, ToPoint};
 use util::{NumericPrefixWithSuffix, ResultExt as _, post_inc, rel_path::RelPath};
 use worktree::WorktreeId;
 
+#[cfg(feature = "jvm-tools")]
+use crate::jvm_project::jdtls_preference;
 use crate::{git_store::GitStore, task_store::TaskSettingsLocation, worktree_store::WorktreeStore};
 
 pub const GIT_COMMAND_TASK_TAG: &str = "git-command";
@@ -195,21 +197,6 @@ fn jvm_operation_settings(worktree_id: WorktreeId, cx: &App) -> Result<serde_jso
             cx,
         ),
     ))?)
-}
-
-#[cfg(feature = "jvm-tools")]
-fn jdtls_preference<'a>(
-    preferences: &'a serde_json::Value,
-    key: &str,
-) -> Option<&'a serde_json::Value> {
-    preferences
-        .get(key)
-        .filter(|value| !value.is_null())
-        .or_else(|| {
-            key.split('.')
-                .try_fold(preferences, |value, part| value.get(part))
-        })
-        .filter(|value| !value.is_null())
 }
 
 #[cfg(feature = "jvm-tools")]

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 use std::io::Read as _;
 use std::path::Path;
@@ -14,7 +15,10 @@ use lsp::{LanguageServer, LanguageServerId};
 use rpc::proto;
 use util::{ResultExt as _, paths::UrlExt as _};
 
-use crate::jvm_project::{JdtlsImportedBuildKind, KotlinBuildSystem, KotlinWorkspaceDependency};
+use crate::jvm_project::{
+    JdtlsImportedBuildKind, KotlinBuildSystem, KotlinWorkspaceDependency, jdtls_nested_preference,
+    jdtls_preference,
+};
 use crate::project_settings::ProjectSettings;
 use crate::trusted_worktrees::TrustedWorktrees;
 use crate::{File, LspStore, ProjectPath};
@@ -61,6 +65,48 @@ const COMPANION_COMMANDS: &[&str] = &[
     "groovy.maven.unlinkSelected",
     "groovy.gradle.unlinkSelected",
 ];
+
+pub(super) fn apply_gradle_import_settings_at_startup(
+    workspace_configuration: &Value,
+    initialization_options: &mut Option<Value>,
+) {
+    // JDTLS can start Gradle import before receiving workspace/didChangeConfiguration.
+    const PREFERENCES: &[&str] = &[
+        "java.import.gradle.annotationProcessing.enabled",
+        "java.import.gradle.arguments",
+        "java.import.gradle.enabled",
+        "java.import.gradle.home",
+        "java.import.gradle.java.home",
+        "java.import.gradle.jvmArguments",
+        "java.import.gradle.offline.enabled",
+        "java.import.gradle.user.home",
+        "java.import.gradle.version",
+        "java.import.gradle.wrapper.enabled",
+        "java.jdt.ls.kotlinSupport.enabled",
+    ];
+    let mut preferences = PREFERENCES
+        .iter()
+        .filter_map(|&key| jdtls_preference(workspace_configuration, key).map(|value| (key, value)))
+        .peekable();
+    if preferences.peek().is_none() {
+        return;
+    }
+    let Some(options) = initialization_options
+        .get_or_insert_with(|| json!({}))
+        .as_object_mut()
+    else {
+        return;
+    };
+    let settings = options.entry("settings").or_insert_with(|| json!({}));
+    for (key, value) in preferences {
+        if settings.get(key).is_none()
+            && jdtls_nested_preference(settings, key).is_none()
+            && let Some(settings) = settings.as_object_mut()
+        {
+            settings.insert(key.to_owned(), value.clone());
+        }
+    }
+}
 
 pub(super) async fn has_pinned_companion(
     fs: &dyn fs::Fs,
@@ -641,6 +687,40 @@ pub(super) fn register_notifications(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gradle_import_startup_preserves_explicit_initialization_settings() {
+        let home = "java.import.gradle.java.home";
+        let offline = "java.import.gradle.offline.enabled";
+        let workspace_configuration = json!({
+            "java": {"import": {"gradle": {
+                "java": {"home": "/gradle/live"},
+                "offline": {"enabled": true},
+                "wrapper": {"enabled": false},
+            }}},
+            "java.import.gradle.home": "/gradle/distribution",
+            "java.format.enabled": false,
+        });
+        let mut options = Some(json!({
+            "bundles": ["fixture.jar"],
+            "settings": {
+                "java.import.gradle.offline.enabled": false,
+                "java": {"import": {"gradle": {"java": {"home": null}}}},
+            },
+        }));
+
+        apply_gradle_import_settings_at_startup(&workspace_configuration, &mut options);
+
+        let options = options.expect("initialization options");
+        assert_eq!(options["bundles"], json!(["fixture.jar"]));
+        let settings = &options["settings"];
+        assert!(settings.get(home).is_none());
+        assert_eq!(jdtls_nested_preference(settings, home), Some(&Value::Null));
+        assert_eq!(settings[offline], false);
+        assert_eq!(settings["java.import.gradle.wrapper.enabled"], false);
+        assert_eq!(settings["java.import.gradle.home"], "/gradle/distribution");
+        assert!(settings.get("java.format.enabled").is_none());
+    }
 
     #[test]
     fn pinned_companion_recovery_uses_only_the_reviewed_manifest_commands() {
