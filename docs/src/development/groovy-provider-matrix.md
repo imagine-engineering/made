@@ -234,8 +234,13 @@ and uses **Reimport Gradle projects**. The supported host import command
 restores all three cached project identities. An explicit **Synchronize
 metadata** then loads the tasks, and the ordered Task writes fresh JUnit XML.
 The host also rejects incompatible requests and stale session generations.
-The fixture provisions the companion at Eclipse startup. Standard companion
-startup and separate physical-host qualification remain open.
+The pinned companion was available at Eclipse startup in the initial fixture.
+A separate passive replay used JDTLS's standard `initializationOptions.bundles`
+and completed the same connected restart, reimport, synchronization and Task.
+The first server advertised 33 commands and omitted all 22 Gradle companion
+commands. Its replacement advertised all 68 commands, including the companion.
+Standard startup reliability and separate physical-host qualification remain
+open.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java
