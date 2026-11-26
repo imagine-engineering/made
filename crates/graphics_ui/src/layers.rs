@@ -110,23 +110,33 @@ pub(crate) fn render_saved_layer_duplicate(
         )
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum SavedLayerClipboardAction {
+    Copy,
+    Cut,
+    Paste,
+}
+
 pub(crate) fn render_saved_layer_clipboard(
     can_copy: bool,
     can_cut: bool,
-    dispatch: impl Fn(bool, &mut Window, &mut App) + Clone + 'static,
+    can_paste: bool,
+    dispatch: impl Fn(SavedLayerClipboardAction, &mut Window, &mut App) + Clone + 'static,
 ) -> impl IntoElement {
+    use SavedLayerClipboardAction::*;
     h_flex().gap_2().children(
         [
-            (false, "GRAPHITE-GDD-LAYER-COPY", "Copy Layers", can_copy),
-            (true, "GRAPHITE-GDD-LAYER-CUT", "Cut Layers", can_cut),
+            (Copy, "GRAPHITE-GDD-LAYER-COPY", "Copy Layers", can_copy),
+            (Cut, "GRAPHITE-GDD-LAYER-CUT", "Cut Layers", can_cut),
+            (Paste, "GRAPHITE-GDD-LAYER-PASTE", "Paste Layers", can_paste),
         ]
         .into_iter()
-        .map(move |(cut, selector, label, enabled)| {
+        .map(move |(action, selector, label, enabled)| {
             let dispatch = dispatch.clone();
             div().debug_selector(move || selector.into()).child(
                 Button::new(selector, label)
                     .disabled(!enabled)
-                    .on_click(move |_, window, cx| dispatch(cut, window, cx)),
+                    .on_click(move |_, window, cx| dispatch(action, window, cx)),
             )
         }),
     )

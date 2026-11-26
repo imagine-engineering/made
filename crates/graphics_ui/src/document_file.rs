@@ -5518,6 +5518,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
             SavedGraphAction::CopyLayers => self.copy_saved_layers(false, window, cx),
             SavedGraphAction::CutLayers => self.copy_saved_layers(true, window, cx),
+            SavedGraphAction::PasteLayers => self.paste_saved_layers(window, cx),
             SavedGraphAction::DuplicateLayers => self.duplicate_saved_layers(window, cx),
             SavedGraphAction::DeleteLayers => self.delete_saved_layers(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
@@ -7154,6 +7155,40 @@ impl GraphiteDocumentItem {
             }
         }));
         cx.notify();
+    }
+
+    fn paste_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.copy_task.is_some() || self.model.read(cx).working.is_none() {
+            return;
+        }
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(selection) = form.selected_layer_nodes() else {
+            return;
+        };
+        let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
+            self.copy_feedback = Some((
+                GddArchiveError::UnsupportedLayerClipboard
+                    .to_string()
+                    .into(),
+                Color::Error,
+            ));
+            cx.notify();
+            return;
+        };
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        self.stage_working_layer_snapshot(
+            revision,
+            async move {
+                snapshot
+                    .paste_root_layers_in_copy(&text, &selection, ARCHIVE_BUDGET)
+                    .await
+            },
+            window,
+            cx,
+        );
     }
 
     fn copy_graph_clipboard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -15030,6 +15065,147 @@ mod tests {
                 .iter()
                 .any(|node| node.storage_id() == original_id)
         );
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_032_1_at_gra_layer_032_2_workspace_pastes_editable_layers(
+        cx: &mut TestAppContext,
+    ) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/paste-layers.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native inspector");
+        let read_clipboard = |window: &mut gpui::VisualTestContext| {
+            window.update(|_, cx| {
+                cx.read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .expect("host clipboard")
+            })
+        };
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        let source_layer = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layers");
+            };
+            form.selected_node().expect("Blue Repeat").storage_id()
+        });
+        click(window, "GRAPHITE-GDD-LAYER-COPY");
+        let clipboard = read_clipboard(window);
+        click(window, "GRAPHITE-GDD-LAYER-PASTE");
+        assert_eq!(read_clipboard(window), clipboard);
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-8");
+        let parent = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layers");
+            };
+            let target = form.selected_node().expect("Gray layer");
+            assert_eq!(target.display_name(), "Gray");
+            form.saved_layer_rows()
+                .expect("editable layer rows")
+                .iter()
+                .find(|(_, row)| row.storage_id == target.storage_id())
+                .and_then(|(_, row)| row.parent)
+                .expect("Gray's parent")
+        });
+        let malformed = "graphite: []";
+        window.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string(malformed.into())));
+        click(window, "GRAPHITE-GDD-LAYER-PASTE");
+        assert_eq!(read_clipboard(window), malformed);
+        assert!(!item.read_with(window, |item, cx| item.is_dirty(cx)));
+        window.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string(clipboard.clone())));
+        window.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-v"
+        } else {
+            "ctrl-v"
+        });
+        window.run_until_parked();
+        paint(window);
+        assert_eq!(read_clipboard(window), clipboard);
+        let pasted = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native layers");
+            };
+            let pasted = form.selected_layer_nodes().expect("pasted selection");
+            let [layer] = pasted.as_slice() else {
+                panic!("one pasted layer");
+            };
+            assert_eq!(layer.display_name(), "Blue Repeat");
+            assert_ne!(layer.storage_id(), source_layer);
+            let rows = form.saved_layer_rows().expect("working layer tree");
+            assert_eq!(
+                rows.iter()
+                    .find(|(_, row)| row.parent == Some(parent))
+                    .map(|(_, row)| row.storage_id),
+                Some(layer.storage_id())
+            );
+            let wire_id = |node: &GddGraphNode| {
+                let Some(GddGraphPortSource::Node {
+                    storage_id,
+                    output_index: 0,
+                }) = node.input_ports()[1].source
+                else {
+                    panic!("editable content");
+                };
+                storage_id
+            };
+            let original = form
+                .nodes
+                .iter()
+                .find(|node| node.storage_id() == source_layer)
+                .expect("original layer");
+            assert_ne!(wire_id(layer), wire_id(original));
+            layer.storage_id()
+        });
+        click(window, "GRAPHITE-GDD-UNDO");
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers");
+            };
+            assert!(!form.nodes.iter().any(|node| node.storage_id() == pasted));
+        });
+        click(window, "GRAPHITE-GDD-REDO");
+        let destination = PathBuf::from("/project/pasted-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved paste");
+        assert!(
+            reopened
+                .graph_nodes()
+                .await
+                .expect("saved graph")
+                .iter()
+                .any(|node| node.storage_id() == pasted)
+        );
+        assert_eq!(read_clipboard(window), clipboard);
         assert_eq!(
             filesystem
                 .load_bytes(&path)

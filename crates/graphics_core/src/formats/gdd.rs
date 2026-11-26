@@ -60,7 +60,7 @@ use graphite_editor::messages::portfolio::document::{
 use graphite_editor::{
     consts::VIEWPORT_ZOOM_TO_FIT_PADDING_SCALE_FACTOR,
     messages::{
-        clipboard::utility_types::ClipboardItem,
+        clipboard::utility_types::{ClipboardItem, ClipboardLayer, ClipboardResource},
         prelude::NavigationMessageHandler,
         tool::common_functionality::graph_modification_utils::{
             get_blend_mode, get_clip_mode, get_fill, get_opacity,
@@ -232,6 +232,8 @@ pub enum GddArchiveError {
     UnsupportedGraphCutSelection,
     #[error("The clipboard does not contain an eligible Graphite numeric node group.")]
     UnsupportedGraphClipboard,
+    #[error("The clipboard does not contain eligible Graphite layers.")]
+    UnsupportedLayerClipboard,
     #[error("Could not encode or decode the Graphite clipboard. {0}")]
     GraphClipboardFormat(serde_json::Error),
     #[error("Graphite could not type-check the node group. {0}")]
@@ -3391,35 +3393,8 @@ impl InspectedGddV1 {
                     .map(LayerNodeIdentifier::to_node)
                     .collect(),
             );
-        let document_id = DocumentId(0);
-        let mut portfolio = PortfolioMessageHandler::default();
-        portfolio.documents.insert(document_id, *document);
-        let tool = graphite_editor::messages::tool::utility_types::ToolType::Select;
-        let resource_storage = ResourceStorageMessageHandler::default();
-        portfolio.process_message(
-            PortfolioMessage::SelectDocument { document_id },
-            &mut VecDeque::new(),
-            PortfolioMessageContext {
-                ipp: &Default::default(),
-                preferences: &Default::default(),
-                animation: &Default::default(),
-                current_tool: &tool,
-                reset_node_definitions_on_open: false,
-                timing_information: Default::default(),
-                viewport: &Default::default(),
-                resource_storage: &resource_storage,
-            },
-        );
-        let mut responses = VecDeque::new();
-        ClipboardMessageHandler::default().process_message(
-            ClipboardMessage::CopyLayers,
-            &mut responses,
-            ClipboardMessageContext {
-                portfolio: &mut portfolio,
-                current_tool: &tool,
-                resource_storage: &resource_storage,
-            },
-        );
+        let mut responses =
+            plan_source_layer_clipboard(&mut document, ClipboardMessage::CopyLayers)?;
         let Some(Message::Clipboard(ClipboardMessage::WriteItems { mut items })) =
             responses.pop_front()
         else {
@@ -3506,6 +3481,84 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::BudgetExceeded);
         }
         Ok(text)
+    }
+
+    pub async fn paste_root_layers_in_copy(
+        &self,
+        clipboard: &str,
+        selected: &[GddGraphNode],
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        use graphite_editor::messages::prelude::*;
+
+        if self.hot_log_len() != 0 {
+            return Err(GddArchiveError::PendingGraphEdits);
+        }
+        let (entries, resources) =
+            decode_layer_clipboard(clipboard, self.document.registry(), &budget)?;
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = self.runtime_graph().await?.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let selection = if selected.is_empty() {
+            Vec::new()
+        } else {
+            self.resolve_root_layer_selection(&document, selected)?
+                .into_iter()
+                .map(LayerNodeIdentifier::to_node)
+                .collect()
+        };
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(selection);
+        let expected_count = entries.len();
+        let mut commands =
+            plan_source_layer_clipboard(&mut document, ClipboardMessage::PasteLayers { entries })?;
+        let Some(Message::Defer(DeferMessage::AfterGraphRun { messages })) = commands.pop_back()
+        else {
+            return Err(GddArchiveError::UnsupportedLayerClipboard);
+        };
+        let [Message::Portfolio(PortfolioMessage::CenterLayers { layers })] = messages.as_slice()
+        else {
+            return Err(GddArchiveError::UnsupportedLayerClipboard);
+        };
+        if layers.len() != expected_count {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        self.finish_root_layer_edit_with_resources(
+            &mut document,
+            |document| {
+                let applied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    if document
+                        .network_interface
+                        .document_network()
+                        .exports
+                        .is_empty()
+                    {
+                        document
+                            .network_interface
+                            .add_export(TaggedValue::None, -1, "", &[]);
+                    }
+                    apply_document_layer_commands(document, commands)
+                }))
+                .map_err(|_| GddArchiveError::UnsupportedLayerClipboard)?;
+                applied?;
+                // The Layers inspector has no active artwork viewport. Its Canvas
+                // opens with a fitted camera and retains the saved layer offsets.
+                let interface = &document.network_interface;
+                if layers
+                    .iter()
+                    .any(|layer| !interface.connected_to_output(&layer.to_node(), &[]))
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                Ok(())
+            },
+            resources,
+            budget,
+        )
+        .await
     }
 
     async fn graph_templates_for_selection(
@@ -6445,22 +6498,39 @@ impl InspectedGddV1 {
         edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
-        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
-        let resources = owner
+        self.finish_root_layer_edit_with_resources(document, edit, Vec::new(), budget)
+            .await
+    }
+
+    async fn finish_root_layer_edit_with_resources(
+        &self,
+        document: &mut DocumentMessageHandler,
+        edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
+        imported: Vec<ClipboardResource>,
+        budget: GddArchiveBudget,
+    ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
+        let (mut owner, mut staged) = self.fork_working_copy(&budget).await?;
+        if self.graph_root_needs_initialization() {
+            initialize_graph_root_history(&mut owner)?;
+        }
+        let mut resources = owner
             .registry()
             .to_resource_registry()
             .map_err(GddArchiveError::RuntimeRegistry)?;
         let peer = owner.session().peer();
-        let convert = |interface: &NodeNetworkInterface| {
+        let convert = |interface: &NodeNetworkInterface,
+                       resources: &graphite_resource::ResourceRegistry| {
             Registry::convert_from_runtime(
                 interface.document_network(),
                 &StorageMetadataView::new(interface),
-                &resources,
+                resources,
                 peer,
             )
             .map_err(GddArchiveError::GraphNodePreparation)
         };
-        let baseline = convert(&document.network_interface)?;
+        let baseline = convert(&document.network_interface, &resources)?;
+        let imported_bytes = collect_layer_clipboard_resources(&mut resources, imported)?;
+        staged.store_declarations(&imported_bytes, &budget)?;
         let collapsed = document.collapsed.clone();
         edit(document)?;
         if collapsed != document.collapsed {
@@ -6472,7 +6542,7 @@ impl InspectedGddV1 {
             owner.set_view_settings(settings)?;
         }
         let after = layer_tree_order(&document.network_interface);
-        let converted = convert(&document.network_interface)?;
+        let converted = convert(&document.network_interface, &resources)?;
         // A diff between source projections keeps unrelated registry attributes and resources in the GDD.
         let ops = graphite_document_graph_storage::delta::compute_deltas(
             &baseline.registry,
@@ -6500,7 +6570,9 @@ impl InspectedGddV1 {
         let mut actual = actual.into_interface()?;
         load_root_layer_structure(&mut actual)?;
         if layer_tree_order(&actual) != after
-            || !converted.registry.value_equal(&convert(&actual)?.registry)
+            || !converted
+                .registry
+                .value_equal(&convert(&actual, &resources)?.registry)
         {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
@@ -8397,6 +8469,49 @@ fn layer_tree_order(
         .collect()
 }
 
+fn plan_source_layer_clipboard(
+    document: &mut DocumentMessageHandler,
+    message: graphite_editor::messages::prelude::ClipboardMessage,
+) -> Result<VecDeque<graphite_editor::messages::prelude::Message>, GddArchiveError> {
+    use graphite_editor::messages::prelude::*;
+    let document_id = DocumentId(0);
+    let mut portfolio = PortfolioMessageHandler::default();
+    portfolio
+        .documents
+        .insert(document_id, std::mem::take(document));
+    let tool = graphite_editor::messages::tool::utility_types::ToolType::Select;
+    let resource_storage = ResourceStorageMessageHandler::default();
+    portfolio.process_message(
+        PortfolioMessage::SelectDocument { document_id },
+        &mut VecDeque::new(),
+        PortfolioMessageContext {
+            ipp: &Default::default(),
+            preferences: &Default::default(),
+            animation: &Default::default(),
+            current_tool: &tool,
+            reset_node_definitions_on_open: false,
+            timing_information: Default::default(),
+            viewport: &Default::default(),
+            resource_storage: &resource_storage,
+        },
+    );
+    let mut responses = VecDeque::new();
+    ClipboardMessageHandler::default().process_message(
+        message,
+        &mut responses,
+        ClipboardMessageContext {
+            portfolio: &mut portfolio,
+            current_tool: &tool,
+            resource_storage: &resource_storage,
+        },
+    );
+    *document = portfolio
+        .documents
+        .remove(&document_id)
+        .ok_or(GddArchiveError::InvalidRootLayerGraph)?;
+    Ok(responses)
+}
+
 fn plan_document_layer_command(
     document: &mut DocumentMessageHandler,
     message: graphite_editor::messages::prelude::DocumentMessage,
@@ -8615,6 +8730,28 @@ fn apply_document_layer_commands(
                 }
                 interface.set_display_name(&node_id, alias, &[]);
             }
+            DocumentMessage::NodeGraph(NodeGraphMessage::SetVisibility {
+                node_id,
+                network_path,
+                visible,
+            }) if network_path.is_empty() => {
+                let interface = &mut document.network_interface;
+                if !interface.is_layer(&node_id, &[]) {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                interface.set_visibility(&node_id, &[], visible);
+            }
+            DocumentMessage::NodeGraph(NodeGraphMessage::SetLocked {
+                node_id,
+                network_path,
+                locked,
+            }) if network_path.is_empty() => {
+                let interface = &mut document.network_interface;
+                if !interface.is_layer(&node_id, &[]) {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                interface.set_locked(&node_id, &[], locked);
+            }
             DocumentMessage::ToggleLayerExpansion {
                 recursive: false, ..
             } => {
@@ -8636,6 +8773,13 @@ fn apply_document_layer_commands(
                     .selected_nodes_mut(&[])
                     .ok_or(GddArchiveError::InvalidRootLayerGraph)?
                     .set_selected_nodes(nodes);
+            }
+            DocumentMessage::DeselectAllLayers => {
+                document
+                    .network_interface
+                    .selected_nodes_mut(&[])
+                    .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+                    .set_selected_nodes(Vec::new());
             }
             DocumentMessage::MoveSelectedLayersToGroup { parent } => {
                 let group_parent = parent
@@ -8997,15 +9141,189 @@ fn graph_clipboard_node_position(node: &NodeTemplate) -> bool {
 }
 
 fn graph_clipboard_node_count(nodes: &[(NodeId, NodeTemplate)]) -> usize {
+    fn count(node: &NodeTemplate) -> usize {
+        match &node.implementation {
+            NodeTemplateImplementation::Network(inner) => inner
+                .nodes
+                .values()
+                .map(count)
+                .fold(1, usize::saturating_add),
+            _ => 1,
+        }
+    }
     nodes
         .iter()
-        .map(|(_, node)| {
-            1 + match &node.implementation {
-                NodeTemplateImplementation::Network(inner) => inner.nodes.len(),
-                _ => 0,
+        .map(|(_, node)| count(node))
+        .fold(0, usize::saturating_add)
+}
+
+fn decode_layer_clipboard(
+    clipboard: &str,
+    destination: &Registry,
+    budget: &GddArchiveBudget,
+) -> Result<(Vec<ClipboardLayer>, Vec<ClipboardResource>), GddArchiveError> {
+    use graphite_editor::messages::portfolio::document::utility_types::network_interface::collect_template_resources;
+    use std::collections::HashSet;
+
+    if clipboard.len() as u64 > budget.max_entry_bytes {
+        return Err(GddArchiveError::BudgetExceeded);
+    }
+    let encoded = clipboard
+        .strip_prefix("graphite: ")
+        .ok_or(GddArchiveError::UnsupportedLayerClipboard)?;
+    let raw: OriginalJson =
+        serde_json::from_str(encoded).map_err(GddArchiveError::GraphClipboardFormat)?;
+    let items: Vec<ClipboardItem> =
+        serde_json::from_value(raw.0).map_err(GddArchiveError::GraphClipboardFormat)?;
+    if items.len() > budget.max_entries {
+        return Err(GddArchiveError::BudgetExceeded);
+    }
+    let mut layers = Vec::new();
+    let mut resources = Vec::new();
+    let mut referenced = HashSet::new();
+    let mut node_count = 0usize;
+    for item in items {
+        match item {
+            ClipboardItem::Layer(mut layer) => {
+                node_count = node_count.saturating_add(graph_clipboard_node_count(&layer.nodes));
+                if node_count > budget.max_entries {
+                    return Err(GddArchiveError::BudgetExceeded);
+                }
+                let mut network = NodeNetwork {
+                    exports: vec![NodeInput::node(NodeId(0), 0)],
+                    ..Default::default()
+                };
+                for (id, template) in &mut layer.nodes {
+                    template.normalize_stored_types();
+                    if *id == NodeId(u64::MAX)
+                        || (*id == NodeId(0)
+                            && (!matches!(
+                                template.node_type_metadata,
+                                NodeTypePersistentMetadata::Layer(_)
+                            ) || template
+                                .inputs
+                                .first()
+                                .and_then(NodeInput::as_node)
+                                .is_some()))
+                        || network
+                            .nodes
+                            .insert(*id, template.clone().into_parts().0)
+                            .is_some()
+                    {
+                        return Err(GddArchiveError::UnsupportedLayerClipboard);
+                    }
+                    collect_template_resources(template, &mut referenced);
+                }
+                if !valid_pasted_layer_network(&network, 0) {
+                    return Err(GddArchiveError::UnsupportedLayerClipboard);
+                }
+                let mut visited = BTreeSet::new();
+                let mut pending = vec![NodeId(0)];
+                while let Some(id) = pending.pop() {
+                    if visited.insert(id) {
+                        let node = network
+                            .nodes
+                            .get(&id)
+                            .ok_or(GddArchiveError::UnsupportedLayerClipboard)?;
+                        pending.extend(node.inputs.iter().filter_map(NodeInput::as_node));
+                    }
+                }
+                if network.nodes.len() != visited.len() {
+                    return Err(GddArchiveError::UnsupportedLayerClipboard);
+                }
+                layers.push(layer);
             }
+            ClipboardItem::Resource(resource) => resources.push(resource),
+            _ => return Err(GddArchiveError::UnsupportedLayerClipboard),
+        }
+    }
+    if layers.is_empty()
+        || resources
+            .iter()
+            .any(|resource| !referenced.remove(&resource.id))
+    {
+        return Err(GddArchiveError::UnsupportedLayerClipboard);
+    }
+    if referenced
+        .iter()
+        .any(|id| !destination.resources.contains_key(id))
+    {
+        return Err(GddArchiveError::UnresolvedResource);
+    }
+    Ok((layers, resources))
+}
+
+fn valid_pasted_layer_network(network: &NodeNetwork, import_count: usize) -> bool {
+    let valid_input = |input: &NodeInput| match input {
+        NodeInput::Node {
+            node_id,
+            output_index,
+        } => network
+            .nodes
+            .get(node_id)
+            .is_some_and(|node| match &node.implementation {
+                DocumentNodeImplementation::Network(inner) => *output_index < inner.exports.len(),
+                DocumentNodeImplementation::ProtoNode(_) => *output_index == 0,
+                DocumentNodeImplementation::Extract => false,
+            }),
+        NodeInput::Import { import_index, .. } => *import_index < import_count,
+        NodeInput::Inline(_) => false,
+        _ => true,
+    };
+    network.exports.iter().all(valid_input)
+        && network.nodes.values().all(|node| {
+            node.inputs.iter().all(valid_input)
+                && match &node.implementation {
+                    DocumentNodeImplementation::Network(inner) => {
+                        valid_pasted_layer_network(inner, node.inputs.len())
+                    }
+                    DocumentNodeImplementation::ProtoNode(identifier) => {
+                        NODE_REGISTRY.contains_key(identifier)
+                    }
+                    DocumentNodeImplementation::Extract => false,
+                }
         })
-        .sum()
+        && network.is_acyclic()
+}
+
+fn collect_layer_clipboard_resources(
+    registry: &mut graphite_resource::ResourceRegistry,
+    resources: Vec<ClipboardResource>,
+) -> Result<from_runtime::DeclarationBytes, GddArchiveError> {
+    use graphite_graph_craft::application_io::resource::DataSource;
+    let mut bytes = HashMap::new();
+    for resource in resources {
+        if resource.hash.is_none() && resource.sources.is_empty() {
+            return Err(GddArchiveError::UnresolvedResource);
+        }
+        if let Some(content) = resource.data {
+            let hash = ResourceHash::from(content.0.as_slice());
+            if resource.hash != Some(hash) {
+                return Err(GddArchiveError::InvalidResource(hash));
+            }
+            bytes.insert(hash, content.0);
+        }
+        if let Some(current) = registry.info(&resource.id) {
+            if current.hash.copied() != resource.hash
+                || current.sources != resource.sources.as_slice()
+            {
+                return Err(GddArchiveError::UnsupportedLayerClipboard);
+            }
+            continue;
+        }
+        if resource.sources.contains(&DataSource::Embedded)
+            && !resource.hash.is_some_and(|hash| bytes.contains_key(&hash))
+        {
+            return Err(GddArchiveError::UnresolvedResource);
+        }
+        for source in resource.sources {
+            registry.push_source_back(&resource.id, source);
+        }
+        if let Some(hash) = resource.hash {
+            registry.resolve(&resource.id, hash);
+        }
+    }
+    Ok(bytes)
 }
 
 fn graph_clipboard_input(
@@ -11031,7 +11349,7 @@ mod tests {
     }
 
     #[test]
-    fn at_gra_layer_030_1_carries_referenced_embedded_resources() {
+    fn at_gra_layer_030_1_at_gra_layer_032_1_transfers_referenced_embedded_resources() {
         use graphite_editor::messages::clipboard::utility_types::ClipboardResource;
         use graphite_graph_craft::application_io::resource::{DataSource, ResourceId};
         use graphite_std::raster_nodes::std_nodes::image;
@@ -11118,7 +11436,112 @@ mod tests {
             assert_eq!(id, resource);
             assert_eq!(transferred, Some(hash));
             assert_eq!(sources, [DataSource::Embedded]);
-            assert_eq!(data.expect("embedded bytes").0, content);
+            assert_eq!(data.as_ref().expect("embedded bytes").0, content);
+            let [first, second] = ["First Image", "Second Image"].map(|name| {
+                let mut entry = layer_data.clone();
+                let (_, root) = entry
+                    .nodes
+                    .iter_mut()
+                    .find(|(id, _)| *id == NodeId(0))
+                    .expect("clipboard root");
+                root.display_name = name.into();
+                ClipboardItem::Layer(entry)
+            });
+            let transfers = [
+                first,
+                second,
+                ClipboardItem::Resource(ClipboardResource {
+                    id,
+                    hash: transferred,
+                    sources,
+                    data,
+                }),
+            ];
+            let multi_layer_text = format!(
+                "graphite: {}",
+                serde_json::to_string(&transfers).expect("editable ordered layers")
+            );
+            let target_before = export(&document(), None).await;
+            let target = open_gdd_zip(&target_before, budget())
+                .await
+                .expect("target snapshot");
+            let (pasted, selected) = target
+                .paste_root_layers_in_copy(&multi_layer_text, &[], budget())
+                .await
+                .expect("paste layer and its resource into the target");
+            assert!(selected.len() > 1);
+            let mut interface = pasted
+                .runtime_graph()
+                .await
+                .expect("pasted editable network")
+                .into_interface()
+                .expect("source interface");
+            load_root_layer_structure(&mut interface).expect("source layer structure");
+            let names: Vec<_> = LayerNodeIdentifier::ROOT_PARENT
+                .children(interface.document_metadata())
+                .map(|layer| interface.display_name(&layer.to_node(), &[]))
+                .collect();
+            assert_eq!(names, ["First Image", "Second Image"]);
+            assert_eq!(
+                pasted
+                    .document
+                    .read_resource(&hash)
+                    .await
+                    .expect("saved content")
+                    .as_slice(),
+                content
+            );
+            assert!(!target.document.has_resource(&hash).await);
+            let restored = pasted
+                .document
+                .registry()
+                .to_resource_registry()
+                .expect("pasted registry");
+            assert_eq!(
+                restored.info(&id).expect("referenced resource").hash,
+                Some(&hash)
+            );
+            let reverted = pasted
+                .move_history_in_copy(GddHistoryDirection::Undo, budget())
+                .await
+                .expect("one interaction");
+            assert!(!reverted.document.registry().resources.contains_key(&id));
+            let mut bad: Vec<ClipboardItem> =
+                serde_json::from_str(text.strip_prefix("graphite: ").expect("source prefix"))
+                    .expect("typed source items");
+            let mut cyclic = bad.clone();
+            let Some(ClipboardItem::Layer(layer_nodes)) = cyclic.first_mut() else {
+                panic!("editable clipboard template");
+            };
+            let (_, root) = layer_nodes
+                .nodes
+                .iter_mut()
+                .find(|(id, _)| *id == NodeId(0))
+                .expect("source root");
+            root.inputs[1] = NodeInput::node(NodeId(0), 0);
+            let cyclic = format!(
+                "graphite: {}",
+                serde_json::to_string(&cyclic).expect("cyclic source template")
+            );
+            assert!(matches!(
+                target
+                    .paste_root_layers_in_copy(&cyclic, &[], budget())
+                    .await,
+                Err(GddArchiveError::UnsupportedLayerClipboard)
+            ));
+            let Some(ClipboardItem::Resource(resource)) = bad.last_mut() else {
+                panic!("embedded resource to corrupt");
+            };
+            resource.data.as_mut().expect("original bytes").0.push(0);
+            let bad = format!(
+                "graphite: {}",
+                serde_json::to_string(&bad).expect("malformed content")
+            );
+            assert!(matches!(
+                target.paste_root_layers_in_copy(&bad, &[], budget()).await,
+                Err(GddArchiveError::InvalidResource(_))
+            ));
+            assert_eq!(target.original_bytes(), target_before.as_ref());
             let limit = GddArchiveBudget {
                 max_entry_bytes: 100,
                 ..budget()
