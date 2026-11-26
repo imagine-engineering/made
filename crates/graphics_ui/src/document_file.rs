@@ -16091,24 +16091,31 @@ mod tests {
     async fn at_r14_1_at_gra_text_003_at_gra_text_006_at_gra_text_007_at_gra_node_195_workspace_edits_saved_artwork_text(
         cx: &mut TestAppContext,
     ) {
-        check_workspace_artwork_text(cx, false).await;
+        check_workspace_artwork_text(cx, false, false).await;
     }
 
     #[gpui::test]
     async fn at_gra_node_195_workspace_edits_mapped_artwork_text(cx: &mut TestAppContext) {
-        check_workspace_artwork_text(cx, true).await;
+        check_workspace_artwork_text(cx, true, false).await;
     }
 
-    async fn check_workspace_artwork_text(cx: &mut TestAppContext, mapped: bool) {
+    #[gpui::test]
+    async fn at_gra_node_196_workspace_edits_saved_glyph_outlines(cx: &mut TestAppContext) {
+        check_workspace_artwork_text(cx, false, true).await;
+    }
+
+    async fn check_workspace_artwork_text(cx: &mut TestAppContext, mapped: bool, glyphs: bool) {
         use gpui::EntityInputHandler as _;
         let text_id = format!(
             "PROTONODE:{}",
             graphite_std::text::text::IDENTIFIER.as_str()
         );
-        let converter_id = format!(
-            "PROTONODE:{}",
-            graphite_std::text::text_to_vector::IDENTIFIER.as_str()
-        );
+        let outline = if glyphs {
+            graphite_std::text::text_to_vector_glyphs::IDENTIFIER
+        } else {
+            graphite_std::text::text_to_vector::IDENTIFIER
+        };
+        let converter_id = format!("PROTONODE:{}", outline.as_str());
         let fill_id = format!(
             "PROTONODE:{}",
             graphite_std::vector_nodes::fill::IDENTIFIER.as_str()
@@ -16165,9 +16172,14 @@ mod tests {
             panic!("original Artboard, Merge, Fill, converter and Text");
         };
         let repeat_id = remaining.first().copied();
-        let initial_content = if mapped { "Hi Go" } else { "Lorem ipsum" };
-        if mapped {
-            let graph = document.graph_nodes().await.expect("repeated text graph");
+        let compact_fixture = mapped || glyphs;
+        let initial_content = if compact_fixture {
+            "Hi Go"
+        } else {
+            "Lorem ipsum"
+        };
+        if compact_fixture {
+            let graph = document.graph_nodes().await.expect("outlined text graph");
             let text = graph
                 .iter()
                 .find(|node| node.storage_id() == *text_id)
@@ -16175,7 +16187,7 @@ mod tests {
             document = document
                 .set_graph_artwork_text_in_copy(text, initial_content.into(), ARCHIVE_BUDGET)
                 .await
-                .expect("editable repeat fixture within the Canvas output budget");
+                .expect("editable outline fixture within the Canvas output budget");
         }
         let graph = document.graph_nodes().await.expect("text graph");
         let board = graph
@@ -16361,7 +16373,7 @@ mod tests {
         enter_value(window, width_field, "-5");
         click(window, apply);
         assert!(Arc::ptr_eq(&snapshot(window), &before));
-        let wrap_width = if mapped { 36. } else { 68. };
+        let wrap_width = if compact_fixture { 36. } else { 68. };
         enter_value(window, width_field, &wrap_width.to_string());
         click(window, apply);
         assert_eq!(layout(window).await.max_width, Some(wrap_width));
@@ -16442,7 +16454,7 @@ mod tests {
         );
         assert!(Arc::ptr_eq(&snapshot(window), &before));
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
-        let committed = if mapped {
+        let committed = if compact_fixture {
             "I\u{301}\nA"
         } else {
             "Cafe\u{301}\nGraphite"

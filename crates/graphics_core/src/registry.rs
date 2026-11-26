@@ -255,13 +255,40 @@ mod tests {
 
     #[test]
     fn at_gra_node_195_1_joins_the_pinned_text_to_vector_contract() {
-        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
         use graphite_std::text::text_to_vector;
 
         let identifier = text_to_vector::IDENTIFIER;
         assert_eq!(identifier.as_str(), "graphene_std::text::TextToVectorNode");
+        assert_eq!(text_to_vector::StringInput::INDEX, 0);
+        check_text_outline_registration(identifier, "Text to Vector", concrete!(Item<Vector>));
+    }
+
+    #[test]
+    fn at_gra_node_196_1_joins_the_pinned_text_to_vector_glyphs_contract() {
+        use graphite_std::text::text_to_vector_glyphs;
+
+        let identifier = text_to_vector_glyphs::IDENTIFIER;
+        assert_eq!(
+            identifier.as_str(),
+            "graphene_std::text::TextToVectorGlyphsNode"
+        );
+        assert_eq!(text_to_vector_glyphs::StringInput::INDEX, 0);
+        check_text_outline_registration(
+            identifier,
+            "Text to Vector Glyphs",
+            concrete!(List<Vector>),
+        );
+    }
+
+    fn check_text_outline_registration(
+        identifier: ProtoNodeIdentifier,
+        name: &str,
+        scalar_output: Type,
+    ) {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+
         let registered = registered_node(identifier.as_str()).expect("pinned source registration");
-        assert_eq!(registered.metadata.display_name, "Text to Vector");
+        assert_eq!(registered.metadata.display_name, name);
         assert_eq!(registered.metadata.category, "Text");
         assert!(registered.metadata.context_features.is_empty());
         assert_eq!(
@@ -269,7 +296,7 @@ mod tests {
             HashSet::from([
                 NodeIOTypes::new(
                     concrete!(Context<'static>),
-                    Type::Future(Box::new(concrete!(Item<Vector>))),
+                    Type::Future(Box::new(scalar_output)),
                     vec![fn_type_fut!(Context<'static>, Item<String>)],
                 ),
                 NodeIOTypes::new(
@@ -291,7 +318,6 @@ mod tests {
         let template = resolve_proto_node_type(identifier)
             .expect("native catalog template")
             .default_node_template();
-        assert_eq!(text_to_vector::StringInput::INDEX, 0);
         assert_eq!(
             template.inputs,
             [NodeInput::value(TaggedValue::String(String::new()), true)]

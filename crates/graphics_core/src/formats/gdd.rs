@@ -86,7 +86,7 @@ use graphite_std::{
     blending_nodes::{blend_mode, clipping_mask, opacity},
     graphic::item_at_index,
     repeat_nodes::repeat_array,
-    text::{text as artwork_text, text_to_vector},
+    text::{text as artwork_text, text_to_vector, text_to_vector_glyphs},
     text_nodes::TextAlign,
     transform::Footprint,
     transform_nodes::transform,
@@ -982,7 +982,7 @@ pub enum GddGraphLayerPreview {
 enum SavedGraphicProfile {
     Rectangle,
     Text,
-    TextToVector,
+    TextOutline,
     Path,
     Transform,
     Stroke,
@@ -1034,6 +1034,10 @@ const ARTWORK_TEXT_INPUTS: [usize; 7] = [
     artwork_text::HasMaxHeightInput::INDEX,
     artwork_text::MaxHeightInput::INDEX,
     artwork_text::AlignInput::INDEX,
+];
+const SAVED_TEXT_OUTLINE_PROTOTYPES: [ProtoNodeIdentifier; 2] = [
+    text_to_vector::IDENTIFIER,
+    text_to_vector_glyphs::IDENTIFIER,
 ];
 const MAX_PREVIEW_VALUES: usize = 1024;
 
@@ -1432,7 +1436,7 @@ impl GddGraphNode {
         }
         let index = match (self.graphic_profile?, source.graphic_profile?) {
             (
-                SavedGraphicProfile::TextToVector,
+                SavedGraphicProfile::TextOutline,
                 SavedGraphicProfile::Text | SavedGraphicProfile::RepeatArrayText,
             ) => text_to_vector::StringInput::INDEX,
             (SavedGraphicProfile::RepeatArray, SavedGraphicProfile::Text) => {
@@ -1456,7 +1460,7 @@ impl GddGraphNode {
             (
                 target @ (SavedGraphicProfile::Fill
                 | SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge)),
-                SavedGraphicProfile::TextToVector,
+                SavedGraphicProfile::TextOutline,
             ) if matches!(
                 source
                     .input_ports
@@ -5098,7 +5102,7 @@ impl InspectedGddV1 {
             Some(SavedGraphicProfile::Fill) => {
                 let (id, proto) = upstream_proto(source.local_id, fill::ContentInput::INDEX)?;
                 chain.insert(id);
-                if *proto == text_to_vector::IDENTIFIER {
+                if SAVED_TEXT_OUTLINE_PROTOTYPES.contains(proto) {
                     Some(id)
                 } else if *proto == rectangle::IDENTIFIER || *proto == ellipse::IDENTIFIER {
                     None
@@ -5106,7 +5110,7 @@ impl InspectedGddV1 {
                     return Err(GddArchiveError::UnsupportedGraphContentConnection);
                 }
             }
-            Some(SavedGraphicProfile::TextToVector) => Some(source.local_id),
+            Some(SavedGraphicProfile::TextOutline) => Some(source.local_id),
             _ => None,
         };
         if let Some(converter) = converter {
@@ -10216,18 +10220,18 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier)
-            if identifier == &text_to_vector::IDENTIFIER =>
+            if SAVED_TEXT_OUTLINE_PROTOTYPES.contains(identifier) =>
         {
             let [string] = node.inputs.as_slice() else {
                 return None;
             };
             (
-                resolve_proto_node_type(text_to_vector::IDENTIFIER)?,
+                resolve_proto_node_type(identifier.clone())?,
                 output_wire(string)
                     .then_some((text_to_vector::StringInput::INDEX, string))
                     .into_iter()
                     .collect(),
-                SavedGraphicProfile::TextToVector,
+                SavedGraphicProfile::TextOutline,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier)
@@ -16535,15 +16539,21 @@ mod tests {
 
     #[test]
     fn at_gra_node_195_2_3_saved_text_to_vector_matches_the_source_outline() {
-        check_saved_text_to_vector(false);
+        check_saved_text_outline(false, false);
     }
 
     #[test]
     fn at_gra_node_195_2_3_saved_mapped_text_to_vector_keeps_source_order() {
-        check_saved_text_to_vector(true);
+        check_saved_text_outline(true, false);
     }
 
-    fn check_saved_text_to_vector(mapped: bool) {
+    #[test]
+    fn at_gra_node_196_2_3_saved_text_to_vector_glyphs_preserves_source_order() {
+        check_saved_text_outline(false, true);
+        check_saved_text_outline(true, true);
+    }
+
+    fn check_saved_text_outline(mapped: bool, glyphs: bool) {
         use graphite_core_types::{
             ATTR_FONT_SIZE, ATTR_TRANSFORM, Context, Node, item, list,
             list::{Item, List},
@@ -16552,9 +16562,17 @@ mod tests {
         };
         use graphite_graph_craft::{graphene_compiler::Compiler, proto::TypingContext};
         use graphite_interpreted_executor::dynamic_executor::BorrowTree;
-        use graphite_std::text::{TextToVectorNode, TextToVectorNodeMapped};
+        use graphite_std::text::{
+            TextToVectorGlyphsNode, TextToVectorGlyphsNodeMapped, TextToVectorNode,
+            TextToVectorNodeMapped,
+        };
 
         futures::executor::block_on(async {
+            let outline = if glyphs {
+                text_to_vector_glyphs::IDENTIFIER
+            } else {
+                text_to_vector::IDENTIFIER
+            };
             let mut graph = create_gdd_folder(622, 993, "Vector text".into(), budget())
                 .await
                 .expect("new saved graph");
@@ -16563,10 +16581,7 @@ mod tests {
                 (ARTBOARD_NODE_IDENTIFIER.to_owned(), [4, -6]),
                 (MERGE_NODE_IDENTIFIER.to_owned(), [0, 0]),
                 (format!("PROTONODE:{}", fill::IDENTIFIER.as_str()), [-4, 0]),
-                (
-                    format!("PROTONODE:{}", text_to_vector::IDENTIFIER.as_str()),
-                    [-6, 0],
-                ),
+                (format!("PROTONODE:{}", outline.as_str()), [-6, 0]),
                 (
                     format!("PROTONODE:{}", artwork_text::IDENTIFIER.as_str()),
                     [-12, 0],
@@ -16773,7 +16788,11 @@ mod tests {
                 types
                     .update(&proto)
                     .expect("resolve the exact source signature");
-                let expected_type = if mapped { list!(Vector) } else { item!(Vector) };
+                let expected_type = if mapped || glyphs {
+                    list!(Vector)
+                } else {
+                    item!(Vector)
+                };
                 assert_eq!(
                     types
                         .type_of(output)
@@ -16785,7 +16804,7 @@ mod tests {
                 let tree = BorrowTree::new(proto, &types)
                     .await
                     .expect("original source constructors");
-                let actual = if mapped {
+                let actual = if mapped || glyphs {
                     let items: List<Vector> = tree
                         .eval(output, Context::default())
                         .await
@@ -16798,7 +16817,6 @@ mod tests {
                             .expect("typed vector"),
                     ]
                 };
-                assert_eq!(actual.len(), if mapped { 5 } else { 1 });
                 let styled =
                     Item::new_from_element(sample.to_owned()).with_attribute(ATTR_FONT_SIZE, 32.);
                 let expected = if mapped {
@@ -16810,11 +16828,23 @@ mod tests {
                             )
                         })
                         .collect();
-                    TextToVectorNodeMapped::new(FutureWrapperNode::new(ClonedNode::new(inputs)))
+                    let input = FutureWrapperNode::new(ClonedNode::new(inputs));
+                    let output = if glyphs {
+                        TextToVectorGlyphsNodeMapped::new(input)
+                            .eval(Context::default())
+                            .await
+                    } else {
+                        TextToVectorNodeMapped::new(input)
+                            .eval(Context::default())
+                            .await
+                    };
+                    output.into_iter().collect::<Vec<_>>()
+                } else if glyphs {
+                    TextToVectorGlyphsNode::new(FutureWrapperNode::new(ClonedNode::new(styled)))
                         .eval(Context::default())
                         .await
                         .into_iter()
-                        .collect::<Vec<_>>()
+                        .collect()
                 } else {
                     vec![
                         TextToVectorNode::new(FutureWrapperNode::new(ClonedNode::new(styled)))
@@ -16822,6 +16852,14 @@ mod tests {
                             .await,
                     ]
                 };
+                if glyphs {
+                    assert_eq!(actual.is_empty(), sample.is_empty());
+                    if sample == "Graphite" {
+                        assert_eq!(actual.len(), "Graphite".len() * if mapped { 5 } else { 1 });
+                    }
+                } else {
+                    assert_eq!(actual.len(), if mapped { 5 } else { 1 });
+                }
                 assert_eq!(actual.len(), expected.len());
                 for (index, (actual, expected)) in actual.into_iter().zip(expected).enumerate() {
                     assert_eq!(
