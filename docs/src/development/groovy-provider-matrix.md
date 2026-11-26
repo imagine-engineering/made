@@ -118,6 +118,14 @@ standalone JDTLS `1.61.0` Maven probe passed Java completion, quick fix and
 mixed-language diagnostics using Temurin `25.0.5.1+2`. Both probes used
 containers with external networking disabled.
 
+The Linux ARM64 Kotlin probe also passed two launches of each fixture with
+500 generated Kotlin sources. Each launch indexed the last generated source,
+passed completion, definition, diagnostic recovery and workspace export, and
+exited with code 0 after `shutdown`, `exit` and stdin EOF. Groovy closes the
+server's input after flushing `exit` and gives an acknowledging process a
+bounded interval to finish cleanup. These standalone runs leave the native
+32 GiB reference editor and worker memory measurement open.
+
 The opt-in `docker_maven_java_definition_opens_host_kotlin_source` test used
 Groovy's Docker transport from a GPUI test client to a Linux ARM64 development
 Remote Server. The host rejected provider startup before worktree trust, then

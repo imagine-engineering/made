@@ -56,6 +56,7 @@ pub const DEFAULT_LSP_REQUEST_TIMEOUT: Duration =
 
 /// The shutdown timeout for LSP servers (including Prettier/Copilot).
 const SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
+const SERVER_EXIT_GRACE_PERIOD: Duration = Duration::from_secs(1);
 
 pub fn workspace_folder_for_uri(uri: Uri) -> WorkspaceFolder {
     let name = uri
@@ -770,6 +771,8 @@ impl LanguageServer {
             stdin.write_all(message.as_bytes()).await?;
             stdin.flush().await?;
         }
+        // Some servers wait for EOF after receiving `exit`.
+        drop(stdin);
         drop(output_done_tx);
         Ok(())
     }
@@ -1131,38 +1134,56 @@ impl LanguageServer {
         Some(async move {
             log::debug!("language server shutdown started");
 
-            select! {
+            let acknowledged = select! {
                 request_result = shutdown_request.fuse() => {
                     match request_result {
                         ConnectionResult::Timeout => {
                             log::warn!("timeout waiting for language server {name} (id {server_id}) to shutdown");
+                            false
                         },
                         ConnectionResult::ConnectionReset => {
                             log::warn!("language server {name} (id {server_id}) closed the shutdown request connection");
+                            false
                         },
                         ConnectionResult::Result(Err(e)) => {
                             log::error!("Shutdown request failure, server {name} (id {server_id}): {e:#}");
+                            false
                         },
-                        ConnectionResult::Result(Ok(())) => {}
+                        ConnectionResult::Result(Ok(())) => true
                     }
                 }
 
                 _ = timer => {
                     log::info!("timeout waiting for language server {name} (id {server_id}) to shutdown");
+                    false
                 },
-            }
+            };
 
             response_handlers.lock().take();
             Self::notify_internal::<notification::Exit>(&outbound_tx, ()).log_err();
             outbound_tx.close();
             // A server that has stopped reading can also stall the final flush.
-            select! {
-                _ = output_done.recv().fuse() => {}
+            let drained = select! {
+                _ = output_done.recv().fuse() => true,
                 _ = executor.timer(SERVER_SHUTDOWN_TIMEOUT).fuse() => {
                     log::warn!("timeout flushing language server {name} (id {server_id}) output");
+                    false
+                }
+            };
+            let child = server.lock().take();
+            if let Some(mut child) = child
+                && acknowledged
+                && drained
+            {
+                select! {
+                    status = child.status().fuse() => {
+                        status.log_err();
+                    }
+                    _ = executor.timer(SERVER_EXIT_GRACE_PERIOD).fuse() => {
+                        log::warn!("language server {name} (id {server_id}) did not exit after shutdown");
+                    }
                 }
             }
-            server.lock().take().map(|mut child| child.kill());
             drop(tasks);
             log::debug!("language server shutdown finished");
             Some(())
@@ -2204,6 +2225,62 @@ mod tests {
 
         cx.executor().advance_clock(SERVER_SHUTDOWN_TIMEOUT);
         assert_eq!(futures::poll!(shutdown.as_mut()), Poll::Ready(Some(())));
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    async fn test_shutdown_waits_for_server_cleanup_after_stdin_eof(cx: &mut TestAppContext) {
+        cx.executor().allow_parking();
+        let fixture = util::test::TempTree::new(json!({}));
+        let marker = fixture.path().join("closed");
+        let server = LanguageServer::new(
+            Arc::new(Mutex::new(None)),
+            LanguageServerId(0),
+            "stdin-eof-test".into(),
+            LanguageServerBinary {
+                path: "/bin/sh".into(),
+                arguments: vec![
+                    "-c".into(),
+                    r#"
+                        set -eu
+                        read_frame() {
+                            IFS= read -r header
+                            IFS= read -r separator
+                            length="${header#Content-Length: }"
+                            /bin/dd bs=1 count="${length%?}" 2>/dev/null
+                        }
+                        case "$(read_frame)" in
+                            *'"method":"shutdown"'*) ;;
+                            *) exit 1 ;;
+                        esac
+                        reply='{"jsonrpc":"2.0","id":0,"result":null}'
+                        printf 'Content-Length: %s\r\n\r\n%s' "${#reply}" "$reply"
+                        case "$(read_frame)" in
+                            *'"method":"exit"'*) ;;
+                            *) exit 1 ;;
+                        esac
+                        /bin/cat >/dev/null
+                        /bin/sleep 0.05
+                        printf 'finished' > "$1"
+                    "#
+                    .into(),
+                    "stdin-eof-test".into(),
+                    marker.as_os_str().to_owned(),
+                ],
+                env: None,
+            },
+            fixture.path(),
+            None,
+            None,
+            &mut cx.to_async(),
+        )
+        .expect("start a server that exits after stdin closes");
+
+        assert_eq!(server.shutdown().expect("shutdown starts").await, Some(()));
+        assert_eq!(
+            std::fs::read_to_string(marker).expect("server finished cleanup after EOF"),
+            "finished",
+        );
     }
 
     #[gpui::test]

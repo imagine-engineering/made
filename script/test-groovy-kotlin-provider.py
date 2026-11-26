@@ -205,6 +205,7 @@ class KotlinClient:
             try:
                 self.request("shutdown", None, timeout=5)
                 self.notify("exit", None)
+                self.process.stdin.close()
                 self.process.wait(timeout=5)
             except (EOFError, TimeoutError, BrokenPipeError, RuntimeError, subprocess.TimeoutExpired):
                 pass
@@ -1088,9 +1089,11 @@ def probe(
             finally:
                 try:
                     try:
+                        shutdown_started = time.monotonic()
                         client.close()
                         if results and results[-1]["launch"] == launch + 1:
                             results[-1]["serverExitCode"] = client.process.returncode
+                            results[-1]["serverShutdownSeconds"] = round(time.monotonic() - shutdown_started, 3)
                     finally:
                         if gradle_home is not None:
                             stop_cached_gradle_daemon(gradle_home, java_home)
