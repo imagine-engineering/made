@@ -110,6 +110,19 @@ pub(crate) fn render_saved_layer_duplicate(
         )
 }
 
+pub(crate) fn render_saved_layer_copy(
+    enabled: bool,
+    dispatch: impl Fn(&mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .debug_selector(|| "GRAPHITE-GDD-LAYER-COPY".into())
+        .child(
+            Button::new("graphite-saved-layer-copy", "Copy Layers")
+                .disabled(!enabled)
+                .on_click(move |_, window, cx| dispatch(window, cx)),
+        )
+}
+
 pub(crate) fn render_saved_layer_delete(
     enabled: bool,
     dispatch: impl Fn(&mut Window, &mut App) + 'static,

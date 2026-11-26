@@ -5511,6 +5511,7 @@ impl GraphiteDocumentItem {
             SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
             SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
             SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
+            SavedGraphAction::CopyLayers => self.copy_saved_layers(window, cx),
             SavedGraphAction::DuplicateLayers => self.duplicate_saved_layers(window, cx),
             SavedGraphAction::DeleteLayers => self.delete_saved_layers(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
@@ -7078,6 +7079,55 @@ impl GraphiteDocumentItem {
             form.node_selection.insert(index);
             self.copy_feedback = None;
         }
+        cx.notify();
+    }
+
+    fn copy_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let NodeCopyPanel::Ready(form) = &self.node_copy else {
+            return;
+        };
+        let Some(layers) = form
+            .selected_layer_nodes()
+            .filter(|layers| !layers.is_empty())
+        else {
+            return;
+        };
+        if self.copy_task.is_some() {
+            return;
+        }
+        let collapsed = form
+            .collapsed_layers
+            .iter()
+            .filter_map(|index| form.nodes.get(*index))
+            .map(GddGraphNode::storage_id)
+            .collect();
+        let snapshot = form.snapshot.clone();
+        let revision = form.revision.clone();
+        let copy = cx.background_spawn(async move {
+            snapshot
+                .copy_root_layers_to_clipboard(&layers, Some(&collapsed), ARCHIVE_BUDGET)
+                .await
+        });
+        self.copy_task = Some(cx.spawn_in(window, async move |item, cx| {
+            let result = copy.await;
+            if let Err(error) = item.update_in(cx, |item, _, cx| {
+                item.copy_task = None;
+                if Arc::ptr_eq(&item.model.read(cx).revision, &revision)
+                    && matches!(&item.node_copy, NodeCopyPanel::Ready(form) if form.active_network.is_none())
+                {
+                    item.copy_feedback = Some(match result {
+                        Ok(text) => {
+                            cx.write_to_clipboard(ClipboardItem::new_string(text));
+                            ("Copied Graphite layers.".into(), Color::Success)
+                        }
+                        Err(error) => (error.to_string().into(), Color::Error),
+                    });
+                }
+                cx.notify();
+            }) {
+                log::debug!("Graphite layers clipboard source closed: {error:#}");
+            }
+        }));
         cx.notify();
     }
 
@@ -14655,6 +14705,157 @@ mod tests {
         assert_eq!(layer_tree(window), base);
         assert_eq!(
             filesystem.load_bytes(&source).await.expect("source ZIP"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_030_1_copies_editable_layer_branches_in_the_source_envelope(
+        _cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::clipboard::utility_types::ClipboardItem as SourceItem;
+        use graphite_graph_craft::document::NodeId;
+
+        let bytes = layer_order_archive().await.into();
+        let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = source.graph_nodes().await.expect("source nodes");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let inner = find("Inner Group");
+        let text = source
+            .copy_root_layers_to_clipboard(
+                &[inner.clone(), find("Blue Repeat").clone()],
+                Some(&BTreeSet::from([inner.storage_id()])),
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("source editable clipboard");
+        let [SourceItem::Layer(layer)] = serde_json::from_str::<[SourceItem; 1]>(
+            text.strip_prefix("graphite: ").expect("pinned envelope"),
+        )
+        .expect("source layer schema") else {
+            panic!("one unique selected layer");
+        };
+        assert!(layer.visible && !layer.locked && layer.collapsed);
+        let root = layer
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == NodeId(0))
+            .expect("local root");
+        assert_eq!(root.1.display_name, "Inner Group");
+        let names = layer
+            .nodes
+            .iter()
+            .map(|(_, template)| template.display_name.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(names.contains("Blue Repeat"));
+        assert!(names.contains("Red"));
+        assert!(!names.contains("Gray"));
+        let history = source.history_len();
+        assert!(matches!(
+            source
+                .copy_root_layers_to_clipboard(&[], None, ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::UnsupportedRootLayerEdit)
+        ));
+        let reopened = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("another snapshot");
+        assert!(matches!(
+            reopened
+                .copy_root_layers_to_clipboard(std::slice::from_ref(inner), None, ARCHIVE_BUDGET)
+                .await,
+            Err(GddArchiveError::StaleGraphNode)
+        ));
+        assert_eq!(source.history_len(), history);
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_030_2_workspace_copies_read_only_layers_to_the_host_clipboard(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::clipboard::utility_types::ClipboardItem as SourceItem;
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/copy-layers.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        let revision = item.read_with(window, |item, cx| item.model.read(cx).revision.clone());
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-7");
+        window.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-c"
+        } else {
+            "ctrl-c"
+        });
+        window.run_until_parked();
+        paint(window);
+        let layers = |window: &mut gpui::VisualTestContext| {
+            window.update(|_, cx| {
+                let text = cx
+                    .read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .expect("native clipboard text");
+                serde_json::from_str::<[SourceItem; 1]>(
+                    text.strip_prefix("graphite: ").expect("source envelope"),
+                )
+                .expect("one native layer transfer")
+            })
+        };
+        let [SourceItem::Layer(locked)] = layers(window) else {
+            panic!("native selected layer");
+        };
+        assert!(locked.locked);
+        assert!(
+            locked
+                .nodes
+                .iter()
+                .any(|(_, template)| template.display_name == "Locked Gold")
+        );
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-3");
+        click(window, "GRAPHITE-GDD-LAYER-EXPANSION-3");
+        click(window, "GRAPHITE-GDD-LAYER-COPY");
+        let [SourceItem::Layer(group)] = layers(window) else {
+            panic!("native selected group");
+        };
+        assert!(group.collapsed);
+        assert!(
+            group
+                .nodes
+                .iter()
+                .any(|(_, template)| template.display_name == "Blue Repeat")
+        );
+        item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            assert!(model.working.is_none());
+            assert!(Arc::ptr_eq(&model.revision, &revision));
+            assert!(!item.is_dirty(cx));
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
             original
         );
     }

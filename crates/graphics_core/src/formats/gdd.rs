@@ -3336,6 +3336,163 @@ impl InspectedGddV1 {
         Ok(copy)
     }
 
+    pub async fn copy_root_layers_to_clipboard(
+        &self,
+        nodes: &[GddGraphNode],
+        collapsed: Option<&BTreeSet<StorageNodeId>>,
+        budget: GddArchiveBudget,
+    ) -> Result<String, GddArchiveError> {
+        use graphite_editor::messages::{
+            clipboard::utility_types::{ClipboardResource, ResourceData},
+            portfolio::document::utility_types::network_interface::collect_template_resources,
+            prelude::*,
+        };
+        use graphite_graph_craft::application_io::resource::DataSource;
+
+        if nodes.len() > budget.max_entries {
+            return Err(GddArchiveError::BudgetExceeded);
+        }
+        let graph = self.runtime_graph().await?;
+        let collapsed = collapsed.map(|ids| {
+            graph
+                .nodes
+                .iter()
+                .filter(|node| node.network_path.is_empty() && ids.contains(&node.storage_id))
+                .map(|node| node.local_id)
+                .collect::<BTreeSet<_>>()
+        });
+        let mut document = self.canvas_snapping_defaults();
+        document.network_interface = graph.into_interface()?;
+        load_root_layer_structure(&mut document.network_interface)?;
+        let layers = self.resolve_root_layer_selection(&document, nodes)?;
+        if let Some(collapsed) = collapsed {
+            document.collapsed.0 = document
+                .metadata()
+                .all_layers()
+                .filter(|layer| collapsed.contains(&layer.to_node()))
+                .map(|layer| {
+                    let mut path = layer
+                        .ancestors(document.metadata())
+                        .take_while(|ancestor| *ancestor != LayerNodeIdentifier::ROOT_PARENT)
+                        .map(LayerNodeIdentifier::to_node)
+                        .collect::<Vec<_>>();
+                    path.reverse();
+                    path
+                })
+                .collect();
+        }
+        document
+            .network_interface
+            .selected_nodes_mut(&[])
+            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+            .set_selected_nodes(
+                layers
+                    .into_iter()
+                    .map(LayerNodeIdentifier::to_node)
+                    .collect(),
+            );
+        let document_id = DocumentId(0);
+        let mut portfolio = PortfolioMessageHandler::default();
+        portfolio.documents.insert(document_id, *document);
+        let tool = graphite_editor::messages::tool::utility_types::ToolType::Select;
+        let resource_storage = ResourceStorageMessageHandler::default();
+        portfolio.process_message(
+            PortfolioMessage::SelectDocument { document_id },
+            &mut VecDeque::new(),
+            PortfolioMessageContext {
+                ipp: &Default::default(),
+                preferences: &Default::default(),
+                animation: &Default::default(),
+                current_tool: &tool,
+                reset_node_definitions_on_open: false,
+                timing_information: Default::default(),
+                viewport: &Default::default(),
+                resource_storage: &resource_storage,
+            },
+        );
+        let mut responses = VecDeque::new();
+        ClipboardMessageHandler::default().process_message(
+            ClipboardMessage::CopyLayers,
+            &mut responses,
+            ClipboardMessageContext {
+                portfolio: &mut portfolio,
+                current_tool: &tool,
+                resource_storage: &resource_storage,
+            },
+        );
+        let Some(Message::Clipboard(ClipboardMessage::WriteItems { mut items })) =
+            responses.pop_front()
+        else {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        };
+        if !responses.is_empty() || items.is_empty() {
+            return Err(GddArchiveError::UnsupportedRootLayerEdit);
+        }
+        let mut resource_ids = HashSet::new();
+        let mut node_count = 0usize;
+        for item in &items {
+            let ClipboardItem::Layer(layer) = item else {
+                return Err(GddArchiveError::UnsupportedRootLayerEdit);
+            };
+            node_count = node_count.saturating_add(graph_clipboard_node_count(&layer.nodes));
+            if node_count > budget.max_entries {
+                return Err(GddArchiveError::BudgetExceeded);
+            }
+            for (_, template) in &layer.nodes {
+                collect_template_resources(template, &mut resource_ids);
+            }
+        }
+        let registry = self
+            .document
+            .registry()
+            .to_resource_registry()
+            .map_err(GddArchiveError::RuntimeRegistry)?;
+        let mut resource_bytes = 0u64;
+        for id in resource_ids.into_iter().collect::<BTreeSet<_>>() {
+            let Some(info) = registry.info(&id) else {
+                continue;
+            };
+            let data = if let Some(hash) = info.hash
+                && info.sources.contains(&DataSource::Embedded)
+            {
+                let content = self.document.read_resource(hash).await?;
+                resource_bytes = resource_bytes.saturating_add(content.as_slice().len() as u64);
+                if resource_bytes > budget.max_entry_bytes {
+                    return Err(GddArchiveError::BudgetExceeded);
+                }
+                if ResourceHash::from(content.as_slice()) != *hash {
+                    return Err(GddArchiveError::InvalidResource(*hash));
+                }
+                Some(ResourceData(content.as_slice().to_vec()))
+            } else {
+                None
+            };
+            items.push(ClipboardItem::Resource(ClipboardResource {
+                id,
+                hash: info.hash.copied(),
+                sources: info.sources.to_vec(),
+                data,
+            }));
+        }
+        let prefix = b"graphite: ";
+        let mut encoded = BoundedArchive {
+            bytes: Cursor::new(Vec::new()),
+            limit: budget.max_entry_bytes,
+        };
+        encoded
+            .write_all(prefix)
+            .map_err(|_| GddArchiveError::BudgetExceeded)?;
+        serde_json::to_writer(&mut encoded, &items).map_err(|error| {
+            if error.io_error_kind() == Some(io::ErrorKind::FileTooLarge) {
+                GddArchiveError::BudgetExceeded
+            } else {
+                GddArchiveError::GraphClipboardFormat(error)
+            }
+        })?;
+        String::from_utf8(encoded.bytes.into_inner())
+            .map_err(|_| GddArchiveError::UnsupportedGraphClipboard)
+    }
+
     pub async fn copy_graph_nodes_to_clipboard(
         &self,
         targets: &[GddGraphNode],
@@ -6355,8 +6512,26 @@ impl InspectedGddV1 {
         document: &DocumentMessageHandler,
         nodes: &[GddGraphNode],
     ) -> Result<Vec<NodeId>, GddArchiveError> {
-        let requested: BTreeSet<_> = nodes.iter().map(|node| node.local_id).collect();
+        let layers = self.resolve_root_layer_selection(document, nodes)?;
         let interface = &document.network_interface;
+        if layers
+            .iter()
+            .any(|layer| interface.selected_nodes().layer_locked(*layer, interface))
+        {
+            return Err(GddArchiveError::LockedLayerOrder);
+        }
+        Ok(layers
+            .into_iter()
+            .map(LayerNodeIdentifier::to_node)
+            .collect())
+    }
+
+    fn resolve_root_layer_selection(
+        &self,
+        document: &DocumentMessageHandler,
+        nodes: &[GddGraphNode],
+    ) -> Result<Vec<LayerNodeIdentifier>, GddArchiveError> {
+        let requested: BTreeSet<_> = nodes.iter().map(|node| node.local_id).collect();
         let layers: Vec<_> = document
             .metadata()
             .all_layers()
@@ -6369,19 +6544,10 @@ impl InspectedGddV1 {
         {
             return Err(GddArchiveError::UnsupportedRootLayerEdit);
         }
-        if layers
-            .iter()
-            .any(|layer| interface.selected_nodes().layer_locked(*layer, interface))
-        {
-            return Err(GddArchiveError::LockedLayerOrder);
-        }
         for node in nodes {
             self.check_node_edit_target(node)?;
         }
-        Ok(layers
-            .into_iter()
-            .map(LayerNodeIdentifier::to_node)
-            .collect())
+        Ok(layers)
     }
 
     pub async fn set_graph_node_pinned_in_copy(
@@ -10862,6 +11028,109 @@ mod tests {
             .await
             .expect("actual Graphite ZIP export")
             .into()
+    }
+
+    #[test]
+    fn at_gra_layer_030_1_carries_referenced_embedded_resources() {
+        use graphite_editor::messages::clipboard::utility_types::ClipboardResource;
+        use graphite_graph_craft::application_io::resource::{DataSource, ResourceId};
+        use graphite_std::raster_nodes::std_nodes::image;
+
+        struct ClipboardLayerMetadata;
+        impl NodeMetadataSource for ClipboardLayerMetadata {
+            fn is_layer(&self, path: &[NodeId], node: NodeId) -> bool {
+                path.is_empty() && node == NodeId(1)
+            }
+
+            fn reference(&self, path: &[NodeId]) -> Option<&str> {
+                (path == [NodeId(1)]).then_some("Merge")
+            }
+        }
+
+        futures::executor::block_on(async {
+            let content = b"saved embedded image resource";
+            let resource = ResourceId::from(17_u64);
+            let hash = ResourceHash::from(content.as_slice());
+            let layer = merge_node_definition()
+                .expect("pinned Merge")
+                .node_template_input_override([None, Some(NodeInput::node(NodeId(2), 0))])
+                .into_parts()
+                .0;
+            let image = resolve_proto_node_type(image::IDENTIFIER)
+                .expect("pinned Image")
+                .node_template_input_override([
+                    None,
+                    Some(NodeInput::value(TaggedValue::Resource(resource), false)),
+                ])
+                .into_parts()
+                .0;
+            let graph = NodeNetwork {
+                exports: vec![NodeInput::node(NodeId(1), 0)],
+                nodes: [(NodeId(1), layer), (NodeId(2), image)]
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            };
+            let mut owner = document();
+            owner
+                .add_resource(resource, content)
+                .expect("embedded source resource");
+            let resources = owner
+                .registry()
+                .to_resource_registry()
+                .expect("source resource registry");
+            let bytes = HashMapResourceStorage::new();
+            assert_eq!(bytes.store(content), hash);
+            owner
+                .commit_from_runtime(&graph, &ClipboardLayerMetadata, &resources, &bytes)
+                .expect("saved editable layer");
+            let before: Arc<[u8]> = owner
+                .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &bytes, None)
+                .await
+                .expect("source resource archive")
+                .into();
+            let source = open_gdd_zip(&before, budget()).await.expect("source ZIP");
+            let nodes = source.graph_nodes().await.expect("saved nodes");
+            let layer = nodes
+                .into_iter()
+                .find(|node| node.local_id == NodeId(1) && node.network_path.is_empty())
+                .expect("source layer");
+            let text = source
+                .copy_root_layers_to_clipboard(std::slice::from_ref(&layer), None, budget())
+                .await
+                .expect("clipboard transfer");
+            let [
+                ClipboardItem::Layer(layer_data),
+                ClipboardItem::Resource(ClipboardResource {
+                    id,
+                    hash: transferred,
+                    sources,
+                    data,
+                }),
+            ] = serde_json::from_str::<[ClipboardItem; 2]>(
+                text.strip_prefix("graphite: ").expect("source envelope"),
+            )
+            .expect("source clipboard items")
+            else {
+                panic!("editable layer and referenced resource");
+            };
+            assert_eq!(layer_data.nodes.len(), 2);
+            assert_eq!(id, resource);
+            assert_eq!(transferred, Some(hash));
+            assert_eq!(sources, [DataSource::Embedded]);
+            assert_eq!(data.expect("embedded bytes").0, content);
+            let limit = GddArchiveBudget {
+                max_entry_bytes: 100,
+                ..budget()
+            };
+            assert!(matches!(
+                source
+                    .copy_root_layers_to_clipboard(&[layer], None, limit)
+                    .await,
+                Err(GddArchiveError::BudgetExceeded)
+            ));
+            assert_eq!(source.original_bytes(), before.as_ref());
+        });
     }
 
     fn document_with_nested_graph_nodes() -> GddV1 {
