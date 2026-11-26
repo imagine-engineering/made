@@ -21,13 +21,13 @@ use graphics_core::evaluate::{
 use graphics_core::formats::{
     gdd::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasLayer,
-        GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasRenderTarget, GddDocumentCanvasOutput,
-        GddEllipseAxis, GddExportContent, GddGraphGeometry, GddGraphInspection,
-        GddGraphLayerPreview, GddGraphNetwork, GddGraphNode, GddGraphPortSource,
-        GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
-        ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder, inspect_gdd_folder_files,
-        open_gdd_archive,
+        GddArtboardCanvasPick, GddArtboardGeometry, GddCanvasArtworkHit, GddCanvasRenderTarget,
+        GddDocumentCanvasOutput, GddEllipseAxis, GddExportContent, GddGraphGeometry,
+        GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
+        GddGraphPortSource, GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind,
+        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
+        GddSavedView, ImportOrExport, InspectedGddV1, StorageNodeId, create_gdd_folder,
+        inspect_gdd_folder_files, open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
@@ -702,6 +702,7 @@ struct SavedSceneCanvas {
     resize_armed: bool,
     draw_armed: bool,
     selected_artboard: Option<StorageNodeId>,
+    artwork_hit: Option<GddCanvasArtworkHit>,
     artboard_draw: Option<SavedSceneArtboardDraw>,
     artboard_drag: Option<SavedSceneArtboardDrag>,
     artboard_view: Option<SavedSceneArtboardView>,
@@ -719,6 +720,14 @@ struct SavedSceneGraphOverlay {
     identity: Arc<()>,
     fade_input: Entity<Editor>,
     fade_error: bool,
+}
+
+enum SavedScenePick {
+    Artboard(GddArtboardCanvasPick),
+    Artwork {
+        hit: GddCanvasArtworkHit,
+        canvas: Arc<()>,
+    },
 }
 
 struct SavedScenePan {
@@ -1183,7 +1192,7 @@ enum NodeCatalogPanel {
 
 enum NodeCopyPanel {
     Closed,
-    Loading { _task: Task<()> },
+    Loading { revision: Arc<()>, _task: Task<()> },
     Ready(Box<NodeCopyForm>),
     Failed(SharedString),
 }
@@ -1905,6 +1914,7 @@ impl GraphiteDocumentItem {
             resize_armed: false,
             draw_armed: false,
             selected_artboard: None,
+            artwork_hit: None,
             artboard_draw: None,
             artboard_drag: None,
             artboard_view: None,
@@ -2280,6 +2290,9 @@ impl GraphiteDocumentItem {
         }
         if revision_changed || target_changed {
             canvas.clear_artboard_edit(Some(window), cx);
+        }
+        if revision_changed {
+            canvas.artwork_hit = None;
         }
         if !working_copy {
             canvas.draw_armed = false;
@@ -3201,36 +3214,63 @@ impl GraphiteDocumentItem {
         }
     }
 
-    fn pick_scene_artboard(
+    fn pick_scene_node(
         &mut self,
         instance: &Arc<()>,
         pane: gpui::Bounds<gpui::Pixels>,
         position: gpui::Point<gpui::Pixels>,
+        image: Option<&Arc<RenderImage>>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(canvas) = &mut self.scene_canvas else {
             return;
         };
-        if !canvas.pick_armed
-            || canvas.pan.is_some()
+        if canvas.pan.is_some()
+            || canvas.graph_overlay.is_some()
+            || canvas.artboard_view.is_some()
             || !Arc::ptr_eq(&canvas.instance, instance)
             || !Arc::ptr_eq(&canvas.revision, &self.model.read(cx).revision)
             || canvas.target != SavedSceneTarget::measure(pane.size, window.scale_factor())
             || !pane.contains(&position)
+            || !matches!((&canvas.frame, image), (SavedSceneFrame::Ready(current), Some(image)) if Arc::ptr_eq(current, image))
         {
             return;
         }
-        let point = position - pane.origin;
-        let pane_point = DVec2::new(f64::from(f32::from(point.x)), f64::from(f32::from(point.y)));
-        if let Some(pick) = canvas
-            .artboards
-            .iter_mut()
-            .find_map(|board| board.pick_target.take_if(|pick| pick.contains(pane_point)))
-        {
-            self.close_scene_canvas(window, cx);
-            self.show_node_copy(Some(pick), window, cx);
+        let point = logical_vector(position - pane.origin);
+        if canvas.pick_armed {
+            if let Some(pick) = canvas
+                .artboards
+                .iter_mut()
+                .find_map(|board| board.pick_target.take_if(|pick| pick.contains(point)))
+            {
+                self.close_scene_canvas(window, cx);
+                self.show_node_copy(Some(SavedScenePick::Artboard(pick)), window, cx);
+            }
+            return;
         }
+        if canvas.draw_armed || canvas.move_armed || canvas.resize_armed {
+            return;
+        }
+        let Some(hit) = self
+            .model
+            .read(cx)
+            .gdd_contents()
+            .zip(canvas.snapping_document.as_deref())
+            .and_then(|(contents, source)| contents.hit_test_canvas_artwork(source, point))
+        else {
+            return;
+        };
+        canvas.artwork_hit = Some(hit.clone());
+        self.show_node_copy(
+            Some(SavedScenePick::Artwork {
+                hit,
+                canvas: instance.clone(),
+            }),
+            window,
+            cx,
+        );
+        cx.notify();
     }
 
     fn render_scene_view_controls(
@@ -3676,6 +3716,11 @@ impl GraphiteDocumentItem {
         let current = Arc::ptr_eq(&canvas.revision, &model.revision);
         let graph_overlay_open = canvas.graph_overlay.is_some();
         let show_artwork_overlays = current && !graph_overlay_open;
+        let artwork_hit = canvas.artwork_hit.as_ref().filter(|hit| {
+            show_artwork_overlays
+                && matches!(&self.node_copy, NodeCopyPanel::Ready(form)
+                    if form.selected_node().is_some_and(|node| hit.matches_node(node)))
+        });
         let visibility = show_artwork_overlays
             .then(|| canvas.overlay_visibility(model))
             .flatten();
@@ -3753,6 +3798,7 @@ impl GraphiteDocumentItem {
             (None, SavedSceneFrame::Ready(image)) if current => Some(image.clone()),
             _ => None,
         };
+        let pick_image = image.clone();
         let pick_targets = || {
             canvas
                 .artboards
@@ -3992,6 +4038,12 @@ impl GraphiteDocumentItem {
                             .child(self.render_scene_graph_fade_control(overlay, cx))
                             .child(self.render_scene_graph_controls(cx))
                     })
+                    .when_some(artwork_hit, |toolbar, hit| {
+                        toolbar.child(
+                            div().debug_selector(|| "GRAPHITE-GDD-CANVAS-SELECTED-ARTWORK".into())
+                                .child(Label::new(hit.name().to_owned()).color(Color::Muted)),
+                        )
+                    })
                     .when(canvas.render_mode_task.is_some(), |toolbar| {
                         toolbar.child(Label::new("Changing view mode…").color(Color::Muted))
                     })
@@ -4055,10 +4107,11 @@ impl GraphiteDocumentItem {
                     .when(!graph_overlay_open, |pane| pane.on_click(
                         cx.listener(move |item, event: &gpui::ClickEvent, window, cx| {
                             if let Some(pane) = pick_bounds.get() {
-                                item.pick_scene_artboard(
+                                item.pick_scene_node(
                                     &pick_instance,
                                     pane,
                                     event.position(),
+                                    pick_image.as_ref(),
                                     window,
                                     cx,
                                 );
@@ -4975,7 +5028,7 @@ impl GraphiteDocumentItem {
 
     fn show_node_copy(
         &mut self,
-        pick: Option<GddArtboardCanvasPick>,
+        pick: Option<SavedScenePick>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -4988,8 +5041,14 @@ impl GraphiteDocumentItem {
             && Arc::ptr_eq(&form.revision, &revision)
         {
             if let Some(pick) = pick {
-                self.select_picked_artboard(pick, window, cx);
+                self.select_picked_node(pick, window, cx);
             }
+            return;
+        }
+        if pick.is_none()
+            && matches!(&self.node_copy, NodeCopyPanel::Loading { revision: loading, .. }
+                if Arc::ptr_eq(loading, &revision))
+        {
             return;
         }
         if let Some(working) = &model.working {
@@ -5002,7 +5061,7 @@ impl GraphiteDocumentItem {
                 cx,
             )));
             if let Some(pick) = pick {
-                self.select_picked_artboard(pick, window, cx);
+                self.select_picked_node(pick, window, cx);
             }
         } else {
             let load = cx.background_spawn({
@@ -5010,6 +5069,7 @@ impl GraphiteDocumentItem {
                 async move { contents.graph_inspection().await }
             });
             self.node_copy = NodeCopyPanel::Loading {
+                revision: revision.clone(),
                 _task: cx.spawn_in(window, async move |item, cx| {
                     let loaded = load.await;
                     if let Err(error) = item.update_in(cx, |item, window, cx| {
@@ -5025,7 +5085,7 @@ impl GraphiteDocumentItem {
                             Err(error) => NodeCopyPanel::Failed(error.to_string().into()),
                         };
                         if let Some(pick) = pick {
-                            item.select_picked_artboard(pick, window, cx);
+                            item.select_picked_node(pick, window, cx);
                         }
                         if item.scene_graph_overlay_is_open() {
                             item.show_saved_graph(window, cx);
@@ -5040,18 +5100,39 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
-    fn select_picked_artboard(
+    fn select_picked_node(
         &mut self,
-        pick: GddArtboardCanvasPick,
+        pick: SavedScenePick,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let NodeCopyPanel::Ready(form) = &mut self.node_copy
-            && let Some(index) = form.nodes.iter().position(|node| pick.matches_node(node))
+        if let SavedScenePick::Artwork { canvas, .. } = &pick
+            && !self
+                .scene_canvas
+                .as_ref()
+                .is_some_and(|scene| Arc::ptr_eq(&scene.instance, canvas))
         {
-            form.select_network(None);
+            return;
+        }
+        if let NodeCopyPanel::Ready(form) = &mut self.node_copy
+            && let Some(index) = form.nodes.iter().position(|node| match &pick {
+                SavedScenePick::Artboard(pick) => pick.matches_node(node),
+                SavedScenePick::Artwork { hit, .. } => hit.matches_node(node),
+            })
+        {
+            let reopen_graph = self
+                .scene_canvas
+                .as_ref()
+                .is_some_and(|canvas| canvas.graph_overlay.is_some());
+            if matches!(pick, SavedScenePick::Artboard(_)) || form.active_network.is_some() {
+                form.select_network(None);
+            }
+            form.node_selection.clear();
             form.node_selection.insert(index);
             self.select_copy_node(index, window, cx);
+            if reopen_graph {
+                self.show_saved_graph(window, cx);
+            }
         }
     }
 
@@ -16709,6 +16790,170 @@ mod tests {
             curve_to_artboard,
             rectangle_to_artboard,
         }
+    }
+
+    #[gpui::test]
+    async fn at_gra_view_013_2_workspace_picks_f_vector_source_layer_paths(
+        cx: &mut TestAppContext,
+    ) {
+        let SavedVectorFixture {
+            original,
+            origin,
+            curve_to_artboard,
+            rectangle_to_artboard,
+        } = saved_vector_fixture(None, None).await;
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1400.), px(1050.)));
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/f-vector-click-targets.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source archive");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-VECTOR")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native document");
+        let (contents, revision) = item.read_with(window, |item, cx| {
+            let model = item.model.read(cx);
+            (
+                model.gdd_contents().expect("source snapshot").clone(),
+                model.revision.clone(),
+            )
+        });
+        let inspection = contents.graph_inspection().await.expect("source graph");
+        let root = inspection
+            .networks
+            .iter()
+            .find(|scope| scope.parent.is_none())
+            .expect("root network");
+        let layers = contents
+            .graph_geometry(root)
+            .await
+            .expect("source graph geometry")
+            .root_layers
+            .expect("source layer tree");
+        let [artboard, group, curve, rectangle] = layers.as_slice() else {
+            panic!("Artboard, transformed group, curve and generated rectangle");
+        };
+        assert_eq!(group.parent, Some(artboard.storage_id));
+        assert_eq!(curve.parent, Some(group.storage_id));
+        assert_eq!(rectangle.parent, Some(group.storage_id));
+        let curve_point = origin + curve_to_artboard.transform_point2(DVec2::new(35., 30.));
+        let rectangle_point = origin + rectangle_to_artboard.transform_point2(DVec2::ZERO);
+
+        paint(window);
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        let pane_point = |window: &mut gpui::VisualTestContext, point| {
+            let pane = window
+                .debug_bounds("GRAPHITE-GDD-DOCUMENT-CANVAS")
+                .expect("Canvas pane");
+            item.read_with(window, |item, _| {
+                let canvas = item.scene_canvas.as_ref().expect("Canvas");
+                let point = canvas
+                    .navigation
+                    .expect("accepted navigation")
+                    .document_to_pane(canvas.target.expect("accepted viewport").logical_size())
+                    .transform_point2(point);
+                (
+                    pane,
+                    pane.origin + gpui::point(px(point.x as f32), px(point.y as f32)),
+                )
+            })
+        };
+        let click_point = |window: &mut gpui::VisualTestContext, point| {
+            let (_, point) = pane_point(window, point);
+            click_graph_point(
+                window,
+                point,
+                gpui::MouseButton::Left,
+                gpui::Modifiers::default(),
+            );
+        };
+        let assert_selected = |window: &mut gpui::VisualTestContext, leaf| {
+            item.read_with(window, |item, cx| {
+                let canvas = item
+                    .scene_canvas
+                    .as_ref()
+                    .expect("selected in the active Canvas");
+                let hit = canvas.artwork_hit.as_ref().expect("rendered artwork hit");
+                assert_eq!(
+                    hit.layer_path(),
+                    &[artboard.storage_id, group.storage_id, leaf]
+                );
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("native node selection")
+                };
+                assert_eq!(form.clipboard_scope().expect("root scope").id, root.id);
+                let node = form.selected_node().expect("source node");
+                assert!(hit.matches_node(node));
+                assert_eq!(node.storage_id(), leaf);
+                assert_eq!(node.network_id(), root.id);
+                assert!(Arc::ptr_eq(&item.model.read(cx).revision, &revision));
+                assert!(!item.is_dirty(cx));
+            });
+        };
+        click_point(window, curve_point);
+        assert_selected(window, curve.storage_id);
+        click_point(window, rectangle_point);
+        assert_selected(window, rectangle.storage_id);
+        assert!(
+            window
+                .debug_bounds("GRAPHITE-GDD-CANVAS-SELECTED-ARTWORK")
+                .is_some()
+        );
+        let (instance, old_frame) = item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("Canvas");
+            let SavedSceneFrame::Ready(frame) = &canvas.frame else {
+                panic!("accepted artwork frame");
+            };
+            (canvas.instance.clone(), frame.clone())
+        });
+        window.simulate_resize(gpui::size(px(1420.), px(1000.)));
+        window.run_until_parked();
+        paint(window);
+        let (pane, point) = pane_point(window, curve_point);
+        item.update_in(window, |item, window, cx| {
+            item.pick_scene_node(&instance, pane, point, Some(&old_frame), window, cx);
+        });
+        assert_selected(window, rectangle.storage_id);
+        click_graph_point(
+            window,
+            pane.origin + gpui::point(px(1.), px(1.)),
+            gpui::MouseButton::Left,
+            gpui::Modifiers::default(),
+        );
+        assert_selected(window, rectangle.storage_id);
+        click_point(window, curve_point);
+        assert_selected(window, curve.storage_id);
+
+        click(window, "GRAPHITE-GDD-CANVAS-PICK");
+        click_point(window, rectangle_point);
+        item.read_with(window, |item, cx| {
+            assert!(item.scene_canvas.is_none());
+            assert!(!item.is_dirty(cx));
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("Artboard Inspector")
+            };
+            assert_eq!(
+                form.selected_node().expect("picked Artboard").storage_id(),
+                artboard.storage_id
+            );
+        });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("source ZIP")
+                .as_slice(),
+            original.as_ref()
+        );
     }
 
     #[gpui::test]
