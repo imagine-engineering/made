@@ -51,7 +51,9 @@ const FFMPEG_7_1_ARCHIVE_SHA256: &str =
 const FFMPEG_7_1_SIGNATURE_SHA256: &str =
     "9bd1689dce76b109034dcc4765a406e84e8799a2fd857b000c0a4d9744b70617";
 const FFMPEG_7_1_SIGNING_KEY_FINGERPRINT: &str = "FCF986EA15E6E293A5644F10B4322F04D67658D8";
-const REVIEWED_SYSTEM_SONAMES: [&str; 5] = [
+const REVIEWED_SYSTEM_SONAMES: [&str; 6] = [
+    // Loading libc into a new namespace also loads its GNU interpreter.
+    "ld-linux-x86-64.so.2",
     "libc.so.6",
     "libdl.so.2",
     "libm.so.6",

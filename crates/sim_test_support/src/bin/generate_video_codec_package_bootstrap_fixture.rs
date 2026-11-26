@@ -270,6 +270,7 @@ fn build_fixture() -> Result<BTreeMap<String, Vec<u8>>> {
             ("libx264".to_owned(), "x264".to_owned()),
         ]),
         reviewed_system_sonames: [
+            "ld-linux-x86-64.so.2",
             "libc.so.6",
             "libdl.so.2",
             "libm.so.6",
@@ -507,6 +508,14 @@ fn hex_nibble(value: u8) -> Result<u8> {
     }
 }
 
+fn elf_hash(name: &str) -> u32 {
+    name.bytes().fold(0, |hash, byte| {
+        let hash = (hash << 4) + u32::from(byte);
+        let high_bits = hash & 0xf000_0000;
+        (hash ^ (high_bits >> 24)) & !high_bits
+    })
+}
+
 fn elf_fixture(
     machine: u16,
     symbols: &[String],
@@ -536,8 +545,9 @@ fn elf_fixture(
 
     let program_offset = 64_usize;
     let program_entry_size = 56_usize;
-    let program_count = 2_usize;
-    let string_offset = 192_usize;
+    let program_count = 4_usize;
+    let page_size = 0x1000;
+    let string_offset = align(program_offset + program_entry_size * program_count, 16)?;
     let symbol_offset = align(string_offset + strings.len(), 8)?;
     let symbol_count = symbols
         .len()
@@ -567,7 +577,7 @@ fn elf_fixture(
         .len()
         .checked_mul(16)
         .ok_or_else(|| anyhow!("code table overflowed"))?;
-    let dynamic_offset = align(code_offset + code_size, 8)?;
+    let dynamic_offset = align(code_offset + code_size, page_size)?;
     let dynamic_entries = 10_usize
         .checked_add(needed_offsets.len())
         .ok_or_else(|| anyhow!("dynamic table overflowed"))?;
@@ -596,12 +606,23 @@ fn elf_fixture(
     let file_length = u64::try_from(bytes.len())?;
     write_u32(&mut bytes, program_offset, 1)?;
     write_u32(&mut bytes, program_offset + 4, 5)?;
-    write_u64(&mut bytes, program_offset + 32, file_length)?;
-    write_u64(&mut bytes, program_offset + 40, file_length)?;
-    write_u64(&mut bytes, program_offset + 48, 0x1000)?;
-    let dynamic_program = program_offset + program_entry_size;
+    let executable_size = u64::try_from(dynamic_offset)?;
+    write_u64(&mut bytes, program_offset + 32, executable_size)?;
+    write_u64(&mut bytes, program_offset + 40, executable_size)?;
+    write_u64(&mut bytes, program_offset + 48, u64::try_from(page_size)?)?;
+    let data_program = program_offset + program_entry_size;
+    let data_size = file_length - executable_size;
+    write_u32(&mut bytes, data_program, 1)?;
+    write_u32(&mut bytes, data_program + 4, 6)?;
+    write_u64(&mut bytes, data_program + 8, executable_size)?;
+    write_u64(&mut bytes, data_program + 16, executable_size)?;
+    write_u64(&mut bytes, data_program + 32, data_size)?;
+    write_u64(&mut bytes, data_program + 40, data_size)?;
+    write_u64(&mut bytes, data_program + 48, u64::try_from(page_size)?)?;
+    // glibc relocates dynamic pointers in a writable segment.
+    let dynamic_program = data_program + program_entry_size;
     write_u32(&mut bytes, dynamic_program, 2)?;
-    write_u32(&mut bytes, dynamic_program + 4, 4)?;
+    write_u32(&mut bytes, dynamic_program + 4, 6)?;
     write_u64(
         &mut bytes,
         dynamic_program + 8,
@@ -623,6 +644,11 @@ fn elf_fixture(
         u64::try_from(dynamic_size)?,
     )?;
     write_u64(&mut bytes, dynamic_program + 48, 8)?;
+    // glibc assumes an executable stack when PT_GNU_STACK is absent.
+    let stack_program = dynamic_program + program_entry_size;
+    write_u32(&mut bytes, stack_program, 0x6474_e551)?;
+    write_u32(&mut bytes, stack_program + 4, 6)?;
+    write_u64(&mut bytes, stack_program + 48, 16)?;
     bytes[string_offset..string_offset + strings.len()].copy_from_slice(&strings);
 
     for (index, (name_offset, symbol)) in names.iter().zip(symbols).enumerate() {
@@ -645,6 +671,7 @@ fn elf_fixture(
     write_u16(&mut bytes, version_definition_offset + 2, 1)?;
     write_u16(&mut bytes, version_definition_offset + 4, 1)?;
     write_u16(&mut bytes, version_definition_offset + 6, 1)?;
+    write_u32(&mut bytes, version_definition_offset + 8, elf_hash(soname))?;
     write_u32(&mut bytes, version_definition_offset + 12, 20)?;
     write_u32(&mut bytes, version_definition_offset + 16, 28)?;
     write_u32(
@@ -656,6 +683,11 @@ fn elf_fixture(
     write_u16(&mut bytes, callable_definition, 1)?;
     write_u16(&mut bytes, callable_definition + 4, 2)?;
     write_u16(&mut bytes, callable_definition + 6, 1)?;
+    write_u32(
+        &mut bytes,
+        callable_definition + 8,
+        elf_hash(version_namespace),
+    )?;
     write_u32(&mut bytes, callable_definition + 12, 20)?;
     write_u32(&mut bytes, callable_definition + 20, version_name_offset)?;
 
@@ -814,7 +846,8 @@ fn function_code(symbol: &str) -> Vec<u8> {
         symbol,
         "avcodec_find_encoder_by_name" | "avcodec_find_decoder"
     ) {
-        return vec![0xb8, 1, 0, 0, 0, 0xc3];
+        // Admission proves the descriptor address belongs to this library.
+        return vec![0x48, 0x8d, 0x05, 1, 0, 0, 0, 0xc3, 0];
     }
     vec![0x31, 0xc0, 0xc3]
 }
