@@ -87,6 +87,7 @@ use graphite_std::{
     graphic::item_at_index,
     repeat_nodes::repeat_array,
     text::text as artwork_text,
+    text_nodes::TextAlign,
     transform::Footprint,
     transform_nodes::transform,
     vector_nodes::{
@@ -1023,13 +1024,14 @@ const ARTBOARD_BACKGROUND_INPUT: usize = 4;
 const ARTBOARD_CLIP_INPUT: usize = 5;
 const ELLIPSE_RADIUS_INPUTS: [usize; 2] =
     [ellipse::RadiusXInput::INDEX, ellipse::RadiusYInput::INDEX];
-const ARTWORK_TEXT_INPUTS: [usize; 6] = [
+const ARTWORK_TEXT_INPUTS: [usize; 7] = [
     artwork_text::TextInput::INDEX,
     artwork_text::SizeInput::INDEX,
     artwork_text::HasMaxWidthInput::INDEX,
     artwork_text::MaxWidthInput::INDEX,
     artwork_text::HasMaxHeightInput::INDEX,
     artwork_text::MaxHeightInput::INDEX,
+    artwork_text::AlignInput::INDEX,
 ];
 const MAX_PREVIEW_VALUES: usize = 1024;
 
@@ -1038,6 +1040,7 @@ pub struct GddArtworkTextLayout {
     pub size: f64,
     pub max_width: Option<f64>,
     pub max_height: Option<f64>,
+    pub alignment: TextAlign,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -5647,6 +5650,7 @@ impl InspectedGddV1 {
                     .max_height
                     .unwrap_or(stored_bound(artwork_text::MaxHeightInput::INDEX)?),
             ),
+            TaggedValue::TextAlign(layout.alignment),
         ];
         let mut edits = Vec::with_capacity(values.len());
         let mut changed_indices = BTreeSet::new();
@@ -9815,6 +9819,7 @@ fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, GddArtworkT
         Some(TaggedValue::Number(width)),
         Some(TaggedValue::Bool(has_height)),
         Some(TaggedValue::Number(height)),
+        Some(TaggedValue::TextAlign(alignment)),
     ] = ARTWORK_TEXT_INPUTS.map(|index| saved_artwork_text_input(node, index))
     else {
         return None;
@@ -9831,6 +9836,7 @@ fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, GddArtworkT
             size: *size,
             max_width: has_width.then_some(*width),
             max_height: has_height.then_some(*height),
+            alignment: *alignment,
         },
     ))
 }
@@ -9840,7 +9846,7 @@ fn validate_artwork_text_layout(
     layout: GddArtworkTextLayout,
 ) -> Result<(), GddArchiveError> {
     use graphite_core_types::{
-        ATTR_FONT, ATTR_FONT_SIZE, ATTR_MAX_HEIGHT, ATTR_MAX_WIDTH, list::Item,
+        ATTR_FONT, ATTR_FONT_SIZE, ATTR_MAX_HEIGHT, ATTR_MAX_WIDTH, ATTR_TEXT_ALIGN, list::Item,
     };
 
     let mut source = Item::new_from_element(text.to_owned())
@@ -9848,7 +9854,8 @@ fn validate_artwork_text_layout(
             ATTR_FONT,
             graphite_std::text::FALLBACK_FONT_RESOURCE.clone(),
         )
-        .with_attribute(ATTR_FONT_SIZE, layout.size);
+        .with_attribute(ATTR_FONT_SIZE, layout.size)
+        .with_attribute(ATTR_TEXT_ALIGN, layout.alignment);
     if let Some(width) = layout.max_width {
         source.set_attribute(ATTR_MAX_WIDTH, width);
     }

@@ -34,7 +34,7 @@ use graphics_core::formats::{
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
 };
 use graphics_core::registry::{CUSTOM_NODE_IDENTIFIER, CUSTOM_NODE_NAME, GraphiteNodeCatalog};
-use graphite_core_types::BlendMode;
+use graphite_core_types::{BlendMode, choice_type::ChoiceTypeStatic};
 use graphite_editor::messages::portfolio::document::{
     DocumentMessageHandler,
     overlays::utility_types::OverlaysVisibilitySettings,
@@ -43,6 +43,7 @@ use graphite_editor::messages::portfolio::document::{
 use graphite_graph_craft::document::value::{DAffine2, DVec2, RenderOutputType, UVec2};
 use graphite_std::{
     application_io::{ExportFormat as RenderFormat, RenderConfig},
+    text_nodes::TextAlign,
     transform::Footprint,
     vector_types::vector::style::RenderMode,
 };
@@ -1283,6 +1284,7 @@ struct NodeCopyForm {
     position: Entity<Editor>,
     artwork_text: Entity<Editor>,
     artwork_bounds: [Entity<Editor>; 2],
+    artwork_alignment: TextAlign,
     artboard_background: Entity<Editor>,
     ellipse_radii: [Entity<Editor>; 2],
     layer_opacity: [Entity<Editor>; 2],
@@ -1336,6 +1338,7 @@ impl NodeCopyForm {
                     editor
                 })
             }),
+            artwork_alignment: TextAlign::default(),
             artboard_background: cx.new(|cx| Editor::single_line(window, cx)),
             ellipse_radii: std::array::from_fn(|_| cx.new(|cx| Editor::single_line(window, cx))),
             layer_opacity: std::array::from_fn(|_| {
@@ -1373,12 +1376,10 @@ impl NodeCopyForm {
         }
     }
 
-    fn reset_artwork_text(
-        &self,
-        node: &GddGraphNode,
-        window: &mut Window,
-        cx: &mut Context<GraphiteDocumentItem>,
-    ) {
+    fn reset_artwork_text(&mut self, window: &mut Window, cx: &mut Context<GraphiteDocumentItem>) {
+        let Some(node) = self.selected_node() else {
+            return;
+        };
         let (Some(text), Some(layout)) = (node.artwork_text(), node.artwork_text_layout()) else {
             return;
         };
@@ -1386,6 +1387,7 @@ impl NodeCopyForm {
             gpui::EntityInputHandler::unmark_text(editor, window, cx);
             editor.set_text(text, window, cx);
         });
+        self.artwork_alignment = layout.alignment;
         self.value.update(cx, |editor, cx| {
             editor.set_text(layout.size.to_string(), window, cx);
         });
@@ -5385,7 +5387,6 @@ impl GraphiteDocumentItem {
             form.selected = Some(index);
             form.name
                 .update(cx, |editor, cx| editor.set_text(node.name(), window, cx));
-            form.reset_artwork_text(node, window, cx);
             if let Some(value) = node.numeric_input() {
                 form.value.update(cx, |editor, cx| {
                     editor.set_text(value.to_string(), window, cx)
@@ -5419,6 +5420,7 @@ impl GraphiteDocumentItem {
                     });
                 }
             }
+            form.reset_artwork_text(window, cx);
             form.refresh_layer_opacity(window, cx);
             cx.notify();
         }
@@ -8612,6 +8614,10 @@ impl GraphiteDocumentItem {
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
+        let model = self.model.read(cx);
+        if model.working.is_none() || !Arc::ptr_eq(&form.revision, &model.revision) {
+            return;
+        }
         let Some(node) = form
             .selected_node()
             .filter(|node| node.artwork_text().is_some())
@@ -8662,6 +8668,7 @@ impl GraphiteDocumentItem {
                         size,
                         max_width,
                         max_height,
+                        alignment: form.artwork_alignment,
                     },
                 },
             },
@@ -8670,10 +8677,69 @@ impl GraphiteDocumentItem {
         );
     }
 
+    fn render_artwork_alignment(
+        &self,
+        form: &NodeCopyForm,
+        node: &GddGraphNode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let item = cx.entity().downgrade();
+        let revision = &form.revision;
+        let node_id = node.storage_id();
+        let menu = ContextMenu::build(window, cx, |mut menu, _, _| {
+            for (alignment, option) in TextAlign::list().iter().copied().flatten() {
+                let alignment = *alignment;
+                let item = item.clone();
+                let revision = revision.clone();
+                menu = menu.toggleable_entry(
+                    option.label,
+                    form.artwork_alignment == alignment,
+                    IconPosition::Start,
+                    None,
+                    move |_, cx| {
+                        if let Some(item) = item.upgrade() {
+                            item.update(cx, |item, cx| {
+                                if item.copy_task.is_none()
+                                    && item.model.read(cx).working.is_some()
+                                    && let NodeCopyPanel::Ready(form) = &mut item.node_copy
+                                    && Arc::ptr_eq(&form.revision, &revision)
+                                    && form.selected_node().is_some_and(|selected| {
+                                        selected.storage_id() == node_id
+                                            && selected.artwork_text().is_some()
+                                    })
+                                {
+                                    form.artwork_alignment = alignment;
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    },
+                );
+            }
+            menu
+        });
+        h_flex().gap_2().child(Label::new("Alignment")).child(
+            div()
+                .debug_selector(|| "GRAPHITE-GDD-ARTWORK-ALIGNMENT".into())
+                .child(
+                    DropdownMenu::new(
+                        "graphite-gdd-artwork-alignment",
+                        form.artwork_alignment.to_string(),
+                        menu,
+                    )
+                    .aria_label("Artwork text alignment")
+                    .disabled(self.copy_task.is_some()),
+                ),
+        )
+    }
+
     fn render_saved_artwork_text(
         &self,
         form: &NodeCopyForm,
-        cx: &Context<Self>,
+        node: &GddGraphNode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         v_flex()
             .gap_2()
@@ -8715,6 +8781,7 @@ impl GraphiteDocumentItem {
                     )
                 }),
             )
+            .child(self.render_artwork_alignment(form, node, window, cx))
             .child(
                 h_flex()
                     .gap_2()
@@ -8736,12 +8803,11 @@ impl GraphiteDocumentItem {
                                 Button::new("graphite-gdd-artwork-text-cancel", "Cancel")
                                     .disabled(self.copy_task.is_some())
                                     .on_click(cx.listener(|item, _, window, cx| {
-                                        let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                                        let NodeCopyPanel::Ready(form) = &mut item.node_copy else {
                                             return;
                                         };
-                                        if let Some(node) = form.selected_node() {
-                                            form.reset_artwork_text(node, window, cx);
-                                        }
+                                        form.reset_artwork_text(window, cx);
+                                        cx.notify();
                                     })),
                             ),
                     ),
@@ -9413,7 +9479,7 @@ impl GraphiteDocumentItem {
                                 panel.child(self.render_artboard_geometry(form, working, cx))
                             })
                             .when(working && selected.artwork_text().is_some(), |panel| {
-                                panel.child(self.render_saved_artwork_text(form, cx))
+                                panel.child(self.render_saved_artwork_text(form, selected, window, cx))
                             })
                             .when(selected.artboard_background().is_some(), |panel| {
                                 panel.child(self.render_artboard_background(form, working, cx))
@@ -16022,7 +16088,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn at_r14_1_at_gra_text_003_at_gra_text_006_workspace_edits_saved_artwork_text(
+    async fn at_r14_1_at_gra_text_003_at_gra_text_006_at_gra_text_007_workspace_edits_saved_artwork_text(
         cx: &mut TestAppContext,
     ) {
         use gpui::EntityInputHandler as _;
@@ -16179,6 +16245,7 @@ mod tests {
             size: 24.,
             max_width: None,
             max_height: None,
+            alignment: TextAlign::AlignLeft,
         };
         assert_eq!(layout(window).await, automatic);
         enter_value(window, size_field, "0");
@@ -16222,6 +16289,52 @@ mod tests {
         click(window, apply);
         assert_eq!(layout(window).await, automatic);
         assert!(original_image.as_bytes(0) == artwork_image(window).as_bytes(0));
+        enter_value(window, width_field, "180");
+        click(window, apply);
+        let left_pixels = artwork_image(window);
+        let before_alignment = snapshot(window);
+        let alignment_picker = "GRAPHITE-GDD-ARTWORK-ALIGNMENT";
+        click(window, alignment_picker);
+        for option in [
+            "MENU_ITEM-Align Left",
+            "MENU_ITEM-Align Center",
+            "MENU_ITEM-Align Right",
+            "MENU_ITEM-Justify Left",
+            "MENU_ITEM-Justify Center",
+            "MENU_ITEM-Justify Right",
+            "MENU_ITEM-Justify All",
+        ] {
+            assert!(window.debug_bounds(option).is_some(), "{option}");
+        }
+        click(window, "MENU_ITEM-Justify All");
+        assert!(Arc::ptr_eq(&snapshot(window), &before_alignment));
+        let draft_alignment = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| match &item.node_copy {
+                NodeCopyPanel::Ready(form) => form.artwork_alignment,
+                _ => panic!("native Text inspector"),
+            })
+        };
+        assert_eq!(draft_alignment(window), TextAlign::JustifyAll);
+        click(window, "GRAPHITE-GDD-ARTWORK-TEXT-CANCEL");
+        assert_eq!(draft_alignment(window), TextAlign::AlignLeft);
+        assert!(Arc::ptr_eq(&snapshot(window), &before_alignment));
+        click(window, alignment_picker);
+        click(window, "MENU_ITEM-Align Right");
+        click(window, apply);
+        assert_eq!(layout(window).await.alignment, TextAlign::AlignRight);
+        assert_eq!(layout(window).await.max_width, Some(180.));
+        assert!(left_pixels.as_bytes(0) != artwork_image(window).as_bytes(0));
+        window.dispatch_action(editor::actions::Undo);
+        window.run_until_parked();
+        assert_eq!(layout(window).await.alignment, TextAlign::AlignLeft);
+        window.dispatch_action(editor::actions::Redo);
+        window.run_until_parked();
+        assert_eq!(layout(window).await.alignment, TextAlign::AlignRight);
+        enter_value(window, width_field, "");
+        click(window, alignment_picker);
+        click(window, "MENU_ITEM-Align Left");
+        click(window, apply);
+        assert_eq!(layout(window).await, automatic);
         let before = snapshot(window);
         click(window, "GRAPHITE-GDD-ARTWORK-TEXT");
         editor.update_in(window, |editor, window, cx| {
@@ -16246,6 +16359,8 @@ mod tests {
         enter_value(window, size_field, "48");
         enter_value(window, width_field, "180");
         enter_value(window, height_field, "70");
+        click(window, alignment_picker);
+        click(window, "MENU_ITEM-Justify Right");
         click(window, apply);
         let changed = snapshot(window);
         let graph = changed.graph_nodes().await.expect("edited Text");
@@ -16259,6 +16374,7 @@ mod tests {
             size: 48.,
             max_width: Some(180.),
             max_height: Some(70.),
+            alignment: TextAlign::JustifyRight,
         };
         assert_eq!(text.artwork_text_layout(), Some(edited_layout));
         assert!(original_image.as_bytes(0) != artwork_image(window).as_bytes(0));
