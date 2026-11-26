@@ -172,6 +172,8 @@ pub(crate) fn render_saved_layer_grouping(
             ("NEW", "New Group", GddLayerGrouping::Empty),
             ("GROUP", "Group", GddLayerGrouping::Group),
             ("UNGROUP", "Ungroup", GddLayerGrouping::Ungroup),
+            ("BLEND", "Blend", GddLayerGrouping::Blend),
+            ("MORPH", "Morph", GddLayerGrouping::Morph),
         ]
         .into_iter()
         .map(move |(id, label, operation)| {

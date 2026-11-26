@@ -1312,7 +1312,17 @@ impl NodeCopyForm {
             port_rename: None,
             node_selection: BTreeSet::new(),
             layer_selection_anchor: None,
-            collapsed_layers: BTreeSet::new(),
+            collapsed_layers: inspection
+                .nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, node)| {
+                    inspection
+                        .source_collapsed_layers
+                        .contains(&node.storage_id())
+                })
+                .map(|(index, _)| index)
+                .collect(),
             show_saved_ports: false,
             saved_graph: SavedGraphPanel::Closed,
             saved_graph_viewport: ScrollHandle::new(),
@@ -1342,12 +1352,17 @@ impl NodeCopyForm {
             .filter_map(|index| self.nodes.get(*index))
             .map(GddGraphNode::storage_id)
             .collect::<BTreeSet<_>>();
-        let collapsed = self
+        let mut collapsed = self
             .collapsed_layers
             .iter()
             .filter_map(|&index| self.nodes.get(index))
             .map(GddGraphNode::storage_id)
             .collect::<BTreeSet<_>>();
+        let mut new_collapsed = inspection.source_collapsed_layers.clone();
+        for node in &self.nodes {
+            new_collapsed.remove(&node.storage_id());
+        }
+        collapsed.extend(new_collapsed);
         self.snapshot = snapshot;
         self.revision = revision;
         self.document_run = NodeOutputPreview::Hidden;
@@ -8864,7 +8879,7 @@ impl GraphiteDocumentItem {
                                 let label = match value {
                                     GddNumericValue::Vector(_) => "Value (x, y)",
                                     GddNumericValue::NumberList(_) => "Value (comma-separated numbers)",
-                                    _ => "Value",
+                                    _ => selected.interpolation_parameter_name().unwrap_or("Value"),
                                 };
                                 panel
                                     .child(Label::new(label))
@@ -14585,6 +14600,376 @@ mod tests {
             filesystem.load_bytes(&source).await.expect("source ZIP"),
             original
         );
+    }
+
+    async fn check_saved_interpolation_group(operation: GddLayerGrouping, name: &str) {
+        let bytes = layer_order_archive().await.into();
+        let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = source.graph_nodes().await.expect("source nodes");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        assert!(matches!(
+            source
+                .group_root_layers_in_copy(
+                    &[find("Locked Gold").clone()],
+                    operation,
+                    ARCHIVE_BUDGET
+                )
+                .await,
+            Err(GddArchiveError::LockedLayerStructure)
+        ));
+        let (edited, selected) = source
+            .group_root_layers_in_copy(
+                &[find("Green").clone(), find("Red").clone()],
+                operation,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("source interpolation grouping");
+        let nodes = edited.graph_nodes().await.expect("edited nodes");
+        let group = nodes
+            .iter()
+            .find(|node| selected == [node.storage_id()])
+            .expect("new selected group");
+        assert_eq!(group.display_name(), name);
+        let wire = |node: &GddGraphNode, input: usize| match node
+            .input_ports()
+            .get(input)
+            .and_then(|port| port.source.as_ref())
+        {
+            Some(GddGraphPortSource::Node {
+                storage_id,
+                output_index: 0,
+            }) => nodes
+                .iter()
+                .find(|node| node.storage_id() == *storage_id)
+                .expect("editable node"),
+            other => panic!("expected source wire on {input}: {other:?}"),
+        };
+        let chain = wire(group, 1);
+        assert_eq!(chain.display_name(), name);
+        assert_eq!(
+            chain.numeric_input().map(ToString::to_string).as_deref(),
+            Some(if name == "Blend" { "20" } else { "0.5" })
+        );
+        assert_eq!(chain.boolean_input().map(|input| input.value), Some(false));
+        assert_eq!(wire(chain, 0).storage_id(), find("Red").storage_id());
+        assert_eq!(
+            wire(wire(chain, 0), 0).storage_id(),
+            find("Green").storage_id()
+        );
+        let control_name = format!("{name} Path");
+        let control = nodes
+            .iter()
+            .find(|node| node.display_name() == control_name)
+            .expect("editable control layer");
+        let path = wire(control, 1);
+        assert_eq!(path.display_name(), "Path");
+        assert!(chain.input_ports().iter().any(|port| {
+            port.source
+                == Some(GddGraphPortSource::Node {
+                    storage_id: path.storage_id(),
+                    output_index: 0,
+                })
+        }));
+        let tangents = wire(path, 0);
+        assert_eq!(tangents.display_name(), "Auto-Tangents");
+        let origins = wire(tangents, 0);
+        assert_eq!(origins.display_name(), "Origins to Polyline");
+        assert_eq!(wire(origins, 0).storage_id(), find("Red").storage_id());
+        let rendered = edited
+            .render_document_canvas_svg(
+                UVec2::new(640, 480),
+                1.,
+                None,
+                CpuSvgEvaluationBudget {
+                    max_viewport_pixels: 640 * 480,
+                    max_output_bytes: 256 * 1024,
+                },
+            )
+            .await
+            .expect("render the edited source document");
+        let RenderOutputType::Svg { svg, .. } = rendered.render.data else {
+            panic!("source SVG");
+        };
+        assert!(svg.contains("<path "));
+        let parameter = if name == "Blend" {
+            GddNumericValue::Integer(12)
+        } else {
+            GddNumericValue::Number(0.75)
+        };
+        let adjusted = edited
+            .set_graph_numeric_input_in_copy(chain, parameter.clone(), ARCHIVE_BUDGET)
+            .await
+            .expect("edit source interpolation parameter");
+        let adjusted_nodes = adjusted.graph_nodes().await.expect("adjusted graph");
+        let adjusted_chain = adjusted_nodes
+            .iter()
+            .find(|node| node.storage_id() == chain.storage_id())
+            .expect("same operator");
+        assert_eq!(
+            adjusted_chain.numeric_input().map(ToString::to_string),
+            Some(parameter.to_string())
+        );
+        let reversed = adjusted
+            .set_graph_boolean_input_in_copy(adjusted_chain, true, ARCHIVE_BUDGET)
+            .await
+            .expect("reverse interpolation");
+        let reversed_nodes = reversed.graph_nodes().await.expect("reversed graph");
+        let reversed_chain = reversed_nodes
+            .iter()
+            .find(|node| node.storage_id() == chain.storage_id())
+            .expect("same reversed operator");
+        assert_eq!(
+            reversed_chain.boolean_input().map(|input| input.value),
+            Some(true)
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_027_1_groups_source_order_into_an_editable_blend(
+        _cx: &mut TestAppContext,
+    ) {
+        check_saved_interpolation_group(GddLayerGrouping::Blend, "Blend").await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_028_1_groups_source_order_into_an_editable_morph(
+        _cx: &mut TestAppContext,
+    ) {
+        check_saved_interpolation_group(GddLayerGrouping::Morph, "Morph").await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_027_1_keeps_interpolation_selections_in_their_artboards(
+        _cx: &mut TestAppContext,
+    ) {
+        let bytes = layer_order_archive().await.into();
+        let source = open_gdd_archive(&bytes, ARCHIVE_BUDGET)
+            .await
+            .expect("F-LAYERS");
+        let nodes = source.graph_nodes().await.expect("source nodes");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let separated = source
+            .reparent_root_layers_in_copy(
+                &[find("Gray").clone()],
+                Some(find("Second Artboard")),
+                0,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("put Gray in the second Artboard");
+        let nodes = separated.graph_nodes().await.expect("separated selections");
+        let find = |name| {
+            nodes
+                .iter()
+                .find(|node| node.display_name() == name)
+                .expect(name)
+        };
+        let (grouped, selected) = separated
+            .group_root_layers_in_copy(
+                &[find("Gray").clone(), find("Red").clone()],
+                GddLayerGrouping::Blend,
+                ARCHIVE_BUDGET,
+            )
+            .await
+            .expect("one Blend per Artboard");
+        assert_eq!(selected.len(), 2);
+        let edited = grouped.graph_nodes().await.expect("grouped nodes");
+        let source_of = |node: &GddGraphNode, index: usize| {
+            let Some(GddGraphPortSource::Node {
+                storage_id,
+                output_index: 0,
+            }) = node.input_ports()[index].source
+            else {
+                panic!("source wire on {index}");
+            };
+            edited
+                .iter()
+                .find(|node| node.storage_id() == storage_id)
+                .expect("saved source")
+        };
+        let mut child_ids = BTreeSet::new();
+        for group in edited
+            .iter()
+            .filter(|node| selected.contains(&node.storage_id()))
+        {
+            let blend = source_of(group, 1);
+            assert!(matches!(
+                blend.numeric_input(),
+                Some(GddNumericValue::Integer(10))
+            ));
+            child_ids.insert(source_of(blend, 0).storage_id());
+        }
+        assert_eq!(
+            child_ids,
+            BTreeSet::from([find("Red").storage_id(), find("Gray").storage_id()])
+        );
+    }
+
+    async fn check_workspace_interpolation_group(
+        cx: &mut TestAppContext,
+        name: &str,
+        dispatch: impl FnOnce(&mut gpui::VisualTestContext),
+    ) {
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/interpolation.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open F-LAYERS")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        click(
+            window,
+            if name == "Blend" {
+                "GRAPHITE-GDD-LAYER-GROUPING-BLEND"
+            } else {
+                "GRAPHITE-GDD-LAYER-GROUPING-MORPH"
+            },
+        );
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-5");
+        let red = window
+            .debug_bounds("GRAPHITE-GDD-SAVED-LAYER-4")
+            .expect("Red layer");
+        click_graph_point(
+            window,
+            red.center(),
+            gpui::MouseButton::Left,
+            gpui::Modifiers {
+                shift: true,
+                ..Default::default()
+            },
+        );
+        dispatch(window);
+        let new_layer = item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx), "{:?}", item.copy_feedback);
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers view");
+            };
+            let group = form.selected_node().expect("selected interpolation layer");
+            assert_eq!(group.display_name(), name);
+            assert!(form.collapsed_layers.iter().any(|index| {
+                form.nodes
+                    .get(*index)
+                    .is_some_and(|node| node.display_name() == format!("{name} Path"))
+            }));
+            group.storage_id()
+        });
+        click(window, "GRAPHITE-GDD-OPEN-CANVAS");
+        item.read_with(window, |item, _| {
+            let canvas = item.scene_canvas.as_ref().expect("native Canvas");
+            if let SavedSceneFrame::Failed(error) = &canvas.frame {
+                panic!("Canvas failed: {error}");
+            }
+            assert!(matches!(canvas.frame, SavedSceneFrame::Ready(_)));
+        });
+        click(window, "GRAPHITE-GDD-CANVAS-BACK");
+        click(window, "GRAPHITE-GDD-UNDO");
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("native Layers view");
+            };
+            assert!(!form.nodes.iter().any(|node| node.storage_id() == new_layer));
+        });
+        click(window, "GRAPHITE-GDD-REDO");
+        let destination = PathBuf::from("/project/interpolation.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved interpolation");
+        let inspection = reopened.graph_inspection().await.expect("editable graph");
+        let control = inspection
+            .nodes
+            .iter()
+            .find(|node| node.display_name() == format!("{name} Path"))
+            .expect("saved control path layer");
+        assert!(
+            inspection
+                .source_collapsed_layers
+                .contains(&control.storage_id())
+        );
+        let group = inspection
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == new_layer)
+            .expect("same group after redo and reopen");
+        assert_eq!(group.display_name(), name);
+        let Some(GddGraphPortSource::Node { storage_id, .. }) = group.input_ports()[1].source
+        else {
+            panic!("editable saved interpolation source");
+        };
+        let operator = inspection
+            .nodes
+            .iter()
+            .find(|node| node.storage_id() == storage_id)
+            .expect("editable saved operator");
+        assert_eq!(operator.display_name(), name);
+        assert_eq!(operator.input_ports()[4].name.as_deref(), Some("Path"));
+        assert!(matches!(
+            operator.input_ports()[4].source,
+            Some(GddGraphPortSource::Node { .. })
+        ));
+        assert_eq!(
+            filesystem
+                .load_bytes(&source)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_027_2_workspace_blends_selected_layers(cx: &mut TestAppContext) {
+        check_workspace_interpolation_group(cx, "Blend", |window| {
+            click(window, "GRAPHITE-GDD-LAYER-GROUPING-BLEND");
+        })
+        .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_028_2_workspace_morphs_selected_layers(cx: &mut TestAppContext) {
+        check_workspace_interpolation_group(cx, "Morph", |window| {
+            window.simulate_keystrokes(if cfg!(target_os = "macos") {
+                "cmd-alt-m"
+            } else {
+                "ctrl-alt-m"
+            });
+            window.run_until_parked();
+            paint(window);
+        })
+        .await;
     }
 
     #[gpui::test]

@@ -35,7 +35,8 @@ use graphite_editor::messages::portfolio::document::{
         utility_types::{ModifyInputsContext, TransformIn},
     },
     node_graph::document_node_definitions::{
-        DefinitionIdentifier, DocumentNodeDefinition, resolve_proto_node_type,
+        DefinitionIdentifier, DocumentNodeDefinition, resolve_network_node_type,
+        resolve_proto_node_type,
     },
     utility_types::{
         document_metadata::LayerNodeIdentifier,
@@ -53,6 +54,7 @@ use graphite_editor::messages::portfolio::document::{
                 build_interface_from_storage, network_ids_from_entries,
             },
         },
+        nodes::CollapsedLayers,
     },
 };
 use graphite_editor::{
@@ -86,9 +88,9 @@ use graphite_std::{
     transform::Footprint,
     transform_nodes::transform,
     vector_nodes::{
-        fill,
+        auto_tangents, fill,
         generator_nodes::{ellipse, rectangle},
-        stroke,
+        morph, stroke,
     },
     vector_types::vector::style::RenderMode,
 };
@@ -576,6 +578,7 @@ pub struct GddNetworkView {
 pub struct GddGraphInspection {
     pub nodes: Vec<GddGraphNode>,
     pub networks: Vec<GddGraphNetwork>,
+    pub source_collapsed_layers: BTreeSet<StorageNodeId>,
 }
 
 impl GddGraphInspection {
@@ -728,6 +731,8 @@ pub enum GddLayerGrouping {
     Empty,
     Group,
     Ungroup,
+    Blend,
+    Morph,
 }
 
 #[derive(Clone)]
@@ -974,6 +979,10 @@ enum SavedGraphicProfile {
     Opacity,
     BlendMode,
     RepeatArray,
+    InterpolationBlend,
+    InterpolationMorph,
+    OriginsToPolyline,
+    AutoTangents,
     Layer(GddGraphLayerPreview),
 }
 
@@ -1438,7 +1447,18 @@ impl GddGraphNode {
     }
 
     pub fn numeric_input_exposed(&self) -> Option<bool> {
+        if self.interpolation_parameter_name().is_some() {
+            return None;
+        }
         self.numeric_port().map(|port| port.exposed)
+    }
+
+    pub fn interpolation_parameter_name(&self) -> Option<&'static str> {
+        match self.graphic_profile {
+            Some(SavedGraphicProfile::InterpolationBlend) => Some("Count"),
+            Some(SavedGraphicProfile::InterpolationMorph) => Some("Progression"),
+            _ => None,
+        }
     }
 
     pub fn boolean_input(&self) -> Option<GddGraphBooleanInput> {
@@ -2045,6 +2065,9 @@ impl InspectedGddV1 {
                     node.artboard_geometry = GddArtboardGeometry::hidden(document);
                     node.artboard_background = hidden_artboard_background(document);
                 }
+                if node.interpolation_parameter_name().is_some() {
+                    node.boolean_input = hidden_graph_boolean(&document.inputs, 2, "Reverse");
+                }
             }
             node.can_supply_numeric_export = node.can_preview_numeric_output
                 && !interface.is_chain(&node.local_id, path)
@@ -2079,7 +2102,31 @@ impl InspectedGddV1 {
                     .map(|position| position.to_array());
             }
         }
-        Ok(GddGraphInspection { nodes, networks })
+        let collapsed_nodes = self
+            .document
+            .view_settings()
+            .get(graphite_document_graph_storage::attr::session::doc::COLLAPSED)
+            .and_then(|value| {
+                graphite_document_graph_storage::from_value::<CollapsedLayers>(value).ok()
+            })
+            .map(|layers| {
+                layers
+                    .0
+                    .iter()
+                    .filter_map(|path| path.last().copied())
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        let source_collapsed_layers = nodes
+            .iter()
+            .filter(|node| node.network_path.is_empty() && collapsed_nodes.contains(&node.local_id))
+            .map(GddGraphNode::storage_id)
+            .collect();
+        Ok(GddGraphInspection {
+            nodes,
+            networks,
+            source_collapsed_layers,
+        })
     }
 
     pub async fn insert_root_numeric_node_in_copy(
@@ -6071,23 +6118,72 @@ impl InspectedGddV1 {
         {
             document = self.render_layer_edit_geometry(&budget).await?;
         }
-        document
-            .network_interface
-            .selected_nodes_mut(&[])
-            .ok_or(GddArchiveError::InvalidRootLayerGraph)?
-            .set_selected_nodes(selected);
-        let mut commands = VecDeque::new();
+        let interpolation = matches!(operation, GddLayerGrouping::Blend | GddLayerGrouping::Morph);
+        let artboards: Vec<_> = LayerNodeIdentifier::ROOT_PARENT
+            .children(document.metadata())
+            .filter(|layer| {
+                document
+                    .network_interface
+                    .is_artboard(&layer.to_node(), &[])
+            })
+            .collect();
+        let selections = if interpolation && !artboards.is_empty() {
+            // The source plans child moves from the active selection, before its
+            // queued Artboard selection changes run.
+            artboards
+                .into_iter()
+                .map(|artboard| {
+                    artboard
+                        .descendants(document.metadata())
+                        .map(LayerNodeIdentifier::to_node)
+                        .filter(|node| selected.contains(node))
+                        .collect::<Vec<_>>()
+                })
+                .filter(|nodes| !nodes.is_empty())
+                .collect()
+        } else {
+            vec![selected]
+        };
         let message = match operation {
             GddLayerGrouping::Empty => DocumentMessage::CreateEmptyFolder,
             GddLayerGrouping::Group => DocumentMessage::GroupSelectedLayers {
                 group_folder_type: GroupFolderType::Layer,
             },
             GddLayerGrouping::Ungroup => DocumentMessage::UngroupSelectedLayers,
+            GddLayerGrouping::Blend => DocumentMessage::BlendSelectedLayers,
+            GddLayerGrouping::Morph => DocumentMessage::MorphSelectedLayers,
         };
-        plan_document_layer_command(&mut document, message, &mut commands);
         self.finish_layer_structure_edit(
             &mut document,
-            |document| apply_document_layer_commands(document, commands),
+            |document| {
+                let mut groups = Vec::new();
+                for selection in selections {
+                    document
+                        .network_interface
+                        .selected_nodes_mut(&[])
+                        .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+                        .set_selected_nodes(selection);
+                    let mut commands = VecDeque::new();
+                    plan_document_layer_command(document, message.clone(), &mut commands);
+                    apply_document_layer_commands(document, commands)?;
+                    if interpolation {
+                        groups.extend_from_slice(
+                            document
+                                .network_interface
+                                .selected_nodes()
+                                .selected_nodes_ref(),
+                        );
+                    }
+                }
+                if interpolation {
+                    document
+                        .network_interface
+                        .selected_nodes_mut(&[])
+                        .ok_or(GddArchiveError::InvalidRootLayerGraph)?
+                        .set_selected_nodes(groups);
+                }
+                Ok(())
+            },
             budget,
             GddArchiveError::UnchangedLayerStructure,
         )
@@ -6141,7 +6237,7 @@ impl InspectedGddV1 {
         edit: impl FnOnce(&mut DocumentMessageHandler) -> Result<(), GddArchiveError>,
         budget: GddArchiveBudget,
     ) -> Result<(Self, Vec<StorageNodeId>), GddArchiveError> {
-        let (owner, staged) = self.fork_working_copy(&budget).await?;
+        let (mut owner, staged) = self.fork_working_copy(&budget).await?;
         let resources = owner
             .registry()
             .to_resource_registry()
@@ -6157,7 +6253,16 @@ impl InspectedGddV1 {
             .map_err(GddArchiveError::GraphNodePreparation)
         };
         let baseline = convert(&document.network_interface)?;
+        let collapsed = document.collapsed.clone();
         edit(document)?;
+        if collapsed != document.collapsed {
+            let mut settings = owner.view_settings().clone();
+            settings.insert(
+                graphite_document_graph_storage::attr::session::doc::COLLAPSED.into(),
+                graphite_document_graph_storage::to_value(&document.collapsed)?,
+            );
+            owner.set_view_settings(settings)?;
+        }
         let after = layer_tree_order(&document.network_interface);
         let converted = convert(&document.network_interface)?;
         // A diff between source projections keeps unrelated registry attributes and resources in the GDD.
@@ -6399,6 +6504,14 @@ impl InspectedGddV1 {
             }
             _ => return Err(GddArchiveError::GraphInputTypeChanged),
         };
+        if matches!(
+            node.graphic_profile,
+            Some(SavedGraphicProfile::InterpolationBlend)
+        ) && matches!(&tagged_value, TaggedValue::Integer(value)
+                if !(1..=MAX_PREVIEW_VALUES as i64).contains(value))
+        {
+            return Err(GddArchiveError::GraphLayerPreviewBudget);
+        }
         let input = NodeInput::value(tagged_value, false);
         self.write_graph_numeric_port(
             node,
@@ -6973,6 +7086,9 @@ impl InspectedGddV1 {
         budget: GddArchiveBudget,
     ) -> Result<Self, GddArchiveError> {
         self.check_node_edit_target(node)?;
+        if node.interpolation_parameter_name().is_some() {
+            return Err(GddArchiveError::UnsupportedGraphNumericInput);
+        }
         let interface = self.runtime_graph().await?.into_interface()?;
         let port = graph_numeric_port(&interface, node)
             .ok_or(GddArchiveError::UnsupportedGraphNumericInput)?;
@@ -7172,6 +7288,19 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::UnchangedGraphInput);
         }
         interface.set_input(&connector, input, path);
+        if node.interpolation_parameter_name().is_some() {
+            let mut detached = NodeNetwork {
+                exports: vec![NodeInput::node(node.local_id, 0)],
+                ..Default::default()
+            };
+            collect_layer_preview_node(
+                interface.document_network(),
+                node.local_id,
+                &mut detached,
+                &mut BTreeSet::new(),
+            )?;
+            validate_saved_graphic_work(&detached)?;
+        }
         self.finish_graph_numeric_input(
             node,
             interface,
@@ -8189,6 +8318,94 @@ fn apply_document_layer_commands(
                 let layer = ModifyInputsContext::new(interface, &mut refresh).create_layer(id);
                 move_source_layer(interface, layer, parent, insert_index)?;
             }
+            DocumentMessage::GraphOperation(GraphOperationMessage::NewInterpolationLayer {
+                id,
+                control_path_id,
+                parent,
+                insert_index,
+                ..
+            }) => {
+                let interface = &document.network_interface;
+                if id == control_path_id
+                    || [id, control_path_id].iter().any(|node| {
+                        matches!(node, NodeId(0) | NodeId(u64::MAX))
+                            || interface.document_node(node, &[]).is_some()
+                    })
+                {
+                    return Err(GddArchiveError::GraphNodeIdentityCollision);
+                }
+                if parent != LayerNodeIdentifier::ROOT_PARENT
+                    && interface.selected_nodes().layer_locked(parent, interface)
+                {
+                    return Err(GddArchiveError::LockedLayerStructure);
+                }
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                nested.append(&mut commands);
+                commands = nested;
+                let interface = &mut document.network_interface;
+                load_root_layer_structure(interface)?;
+                let mut siblings = parent
+                    .children(interface.document_metadata())
+                    .skip(insert_index);
+                if siblings.next().map(LayerNodeIdentifier::to_node) != Some(control_path_id)
+                    || siblings.next().map(LayerNodeIdentifier::to_node) != Some(id)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+            }
+            DocumentMessage::GraphOperation(
+                GraphOperationMessage::ConnectInterpolationControlPathToChildren {
+                    interpolation_layer_id,
+                    control_path_id,
+                },
+            ) => {
+                let interface = &document.network_interface;
+                let chain = interface
+                    .input_from_connector(
+                        &InputConnector::layer_secondary_input(interpolation_layer_id),
+                        &[],
+                    )
+                    .and_then(NodeInput::as_node)
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+                let children = interface
+                    .upstream_output_connector(&InputConnector::primary_input(chain), &[])
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+                let origins = interface
+                    .upstream_flow_back_from_nodes(vec![control_path_id], &[], FlowType::HorizontalFlow)
+                    .find(|node| matches!(interface.reference(node, &[]), Some(DefinitionIdentifier::Network(name)) if name == "Origins to Polyline"))
+                    .ok_or(GddArchiveError::IncompleteGraphNodeEdit)?;
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                nested.append(&mut commands);
+                commands = nested;
+                let interface = &mut document.network_interface;
+                load_root_layer_structure(interface)?;
+                if interface.upstream_output_connector(&InputConnector::primary_input(origins), &[])
+                    != Some(children)
+                {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+            }
+            DocumentMessage::NodeGraph(NodeGraphMessage::SetDisplayNameImpl {
+                node_id,
+                network_path,
+                alias,
+            }) if network_path.is_empty() => {
+                let interface = &mut document.network_interface;
+                if !interface.is_layer(&node_id, &[]) {
+                    return Err(GddArchiveError::IncompleteGraphNodeEdit);
+                }
+                interface.set_display_name(&node_id, alias, &[]);
+            }
+            DocumentMessage::ToggleLayerExpansion {
+                recursive: false, ..
+            } => {
+                let mut nested = VecDeque::new();
+                plan_document_layer_command(document, command, &mut nested);
+                nested.append(&mut commands);
+                commands = nested;
+            }
             DocumentMessage::NodeGraph(NodeGraphMessage::SelectedNodesSet { nodes }) => {
                 document
                     .network_interface
@@ -8758,8 +8975,26 @@ fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveEr
 }
 
 fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveError> {
-    if !network.nodes.values().any(|node| matches!(&node.implementation,
-        DocumentNodeImplementation::ProtoNode(identifier) if *identifier == repeat_array::IDENTIFIER))
+    fn count_input(node: &DocumentNode) -> Option<usize> {
+        match &node.implementation {
+            DocumentNodeImplementation::ProtoNode(identifier)
+                if *identifier == repeat_array::IDENTIFIER =>
+            {
+                Some(repeat_array::CountInput::INDEX)
+            }
+            DocumentNodeImplementation::Network(_) if node.inputs.len() == 5 => matches!(
+                checked_saved_graphic_node(node),
+                Some((_, SavedGraphicProfile::InterpolationBlend))
+            )
+            .then_some(1),
+            _ => None,
+        }
+    }
+
+    if !network
+        .nodes
+        .values()
+        .any(|node| count_input(node).is_some())
     {
         return Ok(());
     }
@@ -8783,13 +9018,9 @@ fn validate_saved_repeat_work(network: &NodeNetwork) -> Result<(), GddArchiveErr
                 work = work.max(values.len());
             }
         }
-        if matches!(&node.implementation,
-            DocumentNodeImplementation::ProtoNode(identifier) if *identifier == repeat_array::IDENTIFIER)
-        {
-            let Some(TaggedValue::Integer(count)) = node
-                .inputs
-                .get(repeat_array::CountInput::INDEX)
-                .and_then(NodeInput::as_value)
+        if let Some(index) = count_input(node) {
+            let Some(TaggedValue::Integer(count)) =
+                node.inputs.get(index).and_then(NodeInput::as_value)
             else {
                 return Err(GddArchiveError::UnsupportedGraphLayerPreview);
             };
@@ -8880,18 +9111,43 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                 })
                 .collect::<Vec<_>>();
             match node.inputs.as_slice() {
-                [_, modification]
+                [content, modification]
                     if matches!(modification, NodeInput::Value { exposed: false, .. })
                         && matches!(
                             modification.as_value(),
                             Some(TaggedValue::VectorModification(_))
                         ) =>
                 {
-                    // This profile starts with the original empty Vector input.
+                    let mut replacements = vec![(1, modification)];
+                    if output_wire(content) {
+                        replacements.push((0, content));
+                    }
                     (
                         path_node_definition()?,
-                        vec![(1, modification)],
+                        replacements,
                         SavedGraphicProfile::Path,
+                    )
+                }
+                [content] if output_wire(content) => (
+                    resolve_network_node_type("Origins to Polyline")?,
+                    vec![(0, content)],
+                    SavedGraphicProfile::OriginsToPolyline,
+                ),
+                [content, count, reverse, distribution, path]
+                    if output_wire(content)
+                        && matches!(count.as_value(), Some(TaggedValue::Integer(value))
+                            if (1..=MAX_PREVIEW_VALUES as i64).contains(value))
+                        && matches!(reverse.as_value(), Some(TaggedValue::Bool(_)))
+                        && matches!(
+                            distribution.as_value(),
+                            Some(TaggedValue::InterpolationDistribution(_))
+                        )
+                        && output_wire(path) =>
+                {
+                    (
+                        resolve_network_node_type("Blend")?,
+                        node.inputs.iter().enumerate().collect(),
+                        SavedGraphicProfile::InterpolationBlend,
                     )
                 }
                 [_, _] => (
@@ -8974,6 +9230,45 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                     (ellipse::RadiusYInput::INDEX, vertical),
                 ]),
                 profile,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &morph::IDENTIFIER => {
+            let [content, progression, reverse, distribution, path] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(content)
+                || !matches!(progression.as_value(), Some(TaggedValue::Number(value)) if value.is_finite())
+                || !matches!(reverse.as_value(), Some(TaggedValue::Bool(_)))
+                || !matches!(
+                    distribution.as_value(),
+                    Some(TaggedValue::InterpolationDistribution(_))
+                )
+                || !output_wire(path)
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(morph::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::InterpolationMorph,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier)
+            if identifier == &auto_tangents::IDENTIFIER =>
+        {
+            let [source, spread, preserve_existing] = node.inputs.as_slice() else {
+                return None;
+            };
+            if !output_wire(source)
+                || !matches!(spread.as_value(), Some(TaggedValue::Number(value)) if (0. ..=1.).contains(value))
+                || !matches!(preserve_existing.as_value(), Some(TaggedValue::Bool(_)))
+            {
+                return None;
+            }
+            (
+                resolve_proto_node_type(auto_tangents::IDENTIFIER)?,
+                node.inputs.iter().enumerate().collect(),
+                SavedGraphicProfile::AutoTangents,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -9345,6 +9640,17 @@ fn numeric_proto_input_count(identifier: &ProtoNodeIdentifier) -> Option<usize> 
 const TRIGONOMETRIC_RADIANS_INDEX: usize = graphite_math_nodes::sine::RadiansInput::INDEX;
 
 fn graph_boolean_literal(document: &DocumentNode) -> Option<GddGraphBooleanInput> {
+    if document.inputs.len() == 5
+        && matches!(
+            checked_saved_graphic_node(document),
+            Some((
+                _,
+                SavedGraphicProfile::InterpolationBlend | SavedGraphicProfile::InterpolationMorph
+            ))
+        )
+    {
+        return hidden_graph_boolean(&document.inputs, 2, "Reverse");
+    }
     match &document.implementation {
         DocumentNodeImplementation::ProtoNode(identifier) => {
             let (index, name) = numeric_boolean_port(identifier)?;
@@ -9481,6 +9787,33 @@ fn graph_numeric_input(
     use graphite_math_nodes::{absolute_value, ceiling, floor, round, sign};
 
     let path = &node.network_path;
+    if path.is_empty()
+        && let Some(document) = interface.document_node(&node.local_id, path)
+        && let [
+            _,
+            NodeInput::Value {
+                tagged_value,
+                exposed: false,
+            },
+            ..,
+        ] = document.inputs.as_slice()
+        && document.inputs.len() == 5
+    {
+        let value = match (checked_saved_graphic_node(document)?.1, &**tagged_value) {
+            (SavedGraphicProfile::InterpolationBlend, TaggedValue::Integer(count)) => {
+                GddNumericValue::Integer(*count)
+            }
+            (SavedGraphicProfile::InterpolationMorph, TaggedValue::Number(progression)) => {
+                GddNumericValue::Number(*progression)
+            }
+            _ => return None,
+        };
+        return Some(GddNumericInput::Literal(GddNumericPort {
+            index: 1,
+            value,
+            exposed: false,
+        }));
+    }
     let DocumentNodeImplementation::ProtoNode(identifier) =
         interface.implementation(&node.local_id, path)?
     else {
@@ -13226,8 +13559,9 @@ mod tests {
     #[test]
     fn at_gra_node_280_3_custom_number_list_import_drives_a_saved_export() {
         async fn inspect_custom(copy: &InspectedGddV1) -> (GddGraphNetwork, Option<GddGraphNode>) {
-            let GddGraphInspection { nodes, networks } =
-                copy.graph_inspection().await.expect("saved custom network");
+            let GddGraphInspection {
+                nodes, networks, ..
+            } = copy.graph_inspection().await.expect("saved custom network");
             let Ok([_, custom]) = <[GddGraphNetwork; 2]>::try_from(networks) else {
                 panic!("root and custom network")
             };

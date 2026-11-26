@@ -907,6 +907,8 @@ pub(crate) fn render_saved_graph(
             let keyboard_delete = dispatch.clone();
             let reorder_layers = dispatch.clone();
             let group_layers = dispatch.clone();
+            let keyboard_blend = dispatch.clone();
+            let keyboard_morph = dispatch.clone();
             let editing = view.working && view.can_start_connection && can_select;
             let selected = layers.iter().any(|layer| {
                 nodes_by_id
@@ -965,6 +967,28 @@ pub(crate) fn render_saved_graph(
                     .on_action(move |_: &DuplicateSavedLayers, window, cx| {
                         if editing && selected {
                             keyboard_duplicate(SavedGraphAction::DuplicateLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &BlendSavedLayers, window, cx| {
+                        if editing && selected {
+                            keyboard_blend(
+                                SavedGraphAction::GroupLayers(GddLayerGrouping::Blend),
+                                window,
+                                cx,
+                            );
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &MorphSavedLayers, window, cx| {
+                        if editing && selected {
+                            keyboard_morph(
+                                SavedGraphAction::GroupLayers(GddLayerGrouping::Morph),
+                                window,
+                                cx,
+                            );
                         } else {
                             cx.propagate();
                         }
@@ -2252,11 +2276,26 @@ pub fn open_numeric_document(
 }
 
 pub fn bind_keys(cx: &mut App) {
-    let (select_all, deselect, duplicate, alternate_duplicate) = if cfg!(target_os = "macos") {
-        ("cmd-a", "cmd-shift-a", "cmd-d", "cmd-j")
-    } else {
-        ("ctrl-a", "ctrl-shift-a", "ctrl-d", "ctrl-j")
-    };
+    let (select_all, deselect, duplicate, alternate_duplicate, blend, morph) =
+        if cfg!(target_os = "macos") {
+            (
+                "cmd-a",
+                "cmd-shift-a",
+                "cmd-d",
+                "cmd-j",
+                "cmd-alt-b",
+                "cmd-alt-m",
+            )
+        } else {
+            (
+                "ctrl-a",
+                "ctrl-shift-a",
+                "ctrl-d",
+                "ctrl-j",
+                "ctrl-alt-b",
+                "ctrl-alt-m",
+            )
+        };
     cx.bind_keys([
         gpui::KeyBinding::new(
             select_all,
@@ -2283,6 +2322,8 @@ pub fn bind_keys(cx: &mut App) {
         ),
         gpui::KeyBinding::new("delete", DeleteSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("backspace", DeleteSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new(blend, BlendSavedLayers, Some("GraphiteSavedLayers")),
+        gpui::KeyBinding::new(morph, MorphSavedLayers, Some("GraphiteSavedLayers")),
         gpui::KeyBinding::new("escape", CancelSavedGraphBox, Some("GraphiteBoxSelection")),
         gpui::KeyBinding::new("tab", FocusNextArtboardControl, Some("GraphiteArtboard")),
         gpui::KeyBinding::new(
@@ -2321,6 +2362,10 @@ actions!(
         DuplicateSavedLayers,
         /// Deletes selected editable layers in the focused Graphite Layers view.
         DeleteSavedLayers,
+        /// Creates an editable blend from the selected Graphite layers.
+        BlendSavedLayers,
+        /// Creates an editable morph from the selected Graphite layers.
+        MorphSavedLayers,
         /// Switches the selected nodes between layer and node forms.
         ToggleSavedLayerRepresentation,
         /// Shows the original imported image in the focused Graphite item.
