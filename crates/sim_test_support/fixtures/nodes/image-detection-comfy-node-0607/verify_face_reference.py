@@ -5,9 +5,12 @@ from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
 
-source_path = Path('projects/sim/ComfyUI/sim_extras/nodes_sdpose.py')
-assert hashlib.sha256(source_path.read_bytes()).hexdigest() == "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
-source = source_path.read_text()
+source_path = Path('projects/comfy/ComfyUI/comfy_extras/nodes_sdpose.py')
+source_file = Path(__file__).resolve().parents[5] / source_path
+source_bytes = source_file.read_bytes()
+source_digest = hashlib.sha256(source_bytes).hexdigest()
+assert source_digest == "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21"
+source = source_bytes.decode('utf-8')
 module = ast.parse(source)
 nodes = [node for node in module.body if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and node.name in {'get_face_bboxes', 'SDPoseFaceBBoxes'}]
 assert len(nodes) == 2
@@ -41,7 +44,7 @@ for name, frames in scenarios:
         for force_square in [False, True]:
             output = namespace['SDPoseFaceBBoxes'].execute(frames, scale, force_square)
             cases.append({'id': f'{name}-scale-{scale}-square-{force_square}', 'frames': frames, 'scale': scale, 'force_square': force_square, 'expected': output})
-result = {'source_path': str(source_path), 'source_sha256': hashlib.sha256(source_path.read_bytes()).hexdigest(), 'oracle': 'Pinned source AST execution with NumPy', 'numpy_version': np.__version__, 'cases': cases}
+result = {'source_path': str(source_path), 'source_sha256': source_digest, 'oracle': 'Pinned source AST execution with NumPy', 'numpy_version': np.__version__, 'cases': cases}
 fixture = json.loads(Path(__file__).with_name('fixture.json').read_text())
 assert result == fixture['face_reference']
 print('Validated', len(cases), 'pinned-source face reference cases')

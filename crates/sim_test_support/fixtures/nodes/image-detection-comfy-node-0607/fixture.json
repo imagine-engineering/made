@@ -5,7 +5,7 @@
       "class_type": "SDPoseFaceBBoxes",
       "source": {
         "catalog_line": 613,
-        "path": "sim_extras/nodes_sdpose.py",
+        "path": "comfy_extras/nodes_sdpose.py",
         "sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
         "symbol": {
           "end_line": 669,
@@ -148,7 +148,7 @@
       "class_type": "SDPoseKeypointExtractor",
       "source": {
         "catalog_line": 439,
-        "path": "sim_extras/nodes_sdpose.py",
+        "path": "comfy_extras/nodes_sdpose.py",
         "sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
         "symbol": {
           "end_line": 580,
@@ -329,7 +329,7 @@
     }
   ],
   "face_reference": {
-    "source_path": "projects/sim/ComfyUI/sim_extras/nodes_sdpose.py",
+    "source_path": "projects/comfy/ComfyUI/comfy_extras/nodes_sdpose.py",
     "source_sha256": "d9b38524b1ee4b09b0ba4373537fb53526f08a6b2d8f714bb80225379342ee21",
     "oracle": "Pinned source AST execution with NumPy",
     "numpy_version": "2.3.5",
