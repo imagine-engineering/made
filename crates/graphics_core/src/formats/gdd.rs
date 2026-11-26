@@ -67,7 +67,10 @@ use graphite_math_nodes::modulo;
 use graphite_std::{
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
     transform::Footprint,
-    vector_nodes::{fill, generator_nodes::rectangle},
+    vector_nodes::{
+        fill,
+        generator_nodes::{ellipse, rectangle},
+    },
 };
 use zip::ZipArchive;
 
@@ -774,7 +777,7 @@ pub enum GddGraphLayerPreview {
 
 #[derive(Clone, Copy)]
 enum SavedGraphicProfile {
-    Rectangle,
+    Shape,
     Fill,
     Layer(GddGraphLayerPreview),
 }
@@ -1130,9 +1133,7 @@ impl GddGraphNode {
             return None;
         }
         let index = match (self.graphic_profile?, source.graphic_profile?) {
-            (SavedGraphicProfile::Fill, SavedGraphicProfile::Rectangle) => {
-                fill::ContentInput::INDEX
-            }
+            (SavedGraphicProfile::Fill, SavedGraphicProfile::Shape) => fill::ContentInput::INDEX,
             (
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Artboard { .. }),
                 SavedGraphicProfile::Layer(GddGraphLayerPreview::Merge),
@@ -3797,10 +3798,7 @@ impl InspectedGddV1 {
             &mut detached,
             &mut BTreeSet::new(),
         )?;
-        let upstream_rectangle = if matches!(
-            source.graphic_profile,
-            Some(SavedGraphicProfile::Fill)
-        ) {
+        let upstream_shape = if matches!(source.graphic_profile, Some(SavedGraphicProfile::Fill)) {
             let Some(NodeInput::Node {
                 node_id,
                 output_index: 0,
@@ -3813,7 +3811,8 @@ impl InspectedGddV1 {
             };
             if !matches!(
                 detached.nodes.get(node_id).map(|node| &node.implementation),
-                Some(DocumentNodeImplementation::ProtoNode(identifier)) if *identifier == rectangle::IDENTIFIER
+                Some(DocumentNodeImplementation::ProtoNode(identifier))
+                    if *identifier == rectangle::IDENTIFIER || *identifier == ellipse::IDENTIFIER
             ) {
                 return Err(GddArchiveError::UnsupportedGraphContentConnection);
             }
@@ -3833,7 +3832,7 @@ impl InspectedGddV1 {
                     continue;
                 }
                 let (_, local_id) = key;
-                if (local_id != source.local_id && Some(local_id) != upstream_rectangle)
+                if (local_id != source.local_id && Some(local_id) != upstream_shape)
                     || !matches!(layout.get(&key), Some(NodeTypePersistentMetadata::Node(node)) if matches!(node.position(), NodePosition::Absolute(_)))
                     || !matches!(position, NodeTypePersistentMetadata::Node(node) if *node.position() == NodePosition::Chain)
                 {
@@ -5867,7 +5866,25 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             (
                 resolve_proto_node_type(rectangle::IDENTIFIER)?,
                 replacements,
-                SavedGraphicProfile::Rectangle,
+                SavedGraphicProfile::Shape,
+            )
+        }
+        DocumentNodeImplementation::ProtoNode(identifier) if identifier == &ellipse::IDENTIFIER => {
+            let mut replacements = Vec::with_capacity(2);
+            for index in [ellipse::RadiusXInput::INDEX, ellipse::RadiusYInput::INDEX] {
+                let input = node.inputs.get(index)?;
+                // The source forms its diameters by subtracting the two opposite radii.
+                if input.is_exposed()
+                    || !matches!(input.as_value(), Some(TaggedValue::Number(value)) if (*value * 2.).is_finite())
+                {
+                    return None;
+                }
+                replacements.push((index, input));
+            }
+            (
+                resolve_proto_node_type(ellipse::IDENTIFIER)?,
+                replacements,
+                SavedGraphicProfile::Shape,
             )
         }
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &fill::IDENTIFIER => {
@@ -10558,6 +10575,38 @@ mod tests {
     }
 
     #[test]
+    fn at_gra_node_262_2_admits_only_the_pinned_finite_ellipse_template() {
+        let mut ellipse_node = resolve_proto_node_type(ellipse::IDENTIFIER)
+            .expect("pinned Ellipse definition")
+            .default_node_template()
+            .into_parts()
+            .0;
+        assert!(checked_saved_graphic_node(&ellipse_node).is_some());
+        for value in [-40., 0., 75.] {
+            *ellipse_node
+                .inputs
+                .get_mut(ellipse::RadiusXInput::INDEX)
+                .expect("horizontal radius") = NodeInput::value(TaggedValue::Number(value), false);
+            assert!(matches!(
+                checked_saved_graphic_node(&ellipse_node),
+                Some((actual, SavedGraphicProfile::Shape)) if actual == ellipse_node
+            ));
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::MAX] {
+            *ellipse_node
+                .inputs
+                .get_mut(ellipse::RadiusYInput::INDEX)
+                .expect("vertical radius") = NodeInput::value(TaggedValue::Number(value), false);
+            assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+        }
+        *ellipse_node
+            .inputs
+            .get_mut(ellipse::RadiusYInput::INDEX)
+            .expect("vertical radius") = NodeInput::value(TaggedValue::Number(25.), true);
+        assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+    }
+
+    #[test]
     fn at_gra_node_266_272_2_connects_the_pinned_rectangle_to_fill_content() {
         use graphite_glam::UVec2;
         use graphite_graph_craft::document::value::RenderOutputType;
@@ -10589,7 +10638,7 @@ mod tests {
                 .expect("pinned loose Fill");
             let rectangle = nodes
                 .iter()
-                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Rectangle)))
+                .find(|node| matches!(node.graphic_profile, Some(SavedGraphicProfile::Shape)))
                 .expect("pinned Rectangle");
             assert!(matches!(
                 graph
@@ -10710,7 +10759,7 @@ mod tests {
                     .expect("pinned Merge");
                 let nodes = graph.graph_nodes().await.expect("saved addresses");
                 let profiles: [fn(Option<SavedGraphicProfile>) -> bool; 3] = [
-                    |profile| matches!(profile, Some(SavedGraphicProfile::Rectangle)),
+                    |profile| matches!(profile, Some(SavedGraphicProfile::Shape)),
                     |profile| matches!(profile, Some(SavedGraphicProfile::Fill)),
                     |profile| {
                         matches!(

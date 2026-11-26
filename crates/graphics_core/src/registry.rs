@@ -520,6 +520,62 @@ mod tests {
         ranked_signature([left, right], output)
     }
 
+    #[test]
+    fn at_gra_node_262_1_resolves_the_pinned_ellipse_ports_and_constructors() {
+        use graphite_editor::messages::portfolio::document::node_graph::document_node_definitions::resolve_proto_node_type;
+        use graphite_std::{Vector, vector_nodes::generator_nodes::ellipse};
+
+        let identifier = ellipse::IDENTIFIER;
+        assert_eq!(
+            identifier.as_str(),
+            "vector_nodes::generator_nodes::EllipseNode"
+        );
+        let source = registered_node(identifier.as_str()).expect("source Ellipse registry");
+        assert_eq!(source.metadata.display_name, "Ellipse");
+        assert_eq!(source.metadata.category, "Vector: Shape");
+        assert!(source.metadata.context_features.is_empty());
+        assert!(source.metadata.properties.is_none());
+        let [_, horizontal, vertical] = source.metadata.fields.as_slice() else {
+            panic!("ordered unit primary and both source radii");
+        };
+        for (field, name, value) in [(horizontal, "Radius X", "50"), (vertical, "Radius Y", "25")] {
+            assert_eq!(field.name, name);
+            assert_eq!(field.unit, Some(" px"));
+            assert!(
+                matches!(field.value_source, RegistryValueSource::Default(actual) if actual == value)
+            );
+            assert!(matches!(
+                field.widget_override,
+                RegistryWidgetOverride::None
+            ));
+        }
+        assert_eq!(source.signatures.len(), 2);
+        assert_eq!(
+            source.signatures.into_iter().collect::<HashSet<_>>(),
+            HashSet::from([
+                ranked_signature(
+                    [concrete!(()), item!(f64), item!(f64)],
+                    concrete!(Item<Vector>),
+                ),
+                ranked_signature(
+                    [concrete!(()), list!(f64), list!(f64)],
+                    concrete!(List<Vector>),
+                ),
+            ]),
+        );
+        let definition = resolve_proto_node_type(identifier).expect("source Ellipse definition");
+        let template = definition.default_node_template();
+        for (index, value) in [
+            (ellipse::RadiusXInput::INDEX, 50.),
+            (ellipse::RadiusYInput::INDEX, 25.),
+        ] {
+            assert_eq!(
+                template.inputs.get(index),
+                Some(&NodeInput::value(TaggedValue::Number(value), false)),
+            );
+        }
+    }
+
     fn ranked_signature(inputs: impl IntoIterator<Item = Type>, output: Type) -> NodeIOTypes {
         let input = |value| {
             Type::Fn(

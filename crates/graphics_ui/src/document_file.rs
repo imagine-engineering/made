@@ -13629,6 +13629,26 @@ mod tests {
     async fn at_gra_node_282_3_workspace_builds_and_exports_the_default_artboard(
         cx: &mut TestAppContext,
     ) {
+        verify_painted_artboard(
+            cx,
+            "Rectangle",
+            "GRAPHITE-NODE-CATALOG-ADD-Rectangle",
+            [0, 0, 0, 255],
+        )
+        .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_262_3_workspace_paints_and_reopens_an_ellipse(cx: &mut TestAppContext) {
+        verify_painted_artboard(cx, "Ellipse", "GRAPHITE-NODE-CATALOG-ADD-Ellipse", [255; 4]).await;
+    }
+
+    async fn verify_painted_artboard(
+        cx: &mut TestAppContext,
+        shape: &'static str,
+        add_shape: &'static str,
+        expected_lower_sample: [u8; 4],
+    ) {
         use graphics_core::formats::gdd::GddGraphPortSource;
 
         let (workspace, window) = native_workspace(cx).await;
@@ -13662,7 +13682,7 @@ mod tests {
             ("Artboard", "2, 0", "GRAPHITE-NODE-CATALOG-ADD-Artboard"),
             ("Merge", "-6, 0", "GRAPHITE-NODE-CATALOG-ADD-Merge"),
             ("Fill", "-12, 0", "GRAPHITE-NODE-CATALOG-ADD-Fill"),
-            ("Rectangle", "-18, 0", "GRAPHITE-NODE-CATALOG-ADD-Rectangle"),
+            (shape, "-18, 0", add_shape),
         ] {
             click(window, "GRAPHITE-NODE-CATALOG-SEARCH");
             window.dispatch_action(editor::actions::SelectAll);
@@ -13738,11 +13758,7 @@ mod tests {
         };
         select(window, "Artboard");
         click(window, "GRAPHITE-GDD-SET-DOCUMENT-ARTBOARD");
-        for (target, source) in [
-            ("Fill", "Rectangle"),
-            ("Merge", "Fill"),
-            ("Artboard", "Merge"),
-        ] {
+        for (target, source) in [("Fill", shape), ("Merge", "Fill"), ("Artboard", "Merge")] {
             select(window, target);
             let index = root_index(window, source);
             click(window, "GRAPHITE-GDD-CONNECT-GRAPHIC-CONTENT");
@@ -13758,7 +13774,9 @@ mod tests {
         }
         let preview = "GRAPHITE-GDD-PREVIEW-ARTBOARD";
         click(window, preview);
-        let (painting, background) = item.read_with(window, |item, _| {
+        let painting = [0, 0, 0, 255];
+        let background = [255; 4];
+        item.read_with(window, |item, _| {
             let NodeCopyPanel::Ready(form) = &item.node_copy else {
                 panic!("saved Artboard selection");
             };
@@ -13777,10 +13795,10 @@ mod tests {
                     .to_vec()
             };
             assert_eq!(sample(8, 8), [0, 0, 0, 0]);
-            (sample(1, 29), sample(64, 64))
+            let pixel = sample(1, 29);
+            assert!(matches!(pixel.as_slice(), [red, green, blue, 255] if red == green && green == blue && *red < 255));
+            assert_eq!(sample(64, 64), background);
         });
-        assert_eq!(painting, [0, 0, 0, 255]);
-        assert_eq!(background, [255, 255, 255, 255]);
         click(window, preview);
         click(window, "GRAPHITE-GDD-OPEN-CANVAS");
         window.run_until_parked();
@@ -13817,6 +13835,11 @@ mod tests {
             assert!(((bottom - top + 1) as f64 - canvas_scale * 1080.).abs() <= 2.);
             let inset = (20. * canvas_scale).round() as usize;
             assert_eq!(sample(left + inset, top + inset), painting.as_slice());
+            let below = (35. * canvas_scale).round() as usize;
+            assert_eq!(
+                sample(left + inset, top + below),
+                expected_lower_sample.as_slice()
+            );
             assert_eq!(sample(width / 2, height / 2), background.as_slice());
             assert_eq!(sample(0, 0), [0; 4]);
         });
@@ -13848,6 +13871,11 @@ mod tests {
             let offset = (y * 1920 + x) * 4;
             assert_eq!(pixels.get(offset..offset + 4), Some(expected.as_slice()));
         }
+        let offset = (35 * 1920 + 20) * 4;
+        assert_eq!(
+            pixels.get(offset..offset + 4),
+            Some(expected_lower_sample.as_slice())
+        );
         let published = PathBuf::from("/project/default-artboard-result.gdd");
         click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
         window.simulate_new_path_selection(|_| Some(published.clone()));
@@ -13879,7 +13907,7 @@ mod tests {
         for (target, index, source) in [
             ("Artboard", 1, "Merge"),
             ("Merge", 1, "Fill"),
-            ("Fill", 0, "Rectangle"),
+            ("Fill", 0, shape),
         ] {
             assert!(matches!(
                 find(target).input_ports().get(index).and_then(|port| port.source.as_ref()),
