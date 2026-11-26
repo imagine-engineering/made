@@ -119,11 +119,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class OrderedTaskTest {
     @Test
     @Timeout(60)
-    void waitsForCancellation() throws Exception {
+    void runsOrderedTest() throws Exception {
         Path target = Path.of("target");
         Path wait = target.resolve("await-cancellation");
         Files.writeString(target.resolve("ordered-test-pid"), Long.toString(ProcessHandle.current().pid()));
@@ -131,6 +132,7 @@ class OrderedTaskTest {
         while (Files.exists(wait)) {
             Thread.sleep(100);
         }
+        assertFalse(Files.exists(target.resolve("force-test-failure")), "Intentional Groovy ordered Maven test failure");
         Files.writeString(target.resolve("ordered-test-completed"), "completed\n");
     }
 }

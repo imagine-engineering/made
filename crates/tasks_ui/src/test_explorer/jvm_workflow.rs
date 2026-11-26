@@ -2315,7 +2315,19 @@ async fn docker_maven_help_goals_run_in_queue_order_with_task_options(cx: &mut T
 #[ignore = "requires the offline Maven ordered cancellation fixture on a fresh Docker host"]
 async fn docker_maven_ordered_operations_cancel_on_host(cx: &mut TestAppContext) {
     run_maven_goal_fixture(
-        MavenGoalRun::OrderedCancellation,
+        MavenGoalRun::OrderedTest { failure: false },
+        MavenGoalConnection::Docker,
+        cx,
+    )
+    .await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Docker Maven fixture with the ordered Surefire test"]
+async fn docker_maven_ordered_operations_report_failure_and_recover(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(
+        MavenGoalRun::OrderedTest { failure: true },
         MavenGoalConnection::Docker,
         cx,
     )
@@ -2403,7 +2415,9 @@ enum MavenGoalRun {
     EffectivePom,
     OrderedHelp,
     #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-    OrderedCancellation,
+    OrderedTest {
+        failure: bool,
+    },
     ResolveSources {
         cached: bool,
     },
@@ -2456,7 +2470,7 @@ async fn run_maven_goal_fixture(
         MavenGoalRun::EffectivePom => &["effective-pom"],
         MavenGoalRun::OrderedHelp => &["active-profiles", "effective-pom"],
         #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-        MavenGoalRun::OrderedCancellation => &["effective-pom"],
+        MavenGoalRun::OrderedTest { .. } => &["effective-pom"],
         MavenGoalRun::ResolveSources { .. } => &["resolve-sources"],
         MavenGoalRun::ResolveJavadoc => &["resolve"],
         MavenGoalRun::CheckOfflineRepository => &["go-offline"],
@@ -2676,6 +2690,28 @@ async fn run_maven_goal_fixture(
     let select_goal = |cx: &mut VisualTestContext, goal| {
         select_operation(cx, goal, ":maven:goal:");
     };
+    let mut arguments = [
+        "--offline",
+        "--settings",
+        settings.to_str().expect("settings path"),
+        "--file",
+        "pom.xml",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let profile_option = match run {
+        MavenGoalRun::OrderedHelp => Some("!evidence-selected"),
+        MavenGoalRun::ResolveJavadoc => Some("artifact-javadocs"),
+        _ => None,
+    };
+    if let Some(profile) = profile_option {
+        arguments.extend(["--activate-profiles", profile].map(str::to_owned));
+    }
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+    if matches!(run, MavenGoalRun::OrderedTest { .. }) {
+        arguments.push("test".into());
+    }
+    arguments.extend(coordinates.iter().cloned());
     let output = fixture_root.join("target/groovy-effective.xml");
     if matches!(run, MavenGoalRun::EffectivePom | MavenGoalRun::OrderedHelp) {
         assert!(
@@ -2685,23 +2721,33 @@ async fn run_maven_goal_fixture(
     }
     match run {
         #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-        MavenGoalRun::OrderedCancellation => {
+        MavenGoalRun::OrderedTest { failure } => {
             assert!(
                 !output.exists(),
                 "the fixture must start without an effective POM"
             );
             let target = fixture_root.join("target");
             std::fs::create_dir_all(&target).expect("create Maven output directory");
-            let wait = target.join("await-cancellation");
+            let marker = target.join(if failure {
+                "force-test-failure"
+            } else {
+                "await-cancellation"
+            });
             let witness = target.join("ordered-test-pid");
             let completion = target.join("ordered-test-completed");
-            assert!(!witness.exists() && !completion.exists());
-            std::fs::write(&wait, "").expect("block the forked test before it completes");
+            let report = target.join("surefire-reports/TEST-evidence.OrderedTaskTest.xml");
+            assert!(
+                !marker.exists() && !witness.exists() && !completion.exists() && !report.exists()
+            );
+            std::fs::write(&marker, "").expect("configure how the forked test is interrupted");
             select_operation(cx, "test", ":maven:phase:");
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             select_goal(cx, "effective-pom");
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+            let [help_goal] = coordinates.as_slice() else {
+                panic!("the ordered test fixture has exactly one Help goal");
+            };
             panel.read_with(cx, |panel, _| {
                 let rows = panel.snapshot_for_test().1;
                 let queue = rows
@@ -2711,26 +2757,58 @@ async fn run_maven_goal_fixture(
                     .collect::<Vec<_>>();
                 assert_eq!(
                     queue,
-                    [
-                        "1. default: test",
-                        "2. org.apache.maven.plugins:maven-help-plugin:3.5.2:effective-pom",
-                    ]
+                    ["1. default: test".to_owned(), format!("2. {help_goal}"),]
                 );
             });
             const RUN: &str =
                 "Run ordered offline operations on the current project host through Tasks";
             focus_control(cx, RUN);
             press_enter(cx);
-            assert_cancelled_maven_queue(&terminal_panel, &witness, cx).await;
+            if failure {
+                let transcript = assert_fixture_task_outcome(
+                    &terminal_panel,
+                    &root,
+                    &root.join("mvnw"),
+                    &arguments,
+                    host_shell,
+                    false,
+                    cx,
+                )
+                .await;
+                const CAUSE: &str = "Intentional Groovy ordered Maven test failure";
+                assert!(transcript.contains(CAUSE), "{transcript}");
+                assert!(
+                    transcript.contains("finished with exit code: 1"),
+                    "{transcript}"
+                );
+                assert!(
+                    !transcript.contains("Effective-POM written to:"),
+                    "{transcript}"
+                );
+                let xml = std::fs::read_to_string(&report).expect("fresh failing Surefire report");
+                assert!(
+                    xml.contains("tests=\"1\"")
+                        && xml.contains("failures=\"1\"")
+                        && xml.contains(CAUSE),
+                    "{xml}"
+                );
+                std::fs::rename(report, target.join("ordered-test-failed.xml"))
+                    .expect("retain the failing report and require a fresh retry report");
+                eprintln!(
+                    "Connected Maven reported the Surefire failure and skipped the queued goal:\n{transcript}"
+                );
+            } else {
+                assert_cancelled_maven_queue(&terminal_panel, &witness, cx).await;
+            }
             assert!(
                 !completion.exists(),
-                "the forked test completed after cancellation"
+                "the forked test recorded successful completion after interruption"
             );
             assert!(
                 !output.exists(),
                 "the skipped Maven operation wrote an effective POM"
             );
-            std::fs::remove_file(wait).expect("allow the next test to finish");
+            std::fs::remove_file(marker).expect("allow the next test to pass");
             workspace.update_in(cx, |workspace, window, cx| {
                 workspace.focus_panel::<DependenciesPanel>(window, cx);
             });
@@ -2809,28 +2887,6 @@ async fn run_maven_goal_fixture(
             }
         }
     }
-    let mut arguments = [
-        "--offline",
-        "--settings",
-        settings.to_str().expect("settings path"),
-        "--file",
-        "pom.xml",
-    ]
-    .map(str::to_owned)
-    .to_vec();
-    let profile_option = match run {
-        MavenGoalRun::OrderedHelp => Some("!evidence-selected"),
-        MavenGoalRun::ResolveJavadoc => Some("artifact-javadocs"),
-        _ => None,
-    };
-    if let Some(profile) = profile_option {
-        arguments.extend(["--activate-profiles", profile].map(str::to_owned));
-    }
-    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-    if matches!(run, MavenGoalRun::OrderedCancellation) {
-        arguments.push("test".into());
-    }
-    arguments.extend(coordinates);
     let transcript = assert_fixture_task(
         &terminal_panel,
         &root,
@@ -2845,7 +2901,7 @@ async fn run_maven_goal_fixture(
     }
     match run {
         #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
-        MavenGoalRun::OrderedCancellation => {
+        MavenGoalRun::OrderedTest { failure } => {
             let report =
                 fixture_root.join("target/surefire-reports/TEST-evidence.OrderedTaskTest.xml");
             let xml = std::fs::read_to_string(report).expect("fresh Surefire report");
@@ -2865,7 +2921,8 @@ async fn run_maven_goal_fixture(
                 .expect("fresh effective POM");
             assert!(test < effective, "{transcript}");
             eprintln!(
-                "The same connected Maven queue ran the test and wrote an effective POM after cancellation"
+                "The same connected Maven queue ran the test and wrote an effective POM after {}",
+                if failure { "failure" } else { "cancellation" }
             );
         }
         MavenGoalRun::ResolveSources { cached } => {

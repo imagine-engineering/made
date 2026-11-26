@@ -222,6 +222,14 @@ observes one provider reimport and a newer project generation, and then runs
 the ordered Maven Help goals. Stale session and incompatible request versions
 are refused before reimport.
 
+The opt-in `docker_maven_ordered_operations_report_failure_and_recover`
+uses the offline Effective POM fixture prepared with
+`--ordered-cancellation`. It runs the Maven `test` phase before
+`maven-help-plugin:3.5.2:effective-pom` through the connected Task terminal.
+A failed Surefire test must show its cause and exit code and leave the
+Effective POM absent. Retrying the same queue after correcting the fixture
+must write a fresh passing Surefire report before generating the model.
+
 The opt-in `docker_gradle_java_definition_opens_host_kotlin_source` test
 uses the same Docker transport with the offline Gradle 8.13 reactor. Both
 providers identify the current application and library as Gradle modules.
