@@ -20,6 +20,18 @@ impl ArtboardNavigation {
             .calculate_offset_transform(viewport_size / 2., &self.camera)
     }
 
+    pub fn pan(&self, viewport_size: DVec2, delta: Point<Pixels>) -> Option<PTZ> {
+        let mut camera = self.camera;
+        camera.pan += self.document_delta(viewport_size, logical_vector(delta));
+        camera.pan.is_finite().then_some(camera)
+    }
+
+    fn document_delta(&self, viewport_size: DVec2, pane_delta: DVec2) -> DVec2 {
+        self.document_to_pane(viewport_size)
+            .inverse()
+            .transform_vector2(pane_delta)
+    }
+
     pub fn scroll(
         &self,
         viewport_size: DVec2,
@@ -64,10 +76,7 @@ impl ArtboardNavigation {
                 };
                 delta * VIEWPORT_SCROLL_RATE
             };
-        camera.pan += self
-            .document_to_pane(viewport_size)
-            .inverse()
-            .transform_vector2(pane_delta);
+        camera.pan += self.document_delta(viewport_size, pane_delta);
         (camera != self.camera && camera.pan.is_finite()).then_some(camera)
     }
 }

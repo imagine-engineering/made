@@ -4,5 +4,11 @@
     "bindings": {
       "shift-escape": "graphite::SelectParentSavedLayers"
     }
+  },
+  {
+    "context": "GraphiteCanvasPan",
+    "bindings": {
+      "escape": "graphite::CancelArtboardCanvasPan"
+    }
   }
 ]
