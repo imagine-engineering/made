@@ -674,6 +674,27 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
         })
         .await
         .expect("open Java on the Gradle project host");
+    let kotlin = if restart {
+        let path =
+            util::rel_path::RelPath::from_unix_str("library/src/main/kotlin/evidence/Greeting.kt")
+                .expect("Gradle fixture Kotlin path");
+        Some(
+            project
+                .update(cx, |project, cx| {
+                    project.open_buffer_with_lsp(
+                        project::ProjectPath {
+                            worktree_id,
+                            path: path.into(),
+                        },
+                        cx,
+                    )
+                })
+                .await
+                .expect("open Kotlin on the Gradle project host"),
+        )
+    } else {
+        None
+    };
     let remote_client = project.read_with(cx, |project, cx| {
         project
             .remote_client()
@@ -899,6 +920,70 @@ async fn run_docker_gradle_ordered_operations(restart: bool, cx: &mut TestAppCon
             "the first Gradle operation must be admitted with its options"
         );
     });
+    if let Some((buffer, _subscription)) = kotlin {
+        let kotlin_name = lsp::LanguageServerName::new_static("kotlin-lsp");
+        let kotlin_server_id = |cx: &VisualTestContext| {
+            lsp_store.read_with(cx, |store, _| {
+                store.language_server_statuses().find_map(|(id, status)| {
+                    (status.name == kotlin_name && status.worktree == Some(worktree_id))
+                        .then_some(id)
+                })
+            })
+        };
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let previous = loop {
+            cx.run_until_parked();
+            if let Some(id) = kotlin_server_id(cx) {
+                break id;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the pinned Kotlin provider did not start"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
+        let prior_jdtls = lsp_store.read_with(cx, |store, _| {
+            let (snapshot, current) = store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("configured Java data");
+            assert!(current);
+            (snapshot.server_id, snapshot.generation)
+        });
+        lsp_store.update(cx, |store, cx| {
+            store.restart_language_servers_for_buffers(
+                vec![buffer],
+                HashSet::from_iter([lsp::LanguageServerSelector::Name(kotlin_name.clone())]),
+                true,
+                cx,
+            );
+        });
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            cx.run_until_parked();
+            if kotlin_server_id(cx).is_some_and(|id| id != previous) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the named Kotlin restart did not finish"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        lsp_store.read_with(cx, |store, _| {
+            let (snapshot, current) = store
+                .jdtls_project_snapshot(worktree_id)
+                .expect("Java data after Kotlin restart");
+            assert!(
+                current && (snapshot.server_id, snapshot.generation) == prior_jdtls,
+                "a Kotlin restart must retain the Java Task generation"
+            );
+        });
+        eprintln!("A host Kotlin LSP restart preserved the Java-owned Gradle queue generation");
+    }
     select_fixture_gradle_task(&workspace, &panel, SECOND, None, cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");

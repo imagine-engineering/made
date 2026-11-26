@@ -679,7 +679,11 @@ pub struct DependenciesPanel {
     workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     host: LanguageToolTreeHost,
-    provider_servers: HashSet<(lsp::LanguageServerId, settings::WorktreeId)>,
+    provider_servers: HashSet<(
+        lsp::LanguageServerId,
+        settings::WorktreeId,
+        DependencyProvider,
+    )>,
     navigation: HashMap<LanguageToolNodeId, DependencyNavigation>,
     graph_selections: HashMap<LanguageToolNodeId, GraphSelection>,
     operation_selections: HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
@@ -870,7 +874,7 @@ fn apply_source_directory_status(
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 enum DependencyProvider {
     Jdtls,
     Kotlin,
@@ -4738,27 +4742,36 @@ impl DependenciesPanel {
     fn provider_servers_for_project(
         project: &Entity<Project>,
         cx: &App,
-    ) -> HashSet<(lsp::LanguageServerId, settings::WorktreeId)> {
+    ) -> HashSet<(
+        lsp::LanguageServerId,
+        settings::WorktreeId,
+        DependencyProvider,
+    )> {
         let lsp_store = project.read(cx).lsp_store();
         lsp_store
             .read(cx)
             .language_server_statuses()
             .filter_map(|(server_id, status)| {
                 let worktree_id = status.worktree?;
-                matches!(status.name.as_ref(), "jdtls" | "kotlin-lsp")
-                    .then_some((server_id, worktree_id))
+                let provider = match status.name.as_ref() {
+                    "jdtls" => DependencyProvider::Jdtls,
+                    "kotlin-lsp" => DependencyProvider::Kotlin,
+                    _ => return None,
+                };
+                Some((server_id, worktree_id, provider))
             })
             .collect()
     }
 
     fn on_lsp_store_changed(&mut self, cx: &mut Context<Self>) {
         let provider_servers = Self::provider_servers_for_project(&self.project, cx);
-        let server_added = provider_servers
-            .iter()
-            .any(|server_id| !self.provider_servers.contains(server_id));
+        let started = provider_servers
+            .difference(&self.provider_servers)
+            .map(|&(_, worktree_id, provider)| (worktree_id, provider))
+            .collect::<HashSet<_>>();
         self.provider_servers = provider_servers;
-        if server_added && self.active && !self.host_unavailable(cx) {
-            self.refresh(cx);
+        if self.active && !started.is_empty() {
+            self.refresh_providers(Some(&started), cx);
         } else {
             self.invalidate(cx);
         }
@@ -5295,6 +5308,14 @@ impl DependenciesPanel {
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.refresh_providers(None, cx);
+    }
+
+    fn refresh_providers(
+        &mut self,
+        started: Option<&HashSet<(WorktreeId, DependencyProvider)>>,
+        cx: &mut Context<Self>,
+    ) {
         if self.host_unavailable(cx) {
             self.rebuild(cx);
             return;
@@ -5323,8 +5344,16 @@ impl DependenciesPanel {
             .collect::<Vec<_>>();
         project.lsp_store().update(cx, |store, cx| {
             for worktree_id in worktree_ids {
-                store.refresh_jdtls_project(worktree_id, cx);
-                store.refresh_kotlin_workspace(worktree_id, cx);
+                if started.is_none_or(|started| {
+                    started.contains(&(worktree_id, DependencyProvider::Jdtls))
+                }) {
+                    store.refresh_jdtls_project(worktree_id, cx);
+                }
+                if started.is_none_or(|started| {
+                    started.contains(&(worktree_id, DependencyProvider::Kotlin))
+                }) {
+                    store.refresh_kotlin_workspace(worktree_id, cx);
+                }
             }
         });
         self.rebuild(cx);
@@ -14911,6 +14940,45 @@ mod tests {
                         ]
                     );
                 }
+            }
+            if provider == GraphFixtureProvider::Gradle {
+                fs.insert_file("/groovy-graph/application/Late.kt", b"class Late".to_vec())
+                    .await;
+                let languages = project.read_with(cx, |project, _| project.languages().clone());
+                languages.add(Arc::new(Language::new(
+                    LanguageConfig {
+                        name: "Kotlin".into(),
+                        matcher: LanguageMatcher {
+                            path_suffixes: vec!["kt".into()],
+                            ..Default::default()
+                        }
+                        .into(),
+                        ..Default::default()
+                    },
+                    None,
+                )));
+                let mut kotlin_servers = languages.register_fake_lsp(
+                    "Kotlin",
+                    FakeLspAdapter {
+                        name: "kotlin-lsp",
+                        ..FakeLspAdapter::default()
+                    },
+                );
+                let _kotlin_buffer = project
+                    .update(cx, |project, cx| {
+                        project.open_local_buffer_with_lsp("/groovy-graph/application/Late.kt", cx)
+                    })
+                    .await
+                    .expect("start Kotlin after queuing Gradle Tasks");
+                let _kotlin_server = kotlin_servers.next().await.expect("late Kotlin provider");
+                cx.run_until_parked();
+                panel.read_with(cx, |panel, cx| {
+                    assert_eq!(
+                        panel.ordered_operations, held,
+                        "Kotlin startup keeps the Java-owned queue"
+                    );
+                    assert!(panel.ordered_queue_menu(cx).run_ordered);
+                });
             }
             lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             panel.update_in(cx, |panel, window, cx| {
