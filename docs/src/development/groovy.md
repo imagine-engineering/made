@@ -418,8 +418,10 @@ uses the existing Tasks and terminal path. On an eligible operation, use
 **Add to Queue**. Open **Ordered operations** in Dependencies, or use the
 ordered-operations control in the diagram or analyzer toolbar. Expand the
 section to review the order, remove the last operation, clear the queue, or
-run offline. Saved run configurations appear in the queue row's context menu
-when available. Cancel a running queue from its Task terminal.
+run offline. The queue stays available when you switch between Dependencies,
+Maven, and Gradle. Groovy clears it when its project data becomes stale.
+Saved run configurations appear in the queue row's context menu when
+available. Cancel a running queue from its Task terminal.
 
 On a direct remote connection, refresh JVM metadata with the matching
 Groovy-enabled host before selecting operations. In the Gradle view, use

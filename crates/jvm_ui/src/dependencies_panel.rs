@@ -5192,21 +5192,21 @@ impl DependenciesPanel {
         };
         self.navigation = navigation;
         self.graph_selections = graph_selections;
-        if self
-            .ordered_operations
-            .iter()
-            .any(|receipt| !has_current_operation(receipt, &operation_selections))
+        if !self.ordered_operations.is_empty()
+            && self
+                .current_ordered_operation(&self.ordered_operations, cx)
+                .is_err()
         {
             self.ordered_operations.clear();
             self.operation_notice = Some(
                 "Ordered operations were cleared because their project or provider data changed. Refresh and select them again.".into(),
             );
         }
-        if self
-            .operation_option_target
-            .as_ref()
-            .is_some_and(|receipt| !has_current_operation(receipt, &operation_selections))
-        {
+        if self.operation_option_target.as_ref().is_some_and(|target| {
+            !operation_selections
+                .values()
+                .any(|receipt| receipt == target)
+        }) {
             self.operation_option_target = None;
         }
         if !self.ordered_operations.is_empty() {
@@ -5576,7 +5576,7 @@ impl DependenciesPanel {
             );
             let mut proposed = self.ordered_operations.clone();
             proposed.push(receipt);
-            compose_ordered_operations(&proposed, &self.operation_selections)?;
+            self.current_ordered_operation(&proposed, cx)?;
             self.ordered_operations = proposed;
             Ok(())
         })();
@@ -5723,13 +5723,10 @@ impl DependenciesPanel {
             .selected()
             .and_then(|id| self.operation_selections.get(id))
             .is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
-        let ordered_composes =
-            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
-                .is_ok_and(|receipt| self.operation_host_is_available(&receipt, cx));
         let mut availability = ordered_queue_menu_availability(
             operation_row_selected,
             self.ordered_operations.len(),
-            ordered_composes,
+            self.can_run_ordered_operations(cx),
             !self.host_unavailable(cx),
             &self.configuration_selections,
         );
@@ -5751,14 +5748,37 @@ impl DependenciesPanel {
                 .can_resolve_remote_jvm_operation(receipt, cx)
     }
 
+    fn current_ordered_operation(
+        &self,
+        ordered: &[JvmBuildOperationReceipt],
+        cx: &App,
+    ) -> anyhow::Result<JvmBuildOperationReceipt> {
+        let receipt = compose_ordered_operations(ordered)?;
+        let project = self.project.read(cx);
+        let snapshot = admitted_dependency_snapshot(project, receipt.worktree_id, cx).context(
+            "Ordered operation metadata is stale; refresh and select the operations again",
+        )?;
+        let worktree = project
+            .worktree_for_id(receipt.worktree_id, cx)
+            .context("The selected build folder is unavailable")?;
+        receipt.plan(snapshot, true, worktree.read(cx).path_style())?;
+        Ok(receipt)
+    }
+
+    fn can_run_ordered_operations(&self, cx: &App) -> bool {
+        !self.ordered_operations.is_empty()
+            && self
+                .current_ordered_operation(&self.ordered_operations, cx)
+                .is_ok_and(|receipt| self.operation_host_is_available(&receipt, cx))
+    }
+
     fn run_ordered_offline_operations(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let result = (|| -> anyhow::Result<()> {
             anyhow::ensure!(
                 !self.host_unavailable(cx) && !self.project.read(cx).is_via_collab(),
                 "Ordered execution requires the local project host or a direct remote connection"
             );
-            let receipt =
-                compose_ordered_operations(&self.ordered_operations, &self.operation_selections)?;
+            let receipt = self.current_ordered_operation(&self.ordered_operations, cx)?;
             anyhow::ensure!(
                 self.operation_host_is_available(&receipt, cx),
                 "Refresh the current project host before running ordered JVM operations"
@@ -7655,18 +7675,6 @@ fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOp
     Ok(options)
 }
 
-fn has_current_operation(
-    receipt: &JvmBuildOperationReceipt,
-    current: &HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
-) -> bool {
-    let mut target = receipt.clone();
-    target.maven_options = MavenOperationOptions::default();
-    if let [JvmBuildOperation::GradleTaskWithOptions { path, .. }] = receipt.operations.as_slice() {
-        target.operations = vec![JvmBuildOperation::GradleTask { path: path.clone() }];
-    }
-    current.values().any(|candidate| candidate == &target)
-}
-
 /// The ordered-operations queue menu family's availability. The rules mirror
 /// the strip's buttons exactly so menu, toolbar and keyboard invocations
 /// share one enablement path.
@@ -7715,7 +7723,6 @@ fn ordered_queue_menu_availability(
 
 fn compose_ordered_operations(
     ordered: &[JvmBuildOperationReceipt],
-    current: &HashMap<LanguageToolNodeId, JvmBuildOperationReceipt>,
 ) -> anyhow::Result<JvmBuildOperationReceipt> {
     anyhow::ensure!(
         !ordered.is_empty() && ordered.len() <= 32,
@@ -7737,10 +7744,6 @@ fn compose_ordered_operations(
                 && receipt.generation == first.generation
                 && receipt.module_root == first.module_root,
             "Ordered operations must belong to the same current project module; clear the selection before changing modules"
-        );
-        anyhow::ensure!(
-            has_current_operation(receipt, current),
-            "Ordered operation metadata is stale; refresh and select the operations again"
         );
         anyhow::ensure!(
             receipt
@@ -8600,9 +8603,7 @@ impl Render for DependenciesPanel {
         });
         let show_operation_options =
             can_run_operation && selected_operation == self.operation_option_target.as_ref();
-        let can_run_ordered =
-            compose_ordered_operations(&self.ordered_operations, &self.operation_selections)
-                .is_ok_and(|receipt| self.operation_host_is_available(&receipt, cx));
+        let can_run_ordered = self.can_run_ordered_operations(cx);
         let can_cancel_graph = self.graph_query_is_pending(cx);
         let can_apply_build_selection =
             self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok();
@@ -14545,14 +14546,15 @@ mod tests {
             });
             focus(cx, disclosure_label);
             press(cx);
-            panel.read_with(cx, |panel, _| {
+            panel.read_with(cx, |panel, cx| {
                 assert_eq!(panel.ordered_operations.len(), 3);
                 for (receipt, index) in panel.ordered_operations.iter().zip([1, 0, 1]) {
                     assert_eq!(receipt, &selections.get(index).expect("row").1);
                 }
                 let receipts = vec![selections.first().expect("current row").1.clone(); 32];
                 assert_eq!(
-                    compose_ordered_operations(&receipts, &panel.operation_selections)
+                    panel
+                        .current_ordered_operation(&receipts, cx)
                         .expect("32 ordered operations")
                         .operations
                         .len(),
@@ -14560,31 +14562,23 @@ mod tests {
                 );
                 let mut too_many = receipts.clone();
                 too_many.push(selections.first().expect("row").1.clone());
-                assert!(
-                    compose_ordered_operations(&too_many, &panel.operation_selections).is_err()
-                );
+                assert!(compose_ordered_operations(&too_many).is_err());
                 let mut foreign = selections.first().expect("row").1.clone();
                 foreign.module_root.path = path(worktree_id, "library").path;
-                let mut current = panel.operation_selections.clone();
-                current.insert(LanguageToolNodeId("foreign-module".into()), foreign.clone());
                 assert!(
-                    compose_ordered_operations(
-                        &[receipts.first().expect("first").clone(), foreign],
-                        &current
-                    )
+                    compose_ordered_operations(&[
+                        receipts.first().expect("first").clone(),
+                        foreign
+                    ])
                     .is_err()
                 );
                 let mut wrong_generation = receipts.first().expect("first").clone();
                 wrong_generation.generation += 1;
-                current.insert(
-                    LanguageToolNodeId("foreign-generation".into()),
-                    wrong_generation.clone(),
-                );
                 assert!(
-                    compose_ordered_operations(
-                        &[receipts.first().expect("first").clone(), wrong_generation],
-                        &current
-                    )
+                    compose_ordered_operations(&[
+                        receipts.first().expect("first").clone(),
+                        wrong_generation
+                    ])
                     .is_err()
                 );
                 let mut mixed = receipts.first().expect("first").clone();
@@ -14598,16 +14592,9 @@ mod tests {
                         phase: "verify".into(),
                     }]
                 };
-                current.insert(
-                    LanguageToolNodeId("mixed-build-system".into()),
-                    mixed.clone(),
-                );
                 assert!(
-                    compose_ordered_operations(
-                        &[receipts.first().expect("first").clone(), mixed],
-                        &current
-                    )
-                    .is_err()
+                    compose_ordered_operations(&[receipts.first().expect("first").clone(), mixed])
+                        .is_err()
                 );
                 assert!(
                     panel
@@ -14786,7 +14773,7 @@ mod tests {
                 assert!(events.lock().expect("events").is_empty());
             }
             add_order(cx);
-            let combined = panel.read_with(cx, |panel, _| {
+            let combined = panel.read_with(cx, |panel, cx| {
                 if provider == GraphFixtureProvider::Maven {
                     let mut conflicting = panel.ordered_operations.clone();
                     conflicting
@@ -14794,15 +14781,15 @@ mod tests {
                         .expect("queued Maven operation")
                         .maven_options
                         .failure_policy = Some(MavenReactorFailurePolicy::FailFast);
-                    let error =
-                        compose_ordered_operations(&conflicting, &panel.operation_selections)
-                            .expect_err("conflicting Maven queue policies");
+                    let error = compose_ordered_operations(&conflicting)
+                        .expect_err("conflicting Maven queue policies");
                     assert_eq!(
                         error.to_string(),
                         "Choose the same Maven options for the entire ordered run"
                     );
                 }
-                compose_ordered_operations(&panel.ordered_operations, &panel.operation_selections)
+                panel
+                    .current_ordered_operation(&panel.ordered_operations, cx)
                     .expect("combined receipt")
             });
             let expected = lsp_store.read_with(cx, |store, _| {
@@ -14812,6 +14799,23 @@ mod tests {
                     .plan(snapshot, current, util::paths::PathStyle::Unix)
                     .expect("existing plan")
             });
+            let held = panel.read_with(cx, |panel, _| panel.ordered_operations.clone());
+            let other_view = if view == BuildToolView::Maven {
+                BuildToolView::Gradle
+            } else {
+                BuildToolView::Maven
+            };
+            for next_view in [other_view, BuildToolView::Dependencies] {
+                panel.update_in(cx, |panel, window, cx| {
+                    panel.set_view(next_view, window, cx);
+                    assert_eq!(
+                        panel.ordered_operations, held,
+                        "queue survives a view change"
+                    );
+                    assert!(panel.operation_selections.is_empty());
+                    assert!(panel.ordered_queue_menu(cx).run_ordered);
+                });
+            }
             focus(cx, run_label);
             press(cx);
             {
@@ -14853,7 +14857,6 @@ mod tests {
                     );
                 }
             }
-            let held = panel.read_with(cx, |panel, _| panel.ordered_operations.clone());
             lsp_store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             panel.update_in(cx, |panel, window, cx| {
                 panel.rebuild(cx);
@@ -14872,8 +14875,8 @@ mod tests {
             cx.executor()
                 .advance_clock(std::time::Duration::from_millis(300));
             cx.run_until_parked();
-            panel.update(cx, |panel, cx| {
-                panel.rebuild(cx);
+            panel.update_in(cx, |panel, window, cx| {
+                panel.set_view(view, window, cx);
                 panel.host.expand_all();
                 assert!(panel.ordered_operations.is_empty());
             });
