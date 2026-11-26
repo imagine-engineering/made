@@ -20,9 +20,9 @@ use graphics_core::formats::{
         ArchiveFormat, GddArchiveBudget, GddArchiveError, GddArtboardCanvasPick,
         GddArtboardGeometry, GddEllipseAxis, GddExportContent, GddGraphGeometry,
         GddGraphInspection, GddGraphLayerPreview, GddGraphNetwork, GddGraphNode,
-        GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind, GddNumericValue,
-        GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange, GddSavedView,
-        ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
+        GddGraphPortSource, GddHistoryDirection, GddNumericGraphEvaluator, GddNumericImportKind,
+        GddNumericValue, GddPinnedNodeMove, GddRecoverySource, GddRootLayer, GddRootLayerChange,
+        GddSavedView, ImportOrExport, InspectedGddV1, create_gdd_folder, inspect_gdd_folder_files,
         open_gdd_archive,
     },
     legacy::{LegacyDocumentSchema, PreservedLegacyDocument, inspect_legacy_document},
@@ -1206,6 +1206,7 @@ enum NodeCopyChange {
     ArtboardGeometry(GddArtboardGeometry),
     ArtboardBackground([f32; 4]),
     EllipseRadius(GddEllipseAxis, f64),
+    EllipseRadiusSource(GddEllipseAxis, Option<Box<GddGraphNode>>),
     SetDocumentArtboard,
     ConnectGraphicContent(Box<GddGraphNode>),
     DisconnectNumericInput,
@@ -1281,6 +1282,16 @@ impl NodeCopyChange {
             Self::EllipseRadius(axis, radius) => {
                 archive
                     .set_ellipse_radius_in_copy(node, axis, radius, ARCHIVE_BUDGET)
+                    .await
+            }
+            Self::EllipseRadiusSource(axis, source) => {
+                archive
+                    .set_ellipse_radius_source_in_copy(
+                        node,
+                        axis,
+                        source.as_deref(),
+                        ARCHIVE_BUDGET,
+                    )
                     .await
             }
             Self::SetDocumentArtboard => {
@@ -4442,6 +4453,130 @@ impl GraphiteDocumentItem {
         )
     }
 
+    fn render_ellipse_radius_source(
+        &self,
+        form: &NodeCopyForm,
+        target: &GddGraphNode,
+        axis: GddEllipseAxis,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let port = target.ellipse_radius_port(axis)?;
+        let (name, axis_name) = match axis {
+            GddEllipseAxis::X => ("Radius X", "X"),
+            GddEllipseAxis::Y => ("Radius Y", "Y"),
+        };
+        let connected = match port.source {
+            Some(GddGraphPortSource::Node {
+                storage_id,
+                output_index: 0,
+            }) => Some(storage_id),
+            _ => None,
+        };
+        let sources: Vec<_> = form
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, source)| target.can_connect_ellipse_radius_from(axis, source))
+            .collect();
+        if sources.is_empty() && connected.is_none() {
+            return None;
+        }
+        let menu_id = format!("GRAPHITE-GDD-CONNECT-ELLIPSE-RADIUS-{axis_name}");
+        let disconnect_id = format!("GRAPHITE-GDD-DISCONNECT-ELLIPSE-RADIUS-{axis_name}");
+        let source_label = connected
+            .and_then(|id| form.nodes.iter().find(|node| node.storage_id() == id))
+            .map(|source| format!("{name} from {}", source.label()));
+        let menu = (!sources.is_empty() && self.copy_task.is_none()).then(|| {
+            let item = cx.entity().downgrade();
+            ContextMenu::build(window, cx, |mut menu, _, _| {
+                for (index, source) in sources {
+                    let item = item.clone();
+                    let target = target.clone();
+                    let source = source.clone();
+                    let label: SharedString = source.label().to_owned().into();
+                    menu = menu.custom_entry(
+                        move |_, _| {
+                            div()
+                                .debug_selector(move || {
+                                    format!(
+                                        "GRAPHITE-GDD-ELLIPSE-RADIUS-{axis_name}-SOURCE-{index}"
+                                    )
+                                })
+                                .p_2()
+                                .child(Label::new(label.clone()))
+                                .into_any_element()
+                        },
+                        move |window, cx| {
+                            if let Some(item) = item.upgrade() {
+                                item.update(cx, |item, cx| {
+                                    item.apply_graph_edit(
+                                        GraphiteCopy::EditNode {
+                                            node: Box::new(target.clone()),
+                                            change: NodeCopyChange::EllipseRadiusSource(
+                                                axis,
+                                                Some(Box::new(source.clone())),
+                                            ),
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    );
+                }
+                menu
+            })
+        });
+        let target = target.clone();
+        Some(
+            v_flex()
+                .gap_1()
+                .when_some(source_label, |row, label| row.child(Label::new(label)))
+                .when_some(menu, |row, menu| {
+                    let verb = if connected.is_some() {
+                        "Replace"
+                    } else {
+                        "Connect"
+                    };
+                    row.child(
+                        div()
+                            .debug_selector({
+                                let id = menu_id.clone();
+                                move || id.clone()
+                            })
+                            .child(DropdownMenu::new(menu_id, format!("{verb} {name}"), menu)),
+                    )
+                })
+                .when(connected.is_some(), |row| {
+                    row.child(
+                        div()
+                            .debug_selector({
+                                let id = disconnect_id.clone();
+                                move || id.clone()
+                            })
+                            .child(
+                                Button::new(disconnect_id, format!("Disconnect {name}"))
+                                    .disabled(self.copy_task.is_some())
+                                    .on_click(cx.listener(move |item, _, window, cx| {
+                                        item.apply_graph_edit(
+                                            GraphiteCopy::EditNode {
+                                                node: Box::new(target.clone()),
+                                                change: NodeCopyChange::EllipseRadiusSource(
+                                                    axis, None,
+                                                ),
+                                            },
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                    )
+                }),
+        )
+    }
+
     fn render_artboard_geometry(
         &self,
         form: &NodeCopyForm,
@@ -5364,6 +5499,9 @@ impl GraphiteDocumentItem {
                             .when(selected.ellipse_radii().is_some(), |panel| {
                                 panel.child(self.render_ellipse_radii(form, working, cx))
                             })
+                            .children([GddEllipseAxis::X, GddEllipseAxis::Y].into_iter().filter_map(|axis| {
+                                self.render_ellipse_radius_source(form, selected, axis, window, cx)
+                            }))
                             .when(selected.has_numeric_connection(), |panel| {
                                 panel.child(
                                     div()
@@ -5836,7 +5974,8 @@ impl GraphiteDocumentItem {
                             | NodeCopyChange::BooleanInput(_)
                             | NodeCopyChange::ArtboardGeometry(_)
                             | NodeCopyChange::ArtboardBackground(_)
-                            | NodeCopyChange::EllipseRadius(_, _),
+                            | NodeCopyChange::EllipseRadius(_, _)
+                            | NodeCopyChange::EllipseRadiusSource(_, _),
                         ..
                     } => "Edited",
                     GraphiteCopy::EditNode {
@@ -13775,6 +13914,188 @@ mod tests {
             true,
         )
         .await;
+    }
+
+    #[gpui::test]
+    async fn at_gra_node_262_3_workspace_authors_ellipse_radius_wires(cx: &mut TestAppContext) {
+        let catalog = GraphiteNodeCatalog::load().expect("pinned catalog");
+        let mut initial =
+            create_gdd_folder(621, 187, "Ellipse radius wires".into(), ARCHIVE_BUDGET)
+                .await
+                .expect("empty source folder");
+        for (name, position) in [
+            ("Ellipse", [4, 0]),
+            ("Absolute Value", [-10, -5]),
+            ("Sign", [-12, 5]),
+        ] {
+            let definition = catalog
+                .search(name)
+                .into_iter()
+                .flat_map(|group| group.nodes)
+                .find(|entry| entry.name == name)
+                .expect("pinned node definition");
+            initial = initial
+                .insert_root_catalog_node_in_copy(&definition.identifier, position, ARCHIVE_BUDGET)
+                .await
+                .expect("insert pinned node");
+        }
+        let original = initial
+            .export_archive(ArchiveFormat::Zip, ARCHIVE_BUDGET.max_archive_bytes)
+            .expect("original ZIP");
+        let (workspace, window) = native_workspace(cx).await;
+        window.simulate_resize(gpui::size(px(1160.), px(1400.)));
+        window.run_until_parked();
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let source = PathBuf::from("/project/ellipse-wire-source.gdd.zip");
+        filesystem
+            .write(&source, &original)
+            .await
+            .expect("source ZIP");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(source.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open the original archive")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native Inspector");
+        paint(window);
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-NODE-COPY");
+        let find = |window: &gpui::VisualTestContext, name: &str| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Inspector")
+                };
+                form.nodes
+                    .iter()
+                    .enumerate()
+                    .find(|(_, node)| node.display_name() == name)
+                    .map(|(index, node)| (index, node.storage_id()))
+                    .expect("saved root node")
+            })
+        };
+        let (ellipse_index, ellipse_id) = find(window, "Ellipse");
+        let (_, first) = find(window, "Absolute Value");
+        let (_, second) = find(window, "Sign");
+        let node_selectors = [
+            "GRAPHITE-GDD-NODE-COPY-ITEM-0",
+            "GRAPHITE-GDD-NODE-COPY-ITEM-1",
+            "GRAPHITE-GDD-NODE-COPY-ITEM-2",
+        ];
+        click(window, "GRAPHITE-GDD-NODE-COPY-CHOOSE");
+        click(
+            window,
+            node_selectors.get(ellipse_index).expect("Ellipse selector"),
+        );
+        let verify = |window: &gpui::VisualTestContext, expected| {
+            item.read_with(window, |item, _| {
+                assert!(item.copy_feedback.is_none(), "{:?}", item.copy_feedback);
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("ready Ellipse")
+                };
+                let node = form.selected_node().expect("selected Ellipse");
+                assert_eq!(node.storage_id(), ellipse_id);
+                let radii = [GddEllipseAxis::X, GddEllipseAxis::Y].map(|axis| {
+                    let port = node
+                        .ellipse_radius_port(axis)
+                        .expect("original radius port");
+                    let source = match port.source {
+                        Some(GddGraphPortSource::Node {
+                            storage_id,
+                            output_index: 0,
+                        }) => Some(storage_id),
+                        None => None,
+                        _ => panic!("unexpected radius source"),
+                    };
+                    (source, port.exposed)
+                });
+                assert_eq!(radii, expected);
+            });
+        };
+        let connect = |window: &mut gpui::VisualTestContext, axis, source: &str| {
+            let (index, _) = find(window, source);
+            let (menu, sources) = match axis {
+                GddEllipseAxis::X => (
+                    "GRAPHITE-GDD-CONNECT-ELLIPSE-RADIUS-X",
+                    [
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-X-SOURCE-0",
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-X-SOURCE-1",
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-X-SOURCE-2",
+                    ],
+                ),
+                GddEllipseAxis::Y => (
+                    "GRAPHITE-GDD-CONNECT-ELLIPSE-RADIUS-Y",
+                    [
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-Y-SOURCE-0",
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-Y-SOURCE-1",
+                        "GRAPHITE-GDD-ELLIPSE-RADIUS-Y-SOURCE-2",
+                    ],
+                ),
+            };
+            click(window, menu);
+            click(window, sources.get(index).expect("radius source selector"));
+        };
+        verify(window, [(None, false), (None, false)]);
+        connect(window, GddEllipseAxis::X, "Absolute Value");
+        verify(window, [(Some(first), true), (None, false)]);
+        connect(window, GddEllipseAxis::Y, "Sign");
+        verify(window, [(Some(first), true), (Some(second), true)]);
+        connect(window, GddEllipseAxis::X, "Sign");
+        verify(window, [(Some(second), true), (Some(second), true)]);
+        click(window, "GRAPHITE-GDD-UNDO");
+        verify(window, [(Some(first), true), (Some(second), true)]);
+        click(window, "GRAPHITE-GDD-REDO");
+        verify(window, [(Some(second), true), (Some(second), true)]);
+        click(window, "GRAPHITE-GDD-DISCONNECT-ELLIPSE-RADIUS-Y");
+        verify(window, [(Some(second), true), (None, true)]);
+        click(window, "GRAPHITE-GDD-UNDO");
+        verify(window, [(Some(second), true), (Some(second), true)]);
+        click(window, "GRAPHITE-GDD-REDO");
+        verify(window, [(Some(second), true), (None, true)]);
+        click(window, "GRAPHITE-GDD-DISCONNECT-ELLIPSE-RADIUS-X");
+        verify(window, [(None, true), (None, true)]);
+        item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("ready Ellipse");
+            };
+            let ellipse = form.selected_node().expect("selected Ellipse");
+            for axis in [GddEllipseAxis::X, GddEllipseAxis::Y] {
+                let port = ellipse.ellipse_radius_port(axis).expect("exposed fallback");
+                assert_eq!(port.stored_type, Some(graphite_graph_craft::list!(f64)));
+            }
+        });
+        click(window, "GRAPHITE-GDD-UNDO");
+        verify(window, [(Some(second), true), (None, true)]);
+
+        let destination = PathBuf::from("/project/ellipse-wire-result.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved graph folder");
+        let nodes = reopened.graph_nodes().await.expect("reopened graph");
+        let ellipse = nodes
+            .iter()
+            .find(|node| node.storage_id() == ellipse_id)
+            .expect("same Ellipse");
+        let horizontal = ellipse
+            .ellipse_radius_port(GddEllipseAxis::X)
+            .expect("horizontal input");
+        assert!(
+            matches!(horizontal.source, Some(GddGraphPortSource::Node { storage_id, output_index: 0 }) if storage_id == second)
+        );
+        let vertical = ellipse
+            .ellipse_radius_port(GddEllipseAxis::Y)
+            .expect("vertical input");
+        assert!(vertical.source.is_none() && vertical.exposed);
+        assert_eq!(
+            filesystem.load_bytes(&source).await.expect("original ZIP"),
+            original
+        );
     }
 
     async fn verify_painted_artboard(

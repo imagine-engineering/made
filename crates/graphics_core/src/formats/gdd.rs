@@ -65,6 +65,7 @@ use graphite_graph_craft::{
 use graphite_interpreted_executor::node_registry::NODE_REGISTRY;
 use graphite_math_nodes::modulo;
 use graphite_std::{
+    Vector,
     application_io::{ExportFormat as SvgExportFormat, RenderConfig},
     transform::Footprint,
     vector_nodes::{
@@ -78,7 +79,8 @@ use super::{OriginalJson, legacy::PreservedLegacyDocument};
 use crate::evaluate::{
     CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
     NumericGraphPreparationError, UnaryNumericOperation, evaluate_cpu_svg,
-    typecheck_detached_numeric_network, validate_svg_configuration,
+    typecheck_detached_numeric_network, typecheck_detached_ranked_network,
+    validate_svg_configuration,
 };
 
 use crate::registry::{
@@ -298,6 +300,8 @@ pub enum GddArchiveError {
     UnchangedEllipseRadius,
     #[error("Graphite could not use radius source {node:?}. {reason}")]
     InvalidEllipseRadiusSource { node: NodeId, reason: String },
+    #[error("Graphite could not resolve the Ellipse radius connection. {0}")]
+    EllipseRadiusConnectionType(String),
     #[error("Choose a supported node with a hidden Boolean literal.")]
     UnsupportedGraphBooleanInput,
     #[error("Graphite could not allocate an unused node ID.")]
@@ -799,6 +803,15 @@ pub enum GddEllipseAxis {
     Y,
 }
 
+impl GddEllipseAxis {
+    fn input_index(self) -> usize {
+        match self {
+            Self::X => ellipse::RadiusXInput::INDEX,
+            Self::Y => ellipse::RadiusYInput::INDEX,
+        }
+    }
+}
+
 const LAYER_CONTENT_INPUT: usize = 1;
 const ARTBOARD_LOCATION_INPUT: usize = 2;
 const ARTBOARD_DIMENSIONS_INPUT: usize = 3;
@@ -1238,6 +1251,23 @@ impl GddGraphNode {
             SavedGraphicProfile::Ellipse(radii) => Some(radii),
             _ => None,
         }
+    }
+
+    pub fn ellipse_radius_port(&self, axis: GddEllipseAxis) -> Option<&GddGraphInputPort> {
+        match self.graphic_profile? {
+            SavedGraphicProfile::Ellipse(_)
+            | SavedGraphicProfile::EllipseList
+            | SavedGraphicProfile::EllipseWired => self.input_ports.get(axis.input_index()),
+            _ => None,
+        }
+    }
+
+    pub fn can_connect_ellipse_radius_from(&self, axis: GddEllipseAxis, source: &Self) -> bool {
+        self.same_network_as(source)
+            && source.can_supply_numeric_export
+            && self.ellipse_radius_port(axis).is_some_and(|port| {
+                !matches!(port.source, Some(GddGraphPortSource::Node { storage_id, .. }) if storage_id == source.storage_id)
+            })
     }
 
     pub fn has_numeric_connection(&self) -> bool {
@@ -4837,10 +4867,11 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::InvalidEllipseRadius);
         }
         let [mut radius_x, mut radius_y] = previous;
-        let (index, radius) = match axis {
-            GddEllipseAxis::X => (ellipse::RadiusXInput::INDEX, &mut radius_x),
-            GddEllipseAxis::Y => (ellipse::RadiusYInput::INDEX, &mut radius_y),
+        let radius = match axis {
+            GddEllipseAxis::X => &mut radius_x,
+            GddEllipseAxis::Y => &mut radius_y,
         };
+        let index = axis.input_index();
         if *radius == value {
             return Err(GddArchiveError::UnchangedEllipseRadius);
         }
@@ -4858,9 +4889,14 @@ impl InspectedGddV1 {
         if exact_radii(&interface) != Some(previous.map(f64::to_bits)) {
             return Err(GddArchiveError::UnsupportedEllipseRadius);
         }
+        let connector = InputConnector::node_at_index(node.local_id, index);
+        let exposed = interface
+            .input_from_connector(&connector, path)
+            .ok_or(GddArchiveError::UnsupportedEllipseRadius)?
+            .is_exposed();
         interface.set_input(
-            &InputConnector::node_at_index(node.local_id, index),
-            NodeInput::value(TaggedValue::Number(value), false),
+            &connector,
+            NodeInput::value(TaggedValue::Number(value), exposed),
             path,
         );
         if exact_radii(&interface) != Some(expected) {
@@ -4870,6 +4906,134 @@ impl InspectedGddV1 {
             .finish_graph_input(node, interface, index, None, budget)
             .await?;
         if exact_radii(&copy.runtime_graph().await?.into_interface()?) != Some(expected) {
+            return Err(GddArchiveError::IncompleteGraphNodeEdit);
+        }
+        Ok(copy)
+    }
+
+    pub async fn set_ellipse_radius_source_in_copy(
+        &self,
+        node: &GddGraphNode,
+        axis: GddEllipseAxis,
+        source: Option<&GddGraphNode>,
+        budget: GddArchiveBudget,
+    ) -> Result<Self, GddArchiveError> {
+        self.check_node_edit_target(node)?;
+        let port = node
+            .ellipse_radius_port(axis)
+            .ok_or(GddArchiveError::UnsupportedEllipseRadius)?;
+        if let Some(source) = source {
+            self.check_node_edit_target(source)?;
+            if !node.can_connect_ellipse_radius_from(axis, source) {
+                return Err(GddArchiveError::InvalidGraphConnection);
+            }
+        } else if !matches!(
+            port.source,
+            Some(GddGraphPortSource::Node {
+                output_index: 0,
+                ..
+            })
+        ) {
+            return Err(GddArchiveError::UnsupportedGraphDisconnection);
+        }
+
+        let path = node.network_path.as_slice();
+        let mut interface = self.runtime_graph().await?.into_interface()?;
+        let layout = graph_port_edit_layout(&interface, [path])?;
+        let exports = interface.document_network().exports.clone();
+        let mut expected = interface
+            .document_node(&node.local_id, path)
+            .cloned()
+            .ok_or(GddArchiveError::UnsupportedEllipseRadius)?;
+        let index = axis.input_index();
+        let input = expected
+            .inputs
+            .get_mut(index)
+            .ok_or(GddArchiveError::UnsupportedEllipseRadius)?;
+        let connector = InputConnector::node_at_index(node.local_id, index);
+        let mut intermediate = None;
+        if let NodeInput::Node {
+            node_id: previous_source,
+            output_index: 0,
+        } = input
+        {
+            let branch =
+                numeric_preview_network(interface.document_network(), *previous_source, &[])?;
+            let types = typecheck_detached_ranked_network(
+                branch,
+                &[graphite_core_types::concrete!(f64)],
+                "A radius needs a floating-point scalar or list output.",
+            )
+            .map_err(GddArchiveError::EllipseRadiusConnectionType)?;
+            interface
+                .resolved_types
+                .types
+                .insert(vec![*previous_source], types);
+            interface.disconnect_input(&connector, path);
+            let fallback = interface
+                .input_from_connector(&connector, path)
+                .filter(|input| {
+                    input.is_exposed()
+                        && input
+                            .as_value()
+                            .is_some_and(valid_saved_ellipse_radius_value)
+                })
+                .cloned()
+                .ok_or(GddArchiveError::UnsupportedGraphDisconnection)?;
+            if source.is_some() {
+                intermediate = Some(fallback.clone());
+            }
+            *input = fallback;
+        }
+        if let Some(source) = source {
+            interface.create_wire(
+                &OutputConnector::primary_output(source.local_id),
+                &connector,
+                path,
+            );
+            *input = NodeInput::node(source.local_id, 0);
+        }
+        let matches_expected = |interface: &NodeNetworkInterface| -> Result<bool, GddArchiveError> {
+            Ok(
+                interface.document_node(&node.local_id, path) == Some(&expected)
+                    && interface.document_network().exports == exports
+                    && graph_port_edit_layout(interface, [path])? == layout,
+            )
+        };
+        if !matches_expected(&interface)? {
+            return Err(GddArchiveError::UnsupportedGraphConnectionLayout);
+        }
+        let network = interface.document_network();
+        for index in ELLIPSE_RADIUS_INPUTS {
+            if let Some(NodeInput::Node {
+                node_id,
+                output_index: 0,
+            }) = expected.inputs.get(index)
+            {
+                let branch = numeric_preview_network(network, *node_id, &[])?;
+                typecheck_detached_ranked_network(
+                    branch,
+                    &[graphite_core_types::concrete!(f64)],
+                    "A radius needs a floating-point scalar or list output.",
+                )
+                .map_err(GddArchiveError::EllipseRadiusConnectionType)?;
+            }
+        }
+        let mut detached = NodeNetwork {
+            exports: vec![NodeInput::node(node.local_id, 0)],
+            ..Default::default()
+        };
+        collect_layer_preview_node(network, node.local_id, &mut detached, &mut BTreeSet::new())?;
+        typecheck_detached_ranked_network(
+            detached,
+            &[graphite_core_types::concrete!(Vector)],
+            "Graphite did not resolve a supported Ellipse output.",
+        )
+        .map_err(GddArchiveError::EllipseRadiusConnectionType)?;
+        let copy = self
+            .finish_graph_input(node, interface, index, intermediate, budget)
+            .await?;
+        if !matches_expected(&copy.runtime_graph().await?.into_interface()?)? {
             return Err(GddArchiveError::IncompleteGraphNodeEdit);
         }
         Ok(copy)
@@ -6038,17 +6202,15 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
         DocumentNodeImplementation::ProtoNode(identifier) if identifier == &ellipse::IDENTIFIER => {
             let horizontal = node.inputs.get(ellipse::RadiusXInput::INDEX)?;
             let vertical = node.inputs.get(ellipse::RadiusYInput::INDEX)?;
-            let profile = match (
-                horizontal.as_non_exposed_value(),
-                vertical.as_non_exposed_value(),
-            ) {
+            let profile = match (horizontal.as_value(), vertical.as_value()) {
                 (Some(TaggedValue::Number(x)), Some(TaggedValue::Number(y)))
                     if valid_saved_ellipse_radius(*x) && valid_saved_ellipse_radius(*y) =>
                 {
                     SavedGraphicProfile::Ellipse([*x, *y])
                 }
-                (Some(TaggedValue::Numbers(x)), Some(TaggedValue::Numbers(y)))
-                    if valid_saved_ellipse_radius_list(x) && valid_saved_ellipse_radius_list(y) =>
+                (Some(x), Some(y))
+                    if valid_saved_ellipse_radius_value(x)
+                        && valid_saved_ellipse_radius_value(y) =>
                 {
                     SavedGraphicProfile::EllipseList
                 }
@@ -6056,7 +6218,7 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
                     && [horizontal, vertical].into_iter().all(|input| {
                         output_wire(input)
                             || input
-                                .as_non_exposed_value()
+                                .as_value()
                                 .is_some_and(valid_saved_ellipse_radius_value)
                     }) =>
                 {
@@ -10789,7 +10951,10 @@ mod tests {
             .inputs
             .get_mut(ellipse::RadiusYInput::INDEX)
             .expect("vertical radius") = NodeInput::value(TaggedValue::Number(25.), true);
-        assert!(checked_saved_graphic_node(&ellipse_node).is_none());
+        assert!(matches!(
+            checked_saved_graphic_node(&ellipse_node),
+            Some((actual, SavedGraphicProfile::Ellipse(_))) if actual == ellipse_node
+        ));
 
         *ellipse_node
             .inputs
@@ -10797,8 +10962,7 @@ mod tests {
             .expect("horizontal radius") =
             NodeInput::value(TaggedValue::Numbers(vec![32.5, 0.]), false);
         for (value, exposed) in [
-            (TaggedValue::Number(25.), false),
-            (TaggedValue::Numbers(vec![25.]), true),
+            (TaggedValue::DVec2(DVec2::ONE), false),
             (TaggedValue::Numbers(vec![f64::MAX]), false),
             (
                 TaggedValue::Numbers(vec![25.; MAX_PREVIEW_VALUES + 1]),
@@ -10971,8 +11135,10 @@ mod tests {
             let list = || TaggedValue::Numbers(vec![32.5, 0., -12.75]);
             for (horizontal, vertical, expected_paths, wired) in [
                 (list(), TaggedValue::Numbers(vec![17.25, 9.5]), 3, false),
+                (list(), TaggedValue::Number(17.25), 3, false),
                 (list(), TaggedValue::Numbers(Vec::new()), 0, false),
                 (list(), TaggedValue::Numbers(vec![17.25, 9.5]), 3, true),
+                (list(), TaggedValue::Number(17.25), 3, true),
                 (list(), TaggedValue::Numbers(Vec::new()), 0, true),
                 (
                     TaggedValue::Number(-32.5),

@@ -431,6 +431,23 @@ impl NumericGraphEvaluator {
 }
 
 pub(crate) fn typecheck_detached_numeric_network(network: NodeNetwork) -> Result<(), String> {
+    typecheck_detached_ranked_network(
+        network,
+        &[
+            graphite_core_types::concrete!(f64),
+            graphite_core_types::concrete!(i64),
+            graphite_core_types::concrete!(DVec2),
+        ],
+        "The selected output has an unsupported Graphite numeric type.",
+    )
+    .map(|_| ())
+}
+
+pub(crate) fn typecheck_detached_ranked_network(
+    network: NodeNetwork,
+    elements: &[Type],
+    incompatible_output: &'static str,
+) -> Result<NodeTypes, String> {
     std::panic::catch_unwind(AssertUnwindSafe(|| {
         let proto = compile_detached_numeric_network(network)?;
         let mut typing = TypingContext::new(&NODE_REGISTRY);
@@ -440,19 +457,17 @@ pub(crate) fn typecheck_detached_numeric_network(network: NodeNetwork) -> Result
         let types = typing
             .type_of(proto.output)
             .ok_or_else(|| "Graphite did not resolve the selected output type.".to_owned())?;
-        let numeric = match types.return_value.nested_type() {
-            Type::Item(element) | Type::List(element) => [
-                graphite_core_types::concrete!(f64),
-                graphite_core_types::concrete!(i64),
-                graphite_core_types::concrete!(DVec2),
-            ]
-            .contains(element.as_ref()),
+        let supported = match types.return_value.nested_type() {
+            Type::Item(element) | Type::List(element) => elements.contains(element.as_ref()),
             _ => false,
         };
-        if types.call_argument != graphite_core_types::concrete!(Context<'static>) || !numeric {
-            return Err("The selected output has an unsupported Graphite numeric type.".into());
+        if types.call_argument != graphite_core_types::concrete!(Context<'static>) || !supported {
+            return Err(incompatible_output.into());
         }
-        Ok(())
+        Ok(NodeTypes {
+            inputs: types.inputs.clone(),
+            output: types.return_value.clone(),
+        })
     }))
     .unwrap_or_else(|_| {
         Err("The pinned Graphite compiler stopped while typing the selected output.".into())
