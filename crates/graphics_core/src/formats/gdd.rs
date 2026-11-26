@@ -38,7 +38,7 @@ use graphite_editor::messages::portfolio::document::{
     },
     utility_types::{
         document_metadata::LayerNodeIdentifier,
-        misc::PTZ,
+        misc::{GridType, PTZ},
         network_interface::{
             InputConnector, LayerPosition, NavigationMetadata, NodeNetworkInterface, NodePosition,
             NodeTemplate, NodeTemplateImplementation, NodeTypePersistentMetadata, OutputConnector,
@@ -409,6 +409,7 @@ pub struct GddDocumentCanvasOutput {
     pub document_size: DVec2,
     pub artboards: Vec<GddArtboardCanvasLayer>,
     pub can_draw_artboard: bool,
+    pub snapping_document: Option<Box<DocumentMessageHandler>>,
 }
 
 pub struct GddArtboardCanvasLayer {
@@ -3827,14 +3828,23 @@ impl InspectedGddV1 {
                 return Err(GddArchiveError::UnsupportedArtboardGeometry);
             }
             let can_draw_artboard = classify_document_artboard_source(&mut interface).is_ok();
-            return Self::render_unframed_canvas_svg(
+            let mut output = Self::render_unframed_canvas_svg(
                 &detached,
                 (resolution, scale),
                 camera,
                 budget,
                 can_draw_artboard,
             )
-            .await;
+            .await?;
+            if can_draw_artboard {
+                output.snapping_document = Some(self.canvas_snapping_document(
+                    interface,
+                    &output.render,
+                    output.camera,
+                    resolution.as_dvec2() / scale,
+                ));
+            }
+            return Ok(output);
         }
         let root_visible = saved.visible;
         let boards: Vec<_> = if interface.is_artboard(&root, &[]) && interface.is_layer(&root, &[])
@@ -3980,6 +3990,8 @@ impl InspectedGddV1 {
             })
             .collect();
         Ok(GddDocumentCanvasOutput {
+            snapping_document: can_draw_artboard
+                .then(|| self.canvas_snapping_document(interface, &render, camera, logical_size)),
             render,
             camera,
             document_size: size,
@@ -4056,7 +4068,81 @@ impl InspectedGddV1 {
             document_size,
             artboards: Vec::new(),
             can_draw_artboard,
+            snapping_document: None,
         })
+    }
+
+    pub fn canvas_snapping_defaults(&self) -> Box<DocumentMessageHandler> {
+        let mut document = Box::<DocumentMessageHandler>::default();
+        document.apply_stored_document_settings(self.document.view_settings());
+        let snapping = &mut document.snapping_state;
+        if !snapping.tolerance.is_finite() || snapping.tolerance < 0. {
+            snapping.tolerance = Default::default();
+            snapping.snapping_enabled = false;
+        }
+        let finite_grid = match snapping.grid.grid_type {
+            GridType::Rectangular { spacing } => spacing.is_finite(),
+            GridType::Isometric {
+                y_axis_spacing,
+                angle_a,
+                angle_b,
+            } => {
+                let slope = angle_a.to_radians().tan() + angle_b.to_radians().tan();
+                y_axis_spacing.is_finite() && slope.is_finite() && slope != 0.
+            }
+        };
+        if !finite_grid || !snapping.grid.origin.is_finite() {
+            snapping.grid = Default::default();
+            snapping.grid_snapping = false;
+        }
+        document
+    }
+
+    fn canvas_snapping_document(
+        &self,
+        mut interface: NodeNetworkInterface,
+        render: &RenderOutput,
+        camera: PTZ,
+        viewport_size: DVec2,
+    ) -> Box<DocumentMessageHandler> {
+        let mut document = self.canvas_snapping_defaults();
+        document.document_ptz = camera;
+        interface.set_document_to_viewport_transform(
+            document
+                .navigation_handler
+                .calculate_offset_transform(viewport_size / 2., &camera),
+        );
+        let metadata = &render.metadata;
+        interface.update_transforms(
+            metadata.upstream_footprints.clone(),
+            metadata.local_transforms.clone(),
+        );
+        interface.update_first_element_source_id(metadata.first_element_source_id.clone());
+        let source_layer = |id| {
+            (interface.document_network().nodes.contains_key(id) && interface.is_layer(id, &[]))
+                .then(|| LayerNodeIdentifier::new(*id, &interface))
+        };
+        let click_targets = metadata
+            .click_targets
+            .iter()
+            .filter_map(|(id, targets)| Some((source_layer(id)?, targets.clone())))
+            .collect();
+        let outlines = metadata
+            .outlines
+            .iter()
+            .filter_map(|(id, outlines)| Some((source_layer(id)?, outlines.clone())))
+            .collect();
+        let vector_data = metadata
+            .vector_data
+            .iter()
+            .filter_map(|(id, vector)| Some((source_layer(id)?, vector.clone())))
+            .collect();
+        interface.update_click_targets(click_targets);
+        interface.update_outlines(outlines);
+        interface.update_clip_targets(metadata.clip_targets.clone());
+        interface.update_vector_data(vector_data);
+        document.network_interface = interface;
+        document
     }
 
     async fn render_saved_layer_svg(
@@ -15845,6 +15931,10 @@ mod tests {
             let mut artwork_camera = PTZ::default();
             artwork_camera.pan = DVec2::new(12., -24.);
             artwork_camera.set_zoom(1.5);
+            let mut snapping = DocumentMessageHandler::default().snapping_state;
+            snapping.snapping_enabled = false;
+            snapping.tolerance = 5.;
+            snapping.grid.origin = DVec2::new(12., -8.);
             owner
                 .set_view_settings(BTreeMap::from([
                     (
@@ -15854,6 +15944,10 @@ mod tests {
                     (
                         session::doc::RULERS_VISIBLE.into(),
                         to_value(&false).expect("rulers"),
+                    ),
+                    (
+                        session::doc::SNAPPING.into(),
+                        to_value(&snapping).expect("snapping preferences"),
                     ),
                 ]))
                 .expect("persist peer view settings");
@@ -15906,6 +16000,10 @@ mod tests {
             let artwork = view.document.expect("per-peer artwork settings");
             assert_eq!(artwork.camera, artwork_camera);
             assert!(!artwork.rulers_visible);
+            let accepted_snapping = source.canvas_snapping_defaults().snapping_state;
+            assert!(!accepted_snapping.snapping_enabled);
+            assert_eq!(accepted_snapping.tolerance, 5.);
+            assert_eq!(accepted_snapping.grid.origin, DVec2::new(12., -8.));
             let [root, nested] = view.networks.as_slice() else {
                 panic!("expected only the two attached graph views");
             };

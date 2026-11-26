@@ -1,7 +1,8 @@
 use std::{collections::VecDeque, time::Duration};
 
 use gpui::{
-    Bounds, PathBuilder, PathStyle, Pixels, Point, Rgba, ScrollWheelEvent, Window, point, px,
+    Bounds, Modifiers, PathBuilder, PathStyle, Pixels, Point, Rgba, ScrollWheelEvent, Window,
+    point, px,
 };
 use graphics_core::formats::gdd::{GddArtboardCanvasOverlay, GddArtboardGeometry};
 use graphite_editor::{
@@ -10,13 +11,14 @@ use graphite_editor::{
         VIEWPORT_ZOOM_MIN_FRACTION_COVER, VIEWPORT_ZOOM_WHEEL_RATE,
     },
     messages::{
-        input_mapper::utility_types::pointer::ScrollDelta,
-        portfolio::document::utility_types::misc::PTZ,
+        input_mapper::utility_types::{keyboard::Key, pointer::ScrollDelta},
+        portfolio::document::{DocumentMessageHandler, utility_types::misc::PTZ},
         prelude::{
-            InputPreprocessorMessageHandler, MessageHandler, NavigationMessageHandler,
+            InputPreprocessorMessageHandler, Message, MessageHandler, NavigationMessageHandler,
             ViewportMessage, ViewportMessageHandler,
         },
         tool::common_functionality::auto_panning::AutoPanning,
+        tool::common_functionality::resize::Resize,
         tool::common_functionality::transformation_cage::{
             BoundingBoxManager, SelectedEdges, axis_align_drag,
         },
@@ -116,41 +118,71 @@ pub(crate) fn paint_artboard_outline(
     }
 }
 
+pub(crate) fn paint_artboard_snap_point(
+    position: DVec2,
+    origin: Point<Pixels>,
+    window: &mut Window,
+) {
+    if let (Some(center), Ok(color)) = (
+        pane_point(position, origin),
+        Rgba::try_from(COLOR_OVERLAY_BLUE),
+    ) {
+        let bounds = Bounds::new(center - point(px(2.5), px(2.5)), gpui::size(px(5.), px(5.)));
+        window.paint_quad(gpui::fill(bounds, color));
+    }
+}
+
 pub(crate) struct ArtboardDraw {
-    start: DVec2,
-    document_to_pane: DAffine2,
+    resize: Resize,
+    start_pointer: DVec2,
+    viewport: ViewportMessageHandler,
 }
 
 impl ArtboardDraw {
-    pub fn new(start: Point<Pixels>, document_to_pane: DAffine2) -> Self {
+    pub fn new(position: DVec2, document: &DocumentMessageHandler, viewport_size: DVec2) -> Self {
+        let viewport = artboard_viewport(viewport_size, &mut VecDeque::new());
+        let input = artboard_pointer(position, Modifiers::default());
+        let mut resize = Resize::default();
+        resize.start(document, &input, &viewport);
+        let start_pointer = document
+            .metadata()
+            .document_to_viewport
+            .inverse()
+            .transform_point2(position);
         Self {
-            start: document_to_pane
-                .inverse()
-                .transform_point2(logical_vector(start)),
-            document_to_pane,
+            resize,
+            start_pointer,
+            viewport,
         }
     }
 
     pub fn placement(
-        &self,
-        position: Point<Pixels>,
-        constrain: bool,
-        center: bool,
+        &mut self,
+        position: DVec2,
+        modifiers: Modifiers,
+        document: &DocumentMessageHandler,
     ) -> Option<GddArtboardGeometry> {
-        let mut delta = self
-            .document_to_pane
-            .inverse()
-            .transform_point2(logical_vector(position))
-            - self.start;
-        if constrain {
-            delta = delta.signum() * delta.abs().max_element();
+        let to_document = document.metadata().document_to_viewport.inverse();
+        if !position.is_finite()
+            || to_document
+                .transform_point2(position)
+                .abs_diff_eq(self.start_pointer, 1e-9)
+        {
+            self.resize.snap_manager.clear_indicator();
+            return None;
         }
-        let start = if center {
-            self.start - delta
-        } else {
-            self.start
-        };
-        let end = self.start + delta;
+        let input = artboard_pointer(position, modifiers);
+        let [start, end] = self
+            .resize
+            .calculate_points_ignore_layer(
+                document,
+                &input,
+                &self.viewport,
+                Key::Alt,
+                Key::Shift,
+                true,
+            )
+            .map(|point| to_document.transform_point2(point));
         let location = start.min(end).round();
         let dimensions = (start.round() - end.round()).abs();
         (location.is_finite() && dimensions.is_finite() && dimensions != DVec2::ZERO).then_some(
@@ -161,8 +193,8 @@ impl ArtboardDraw {
         )
     }
 
-    pub fn outline(&self, geometry: GddArtboardGeometry) -> [DVec2; 4] {
-        artboard_outline(geometry, self.document_to_pane)
+    pub fn snap_point(&self) -> Option<DVec2> {
+        self.resize.snap_manager.indicator_pos()
     }
 }
 
@@ -379,7 +411,10 @@ impl DocumentNavigation {
     }
 }
 
-fn artboard_outline(geometry: GddArtboardGeometry, document_to_pane: DAffine2) -> [DVec2; 4] {
+pub(crate) fn artboard_outline(
+    geometry: GddArtboardGeometry,
+    document_to_pane: DAffine2,
+) -> [DVec2; 4] {
     let first = geometry.location;
     let last = first + geometry.dimensions.max(DVec2::ONE);
     [
@@ -396,8 +431,59 @@ pub(crate) fn artboard_auto_pan_delta(
     cursor: Point<Pixels>,
     frame_duration: Duration,
 ) -> Option<DVec2> {
-    let mut viewport = ViewportMessageHandler::default();
     let mut responses = VecDeque::new();
+    let viewport = artboard_viewport(viewport_size, &mut responses);
+    let mut input = artboard_pointer(logical_vector(cursor), Modifiers::default());
+    input.frame_time.advance_timestamp(frame_duration);
+    let mut auto_pan = AutoPanning::default();
+    auto_pan.setup_by_mouse_position(&input, &viewport, &[], &mut responses);
+    auto_pan
+        .shift_viewport(&input, &viewport, &mut responses)
+        .filter(|delta| delta.is_finite() && *delta != DVec2::ZERO)
+}
+
+pub(crate) fn set_artboard_snap_camera(
+    document: &mut DocumentMessageHandler,
+    navigation: DocumentNavigation,
+    viewport_size: DVec2,
+) {
+    let transform = navigation.document_to_pane(viewport_size);
+    let metadata = document.metadata();
+    if metadata.document_to_viewport != transform {
+        // Graphite caches renderer footprints in viewport space.
+        let change = transform * metadata.document_to_viewport.inverse();
+        let mut footprints = metadata.upstream_footprints.clone();
+        for footprint in footprints.values_mut() {
+            footprint.transform = change * footprint.transform;
+        }
+        let local_transforms = metadata.local_transforms.clone();
+        document
+            .network_interface
+            .update_transforms(footprints, local_transforms);
+        document
+            .network_interface
+            .set_document_to_viewport_transform(transform);
+    }
+    document.document_ptz = navigation.camera;
+}
+
+fn artboard_pointer(position: DVec2, modifiers: Modifiers) -> InputPreprocessorMessageHandler {
+    let mut input = InputPreprocessorMessageHandler::default();
+    input.mouse.position = position;
+    if modifiers.alt {
+        input.keyboard.set(Key::Alt as usize);
+    }
+    if modifiers.shift {
+        input.keyboard.set(Key::Shift as usize);
+    }
+    input
+}
+
+fn artboard_viewport(
+    viewport_size: DVec2,
+    responses: &mut VecDeque<Message>,
+) -> ViewportMessageHandler {
+    let mut viewport = ViewportMessageHandler::default();
     viewport.process_message(
         ViewportMessage::Update {
             x: 0.,
@@ -406,17 +492,10 @@ pub(crate) fn artboard_auto_pan_delta(
             height: viewport_size.y,
             scale: 1.,
         },
-        &mut responses,
+        responses,
         (),
     );
-    let mut input = InputPreprocessorMessageHandler::default();
-    input.mouse.position = logical_vector(cursor);
-    input.frame_time.advance_timestamp(frame_duration);
-    let mut auto_pan = AutoPanning::default();
-    auto_pan.setup_by_mouse_position(&input, &viewport, &[], &mut responses);
-    auto_pan
-        .shift_viewport(&input, &viewport, &mut responses)
-        .filter(|delta| delta.is_finite() && *delta != DVec2::ZERO)
+    viewport
 }
 
 pub(crate) fn logical_vector(point: Point<Pixels>) -> DVec2 {
@@ -426,6 +505,37 @@ pub(crate) fn logical_vector(point: Point<Pixels>) -> DVec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn at_gra_tool_008_1_draw_respects_source_grid_snapping() {
+        use graphite_editor::messages::portfolio::document::utility_types::misc::GridType;
+
+        let mut document = DocumentMessageHandler::default();
+        document.snapping_state.grid_snapping = true;
+        document.snapping_state.grid.grid_type = GridType::Rectangular {
+            spacing: DVec2::splat(20.),
+        };
+        let size = DVec2::splat(200.);
+        let navigation = DocumentNavigation {
+            camera: PTZ::default(),
+            document_size: DVec2::ZERO,
+        };
+        set_artboard_snap_camera(&mut document, navigation, size);
+        let start = DVec2::splat(121.);
+        let end = DVec2::splat(161.);
+        for (enabled, location) in [(true, 20.), (false, 21.)] {
+            document.snapping_state.snapping_enabled = enabled;
+            let mut draw = ArtboardDraw::new(start, &document, size);
+            assert_eq!(
+                draw.placement(end, Modifiers::default(), &document),
+                Some(GddArtboardGeometry {
+                    location: DVec2::splat(location),
+                    dimensions: DVec2::splat(40.)
+                }),
+            );
+            assert_eq!(draw.snap_point(), enabled.then_some(DVec2::splat(60.)));
+        }
+    }
     use graphite_std::vector_types::kurbo::Shape;
 
     #[test]
