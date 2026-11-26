@@ -25005,6 +25005,17 @@ def write_validation() -> None:
                 "Every claimed task result has zero failures and skips; partial artifacts claim "
                 "only their exact passed rows."
             )
+        if identifier == "VAL-CLIP-001":
+            pass_artifact = pass_artifact.replace(
+                "and unique exact contract records",
+                "a current test-source path and SHA-256 for every task result, "
+                "and unique exact contract records",
+            )
+        if identifier == "VAL-VAE-001":
+            pass_artifact += (
+                " Each published execution result requires a runtime case. The optional "
+                "`catalog_checks` field carries source and fixture observations for outstanding tasks."
+            )
         if identifier == "VAL-COMFY-BUILD-001":
             pass_artifact = (
                 "exit status 0 from both build profiles and the focused Sim defaults test, "

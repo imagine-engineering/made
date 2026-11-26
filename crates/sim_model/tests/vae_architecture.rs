@@ -17,7 +17,7 @@ use sim_types::CancellationToken;
 use std::{
     collections::{BTreeMap, BTreeSet},
     error::Error,
-    fs,
+    fs::{self, OpenOptions},
     path::{Path, PathBuf},
 };
 
@@ -761,21 +761,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
         ),
         Err(VaeArchitectureError::NoMatch { unbound_row }) if unbound_row == VAE_UNBOUND_ROW_ID
     ));
-    let converted = registry.select(
-        &probe(
-            &[
-                (
-                    "decoder.up_blocks.0.resnets.0.norm1.weight",
-                    vec![128],
-                    "F32",
-                ),
-                ("decoder.conv_in.weight", vec![128, 4, 3, 3], "F32"),
-            ],
-            BTreeMap::new(),
-        )?,
-        &cancellation,
-    )?;
-    assert!(converted.trace().contains(&VAE_DIFFUSERS_ROW_ID));
+    check_source_loader_configuration_and_conversion(&registry, &cancellation)?;
 
     let workspace = workspace()?;
     let source = fs::read(workspace.join(VAE_SELECTOR_SOURCE_PATH))?;
@@ -794,7 +780,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
         .filter(|fields| fields.get(8).is_some_and(|task| task == LOADER_TASK))
         .collect::<Vec<_>>();
     assert_eq!(vae_rows.len(), VAE_SELECTOR_ROW_COUNT);
-    let mut contract_evidence = Vec::with_capacity(VAE_SELECTOR_ROW_COUNT);
+    let mut loader_contracts = Vec::with_capacity(VAE_SELECTOR_ROW_COUNT);
     for row in VAE_SELECTOR_CATALOG_ROWS {
         let fields = vae_rows
             .iter()
@@ -835,7 +821,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                 format!("{}:wrong-family", row.contract_id),
             ]
         };
-        contract_evidence.push(json!({
+        loader_contracts.push(json!({
             "contract_id": row.contract_id,
             "task_id": LOADER_TASK,
             "source_sha256": fields[5],
@@ -844,7 +830,8 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "case_ids": case_ids,
         }));
     }
-    let loader_contract_count = contract_evidence.len();
+    let loader_contract_count = loader_contracts.len();
+    let mut catalog_contracts = Vec::new();
     let execution_rows = catalog_rows
         .iter()
         .filter(|fields| fields.get(8).is_some_and(|task| task == VAE_EXECUTION_TASK))
@@ -950,13 +937,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
         ),
         Err(VaeError::SelectionBoundaryMismatch { .. })
     ));
-    contract_evidence.push(json!({
+    catalog_contracts.push(json!({
         "contract_id": execution_fields[0],
         "task_id": VAE_EXECUTION_TASK,
         "source_sha256": execution_fields[5],
         "symbol_sha256": execution_fields[6],
-        "status": "passed",
-        "case_ids": [
+        "descriptor_case_ids": [
             "vae-execution:canonical-selection-binding",
             "vae-execution:identity-round-trip",
             "vae-execution:typed-boundary-rejection",
@@ -992,15 +978,13 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             ),
             source_sha256
         );
-        contract_evidence.push(json!({
+        catalog_contracts.push(json!({
             "contract_id": contract_id,
             "task_id": VAE_TILING_TASK,
             "source_sha256": source_sha256,
             "symbol_sha256": symbol_sha256,
-            "status": "passed",
-            "case_ids": [
-                format!("{contract_id}:source-exact"),
-                format!("{contract_id}:typed-invalid"),
+            "fixture_case_ids": [
+                format!("{contract_id}:pinned-source-row"),
             ],
         }));
     }
@@ -1140,13 +1124,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             !case_ids.is_empty(),
             "{contract_id} has no image fixture case"
         );
-        contract_evidence.push(json!({
+        catalog_contracts.push(json!({
             "contract_id": contract_id,
             "task_id": VAE_IMAGE_TASK,
             "source_sha256": source_sha256,
             "symbol_sha256": symbol_sha256,
-            "status": "passed",
-            "case_ids": case_ids,
+            "fixture_case_ids": case_ids,
         }));
     }
 
@@ -1267,8 +1250,8 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "profile": profile_name,
             "state_checkpoint_count": state_checkpoints.len(),
             "equation_checkpoints": equations,
-            "native_encode_path": "implemented",
-            "native_decode_path": "implemented",
+            "expected_encode_path": "implemented",
+            "expected_decode_path": "implemented",
             "validation_scope": "immutable source topology and named native semantic equation tests",
         }));
     }
@@ -1300,13 +1283,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             ),
             fields[5]
         );
-        contract_evidence.push(json!({
+        catalog_contracts.push(json!({
             "contract_id": contract_id,
             "task_id": VAE_VIDEO_TASK,
             "source_sha256": fields[5],
             "symbol_sha256": fields[6],
-            "status": "passed",
-            "case_ids": case_ids,
+            "fixture_case_ids": case_ids,
         }));
     }
 
@@ -1403,8 +1385,8 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "id": id,
             "profile": profile_name,
             "equation_checkpoints": equations,
-            "native_encode_path": "implemented",
-            "native_decode_path": "implemented",
+            "expected_encode_path": "implemented",
+            "expected_decode_path": "implemented",
             "validation_scope": "immutable source topology and named native semantic equation tests",
         }));
     }
@@ -1436,13 +1418,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             ),
             fields[5]
         );
-        contract_evidence.push(json!({
+        catalog_contracts.push(json!({
             "contract_id": contract_id,
             "task_id": VAE_AUDIO_TASK,
             "source_sha256": fields[5],
             "symbol_sha256": fields[6],
-            "status": "passed",
-            "case_ids": case_ids,
+            "fixture_case_ids": case_ids,
         }));
     }
 
@@ -1514,12 +1495,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "structured_kind": case["structured_kind"],
             "source_state_count": structured_vae_source_state_count(&profile)?,
             "equation_checkpoints": equations,
-            "native_encode_path": if profile == VaeKernelProfile::HunyuanShapeV1 {
+            "expected_encode_path": if profile == VaeKernelProfile::HunyuanShapeV1 {
                 "typed_unavailable_pinned_source_missing_pre_kl_definition"
             } else {
                 "not_exposed_by_source_decoder_contract"
             },
-            "native_decode_path": "implemented",
+            "expected_decode_path": "implemented",
             "validation_scope": "immutable source topology, exact state manifest, and named native semantic equation tests",
         }));
     }
@@ -1557,13 +1538,12 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             ),
             fields[5]
         );
-        contract_evidence.push(json!({
+        catalog_contracts.push(json!({
             "contract_id": contract_id,
             "task_id": VAE_STRUCTURED_TASK,
             "source_sha256": fields[5],
             "symbol_sha256": fields[6],
-            "status": "passed",
-            "case_ids": case_ids,
+            "fixture_case_ids": case_ids,
         }));
     }
 
@@ -1573,151 +1553,43 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
     let producer_path = "crates/sim_model/tests/vae_architecture.rs";
     let producer_bytes = fs::read(workspace.join(producer_path))?;
     let producer_sha256 = format!("{:x}", Sha256::digest(producer_bytes));
-    let tiling_implementations = [
-        "crates/sim_model/src/vae.rs",
-        "crates/sim_model/src/vae_tiling.rs",
-        "crates/sim_model/tests/vae_architecture.rs",
-        "crates/sim_model/tests/vae_tiling.rs",
-    ]
-    .into_iter()
-    .map(|path| {
-        Ok(json!({
-            "path": path,
-            "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-        }))
-    })
-    .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let image_implementations = [
-        "crates/sim_model/src/vae.rs",
-        "crates/sim_model/src/vae_architecture.rs",
-        "crates/sim_model/src/vae_image.rs",
-        "crates/sim_model/src/native_ops.rs",
-        "crates/sim_runtime/src/assets.rs",
-        "crates/sim_model/tests/vae_architecture.rs",
-        "crates/sim_model/tests/vae_image.rs",
-        "crates/sim_test_support/src/bin/generate_vae_image_fixture.rs",
-        "crates/sim_test_support/tests/ownership_consolidation.rs",
-    ]
-    .into_iter()
-    .map(|path| {
-        Ok(json!({
-            "path": path,
-            "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-        }))
-    })
-    .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let video_implementations = [
-        "crates/sim_model/src/vae.rs",
-        "crates/sim_model/src/vae_architecture.rs",
-        "crates/sim_model/src/vae_tiling.rs",
-        "crates/sim_model/src/vae_video.rs",
-        "crates/sim_model/src/native_ops.rs",
-        "crates/sim_model/src/vision_models.rs",
-        "crates/sim_runtime/src/assets.rs",
-        "crates/sim_model/tests/vae_architecture.rs",
-        "crates/sim_model/tests/vae_video.rs",
-        "crates/sim_test_support/src/bin/generate_vae_video_fixture.rs",
-        "crates/sim_test_support/tests/ownership_consolidation.rs",
-    ]
-    .into_iter()
-    .map(|path| {
-        Ok(json!({
-            "path": path,
-            "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-        }))
-    })
-    .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let audio_implementations = [
-        "crates/sim_model/src/vae_architecture.rs",
-        "crates/sim_model/src/vae_audio.rs",
-        "crates/sim_model/src/vision_models.rs",
-        "crates/sim_runtime/src/assets.rs",
-        "crates/sim_model/tests/vae_architecture.rs",
-        "crates/sim_model/tests/vae_audio.rs",
-        "crates/sim_test_support/src/bin/generate_vae_audio_fixture.rs",
-        "crates/sim_test_support/tests/ownership_consolidation.rs",
-    ]
-    .into_iter()
-    .map(|path| {
-        Ok(json!({
-            "path": path,
-            "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-        }))
-    })
-    .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let structured_implementations = [
-        "crates/sim_model/src/sim_model.rs",
-        "crates/sim_model/src/vae.rs",
-        "crates/sim_model/src/vae_architecture.rs",
-        "crates/sim_model/src/vae_structured.rs",
-        "crates/sim_runtime/src/assets.rs",
-        "crates/sim_model/tests/vae_architecture.rs",
-        "crates/sim_model/tests/vae_structured.rs",
-        "crates/sim_test_support/src/bin/generate_vae_structured_fixture.rs",
-        "crates/sim_test_support/tests/ownership_consolidation.rs",
-    ]
-    .into_iter()
-    .map(|path| {
-        Ok(json!({
-            "path": path,
-            "sha256": format!("{:x}", Sha256::digest(fs::read(workspace.join(path))?)),
-        }))
-    })
-    .collect::<Result<Vec<_>, std::io::Error>>()?;
-    let task_results = BTreeMap::from([
-        (
-            LOADER_TASK,
-            json!({
-                "status": "passed",
-                "passed": loader_contract_count,
-                "failed": 0,
-                "skipped": 0,
-                "implementation": {
-                    "path": implementation_path,
-                    "sha256": implementation_sha256,
-                },
-            }),
-        ),
+    let task_results = BTreeMap::from([(
+        LOADER_TASK,
+        json!({
+            "status": "passed",
+            "passed": loader_contract_count,
+            "failed": 0,
+            "skipped": 0,
+            "implementation": {
+                "path": implementation_path,
+                "sha256": implementation_sha256,
+            },
+        }),
+    )]);
+    let catalog_checks = BTreeMap::from([
         (
             VAE_EXECUTION_TASK,
             json!({
-                "status": "passed",
-                "passed": 1,
-                "failed": 0,
-                "skipped": 0,
+                "matched_rows": 1,
                 "case_ids": [
                     "vae-execution:canonical-selection-binding",
                     "vae-execution:identity-round-trip",
                     "vae-execution:typed-boundary-rejection",
                 ],
-                "implementations": [{
-                    "path": "crates/sim_model/src/vae.rs",
-                    "sha256": format!(
-                        "{:x}",
-                        Sha256::digest(fs::read(workspace.join("crates/sim_model/src/vae.rs"))?)
-                    ),
-                }],
             }),
         ),
         (
             VAE_TILING_TASK,
             json!({
-                "status": "passed",
-                "passed": VAE_TILING_CONTRACTS.len(),
-                "failed": 0,
-                "skipped": 0,
-                "case_ids": VAE_TILING_CASE_IDS,
-                "implementations": tiling_implementations,
+                "matched_rows": VAE_TILING_CONTRACTS.len(),
+                "required_case_ids": VAE_TILING_CASE_IDS,
             }),
         ),
         (
             VAE_IMAGE_TASK,
             json!({
-                "status": "passed",
-                "passed": VAE_IMAGE_CONTRACTS.len(),
-                "failed": 0,
-                "skipped": 0,
-                "case_ids": VAE_IMAGE_CASE_IDS,
+                "matched_rows": VAE_IMAGE_CONTRACTS.len(),
+                "required_case_ids": VAE_IMAGE_CASE_IDS,
                 "fixture_case_ids": image_case_ids,
                 "fixture_cases": image_case_evidence,
                 "fixture_equation_checkpoint_count": image_equation_checkpoint_count,
@@ -1728,21 +1600,17 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                     "provenance_path": image_provenance_path,
                     "provenance_sha256": format!("{:x}", Sha256::digest(&image_provenance_bytes)),
                 },
-                "implementations": image_implementations,
             }),
         ),
         (
             VAE_VIDEO_TASK,
             json!({
-                "status": "passed",
-                "passed": video_contract_case_ids.len(),
-                "failed": 0,
-                "skipped": 0,
+                "matched_rows": video_contract_case_ids.len(),
                 "fixture_case_ids": video_case_ids,
                 "fixture_cases": video_case_evidence,
                 "fixture_equation_checkpoint_count": video_equation_checkpoint_count,
                 "fixture_unique_equation_checkpoint_count": unique_video_equation_checkpoints.len(),
-                "semantic_test_suites": [
+                "execution_tests_required": [
                     "sim_model::vae_video::tests",
                     "sim_model/tests/vae_video.rs"
                 ],
@@ -1752,21 +1620,17 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                     "provenance_path": video_provenance_path,
                     "provenance_sha256": format!("{:x}", Sha256::digest(&video_provenance_bytes)),
                 },
-                "implementations": video_implementations,
             }),
         ),
         (
             VAE_AUDIO_TASK,
             json!({
-                "status": "passed",
-                "passed": audio_contract_case_ids.len(),
-                "failed": 0,
-                "skipped": 0,
+                "matched_rows": audio_contract_case_ids.len(),
                 "fixture_case_ids": audio_case_ids,
                 "fixture_cases": audio_case_evidence,
                 "fixture_equation_checkpoint_count": audio_equation_checkpoint_count,
                 "fixture_unique_equation_checkpoint_count": unique_audio_equation_checkpoints.len(),
-                "semantic_test_suites": [
+                "execution_tests_required": [
                     "sim_model::vae_audio::tests",
                     "sim_model/tests/vae_audio.rs",
                     "sim_runtime::assets::tests::audio_vae_production_admission_is_authorized_canonical_and_failure_atomic"
@@ -1777,21 +1641,17 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                     "provenance_path": audio_provenance_path,
                     "provenance_sha256": format!("{:x}", Sha256::digest(&audio_provenance_bytes)),
                 },
-                "implementations": audio_implementations,
             }),
         ),
         (
             VAE_STRUCTURED_TASK,
             json!({
-                "status": "passed",
-                "passed": structured_contract_case_ids.len(),
-                "failed": 0,
-                "skipped": 0,
+                "matched_rows": structured_contract_case_ids.len(),
                 "fixture_case_ids": structured_case_ids,
                 "fixture_cases": structured_case_evidence,
                 "fixture_equation_checkpoint_count": structured_equation_checkpoint_count,
                 "fixture_unique_equation_checkpoint_count": unique_structured_equation_checkpoints.len(),
-                "semantic_test_suites": [
+                "execution_tests_required": [
                     "sim_model::vae_structured::tests",
                     "sim_model/tests/vae_structured.rs",
                     "sim_runtime::assets::AssetService::load_structured_vae_with_context"
@@ -1802,7 +1662,6 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
                     "provenance_path": structured_provenance_path,
                     "provenance_sha256": format!("{:x}", Sha256::digest(&structured_provenance_bytes)),
                 },
-                "implementations": structured_implementations,
             }),
         ),
     ]);
@@ -1818,7 +1677,7 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "dtype": "f32",
         },
         "summary": {
-            "passed": contract_evidence.len(),
+            "passed": loader_contract_count,
             "failed": 0,
             "skipped": 0,
         },
@@ -1827,17 +1686,35 @@ fn val_vae_001_selector_rows() -> Result<(), Box<dyn Error>> {
             "sha256": producer_sha256,
         },
         "task_results": task_results,
-        "contracts": contract_evidence,
+        "contracts": loader_contracts,
         "selector_cases": validated,
-        "remaining_tasks": [
-            "comfy-parity-vae-owner-consolidation"
-        ],
+        "catalog_checks": { "tasks": catalog_checks, "contracts": catalog_contracts },
+        "remaining_tasks": catalog_checks.keys().copied()
+            .chain(["comfy-parity-vae-owner-consolidation"])
+            .collect::<Vec<_>>(),
     });
-    let directory = workspace.join("target/sim-parity");
+    let directory = workspace.canonicalize()?.join("target/comfy-parity");
     fs::create_dir_all(&directory)?;
+    let lock_path = directory.join("val-vae-001.lock");
     let temporary = directory.join("val-vae-001.json.tmp");
-    fs::write(&temporary, serde_json::to_vec_pretty(&artifact)?)?;
-    fs::rename(temporary, directory.join("val-vae-001.json"))?;
+    let destination = directory.join("val-vae-001.json");
+    if directory.canonicalize()? != directory
+        || [&lock_path, &temporary, &destination]
+            .into_iter()
+            .any(|path| path.is_symlink())
+    {
+        return Err("invalid VAE receipt output path".into());
+    }
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(lock_path)?;
+    lock.lock()?;
+    let mut bytes = serde_json::to_vec_pretty(&artifact)?;
+    bytes.push(b'\n');
+    fs::write(&temporary, bytes)?;
+    fs::rename(temporary, destination)?;
     Ok(())
 }
 
@@ -1956,15 +1833,22 @@ fn nested_profile_decisions_are_deterministic() -> Result<(), Box<dyn Error>> {
 #[test]
 fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Result<(), Box<dyn Error>>
 {
-    let registry = VaeArchitectureRegistry::checked()?;
-    let cancellation = CancellationToken::default();
+    check_source_loader_configuration_and_conversion(
+        &VaeArchitectureRegistry::checked()?,
+        &CancellationToken::default(),
+    )
+}
 
+fn check_source_loader_configuration_and_conversion(
+    registry: &VaeArchitectureRegistry,
+    cancellation: &CancellationToken,
+) -> Result<(), Box<dyn Error>> {
     let temporal = registry.select(
         &probe(
             &[("decoder.mid.block_1.mix_factor", Vec::new(), "F32")],
             BTreeMap::new(),
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert_eq!(temporal.latent_dimensions(), 2);
     assert_eq!(temporal.boundary(), sim_model::VaeBoundaryDomain::Image);
@@ -1976,7 +1860,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
             &[("taesd_decoder.1.weight", vec![1, 8], "F32")],
             taesd_metadata,
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert!(matches!(
         taesd.loader_configuration(),
@@ -1995,7 +1879,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
             ],
             BTreeMap::new(),
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert!(matches!(
         default.loader_configuration(),
@@ -2022,7 +1906,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
             &[("decoder.conv_in.weight", vec![128, 4, 3, 3], "F32")],
             BTreeMap::new(),
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert_eq!(x4.profile(), &VaeKernelProfile::AutoencodingEngineX4V1);
     assert_eq!(
@@ -2042,7 +1926,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
             ],
             BTreeMap::new(),
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert_eq!(standard.profile(), &VaeKernelProfile::AutoencodingEngineV1);
 
@@ -2063,7 +1947,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
             ],
             BTreeMap::new(),
         )?,
-        &cancellation,
+        cancellation,
     )?;
     assert!(matches!(
         diffusers.loader_configuration(),
@@ -2087,7 +1971,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
         BTreeMap::new(),
     )?;
     assert!(matches!(
-        registry.select(&malformed, &cancellation),
+        registry.select(&malformed, cancellation),
         Err(VaeArchitectureError::MalformedDiffusersTensor { .. })
     ));
 
@@ -2103,14 +1987,14 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
         BTreeMap::new(),
     )?;
     assert!(matches!(
-        registry.select(&collision, &cancellation),
+        registry.select(&collision, cancellation),
         Err(VaeArchitectureError::DiffusersKeyCollision { .. })
     ));
 
     let explicit = registry.select_explicit(
         &probe(&[], BTreeMap::new())?,
         r#"{"params":{"embed_dim":4,"ddconfig":{"attn_resolutions":[],"ch":32,"ch_mult":[1],"double_z":true,"in_channels":3,"num_res_blocks":1,"out_ch":3,"resolution":8,"z_channels":4}}}"#,
-        &cancellation,
+        cancellation,
     )?;
     assert!(matches!(
         explicit.loader_configuration(),
@@ -2121,7 +2005,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
         registry.select_explicit(
             &probe(&[], BTreeMap::new())?,
             r#"{"params":null}"#,
-            &cancellation,
+            cancellation,
         ),
         Err(VaeArchitectureError::MalformedConfiguration(_))
     ));
@@ -2129,7 +2013,7 @@ fn val_vae_001_source_loader_configuration_and_conversion_are_checked() -> Resul
         registry.select_explicit(
             &probe(&[], BTreeMap::new())?,
             r#"{"params":{"embed_dim":4,"ddconfig":{"attn_resolutions":[],"ch":32,"ch_mult":[1],"double_z":true,"in_channels":3,"num_res_blocks":1,"out_ch":3,"resolution":8,"z_channels":4},"decoder_ddconfig":{"attn_resolutions":[],"ch":32,"ch_mult":[1],"double_z":true,"in_channels":3,"num_res_blocks":1,"out_ch":3,"resolution":8,"use_linear_attn":true,"z_channels":4}}}"#,
-            &cancellation,
+            cancellation,
         ),
         Err(VaeArchitectureError::MalformedConfiguration(message))
             if message.contains("decoder_ddconfig") && message.contains("use_linear_attn=false")

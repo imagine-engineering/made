@@ -377,10 +377,11 @@ def artifact_covers_row(
     if not isinstance(implementation, dict):
         return False
     producer_path = implementation.get("path")
-    if (
-        closure_artifact == "VAL-CLIP-001"
-        and producer_path != "crates/sim_model/tests/support/clip_receipt.rs"
-    ):
+    expected_producer = {
+        "VAL-CLIP-001": "crates/sim_model/tests/support/clip_receipt.rs",
+        "VAL-VAE-001": "crates/sim_model/tests/vae_architecture.rs",
+    }.get(closure_artifact)
+    if expected_producer is not None and producer_path != expected_producer:
         return False
     implementation_path = safe_workspace_file(workspace, producer_path)
     producer_sha256 = implementation.get("sha256")
