@@ -239,8 +239,18 @@ A separate passive replay used JDTLS's standard `initializationOptions.bundles`
 and completed the same connected restart, reimport, synchronization and Task.
 The first server advertised 33 commands and omitted all 22 Gradle companion
 commands. Its replacement advertised all 68 commands, including the companion.
-Standard startup reliability and separate physical-host qualification remain
-open.
+
+A later connected trace showed JDTLS answer the cached Gradle topology request
+even when its command registration omitted the companion. For JDTLS `1.61.0`
+with the checksum-verified companion `0.50.0` in its initialization bundles,
+Groovy now checks the live handler with that read-only request before making
+the companion's reviewed commands available. Build actions still require the
+existing project, provider and ownership checks. The connected regression
+withheld the companion commands on both launches and passed reimport,
+synchronization and ordered Tasks after restart. The Maven navigation and
+worktree-privacy regression also passed with registration withheld. A
+separate cold-process run without restart and physical-host qualification
+remain open.
 
 Groovy's connected Debug session also passed through Docker from the GPUI
 test client. The project host refused Debug before trust. The cached Java

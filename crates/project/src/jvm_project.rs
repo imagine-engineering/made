@@ -6242,6 +6242,7 @@ pub(crate) async fn query_jdtls_projects(
     worktree_root: &Path,
     maven_root: Option<PathBuf>,
     imported_build_root: Option<PathBuf>,
+    pinned_companion: bool,
 ) -> Result<JdtlsProjectQuery> {
     // The installed Java proxy answered these read-only commands in a direct
     // probe, while Groovy's capability snapshot omitted them. Validate the
@@ -6259,6 +6260,12 @@ pub(crate) async fn query_jdtls_projects(
         .context("query JDTLS projects")?
         .context("JDTLS returned no project list")?;
     let (project_uris, mut partial) = worktree_imported_project_uris(projects, worktree_root)?;
+    if pinned_companion
+        && let Some(root) = imported_build_root.as_ref()
+        && crate::lsp_store::recover_pinned_companion_commands(&server, root, request_timeout).await
+    {
+        log::info!("Recovered the pinned JDTLS companion command set after its cached probe");
+    }
     let resources = server
         .request::<lsp::request::ExecuteCommand>(
             lsp::ExecuteCommandParams {
@@ -19222,6 +19229,7 @@ mod tests {
             root,
             None,
             None,
+            false,
         )
         .await
         .expect("worktree query");
@@ -19314,6 +19322,7 @@ mod tests {
             root,
             None,
             None,
+            false,
         )
         .await
         .expect("unscoped Java project query");
@@ -19330,6 +19339,7 @@ mod tests {
             root,
             None,
             Some(root.to_path_buf()),
+            false,
         )
         .await
         .expect("cached parent workspace Maven query");

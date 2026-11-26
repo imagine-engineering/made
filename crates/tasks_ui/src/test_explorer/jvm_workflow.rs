@@ -781,6 +781,13 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
             .contains("Gradle metadata synchronization failed or was superseded"),
         "{sync_error:#}"
     );
+    let generation_before_reimport = lsp_store.read_with(cx, |store, _| {
+        store
+            .jdtls_project_snapshot(worktree_id)
+            .expect("restarted project")
+            .0
+            .generation
+    });
     focus_control(
         cx,
         "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts",
@@ -795,6 +802,13 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
         if notice
             .as_deref()
             .is_some_and(|notice| notice.starts_with("Gradle projects reimported."))
+            && lsp_store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(snapshot, current)| {
+                        current && snapshot.generation > generation_before_reimport
+                    })
+            })
         {
             break;
         }
@@ -828,7 +842,15 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
     loop {
         cx.run_until_parked();
         cx.dispatch_action(ExpandAll);
-        if panel.read_with(cx, |panel, _| {
+        if !lsp_store.read_with(cx, |store, _| {
+            store.jdtls_project_query_pending(worktree_id)
+        }) && panel.read_with(cx, |panel, _| {
+            if !panel
+                .build_phase_notice_for_test()
+                .is_some_and(|notice| notice.starts_with("Gradle metadata synchronized."))
+            {
+                return false;
+            }
             let (status, rows, _) = panel.snapshot_for_test();
             let tasks_available = [FIRST, SECOND].into_iter().all(|path| {
                 rows.iter()

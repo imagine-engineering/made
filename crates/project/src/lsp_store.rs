@@ -19,6 +19,8 @@ mod folding_ranges;
 mod inlay_hints;
 #[cfg(feature = "jvm-tools")]
 mod jdtls_ext;
+#[cfg(feature = "jvm-tools")]
+pub(crate) use jdtls_ext::recover_pinned_companion_commands;
 pub mod json_language_server_ext;
 #[cfg(feature = "jvm-tools")]
 mod kotlin_lsp_ext;
@@ -864,6 +866,8 @@ impl LocalLspStore {
 
         let startup = {
             let server_name = adapter.name.0.clone();
+            #[cfg(feature = "jvm-tools")]
+            let companion_fs = delegate.fs.clone();
             let delegate = delegate as Arc<dyn LspAdapterDelegate>;
             let key = key.clone();
             let adapter = adapter.clone();
@@ -884,6 +888,8 @@ impl LocalLspStore {
                 .semantic_tokens
                 .use_tree_sitter();
             cx.spawn(async move |cx| {
+                #[cfg(feature = "jvm-tools")]
+                let mut pinned_companion = false;
                 let result = async {
                     let language_server = pending_server.await?;
 
@@ -954,6 +960,22 @@ impl LocalLspStore {
                         adapter.adapter.prepare_initialize_params(params, cx)
                     })?;
 
+                    #[cfg(feature = "jvm-tools")]
+                    if server_name.as_ref() == "jdtls" && language_name.as_ref() == "Java" {
+                        let initialization_options =
+                            initialization_params.initialization_options.clone();
+                        pinned_companion = cx
+                            .background_executor()
+                            .spawn(async move {
+                                jdtls_ext::has_pinned_companion(
+                                    companion_fs.as_ref(),
+                                    initialization_options.as_ref(),
+                                )
+                                .await
+                            })
+                            .await;
+                    }
+
                     Self::setup_lsp_messages(
                         lsp_store.clone(),
                         &language_server,
@@ -1006,6 +1028,8 @@ impl LocalLspStore {
                                     key,
                                     language_name,
                                     pending_workspace_folders,
+                                    #[cfg(feature = "jvm-tools")]
+                                    pinned_companion,
                                     cx,
                                 );
                             })
@@ -14965,6 +14989,7 @@ impl LspStore {
             &worktree_root,
             maven_root,
             imported_build_root,
+            false,
         )
         .await
         {
@@ -18885,9 +18910,19 @@ impl LspStore {
             .selected_build_files
             .as_ref()
             .is_some_and(Vec::is_empty);
+        let pinned_companion = matches!(
+            self.as_local()
+                .and_then(|local| local.language_servers.get(&server_id)),
+            Some(LanguageServerState::Running {
+                pinned_companion: true,
+                ..
+            })
+        ) && server.version().as_deref()
+            == Some(jdtls_ext::PINNED_COMPANION_JDTLS_VERSION);
         let mut metadata_plan = if gradle_synchronization_root.is_some()
             && !empty_metadata_selection
-            && jvm_project::ScopedGradleImports::metadata_commands_available(&server)
+            && (pinned_companion
+                || jvm_project::ScopedGradleImports::metadata_commands_available(&server))
         {
             let mut plan = jvm_project::ScopedGradleImports::for_metadata(
                 &worktree.read(cx).snapshot(),
@@ -18953,6 +18988,7 @@ impl LspStore {
                 .await;
             let result = jvm_project::query_jdtls_projects(
                 server.clone(), request_timeout, background_executor, &worktree_root, maven_root, trusted_build_root,
+                pinned_companion,
             ).await;
             let authorize_metadata = |plan: Option<&jvm_project::ScopedGradleImports>, store: &Self, cx: &mut Context<Self>| -> Result<()> {
                 if let Some(scope) = remote_scope {
@@ -20864,6 +20900,7 @@ impl LspStore {
         key: LanguageServerSeed,
         language_name: LanguageName,
         workspace_folders: Arc<Mutex<BTreeSet<Uri>>>,
+        #[cfg(feature = "jvm-tools")] pinned_companion: bool,
         cx: &mut Context<Self>,
     ) {
         #[cfg(feature = "jvm-tools")]
@@ -20932,6 +20969,8 @@ impl LspStore {
                 adapter: adapter.clone(),
                 server: language_server.clone(),
                 simulate_disk_based_diagnostics_completion: None,
+                #[cfg(feature = "jvm-tools")]
+                pinned_companion,
                 #[cfg(feature = "jvm-tools")]
                 last_jdtls_configuration: (language_server.name()
                     == LanguageServerName::new_static("jdtls"))
@@ -23087,6 +23126,8 @@ pub enum LanguageServerState {
         server: Arc<LanguageServer>,
         simulate_disk_based_diagnostics_completion: Option<Task<()>>,
         workspace_diagnostics_refresh_tasks: HashMap<Option<String>, WorkspaceRefreshTask>,
+        #[cfg(feature = "jvm-tools")]
+        pinned_companion: bool,
         #[cfg(feature = "jvm-tools")]
         last_jdtls_configuration: Option<Value>,
         #[cfg(feature = "jvm-tools")]

@@ -1,8 +1,12 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest as _, Sha256};
+use std::io::Read as _;
+use std::path::Path;
 use std::sync::{
     Arc,
     atomic::{AtomicU8, Ordering},
 };
+use std::time::Duration;
 
 use gpui::{App, Context, Entity, Task, WeakEntity};
 use language::{Buffer, PointUtf16, ToOffset as _};
@@ -15,6 +19,178 @@ use crate::project_settings::ProjectSettings;
 use crate::trusted_worktrees::TrustedWorktrees;
 use crate::{File, LspStore, ProjectPath};
 use settings::Settings as _;
+
+const COMPANION_SIZE: u64 = 122_117;
+const COMPANION_SHA256: &str = "6c0f070ca799ce6e89d859cb317044b354f3cae1b0e3509d9be64a335ccd990e";
+pub(super) const PINNED_COMPANION_JDTLS_VERSION: &str = "1.61.0-SNAPSHOT";
+const COMPANION_PROBE: &str = "groovy.gradle.importedBuildRoots.v2";
+const COMPANION_COMMANDS: &[&str] = &[
+    "groovy.gradle.projects",
+    "groovy.gradle.projectDetails",
+    "groovy.gradle.projectDetails.v3",
+    "groovy.gradle.projectDetails.v4",
+    "groovy.gradle.sourceOutputs",
+    "groovy.gradle.dependencyGraph",
+    "groovy.maven.projects",
+    "groovy.maven.projectDetails",
+    "groovy.maven.goalDetails",
+    "groovy.maven.dependencyGraph",
+    "groovy.gradle.defaultImportRoots",
+    "groovy.gradle.defaultImportRoots.v2",
+    "groovy.gradle.importSelected",
+    "groovy.gradle.importSelected.v2",
+    "groovy.gradle.applyModuleStates",
+    "groovy.gradle.moduleStates",
+    "groovy.gradle.rootState",
+    "groovy.gradle.moduleStates.v2",
+    "groovy.gradle.applyModuleStates.v2",
+    "groovy.gradle.rootState.v2",
+    "groovy.gradle.applyRootState.v2",
+    "groovy.gradle.applyRootState",
+    "groovy.maven.defaultImportRoots",
+    "groovy.maven.defaultImportRoots.v2",
+    "groovy.maven.importSelected",
+    "groovy.maven.importReactor",
+    "groovy.maven.importReactorWithMasks",
+    "groovy.java.importPlainProjects",
+    "groovy.java.addLooseSource",
+    "groovy.maven.importedProjects",
+    "groovy.gradle.importedProjects",
+    "groovy.gradle.importedBuildRoots",
+    COMPANION_PROBE,
+    "groovy.maven.unlinkSelected",
+    "groovy.gradle.unlinkSelected",
+];
+
+pub(super) async fn has_pinned_companion(
+    fs: &dyn fs::Fs,
+    options: Option<&serde_json::Value>,
+) -> bool {
+    let Some(bundles) = options
+        .and_then(|options| options.get("bundles"))
+        .and_then(serde_json::Value::as_array)
+        .filter(|bundles| bundles.len() <= 32)
+    else {
+        return false;
+    };
+    for bundle in bundles.iter().filter_map(|bundle| bundle.as_str()) {
+        let path = Path::new(bundle);
+        if !path.is_absolute() || path.extension().is_none_or(|extension| extension != "jar") {
+            continue;
+        }
+        match fs.metadata(path).await {
+            Ok(Some(metadata))
+                if !metadata.is_dir && !metadata.is_fifo && metadata.len == COMPANION_SIZE => {}
+            Ok(_) => continue,
+            Err(error) => {
+                log::debug!("Could not check a configured JDTLS bundle: {error:#}");
+                continue;
+            }
+        }
+        let Some(file) = fs.open_sync(path).await.log_err() else {
+            continue;
+        };
+        let mut bytes = Vec::with_capacity(COMPANION_SIZE as usize);
+        if file
+            .take(COMPANION_SIZE + 1)
+            .read_to_end(&mut bytes)
+            .log_err()
+            .is_some()
+            && bytes.len() as u64 == COMPANION_SIZE
+            && format!("{:x}", Sha256::digest(bytes)) == COMPANION_SHA256
+        {
+            return true;
+        }
+    }
+    false
+}
+
+pub(crate) async fn recover_pinned_companion_commands(
+    server: &LanguageServer,
+    worktree_root: &Path,
+    request_timeout: Duration,
+) -> bool {
+    if server.name() != lsp::LanguageServerName::new_static("jdtls")
+        || server.version().as_deref() != Some(PINNED_COMPANION_JDTLS_VERSION)
+        || server
+            .capabilities()
+            .execute_command_provider
+            .is_some_and(|provider| {
+                COMPANION_COMMANDS
+                    .iter()
+                    .all(|command| provider.commands.iter().any(|item| item == command))
+            })
+    {
+        return false;
+    }
+    let initialized_folders = server.workspace_folders();
+    let Ok(scopes) = crate::jvm_project::imported_build_read_roots(
+        initialized_folders
+            .iter()
+            .map(|folder| folder.as_str().to_owned()),
+        worktree_root,
+    ) else {
+        return false;
+    };
+    let Some(root) = scopes
+        .first()
+        .and_then(|root| url::Url::from_directory_path(root).ok())
+    else {
+        return false;
+    };
+
+    // The pinned JDTLS retries its Eclipse registry lookup on an unknown command.
+    // The cached-only probe establishes that the checked bundle's handler can answer.
+    let response = server
+        .request::<lsp::request::ExecuteCommand>(
+            lsp::ExecuteCommandParams {
+                command: COMPANION_PROBE.into(),
+                arguments: vec![serde_json::json!({"rootUri": root, "cachedOnly": true})],
+                ..Default::default()
+            },
+            request_timeout.min(Duration::from_secs(4)),
+        )
+        .await
+        .into_response();
+    let Ok(Some(reply)) = response else {
+        log::debug!("Pinned JDTLS companion did not answer its cached capability probe");
+        return false;
+    };
+    if initialized_folders != server.workspace_folders() || !is_companion_probe_reply(&reply, &root)
+    {
+        return false;
+    }
+    server.update_capabilities(|capabilities| {
+        let provider = capabilities
+            .execute_command_provider
+            .get_or_insert_with(Default::default);
+        for command in COMPANION_COMMANDS {
+            if !provider.commands.iter().any(|item| item == command) {
+                provider.commands.push((*command).to_owned());
+            }
+        }
+    });
+    true
+}
+
+fn is_companion_probe_reply(reply: &serde_json::Value, root: &url::Url) -> bool {
+    reply.get("version").and_then(serde_json::Value::as_u64) == Some(2)
+        && reply.get("rootUri").and_then(serde_json::Value::as_str) == Some(root.as_str())
+        && reply.get("cachedOnly").and_then(serde_json::Value::as_bool) == Some(true)
+        && reply.get("readOnly").and_then(serde_json::Value::as_bool) == Some(true)
+        && reply
+            .get("fullSynchronizationKnown")
+            .and_then(serde_json::Value::as_bool)
+            == Some(false)
+        && reply
+            .get("projects")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|rows| rows.len() <= 128)
+        && reply
+            .get("topologies")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|rows| rows.len() <= 128)
+}
 
 #[derive(PartialEq, Eq)]
 struct MavenKotlinDefinitionScope {
@@ -465,6 +641,49 @@ pub(super) fn register_notifications(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinned_companion_recovery_uses_only_the_reviewed_manifest_commands() {
+        let manifest = include_str!("../../../../tooling/jvm/gradle-model/plugin.xml");
+        let commands: Vec<_> = manifest
+            .lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_prefix("<command id=\"")?
+                    .strip_suffix("\"/>")
+            })
+            .collect();
+        assert_eq!(COMPANION_COMMANDS, commands);
+    }
+
+    #[test]
+    fn pinned_companion_probe_requires_the_exact_cached_read_reply() {
+        let root = url::Url::parse("file:///trusted/").expect("initialized folder");
+        let reply = serde_json::json!({
+            "version": 2,
+            "rootUri": root,
+            "cachedOnly": true,
+            "readOnly": true,
+            "fullSynchronizationKnown": false,
+            "partial": true,
+            "projects": [],
+            "topologies": [{"topologyKnown": false, "projects": []}]
+        });
+        assert!(is_companion_probe_reply(&reply, &root));
+        for (key, value) in [
+            ("version", serde_json::json!(1)),
+            ("rootUri", serde_json::json!("file:///different/")),
+            ("cachedOnly", serde_json::json!(false)),
+            ("readOnly", serde_json::json!(false)),
+            ("fullSynchronizationKnown", serde_json::json!(true)),
+            ("projects", serde_json::json!(vec![0; 129])),
+            ("topologies", serde_json::Value::Null),
+        ] {
+            let mut rejected = reply.clone();
+            rejected[key] = value;
+            assert!(!is_companion_probe_reply(&rejected, &root), "{key}");
+        }
+    }
 
     #[test]
     fn jdtls_status_reports_failure_without_exposing_host_paths_or_claiming_import_success() {
