@@ -19488,23 +19488,44 @@ fn val_ownership_native_video_component_h264_mp4_10bit_backing_001()
         );
     }
     let video_fixtures = root.join("crates/sim_test_support/fixtures/video");
-    let fixture =
-        fs::read_to_string(video_fixtures.join("component-h264-mp4-10bit-backing/manifest.json"))?;
-    for required in [
-        "synthetic-component-h264-mp4-eight-and-ten-bit-backing",
+    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(
+        video_fixtures.join("component-h264-mp4-10bit-backing/manifest.json"),
+    )?)?;
+    assert_eq!(
+        manifest["truth_mode"].as_str(),
+        Some("synthetic-component-h264-mp4-eight-and-ten-bit-backing")
+    );
+    let contract = &manifest["contract"];
+    assert_eq!(
+        contract["service_identity_version"].as_str(),
+        Some("zed.sim.component-h264-mp4-backing-service.v2")
+    );
+    for key in [
         "source_depth_is_authoritative",
         "actor_owned_tensor_moved_without_second_copy",
         "eight_bit_semantic_identity_byte_stable",
-        "zed.sim.component-h264-mp4-backing-service.v2",
-        "trim_window_video_slice_or_save_video_effect",
     ] {
-        assert!(
-            fixture.contains(required),
-            "ten-bit backing fixture lacks {required}"
+        assert_eq!(
+            contract[key].as_bool(),
+            Some(true),
+            "ten-bit contract: {key}"
         );
     }
-
-    let manifest: serde_json::Value = serde_json::from_str(&fixture)?;
+    assert_eq!(
+        manifest["claims"],
+        serde_json::json!({
+            "synthetic_depth_exact_backing_service_and_payload_execution": true,
+            "licensed_or_installed_ffmpeg_or_libx264_package": false,
+            "synthetic_bytes_are_valid_playable_mp4": false,
+            "decoded_numeric_or_pyav_encoder_or_byte_identity": false,
+            "aac_audio_or_container_metadata": false,
+            "demux_decode_path_or_load_video": false,
+            "trim_window_video_slice_or_save_video_effect": false,
+            "handle_cache_persistence_recovery_or_publication": false,
+            "all_native_heap_allocations_intercepted": false
+        }),
+        "ten-bit backing fixture claims must match its synthetic validation scope"
+    );
     for (key, relative_path) in [
         (
             "component_backing_service_manifest_sha256",
