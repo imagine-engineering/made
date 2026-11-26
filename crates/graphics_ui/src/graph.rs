@@ -154,6 +154,7 @@ pub(crate) enum SavedGraphAction {
     DeselectLayers,
     SelectParentLayers,
     CopyLayers,
+    CutLayers,
     DuplicateLayers,
     DeleteLayers,
     ToggleLayerExpansion {
@@ -904,6 +905,7 @@ pub(crate) fn render_saved_graph(
             let keyboard_parent = dispatch.clone();
             let copy_layers = dispatch.clone();
             let keyboard_copy = dispatch.clone();
+            let keyboard_cut = dispatch.clone();
             let layer_toggle_representation = dispatch.clone();
             let duplicate_layers = dispatch.clone();
             let keyboard_duplicate = dispatch.clone();
@@ -973,6 +975,13 @@ pub(crate) fn render_saved_graph(
                     .on_action(move |_: &CopySavedLayers, window, cx| {
                         if copying {
                             keyboard_copy(SavedGraphAction::CopyLayers, window, cx);
+                        } else {
+                            cx.propagate();
+                        }
+                    })
+                    .on_action(move |_: &CutSavedLayers, window, cx| {
+                        if editing && selected {
+                            keyboard_cut(SavedGraphAction::CutLayers, window, cx);
                         } else {
                             cx.propagate();
                         }
@@ -1051,10 +1060,19 @@ pub(crate) fn render_saved_graph(
                                             }),
                                     ),
                             )
-                            .child(crate::layers::render_saved_layer_copy(
+                            .child(crate::layers::render_saved_layer_clipboard(
                                 copying,
-                                move |window, cx| {
-                                    copy_layers(SavedGraphAction::CopyLayers, window, cx)
+                                editing && selected,
+                                move |cut, window, cx| {
+                                    copy_layers(
+                                        if cut {
+                                            SavedGraphAction::CutLayers
+                                        } else {
+                                            SavedGraphAction::CopyLayers
+                                        },
+                                        window,
+                                        cx,
+                                    )
                                 },
                             )),
                     )
@@ -2336,6 +2354,15 @@ pub fn bind_keys(cx: &mut App) {
             Some("GraphiteSavedLayers"),
         ),
         gpui::KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-x"
+            } else {
+                "ctrl-x"
+            },
+            CutSavedLayers,
+            Some("GraphiteSavedLayers"),
+        ),
+        gpui::KeyBinding::new(
             select_all,
             SelectAllSavedLayers,
             Some("GraphiteSavedLayers"),
@@ -2398,6 +2425,8 @@ actions!(
         SelectParentSavedLayers,
         /// Copies the selected editable layers to the clipboard.
         CopySavedLayers,
+        /// Cuts the selected editable layers to the clipboard.
+        CutSavedLayers,
         /// Duplicates the selected editable layers in their current stacks.
         DuplicateSavedLayers,
         /// Deletes selected editable layers in the focused Graphite Layers view.

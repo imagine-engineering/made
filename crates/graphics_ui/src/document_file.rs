@@ -243,8 +243,13 @@ struct GddWorkingCopy {
 struct PreparedWorkingSnapshot {
     contents: Arc<InspectedGddV1>,
     inspection: GddGraphInspection,
-    cut_clipboard: Option<String>,
+    cut_clipboard: Option<CutClipboard>,
     layer_selection: Option<Vec<StorageNodeId>>,
+}
+
+enum CutClipboard {
+    Nodes(String),
+    Layers(String),
 }
 
 impl GddWorkingCopy {
@@ -5511,7 +5516,8 @@ impl GraphiteDocumentItem {
             SavedGraphAction::SelectAllLayers => self.set_saved_layer_selection(true, window, cx),
             SavedGraphAction::DeselectLayers => self.set_saved_layer_selection(false, window, cx),
             SavedGraphAction::SelectParentLayers => self.select_saved_layer_parents(window, cx),
-            SavedGraphAction::CopyLayers => self.copy_saved_layers(window, cx),
+            SavedGraphAction::CopyLayers => self.copy_saved_layers(false, window, cx),
+            SavedGraphAction::CutLayers => self.copy_saved_layers(true, window, cx),
             SavedGraphAction::DuplicateLayers => self.duplicate_saved_layers(window, cx),
             SavedGraphAction::DeleteLayers => self.delete_saved_layers(window, cx),
             SavedGraphAction::ToggleLayerExpansion { index, recursive } => {
@@ -6288,7 +6294,7 @@ impl GraphiteDocumentItem {
                     anyhow::Ok(PreparedWorkingSnapshot {
                         contents: Arc::new(contents),
                         inspection,
-                        cut_clipboard: Some(text),
+                        cut_clipboard: Some(CutClipboard::Nodes(text)),
                         layer_selection: None,
                     })
                 });
@@ -7082,7 +7088,7 @@ impl GraphiteDocumentItem {
         cx.notify();
     }
 
-    fn copy_saved_layers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn copy_saved_layers(&mut self, cut: bool, window: &mut Window, cx: &mut Context<Self>) {
         let NodeCopyPanel::Ready(form) = &self.node_copy else {
             return;
         };
@@ -7092,7 +7098,7 @@ impl GraphiteDocumentItem {
         else {
             return;
         };
-        if self.copy_task.is_some() {
+        if self.copy_task.is_some() || (cut && self.model.read(cx).working.is_none()) {
             return;
         }
         let collapsed = form
@@ -7103,6 +7109,25 @@ impl GraphiteDocumentItem {
             .collect();
         let snapshot = form.snapshot.clone();
         let revision = form.revision.clone();
+        if cut {
+            let staged = cx.background_spawn(async move {
+                let text = snapshot
+                    .copy_root_layers_to_clipboard(&layers, Some(&collapsed), ARCHIVE_BUDGET)
+                    .await?;
+                let contents = snapshot
+                    .delete_root_layers_in_copy(&layers, ARCHIVE_BUDGET)
+                    .await?;
+                let inspection = contents.graph_inspection().await?;
+                anyhow::Ok(PreparedWorkingSnapshot {
+                    contents: Arc::new(contents),
+                    inspection,
+                    cut_clipboard: Some(CutClipboard::Layers(text)),
+                    layer_selection: Some(Vec::new()),
+                })
+            });
+            self.install_working_snapshot(revision, staged, window, cx);
+            return;
+        }
         let copy = cx.background_spawn(async move {
             snapshot
                 .copy_root_layers_to_clipboard(&layers, Some(&collapsed), ARCHIVE_BUDGET)
@@ -7590,6 +7615,19 @@ impl GraphiteDocumentItem {
             if let Err(error) = item.update_in(cx, |item, window, cx| {
                 item.copy_task = None;
                 let result = staged.and_then(|staged| {
+                    if let Some(CutClipboard::Layers(text)) = &staged.cut_clipboard {
+                        let model = item.model.read(cx);
+                        ensure!(
+                            Arc::ptr_eq(&model.revision, &expected) && model.working.is_some()
+                                && matches!(&item.node_copy, NodeCopyPanel::Ready(form) if form.active_network.is_none()),
+                            "The Graphite Layers selection changed. Review the current layers and try again."
+                        );
+                        cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+                        ensure!(
+                            cx.read_from_clipboard().and_then(|item| item.text()).as_deref() == Some(text.as_str()),
+                            "Could not verify the Graphite layers on the clipboard."
+                        );
+                    }
                     item.model.update(cx, |model, cx| {
                         model.replace_working_snapshot(
                             &expected,
@@ -7606,10 +7644,15 @@ impl GraphiteDocumentItem {
                             item.update_working_inspection(window, cx);
                             item.select_layer_storage_ids(&selection, window, cx);
                         }
-                        if let Some(text) = clipboard {
-                            cx.write_to_clipboard(ClipboardItem::new_string(text));
-                            item.copy_feedback =
-                                Some(("Cut Graphite nodes.".into(), Color::Success));
+                        match clipboard {
+                            Some(CutClipboard::Nodes(text)) => {
+                                cx.write_to_clipboard(ClipboardItem::new_string(text));
+                                item.copy_feedback = Some(("Cut Graphite nodes.".into(), Color::Success));
+                            }
+                            Some(CutClipboard::Layers(_)) => {
+                                item.copy_feedback = Some(("Cut Graphite layers.".into(), Color::Success));
+                            }
+                            None => {}
                         }
                         cx.emit(ItemEvent::Edit);
                     }
@@ -14851,6 +14894,142 @@ mod tests {
             assert!(Arc::ptr_eq(&model.revision, &revision));
             assert!(!item.is_dirty(cx));
         });
+        assert_eq!(
+            filesystem
+                .load_bytes(&path)
+                .await
+                .expect("original archive"),
+            original
+        );
+    }
+
+    #[gpui::test]
+    async fn at_gra_layer_031_1_at_gra_layer_031_2_workspace_cuts_layers_in_one_step(
+        cx: &mut TestAppContext,
+    ) {
+        use graphite_editor::messages::clipboard::utility_types::ClipboardItem as SourceItem;
+
+        let original = layer_order_archive().await;
+        let (workspace, window) = native_workspace(cx).await;
+        let filesystem = workspace.read_with(window, |workspace, cx| {
+            workspace.project().read(cx).fs().clone()
+        });
+        let path = PathBuf::from("/project/cut-layers.gdd.zip");
+        filesystem
+            .write(&path, &original)
+            .await
+            .expect("source layers");
+        let item = workspace
+            .update_in(window, |workspace, window, cx| {
+                workspace.open_abs_path(path.clone(), Default::default(), window, cx)
+            })
+            .await
+            .expect("open source")
+            .downcast::<GraphiteDocumentItem>()
+            .expect("native inspector");
+        let read_clipboard = |window: &mut gpui::VisualTestContext| {
+            window.update(|_, cx| {
+                cx.read_from_clipboard()
+                    .and_then(|item| item.text())
+                    .expect("host clipboard")
+            })
+        };
+        let sentinel = "unrelated clipboard contents";
+        window.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string(sentinel.into())));
+        choose_copy_node(window, "GRAPHITE-GDD-NODE-COPY-ITEM-0");
+        click(window, "GRAPHITE-GDD-TOGGLE-SAVED-GRAPH");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        click(window, "GRAPHITE-GDD-LAYER-CUT");
+        assert_eq!(read_clipboard(window), sentinel);
+        item.read_with(window, |item, cx| {
+            assert!(item.model.read(cx).working.is_none());
+            assert!(!item.is_dirty(cx));
+        });
+        click(window, "GRAPHITE-GDD-EDIT-WORKING-COPY");
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-7");
+        click(window, "GRAPHITE-GDD-LAYER-CUT");
+        assert_eq!(read_clipboard(window), sentinel);
+        item.read_with(window, |item, cx| {
+            assert!(!item.is_dirty(cx));
+            assert!(matches!(&item.copy_feedback, Some((message, Color::Error))
+                if message.contains("Unlock the Graphite layers")));
+        });
+        click(window, "GRAPHITE-GDD-SAVED-LAYER-6");
+        let (original_id, history) = item.read_with(window, |item, _| {
+            let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                panic!("editable Layers");
+            };
+            (
+                form.selected_node().expect("Blue Repeat").storage_id(),
+                form.snapshot.history_len(),
+            )
+        });
+        let has_layer = |window: &gpui::VisualTestContext| {
+            item.read_with(window, |item, _| {
+                let NodeCopyPanel::Ready(form) = &item.node_copy else {
+                    panic!("editable Layers");
+                };
+                form.nodes
+                    .iter()
+                    .any(|node| node.storage_id() == original_id)
+            })
+        };
+        window.simulate_keystrokes(if cfg!(target_os = "macos") {
+            "cmd-x"
+        } else {
+            "ctrl-x"
+        });
+        window.run_until_parked();
+        paint(window);
+        assert!(!has_layer(window));
+        let text = read_clipboard(window);
+        let [SourceItem::Layer(layer)] = serde_json::from_str::<[SourceItem; 1]>(
+            text.strip_prefix("graphite: ")
+                .expect("source clipboard envelope"),
+        )
+        .expect("layer clipboard transfer") else {
+            panic!("one cut layer");
+        };
+        assert!(
+            layer
+                .nodes
+                .iter()
+                .any(|(_, template)| template.display_name == "Blue Repeat")
+        );
+        assert!(layer.nodes.len() > 1);
+        item.read_with(window, |item, cx| {
+            assert!(item.is_dirty(cx));
+            assert!(
+                item.model
+                    .read(cx)
+                    .gdd_contents()
+                    .expect("working graph")
+                    .history_len()
+                    > history
+            );
+        });
+        click(window, "GRAPHITE-GDD-UNDO");
+        assert!(has_layer(window));
+        assert_eq!(read_clipboard(window), text);
+        window.update(|_, cx| cx.write_to_clipboard(ClipboardItem::new_string(sentinel.into())));
+        click(window, "GRAPHITE-GDD-REDO");
+        assert!(!has_layer(window));
+        assert_eq!(read_clipboard(window), sentinel);
+        let destination = PathBuf::from("/project/cut-layers.gdd");
+        click(window, "GRAPHITE-GDD-SAVE-WORKING-FOLDER");
+        window.simulate_new_path_selection(|_| Some(destination.clone()));
+        window.run_until_parked();
+        let reopened = read_graphite_folder(filesystem.as_ref(), &destination)
+            .await
+            .expect("saved cut");
+        assert!(
+            !reopened
+                .graph_nodes()
+                .await
+                .expect("saved graph")
+                .iter()
+                .any(|node| node.storage_id() == original_id)
+        );
         assert_eq!(
             filesystem
                 .load_bytes(&path)
