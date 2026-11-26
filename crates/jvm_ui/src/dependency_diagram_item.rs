@@ -61,6 +61,23 @@ pub struct SelectDependencyDiagramScope {
 pub(crate) struct DependencySearchEntry {
     pub id: String,
     pub label: String,
+    search_label: String,
+    search_coordinate: Option<String>,
+}
+
+impl DependencySearchEntry {
+    pub(crate) fn new(id: String, label: String, coordinate: Option<String>) -> Self {
+        let search_label = label.to_lowercase();
+        let search_coordinate = coordinate
+            .map(|coordinate| coordinate.to_lowercase())
+            .filter(|coordinate| coordinate != &search_label);
+        Self {
+            id,
+            label,
+            search_label,
+            search_coordinate,
+        }
+    }
 }
 
 pub(crate) struct DependencySearch {
@@ -86,16 +103,35 @@ impl DependencySearch {
     }
 
     fn filter(&mut self, query: &str) {
+        const MAX_MATCHES: usize = 16;
         let query = query.trim().to_lowercase();
-        self.matches = self
-            .entries
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| entry.label.to_lowercase().contains(&query))
-            .map(|(index, _)| index)
-            .take(16)
-            .collect();
+        self.matches.clear();
         self.selected_index = 0;
+        if query.is_empty() {
+            self.matches.extend(0..self.entries.len().min(MAX_MATCHES));
+            return;
+        }
+
+        let mut partial_matches = Vec::new();
+        for (index, entry) in self.entries.iter().enumerate() {
+            let coordinate = entry.search_coordinate.as_deref();
+            if entry.search_label == query || coordinate == Some(query.as_str()) {
+                self.matches.push(index);
+                if self.matches.len() == MAX_MATCHES {
+                    return;
+                }
+            } else if partial_matches.len() < MAX_MATCHES
+                && (entry.search_label.contains(&query)
+                    || coordinate.is_some_and(|coordinate| coordinate.contains(&query)))
+            {
+                partial_matches.push(index);
+            }
+        }
+        self.matches.extend(
+            partial_matches
+                .into_iter()
+                .take(MAX_MATCHES - self.matches.len()),
+        );
     }
 
     fn entry(&self, index: usize) -> Option<&DependencySearchEntry> {
@@ -111,12 +147,15 @@ fn diagram_search_entries(
     graph: &CanvasGraph,
     receipt: Option<&DependencyGraphReceipt>,
 ) -> Vec<DependencySearchEntry> {
-    let entry = |node: &CanvasNode| DependencySearchEntry {
-        id: node.id.clone(),
-        label: match &node.version {
-            Some(version) => format!("{}:{version}", node.label),
-            None => node.label.clone(),
-        },
+    let entry = |node: &CanvasNode| {
+        DependencySearchEntry::new(
+            node.id.clone(),
+            match &node.version {
+                Some(version) => format!("{}:{version}", node.label),
+                None => node.label.clone(),
+            },
+            None,
+        )
     };
     if graph.truncated
         && let Some(nodes) = receipt.and_then(DependencyGraphReceipt::canvas_nodes)
@@ -1953,6 +1992,40 @@ mod tests {
     use settings::SettingsStore;
     use theme::LoadThemes;
     use workspace::Item as _;
+
+    #[test]
+    fn dependency_search_keeps_exact_coordinates_ahead_of_partial_matches() {
+        let coordinate = "org.example:core:1.0";
+        let mut entries = (0..20)
+            .map(|index| {
+                DependencySearchEntry::new(
+                    format!("partial-{index}"),
+                    format!("{coordinate}-preview-{index}"),
+                    None,
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.extend(
+            ["exact-first", "exact-second"]
+                .map(|id| DependencySearchEntry::new(id.into(), coordinate.into(), None)),
+        );
+        let mut search = DependencySearch::new(entries, |_, _| {});
+
+        search.filter(" ORG.EXAMPLE:CORE:1.0 ");
+        assert_eq!(search.match_count(), 16);
+        assert_eq!(
+            search.entry(0).expect("first exact result").id,
+            "exact-first"
+        );
+        assert_eq!(
+            search.entry(1).expect("second exact result").id,
+            "exact-second"
+        );
+        assert_eq!(
+            search.entry(2).expect("first partial result").id,
+            "partial-0"
+        );
+    }
 
     fn fixture_graph() -> crate::dependency_graph_canvas::CanvasGraph {
         let mut graph = crate::dependency_graph_canvas::CanvasGraph {

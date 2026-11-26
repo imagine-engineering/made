@@ -522,13 +522,11 @@ fn gradle_occurrence_accessibility(occurrence: &GradleOccurrence) -> String {
     text
 }
 
-fn gradle_analyzer_rows(
+fn gradle_occurrences(
     components: &[GradleDependencyComponent],
     edges: &[GradleDependencyEdge],
     filter: DependencyAnalyzerFilter,
-    presentation: DependencyAnalyzerPresentation,
-    show_group_ids: bool,
-) -> Vec<LanguageToolNode> {
+) -> Vec<GradleOccurrence> {
     // Dependency structure comes from resolved non-constraint edges; constraint
     // edges introduce no dependency rows (the same rule the inspection walks
     // apply) and unresolved edges become explicit placeholder rows.
@@ -590,31 +588,30 @@ fn gradle_analyzer_rows(
         };
         placeholders.entry(key).or_insert(occurrence);
     }
-    let kept: Vec<&GradleOccurrence> = occurrences
-        .iter()
-        .chain(placeholders.values())
-        .filter(|occurrence| match filter {
-            DependencyAnalyzerFilter::All => true,
-            DependencyAnalyzerFilter::Conflicts => occurrence.conflict,
-            DependencyAnalyzerFilter::Unresolved => occurrence.unresolved,
-        })
-        .collect();
+    occurrences.extend(placeholders.into_values());
+    occurrences.retain(|occurrence| match filter {
+        DependencyAnalyzerFilter::All => true,
+        DependencyAnalyzerFilter::Conflicts => occurrence.conflict,
+        DependencyAnalyzerFilter::Unresolved => occurrence.unresolved,
+    });
+    occurrences
+}
+
+fn gradle_analyzer_rows(
+    components: &[GradleDependencyComponent],
+    edges: &[GradleDependencyEdge],
+    filter: DependencyAnalyzerFilter,
+    presentation: DependencyAnalyzerPresentation,
+    show_group_ids: bool,
+) -> Vec<LanguageToolNode> {
+    let kept = gradle_occurrences(components, edges, filter);
     match presentation {
         DependencyAnalyzerPresentation::Flat => kept
             .iter()
             .map(|occurrence| {
-                let label = if show_group_ids {
-                    format!(
-                        "{}:{}",
-                        gradle_coordinate_label(occurrence),
-                        occurrence.label
-                    )
-                } else {
-                    format!("{}:{}", occurrence.artifact, occurrence.label)
-                };
                 node_row(
                     &occurrence.key,
-                    label,
+                    gradle_flat_occurrence_label(occurrence, show_group_ids),
                     badges_secondary(occurrence.conflict, occurrence.unresolved),
                     gradle_occurrence_accessibility(occurrence),
                 )
@@ -683,6 +680,18 @@ fn gradle_coordinate_label(occurrence: &GradleOccurrence) -> String {
         occurrence.artifact.clone()
     } else {
         format!("{}:{}", occurrence.group, occurrence.artifact)
+    }
+}
+
+fn gradle_flat_occurrence_label(occurrence: &GradleOccurrence, show_group_ids: bool) -> String {
+    if show_group_ids {
+        format!(
+            "{}:{}",
+            gradle_coordinate_label(occurrence),
+            occurrence.label
+        )
+    } else {
+        format!("{}:{}", occurrence.artifact, occurrence.label)
     }
 }
 
@@ -1036,16 +1045,31 @@ impl DependencyAnalyzerItem {
         if !self.receipt_is_current(cx) {
             return Vec::new();
         }
-        if let DependencyAnalyzerGraph::Maven {
-            scope,
-            nodes,
-            components,
-            edges,
-            unavailable_descriptors,
-            ..
-        } = &self.derivation.graph
-        {
-            return maven_occurrences(
+        match &self.derivation.graph {
+            DependencyAnalyzerGraph::Gradle {
+                components, edges, ..
+            } => gradle_occurrences(components, edges, self.filter)
+                .iter()
+                .map(|occurrence| {
+                    let coordinate = if occurrence.unresolved {
+                        occurrence.artifact.clone()
+                    } else {
+                        gradle_flat_occurrence_label(occurrence, true)
+                    };
+                    DependencySearchEntry::new(
+                        analyzer_row_id_for_node(&occurrence.key).0,
+                        gradle_flat_occurrence_label(occurrence, self.show_group_ids),
+                        Some(coordinate),
+                    )
+                })
+                .collect(),
+            DependencyAnalyzerGraph::Maven {
+                scope,
+                nodes,
+                components,
+                edges,
+                unavailable_descriptors,
+            } => maven_occurrences(
                 nodes,
                 components,
                 edges,
@@ -1054,24 +1078,20 @@ impl DependencyAnalyzerItem {
                 self.filter,
             )
             .iter()
-            .map(|occurrence| DependencySearchEntry {
-                id: analyzer_row_id_for_node(occurrence.key).0,
-                label: maven_occurrence_label(occurrence, true, self.show_group_ids),
+            .map(|occurrence| {
+                let coordinate = format!(
+                    "{}:{}",
+                    maven_coordinate(occurrence.component, true),
+                    occurrence.component.version
+                );
+                DependencySearchEntry::new(
+                    analyzer_row_id_for_node(occurrence.key).0,
+                    maven_occurrence_label(occurrence, true, self.show_group_ids),
+                    Some(coordinate),
+                )
             })
-            .collect();
+            .collect(),
         }
-        analyzer_rows(
-            &self.derivation.graph,
-            self.filter,
-            DependencyAnalyzerPresentation::Flat,
-            self.show_group_ids,
-        )
-        .into_iter()
-        .map(|row| DependencySearchEntry {
-            id: row.id.0,
-            label: row.label,
-        })
-        .collect()
     }
 
     pub(crate) fn reveal_row(&mut self, id: LanguageToolNodeId, cx: &mut Context<Self>) {

@@ -10,10 +10,11 @@ use crate::dependency_analyzer_item::{
     analyzer_rows, analyzer_usages,
 };
 use crate::dependency_diagram_item::{
-    DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget,
+    DependencyDiagramProvider, DependencyDiagramScope, DependencyDiagramTarget, DependencySearch,
 };
 use gpui::{AppContext as _, Focusable as _, InputEvent as _, TestAppContext};
 use language_tools::language_tool_tree::{LanguageToolNode, LanguageToolNodeId};
+use picker::PickerDelegate as _;
 use project::jvm_project::{
     GradleDependencyComponent, GradleDependencyEdge, GradleDependencyKind,
     GradleDependencySelector, MavenDependencyComponent, MavenDependencyEdge, MavenDependencyNode,
@@ -647,16 +648,29 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
     });
     assert_eq!(usages, ["used by org.example:left".to_owned()]);
 
-    // Search lists admitted rows and selecting a match selects and reveals it.
-    item.update(cx, |item, cx| item.collapse_all_rows(cx));
-    let matches = cx.update(|_, cx| item.read(cx).search_entries(cx));
-    let result = matches
-        .iter()
-        .find(|entry| entry.label == "org.example:left:1.0")
-        .expect("collapsed dependency is still searchable");
-    item.update(cx, |item, cx| {
-        item.reveal_row(LanguageToolNodeId(result.id.clone()), cx)
+    let entries = item.update(cx, |item, cx| {
+        item.collapse_all_rows(cx);
+        item.toggle_group_ids(cx);
+        item.search_entries(cx)
     });
+    assert!(entries.iter().any(|entry| entry.label == "left:1.0"));
+    let search_target = item.downgrade();
+    let picker = cx.update(|window, cx| {
+        DependencySearch::new(entries, move |id, cx| {
+            search_target
+                .update(cx, |item, cx| {
+                    item.reveal_row(LanguageToolNodeId(id.into()), cx)
+                })
+                .expect("analyzer for the selected Gradle dependency");
+        })
+        .popover(window, cx)
+    });
+    picker.update_in(cx, |picker, window, cx| {
+        picker.update_matches("org.example:left:1.0".into(), window, cx);
+        assert_eq!(picker.delegate.match_count(), 1);
+        picker.delegate.confirm(false, window, cx);
+    });
+    item.update(cx, |item, cx| item.toggle_group_ids(cx));
     let (selected_key, usages) = cx.update(|_, cx| {
         (
             item.read(cx).selected_key().map(|key| key.to_owned()),
@@ -775,6 +789,7 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
         assert!(item.search_entries(cx).iter().any(|entry| {
             entry.id == late_row.0 && entry.label == "org.example:late-search:4.0 — test"
         }));
+        item.toggle_group_ids(cx);
     });
     let analyzer_focus = second.read_with(cx, |item, cx| item.focus_handle(cx));
     cx.update(|window, cx| {
@@ -821,7 +836,7 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
             window.simulate_next_frame(cx);
         });
     }
-    cx.simulate_input("late-search");
+    cx.simulate_input("org.example:late-search:4.0");
     cx.update(|window, cx| {
         window.draw(cx).clear(cx);
         let tree: serde_json::Value =
@@ -832,8 +847,8 @@ async fn analyzer_item_filters_usages_and_state_survive_tab_switches(cx: &mut Te
                 .as_object()
                 .expect("a11y nodes")
                 .values()
-                .any(|node| { node["aria"]["label"] == "org.example:late-search:4.0 — test" }),
-            "search shows the late occurrence with its admitted scope"
+                .any(|node| { node["aria"]["label"] == "late-search:4.0 — test" }),
+            "the full coordinate finds the late occurrence while group IDs are hidden"
         );
         let confirm = cx
             .build_action("menu::Confirm", None)
