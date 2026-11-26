@@ -1422,7 +1422,7 @@ mod tests {
             ));
         }
         write_artifact(
-            "val-scheduler-001.json",
+            "val-scheduler-normal-slice-001.json",
             "VAL-SCHEDULER-001",
             "Task 36 normal scheduler COMFY-MODEL-0209 exact SD15 sigma slice",
             json!({"normal_sigmas": digest(&fixture)?}),
