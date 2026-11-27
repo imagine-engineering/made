@@ -2931,7 +2931,7 @@ async fn jdtls_import_failure_logs_reach_shared_health_without_host_paths(cx: &m
         })
         .await
         .expect("open Java source");
-    let fake_server = fake_servers.next().await.expect("JDTLS provider");
+    let mut fake_server = fake_servers.next().await.expect("JDTLS provider");
     let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
     let health_events = Arc::new(Mutex::new(Vec::<(i32, String)>::new()));
     let server_logs = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -2958,6 +2958,15 @@ async fn jdtls_import_failure_logs_reach_shared_health_without_host_paths(cx: &m
             .detach();
         }
     });
+
+    // The fake handle is published before the client installs its LSP handlers.
+    let opened = fake_server
+        .receive_notification::<lsp::notification::DidOpenTextDocument>()
+        .await;
+    assert_eq!(
+        opened.text_document.uri,
+        Uri::from_file_path(path!("/jdtls-offline/Main.java")).expect("Java fixture URI")
+    );
 
     fake_server.notify::<JdtlsLog>(json!({
         "type": 1,
