@@ -7153,7 +7153,9 @@ fn project_rows_for_view(
             activation_label: Some("Open module manifest".to_string()),
         });
     }
-    roots = nest_build_module_rows(snapshot, view, roots);
+    if view != BuildToolView::Dependencies {
+        roots = nest_build_module_rows(snapshot, view, roots);
+    }
     if preferences.group_modules(view) {
         roots = group_module_rows(roots, module_groups);
     }
