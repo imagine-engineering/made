@@ -38,6 +38,17 @@ def main():
             raise AssertionError("The owned resource fixture did not start")
         return process
 
+    def peak_processes(resources, included, excluded):
+        processes = resources["processesAtSampledCombinedPeak"]
+        identifiers = [process["processId"] for process in processes]
+        assert identifiers == sorted(set(identifiers)), processes
+        assert included <= set(identifiers), processes
+        assert excluded.isdisjoint(identifiers), processes
+        assert sum(process["residentBytes"] for process in processes) == resources[
+            "sampledPeakCombinedResidentBytes"
+        ], resources
+        return {process["processId"]: process for process in processes}
+
     try:
         with tempfile.TemporaryDirectory(prefix="groovy-resource-control-") as directory:
             home = Path(directory)
@@ -64,6 +75,9 @@ def main():
             assert resources["successfulSamples"] >= 2, resources
             assert resources["observedIsolatedGradleDaemonPids"] == [daemon.pid], resources
             assert resources["sampledPeakOwnedProcessCount"] == 3, resources
+            owned = peak_processes(resources, {server.pid, daemon.pid}, {unrelated.pid})
+            children = set(owned) - {server.pid, daemon.pid}
+            assert len(children) == 1 and owned[children.pop()]["parentProcessId"] == server.pid, owned
             assert 65 * 1024 * 1024 < resources["sampledPeakCombinedResidentBytes"] < 200 * 1024 * 1024, resources
             assert resources["sampledPeakIsolatedGradleResidentBytes"] > 25 * 1024 * 1024, resources
             assert resources["sampledPeakServerGroupResidentBytes"] > 35 * 1024 * 1024, resources
@@ -79,6 +93,7 @@ def main():
             editor_resources = sampler.finish()
             assert editor_resources["explicitEditorProcessId"] == editor.pid, editor_resources
             assert editor_resources["sampledPeakOwnedProcessCount"] == 4, editor_resources
+            peak_processes(editor_resources, {server.pid, daemon.pid, editor.pid}, {unrelated.pid})
             assert editor_resources["sampledPeakEditorTreeResidentBytes"] > 15 * 1024 * 1024, editor_resources
             assert editor_resources["sampledPeakCombinedResidentBytes"] < 230 * 1024 * 1024, editor_resources
 
@@ -88,6 +103,7 @@ def main():
             time.sleep(0.4)
             overlapping_resources = sampler.finish()
             assert overlapping_resources["sampledPeakOwnedProcessCount"] == 3, overlapping_resources
+            peak_processes(overlapping_resources, {server.pid, daemon.pid}, {unrelated.pid, editor.pid})
             assert overlapping_resources["sampledPeakCombinedResidentBytes"] < 200 * 1024 * 1024, overlapping_resources
             assert overlapping_resources["sampledPeakEditorTreeResidentBytes"] == overlapping_resources["sampledPeakServerGroupResidentBytes"], overlapping_resources
 

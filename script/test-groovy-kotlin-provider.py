@@ -255,6 +255,7 @@ class KotlinResourceSampler:
         self.server_peak = 0
         self.gradle_peak = 0
         self.combined_peak = 0
+        self.combined_peak_processes = []
         self.process_count_peak = 0
         self.daemon_ids = set()
         self.error = None
@@ -306,7 +307,17 @@ class KotlinResourceSampler:
         self.samples += 1
         self.server_peak = max(self.server_peak, sum(rows[pid][2] for pid in server_ids))
         self.gradle_peak = max(self.gradle_peak, sum(rows[pid][2] for pid in gradle_ids))
-        self.combined_peak = max(self.combined_peak, sum(rows[pid][2] for pid in combined_ids))
+        combined_resident_bytes = sum(rows[process_id][2] for process_id in combined_ids)
+        if combined_resident_bytes > self.combined_peak:
+            self.combined_peak = combined_resident_bytes
+            self.combined_peak_processes = [
+                {
+                    "processId": process_id,
+                    "parentProcessId": rows[process_id][0],
+                    "residentBytes": rows[process_id][2],
+                }
+                for process_id in sorted(combined_ids)
+            ]
         self.process_count_peak = max(self.process_count_peak, len(combined_ids))
 
     def run(self):
@@ -334,6 +345,7 @@ class KotlinResourceSampler:
             "sampledPeakServerGroupResidentBytes": self.server_peak,
             "sampledPeakIsolatedGradleResidentBytes": self.gradle_peak,
             "sampledPeakCombinedResidentBytes": self.combined_peak,
+            "processesAtSampledCombinedPeak": self.combined_peak_processes,
             "sampledPeakOwnedProcessCount": self.process_count_peak,
             "observedIsolatedGradleDaemonPids": sorted(self.daemon_ids),
             "scope": "server process group/current descendants; isolated Gradle daemon trees; explicit editor/current descendants when supplied",

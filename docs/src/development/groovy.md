@@ -102,9 +102,11 @@ server enabled for a buffer.
 
 The alternate Kotlin server is experimental. With version `1.3.13`, the native
 Maven and Gradle fixtures could navigate to definitions, complete methods, and
-report diagnostics while document highlights failed. If **Language Servers**
-reports a fallback analysis error, open **View Logs** for that server. You can
-select the preferred provider again and restart the language server. Native
+report diagnostics. Groovy now avoids the provider's class-declaration
+highlight error on the pinned version and still highlights class names.
+If **Language Servers** reports a fallback analysis error, open **View Logs**
+for that server. You can select the preferred provider again and restart the
+language server. Native
 fallback runs have exceeded the 8 GiB qualification ceiling, and the 32 GiB
 reference-host check remains open.
 
@@ -610,9 +612,11 @@ boundary and explicit measurement failures with disposable processes.
 Reported maxima are sampled sums of RSS, which can count shared pages
 more than once and miss peaks between samples or untracked detached workers.
 The combined peak unions owned PID sets at each sample; independent
-server/daemon peaks may overlap and must not be added. Supply `--resource-editor-pid <pid>` alongside resource sampling to include an
-explicitly identified editor and its current descendants; an unavailable editor
-fails the sample. Without it, the editor is excluded. The caller must bind that
+server/daemon peaks may overlap. The combined-peak process list records the
+PID, parent PID and RSS of each process in that same sample so you can
+attribute the total. Supply `--resource-editor-pid <pid>` alongside resource
+sampling to include an explicitly identified editor and its current
+descendants. An unavailable editor fails the sample. Without it, the editor is excluded. The caller must bind that
 PID to its exact candidate/profile and account for every owned worker. PID reuse
 and detached untracked workers remain limits. These measurements do not establish
 whole-project physical memory or Kotlin alpha acceptance. Linux execution and the remaining
