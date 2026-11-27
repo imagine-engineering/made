@@ -3222,13 +3222,15 @@ impl DependenciesPanel {
         cx: &mut Context<Workspace>,
     ) {
         if let Some(panel) = workspace.focus_panel::<Self>(window, cx) {
-            panel.update(cx, |panel, cx| {
-                panel.set_ordered_operations_expanded(true, cx);
-                if !panel.ordered_operations.is_empty() {
-                    panel.host.select(ordered_operation_root_id());
-                    panel.host.reveal_selection(ScrollStrategy::Center);
-                }
-            });
+            panel.update(cx, Self::reveal_ordered_operations);
+        }
+    }
+
+    fn reveal_ordered_operations(&mut self, cx: &mut Context<Self>) {
+        self.set_ordered_operations_expanded(true, cx);
+        if !self.ordered_operations.is_empty() {
+            self.host.select(ordered_operation_root_id());
+            self.host.reveal_selection(ScrollStrategy::Center);
         }
     }
 
@@ -9747,6 +9749,10 @@ impl Render for DependenciesPanel {
             .on_action(|_: &crate::FocusPreviousGroovyControl, window, cx| window.focus_prev(cx))
             .on_action(cx.listener(|panel, _: &workspace::ToggleZoom, window, cx| panel.toggle_panel_zoom(window, cx)))
             .on_action(cx.listener(|panel, _: &RunSelectedOfflineOperation, window, cx| panel.run_selected_offline_operation(window,cx)))
+            .on_action(cx.listener(|panel, _: &ShowOrderedOperations, window, cx| {
+                panel.reveal_ordered_operations(cx);
+                window.focus(&panel.focus_handle, cx);
+            }))
             .on_action(cx.listener(
                 |panel, _: &RunSelectedConfiguration, window, cx| {
                     panel.run_selected_or_recent_configuration(window, cx)
@@ -15298,6 +15304,45 @@ mod tests {
                 assert_eq!(panel.ordered_operations.len(), 3);
             });
             invoke_panel_menu_command(cx, "Ordered operations (3)");
+            let workspace_windows = cx.read(|cx| cx.windows());
+            for (mode, use_keyboard) in [("Float", true), ("Open in Window", false)] {
+                panel.update(cx, |panel, cx| {
+                    panel.set_ordered_operations_expanded(false, cx)
+                });
+                invoke_panel_menu_command(cx, mode);
+                let detached_window = cx
+                    .read(|cx| cx.windows())
+                    .into_iter()
+                    .find(|window| !workspace_windows.contains(window))
+                    .expect("detached build tool window");
+                let mut detached = gpui::VisualTestContext::from_window(detached_window, cx);
+                detached.update(|window, cx| {
+                    window.activate_a11y_for_test();
+                    window.draw(cx).clear(cx);
+                });
+                if use_keyboard {
+                    invoke_panel_menu_command(&mut detached, "Ordered operations (3)");
+                } else {
+                    open_panel_menu(&mut detached);
+                    let queue_entry = detached
+                        .debug_bounds("MENU_ITEM-Ordered operations (3)")
+                        .expect("counted queue menu entry");
+                    detached.simulate_click(queue_entry.center(), Default::default());
+                    detached.run_until_parked();
+                }
+                panel.read_with(&detached, |panel, _| {
+                    assert!(panel.preferences.ordered_operations_expanded, "{mode}");
+                    assert_eq!(panel.host.selected(), Some(&ordered_operation_root_id()));
+                    assert!(panel.host.visible_rows().iter().any(|row| {
+                        row.parent_id.as_ref() == Some(&ordered_operation_root_id())
+                    }));
+                });
+                detached.update(|window, cx| {
+                    assert!(panel.read(cx).focus_handle.contains_focused(window, cx));
+                });
+                invoke_panel_menu_command(&mut detached, "Return to Dock");
+                assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+            }
             panel.read_with(cx, |panel, cx| {
                 assert_eq!(panel.ordered_operations.len(), 3);
                 for (receipt, index) in panel.ordered_operations.iter().zip([1, 0, 1]) {
