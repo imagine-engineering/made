@@ -298,9 +298,23 @@ impl CallHierarchyView {
             return;
         }
         self.direction = direction;
+        if matches!(self.root_status, LanguageToolProviderStatus::Loading) {
+            // The pending prepare request is shared by both directions.
+            cx.notify();
+            return;
+        }
         self.generation = self.generation.wrapping_add(1);
         self.reset_roots(cx);
         self.status = self.root_status.clone();
+        let expanded_roots = self
+            .roots
+            .iter()
+            .filter(|id| self.host.expanded().contains(*id))
+            .cloned()
+            .collect::<Vec<_>>();
+        for id in expanded_roots {
+            self.load_node(id, cx);
+        }
         self.rebuild_snapshot();
         self.host.select_first();
         cx.notify();
@@ -330,6 +344,7 @@ impl CallHierarchyView {
             .is_some_and(|node| matches!(node.children, ChildrenState::Unloaded))
         {
             self.load_node(id, cx);
+            self.rebuild_snapshot();
         }
         cx.notify();
     }
@@ -340,7 +355,6 @@ impl CallHierarchyView {
         };
         if node.cycle || node.depth >= MAX_CALL_HIERARCHY_DEPTH {
             node.children = ChildrenState::Loaded(Vec::new());
-            self.rebuild_snapshot();
             return;
         }
         node.children = ChildrenState::Loading;
@@ -348,7 +362,6 @@ impl CallHierarchyView {
         let project = self.project.clone();
         let direction = self.direction;
         let generation = self.generation;
-        self.rebuild_snapshot();
         let request_id = id.clone();
         let task = cx.spawn(async move |view, cx| {
             let request = project.update(cx, |project, cx| match direction {
@@ -635,6 +648,7 @@ impl Render for CallHierarchyView {
                     for id in unloaded {
                         view.load_node(id, cx);
                     }
+                    view.rebuild_snapshot();
                     cx.notify();
                 }),
             )
@@ -722,6 +736,124 @@ impl Item for CallHierarchyView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[gpui::test]
+    async fn call_hierarchy_reloads_expanded_root_when_direction_changes(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        use futures::StreamExt as _;
+        use language::{FakeLspAdapter, rust_lang};
+        use serde_json::json;
+        use util::path;
+
+        cx.update(settings::init);
+        let filesystem = project::FakeFs::new(cx.executor());
+        let source = path!("/workspace/lib.rs");
+        filesystem
+            .insert_tree(
+                path!("/workspace"),
+                json!({"lib.rs": "fn root() {}\nfn caller() {}\nfn callee() {}\n"}),
+            )
+            .await;
+        let project = Project::test(filesystem, [path!("/workspace").as_ref()], cx).await;
+        let languages = project.read_with(cx, |project, _| project.languages().clone());
+        languages.add(rust_lang());
+        let mut servers = languages.register_fake_lsp(
+            "Rust",
+            FakeLspAdapter {
+                capabilities: lsp::ServerCapabilities {
+                    call_hierarchy_provider: Some(lsp::CallHierarchyServerCapability::Simple(true)),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        let (buffer, _handle) = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp(source, cx)
+            })
+            .await
+            .expect("fixture buffer");
+        let server = servers.next().await.expect("fake Rust server");
+        cx.executor().run_until_parked();
+        let item = move |name: &str, line| lsp::CallHierarchyItem {
+            name: name.to_string(),
+            kind: lsp::SymbolKind::FUNCTION,
+            tags: None,
+            detail: None,
+            uri: lsp::Uri::from_file_path(source).expect("fixture URI"),
+            range: lsp::Range::new(
+                lsp::Position::new(line, 0),
+                lsp::Position::new(line, 8 + name.len() as u32),
+            ),
+            selection_range: lsp::Range::new(
+                lsp::Position::new(line, 3),
+                lsp::Position::new(line, 3 + name.len() as u32),
+            ),
+            data: None,
+        };
+        server.set_request_handler::<lsp::request::CallHierarchyPrepare, _, _>(
+            move |_, _| async move { Ok(Some(vec![item("root", 0)])) },
+        );
+        server.set_request_handler::<lsp::request::CallHierarchyOutgoingCalls, _, _>(
+            move |_, _| async move {
+                Ok(Some(vec![lsp::CallHierarchyOutgoingCall {
+                    to: item("callee", 2),
+                    from_ranges: Vec::new(),
+                }]))
+            },
+        );
+        server.set_request_handler::<lsp::request::CallHierarchyIncomingCalls, _, _>(
+            move |_, _| async move {
+                Ok(Some(vec![lsp::CallHierarchyIncomingCall {
+                    from: item("caller", 1),
+                    from_ranges: Vec::new(),
+                }]))
+            },
+        );
+        let position = buffer.read_with(cx, |buffer, _| buffer.anchor_before(4));
+        let view = cx.new(|cx| {
+            let mut view = CallHierarchyView::new(
+                WeakEntity::new_invalid(),
+                project,
+                WeakEntity::new_invalid(),
+                buffer,
+                position,
+                CallHierarchyDirection::Incoming,
+                cx,
+            );
+            view.set_direction(CallHierarchyDirection::Outgoing, cx);
+            view
+        });
+        cx.run_until_parked();
+        view.update(cx, |view, cx| {
+            assert!(!view.roots.is_empty(), "{:?}", view.root_status);
+            let root = view.roots.first().expect("prepared root").clone();
+            view.host.expand_nodes([root.clone()]);
+            view.load_node(root, cx);
+        });
+        cx.run_until_parked();
+        view.update(cx, |view, cx| {
+            assert_eq!(
+                view.host
+                    .visible_rows()
+                    .get(1)
+                    .map(|row| row.label.as_str()),
+                Some("callee")
+            );
+            view.set_direction(CallHierarchyDirection::Incoming, cx);
+        });
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(
+                view.host
+                    .visible_rows()
+                    .get(1)
+                    .map(|row| row.label.as_str()),
+                Some("caller")
+            );
+        });
+    }
 
     #[test]
     fn call_hierarchy_cycles_and_direction_generations_cancel_stale_work() {
