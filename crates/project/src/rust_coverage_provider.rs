@@ -22,9 +22,10 @@ use crate::{
         MAX_SOURCE_COVERAGE_FILES, MAX_SOURCE_COVERAGE_RANGES, MAX_SOURCE_COVERAGE_RANGES_PER_FILE,
         SourceCoverageFile, SourceCoveragePoint, SourceCoverageProviderId, SourceCoverageRange,
         SourceCoverageRequestVersion, SourceCoverageSnapshot, SourceCoverageStatus,
-        SourceCoverageStore, SourceCoverageUnsupportedHost, snapshot_from_proto, snapshot_to_proto,
+        SourceCoverageStore, SourceCoverageStoreEvent, SourceCoverageUnsupportedHost,
+        snapshot_from_proto, snapshot_to_proto,
     },
-    trusted_worktrees::TrustedWorktrees,
+    trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent},
     worktree_store::WorktreeStore,
 };
 
@@ -619,6 +620,12 @@ struct CoverageRelayShare {
     closed: async_channel::Receiver<()>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CoverageRelayStop {
+    TrustRevoked,
+    ProducerDisconnected,
+}
+
 enum RustCoverageProviderStoreMode {
     Local,
     Remote {
@@ -728,7 +735,7 @@ impl RustCoverageProviderStore {
     async fn relay_run_coverage(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::RunRustCoverageTask>,
-        cx: AsyncApp,
+        mut cx: AsyncApp,
     ) -> Result<proto::RustCoverageTaskResponse> {
         use gpui::FutureExt as _;
         use proto::rust_coverage_task_response::Outcome;
@@ -753,6 +760,32 @@ impl RustCoverageProviderStore {
             let version = coverage.read(cx).remote_request_version()?;
             anyhow::Ok((client, peer, closed, coverage, version))
         })?;
+        let (stop, stopped) = async_channel::bounded::<()>(1);
+        let reason = Rc::new(Cell::new(None));
+        let _subscriptions = this.update(&mut cx, |store, cx| {
+            let worktrees = store.worktree_store.downgrade();
+            let trust = TrustedWorktrees::try_get_global(cx).map(|trust| {
+                let stop = stop.clone();
+                let reason = reason.clone();
+                cx.subscribe(&trust, move |_, _, event, _| {
+                    if matches!(event, TrustedWorktreesEvent::Restricted(changed, _) if *changed == worktrees) {
+                        reason.set(Some(CoverageRelayStop::TrustRevoked));
+                        stop.close();
+                    }
+                })
+            });
+            let disconnected = cx.subscribe(&coverage, {
+                let stop = stop.clone();
+                let reason = reason.clone();
+                move |_, _, event, _| {
+                    if matches!(event, SourceCoverageStoreEvent::Disconnected) {
+                        reason.set(Some(CoverageRelayStop::ProducerDisconnected));
+                        stop.close();
+                    }
+                }
+            });
+            (trust, disconnected)
+        });
         request.project_id = proto::REMOTE_SERVER_PROJECT_ID;
         let cancellation = proto::CancelRustCoverageTask {
             project_id: request.project_id,
@@ -761,12 +794,22 @@ impl RustCoverageProviderStore {
             authorization: request.authorization.clone(),
         };
         let pending = client.forward_request(peer, request);
-        let mut reply =
-            match futures::future::select(std::pin::pin!(pending), std::pin::pin!(closed.recv()))
-                .await
+        let run_ended = std::pin::pin!(stopped.recv());
+        let share_ended = std::pin::pin!(closed.recv());
+        let revoked_or_unshared = futures::future::select(run_ended, share_ended);
+        let mut reply = match futures::future::select(std::pin::pin!(pending), revoked_or_unshared)
+            .await
+        {
+            futures::future::Either::Left((reply, _))
+                if !closed.is_closed() && !stopped.is_closed() =>
             {
-                futures::future::Either::Left((reply, _)) if !closed.is_closed() => reply?,
-                _ => {
+                reply?
+            }
+            _ => {
+                let operation_id = cancellation.operation_id;
+                let authorization = cancellation.authorization.clone();
+                let reason = reason.get();
+                if reason != Some(CoverageRelayStop::ProducerDisconnected) {
                     match client
                         .forward_request(peer, cancellation)
                         .with_timeout(Duration::from_secs(3), cx.background_executor())
@@ -774,15 +817,34 @@ impl RustCoverageProviderStore {
                     {
                         Ok(Ok(_)) => {}
                         Ok(Err(error)) => {
-                            log::debug!("Could not retire the unshared Coverage Task: {error:#}")
+                            log::debug!(
+                                "Could not retire the expired relayed Coverage Task: {error:#}"
+                            )
                         }
                         Err(error) => {
-                            log::debug!("Retiring the unshared Coverage Task timed out: {error:#}")
+                            log::debug!(
+                                "Retiring the expired relayed Coverage Task timed out: {error:#}"
+                            )
                         }
                     }
-                    bail!("Coverage Task project is no longer shared by this host");
                 }
-            };
+                let failure = match reason {
+                    Some(CoverageRelayStop::TrustRevoked) => {
+                        proto::RustCoverageTaskFailure::Restricted
+                    }
+                    Some(CoverageRelayStop::ProducerDisconnected) => {
+                        proto::RustCoverageTaskFailure::Stale
+                    }
+                    None => bail!("Coverage Task project is no longer shared by this host"),
+                };
+                return Ok(proto::RustCoverageTaskResponse {
+                    operation_id,
+                    outcome: Some(Outcome::Failure(failure as i32)),
+                    native_receiver: 0,
+                    authorization,
+                });
+            }
+        };
         if let Some(Outcome::Coverage(wire)) = &mut reply.outcome {
             let mut snapshot = snapshot_from_proto(std::mem::take(wire))?;
             this.read_with(&cx, |store, cx| {
@@ -1616,12 +1678,17 @@ impl RustCoverageProviderStore {
             let _active = active;
             let executor = cx.background_executor().clone();
             let timeout = Duration::from_secs(3);
+            let session_timeout = if client.is_via_collab() {
+                Duration::from_secs(10)
+            } else {
+                timeout
+            };
             let session = client
                 .request(proto::GetRustCoverageTaskSession {
                     project_id: request.project_id,
                     authorization: None,
                 })
-                .with_timeout(timeout, &executor)
+                .with_timeout(session_timeout, &executor)
                 .await;
             let session = match session {
                 Ok(response) => response.map_err(map_remote_coverage_error)?,

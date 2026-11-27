@@ -226,6 +226,7 @@ impl SourceCoverageState {
 #[derive(Clone, Debug)]
 pub enum SourceCoverageStoreEvent {
     Changed(SourceCoverageProviderId),
+    Disconnected,
 }
 
 impl EventEmitter<SourceCoverageStoreEvent> for SourceCoverageStore {}
@@ -675,6 +676,7 @@ impl SourceCoverageStore {
         self.disconnected = true;
         self.session_generation = self.session_generation.wrapping_add(1);
         self.active_requests.clear();
+        cx.emit(SourceCoverageStoreEvent::Disconnected);
         for snapshot in self.state.providers.values_mut() {
             snapshot.status = SourceCoverageStatus::Disconnected;
             snapshot.diagnostic = Some("The source coverage host is disconnected".into());

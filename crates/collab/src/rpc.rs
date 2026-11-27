@@ -2763,7 +2763,24 @@ where
             }
         }
     } else {
-        let payload = pending.await?;
+        let deadline = session._executor.sleep(Duration::from_secs(8));
+        let payload = match futures::future::select(pending, std::pin::pin!(deadline)).await {
+            futures::future::Either::Left((payload, _)) => payload?,
+            futures::future::Either::Right(_) if operation_id == 0 => {
+                return Err(anyhow!(
+                    ErrorCode::Internal
+                        .with_tag("reason", "rust_tools_unsupported")
+                        .message(
+                            "The sharing host did not answer the Coverage Task session probe"
+                                .to_string()
+                        )
+                )
+                .into());
+            }
+            futures::future::Either::Right(_) => {
+                return Err(anyhow!("Coverage Task cancellation response expired").into());
+            }
+        };
         if current_route().await? != route {
             return Err(anyhow!(
                 "project request authorization changed while awaiting host response"
