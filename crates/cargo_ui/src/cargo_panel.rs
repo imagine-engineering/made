@@ -124,13 +124,7 @@ impl CargoTreeProvider {
                     },
                 );
             }
-            let mut members = vec![configuration_node(
-                &workspace_id,
-                &workspace.configuration,
-                workspace.root_manifest.as_ref(),
-                active_configuration,
-                &mut navigation,
-            )];
+            let mut members = Vec::with_capacity(workspace.members.len() + 1);
             for package in &workspace.members {
                 if let Some(workspace_manifest) = workspace.root_manifest.as_ref() {
                     members.push(package_node(
@@ -152,6 +146,13 @@ impl CargoTreeProvider {
                     ));
                 }
             }
+            members.push(configuration_node(
+                &workspace_id,
+                &workspace.configuration,
+                workspace.root_manifest.as_ref(),
+                active_configuration,
+                &mut navigation,
+            ));
             roots.push(LanguageToolNode {
                 id: workspace_id,
                 label: workspace.display_name.clone(),
@@ -1358,11 +1359,24 @@ impl CargoPanel {
                 .cargo_workspace_store()
                 .read(cx)
                 .current_input_fingerprint(cx);
+        let initial_workspace = match tree.roots.as_slice() {
+            [root]
+                if snapshot.workspaces.len() == 1
+                    && self
+                        .last_snapshot
+                        .as_ref()
+                        .is_none_or(|previous| previous.workspaces.is_empty()) =>
+            {
+                Some(root.id.clone())
+            }
+            _ => None,
+        };
         self.last_snapshot = Some(snapshot);
         self.provider = provider;
         self.execution_host_available =
             self.input_host_available && !self.refresh_pending && self.refresh_error.is_none();
         self.host.apply_refresh(refresh_generation, Ok(tree));
+        self.host.expand_nodes(initial_workspace);
         self.diagnostic_list.reset(self.host.visible_rows().len());
         if self.host.take_dirty() && !covers_current_inputs {
             self.schedule_debounced_refresh(cx);
@@ -3427,6 +3441,15 @@ mod tests {
                 2
             );
             assert!(panel.execution_host_available);
+            assert_eq!(
+                panel
+                    .host
+                    .visible_rows()
+                    .iter()
+                    .map(|row| row.label.as_str())
+                    .collect::<Vec<_>>(),
+                ["fixture", "member 0.1.0", "Configuration"]
+            );
             panel.host.expand_all();
             assert!(
                 panel
@@ -3486,6 +3509,7 @@ mod tests {
                         .as_deref()
                         .is_some_and(|label| label.contains("Cargo default profile"))
             }));
+            panel.host.collapse_all();
             panel.set_action_notice("invalidated notice", cx);
         });
         let store = project.read_with(cx, |project, _| project.cargo_workspace_store().clone());
@@ -3532,6 +3556,8 @@ mod tests {
         cx.run_until_parked();
         panel.read_with(cx, |panel, _| {
             assert!(panel.execution_host_available);
+            assert_eq!(panel.host.visible_rows().len(), 1);
+            assert!(panel.host.expanded().is_empty());
             assert!(!matches!(
                 panel.host.status(),
                 LanguageToolTreeStatus::Restricted(_)
