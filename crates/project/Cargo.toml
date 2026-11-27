@@ -29,7 +29,7 @@ harness = false
 required-features = ["structured-execution"]
 
 [features]
-cargo-workspace = ["dep:cargo_metadata"]
+cargo-workspace = ["dep:cargo_metadata", "settings/rust-tools"]
 structured-execution = []
 rust-tests = ["cargo-workspace", "structured-execution"]
 rust-coverage = ["structured-execution", "terminal/rust-coverage"]

@@ -3,6 +3,8 @@ pub mod agent_server_store;
 pub mod bookmark_store;
 pub mod buffer_store;
 #[cfg(feature = "cargo-workspace")]
+pub mod cargo_preset;
+#[cfg(feature = "cargo-workspace")]
 pub mod cargo_workspace;
 #[cfg(feature = "cargo-workspace")]
 pub mod cargo_workspace_store;

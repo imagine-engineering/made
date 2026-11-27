@@ -190,11 +190,11 @@ pub fn preset_settings_content(
         profiler: preset
             .profiler
             .as_ref()
-            .map(crate::cargo_profile::CargoProfiler::settings_content),
+            .map(crate::CargoProfiler::settings_content),
         native_profiler: preset
             .native_profiler
             .as_ref()
-            .map(crate::cargo_profile::CargoNativeProfiler::settings_content),
+            .map(crate::CargoNativeProfiler::settings_content),
         features: Some(preset.features.clone()),
         default_features: preset.default_features,
         target_triple: preset.target_triple.clone(),

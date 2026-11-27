@@ -1,130 +1,7 @@
 use anyhow::{Result, bail};
-use collections::HashMap;
-use serde::{Deserialize, Serialize};
-use settings::{CargoNativeProfilerSettingsContent, CargoProfilerSettingsContent};
-use task::{TaskArtifact, TaskArtifactKind};
+use task::TaskArtifact;
 
-use crate::cargo_preset::CompiledCargoPreset;
-
-const MAX_PROFILE_COMMAND_ITEMS: usize = 256;
-const MAX_PROFILE_COMMAND_TEXT_BYTES: usize = 4096;
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ExternalProfileCommand {
-    pub command: String,
-    pub arguments: Vec<String>,
-    pub environment: HashMap<String, String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct CargoProfiler {
-    pub command: ExternalProfileCommand,
-    pub artifact: TaskArtifact,
-}
-
-impl CargoProfiler {
-    pub fn from_settings(content: &CargoProfilerSettingsContent) -> Result<Self> {
-        let command = ExternalProfileCommand {
-            command: content.command.clone().unwrap_or_default(),
-            arguments: content.args.clone().unwrap_or_default(),
-            environment: HashMap::default(),
-        };
-        validate_external_command(&command)?;
-        let kind = match content.artifact_kind.as_deref() {
-            Some("svg") => TaskArtifactKind::Svg,
-            Some("html") => TaskArtifactKind::Html,
-            _ => bail!("profiler artifact_kind must be svg or html"),
-        };
-        let artifact = TaskArtifact {
-            path: content.artifact_path.clone().unwrap_or_default(),
-            kind,
-            max_bytes: content.artifact_max_bytes.unwrap_or(0),
-        };
-        artifact.with_resolved_path(artifact.path.clone())?;
-        Ok(Self { command, artifact })
-    }
-
-    pub fn settings_content(&self) -> CargoProfilerSettingsContent {
-        CargoProfilerSettingsContent {
-            command: Some(self.command.command.clone()),
-            args: Some(self.command.arguments.clone()),
-            artifact_path: Some(self.artifact.path.clone()),
-            artifact_kind: Some(match self.artifact.kind {
-                TaskArtifactKind::Svg => "svg".to_string(),
-                TaskArtifactKind::Html => "html".to_string(),
-                TaskArtifactKind::Data => "data".to_string(),
-                TaskArtifactKind::File => "file".to_string(),
-            }),
-            artifact_max_bytes: Some(self.artifact.max_bytes),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CargoNativeProfiler {
-    pub collector_path: String,
-    pub profile_path: String,
-}
-
-impl CargoNativeProfiler {
-    pub fn from_settings(content: &CargoNativeProfilerSettingsContent) -> Result<Self> {
-        let collector_path = content.collector_path.as_deref().unwrap_or_default();
-        if collector_path.is_empty()
-            || collector_path.len() > MAX_PROFILE_COMMAND_TEXT_BYTES
-            || !std::path::Path::new(collector_path).is_absolute()
-            || collector_path.chars().any(|character| {
-                character.is_whitespace()
-                    || character.is_control()
-                    || matches!(
-                        character,
-                        ';' | '|' | '&' | '<' | '>' | '`' | '$' | '\\' | '"' | '\''
-                    )
-            })
-            || std::path::Path::new(collector_path)
-                .components()
-                .any(|component| {
-                    matches!(
-                        component,
-                        std::path::Component::ParentDir | std::path::Component::CurDir
-                    )
-                })
-        {
-            bail!(
-                "Native profiling requires bounded absolute installed Samply executable path supported by the Task host binding"
-            );
-        }
-        let profile_path = content.profile_path.as_deref().unwrap_or_default();
-        if profile_path.is_empty()
-            || profile_path.len() > task::MAX_TASK_ARTIFACT_PATH_BYTES
-            || profile_path == ".json"
-            || profile_path.contains("$ZED_")
-            || profile_path.contains("${ZED_")
-            || !profile_path.ends_with(".json")
-            || profile_path.ends_with(".syms.json")
-        {
-            bail!(
-                "Native profiling requires a resolved JSON profile output distinct from its symbols companion"
-            );
-        }
-        TaskArtifact {
-            path: profile_path.to_owned(),
-            kind: TaskArtifactKind::Data,
-            max_bytes: 32 * 1024 * 1024,
-        }
-        .with_resolved_path(profile_path.to_owned())?;
-        Ok(Self {
-            collector_path: collector_path.to_owned(),
-            profile_path: profile_path.to_owned(),
-        })
-    }
-
-    pub fn settings_content(&self) -> CargoNativeProfilerSettingsContent {
-        CargoNativeProfilerSettingsContent {
-            collector_path: Some(self.collector_path.clone()),
-            profile_path: Some(self.profile_path.clone()),
-        }
-    }
-}
+use project::cargo_preset::{CargoNativeProfiler, CompiledCargoPreset, ExternalProfileCommand};
 
 pub(crate) fn validate_native_profile_selection(
     selection: &crate::CargoActionSelection,
@@ -289,7 +166,7 @@ pub fn compile_profile_plan(
     external_command: ExternalProfileCommand,
     artifact: TaskArtifact,
 ) -> Result<CompiledCargoPreset> {
-    validate_external_command(&external_command)?;
+    external_command.validate()?;
     if !artifact.path.contains("$ZED_") {
         artifact.with_resolved_path(artifact.path.clone())?;
     }
@@ -345,26 +222,6 @@ pub fn compile_native_profile_plan(
     Ok(compiled_cargo_context)
 }
 
-fn validate_external_command(command: &ExternalProfileCommand) -> Result<()> {
-    if command.command.trim().is_empty()
-        || command.command.len() > MAX_PROFILE_COMMAND_TEXT_BYTES
-        || command.arguments.len() > MAX_PROFILE_COMMAND_ITEMS
-        || command.environment.len() > MAX_PROFILE_COMMAND_ITEMS
-    {
-        bail!("external profile command is empty or exceeds the supported bounds");
-    }
-    if command
-        .arguments
-        .iter()
-        .chain(command.environment.keys())
-        .chain(command.environment.values())
-        .any(|value| value.len() > MAX_PROFILE_COMMAND_TEXT_BYTES)
-    {
-        bail!("external profile command field exceeds the supported length");
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,6 +229,9 @@ mod tests {
         CargoCompileContext, CargoPreset, CargoPresetScope, CargoSubcommand,
         CargoWorkingDirectoryPolicy, compile_preset,
     };
+    use collections::HashMap;
+    use project::cargo_preset::{MAX_PROFILE_COMMAND_ITEMS, MAX_PROFILE_COMMAND_TEXT_BYTES};
+    use settings::CargoNativeProfilerSettingsContent;
     use task::{TaskArtifactKind, TaskContext, TaskVariables, VariableName};
 
     #[test]

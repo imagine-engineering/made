@@ -2,7 +2,6 @@ mod cargo_actions;
 mod cargo_coverage;
 mod cargo_panel;
 mod cargo_panel_settings;
-mod cargo_preset;
 mod cargo_preset_editor;
 mod cargo_profile;
 mod dependency_insight;
@@ -11,10 +10,11 @@ pub use cargo_actions::*;
 pub use cargo_coverage::*;
 pub use cargo_panel::{CargoPanel, CargoTreeProvider, ToggleCargoPanel};
 pub use cargo_panel_settings::{CargoPanelSettings, CargoPanelSide};
-pub use cargo_preset::*;
 pub use cargo_preset_editor::*;
 pub use cargo_profile::*;
 pub use dependency_insight::*;
+use project::cargo_preset;
+pub use project::cargo_preset::*;
 
 use command_palette_hooks::CommandPaletteFilter;
 use feature_flags::{

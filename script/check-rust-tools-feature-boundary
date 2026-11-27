@@ -43,7 +43,7 @@ assert "dep:graphics_ui" in zed["features"]["sim"]
 for feature in ["default", "rust-tools", "jvm-tools"]:
     assert "comfy" not in zed["features"][feature]
     assert "dep:graphics_ui" not in zed["features"][feature]
-assert project["features"]["cargo-workspace"] == ["dep:cargo_metadata"]
+assert project["features"]["cargo-workspace"] == ["dep:cargo_metadata", "settings/rust-tools"]
 assert project["features"]["rust-tests"] == ["cargo-workspace", "structured-execution"]
 assert project["features"]["rust-coverage"] == ["structured-execution", "terminal/rust-coverage"]
 assert project["dependencies"]["cargo_metadata"].get("optional") is True
