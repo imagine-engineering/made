@@ -1389,6 +1389,35 @@ mod jvm_tools_runtime_tests {
         });
         let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
         let store = project.read_with(cx, |project, _| project.lsp_store());
+        let (java_mismatch, kotlin_mismatch) = futures::join!(
+            rpc.request(proto::GetJdtlsProjectSnapshot {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                worktree_id: worktree_id.to_proto(),
+                protocol_version: u32::MAX,
+                request_id: 1,
+            }),
+            rpc.request(proto::GetKotlinWorkspaceSnapshot {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                worktree_id: worktree_id.to_proto(),
+                protocol_version: u32::MAX,
+                request_id: 1,
+            }),
+        );
+        for (error, expected) in [
+            (
+                java_mismatch
+                    .expect_err("the Docker host must reject an incompatible Java snapshot"),
+                "Java project snapshot protocol mismatch",
+            ),
+            (
+                kotlin_mismatch
+                    .expect_err("the Docker host must reject an incompatible Kotlin snapshot"),
+                "Kotlin workspace snapshot protocol mismatch",
+            ),
+        ] {
+            assert!(format!("{error:#}").contains(expected), "{error:#}");
+        }
+        eprintln!("Docker host rejected incompatible Java and Kotlin JVM snapshots before trust");
         let restricted = rpc
             .request(proto::SetJvmProjectConsumers {
                 project_id: proto::REMOTE_SERVER_PROJECT_ID,
