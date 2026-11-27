@@ -2,6 +2,7 @@ use gpui::{
     AnyElement, App, FocusHandle, IntoElement, MouseButton, Pixels, Point, Role, ScrollStrategy,
     Task, UniformListScrollHandle, Window, actions, div, px, uniform_list,
 };
+use itertools::Itertools as _;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -106,6 +107,39 @@ impl From<UniformListScrollHandle> for LanguageToolTreeScrollHandle {
     }
 }
 
+fn inline_row_text(row: &LanguageToolRow, cx: &App) -> impl IntoElement {
+    h_flex()
+        .flex_1()
+        .min_w_0()
+        .gap_1()
+        .child(
+            div()
+                .max_w_full()
+                .flex_shrink_0()
+                .truncate()
+                .line_clamp(1)
+                .child(row.label.clone()),
+        )
+        .when_some(row.secondary_label.clone(), |text, secondary| {
+            let preview = if secondary.contains(['\n', '\r']) {
+                secondary.split_whitespace().join(" ")
+            } else {
+                secondary.clone()
+            };
+            text.child(
+                div()
+                    .id("language-tool-row-detail")
+                    .debug_selector(|| format!("{}:detail", row.id.0))
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(cx.theme().colors().text_muted)
+                    .tooltip(Tooltip::text(secondary))
+                    .child(preview),
+            )
+        })
+}
+
 pub fn language_tool_tree(
     rows: Arc<Vec<VisibleLanguageToolRow>>,
     selected: Option<LanguageToolNodeId>,
@@ -151,18 +185,22 @@ pub fn language_tool_tree(
                 })
                 .into_any_element()
         } else {
-            h_flex()
-                .gap_1()
-                .child(row.label.clone())
-                .when_some(row.secondary_label.clone(), |text, secondary| {
-                    text.child(
-                        div()
-                            .text_color(cx.theme().colors().text_muted)
-                            .child(secondary),
-                    )
-                })
-                .into_any_element()
+            inline_row_text(row, cx).into_any_element()
         };
+        let disclosure = h_flex().w_7().flex_shrink_0().justify_center();
+        let disclosure = disclosure.when(row.is_branch, |slot| {
+            slot.child(
+                Disclosure::new(
+                    format!("language-tool-disclosure:{}", row.id.0),
+                    row.is_expanded,
+                )
+                .shape(ui::IconButtonShape::Square)
+                .on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    on_toggle(toggle_id.clone(), window, cx);
+                }),
+            )
+        });
         div()
             .id(row.id.0.clone())
             .debug_selector(|| row.id.0.clone())
@@ -193,19 +231,7 @@ pub fn language_tool_tree(
                     .aria_active_descendant()
                     .bg(cx.theme().colors().element_selected)
             })
-            .child(if row.is_branch {
-                Disclosure::new(
-                    format!("language-tool-disclosure:{}", row.id.0),
-                    row.is_expanded,
-                )
-                .on_click(move |_, window, cx| {
-                    cx.stop_propagation();
-                    on_toggle(toggle_id.clone(), window, cx);
-                })
-                .into_any_element()
-            } else {
-                div().w_4().flex_shrink_0().into_any_element()
-            })
+            .child(disclosure)
             .when_some(row.icon, |element, icon| {
                 element.child(Icon::new(icon).size(IconSize::Small))
             })

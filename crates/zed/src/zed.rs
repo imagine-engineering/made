@@ -3350,6 +3350,7 @@ fn show_markdown_app_notification<F>(
 fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
     cx.clear_key_bindings();
     load_default_keymap(cx);
+    language_tools::call_hierarchy::bind_keys(cx);
     #[cfg(feature = "sim")]
     graphics_ui::bind_keys(cx);
     #[cfg(feature = "agentic-tools")]
@@ -8391,6 +8392,7 @@ mod tests {
                 #[cfg(feature = "rust-tools")]
                 "CargoPanel",
                 "TestsPanel",
+                "CallHierarchy",
                 #[cfg(feature = "jvm-tools")]
                 "GroovyDependenciesPanel",
             ] {
@@ -8402,6 +8404,13 @@ mod tests {
                     Some("language_tool_tree::SelectNext")
                 );
             }
+            let context = gpui::KeyContext::parse("CallHierarchy").expect("hierarchy key context");
+            let shortcut = gpui::Keystroke::parse("alt-enter").expect("signature shortcut");
+            let (bindings, _) = keymap.bindings_for_input(&[shortcut], &[context]);
+            assert_eq!(
+                bindings.first().map(|binding| binding.action().name()),
+                Some("call_hierarchy::ShowSignature")
+            );
         });
     }
 

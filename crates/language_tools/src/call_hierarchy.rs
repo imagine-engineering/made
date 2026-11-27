@@ -2,12 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 use editor::{Editor, ToOffset as _, actions::ShowCallHierarchy};
 use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
-    Render, ScrollStrategy, SharedString, Task, TaskExt as _, WeakEntity, Window, actions, div,
+    Anchor, App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle,
+    Focusable, IntoElement, KeyBinding, Pixels, Point, PromptLevel, Render, ScrollStrategy,
+    SharedString, Subscription, Task, TaskExt as _, WeakEntity, Window, actions, anchored,
+    deferred, div,
 };
 use language::ToOffset as _;
 use project::{CallHierarchyCalls, CallHierarchyItem, Location, PreparedCallHierarchy, Project};
-use ui::{Button, IconName, prelude::*};
+use ui::{Button, ButtonStyle, ContextMenu, IconName, TintColor, prelude::*};
+use util::ResultExt as _;
 use workspace::{Item, SplitDirection, Workspace};
 
 use crate::language_tool_tree::{
@@ -15,7 +18,17 @@ use crate::language_tool_tree::{
     LanguageToolTreeHost, language_tool_tree, status_message,
 };
 
-actions!(call_hierarchy, [ShowIncomingCalls, ShowOutgoingCalls,]);
+actions!(
+    call_hierarchy,
+    [
+        ShowIncomingCalls,
+        ShowOutgoingCalls,
+        /// Show the full signature of the selected call hierarchy item.
+        ShowSignature,
+    ]
+);
+
+const KEY_CONTEXT: &str = "CallHierarchy";
 
 const MAX_CALL_HIERARCHY_NODES: usize = 10_000;
 const MAX_CALL_HIERARCHY_DEPTH: usize = 32;
@@ -87,9 +100,26 @@ pub struct CallHierarchyView {
     status: LanguageToolProviderStatus,
     prepare_task: Task<()>,
     in_flight: HashMap<LanguageToolNodeId, Task<()>>,
+    context_menu: Option<(Entity<ContextMenu>, Point<Pixels>, Subscription)>,
+}
+
+pub fn bind_keys(cx: &mut App) {
+    let context = Some(KEY_CONTEXT);
+    cx.bind_keys([
+        KeyBinding::new("up", language_tool_tree::SelectPrevious, context),
+        KeyBinding::new("down", language_tool_tree::SelectNext, context),
+        KeyBinding::new("home", language_tool_tree::SelectFirst, context),
+        KeyBinding::new("end", language_tool_tree::SelectLast, context),
+        KeyBinding::new("left", language_tool_tree::SelectParent, context),
+        KeyBinding::new("right", language_tool_tree::SelectFirstChild, context),
+        KeyBinding::new("space", language_tool_tree::ToggleExpanded, context),
+        KeyBinding::new("enter", language_tool_tree::ActivateSelected, context),
+        KeyBinding::new("alt-enter", ShowSignature, context),
+    ]);
 }
 
 pub fn init(cx: &mut App) {
+    bind_keys(cx);
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace.register_action(|workspace, _: &ShowCallHierarchy, window, cx| {
             open_for_active_editor(workspace, CallHierarchyDirection::Incoming, window, cx)
@@ -169,6 +199,7 @@ impl CallHierarchyView {
             status: LanguageToolProviderStatus::Loading,
             prepare_task: Task::ready(()),
             in_flight: HashMap::new(),
+            context_menu: None,
         };
         view.refresh(cx);
         view
@@ -540,10 +571,63 @@ impl CallHierarchyView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        window.focus(&self.focus_handle, cx);
         self.host.select(id);
         if click_count > 1 {
             self.activate_selected(window, cx);
         }
+        cx.notify();
+    }
+
+    fn show_signature(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(item) = self
+            .host
+            .selected()
+            .and_then(|id| self.nodes.get(id))
+            .map(|node| &node.item)
+        else {
+            return;
+        };
+        let Some(signature) = &item.detail else {
+            return;
+        };
+        let title = format!("Signature for {}", item.name);
+        let answer = window.prompt(PromptLevel::Info, &title, Some(signature), &["Close"], cx);
+        cx.spawn(async move |_, _| {
+            answer.await?;
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    }
+
+    fn deploy_context_menu(
+        &mut self,
+        id: LanguageToolNodeId,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(node) = self.nodes.get(&id) else {
+            return;
+        };
+        let has_signature = node.item.detail.is_some();
+        self.host.select(id);
+        let menu = ContextMenu::build(window, cx, |menu, _, _| {
+            menu.context(self.focus_handle.clone())
+                .when(has_signature, |menu| {
+                    menu.action("Show Full Signature", Box::new(ShowSignature))
+                })
+                .action(
+                    "Go to Source",
+                    Box::new(language_tool_tree::ActivateSelected),
+                )
+        });
+        window.focus(&menu.focus_handle(cx), cx);
+        let dismissal = cx.subscribe(&menu, |view, _, _: &DismissEvent, cx| {
+            view.context_menu = None;
+            cx.notify();
+        });
+        self.context_menu = Some((menu, position, dismissal));
         cx.notify();
     }
 }
@@ -567,7 +651,7 @@ impl Render for CallHierarchyView {
         let scroll_handle = self.host.scroll_handle().clone();
         let weak = cx.weak_entity();
         div()
-            .key_context("CallHierarchy")
+            .key_context(KEY_CONTEXT)
             .track_focus(&self.focus_handle)
             .size_full()
             .flex()
@@ -578,6 +662,9 @@ impl Render for CallHierarchyView {
             .on_action(cx.listener(|view, _: &ShowOutgoingCalls, _, cx| {
                 view.set_direction(CallHierarchyDirection::Outgoing, cx)
             }))
+            .on_action(
+                cx.listener(|view, _: &ShowSignature, window, cx| view.show_signature(window, cx)),
+            )
             .on_action(
                 cx.listener(|view, _: &language_tool_tree::SelectPrevious, _, cx| {
                     view.host.select_previous();
@@ -673,14 +760,16 @@ impl Render for CallHierarchyView {
                     .child("Call Hierarchy")
                     .child(
                         Button::new("call-hierarchy-incoming", "Incoming")
-                            .disabled(self.direction == CallHierarchyDirection::Incoming)
+                            .toggle_state(self.direction == CallHierarchyDirection::Incoming)
+                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.set_direction(CallHierarchyDirection::Incoming, cx)
                             })),
                     )
                     .child(
                         Button::new("call-hierarchy-outgoing", "Outgoing")
-                            .disabled(self.direction == CallHierarchyDirection::Outgoing)
+                            .toggle_state(self.direction == CallHierarchyDirection::Outgoing)
+                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
                             .on_click(cx.listener(|view, _, _, cx| {
                                 view.set_direction(CallHierarchyDirection::Outgoing, cx)
                             })),
@@ -698,12 +787,29 @@ impl Render for CallHierarchyView {
                             .ok();
                     }
                 },
-                move |id, window, cx| {
-                    weak.update(cx, |view, cx| view.toggle_node(id, window, cx))
-                        .ok();
+                {
+                    let weak = weak.clone();
+                    move |id, window, cx| {
+                        weak.update(cx, |view, cx| view.toggle_node(id, window, cx))
+                            .log_err();
+                    }
                 },
-                |_, _, _, _| {},
+                move |id, position, window, cx| {
+                    weak.update(cx, |view, cx| {
+                        view.deploy_context_menu(id, position, window, cx)
+                    })
+                    .log_err();
+                },
             ))
+            .children(self.context_menu.as_ref().map(|(menu, position, _)| {
+                deferred(
+                    anchored()
+                        .position(*position)
+                        .anchor(Anchor::TopLeft)
+                        .child(menu.clone()),
+                )
+                .with_priority(1)
+            }))
     }
 }
 
@@ -746,13 +852,18 @@ mod tests {
         use serde_json::json;
         use util::path;
 
-        cx.update(settings::init);
+        cx.update(|cx| {
+            settings::init(cx);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+            init(cx);
+        });
+        const SIGNATURE: &str = "pub fn callee<T, F>(value: T, callback: F) -> Vec<T>\nwhere\n    T: Clone + Send,\n    F: Fn(&T) -> bool,";
         let filesystem = project::FakeFs::new(cx.executor());
         let source = path!("/workspace/lib.rs");
         filesystem
             .insert_tree(
                 path!("/workspace"),
-                json!({"lib.rs": "fn root() {}\nfn caller() {}\nfn callee() {}\n"}),
+                json!({"lib.rs": "fn root() {}\nfn caller() {}\nfn callee() {}\nfn other() {}\n"}),
             )
             .await;
         let project = Project::test(filesystem, [path!("/workspace").as_ref()], cx).await;
@@ -780,7 +891,7 @@ mod tests {
             name: name.to_string(),
             kind: lsp::SymbolKind::FUNCTION,
             tags: None,
-            detail: None,
+            detail: (name == "callee").then(|| SIGNATURE.to_string()),
             uri: lsp::Uri::from_file_path(source).expect("fixture URI"),
             range: lsp::Range::new(
                 lsp::Position::new(line, 0),
@@ -797,10 +908,16 @@ mod tests {
         );
         server.set_request_handler::<lsp::request::CallHierarchyOutgoingCalls, _, _>(
             move |_, _| async move {
-                Ok(Some(vec![lsp::CallHierarchyOutgoingCall {
-                    to: item("callee", 2),
-                    from_ranges: Vec::new(),
-                }]))
+                Ok(Some(vec![
+                    lsp::CallHierarchyOutgoingCall {
+                        to: item("callee", 2),
+                        from_ranges: Vec::new(),
+                    },
+                    lsp::CallHierarchyOutgoingCall {
+                        to: item("other", 3),
+                        from_ranges: Vec::new(),
+                    },
+                ]))
             },
         );
         server.set_request_handler::<lsp::request::CallHierarchyIncomingCalls, _, _>(
@@ -833,15 +950,54 @@ mod tests {
             view.load_node(root, cx);
         });
         cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            let callee = view.host.visible_rows().get(1).expect("expanded callee");
+            assert_eq!(callee.label, "callee");
+            assert_eq!(callee.secondary_label.as_deref(), Some(SIGNATURE));
+        });
+
+        struct MountedHierarchy(Entity<CallHierarchyView>);
+
+        impl Render for MountedHierarchy {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div().size_full().child(self.0.clone())
+            }
+        }
+
+        let window = cx.open_window(gpui::size(gpui::px(240.), gpui::px(200.)), |_, _| {
+            MountedHierarchy(view.clone())
+        });
+        {
+            let mut visual = gpui::VisualTestContext::from_window(*window, cx);
+            for width in [240., 720.] {
+                visual.simulate_resize(gpui::size(gpui::px(width), gpui::px(200.)));
+                visual.run_until_parked();
+                let row = visual
+                    .debug_bounds("call-hierarchy-node-1")
+                    .expect("callee row");
+                let preview = visual
+                    .debug_bounds("call-hierarchy-node-1:detail")
+                    .expect("signature preview");
+                let next_row = visual
+                    .debug_bounds("call-hierarchy-node-2")
+                    .expect("adjacent row");
+                assert!(preview.size.width > gpui::px(0.));
+                assert!(preview.top() >= row.top());
+                assert!(preview.bottom() <= row.bottom());
+                assert!(preview.right() <= row.right());
+                assert!(row.bottom() <= next_row.top());
+            }
+            visual.update(|window, cx| window.focus(&view.read(cx).focus_handle.clone(), cx));
+            visual.simulate_keystrokes("down alt-enter");
+        }
+        assert_eq!(
+            cx.pending_prompt(),
+            Some(("Signature for callee".to_string(), SIGNATURE.to_string()))
+        );
+        cx.simulate_prompt_answer("Close");
+
         view.update(cx, |view, cx| {
-            assert_eq!(
-                view.host
-                    .visible_rows()
-                    .get(1)
-                    .map(|row| row.label.as_str()),
-                Some("callee")
-            );
-            view.set_direction(CallHierarchyDirection::Incoming, cx);
+            view.set_direction(CallHierarchyDirection::Incoming, cx)
         });
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
