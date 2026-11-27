@@ -1,8 +1,7 @@
-use sha2::{Digest, Sha256};
+use super::executed_task_receipt;
 use sim_tensor::{
     CancellationToken, CpuBackend, CpuWorkspaceAuthority, DType, DecodedScalar, DeviceId,
-    ExecutionContext, GENERATED_RESOLVED_OPERATION_CONTRACT_SLICES, StreamId, Tensor,
-    TensorDescriptor, TensorError, ViewAccess,
+    ExecutionContext, StreamId, Tensor, TensorDescriptor, TensorError, ViewAccess,
     generated_spectral_transform_01::{
         FFTN_OPERATION_ID, FFTSHIFT_OPERATION_ID, IFFTN_OPERATION_ID, IFFTSHIFT_OPERATION_ID,
         SpectralTransformError, fftn_jvp_with_context_exact_native,
@@ -14,7 +13,7 @@ use sim_tensor::{
         ifftshift_with_context_exact_native,
     },
 };
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{fs, path::Path};
 
 const IDS: [&str; 4] = [
     FFTN_OPERATION_ID,
@@ -466,6 +465,14 @@ fn dimensions_dtypes_empty_axes_and_cancellation_are_checked()
         ifftn_with_context_exact_native(&backend.backend, &input, &[0], &execution),
         Err(SpectralTransformError::UnsupportedDType { .. })
     ));
+    assert!(matches!(
+        fftshift_with_context_exact_native(&backend.backend, &input, &[0, -2], &execution),
+        Err(SpectralTransformError::Invalid { .. })
+    ));
+    assert!(matches!(
+        ifftshift_with_context_exact_native(&backend.backend, &input, &[2], &execution),
+        Err(SpectralTransformError::Invalid { .. })
+    ));
     let empty = backend.upload_f32(&[0, 2], &[], &cancellation)?;
     assert!(matches!(
         fftn_with_context_exact_native(&backend.backend, &empty, &[0], &execution),
@@ -500,53 +507,87 @@ fn task_55_is_the_only_fft_kernel_owner() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+fn verified_fixture_digests()
+-> Result<std::collections::BTreeMap<&'static str, &'static str>, Box<dyn std::error::Error>> {
+    executed_task_receipt::verify_resolutions(
+        "spectral_transform_01",
+        "comfy-parity-tensor-ops-spectral-transform-comfy-tensor-op-2c39e32acd3c",
+        &IDS,
+    )
+}
+
 #[test]
-fn all_four_resolutions_are_unique_and_runtime_hash_sealed()
--> Result<(), Box<dyn std::error::Error>> {
-    let contracts = GENERATED_RESOLVED_OPERATION_CONTRACT_SLICES
-        .iter()
-        .flat_map(|slice| slice.iter())
-        .filter(|contract| contract.resolution_module == "spectral_transform_01")
-        .collect::<Vec<_>>();
-    assert_eq!(contracts.len(), IDS.len());
-    let operation_ids = contracts
-        .iter()
-        .map(|contract| contract.operation_id)
-        .collect::<BTreeSet<_>>();
-    assert_eq!(operation_ids, IDS.into_iter().collect());
-    assert_eq!(
-        contracts
-            .iter()
-            .map(|contract| contract.overload_id)
-            .collect::<BTreeSet<_>>()
-            .len(),
-        IDS.len()
-    );
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .ok_or("workspace root unavailable")?;
-    for contract in contracts {
-        assert_eq!(
-            contract.owner_task_id,
-            "comfy-parity-tensor-ops-spectral-transform-comfy-tensor-op-2c39e32acd3c"
-        );
-        assert_ne!(
-            contract.baseline_fixture_sha256,
-            contract.evidence_fixture_sha256
-        );
-        let bytes = fs::read(root.join(contract.evidence_fixture))?;
-        assert_eq!(
-            format!("{:x}", Sha256::digest(&bytes)),
-            contract.evidence_fixture_sha256
-        );
-        let fixture: serde_json::Value = serde_json::from_slice(&bytes)?;
-        assert_eq!(
-            fixture
-                .get("operation_id")
-                .and_then(serde_json::Value::as_str),
-            Some(contract.operation_id)
-        );
-    }
+fn all_four_resolutions_are_unique_and_runtime_hash_sealed() -> executed_task_receipt::TestResult {
+    verified_fixture_digests()?;
     Ok(())
+}
+
+#[test]
+fn val_tensor_001_and_val_autograd_001_publish_spectral_transform_01_receipts()
+-> executed_task_receipt::TestResult {
+    let fixture_digests = verified_fixture_digests()?;
+    let tensor_cases = executed_task_receipt::execute(&[
+        (
+            "double_precision_fft_retains_sub_f32_values_and_its_adjoint",
+            double_precision_fft_retains_sub_f32_values_and_its_adjoint,
+        ),
+        (
+            "two_dimensional_freelunch_sequence_round_trips_exactly",
+            two_dimensional_freelunch_sequence_round_trips_exactly,
+        ),
+        (
+            "non_power_of_two_fft_and_odd_shifts_match_reference_values",
+            non_power_of_two_fft_and_odd_shifts_match_reference_values,
+        ),
+        (
+            "logical_strided_input_is_transformed_without_copying_descriptor_rules",
+            logical_strided_input_is_transformed_without_copying_descriptor_rules,
+        ),
+        (
+            "non_power_of_two_workspace_is_exact_failure_atomic_and_convergent",
+            non_power_of_two_workspace_is_exact_failure_atomic_and_convergent,
+        ),
+        (
+            "dimensions_dtypes_empty_axes_and_cancellation_are_checked",
+            dimensions_dtypes_empty_axes_and_cancellation_are_checked,
+        ),
+        (
+            "task_55_is_the_only_fft_kernel_owner",
+            task_55_is_the_only_fft_kernel_owner,
+        ),
+    ])?;
+    let autograd_cases = executed_task_receipt::execute(&[
+        (
+            "double_precision_fft_retains_sub_f32_values_and_its_adjoint",
+            double_precision_fft_retains_sub_f32_values_and_its_adjoint,
+        ),
+        (
+            "fft_and_ifft_analytic_jvp_vjp_are_adjoint",
+            fft_and_ifft_analytic_jvp_vjp_are_adjoint,
+        ),
+        (
+            "shift_jvp_and_vjp_use_the_forward_and_inverse_permutations",
+            shift_jvp_and_vjp_use_the_forward_and_inverse_permutations,
+        ),
+    ])?;
+    let source = (
+        "crates/sim_tensor/tests/ops/spectral_transform_01.rs",
+        include_bytes!("spectral_transform_01.rs").as_slice(),
+    );
+    executed_task_receipt::publish(
+        "val-tensor-spectral-transform-01.json",
+        "VAL-TENSOR-001",
+        "Task 90 executed spectral transform integration cases",
+        source,
+        &fixture_digests,
+        &tensor_cases,
+    )?;
+    executed_task_receipt::publish(
+        "val-autograd-spectral-transform-01.json",
+        "VAL-AUTOGRAD-001",
+        "Task 90 executed spectral transform analytical integration cases",
+        source,
+        &fixture_digests,
+        &autograd_cases,
+    )
 }

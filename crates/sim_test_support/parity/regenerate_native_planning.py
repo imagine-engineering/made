@@ -5557,6 +5557,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/tasks.md",
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
+                    "crates/sim_tensor/tests/breadth_closure.rs",
+                    "crates/sim_tensor/tests/support/executed_task_receipt.rs",
                     "target/comfy-parity/val-autograd-spectral-transform-01.json",
                     "target/comfy-parity/val-tensor-spectral-transform-01.json",
                 ])
@@ -5595,6 +5597,8 @@ def model_tasks() -> tuple[list[dict[str, object]], dict[str, list[str]], str, l
                     "crates/sim_test_support/parity/tasks.md",
                     "crates/sim_test_support/parity/traceability.md",
                     "crates/sim_test_support/parity/validation.md",
+                    "crates/sim_tensor/tests/breadth_closure.rs",
+                    "crates/sim_tensor/tests/support/executed_task_receipt.rs",
                     "target/comfy-parity/val-autograd-storage-dtype-device-01.json",
                     "target/comfy-parity/val-tensor-storage-dtype-device-01.json",
                 ])

@@ -835,7 +835,6 @@ mod validation_tests {
     use super::*;
     use crate::{CancellationToken, CpuWorkspaceAuthority, StreamId};
     use sim_types::DeviceKind;
-    use std::collections::BTreeMap;
 
     #[test]
     fn unsupported_device_is_typed_before_dtype_validation()
@@ -855,51 +854,6 @@ mod validation_tests {
             ifftn_with_context_exact_native(&backend, &input, &[0], &context),
             Err(SpectralTransformError::UnsupportedDevice { .. })
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn writes_task_validation_artifacts() -> Result<(), Box<dyn std::error::Error>> {
-        let fixture_digests = BTreeMap::from([
-            (
-                FFTN_OPERATION_ID,
-                "04d0c5210f7dae09f105663afe19789260a4b5dc4cf2522166ee0a26e3ea64a8",
-            ),
-            (
-                FFTSHIFT_OPERATION_ID,
-                "6851503f6acc59f24084ee647d2450cacb44456c59e801d7ce98542335312a0b",
-            ),
-            (
-                IFFTN_OPERATION_ID,
-                "9ba7d57ae974f34728d0ce0ff49b3a103954ab230898495084d1438b2a5ddfb1",
-            ),
-            (
-                IFFTSHIFT_OPERATION_ID,
-                "c0ec118ef2ef0ab13a26cce3ee8bfe67efe87f9631474603da6978a0994cca8b",
-            ),
-        ]);
-        let cases = fixture_digests
-            .keys()
-            .map(|operation| (*operation, true))
-            .collect::<BTreeMap<_, _>>();
-        crate::validation_artifacts::write(
-            "val-tensor-spectral-transform-01.json",
-            "VAL-TENSOR-001",
-            "Task 90 exact spectral transform adapters over the canonical Task 55 FFT, dtype codec, workspace, and publication owners",
-            "task",
-            &fixture_digests,
-            &cases,
-            &["full native parity release validation remains pending"],
-        )?;
-        crate::validation_artifacts::write(
-            "val-autograd-spectral-transform-01.json",
-            "VAL-AUTOGRAD-001",
-            "Task 90 analytical FFT, inverse FFT, and shift VJP/JVP contracts",
-            "task",
-            &fixture_digests,
-            &cases,
-            &["full native parity release validation remains pending"],
-        )?;
         Ok(())
     }
 }

@@ -759,8 +759,8 @@ fn remap_operation(
 #[cfg(test)]
 mod validation_tests {
     use super::*;
-    use crate::{CpuWorkspaceAuthority, StreamId, validation_artifacts};
-    use std::{collections::BTreeMap, error::Error};
+    use crate::{CpuWorkspaceAuthority, StreamId};
+    use std::error::Error;
 
     #[test]
     fn storage_dtype_device_01_rejects_unavailable_devices() -> Result<(), Box<dyn Error>> {
@@ -791,52 +791,6 @@ mod validation_tests {
                 device,
             }) if device == DeviceId::new(DeviceKind::Cuda, 1)
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn storage_dtype_device_01_writes_validation_artifacts() -> Result<(), Box<dyn Error>> {
-        let fixture_digests = BTreeMap::from([
-            ("clone", "5b18a667357d16b776c8b63ebd3b7e194e683a44a59e022fd6566c9525b4a74a"),
-            ("contiguous", "ece8e84f49320f0514ed3d4a76b48306f83aab4054e326cfa49d410b4cd44fd3"),
-            ("copy", "c560079c8eb87758e9437d764d90ccd4ef62fcbaa345924cbca9fa398d38e3d3"),
-            ("cpu", "e85bf5eb2641d57d3d0431c39f16a1286046ea61171aca66a955c82a513b0e6b"),
-            ("cuda", "4f13b19bbf2f37d4dc6ed645984c869a1badea0e0364f82fa211eb9a4a8a3d4c"),
-            ("float", "56d03f96751ed875b2ec5acbee70d4de97921da25379f9ddfa7ac1884fd5173e"),
-            ("half", "4915f7643095ca0c38fcd150e56d15dd3fca13b3836239067c6ffa81a2090558"),
-            ("numpy", "4323b3c6f4ba2d7acfceb0148e9195ed15abc8139d6e7bb133a4eee6ae62d9e8"),
-            ("to", "2fd954e9382cace3346adf84b3c6762091b0517d5b20b1f2db558153a36b6fe1"),
-            ("type", "c40956b26df948fc8c67ed3f82f3ae4b3b130165ffd8cccba3615e798402a8ca"),
-            ("type_as", "10eebe2078ab49ccf7602380722318b55b597b7660ded3a8d66649237db2a10a"),
-        ]);
-        let tensor_cases = BTreeMap::from([
-            ("alias_layout_and_transaction_semantics", true),
-            ("dtype_device_and_native_array_boundaries", true),
-            ("runtime_sealed_contracts", true),
-        ]);
-        validation_artifacts::write(
-            "val-tensor-storage-dtype-device-01.json",
-            "VAL-TENSOR-001",
-            "Task 91 storage, dtype, and device adapters",
-            "task",
-            &fixture_digests,
-            &tensor_cases,
-            &["all remaining tensor leaves", "release closure"],
-        )?;
-        let autograd_cases = BTreeMap::from([
-            ("cast_vjp_jvp", true),
-            ("identity_vjp_layout", true),
-            ("nondifferentiable_dtype_boundary", true),
-        ]);
-        validation_artifacts::write(
-            "val-autograd-storage-dtype-device-01.json",
-            "VAL-AUTOGRAD-001",
-            "Task 91 storage, dtype, and device analytical maps",
-            "task",
-            &fixture_digests,
-            &autograd_cases,
-            &["all remaining autograd leaves", "release closure"],
-        )?;
         Ok(())
     }
 }

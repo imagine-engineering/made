@@ -1,8 +1,8 @@
-use sha2::{Digest, Sha256};
+use super::executed_task_receipt;
 use sim_tensor::{
     CancellationToken, CpuBackend, CpuWorkspaceAuthority, DType, DecodedScalar, DeviceId,
-    ExecutionContext, GENERATED_RESOLVED_OPERATION_CONTRACT_SLICES, Layout, MemoryFormatReference,
-    StreamId, Tensor, TensorDescriptor, ViewAccess,
+    ExecutionContext, Layout, MemoryFormatReference, StreamId, Tensor, TensorDescriptor,
+    ViewAccess,
     generated_storage_dtype_device_01::{
         CLONE_OPERATION_ID, CONTIGUOUS_OPERATION_ID, COPY_OPERATION_ID, CPU_OPERATION_ID,
         CUDA_OPERATION_ID, FLOAT_OPERATION_ID, HALF_OPERATION_ID, NUMPY_OPERATION_ID,
@@ -18,7 +18,7 @@ use sim_tensor::{
     },
 };
 use sim_types::DeviceKind;
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{fs, path::Path};
 
 const IDS: [&str; 11] = [
     CLONE_OPERATION_ID,
@@ -493,55 +493,80 @@ fn authoritative_owners_are_reused_without_competing_foundations()
     Ok(())
 }
 
+fn verified_fixture_digests()
+-> Result<std::collections::BTreeMap<&'static str, &'static str>, Box<dyn std::error::Error>> {
+    executed_task_receipt::verify_resolutions(
+        "storage_dtype_device_01",
+        "comfy-parity-tensor-ops-storage-dtype-device-comfy-tensor-op-00f639d6c8a7",
+        &IDS,
+    )
+}
+
 #[test]
-fn all_eleven_resolutions_are_unique_and_runtime_hash_sealed()
--> Result<(), Box<dyn std::error::Error>> {
-    let contracts = GENERATED_RESOLVED_OPERATION_CONTRACT_SLICES
-        .iter()
-        .flat_map(|slice| slice.iter())
-        .filter(|contract| contract.resolution_module == "storage_dtype_device_01")
-        .collect::<Vec<_>>();
-    assert_eq!(contracts.len(), IDS.len());
-    assert_eq!(
-        contracts
-            .iter()
-            .map(|contract| contract.operation_id)
-            .collect::<BTreeSet<_>>(),
-        IDS.into_iter().collect()
-    );
-    assert_eq!(
-        contracts
-            .iter()
-            .map(|contract| contract.overload_id)
-            .collect::<BTreeSet<_>>()
-            .len(),
-        IDS.len()
-    );
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .ok_or("workspace root unavailable")?;
-    for contract in contracts {
-        assert_eq!(
-            contract.owner_task_id,
-            "comfy-parity-tensor-ops-storage-dtype-device-comfy-tensor-op-00f639d6c8a7"
-        );
-        assert_ne!(
-            contract.baseline_fixture_sha256,
-            contract.evidence_fixture_sha256
-        );
-        let bytes = fs::read(root.join(contract.evidence_fixture))?;
-        assert_eq!(
-            format!("{:x}", Sha256::digest(&bytes)),
-            contract.evidence_fixture_sha256
-        );
-        let fixture: serde_json::Value = serde_json::from_slice(&bytes)?;
-        assert_eq!(
-            fixture
-                .get("operation_id")
-                .and_then(serde_json::Value::as_str),
-            Some(contract.operation_id)
-        );
-    }
+fn all_eleven_resolutions_are_unique_and_runtime_hash_sealed() -> executed_task_receipt::TestResult
+{
+    verified_fixture_digests()?;
     Ok(())
+}
+
+#[test]
+fn val_tensor_001_and_val_autograd_001_publish_storage_dtype_device_01_receipts()
+-> executed_task_receipt::TestResult {
+    let fixture_digests = verified_fixture_digests()?;
+    let tensor_cases = executed_task_receipt::execute(&[
+        (
+            "clone_is_deep_contiguous_is_conditional_and_formats_are_descriptor_owned",
+            clone_is_deep_contiguous_is_conditional_and_formats_are_descriptor_owned,
+        ),
+        (
+            "copy_broadcasts_converts_and_commits_only_after_complete_staging",
+            copy_broadcasts_converts_and_commits_only_after_complete_staging,
+        ),
+        (
+            "to_cpu_float_half_type_and_type_as_share_the_canonical_cast_adapter",
+            to_cpu_float_half_type_and_type_as_share_the_canonical_cast_adapter,
+        ),
+        (
+            "numpy_is_an_immutable_native_borrow_with_exact_strided_metadata",
+            numpy_is_an_immutable_native_borrow_with_exact_strided_metadata,
+        ),
+        (
+            "invalid_formats_broadcasts_and_cancellation_have_typed_precedence",
+            invalid_formats_broadcasts_and_cancellation_have_typed_precedence,
+        ),
+        (
+            "authoritative_owners_are_reused_without_competing_foundations",
+            authoritative_owners_are_reused_without_competing_foundations,
+        ),
+    ])?;
+    let autograd_cases = executed_task_receipt::execute(&[
+        (
+            "analytical_identity_and_cast_maps_preserve_shape_layout_and_dtype",
+            analytical_identity_and_cast_maps_preserve_shape_layout_and_dtype,
+        ),
+        (
+            "invalid_formats_broadcasts_and_cancellation_have_typed_precedence",
+            invalid_formats_broadcasts_and_cancellation_have_typed_precedence,
+        ),
+    ])?;
+    let source = (
+        "crates/sim_tensor/tests/ops/storage_dtype_device_01.rs",
+        include_bytes!("storage_dtype_device_01.rs").as_slice(),
+    );
+    executed_task_receipt::publish(
+        "val-tensor-storage-dtype-device-01.json",
+        "VAL-TENSOR-001",
+        "Task 91 executed storage, dtype, and device integration cases",
+        source,
+        &fixture_digests,
+        &tensor_cases,
+    )?;
+    executed_task_receipt::publish(
+        "val-autograd-storage-dtype-device-01.json",
+        "VAL-AUTOGRAD-001",
+        "Task 91 executed identity and cast analytical integration cases",
+        source,
+        &fixture_digests,
+        &autograd_cases,
+    )
 }
