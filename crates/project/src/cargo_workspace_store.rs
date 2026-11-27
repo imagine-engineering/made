@@ -108,6 +108,7 @@ pub struct CargoCoverageSelection {
     pub package_manifest: ProjectPath,
     pub target_kind: crate::cargo_workspace::CargoTargetKind,
     pub target_name: String,
+    pub preset_id: Option<String>,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -116,14 +117,157 @@ pub struct PreparedHostCoverageTask {
     resolved: task::ResolvedTask,
     snapshot_revision: u64,
     worktree_store: gpui::EntityId,
+    preset_settings_source: Option<settings::ServerSettingsSource>,
 }
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+#[derive(Debug)]
+pub struct HostCoveragePresetUnavailable;
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl std::fmt::Display for HostCoveragePresetUnavailable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("The named Coverage preset is unavailable on the producing host")
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl std::error::Error for HostCoveragePresetUnavailable {}
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 struct HostCoverageContext {
     template: task::TaskTemplate,
     directory: PathBuf,
-    environment: Shared<Task<Option<HashMap<String, String>>>>,
+    environment: Entity<ProjectEnvironment>,
     revision: u64,
+    preset: Option<HostCoveragePreset>,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+#[derive(Clone)]
+struct HostCoveragePreset {
+    identifier: String,
+    settings: settings::CargoSettingsContent,
+    source: settings::ServerSettingsSource,
+    root: PathBuf,
+    workspace_root: PathBuf,
+    package_scope: Arc<RelPath>,
+    filesystem: Arc<dyn fs::Fs>,
+    context: crate::cargo_preset::CargoCompileContext,
+    target: crate::cargo_preset::CargoTargetSelector,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl HostCoveragePreset {
+    async fn load_settings(&self) -> Result<settings::CargoSettingsContent> {
+        use settings::{MergeFromTrait as _, RootUserSettings as _};
+
+        let scopes = self.package_scope.ancestors().take(65).collect::<Vec<_>>();
+        ensure!(
+            scopes.len() <= 64,
+            "Coverage preset settings ancestry is too deep"
+        );
+        let root = self.filesystem.capture_confined_root(&self.root).await?;
+        let mut merged = self.settings.clone();
+        let mut remaining = 16_usize * 1024 * 1024;
+        for scope in scopes.into_iter().rev() {
+            let path = scope.join(paths::local_settings_file_relative_path());
+            if let Some(content) = crate::project_settings::read_confined_worktree_settings(
+                self.filesystem.as_ref(),
+                &root,
+                &self.root,
+                &path,
+            )
+            .await?
+            {
+                remaining = remaining
+                    .checked_sub(content.len())
+                    .context("Coverage preset settings exceed their total byte limit")?;
+                let content = settings::ProjectSettingsContent::parse_json_with_comments(&content)?;
+                merged.merge_from_option(content.cargo.as_ref());
+            }
+        }
+        Ok(merged)
+    }
+
+    fn compile(
+        &self,
+        settings: &settings::CargoSettingsContent,
+        workspace_directory: &Path,
+    ) -> Result<(task::TaskTemplate, PathBuf, task::TaskContext)> {
+        use crate::cargo_preset::{CargoPresetScope, CargoSubcommand, compile_preset};
+        use feature_flags::{FeatureFlag as _, RustNamedCargoPresetsExperimentalFeatureFlag};
+
+        let mut available = crate::cargo_preset::parse_settings_content(settings);
+        let mut preset = available
+            .presets
+            .remove(&self.identifier)
+            .context("The producing project has no valid preset with this identifier")?;
+        ensure!(
+            preset.pre_launch_task.is_none(),
+            "Named Coverage presets with before-launch Tasks require host Task sequencing"
+        );
+        ensure!(
+            preset.args.iter().all(|argument| {
+                let option = argument.split('=').next().unwrap_or_default();
+                !matches!(
+                    option,
+                    "--" | "--manifest-path"
+                        | "--workspace"
+                        | "--all"
+                        | "--package"
+                        | "--exclude"
+                        | "--bin"
+                        | "--bins"
+                        | "--example"
+                        | "--examples"
+                        | "--lib"
+                        | "--test"
+                        | "--tests"
+                        | "--bench"
+                        | "--benches"
+                        | "--all-targets"
+                        | "--output-path"
+                        | "--no-report"
+                        | "--no-run"
+                ) && !option.starts_with("-p")
+            }),
+            "Coverage preset arguments override the admitted target or report"
+        );
+        preset.scope = CargoPresetScope::Package;
+        preset.package.clone_from(&self.context.package_name);
+        preset.target = Some(self.target.clone());
+        let mut template =
+            compile_preset(&preset, &self.context, Some(CargoSubcommand::Run))?.task_template;
+        template
+            .required_experimental_features
+            .push(RustNamedCargoPresetsExperimentalFeatureFlag::NAME.into());
+        let mut context = task::TaskContext::default();
+        context.task_variables.insert(
+            task::VariableName::WorktreeRoot,
+            self.root
+                .to_str()
+                .context("Coverage worktree root is not Unicode")?
+                .into(),
+        );
+        let directory = match template.cwd.take() {
+            Some(path) => workspace_directory.join(
+                task::substitute_variables_in_str(&path, &context)
+                    .context("Coverage preset directory requires unavailable Task variables")?,
+            ),
+            None => workspace_directory.to_path_buf(),
+        };
+        ensure!(
+            directory.starts_with(&self.root) || directory.starts_with(&self.workspace_root),
+            "Coverage preset directory is outside the producing worktree"
+        );
+        context.cwd = Some(directory.clone());
+        for argument in &mut template.args {
+            *argument = task::substitute_variables_in_str(argument, &context)
+                .context("Coverage preset arguments require unavailable Task variables")?;
+        }
+        Ok((template, directory, context))
+    }
 }
 
 #[async_trait]
@@ -5043,6 +5187,11 @@ impl CargoWorkspaceStore {
             "Coverage requires a runnable Cargo target"
         );
         let worktree_id = worktree.read(cx).id();
+        let allowed_worktrees = [selection.workspace.root.worktree_id, worktree_id]
+            .into_iter()
+            .collect::<HashSet<_>>();
+        let input_fingerprint =
+            cargo_input_fingerprint(&self.worktree_store, Some(&allowed_worktrees), cx);
         let discovery = match self.cached_snapshot(cx) {
             Some((snapshot, true))
                 if snapshot
@@ -5052,30 +5201,97 @@ impl CargoWorkspaceStore {
             {
                 None
             }
-            _ => Some(
-                self.refresh_scoped(
-                    Some(
-                        [selection.workspace.root.worktree_id, worktree_id]
-                            .into_iter()
-                            .collect(),
-                    ),
-                    cx,
-                ),
-            ),
+            _ => Some(self.refresh_scoped(Some(allowed_worktrees.clone()), cx)),
         };
+        let trust_revoked = std::rc::Rc::new(std::cell::Cell::new(false));
+        let trust_subscription = TrustedWorktrees::try_get_global(cx).map(|trust| {
+            let trust_revoked = trust_revoked.clone();
+            let worktrees = self.worktree_store.downgrade();
+            cx.subscribe(&trust, move |_, _, event, _| {
+                if matches!(event, TrustedWorktreesEvent::Restricted(changed, _) if *changed == worktrees) {
+                    trust_revoked.set(true);
+                }
+            })
+        });
         let executor = cx.background_executor().clone();
         let worktree_store = self.worktree_store.entity_id();
         Ok(cx.spawn(async move |this, cx| {
+            let _trust_subscription = trust_subscription;
             if let Some(discovery) = discovery {
                 discovery.await?;
             }
+            let retry = this.update(cx, |store, cx| {
+                ensure!(
+                    !trust_revoked.get(),
+                    "Coverage worktree trust changed before planning"
+                );
+                ensure!(
+                    input_fingerprint
+                        == cargo_input_fingerprint(
+                            &store.worktree_store,
+                            Some(&allowed_worktrees),
+                            cx
+                        ),
+                    "Coverage Cargo inputs changed before planning"
+                );
+                // An independent catalog refresh may have superseded the first refresh of the same inputs.
+                let current = store
+                    .cached_snapshot(cx)
+                    .is_some_and(|(_, current)| current);
+                Ok::<_, anyhow::Error>(
+                    (!current).then(|| store.refresh_scoped(Some(allowed_worktrees.clone()), cx)),
+                )
+            })??;
+            if let Some(retry) = retry {
+                retry.await?;
+            }
             let HostCoverageContext {
-                mut template,
+                template,
                 directory,
                 environment,
                 revision,
-            } = this.update(cx, |store, cx| store.host_coverage_context(&selection, cx))??;
+                preset,
+            } = this.update(cx, |store, cx| {
+                ensure!(
+                    !trust_revoked.get(),
+                    "Coverage worktree trust changed before planning"
+                );
+                ensure!(
+                    input_fingerprint
+                        == cargo_input_fingerprint(
+                            &store.worktree_store,
+                            Some(&allowed_worktrees),
+                            cx
+                        ),
+                    crate::source_coverage::SourceCoverageSourceChanged
+                );
+                store.host_coverage_context(&selection, cx)
+            })??;
+            let (mut template, directory, mut context, preset_settings) = if let Some(preset) =
+                preset
+            {
+                cx.background_spawn(async move {
+                    let settings = preset
+                        .load_settings()
+                        .await
+                        .context(HostCoveragePresetUnavailable)?;
+                    let (template, directory, context) = preset
+                        .compile(&settings, &directory)
+                        .context(HostCoveragePresetUnavailable)?;
+                    Ok::<_, anyhow::Error>((template, directory, context, Some((preset, settings))))
+                })
+                .await?
+            } else {
+                let context = task::TaskContext {
+                    cwd: Some(directory.clone()),
+                    ..Default::default()
+                };
+                (template, directory, context, None)
+            };
             let project_environment = environment
+                .update(cx, |environment, cx| {
+                    environment.directory_environment(Arc::from(directory.as_path()), cx)
+                })
                 .await
                 .context("Coverage host environment is unavailable")?;
             let resolved = cx
@@ -5099,13 +5315,26 @@ impl CargoWorkspaceStore {
                         smol::fs::canonicalize(&directory).await? == directory,
                         "Coverage working directory changed before planning"
                     );
+                    let mut probe_environment = environment.clone();
+                    probe_environment.extend(
+                        task::substitute_variables_in_map(&template.env, &context).context(
+                            "Coverage preset environment requires unavailable Task variables",
+                        )?,
+                    );
+                    let explicit_toolchain = template
+                        .args
+                        .first()
+                        .and_then(|argument| argument.strip_prefix('+'));
+                    if let Some(toolchain) = explicit_toolchain {
+                        probe_environment.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+                    }
                     let cargo = which::which_in(
                         "cargo",
-                        environment.get("PATH").map(OsString::from),
+                        probe_environment.get("PATH").map(OsString::from),
                         &directory,
                     )
                     .map_err(|_| anyhow!("Coverage requires Cargo on the producing host's PATH"))?;
-                    let passive = PassiveRustEnvironment::from_request(Some(&environment));
+                    let passive = PassiveRustEnvironment::from_request(Some(&probe_environment));
                     if let Some(installed) = check_passive_rustup_executable(
                         cargo.as_os_str(),
                         &directory,
@@ -5114,6 +5343,7 @@ impl CargoWorkspaceStore {
                     )
                     .await?
                     {
+                        template.env.remove("RUSTUP_TOOLCHAIN");
                         environment.insert(
                             "RUSTUP_TOOLCHAIN".into(),
                             installed
@@ -5122,6 +5352,13 @@ impl CargoWorkspaceStore {
                                 .context("Coverage toolchain path is not Unicode")?
                                 .into(),
                         );
+                        if explicit_toolchain.is_some() {
+                            template.args.remove(0);
+                        }
+                    } else if explicit_toolchain.is_some() {
+                        return Err(anyhow!(
+                            "Coverage requires the selected installed Rustup toolchain"
+                        ));
                     }
                     crate::rust_coverage_provider::validate_capture_task_environment(&environment)?;
                     crate::rust_coverage_provider::compile_coverage_task_template(&mut template)?;
@@ -5129,25 +5366,38 @@ impl CargoWorkspaceStore {
                         .to_str()
                         .context("Coverage Cargo path is not Unicode")?
                         .into();
-                    let context = task::TaskContext {
-                        cwd: Some(directory),
-                        project_env: environment,
-                        ..Default::default()
-                    };
+                    context.project_env = environment;
                     let run_id = uuid::Uuid::new_v4();
                     let resolved = template
                         .resolve_task_with_literal_arguments("host Cargo coverage", &context)
                         .context("Unable to resolve the selected Coverage Task")?
                         .bind_artifact_invocation(&run_id.simple().to_string())?;
+                    let preset_settings_source = match preset_settings {
+                        Some((preset, settings)) => {
+                            let current = preset
+                                .load_settings()
+                                .await
+                                .context(HostCoveragePresetUnavailable)?;
+                            ensure!(current == settings, HostCoveragePresetUnavailable);
+                            Some(preset.source)
+                        }
+                        None => None,
+                    };
                     Ok::<_, anyhow::Error>(PreparedHostCoverageTask {
                         run_id: run_id.to_string(),
                         resolved,
                         snapshot_revision: revision,
                         worktree_store,
+                        preset_settings_source,
                     })
                 })
                 .await?;
             this.read_with(cx, |store, cx| {
+                ensure!(
+                    !trust_revoked.get(),
+                    "Coverage worktree trust changed before launch"
+                );
+                store.coverage_manifest_worktree(&selection.package_manifest, cx)?;
                 store.validate_host_coverage_task(&resolved, cx)
             })??;
             Ok(resolved)
@@ -5197,7 +5447,12 @@ impl CargoWorkspaceStore {
         selection: &CargoCoverageSelection,
         cx: &mut App,
     ) -> Result<HostCoverageContext> {
+        use crate::cargo_preset::{CargoCompileContext, CargoTargetSelector};
         use crate::cargo_workspace::CargoTargetKind;
+        use feature_flags::{FeatureFlag as _, RustNamedCargoPresetsExperimentalFeatureFlag};
+        use settings::{
+            ServerSettingsOrigin, ServerSettingsParseOutcome, SettingsFile, SettingsStore,
+        };
 
         let (snapshot, true) = self
             .cached_snapshot(cx)
@@ -5215,7 +5470,7 @@ impl CargoWorkspaceStore {
             .iter()
             .find(|member| member.manifest_path == selection.package_manifest)
             .context("Coverage package is not in the selected workspace")?;
-        self.coverage_manifest_worktree(&member.manifest_path, cx)?;
+        let package_worktree = self.coverage_manifest_worktree(&member.manifest_path, cx)?;
         let target = member
             .targets
             .iter()
@@ -5242,9 +5497,78 @@ impl CargoWorkspaceStore {
         let CargoWorkspaceStoreMode::Local { environment, .. } = &self.mode else {
             anyhow::bail!("Coverage planning requires the producing host");
         };
-        let environment = environment.update(cx, |environment, cx| {
-            environment.directory_environment(Arc::from(directory.as_path()), cx)
-        });
+        let preset = selection
+            .preset_id
+            .as_ref()
+            .map(|identifier| -> Result<_> {
+                ensure!(
+                    !identifier.trim().is_empty()
+                        && identifier.len() <= 128
+                        && !identifier.chars().any(char::is_control),
+                    HostCoveragePresetUnavailable
+                );
+                let store = cx.global::<SettingsStore>();
+                let source = store.server_settings_source();
+                let server_settings = store
+                    .get_content_for_file(SettingsFile::Server)
+                    .context(HostCoveragePresetUnavailable)?;
+                ensure!(
+                    source.attempted_origin() == Some(ServerSettingsOrigin::HostLocal)
+                        && source.parse_outcome() == ServerSettingsParseOutcome::Succeeded
+                        && cx.has_flag::<RustNamedCargoPresetsExperimentalFeatureFlag>()
+                        && server_settings
+                            .feature_flags
+                            .as_ref()
+                            .and_then(|flags| {
+                                flags.get(RustNamedCargoPresetsExperimentalFeatureFlag::NAME)
+                            })
+                            .is_some_and(|value| value == "on"),
+                    HostCoveragePresetUnavailable
+                );
+                let filesystem = self
+                    .worktree_store
+                    .read(cx)
+                    .fs()
+                    .context("The producing worktree filesystem is unavailable")?;
+                let package_scope = member
+                    .manifest_path
+                    .path
+                    .parent()
+                    .context("Coverage package has no containing directory")?;
+                let root = package_worktree.read(cx).abs_path().to_path_buf();
+                let package_directory = root.join(package_scope.as_std_path());
+                let workspace_cwd = directory
+                    .to_str()
+                    .context("Coverage workspace directory is not Unicode")?
+                    .to_owned();
+                let package_cwd = package_directory
+                    .to_str()
+                    .context("Coverage package directory is not Unicode")?
+                    .to_owned();
+                Ok(HostCoveragePreset {
+                    identifier: identifier.clone(),
+                    settings: server_settings.project.cargo.clone().unwrap_or_default(),
+                    source,
+                    root,
+                    workspace_root: worktree.read(cx).abs_path().to_path_buf(),
+                    package_scope: package_scope.into_arc(),
+                    filesystem,
+                    context: CargoCompileContext {
+                        workspace_name: None,
+                        workspace_cwd: Some(workspace_cwd),
+                        package_name: Some(member.name.clone()),
+                        package_cwd: Some(package_cwd),
+                    },
+                    target: match target.kind {
+                        CargoTargetKind::Binary => CargoTargetSelector::Binary(target.name.clone()),
+                        CargoTargetKind::Example => {
+                            CargoTargetSelector::Example(target.name.clone())
+                        }
+                        _ => anyhow::bail!("Coverage requires a runnable Cargo target"),
+                    },
+                })
+            })
+            .transpose()?;
         Ok(HostCoverageContext {
             template: task::TaskTemplate {
                 label: format!("{} ({})", target.name, member.name),
@@ -5260,8 +5584,9 @@ impl CargoWorkspaceStore {
                 ..Default::default()
             },
             directory,
-            environment,
+            environment: environment.clone(),
             revision: snapshot.revision,
+            preset,
         })
     }
 
@@ -5281,6 +5606,15 @@ impl CargoWorkspaceStore {
                 }),
             "Coverage Cargo selection changed before launch"
         );
+        if let Some(source) = &prepared.preset_settings_source {
+            ensure!(
+                cx.has_flag::<feature_flags::RustNamedCargoPresetsExperimentalFeatureFlag>()
+                    && cx
+                        .global::<settings::SettingsStore>()
+                        .server_settings_source_is_current(source),
+                HostCoveragePresetUnavailable
+            );
+        }
         Ok(())
     }
 

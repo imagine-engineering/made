@@ -845,6 +845,7 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
                         },
                         target_kind: CargoTargetKind::Binary,
                         target_name: "--output-path".into(),
+                        preset_id: None,
                     };
                     let rejected = host.update(cx, |host, cx| host.run_selected_host_coverage_task(selection.clone(), cx))?.await;
                     let error = rejected.err().context("A selector absent from Cargo metadata started a Task")?;

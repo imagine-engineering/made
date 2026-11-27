@@ -20304,7 +20304,19 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     std::fs::create_dir(host_data.path().join("config")).expect("host config directory");
     std::fs::write(
         host_data.path().join("config/settings.json"),
-        r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
+        r#"{
+            "load_direnv":"disabled",
+            "feature_flags":{
+                "rust-coverage-experimental":"on",
+                "rust-named-cargo-presets-experimental":"on"
+            },
+            "cargo":{"presets":{"host-coverage":{
+                "subcommand":"run",
+                "working_directory":"custom",
+                "custom_working_directory":"$ZED_WORKTREE_ROOT",
+                "environment":{"COVERAGE_PRESET_OWNER":"producer"}
+            }}}
+        }"#,
     )
     .expect("explicit host opt-in");
     std::fs::create_dir_all(fixture.path().join("src/bin")).expect("binary directory");
@@ -20350,6 +20362,17 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
             .expect("fixture parent");
         std::fs::write(destination, content).expect("fixture source");
     }
+    let binary_source = fixture.path().join("src/bin/fixture.rs");
+    let source = std::fs::read_to_string(&binary_source).expect("read Coverage fixture source");
+    std::fs::write(
+        binary_source,
+        source.replacen(
+            "    println!",
+            "    std::fs::write(\"target/preset-owner\", std::env::var(\"COVERAGE_PRESET_OWNER\").unwrap_or_default()).expect(\"record preset environment\"); println!",
+            1,
+        ),
+    )
+    .expect("record the executed fixture's preset environment");
     cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
     cx.update(|cx| project::trusted_worktrees::init(HashMap::default(), cx));
     init_logger();
@@ -20424,6 +20447,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         target_name: target_name.into(),
         session_token: session.clone(),
         authorization: None,
+        preset_id: None,
     };
     let require_failure = |result: proto::RustCoverageTaskResponse, expected| {
         assert_eq!(
@@ -20472,6 +20496,25 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     );
     let worktrees = project.read_with(cx, |project, _| project.worktree_store());
     cx.update(|cx| {
+        SettingsStore::update_global(cx, |settings, cx| {
+            settings
+                .set_user_settings(
+                    r#"{
+                "feature_flags":{
+                    "rust-coverage-experimental":"on",
+                    "rust-named-cargo-presets-experimental":"on"
+                },
+                "cargo":{"presets":{"host-coverage":{
+                    "label":"Producing host coverage",
+                    "subcommand":"run",
+                    "environment":{"COVERAGE_PRESET_OWNER":"client"}
+                }}}
+            }"#,
+                    cx,
+                )
+                .result()
+                .expect("configure the client preset selector");
+        });
         project::task_store::set_experimental_feature_for_test(
             "rust-coverage-experimental",
             true,
@@ -20503,8 +20546,14 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         },
         target_kind: CargoTargetKind::Binary,
         target_name: target_name.into(),
+        preset_id: None,
     };
     exercise_native_cargo_panel_coverage(&project, cx).await;
+    assert_eq!(
+        std::fs::read_to_string(fixture.path().join("target/preset-owner"))
+            .expect("selected Cargo action reached the producing workload"),
+        "producer"
+    );
     let (_, capture) = provider
         .update(cx, |provider, cx| {
             provider.start_native_cargo_coverage(selection("held"), cx)
@@ -20752,6 +20801,11 @@ async fn exercise_native_cargo_panel_coverage(project: &Entity<Project>, cx: &mu
     let panel = cargo_ui::CargoPanel::load(workspace.downgrade(), async_window)
         .await
         .expect("load selected Cargo action panel");
+    visual.update(|_, cx| {
+        panel.update(cx, |panel, cx| {
+            panel.set_active_preset(Some("host-coverage".into()), Default::default(), cx);
+        });
+    });
     workspace.update_in(visual, |workspace, window, cx| {
         window.activate_a11y_for_test();
         workspace.add_panel(panel, window, cx);
@@ -20840,11 +20894,16 @@ async fn exercise_native_cargo_panel_coverage(project: &Entity<Project>, cx: &mu
                 .expect("watch coverage publication from normal Cargo action");
         }
     };
-    match futures::future::select(Box::pin(check_result), Box::pin(deadline)).await {
-        futures::future::Either::Left(_) => {}
-        futures::future::Either::Right(_) => {
-            panic!("the normal Cargo action did not publish coverage")
-        }
+    let completed = matches!(
+        futures::future::select(Box::pin(check_result), Box::pin(deadline)).await,
+        futures::future::Either::Left(_)
+    );
+    if !completed {
+        let tree = visual.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.debug_a11y_tree_json().unwrap_or_default()
+        });
+        panic!("the normal Cargo action did not publish coverage: {tree}");
     }
     visual.deactivate_window();
     workspace.update_in(visual, |_, window, _| window.remove_window());
@@ -20943,6 +21002,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_legacy_host(cx: &mut 
                     },
                     target_kind: CargoTargetKind::Binary,
                     target_name: "coverage-legacy".into(),
+                    preset_id: None,
                 },
                 cx,
             )

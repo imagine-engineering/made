@@ -24,6 +24,7 @@ message RunRustCoverageTask {
   string target_name = 6;
   bytes session_token = 7;
   RustCoverageTaskAuthorization authorization = 8;
+  optional string preset_id = 9;
 }
 
 enum RustCoverageTargetKind {
@@ -62,6 +63,7 @@ message RustCoverageTaskResponse {
   // Assigned and consumed by the direct remote server before sending the reply.
   uint32 native_receiver = 5;
   RustCoverageTaskAuthorization authorization = 7;
+  bool supports_named_presets = 8;
 }
 
 enum RustCoverageTaskFailure {
@@ -72,6 +74,7 @@ enum RustCoverageTaskFailure {
   RUST_COVERAGE_TASK_FAILURE_STALE = 4;
   RUST_COVERAGE_TASK_FAILURE_BUSY = 5;
   RUST_COVERAGE_TASK_FAILURE_HOST_FAILED = 6;
+  RUST_COVERAGE_TASK_FAILURE_PRESET_UNAVAILABLE = 7;
 }
 
 message SourceCoverageResponse {

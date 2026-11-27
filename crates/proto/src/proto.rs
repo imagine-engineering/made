@@ -2213,6 +2213,7 @@ mod tests {
             target_name: "worker".into(),
             session_token: vec![3; 16],
             authorization: authorization.clone(),
+            preset_id: Some("host-coverage".into()),
         };
         assert_eq!(run.remote_entity_id(), 7);
         let cancel = CancelRustCoverageTask {
@@ -2228,11 +2229,16 @@ mod tests {
         };
         assert_eq!(session.remote_entity_id(), 7);
         let response = RustCoverageTaskResponse {
-            operation_id: run.operation_id,
-            outcome: Some(rust_coverage_task_response::Outcome::Cancelled(true)),
+            operation_id: 0,
+            outcome: Some(rust_coverage_task_response::Outcome::SessionToken(vec![
+                3;
+                16
+            ])),
             native_receiver: 1,
             authorization,
+            supports_named_presets: true,
         };
+        assert!(!RustCoverageTaskResponse::default().supports_named_presets);
         for (tag, message) in [
             (546, run.into_envelope(0, None, None)),
             (547, cancel.into_envelope(0, None, None)),

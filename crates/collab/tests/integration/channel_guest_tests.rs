@@ -4618,7 +4618,21 @@ impl LinuxCoverageRelayProducer {
         std::fs::create_dir(directory.path().join("config")).expect("host config directory");
         std::fs::write(
             directory.path().join("config/settings.json"),
-            r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
+            r#"{
+                "load_direnv":"disabled",
+                "feature_flags":{
+                    "rust-coverage-experimental":"on",
+                    "rust-named-cargo-presets-experimental":"on"
+                },
+                "cargo":{"presets":{"host-coverage":{
+                    "subcommand":"check",
+                    "package":"unused-preset-package",
+                    "target_kind":"bin",
+                    "target_name":"held",
+                    "environment":{"COVERAGE_PRESET_OWNER":"user"},
+                    "trailing_args":["argument with spaces"]
+                }}}
+            }"#,
         )
         .expect("host coverage opt-in");
         let state_directory = directory.path().join("server_state");
@@ -4888,6 +4902,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_revokes_ol
         target_name: target_name.into(),
         session_token: token.to_vec(),
         authorization: None,
+        preset_id: None,
     };
     let catalog = owner
         .client()
@@ -5072,6 +5087,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_revokes_ol
                     },
                     target_kind: CargoTargetKind::Binary,
                     target_name: "short".into(),
+                    preset_id: None,
                 },
                 cx,
             )
@@ -5176,6 +5192,21 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
     };
     let enabled_binary = binary("RUST_TOOLS_ENABLED_HOST_BINARY");
     let fixture = linux_coverage_relay_fixture();
+    std::fs::create_dir(fixture.path().join(".zed")).expect("fixture project settings directory");
+    std::fs::write(
+        fixture.path().join(".zed/settings.json"),
+        r#"{"cargo":{"presets":{"host-coverage":{"environment":{"COVERAGE_PRESET_OWNER":"worktree"}}}}}"#,
+    )
+    .expect("override the preset on the producing worktree");
+    std::fs::write(
+        fixture.path().join("src/bin/named.rs"),
+        r#"fn main() {
+    assert_eq!(std::env::var("COVERAGE_PRESET_OWNER").as_deref(), Ok("worktree"));
+    assert_eq!(std::env::args().nth(1).as_deref(), Some("argument with spaces"));
+    std::fs::write("target/named-started", "named").expect("record preset execution");
+}"#,
+    )
+    .expect("add a named preset workload that requires the host configuration");
     let marker = fixture.path().join("target/started");
     executor.allow_parking();
     cx_host.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
@@ -5242,6 +5273,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
                 target_name: target_name.into(),
                 session_token: token.to_vec(),
                 authorization: None,
+                preset_id: None,
             }
         };
     let source_selection = |worktree_id| CargoCoverageSelection {
@@ -5257,6 +5289,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
         },
         target_kind: CargoTargetKind::Binary,
         target_name: "short".into(),
+        preset_id: None,
     };
 
     let original =
@@ -5441,6 +5474,54 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
     let file = snapshot.files.first().expect("covered project file");
     assert_eq!(file.path.path.as_unix_str(), "src/bin/short.rs");
     assert_eq!(file.covered_lines, 3);
+    let (_, unavailable) = provider
+        .update(cx_member, |provider, cx| {
+            provider.start_native_cargo_coverage(
+                CargoCoverageSelection {
+                    target_name: "named".into(),
+                    preset_id: Some("missing-coverage-preset".into()),
+                    ..source_selection(replacement.worktree_id)
+                },
+                cx,
+            )
+        })
+        .expect("negotiate a missing producing-host preset");
+    let error = unavailable
+        .await
+        .expect_err("missing preset must be refused");
+    assert!(
+        error
+            .to_string()
+            .contains("preset is unavailable on the producing host"),
+        "{error:#}"
+    );
+    let marker = fixture.path().join("target/named-started");
+    assert!(!marker.try_exists().expect("inspect named-workload marker"));
+    let (_, named) = provider
+        .update(cx_member, |provider, cx| {
+            provider.start_native_cargo_coverage(
+                CargoCoverageSelection {
+                    target_name: "named".into(),
+                    preset_id: Some("host-coverage".into()),
+                    ..source_selection(replacement.worktree_id)
+                },
+                cx,
+            )
+        })
+        .expect("negotiate the named preset through the authenticated relay");
+    let named = named
+        .await
+        .expect("fresh named coverage")
+        .expect("named report");
+    assert_eq!(named.status, SourceCoverageStatus::Current);
+    assert_eq!(named.files.len(), 1);
+    let file = named.files.first().expect("covered named workload");
+    assert_eq!(file.path.path.as_unix_str(), "src/bin/named.rs");
+    assert_eq!(file.covered_lines, 5);
+    assert_eq!(
+        std::fs::read_to_string(marker).expect("host preset workload executed"),
+        "named"
+    );
     unshare(&replacement, cx_host);
     replacement
         .connection
@@ -5448,9 +5529,25 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
         .await
         .expect("stop the replacement host");
 
-    for (binary_variable, legacy) in [
-        ("RUST_TOOLS_DISABLED_HOST_BINARY", false),
-        ("RUST_TOOLS_LEGACY_COVERAGE_HOST_BINARY", true),
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum CompatibilityHost {
+        Disabled,
+        Legacy,
+        BeforeNamedPresets,
+    }
+    for (binary_variable, compatibility) in [
+        (
+            "RUST_TOOLS_DISABLED_HOST_BINARY",
+            CompatibilityHost::Disabled,
+        ),
+        (
+            "RUST_TOOLS_LEGACY_COVERAGE_HOST_BINARY",
+            CompatibilityHost::Legacy,
+        ),
+        (
+            "RUST_TOOLS_PRE_NAMED_COVERAGE_HOST_BINARY",
+            CompatibilityHost::BeforeNamedPresets,
+        ),
     ] {
         let control_fixture = linux_coverage_relay_fixture();
         std::fs::write(
@@ -5482,37 +5579,61 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
         control.trust(cx_host).await;
         set_linux_coverage_relay_trust(&remote, control.worktree_id, true, cx_member);
         let probe = member.client().request(get_session(project_id)).await;
-        if legacy {
-            let error = probe.expect_err("the pre-protocol host cannot issue a session");
-            assert_eq!(
-                error
-                    .downcast_ref::<proto::RpcError>()
-                    .and_then(|error| error.error_tag("reason")),
-                Some("rust_tools_unsupported"),
-                "{error:#}"
-            );
-        } else {
-            let response = probe.expect("typed disabled producer reply");
-            assert_eq!(
-                response.outcome,
-                Some(Outcome::Failure(
-                    proto::RustCoverageTaskFailure::Unsupported as i32
-                ))
-            );
-            assert!(response.authorization.is_none());
+        match compatibility {
+            CompatibilityHost::Legacy => {
+                let error = probe.expect_err("the pre-protocol host cannot issue a session");
+                assert_eq!(
+                    error
+                        .downcast_ref::<proto::RpcError>()
+                        .and_then(|error| error.error_tag("reason")),
+                    Some("rust_tools_unsupported"),
+                    "{error:#}"
+                );
+            }
+            CompatibilityHost::Disabled => {
+                let response = probe.expect("typed disabled producer reply");
+                assert_eq!(
+                    response.outcome,
+                    Some(Outcome::Failure(
+                        proto::RustCoverageTaskFailure::Unsupported as i32
+                    ))
+                );
+                assert!(response.authorization.is_none());
+            }
+            CompatibilityHost::BeforeNamedPresets => {
+                let response = probe.expect("the earlier host supports default coverage");
+                assert!(!response.supports_named_presets);
+                token(response);
+            }
         }
         let provider = remote.read_with(cx_member, |project, _| {
             project.rust_coverage_provider_store().clone()
         });
+        let named = compatibility == CompatibilityHost::BeforeNamedPresets;
         let (_, rejected) = provider
             .update(cx_member, |provider, cx| {
-                provider.start_native_cargo_coverage(source_selection(control.worktree_id), cx)
+                provider.start_native_cargo_coverage(
+                    CargoCoverageSelection {
+                        preset_id: named.then(|| "host-coverage".into()),
+                        ..source_selection(control.worktree_id)
+                    },
+                    cx,
+                )
             })
             .expect("ask the authenticated host for coverage");
         let error = rejected
             .await
             .expect_err("the compatibility host cannot run the Task");
-        assert!(error.is::<SourceCoverageUnsupportedHost>(), "{error:#}");
+        if named {
+            assert!(
+                error
+                    .to_string()
+                    .contains("does not support named Coverage presets"),
+                "{error:#}"
+            );
+        } else {
+            assert!(error.is::<SourceCoverageUnsupportedHost>(), "{error:#}");
+        }
         let native = control
             .transport
             .read_with(cx_host, |transport, _| transport.proto_client());
@@ -5535,6 +5656,25 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
                     .try_exists()
                     .expect("inspect fallback workload artifact"),
                 "{binary_variable}: unsupported capture created {artifact}"
+            );
+        }
+        if named {
+            let (_, default) = provider
+                .update(cx_member, |provider, cx| {
+                    provider.start_native_cargo_coverage(source_selection(control.worktree_id), cx)
+                })
+                .expect("default coverage remains available");
+            let snapshot = default
+                .await
+                .expect("default coverage on the earlier host")
+                .expect("default report");
+            assert_eq!(snapshot.status, SourceCoverageStatus::Current);
+            assert!(
+                control_fixture
+                    .path()
+                    .join("started")
+                    .try_exists()
+                    .expect("inspect default workload marker")
             );
         }
         unshare(&control, cx_host);

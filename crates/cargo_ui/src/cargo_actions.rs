@@ -1050,10 +1050,6 @@ pub(crate) fn run_native_cargo_coverage(
     };
     use std::{cell::Cell, rc::Rc};
 
-    anyhow::ensure!(
-        preset.is_none(),
-        "The producing host cannot resolve named coverage presets. Select Default to run this target with coverage."
-    );
     let (target_kind, target_name) = match selection.target {
         Some(CargoTargetSelector::Binary(name)) => (CargoTargetKind::Binary, name),
         Some(CargoTargetSelector::Example(name)) => (CargoTargetKind::Example, name),
@@ -1076,6 +1072,7 @@ pub(crate) fn run_native_cargo_coverage(
             .ok_or_else(|| anyhow!("The selected target has no Cargo package manifest"))?,
         target_kind,
         target_name,
+        preset_id: preset.map(|preset| preset.id.clone()),
     };
     let project = workspace.project().clone();
     let (provider, coverage, worktrees) = project.read_with(cx, |project, cx| {
@@ -1136,8 +1133,12 @@ pub(crate) fn run_native_cargo_coverage(
     });
     let feature = cx.observe_global::<feature_flags::FeatureFlagStore>({
         let cancel = cancel.clone();
+        let uses_named_preset = preset.is_some();
         move |_, cx| {
-            if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
+            if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                || uses_named_preset
+                    && !cx.has_flag::<RustNamedCargoPresetsExperimentalFeatureFlag>()
+            {
                 cancel(SourceCoverageStatus::Stale);
             }
         }

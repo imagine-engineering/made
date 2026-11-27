@@ -842,6 +842,7 @@ impl RustCoverageProviderStore {
                     outcome: Some(Outcome::Failure(failure as i32)),
                     native_receiver: 0,
                     authorization,
+                    supports_named_presets: false,
                 });
             }
         };
@@ -1673,6 +1674,7 @@ impl RustCoverageProviderStore {
             target_name: selection.target_name,
             session_token: Vec::new(),
             authorization: None,
+            preset_id: selection.preset_id,
         };
         let capture = cx.spawn(async move |this, cx| {
             let _active = active;
@@ -1715,6 +1717,10 @@ impl RustCoverageProviderStore {
                 }
                 _ => bail!("Coverage host did not issue a session"),
             };
+            anyhow::ensure!(
+                request.preset_id.is_none() || session.supports_named_presets,
+                "This project host does not support named Coverage presets. Choose Default or update the host."
+            );
             let validate = |store: &Self, cx: &App| {
                 anyhow::ensure!(
                     store.is_run_current(token, cx)
@@ -2357,6 +2363,11 @@ fn native_coverage_task_failure(failure: i32) -> anyhow::Error {
         }
         Some(RustCoverageTaskFailure::HostFailed) => {
             anyhow::anyhow!("The producing host could not run Cargo LLVM coverage")
+        }
+        Some(RustCoverageTaskFailure::PresetUnavailable) => {
+            anyhow::anyhow!(
+                "The Coverage preset is unavailable on the producing host. Check its Cargo settings and named preset opt-in."
+            )
         }
         _ => anyhow::anyhow!("Coverage host reported an unknown Task failure"),
     }

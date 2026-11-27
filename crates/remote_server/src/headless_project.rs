@@ -324,7 +324,9 @@ impl HeadlessProject {
     ) -> Result<CoverageOutcome, CoverageFailure> {
         use feature_flags::{FeatureFlagAppExt as _, RustCoverageExperimentalFeatureFlag};
         use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
-        use project::cargo_workspace_store::CargoCoverageSelection;
+        use project::cargo_workspace_store::{
+            CargoCoverageSelection, HostCoveragePresetUnavailable,
+        };
 
         let peer = message.sender_id;
         let mut request = message.payload;
@@ -368,6 +370,7 @@ impl HeadlessProject {
                 package_manifest: path(request.package_manifest)?,
                 target_kind,
                 target_name: request.target_name,
+                preset_id: request.preset_id,
             };
             session.last_operation = operation_id;
             let session = session.token;
@@ -375,7 +378,11 @@ impl HeadlessProject {
                 .run_selected_host_coverage_task(selection, cx)
                 .map_err(|error| {
                     log::debug!("Could not admit the selected Coverage Task: {error:#}");
-                    CoverageFailure::InvalidSelection
+                    if error.is::<HostCoveragePresetUnavailable>() {
+                        CoverageFailure::PresetUnavailable
+                    } else {
+                        CoverageFailure::InvalidSelection
+                    }
                 })?;
             let (cancel, cancellation) = futures::channel::oneshot::channel();
             host.coverage_transport_for(peer, cx)?.active = Some(ActiveCoverageTask {
@@ -409,6 +416,9 @@ impl HeadlessProject {
             let completed = completed.map_err(|error| {
                 if error.is::<project::source_coverage::SourceCoverageSourceChanged>() {
                     CoverageFailure::Stale
+                } else if error.is::<HostCoveragePresetUnavailable>() {
+                    log::debug!("Could not resolve the selected Coverage preset: {error:#}");
+                    CoverageFailure::PresetUnavailable
                 } else {
                     log::warn!("Selected Coverage Task failed on its producing host: {error:#}");
                     CoverageFailure::HostFailed
@@ -484,6 +494,7 @@ impl HeadlessProject {
         authorization: Option<proto::RustCoverageTaskAuthorization>,
         outcome: Result<CoverageOutcome, CoverageFailure>,
     ) -> proto::RustCoverageTaskResponse {
+        let supports_named_presets = matches!(&outcome, Ok(CoverageOutcome::SessionToken(_)));
         proto::RustCoverageTaskResponse {
             operation_id,
             outcome: Some(
@@ -491,6 +502,7 @@ impl HeadlessProject {
             ),
             native_receiver: peer.id,
             authorization,
+            supports_named_presets,
         }
     }
 

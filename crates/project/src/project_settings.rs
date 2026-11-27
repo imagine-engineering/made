@@ -1373,7 +1373,7 @@ impl SettingsObserver {
                         let named_root = named_root.clone();
                         let path = path.clone();
                         async move {
-                            read_settings_for_exclusion_recovery(
+                            read_confined_worktree_settings(
                                 filesystem.as_ref(), &admission, named_root.as_ref(), &path,
                             ).await
                         }
@@ -1913,7 +1913,7 @@ impl SettingsObserver {
     }
 }
 
-async fn read_settings_for_exclusion_recovery(
+pub(crate) async fn read_confined_worktree_settings(
     filesystem: &dyn Fs,
     admission: &fs::ConfinedRoot,
     named_root: &std::path::Path,
@@ -1927,7 +1927,7 @@ async fn read_settings_for_exclusion_recovery(
                 .as_std_path()
                 .components()
                 .all(|component| matches!(component, std::path::Component::Normal(_))),
-        "Invalid settings recovery path or admitted root"
+        "Invalid worktree settings path or admitted root"
     );
     if filesystem
         .is_confined_file_absent(admission, named_root, path.as_std_path())
