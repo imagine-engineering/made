@@ -9607,7 +9607,11 @@ impl Editor {
         has_modifier: bool,
         snapshot: &DisplaySnapshot,
     ) -> Option<&EditorTextAction> {
-        if self.text_actions.is_empty() || snapshot.is_block_line(point.row()) {
+        if self.text_actions.is_empty()
+            || point.row() > snapshot.max_point().row()
+            || snapshot.is_block_line(point.row())
+            || point.column() >= snapshot.line_len(point.row())
+        {
             return None;
         }
         let anchor = snapshot.display_point_to_anchor(point, Bias::Left);

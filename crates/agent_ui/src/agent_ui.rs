@@ -29,6 +29,7 @@ mod mode_selector;
 mod model_selector;
 mod model_selector_popover;
 mod profile_selector;
+mod recipe_dashboard;
 mod recipes_view;
 mod specification_editor;
 pub use specification_editor::SpecificationEditor;
@@ -233,6 +234,8 @@ actions!(
         FocusSpecificationControls,
         /// Open the actions for the specification task at the editor cursor.
         OpenSpecificationTaskActions,
+        /// Opens the pending decision for the selected recipe run.
+        OpenRecipeDecision,
         /// Compare an existing specification with explicitly selected code references.
         CheckSpecificationDrift,
         /// Toggles the profile or mode selector for switching between agent profiles.

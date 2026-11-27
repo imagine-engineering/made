@@ -108,6 +108,61 @@ pub struct RecipeRun {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RecipeActivity {
+    pub id: Uuid,
+    pub schedule_id: Option<Uuid>,
+    pub session_id: String,
+    pub project_paths: SerializedPathList,
+    pub title: String,
+    pub started_at: DateTime<Utc>,
+    pub status: RecipeRunStatus,
+    pub steps: Vec<RecipeActivityStep>,
+    pub current_step: Option<usize>,
+    pub decision: Option<RecipeDecision>,
+    pub(crate) revision: i64,
+}
+
+impl RecipeActivity {
+    pub(crate) fn finish(&mut self, status: RecipeRunStatus) {
+        self.status = status;
+        self.decision = None;
+        if let Some(index) = self.current_step.take()
+            && let Some(step) = self.steps.get_mut(index)
+        {
+            step.status = RecipeStepStatus::Failed;
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RecipeActivityStep {
+    pub id: String,
+    pub status: RecipeStepStatus,
+    pub iteration: u8,
+    pub repetitions: u8,
+    #[serde(default)]
+    pub turn: Option<acp_thread::ClientUserMessageId>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecipeStepStatus {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+    Skipped,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecipeDecision {
+    Tool(String),
+    Elicitation(String),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecipeScheduleState {
     pub version: u32,
@@ -331,7 +386,8 @@ mod tests {
             cron: "* * * * *".into(),
             timezone: "UTC".into(),
             recipe: crate::recipes::builtin_recipes()
-                .pop()
+                .into_iter()
+                .find(|entry| entry.id == "builtin/release-risk")
                 .expect("built-in")
                 .recipe
                 .expect("valid"),

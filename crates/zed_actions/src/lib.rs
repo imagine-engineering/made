@@ -687,6 +687,8 @@ pub mod assistant {
             /// Opens the skills manager in the settings window.
             #[action(deprecated_aliases = ["agent::OpenRulesLibrary", "assistant::OpenRulesLibrary", "assistant::DeployPromptLibrary"])]
             ManageSkills,
+            /// Opens the recipe library, active runs, and schedules.
+            ManageRecipes,
         ]
     );
 

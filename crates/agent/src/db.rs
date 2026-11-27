@@ -2,7 +2,7 @@ use crate::{AgentMessage, AgentMessageContent, UserMessage, UserMessageContent};
 use acp_thread::ClientUserMessageId;
 use agent_client_protocol::schema::v1 as acp;
 use agent_settings::AgentProfileId;
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use chrono::{DateTime, Utc};
 use collections::{HashMap, IndexMap};
 use futures::{FutureExt, future::Shared};
@@ -677,6 +677,36 @@ impl ThreadsDatabase {
                 "UPDATE recipe_automation SET revision = revision + 1, data = ? WHERE id = 1 AND revision = ? RETURNING revision"
             )?((data, expected_revision))?;
             revisions.into_iter().next().ok_or_else(|| anyhow::anyhow!("Schedules changed during this operation; restart Made to reload schedules safely"))
+        })
+    }
+
+    pub(crate) fn load_recipe_activity(
+        &self,
+    ) -> Task<Result<Vec<crate::recipe_schedule::RecipeActivity>>> {
+        let connection = self.connection.clone();
+        self.executor.spawn(async move {
+            let connection = connection.lock();
+            connection.exec("CREATE TABLE IF NOT EXISTS recipe_activity (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, data TEXT NOT NULL)")?()?;
+            connection.select::<String>("SELECT data FROM recipe_activity")?()?
+                .into_iter()
+                .map(|row| serde_json::from_str(&row).context("Invalid recipe run history"))
+                .collect()
+        })
+    }
+
+    pub(crate) fn save_recipe_activity(
+        &self,
+        run: crate::recipe_schedule::RecipeActivity,
+    ) -> Task<Result<()>> {
+        let connection = self.connection.clone();
+        self.executor.spawn(async move {
+            let data = serde_json::to_string(&run)?;
+            connection.lock().exec_bound::<(String, i64, String)>(
+                "INSERT INTO recipe_activity (id, revision, data) VALUES (?, ?, ?) \
+                 ON CONFLICT(id) DO UPDATE SET revision = excluded.revision, data = excluded.data \
+                 WHERE excluded.revision > recipe_activity.revision",
+            )?((run.id.to_string(), run.revision, data))?;
+            Ok(())
         })
     }
 

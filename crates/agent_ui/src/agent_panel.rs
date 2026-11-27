@@ -29,8 +29,8 @@ use zed_actions::{
         ResolveConflictsWithAgent, ReviewBranchDiff, SelectAgent,
     },
     assistant::{
-        FocusAgent, ManageSkills, OpenGlobalAgentsMdRules, OpenProjectAgentsMdRules, Toggle,
-        ToggleFocus,
+        FocusAgent, ManageRecipes, ManageSkills, OpenGlobalAgentsMdRules, OpenProjectAgentsMdRules,
+        Toggle, ToggleFocus,
     },
 };
 
@@ -521,6 +521,18 @@ pub fn init(cx: &mut App) {
                     if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
                         workspace.focus_panel::<AgentPanel>(window, cx);
                         panel.update(cx, |panel, cx| panel.manage_skills(action, window, cx));
+                    }
+                })
+                .register_action(|workspace, _: &ManageRecipes, window, cx| {
+                    crate::recipe_dashboard::RecipeDashboard::open(
+                        workspace, crate::recipe_dashboard::RecipePage::Library, window, cx,
+                    );
+                })
+                .register_action(|workspace, _: &crate::OpenRecipeDecision, window, cx| {
+                    if let Some(dashboard) = workspace.active_item(cx).and_then(|item| {
+                        item.downcast::<crate::recipe_dashboard::RecipeDashboard>()
+                    }) {
+                        dashboard.update(cx, |dashboard, cx| dashboard.open_pending_decision(window, cx));
                     }
                 })
                 .register_action(|workspace, _: &OpenGlobalAgentsMdRules, window, cx| {
@@ -1268,6 +1280,14 @@ enum SpecificationAction {
     Verify,
 }
 
+enum RecipeScheduleForm {
+    Edit,
+    New(
+        agent::recipes::RecipeEntry,
+        collections::HashMap<String, String>,
+    ),
+}
+
 pub struct AgentPanel {
     workspace: WeakEntity<Workspace>,
     /// Workspace id is used as a database key
@@ -1679,7 +1699,14 @@ impl AgentPanel {
                 agent::recipes::RecipeStoreEvent::Review { project, proposal }
                     if project == &this.project =>
                 {
-                    this.open_recipe_management(None, Some(proposal.clone()), None, window, cx);
+                    this.open_recipe_management(
+                        None,
+                        Some(proposal.clone()),
+                        None,
+                        None,
+                        window,
+                        cx,
+                    );
                 }
                 agent::recipes::RecipeStoreEvent::Manage { project, schedule }
                     if project == &this.project =>
@@ -3791,7 +3818,23 @@ impl AgentPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_recipe_management(schedule, None, None, window, cx);
+        if schedule.is_some() {
+            self.open_recipe_schedule(schedule, None, window, cx);
+        } else {
+            let workspace = self.workspace.clone();
+            cx.defer_in(window, move |_, window, cx| {
+                workspace
+                    .update(cx, |workspace, cx| {
+                        crate::recipe_dashboard::RecipeDashboard::open(
+                            workspace,
+                            crate::recipe_dashboard::RecipePage::Library,
+                            window,
+                            cx,
+                        );
+                    })
+                    .log_err();
+            });
+        }
     }
 
     pub fn review_recipe_link(
@@ -3800,7 +3843,139 @@ impl AgentPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_recipe_management(None, None, Some(link), window, cx);
+        self.open_recipe_management(None, None, Some(link), None, window, cx);
+    }
+
+    pub(crate) fn open_recipe_run(
+        &self,
+        run: uuid::Uuid,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let workspace = self.workspace.clone();
+        window.defer(cx, move |window, cx| {
+            workspace
+                .update(cx, |workspace, cx| {
+                    crate::recipe_dashboard::RecipeDashboard::open(
+                        workspace,
+                        crate::recipe_dashboard::RecipePage::Run(run),
+                        window,
+                        cx,
+                    );
+                })
+                .log_err();
+        });
+    }
+
+    pub(crate) fn open_recipe_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_recipe_management(None, None, None, None, window, cx);
+    }
+
+    pub(crate) fn open_recipe_schedule(
+        &mut self,
+        id: Option<uuid::Uuid>,
+        recipe: Option<(
+            agent::recipes::RecipeEntry,
+            collections::HashMap<String, String>,
+        )>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let form = recipe.map_or(RecipeScheduleForm::Edit, |(entry, inputs)| {
+            RecipeScheduleForm::New(entry, inputs)
+        });
+        self.open_recipe_management(id, None, None, Some(form), window, cx);
+    }
+
+    pub(crate) fn start_recipe_from_dashboard(
+        &mut self,
+        entry: agent::recipes::RecipeEntry,
+        parameters: collections::HashMap<String, String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.ensure_native_agent_connection(cx);
+        let Some(connection) = self.connection_store.update(cx, |store, cx| {
+            store
+                .entry(&Agent::NativeAgent)
+                .map(|entry| entry.read(cx).wait_for_connection())
+        }) else {
+            Self::show_deferred_toast(&self.workspace, "The built-in agent is unavailable", cx);
+            return;
+        };
+        let project = self.project.clone();
+        let workspace = self.workspace.clone();
+        cx.spawn_in(window, async move |panel, cx| {
+            let result = async {
+                let connected = connection.await?;
+                let connection = connected
+                    .connection
+                    .downcast::<agent::NativeAgentConnection>()
+                    .context("The built-in agent is unavailable")?;
+                cx.update(|_, cx| {
+                    agent::recipes::start_recipe(connection, project, entry, parameters, cx)
+                })?
+            }
+            .await;
+            match result {
+                Ok(session) => panel.update_in(cx, |panel, window, cx| {
+                    panel.open_recipe_conversation(
+                        session.read(cx).session_id().to_string(),
+                        None,
+                        None,
+                        window,
+                        cx,
+                    );
+                })?,
+                Err(error) => {
+                    workspace.update_in(cx, |workspace, _, cx| workspace.show_error(error, cx))?
+                }
+            }
+            anyhow::Ok(())
+        })
+        .detach_and_log_err(cx);
+    }
+
+    pub(crate) fn open_recipe_conversation(
+        &mut self,
+        session: String,
+        decision: Option<agent::recipe_schedule::RecipeDecision>,
+        turn: Option<acp_thread::ClientUserMessageId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let workspace = self.workspace.clone();
+        let panel = cx.weak_entity();
+        window.defer(cx, move |window, cx| {
+            workspace
+                .update(cx, |workspace, cx| {
+                    Self::reveal_conversation(workspace, false, window, cx)
+                })
+                .log_err();
+            panel
+                .update(cx, |panel, cx| {
+                    panel.open_thread(acp::SessionId::new(session), None, None, window, cx);
+                    if (decision.is_some() || turn.is_some())
+                        && let Some(conversation) = panel.active_conversation_view()
+                    {
+                        let transcript = conversation
+                            .update(cx, |view, cx| view.wait_for_transcript(window, cx));
+                        cx.spawn(async move |_, cx| {
+                            let view = transcript.await?;
+                            view.update(cx, |view, cx| {
+                                if let Some(decision) = decision {
+                                    view.reveal_recipe_decision(&decision, cx);
+                                } else if let Some(turn) = turn {
+                                    view.reveal_recipe_turn(&turn, cx);
+                                }
+                            });
+                            anyhow::Ok(())
+                        })
+                        .detach_and_log_err(cx);
+                    }
+                })
+                .log_err();
+        });
     }
 
     fn open_recipe_management(
@@ -3808,6 +3983,7 @@ impl AgentPanel {
         schedule: Option<uuid::Uuid>,
         proposal: Option<Rc<agent::recipes::RecipeProposal>>,
         link: Option<agent::recipe_import::RecipeLink>,
+        schedule_form: Option<RecipeScheduleForm>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -3852,6 +4028,13 @@ impl AgentPanel {
                             );
                             if let Some(proposal) = proposal { view.review_proposal(proposal, window, cx); }
                             if let Some(link) = link { view.review_link(link, window, cx); }
+                            if let Some(form) = schedule_form {
+                                let recipe = match form {
+                                    RecipeScheduleForm::New(entry, inputs) => Some((entry, inputs)),
+                                    RecipeScheduleForm::Edit => None,
+                                };
+                                view.show_schedule_form(recipe, window, cx);
+                            }
                             view
                         });
                     } else {
@@ -6942,22 +7125,7 @@ impl AgentPanel {
                                 .separator()
                                 .header("Context")
                                 .action("Skills", Box::new(ManageSkills))
-                                .entry("Recipes and Schedules", None, {
-                                    let workspace = workspace.clone();
-                                    move |window, cx| {
-                                        workspace
-                                            .update(cx, |workspace, cx| {
-                                                if let Some(panel) =
-                                                    workspace.panel::<AgentPanel>(cx)
-                                                {
-                                                    panel.update(cx, |panel, cx| {
-                                                        panel.manage_recipes(None, window, cx)
-                                                    });
-                                                }
-                                            })
-                                            .log_err();
-                                    }
-                                });
+                                .action("Recipes", Box::new(ManageRecipes));
 
                             if project_agents_md_path.is_some() || global_agents_md_loaded {
                                 if global_agents_md_loaded {

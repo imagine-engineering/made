@@ -43,6 +43,8 @@ pub struct RecipeStep {
     pub next: Option<String>,
     #[serde(default)]
     pub on_failure: FailurePolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repeat: Option<u8>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,6 +88,46 @@ pub enum StepStatus {
 pub struct StepOutcome {
     pub status: StepStatus,
     pub output: Option<String>,
+}
+
+impl Operand {
+    fn description(&self) -> String {
+        match self {
+            Self::Literal { value } => format!("{value:?}"),
+            Self::Parameter { name } => format!("input {name}"),
+            Self::Output { step } => format!("{step} output"),
+            Self::Status { step } => format!("{step} status"),
+        }
+    }
+}
+
+impl Condition {
+    pub fn description(&self) -> String {
+        match self {
+            Self::Equals { left, right } => {
+                format!("{} equals {}", left.description(), right.description())
+            }
+            Self::NotEquals { left, right } => format!(
+                "{} differs from {}",
+                left.description(),
+                right.description()
+            ),
+            Self::Contains { left, right } => {
+                format!("{} contains {}", left.description(), right.description())
+            }
+            Self::All { conditions } => conditions
+                .iter()
+                .map(Self::description)
+                .collect::<Vec<_>>()
+                .join(" and "),
+            Self::Any { conditions } => conditions
+                .iter()
+                .map(Self::description)
+                .collect::<Vec<_>>()
+                .join(" or "),
+            Self::Not { condition } => format!("not ({})", condition.description()),
+        }
+    }
 }
 
 impl StepStatus {
@@ -222,6 +264,12 @@ pub fn validate(recipe: &crate::recipes::Recipe) -> Result<()> {
         recipe.prompt.is_empty(),
         "Version-2 recipes use step prompts, not a top-level prompt"
     );
+    let attempts = recipe
+        .steps
+        .iter()
+        .map(|step| usize::from(step.repeat.unwrap_or(1)))
+        .sum::<usize>();
+    ensure!(attempts <= 64, "A recipe can have at most 64 step attempts");
     let mut ids = collections::HashSet::default();
     for (index, step) in recipe.steps.iter().enumerate() {
         ensure!(
@@ -229,6 +277,11 @@ pub fn validate(recipe: &crate::recipes::Recipe) -> Result<()> {
             "Step IDs require 1–64 lowercase letters, digits or hyphens"
         );
         ensure!(ids.insert(&step.id), "Duplicate step ID: {}", step.id);
+        ensure!(
+            (1..=8).contains(&step.repeat.unwrap_or(1)),
+            "Step {} requires a repeat count from 1 to 8",
+            step.id
+        );
         ensure!(
             !step.prompt.trim().is_empty(),
             "Step {} requires a prompt",
@@ -394,6 +447,23 @@ mod tests {
                 .collect::<String>()
         );
         assert!(Recipe::from_yaml(&many).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn recipe_workflow_bounds_repeat_counts() -> Result<()> {
+        let recipe = Recipe::from_yaml(&WORKFLOW.replace(
+            "  prompt: Review this project",
+            "  prompt: Review this project\n  repeat: 8",
+        ))?;
+        assert_eq!(recipe.steps.first().context("review step")?.repeat, Some(8));
+        assert_eq!(Recipe::from_yaml(&recipe.to_yaml()?)?, recipe);
+        for count in [0, 9] {
+            let yaml = recipe
+                .to_yaml()?
+                .replace("repeat: 8", &format!("repeat: {count}"));
+            assert!(Recipe::from_yaml(&yaml).is_err());
+        }
         Ok(())
     }
 

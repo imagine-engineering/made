@@ -4093,6 +4093,33 @@ impl acp_thread::AgentSessionClientUserMessageIds for NativeAgentConnection {
             }
         }
 
+        if let Some(acp::ContentBlock::Text(request)) = params.prompt.first()
+            && let Some(recipe) = recipes::recipe_request(&project_state.recipes, &request.text)
+        {
+            if self
+                .thread(&session_id, cx)
+                .is_some_and(|thread| thread.read(cx).is_doctor_repair_proposal())
+            {
+                return Task::ready(Err(anyhow!(
+                    "Recipe launches require an ordinary native session"
+                )));
+            }
+            let (entry, arguments) = match recipe {
+                Ok(result) => result,
+                Err(error) => return Task::ready(Err(error)),
+            };
+            let arguments = arguments.to_owned();
+            return recipes::run_command(
+                self,
+                session_id,
+                client_user_message_id,
+                entry,
+                &arguments,
+                params.prompt.into_iter().skip(1).collect(),
+                cx,
+            );
+        }
+
         if let Some(parsed_command) = Command::parse(&params.prompt) {
             if self
                 .thread(&session_id, cx)
@@ -12705,7 +12732,10 @@ mod internal_tests {
         let model = Arc::new(FakeLanguageModel::default());
         let thread = cx.update(|cx| native_thread_for_session(&agent, &session_id, cx));
         thread.update(cx, |thread, cx| thread.set_model(model.clone(), cx));
-        let mut entry = recipes::builtin_recipes().pop().expect("built-in recipe");
+        let mut entry = recipes::builtin_recipes()
+            .into_iter()
+            .find(|entry| entry.id == "builtin/release-risk")
+            .expect("built-in recipe");
         entry.id = "builtin/compact-review".into();
         entry.recipe.as_mut().expect("valid recipe").command = Some("compact".into());
         agent.update(cx, |agent, cx| {
@@ -12798,7 +12828,8 @@ mod internal_tests {
         let (connection, agent, _project, acp_thread) = setup_native_agent_session(cx).await;
         let session_id = acp_thread.read_with(cx, |thread, _| thread.session_id().clone());
         let recipe = recipes::builtin_recipes()
-            .pop()
+            .into_iter()
+            .find(|entry| entry.id == "builtin/release-risk")
             .expect("built-in")
             .recipe
             .expect("valid recipe");
@@ -13369,7 +13400,8 @@ mod internal_tests {
             cron: "* * * * *".into(),
             timezone: "UTC".into(),
             recipe: recipes::builtin_recipes()
-                .pop()
+                .into_iter()
+                .find(|entry| entry.id == "builtin/release-risk")
                 .expect("recipe")
                 .recipe
                 .expect("valid"),
@@ -13511,21 +13543,15 @@ mod internal_tests {
             .expect("permission request");
         cx.run_until_parked();
         store.read_with(cx, |store, _| {
+            let run = store.state.active_run().expect("waiting run is active");
+            assert_eq!(run.status, recipe_schedule::RecipeRunStatus::Running);
             assert_eq!(
-                store.state.runs.last().expect("attention run").status,
-                recipe_schedule::RecipeRunStatus::NeedsAttention
-            );
-            assert!(
-                store
-                    .state
-                    .schedules
-                    .first()
-                    .expect("paused schedule")
-                    .paused
+                store.activity.get(&run.id).expect("tracked run").decision,
+                Some(recipe_schedule::RecipeDecision::Tool(
+                    "scheduled-permission".into()
+                ))
             );
         });
-        model.end_completion_stream(&permission_request);
-        assert!(model.pending_completions().is_empty());
         permission_session.update(cx, |session, cx| {
             session.authorize_tool_call(
                 "scheduled-permission".into(),
@@ -13538,11 +13564,21 @@ mod internal_tests {
         });
         cx.run_until_parked();
         permission_response.await;
-        assert!(model.pending_completions().is_empty());
-        store
-            .update(cx, |store, cx| store.set_enabled(id, true, true, cx))
-            .await
-            .expect("renewed consent");
+        model.send_completion_stream_text_chunk(&permission_request, "Approved check completed");
+        model.end_completion_stream(&permission_request);
+        cx.run_until_parked();
+        store.read_with(cx, |store, _| {
+            let run = store.state.runs.last().expect("completed run");
+            assert_eq!(run.status, recipe_schedule::RecipeRunStatus::Succeeded);
+            assert!(
+                store
+                    .activity
+                    .get(&run.id)
+                    .expect("tracked run")
+                    .decision
+                    .is_none()
+            );
+        });
         store
             .update(cx, |store, cx| store.run_schedule(id, cx))
             .await
@@ -13670,7 +13706,8 @@ mod internal_tests {
                 .into(),
         };
         let yaml = recipes::builtin_recipes()
-            .pop()
+            .into_iter()
+            .find(|entry| entry.id == "builtin/release-risk")
             .expect("built-in")
             .recipe
             .expect("valid")

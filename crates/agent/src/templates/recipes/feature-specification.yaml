@@ -1,0 +1,15 @@
+version: 1
+title: Feature specification
+description: Draft a feature specification and guide it through independent review and revision approval.
+command: feature-specification
+specification: true
+parameters:
+  - name: feature
+    description: Describe the feature in ordinary language.
+    required: true
+prompt: |
+  Start Made's specification workflow for this feature:
+
+  {{feature}}
+
+  Use the specification_workflow tool to inspect the project principles before drafting. Clarify decisions with the user, save one specification, and arrange Goldfish review. Surface unresolved findings and use the native revision approval. After approval, prepare a plan and tasks against that exact revision. Follow the existing implementation and verification steps in this conversation. Wait for the user at approval and permission requests.

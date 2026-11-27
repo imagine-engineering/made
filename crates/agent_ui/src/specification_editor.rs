@@ -7,7 +7,7 @@ use std::{
 
 use ::ui::{
     Button, ButtonSize, ButtonStyle, CommonAnimationExt as _, Disclosure, Label, LabelSize,
-    ListItem, prelude::*,
+    ListItem, TintColor, Tooltip, prelude::*,
 };
 use agent::{SpecificationOverview, SpecificationPhase, SpecificationSession, SpecificationTask};
 use agent_client_protocol::schema::v1 as acp;
@@ -180,6 +180,7 @@ impl SpecificationEditor {
                 editor.set_text_actions(Vec::new(), cx);
                 editor.set_block_guides(Vec::new(), cx);
                 editor.clear_highlights(HighlightKey::SpecificationTaskReference, cx);
+                editor.clear_highlights(HighlightKey::SpecificationTaskTitle, cx);
                 return;
             }
             let snapshot = editor.buffer().read(cx).snapshot(cx);
@@ -190,10 +191,15 @@ impl SpecificationEditor {
             let mut creases = Vec::new();
             let mut text_actions = Vec::new();
             let mut references = Vec::new();
+            let mut titles = Vec::new();
 
             for row in rows {
                 let checkbox = row.offset + row.indent + 2;
                 let anchor = |offset| snapshot.anchor_before(MultiBufferOffset(offset));
+                let title = checkbox + 4;
+                if title < row.title_end {
+                    titles.push(anchor(title)..anchor(row.title_end));
+                }
                 let guide = anchor(row.offset + row.indent)..anchor(row.end);
                 guides.push(guide);
 
@@ -269,6 +275,15 @@ impl SpecificationEditor {
             );
             editor.set_text_actions(text_actions, cx);
             editor.highlight_text(
+                HighlightKey::SpecificationTaskTitle,
+                titles,
+                HighlightStyle {
+                    font_weight: Some(gpui::FontWeight::SEMIBOLD),
+                    ..Default::default()
+                },
+                cx,
+            );
+            editor.highlight_text(
                 HighlightKey::SpecificationTaskReference,
                 references,
                 HighlightStyle {
@@ -337,11 +352,14 @@ impl SpecificationEditor {
                             .color(Color::Success),
                     )
             } else {
-                h_flex().child(
-                    Label::new("Completed · Unverified")
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
+                h_flex()
+                    .gap_1()
+                    .child(task_icon(IconName::Info, Color::Muted))
+                    .child(
+                        Label::new("Completed · Unverified")
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    )
             });
         } else if let Some(task) = task.filter(|task| !task.blocked_by.is_empty()) {
             let reason = h_flex()
@@ -674,8 +692,7 @@ impl SpecificationEditor {
                     .await?;
                 if let Some(session) = session {
                     let id = acp::ToolCallId::new(session.tool_call_id);
-                    let found =
-                        view.update(cx, |view, cx| view.reveal_specification_tool_call(&id, cx));
+                    let found = view.update(cx, |view, cx| view.reveal_tool_call(&id, cx));
                     ensure!(
                         found || !require_session,
                         "The original task turn is unavailable in this conversation"
@@ -941,6 +958,7 @@ impl ToolbarItemView for SpecificationEditor {
                     editor.set_block_guides(Vec::new(), cx);
                     editor.set_text_actions(Vec::new(), cx);
                     editor.clear_highlights(HighlightKey::SpecificationTaskReference, cx);
+                    editor.clear_highlights(HighlightKey::SpecificationTaskTitle, cx);
                 });
             });
         }
@@ -1051,6 +1069,7 @@ impl Render for SpecificationEditor {
             SpecificationPhase::ResolveFindings => {
                 Some(format!("Revision {revision} has blocking findings"))
             }
+            SpecificationPhase::Draft => Some(format!("Revision {revision} is a draft")),
             _ if self.busy => self
                 .running_task
                 .as_ref()
@@ -1080,6 +1099,126 @@ impl Render for SpecificationEditor {
                 .iter()
                 .any(|task| !task.complete && task.blocked_by.is_empty());
         let session = specification.review_session.clone();
+        let stage_route = h_flex()
+            .id("specification-stages")
+            .role(gpui::Role::Group)
+            .aria_label("Specification stage")
+            .h_8()
+            .gap_1()
+            .flex_shrink_0()
+            .children(
+                [
+                    (
+                        View::Requirements,
+                        "Requirements",
+                        IconName::FileTextOutlined,
+                    ),
+                    (View::Design, "Design", IconName::Pencil),
+                    (View::Tasks, "Tasks", IconName::ListTodo),
+                ]
+                .into_iter()
+                .map(|(view, label, icon)| {
+                    h_flex()
+                        .gap_1()
+                        .when(view != View::Requirements, |group| {
+                            group.child(task_icon(IconName::ChevronRight, Color::Muted))
+                        })
+                        .child(
+                            IconButton::new(label, icon)
+                                .aria_label(label)
+                                .tooltip(Tooltip::text(label))
+                                .tab_index(0isize)
+                                .toggle_state(active == view)
+                                .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                                .disabled(view == View::Tasks && specification.tasks_path.is_none())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_view(view, window, cx)
+                                })),
+                        )
+                }),
+            );
+        let stage = h_flex()
+            .w_full()
+            .gap_1p5()
+            .flex_wrap()
+            .child(
+                Label::new(specification.title.clone())
+                    .size(LabelSize::Small)
+                    .weight(gpui::FontWeight::SEMIBOLD)
+                    .truncate(),
+            )
+            .child(stage_route)
+            .when(active == View::Design, |row| {
+                row.when_some(specification.plan_path.clone(), |row, path| {
+                    row.child(
+                        IconButton::new("specification-plan", IconName::FileDoc)
+                            .aria_label("Open plan")
+                            .tooltip(Tooltip::text("Open plan"))
+                            .tab_index(0isize)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_file(path.clone(), None, window, cx)
+                            })),
+                    )
+                })
+            });
+        let revisions = h_flex()
+            .gap_2()
+            .flex_wrap()
+            .child(revision_label(
+                "Reviewed",
+                specification.reviewed.as_deref(),
+                specification.reviewed.as_deref() == Some(&specification.revision),
+            ))
+            .child(revision_label(
+                "Approved",
+                specification.approved.as_deref(),
+                specification.approved.as_deref() == Some(&specification.revision),
+            ));
+        let actions = h_flex()
+            .w_full()
+            .gap_1()
+            .flex_wrap()
+            .when(!status.is_empty(), |actions| {
+                actions.child(
+                    Label::new(status)
+                        .size(LabelSize::Small)
+                        .color(Color::Warning),
+                )
+            })
+            .when(pending, |actions| {
+                actions.child(
+                    Button::new("specification-open-review", "Open review")
+                        .size(ButtonSize::Compact)
+                        .style(ButtonStyle::Filled)
+                        .start_icon(task_icon(IconName::Chat, Color::Default))
+                        .tab_index(0isize)
+                        .disabled(restricted)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_conversation(session.clone(), false, window, cx)
+                        })),
+                )
+            })
+            .child(div().flex_grow_1())
+            .child(
+                IconButton::new("specification-sync", IconName::RefreshTitle)
+                    .aria_label("Sync files")
+                    .tooltip(Tooltip::text("Sync files"))
+                    .tab_index(0isize)
+                    .on_click(cx.listener(|this, _, _, cx| this.sync(cx))),
+            )
+            .child(
+                Button::new("specification-run-remaining", "Run remaining tasks")
+                    .size(ButtonSize::Compact)
+                    .start_icon(task_icon(IconName::PlayOutlined, Color::Default))
+                    .tab_index(0isize)
+                    .style(if pending {
+                        ButtonStyle::Subtle
+                    } else {
+                        ButtonStyle::Filled
+                    })
+                    .disabled(!can_run)
+                    .on_click(cx.listener(|this, _, window, cx| this.run(None, window, cx))),
+            );
         v_flex()
             .id("specification-editor-bar")
             .track_focus(&self.focus)
@@ -1089,98 +1228,11 @@ impl Render for SpecificationEditor {
             .on_key_down(move_specification_focus)
             .w_full()
             .gap_1()
-            .child(
-                h_flex()
-                    .w_full()
-                    .gap_1p5()
-                    .flex_wrap()
-                    .child(
-                        Label::new(specification.title.clone())
-                            .size(LabelSize::Small)
-                            .weight(gpui::FontWeight::MEDIUM),
-                    )
-                    .children(
-                        [
-                            (View::Requirements, "Requirements"),
-                            (View::Design, "Design"),
-                            (View::Tasks, "Tasks"),
-                        ]
-                        .into_iter()
-                        .map(|(view, label)| {
-                            h_flex()
-                                .gap_1()
-                                .when(view != View::Requirements, |group| {
-                                    group.child(task_icon(IconName::ChevronRight, Color::Muted))
-                                })
-                                .child(
-                                    Button::new(label, label)
-                                        .size(ButtonSize::Compact)
-                                        .tab_index(0isize)
-                                        .style(if active == view {
-                                            ButtonStyle::Filled
-                                        } else {
-                                            ButtonStyle::Subtle
-                                        })
-                                        .disabled(
-                                            view == View::Tasks
-                                                && specification.tasks_path.is_none(),
-                                        )
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_view(view, window, cx)
-                                        })),
-                                )
-                        }),
-                    )
-                    .when(active == View::Design, |row| {
-                        row.when_some(specification.plan_path.clone(), |row, path| {
-                            row.child(
-                                Button::new("specification-plan", "Open plan")
-                                    .size(ButtonSize::Compact)
-                                    .tab_index(0isize)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.open_file(path.clone(), None, window, cx)
-                                    })),
-                            )
-                        })
-                    })
-                    .child(div().flex_grow_1())
-                    .when(pending, |row| {
-                        row.child(
-                            Button::new("specification-open-review", "Open review")
-                                .size(ButtonSize::Compact)
-                                .tab_index(0isize)
-                                .disabled(restricted)
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_conversation(session.clone(), false, window, cx)
-                                })),
-                        )
-                    })
-                    .child(
-                        Button::new("specification-sync", "Sync files")
-                            .size(ButtonSize::Compact)
-                            .start_icon(task_icon(IconName::RefreshTitle, Color::Muted))
-                            .tab_index(0isize)
-                            .on_click(cx.listener(|this, _, _, cx| this.sync(cx))),
-                    )
-                    .child(
-                        Button::new("specification-run-remaining", "Run remaining tasks")
-                            .size(ButtonSize::Compact)
-                            .start_icon(Icon::new(IconName::PlayOutlined).size(IconSize::Small))
-                            .tab_index(0isize)
-                            .style(ButtonStyle::Filled)
-                            .disabled(!can_run)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.run(None, window, cx)),
-                            ),
-                    ),
-            )
-            .when(!status.is_empty(), |bar| {
-                bar.child(
-                    Label::new(status)
-                        .size(LabelSize::Small)
-                        .color(Color::Warning),
-                )
-            })
+            .px_2()
+            .py_1()
+            .child(stage)
+            .child(revisions)
+            .child(actions)
             .when_some(self.feedback.clone(), |bar, feedback| {
                 bar.child(
                     Label::new(feedback)
@@ -1190,6 +1242,19 @@ impl Render for SpecificationEditor {
             })
             .into_any_element()
     }
+}
+
+fn revision_label(label: &str, revision: Option<&str>, current: bool) -> Label {
+    Label::new(format!(
+        "{label} · {}",
+        revision.map(short_revision).unwrap_or("Pending")
+    ))
+    .size(LabelSize::Small)
+    .color(if current {
+        Color::Success
+    } else {
+        Color::Muted
+    })
 }
 
 fn move_specification_focus(event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut App) {

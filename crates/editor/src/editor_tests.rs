@@ -1385,6 +1385,33 @@ fn test_cancel(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_text_action_hit_test_ignores_blank_space(cx: &mut TestAppContext) {
+    init_test(cx, |_| {});
+    let mut cx = EditorTestContext::new(cx).await;
+    cx.set_state("- [ ] CSV importˇ");
+    cx.update_editor(|editor, _, cx| {
+        let snapshot = editor.display_snapshot(cx);
+        let start =
+            snapshot.display_point_to_anchor(DisplayPoint::new(DisplayRow(0), 2), Bias::Left);
+        let end = snapshot.display_point_to_anchor(DisplayPoint::new(DisplayRow(0), 5), Bias::Left);
+        editor.set_text_actions(
+            vec![EditorTextAction::new(start..end, false, |_, _, _, _| {})],
+            cx,
+        );
+        assert!(
+            editor
+                .text_action_at(DisplayPoint::new(DisplayRow(0), 3), false, &snapshot)
+                .is_some()
+        );
+        assert!(
+            editor
+                .text_action_at(DisplayPoint::new(DisplayRow(0), 400), false, &snapshot)
+                .is_none()
+        );
+    });
+}
+
+#[gpui::test]
 async fn test_fold_action(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
 

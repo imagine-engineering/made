@@ -55,6 +55,16 @@ If two threads might edit the same files, you can isolate one in a new Git workt
 
 For more details on the Threads Sidebar and managing multiple projects, see [Parallel Agents](./parallel-agents.md).
 
+### Recipes in Copper and Groovy {#recipes}
+
+Open **Recipes** from the Agent Panel menu, from the settings next to **Skills**, or by searching for **Manage Recipes** in the Command Palette. Search the navigator across runs, schedules, and recipes. Runs awaiting a decision appear before active runs, and completed history starts collapsed. Select a recipe or run to see its details beside the navigator. In a narrow editor, use **Browse recipes** to switch views.
+
+Choose **Run now** to start a new built-in agent conversation. In an existing built-in agent conversation, you can ask “Run the Release risk review recipe” or supply inputs with “Run the Feature specification recipe with feature=Add CSV import”. **Open decision** takes you to the pending tool request or question. **Open result** returns to the run's conversation. Select a step to see its outcome and open its exact turn. **Go to active step** resumes following progress after you inspect an earlier step. The [specification workflow](./specification-workflow.md) still governs review, revision approval, implementation, and evidence for the built-in feature recipe.
+
+Choose **Schedule** in the recipe tab to select a trusted worktree, inputs, recurrence, time zone, and model. The form previews the next occurrence. Saving creates a paused schedule. **Enable schedule** authorizes the saved recipe and inputs for that project and model. Use the library to edit, pause, resume, or open the last run.
+
+Schedules run locally while Made and the trusted project are open. Made does not wake a sleeping Mac or replay missed occurrences. A pending approval waits in the run's conversation while the app is open. Closing the app interrupts active runs. Run history and saved conversations are available when you reopen the project.
+
 ### Editing Messages {#editing-messages}
 
 Any message that you send to the model is editable.

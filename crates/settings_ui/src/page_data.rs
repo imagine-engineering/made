@@ -8,6 +8,8 @@ use std::sync::{Arc, OnceLock};
 use strum::{EnumMessage, IntoDiscriminant as _, VariantArray};
 use theme::SystemAppearance;
 use ui::IntoElement;
+#[cfg(feature = "agentic")]
+use util::ResultExt as _;
 
 #[cfg(feature = "agentic")]
 use crate::pages::{
@@ -8289,6 +8291,21 @@ fn ai_page(cx: &App) -> SettingsPage {
                 in_json: false,
                 files: USER | PROJECT,
                 render: render_skills_setup_page,
+            }),
+            SettingsPageItem::ActionLink(ActionLink {
+                title: "Recipes".into(),
+                description: Some("Browse recipes, follow runs, and manage schedules.".into()),
+                button_text: "Open Recipes".into(),
+                on_click: Arc::new(|settings, _, cx| {
+                    if let Some(workspace_window) = settings.original_window {
+                        workspace_window.update(cx, |multi_workspace, window, cx| {
+                            window.activate_window();
+                            multi_workspace.focus_active_workspace(window, cx);
+                            window.dispatch_action(Box::new(zed_actions::assistant::ManageRecipes), cx);
+                        }).log_err();
+                    }
+                }),
+                files: USER | PROJECT,
             }),
             SettingsPageItem::SubPageLink(SubPageLink {
                 title: "Sandbox".into(),

@@ -4,15 +4,18 @@ use agent::recipe_schedule::{RecipeSchedule, local_timezone, next_run};
 use agent::recipes::{Recipe, RecipeEntry, RecipeProposal, RecipeReviewStatus, RecipeStore};
 use agent_client_protocol::schema::v1 as acp;
 use anyhow::{Context as _, Result};
-use collections::HashMap;
+use collections::{HashMap, HashSet};
 use editor::Editor;
 use gpui::{
-    App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, Subscription,
-    Task, WeakEntity, Window,
+    AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render,
+    Subscription, Task, WeakEntity, Window,
 };
 use language_model::{ConfiguredModel, LanguageModelRegistry, SelectedModel};
 use project::{Project, ProjectPath};
-use ui::{Checkbox, ContextMenu, PopoverMenu, prelude::*};
+use ui::{
+    Checkbox, ContextMenu, Divider, Headline, HeadlineSize, PopoverMenu, TintColor, Tooltip,
+    prelude::*,
+};
 use util::{ResultExt as _, rel_path::RelPath};
 use uuid::Uuid;
 use workspace::ModalView;
@@ -29,6 +32,24 @@ struct RecipeImportPreview {
     selected_id: Option<String>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ManagementPage {
+    Overview,
+    Recipe,
+    Edit,
+    Import,
+    Schedule,
+    EditSchedule,
+    Test,
+}
+
+struct RecipeDraft {
+    yaml: String,
+    filename: String,
+    source: Option<String>,
+    worktree: Option<project::WorktreeId>,
+}
+
 pub struct RecipesView {
     proposal: Option<Rc<RecipeProposal>>,
     panel: WeakEntity<AgentPanel>,
@@ -39,6 +60,10 @@ pub struct RecipesView {
     entries: Vec<RecipeEntry>,
     selected: Option<RecipeEntry>,
     selected_schedule: Option<Uuid>,
+    schedule_form: bool,
+    management_page: ManagementPage,
+    drafts: HashMap<String, RecipeDraft>,
+    collapsed: HashSet<&'static str>,
     source: Option<String>,
     search: Entity<Editor>,
     filename: Entity<Editor>,
@@ -132,6 +157,18 @@ impl RecipesView {
             .next()
             .map(|worktree| worktree.read(cx).id());
         let observation = cx.observe(&store, |_, _, cx| cx.notify());
+        let yaml_buffer = cx.new(|cx| language::Buffer::local("", cx));
+        let yaml_language = project.read(cx).languages().language_for_name("YAML");
+        cx.spawn({
+            let yaml_buffer = yaml_buffer.clone();
+            async move |_, cx| {
+                if let Ok(language) = yaml_language.await {
+                    yaml_buffer.update(cx, |buffer, cx| buffer.set_language(Some(language), cx));
+                }
+            }
+        })
+        .detach();
+        let yaml = cx.new(|cx| Editor::for_buffer(yaml_buffer, None, window, cx));
         let mut view = Self {
             proposal: None,
             panel,
@@ -142,10 +179,14 @@ impl RecipesView {
             entries: Vec::new(),
             selected: None,
             selected_schedule: None,
+            schedule_form: false,
+            management_page: ManagementPage::Overview,
+            drafts: HashMap::default(),
+            collapsed: HashSet::default(),
             source: None,
             search: input("", "Search recipes", window, cx),
             filename: input("review.yaml", "Recipe filename.yaml", window, cx),
-            yaml: cx.new(|cx| Editor::auto_height(4, 12, window, cx)),
+            yaml,
             import_url: input("", "HTTPS recipe or GitHub repository/blob URL", window, cx),
             import_revision: input("", "Revision (repository URLs only)", window, cx),
             import_path: input("", "Recipe path (repository URLs only)", window, cx),
@@ -196,7 +237,9 @@ impl RecipesView {
         ] {
             cx.observe(editor, |_, _, cx| cx.notify()).detach();
         }
-        cx.observe(&view.search, |_, _, cx| cx.notify()).detach();
+        for editor in [&view.search, &view.filename, &view.import_url, &view.title] {
+            cx.observe(editor, |_, _, cx| cx.notify()).detach();
+        }
         cx.observe(&view.cron, |_, _, cx| cx.notify()).detach();
         cx.observe(&view.timezone, |_, _, cx| cx.notify()).detach();
         cx.observe(&agent::ThreadStore::global(cx), |_, _, cx| cx.notify())
@@ -206,6 +249,7 @@ impl RecipesView {
         })
         .detach();
         view.new_recipe(window, cx);
+        view.management_page = ManagementPage::Overview;
         if let Some(id) = schedule {
             view.select_schedule(id, window, cx);
         }
@@ -301,7 +345,67 @@ impl RecipesView {
         .detach();
     }
 
+    fn stash_recipe_draft(&mut self, cx: &App) {
+        if self.selected_schedule.is_some()
+            || self.management_page == ManagementPage::Overview
+            || self
+                .selected
+                .as_ref()
+                .is_some_and(|entry| entry.path.is_none())
+        {
+            return;
+        }
+        let key = self
+            .selected
+            .as_ref()
+            .map_or_else(String::new, |entry| entry.id.clone());
+        let yaml = self.yaml.read(cx).text(cx);
+        if self.source.as_ref() == Some(&yaml) {
+            self.drafts.remove(&key);
+            return;
+        }
+        if self.loading && self.source.is_none() && self.selected.is_some() {
+            return;
+        }
+        self.drafts.insert(
+            key,
+            RecipeDraft {
+                yaml,
+                filename: self.filename.read(cx).text(cx),
+                source: self.source.clone(),
+                worktree: self.worktree,
+            },
+        );
+    }
+
+    fn restore_recipe_draft(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(draft) = self.drafts.remove(key) else {
+            return false;
+        };
+        self.worktree = draft.worktree;
+        self.source = draft.source;
+        self.filename
+            .update(cx, |editor, cx| editor.set_text(draft.filename, window, cx));
+        self.yaml
+            .update(cx, |editor, cx| editor.set_text(draft.yaml, window, cx));
+        self.refresh_parameters(window, cx);
+        true
+    }
+
+    fn author_new_recipe(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.stash_recipe_draft(cx);
+        self.new_recipe(window, cx);
+        self.restore_recipe_draft("", window, cx);
+        cx.notify();
+    }
+
     fn new_recipe(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.management_page = ManagementPage::Edit;
         self.link_notice = None;
         self.import_task = None;
         self.import_preview = None;
@@ -339,6 +443,7 @@ impl RecipesView {
             recipe.steps.push(agent::recipe_workflow::RecipeStep {
                 id: name,
                 prompt: "Describe the work for this step.".into(),
+                repeat: None,
                 when: None,
                 next: None,
                 on_failure: agent::recipe_workflow::FailurePolicy::Stop,
@@ -381,6 +486,7 @@ impl RecipesView {
                 self.link_notice = Some("Untrusted recipe link. Review the complete instructions, parameters and steps below. Opening this link did not save or run the recipe or grant any permissions.".into());
             }
             agent::recipe_import::RecipeLink::Source(request) => {
+                self.management_page = ManagementPage::Import;
                 self.yaml
                     .update(cx, |editor, cx| editor.set_text("", window, cx));
                 self.parameters.clear();
@@ -450,6 +556,7 @@ impl RecipesView {
                 self.import_path.update(cx, |editor, cx| {
                     editor.set_text(request.github_path.unwrap_or_default(), window, cx)
                 });
+                self.management_page = ManagementPage::Import;
                 self.import_updating = true;
                 self.import_use_token = false;
                 self.error = None;
@@ -463,16 +570,40 @@ impl RecipesView {
         if self.import_task.is_some() || self.operation.is_some() {
             return;
         }
+        let url = self.import_url.read(cx).text(cx);
+        if let Ok(link) = agent::recipe_import::RecipeLink::decode(&url) {
+            match link {
+                agent::recipe_import::RecipeLink::Embedded { yaml } => {
+                    let previous = self.yaml.read(cx).text(cx);
+                    let selected = self.selected.as_ref().map(|entry| entry.id.clone());
+                    self.complete_import_fetch(Ok(yaml), previous, false, selected, cx);
+                }
+                agent::recipe_import::RecipeLink::Source(request) => {
+                    self.import_url
+                        .update(cx, |editor, cx| editor.set_text(request.url, window, cx));
+                    self.import_revision.update(cx, |editor, cx| {
+                        editor.set_text(request.github_revision.unwrap_or_default(), window, cx)
+                    });
+                    self.import_path.update(cx, |editor, cx| {
+                        editor.set_text(request.github_path.unwrap_or_default(), window, cx)
+                    });
+                    self.import_use_token = false;
+                    cx.notify();
+                }
+            }
+            return;
+        }
         let result = (|| -> Result<_> {
+            let (github, explicit_pin) = import_fields(&url);
             let revision = self.import_revision.read(cx).text(cx);
             let path = self.import_path.read(cx).text(cx);
             let request = agent::recipe_import::RecipeImportRequest {
-                url: self.import_url.read(cx).text(cx),
-                github_revision: (!revision.trim().is_empty()).then_some(revision),
-                github_path: (!path.trim().is_empty()).then_some(path),
+                url,
+                github_revision: (explicit_pin && !revision.trim().is_empty()).then_some(revision),
+                github_path: (explicit_pin && !path.trim().is_empty()).then_some(path),
             };
             agent::recipe_import::validate_request(&request)?;
-            let token = if self.import_use_token {
+            let token = if github && self.import_use_token {
                 anyhow::ensure!(
                     url::Url::parse(&request.url)?.host_str() == Some("github.com"),
                     "GitHub credentials cannot be used for another source"
@@ -552,6 +683,7 @@ impl RecipesView {
         };
         self.dismiss_proposal();
         if !preview.updating {
+            self.stash_recipe_draft(cx);
             self.selected = None;
             self.source = None;
             self.filename.update(cx, |editor, cx| {
@@ -559,6 +691,7 @@ impl RecipesView {
             });
         }
         self.selected_schedule = None;
+        self.management_page = ManagementPage::Edit;
         self.yaml
             .update(cx, |editor, cx| editor.set_text(preview.yaml, window, cx));
         self.refresh_parameters(window, cx);
@@ -610,11 +743,29 @@ impl RecipesView {
     }
 
     fn select_recipe(&mut self, entry: RecipeEntry, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|selected| selected.id == entry.id)
+            && self.selected_schedule.is_none()
+        {
+            self.management_page = ManagementPage::Recipe;
+            cx.notify();
+            return;
+        }
+        self.stash_recipe_draft(cx);
+        self.management_page = ManagementPage::Recipe;
+        self.import_task = None;
+        self.import_preview = None;
         self.dismiss_proposal();
         self.selected_schedule = None;
         self.selected = Some(entry.clone());
         self.source = None;
         self.error = None;
+        if self.restore_recipe_draft(&entry.id, window, cx) {
+            cx.notify();
+            return;
+        }
         if let Some(path) = &entry.path {
             self.worktree = Some(path.worktree_id);
             self.filename.update(cx, |editor, cx| {
@@ -668,7 +819,49 @@ impl RecipesView {
         cx.notify();
     }
 
+    pub(crate) fn show_schedule_form(
+        &mut self,
+        recipe: Option<(RecipeEntry, HashMap<String, String>)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.schedule_form = true;
+        if let Some((entry, values)) = recipe {
+            let result = entry
+                .recipe
+                .as_ref()
+                .map_err(|error| anyhow::anyhow!("{error}"))
+                .and_then(|recipe| Ok((recipe.title.clone(), recipe.to_yaml()?)));
+            match result {
+                Ok((title, yaml)) => {
+                    if let Some(path) = &entry.path {
+                        self.worktree = Some(path.worktree_id);
+                    }
+                    self.selected = Some(entry);
+                    self.title
+                        .update(cx, |editor, cx| editor.set_text(title, window, cx));
+                    self.yaml
+                        .update(cx, |editor, cx| editor.set_text(yaml, window, cx));
+                    self.refresh_parameters(window, cx);
+                    for (name, editor) in &self.parameters {
+                        if let Some(value) = values.get(name) {
+                            editor.update(cx, |editor, cx| {
+                                editor.set_text(value.clone(), window, cx)
+                            });
+                        }
+                    }
+                }
+                Err(error) => self.error = Some(error.to_string()),
+            }
+        }
+        cx.notify();
+    }
+
     fn select_schedule(&mut self, id: Uuid, window: &mut Window, cx: &mut Context<Self>) {
+        self.stash_recipe_draft(cx);
+        self.management_page = ManagementPage::Schedule;
+        self.import_task = None;
+        self.import_preview = None;
         self.dismiss_proposal();
         let Some(schedule) = self
             .store
@@ -682,6 +875,7 @@ impl RecipesView {
             self.error = Some("Schedule is unavailable".into());
             return;
         };
+        window.focus(&self.focus, cx);
         self.selected_schedule = Some(id);
         self.selected = None;
         self.source = None;
@@ -1178,8 +1372,175 @@ impl Focusable for RecipesView {
     }
 }
 
-impl Render for RecipesView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+pub(crate) const SCHEDULE_AVAILABILITY: &str = "Runs while Made and the trusted project are open. Made cannot wake the Mac. Missed occurrences are skipped.";
+
+pub(crate) fn schedule_time_label(
+    date: chrono::DateTime<chrono::Utc>,
+    zone: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let Ok(timezone) = zone.parse::<chrono_tz::Tz>() else {
+        return date.format("%a, %e %b at %H:%M UTC").to_string();
+    };
+    let local = date.with_timezone(&timezone);
+    let day = now.with_timezone(&timezone).date_naive();
+    let time = local.format("%H:%M");
+    if local.date_naive() == day {
+        format!("Today at {time} ({zone})")
+    } else if day.succ_opt() == Some(local.date_naive()) {
+        format!("Tomorrow at {time} ({zone})")
+    } else {
+        format!("{} at {time} ({zone})", local.format("%a, %e %b %Y"))
+    }
+}
+
+impl RecipesView {
+    fn render_schedule_form(&self, cx: &mut Context<Self>) -> AnyElement {
+        let roots = self
+            .project
+            .read(cx)
+            .visible_worktrees(cx)
+            .map(|worktree| {
+                let worktree = worktree.read(cx);
+                (worktree.id(), worktree.abs_path().display().to_string())
+            })
+            .collect::<Vec<_>>();
+        let root = roots
+            .iter()
+            .find(|(id, _)| Some(*id) == self.worktree)
+            .map(|(_, path)| path.clone())
+            .unwrap_or_else(|| "Choose a project worktree".into());
+        let weak = cx.weak_entity();
+        let model_selector = self.model_selector.clone();
+        let model = self
+            .model
+            .borrow()
+            .as_ref()
+            .map(|model| model.model.name().0.to_string())
+            .unwrap_or_else(|| "Choose model".into());
+        let now = cx
+            .background_executor()
+            .scheduler_executor()
+            .scheduler()
+            .clock()
+            .utc_now();
+        let cron = self.cron.read(cx).text(cx);
+        let zone = self.timezone.read(cx).text(cx);
+        let preview = next_run(&cron, &zone, now).map(|date| schedule_time_label(date, &zone, now));
+        let saved = self
+            .selected_schedule
+            .and_then(|id| {
+                self.store
+                    .read(cx)
+                    .state
+                    .schedules
+                    .iter()
+                    .find(|entry| entry.id == id && !entry.deleted)
+            })
+            .cloned();
+        let busy = self.loading || self.operation.is_some() || self.store.read(cx).busy;
+        let matches_saved = saved.as_ref().is_some_and(|schedule| {
+            schedule.title == self.title.read(cx).text(cx)
+                && schedule.cron == cron
+                && schedule.timezone == zone
+                && schedule.parameters == self.parameter_values(cx)
+                && self
+                    .worktree
+                    .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
+                    .is_some_and(|worktree| {
+                        worktree.read(cx).abs_path().as_ref() == schedule.worktree.as_path()
+                    })
+                && self.model.borrow().as_ref().is_some_and(|model| {
+                    model.provider.id().to_string() == schedule.provider
+                        && model.model.id().0.as_ref() == schedule.model
+                })
+        });
+        let border = cx.theme().colors().border;
+        let field = |label: &'static str, editor: Entity<Editor>| {
+            v_flex()
+                .gap_1()
+                .child(Label::new(label).size(LabelSize::Small).color(Color::Muted))
+                .child(
+                    div()
+                        .p_1p5()
+                        .border_1()
+                        .border_color(border)
+                        .rounded_sm()
+                        .child(editor),
+                )
+        };
+        v_flex().id("recipe-schedule-form").track_focus(&self.focus).tab_group()
+            .on_action(cx.listener(|_, _: &menu::Cancel, _, cx| cx.emit(DismissEvent)))
+              .when(self.schedule_form, |form| form.w(rems(34.)).max_h(rems(44.)).overflow_y_scroll().p_4().elevation_3(cx))
+            .when(!self.schedule_form, |form| form.w_full())
+            .gap_3()
+            .child(h_flex().justify_between()
+                .child(Headline::new("Schedule recipe").size(HeadlineSize::Small))
+                .child(Button::new("close-schedule-form", if self.schedule_form { "Close" } else { "Back" }).tab_index(0_isize)
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if view.schedule_form { cx.emit(DismissEvent); }
+                        else { view.management_page = ManagementPage::Schedule; cx.notify(); }
+                    }))))
+            .child(field("Name", self.title.clone()))
+            .child(v_flex().gap_1().child(Label::new("Project worktree").size(LabelSize::Small).color(Color::Muted))
+                .child(PopoverMenu::new("schedule-project").trigger(Button::new("schedule-project-button", root).tab_index(0_isize))
+                    .menu(move |window, cx| Some(ContextMenu::build(window, cx, |mut menu, _, _| {
+                        for (id, path) in &roots {
+                            let id = *id;
+                            let weak = weak.clone();
+                            menu = menu.entry(path.clone(), None, move |_, cx| {
+                                weak.update(cx, |view, cx| { view.worktree = Some(id); cx.notify(); }).log_err();
+                            });
+                        }
+                        menu
+                    })))))
+            .children(self.parameters.iter().map(|(name, editor)| {
+                v_flex().gap_1().child(Label::new(name.clone()).size(LabelSize::Small).color(Color::Muted))
+                    .child(div().p_1p5().border_1().border_color(border).rounded_sm().child(editor.clone()))
+            }))
+            .child(Label::new("Recurrence"))
+            .child(h_flex().gap_1().flex_wrap().children(
+                [("Every minute", "* * * * *"), ("Daily at 09:00", "0 9 * * *"),
+                 ("Weekdays at 09:00", "0 9 * * 1-5"), ("Mondays at 09:00", "0 9 * * 1")]
+                    .into_iter().map(|(label, value)| Button::new(label, label)
+                        .tab_index(0_isize).size(ButtonSize::Compact)
+                        .style(if cron == value { ButtonStyle::Filled } else { ButtonStyle::Subtle })
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.cron.update(cx, |editor, cx| editor.set_text(value.to_owned(), window, cx));
+                        }))),
+            ))
+            .child(field("Cron expression", self.cron.clone()))
+            .child(field("Time zone", self.timezone.clone()))
+            .child(PopoverMenu::new("schedule-model").trigger(Button::new("schedule-model-button", model).tab_index(0_isize))
+                .menu(move |_, _| Some(model_selector.clone())))
+            .child(Label::new(match &preview { Ok(next) => format!("Next run · {next}"), Err(error) => error.to_string() }))
+            .child(Label::new(SCHEDULE_AVAILABILITY).size(LabelSize::Small).color(Color::Muted))
+            .when_some(self.error.clone().or_else(|| self.store.read(cx).error.clone()), |form, error| {
+                form.child(Label::new(error).color(Color::Error))
+            })
+            .child(h_flex().gap_2()
+                .child(Button::new("save-schedule", "Save schedule").tab_index(0_isize)
+                    .style(ButtonStyle::Filled).disabled(busy || preview.is_err())
+                    .on_click(cx.listener(|view, _, _, cx| view.save_schedule(cx))))
+                .when_some(saved, |actions, schedule| {
+                    let id = schedule.id;
+                    let enable = schedule.paused;
+                    actions.child(Button::new("enable-schedule", if enable { "Enable schedule" } else { "Pause" })
+                        .tab_index(0_isize).disabled(busy || (enable && !matches_saved))
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            let task = view.store.update(cx, |store, cx| store.set_enabled(id, enable, enable, cx));
+                            view.report(task, cx);
+                        })))
+                }))
+            .when(matches_saved, |form| form.child(Label::new(
+                "Enabling lets Made run the saved recipe with this model. Approval requests wait in the agent conversation."
+            ).size(LabelSize::Small).color(Color::Muted)))
+            .into_any_element()
+    }
+}
+
+impl RecipesView {
+    fn render_proposal(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let query = self.search.read(cx).text(cx).to_lowercase();
         let entries = self
             .entries
@@ -1325,7 +1686,7 @@ impl Render for RecipesView {
                         .child(Button::new("apply-recipe-import", "Apply reviewed import to draft").disabled(disabled).on_click(cx.listener(|this, _, window, cx| this.apply_import_preview(window, cx)))))
                     .child(Label::new("Recipe YAML · parameters use {{name}}"))
                     .child(Label::new("Workflow steps run in order. Edit id, prompt, when, next and on_failure below. Branch targets must be later steps; output references must be earlier steps. Invalid edits are retained for correction.").size(LabelSize::Small))
-                    .child(self.filename.clone()).child(self.yaml.clone())
+                    .child(self.filename.clone()).child(div().h(rems(18.)).child(self.yaml.clone()))
                     .child(h_flex().gap_2()
                         .child(Button::new("validate", "Validate / refresh parameters").on_click(cx.listener(|this, _, window, cx| this.refresh_parameters(window, cx))))
                         .child(Button::new("save-recipe", "Save recipe").disabled(disabled || self.proposal.as_ref().is_some_and(|proposal| proposal.input.recipe_id.is_some())).on_click(cx.listener(|this, _, _, cx| this.save_recipe(cx))))
@@ -1352,7 +1713,7 @@ impl Render for RecipesView {
                             .child(Label::new(format!("Saved worktree: {}", schedule.worktree.display())).size(LabelSize::Small))
                             .child(Label::new(format!("Project roots: {}", util::path_list::PathList::deserialize(&schedule.project_paths).paths().iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", "))).size(LabelSize::Small))
                             .when(!matches_saved && !schedule.deleted, |view| view.child(Label::new("Save your edits before enabling or running this schedule.").color(Color::Warning)))
-                            .child(Label::new("Enabling consents to unattended execution of this saved recipe in this project with this model. Existing trust, sandbox and tool permissions still apply; requests for approval stop the run.").size(LabelSize::Small))
+                            .child(Label::new("Enabling consents to unattended execution of this saved recipe in this project with this model. Existing trust, sandbox and tool permissions still apply; approval requests wait in the native conversation.").size(LabelSize::Small))
                             .child(h_flex().gap_2()
                                 .child(div().debug_selector(|| "recipe-consent".to_owned()).child(Button::new("enable-schedule", if schedule.paused { "Enable with these permissions" } else { "Pause" }).disabled(disabled || schedule.deleted || (schedule.paused && !matches_saved)).on_click(cx.listener(move |this, _, _, cx| { if this.proposal.as_ref().is_some_and(|proposal| proposal.status.get() == RecipeReviewStatus::Cancelled) { this.error = Some("Draft request was cancelled".into()); cx.notify(); return; } let task = this.store.update(cx, |store, cx| store.set_enabled(id, schedule.paused, schedule.paused, cx)); this.report(task, cx); }))))
                                 .child(Button::new("run-schedule", "Run saved schedule").disabled(disabled || !matches_saved).on_click(cx.listener(move |this, _, _, cx| { let task = this.store.update(cx, |store, cx| store.run_schedule(id, cx)); this.report(task, cx); })))
@@ -1366,7 +1727,942 @@ impl Render for RecipesView {
                                     .when_some(run.detail.clone(), |view, detail| view.child(Label::new(detail).size(LabelSize::Small)))
                                     .child(Button::new(("open-run", index), if available { "Open session" } else { "Session unavailable" }).disabled(!available).on_click(cx.listener(move |this, _, window, cx| { if let Some(id) = session.clone() { this.open_session(id, window, cx); } })))
                             }))
-                    })))
+                    })))            .into_any_element()
+    }
+}
+
+impl RecipesView {
+    fn render_management(&self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let query = self.search.read(cx).text(cx).trim().to_lowercase();
+        let filter = |text: &str| query.is_empty() || text.to_lowercase().contains(&query);
+        let mut project_recipes = Vec::new();
+        let mut builtins = Vec::new();
+        for entry in &self.entries {
+            let (title, purpose) = recipe_labels(entry);
+            if !filter(&entry.origin) && !filter(&title) && !filter(&purpose) {
+                continue;
+            }
+            if entry.id.starts_with("builtin/") {
+                builtins.push(entry.clone());
+            } else {
+                project_recipes.push(entry.clone());
+            }
+        }
+        let worktrees = self.project.read(cx).worktree_paths(cx);
+        let folders = worktrees.folder_path_list();
+        let schedules: Vec<_> = self
+            .store
+            .read(cx)
+            .state
+            .schedules
+            .iter()
+            .filter(|schedule| {
+                !schedule.deleted
+                    && &util::path_list::PathList::deserialize(&schedule.project_paths) == folders
+                    && (filter(&schedule.title)
+                        || filter(&schedule.recipe.title)
+                        || filter(&schedule.cron)
+                        || filter(&schedule.timezone)
+                        || filter(&schedule.id.to_string()))
+            })
+            .cloned()
+            .collect();
+        let schedule_ids = schedules
+            .iter()
+            .map(|schedule| schedule.id)
+            .collect::<Vec<_>>();
+        let border = cx.theme().colors().border_variant;
+        let now = cx
+            .background_executor()
+            .scheduler_executor()
+            .scheduler()
+            .clock()
+            .utc_now();
+        let mut navigation = v_flex().gap_1();
+        for (id, title, recipes) in [
+            ("project", "Project recipes", project_recipes),
+            ("built-in", "Built-in recipes", builtins),
+        ] {
+            navigation = navigation.child(self.management_section(id, title, recipes.len(), cx));
+            if self.collapsed.contains(id) {
+                continue;
+            }
+            if recipes.is_empty() {
+                navigation = navigation.child(div().pl_4().child(meta("No matching recipes")));
+            }
+            for entry in recipes {
+                let (name, purpose) = recipe_labels(&entry);
+                let selected = self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|current| current.id == entry.id)
+                    && self.management_page != ManagementPage::Import;
+                let path = entry
+                    .path
+                    .as_ref()
+                    .map(|path| path.path.as_unix_str().to_owned());
+                let full_path = self.full_recipe_path(&entry, cx);
+                let description = path
+                    .as_ref()
+                    .map_or_else(|| purpose.clone(), |path| format!("{purpose}. {path}"));
+                navigation = navigation.child(
+                    div()
+                        .pl_3()
+                        .child(
+                            crate::recipe_dashboard::navigator_row(
+                                gpui::SharedString::from(entry.id.clone()),
+                                name,
+                                selected,
+                                IconName::File,
+                                Color::Muted,
+                            )
+                            .aria_description(description)
+                            .when_some(full_path, |row, path| row.tooltip(Tooltip::text(path)))
+                            .child(div().flex_1().min_w_0().child(meta(purpose).truncate()))
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    this.select_recipe(entry.clone(), window, cx)
+                                },
+                            )),
+                        )
+                        .when_some(path, |row, path| {
+                            row.child(div().pl_6().child(meta(path).truncate()))
+                        }),
+                );
+            }
+        }
+        navigation = navigation
+            .child(Divider::horizontal())
+            .child(self.management_section("schedules", "Schedules", schedules.len(), cx));
+        if !self.collapsed.contains("schedules") {
+            for schedule in &schedules {
+                let id = schedule.id;
+                let last = schedule
+                    .last_run
+                    .map(|date| schedule_time_label(date, &schedule.timezone, now));
+                let identity = schedule_identity(schedule);
+                let detail = format!(
+                    "{identity} · {}",
+                    last.map_or("No runs yet".to_owned(), |date| format!("Last {date}"))
+                );
+                let label = format!(
+                    "{} · {}",
+                    schedule.title,
+                    if schedule.paused { "Paused" } else { "Enabled" }
+                );
+                navigation = navigation.child(
+                    v_flex()
+                        .pl_3()
+                        .child(
+                            crate::recipe_dashboard::navigator_row(
+                                gpui::SharedString::from(id.to_string()),
+                                label,
+                                self.selected_schedule == Some(id),
+                                IconName::Clock,
+                                Color::Muted,
+                            )
+                            .aria_description(detail.clone())
+                            .child(div().flex_1())
+                            .on_click(cx.listener(
+                                move |view, _, window, cx| view.select_schedule(id, window, cx),
+                            )),
+                        )
+                        .child(div().pl_4().child(meta(detail).truncate())),
+                );
+            }
+            if schedules.is_empty() {
+                navigation = navigation.child(div().pl_4().child(meta("No matching schedules")));
+            }
+        }
+        let detail = match self.management_page {
+            ManagementPage::Overview => {
+                meta("Select a recipe or schedule, or choose New recipe or Import.")
+                    .into_any_element()
+            }
+            ManagementPage::Recipe => self.render_recipe_overview(cx),
+            ManagementPage::Edit => self.render_recipe_editor(cx),
+            ManagementPage::Import => self.render_import_review(cx),
+            ManagementPage::Schedule => self.render_managed_schedule(cx),
+            ManagementPage::EditSchedule => self.render_schedule_form(cx),
+            ManagementPage::Test => self
+                .render_scan(self.operation.is_some() || self.store.read(cx).busy, cx)
+                .into_any_element(),
+        };
+        let bounds = window.viewport_size();
+        v_flex()
+            .id("made-recipes")
+            .debug_selector(|| "made-recipes".to_owned())
+            .key_context("RecipesView")
+            .track_focus(&self.focus)
+            .tab_group()
+            .role(gpui::Role::Group)
+            .aria_label("Made Recipes and Schedules")
+            .on_key_down(
+                cx.listener(move |view, event: &gpui::KeyDownEvent, window, cx| {
+                    if view.management_page == ManagementPage::Schedule
+                        && !view.collapsed.contains("schedules")
+                        && !event.keystroke.modifiers.modified()
+                        && let Some(current) = schedule_ids
+                            .iter()
+                            .position(|id| Some(*id) == view.selected_schedule)
+                    {
+                        let next = match event.keystroke.key.as_str() {
+                            "up" => current.checked_sub(1),
+                            "down" => current.checked_add(1),
+                            _ => None,
+                        };
+                        if let Some(id) = next.and_then(|index| schedule_ids.get(index)) {
+                            view.select_schedule(*id, window, cx);
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+                    crate::recipe_dashboard::move_recipe_focus(event, window, cx);
+                }),
+            )
+            .on_action(cx.listener(|_, _: &menu::Cancel, _, cx| cx.emit(DismissEvent)))
+            .w(rems(66.))
+            .max_w(bounds.width - px(36.))
+            .h(rems(43.))
+            .max_h(bounds.height - px(54.))
+            .p_3()
+            .gap_2()
+            .elevation_3(cx)
+            .child(
+                h_flex()
+                    .justify_between()
+                    .child(Headline::new("Made Recipes and Schedules").size(HeadlineSize::Small))
+                    .child(
+                        management_button("close", "Close")
+                            .on_click(cx.listener(|_, _, _, cx| cx.emit(DismissEvent))),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .id("recipe-management-toolbar")
+                    .role(gpui::Role::Toolbar)
+                    .aria_label("Recipe management")
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .min_w(rems(12.))
+                            .gap_1()
+                            .px_1p5()
+                            .border_1()
+                            .border_color(border)
+                            .rounded_sm()
+                            .child(management_icon(IconName::MagnifyingGlass))
+                            .child(div().min_w_0().flex_1().child(self.search.clone())),
+                    )
+                    .child(
+                        IconButton::new("new", IconName::Plus)
+                            .aria_label("New recipe")
+                            .tooltip(Tooltip::text("New recipe"))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.author_new_recipe(window, cx)
+                            })),
+                    )
+                    .child(
+                        IconButton::new("import", IconName::Download)
+                            .aria_label("Import recipe")
+                            .tooltip(Tooltip::text("Import recipe"))
+                            .toggle_state(self.management_page == ManagementPage::Import)
+                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.management_page = ManagementPage::Import;
+                                view.import_use_token = false;
+                                view.import_updating = false;
+                                view.import_task = None;
+                                view.import_preview = None;
+                                view.error = None;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        IconButton::new("refresh", IconName::RefreshTitle)
+                            .aria_label("Refresh recipes and schedules")
+                            .tab_index(0_isize)
+                            .tooltip(Tooltip::text("Refresh recipes and schedules"))
+                            .on_click(cx.listener(|view, _, _, cx| view.refresh(cx))),
+                    ),
+            )
+            .when_some(
+                self.error
+                    .clone()
+                    .or_else(|| self.store.read(cx).error.clone()),
+                |modal, error| {
+                    modal.child(Label::new(error).color(Color::Error).size(LabelSize::Small))
+                },
+            )
+            .when_some(self.link_notice.clone(), |modal, notice| {
+                modal.child(meta(notice))
+            })
+            .child(Divider::horizontal())
+            .child(
+                h_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .items_start()
+                    .child(
+                        div()
+                            .id("management-navigator")
+                            .w(gpui::relative(0.38))
+                            .min_w_0()
+                            .h_full()
+                            .border_r_1()
+                            .border_color(border)
+                            .pr_2()
+                            .overflow_y_scroll()
+                            .child(navigation),
+                    )
+                    .child(
+                        div()
+                            .id("management-detail")
+                            .h_full()
+                            .flex_1()
+                            .min_w_0()
+                            .pl_3()
+                            .overflow_y_scroll()
+                            .child(detail),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn management_section(
+        &self,
+        id: &'static str,
+        text: &str,
+        count: usize,
+        cx: &mut Context<Self>,
+    ) -> ui::ButtonLike {
+        let expanded = !self.collapsed.contains(id);
+        crate::recipe_dashboard::disclosure(id, format!("{text} · {count}"), expanded).on_click(
+            cx.listener(move |view, _, _, cx| {
+                if expanded {
+                    view.collapsed.insert(id);
+                } else {
+                    view.collapsed.remove(id);
+                }
+                cx.notify();
+            }),
+        )
+    }
+
+    fn project_label(&self, cx: &App) -> String {
+        self.worktree
+            .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
+            .map_or_else(
+                || "Choose project".into(),
+                |root| root.read(cx).root_name_str().to_owned(),
+            )
+    }
+
+    fn full_recipe_path(&self, entry: &RecipeEntry, cx: &App) -> Option<String> {
+        let path = entry.path.as_ref()?;
+        let worktree = self
+            .project
+            .read(cx)
+            .worktree_for_id(path.worktree_id, cx)?;
+        Some(
+            worktree
+                .read(cx)
+                .abs_path()
+                .join(path.path.as_unix_str())
+                .display()
+                .to_string(),
+        )
+    }
+
+    fn recipe_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let owner = cx.weak_entity();
+        let path = self
+            .selected
+            .as_ref()
+            .and_then(|entry| self.full_recipe_path(entry, cx));
+        let saved = self
+            .selected
+            .as_ref()
+            .is_some_and(|entry| entry.path.is_some());
+        let has_provenance = Recipe::from_yaml(&self.yaml.read(cx).text(cx))
+            .is_ok_and(|recipe| recipe.imported_from.is_some());
+        PopoverMenu::new("recipe-detail-menu")
+            .trigger(
+                IconButton::new("recipe-detail-actions", IconName::Ellipsis)
+                    .tab_index(0_isize)
+                    .aria_label("Recipe actions")
+                    .tooltip(Tooltip::text("Recipe actions")),
+            )
+            .menu(move |window, cx| {
+                Some(ContextMenu::build(window, cx, |mut menu, _, _| {
+                    for (title, source) in [("Copy recipe link", false), ("Copy source link", true)]
+                    {
+                        if source && !has_provenance {
+                            continue;
+                        }
+                        let owner = owner.clone();
+                        menu = menu.entry(title, None, move |_, cx| {
+                            owner
+                                .update(cx, |view, cx| view.copy_recipe_link(source, cx))
+                                .log_err();
+                        });
+                    }
+                    if let Some(path) = path.clone() {
+                        menu = menu.entry("Copy full path", None, move |_, cx| {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(path.clone()));
+                        });
+                    }
+                    if saved && has_provenance {
+                        let owner = owner.clone();
+                        menu = menu.entry("Review saved import source", None, move |window, cx| {
+                            owner
+                                .update(cx, |view, cx| view.prepare_import_update(window, cx))
+                                .log_err();
+                        });
+                    }
+                    if saved {
+                        let owner = owner.clone();
+                        menu = menu.entry("Test in isolation", None, move |_, cx| {
+                            owner
+                                .update(cx, |view, cx| {
+                                    view.management_page = ManagementPage::Test;
+                                    cx.notify();
+                                })
+                                .log_err();
+                        });
+                    }
+                    menu
+                }))
+            })
+    }
+
+    fn render_recipe_overview(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(entry) = &self.selected else {
+            return div().into_any_element();
+        };
+        let (title, purpose) = recipe_labels(entry);
+        let yaml = self.yaml.read(cx).text(cx);
+        let parsed = Recipe::from_yaml(&yaml);
+        let draft = self.source.as_ref().is_some_and(|source| source != &yaml);
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .justify_between()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(Headline::new(title).size(HeadlineSize::Small))
+                    .child(self.recipe_menu(cx)),
+            )
+            .child(meta(if entry.path.is_some() {
+                self.project_label(cx)
+            } else {
+                "Built-in".into()
+            }))
+            .when_some(entry.path.as_ref(), |detail, path| {
+                detail.child(meta(path.path.as_unix_str().to_owned()))
+            })
+            .child(Label::new(purpose))
+            .when(draft, |detail| {
+                detail.child(Label::new("Unsaved draft").color(Color::Warning))
+            })
+            .when_some(
+                parsed.as_ref().err().filter(|_| !self.loading),
+                |detail, error| {
+                    detail.child(
+                        Label::new(error.to_string())
+                            .color(Color::Error)
+                            .size(LabelSize::Small),
+                    )
+                },
+            )
+            .when(entry.path.is_some(), |detail| {
+                detail.child(
+                    management_button("edit-recipe", "Edit recipe")
+                        .style(ButtonStyle::Filled)
+                        .disabled(self.loading)
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.management_page = ManagementPage::Edit;
+                            window.focus(&view.yaml.focus_handle(cx), cx);
+                            cx.notify();
+                        })),
+                )
+            })
+            .when_some(parsed.ok(), |detail, recipe| {
+                detail.children(
+                    recipe
+                        .steps
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, step)| meta(format!("{}. {}", index + 1, step.id))),
+                )
+            })
+            .into_any_element()
+    }
+
+    fn render_recipe_editor(&self, cx: &mut Context<Self>) -> AnyElement {
+        let yaml = self.yaml.read(cx).text(cx);
+        let parsed = Recipe::from_yaml(&yaml);
+        let filename = self.filename.read(cx).text(cx);
+        let current = self.source.as_ref() == Some(&yaml);
+        let existing = self
+            .selected
+            .as_ref()
+            .is_some_and(|entry| entry.path.is_some());
+        let is_workflow = parsed.as_ref().is_ok_and(|recipe| recipe.version == 2);
+        let border = cx.theme().colors().border_variant;
+        let weak = cx.weak_entity();
+        let roots = self
+            .project
+            .read(cx)
+            .visible_worktrees(cx)
+            .map(|root| {
+                let root = root.read(cx);
+                (root.id(), root.root_name_str().to_owned())
+            })
+            .collect::<Vec<_>>();
+        v_flex()
+            .gap_2()
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .justify_between()
+                    .child(
+                        v_flex()
+                            .gap_0p5()
+                            .child(Headline::new(filename).size(HeadlineSize::Small))
+                            .child(meta(self.project_label(cx))),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Label::new(if current { "Saved" } else { "Unsaved changes" })
+                                    .size(LabelSize::Small)
+                                    .color(if current {
+                                        Color::Muted
+                                    } else {
+                                        Color::Warning
+                                    }),
+                            )
+                            .child(
+                                management_button("save-recipe", "Save")
+                                    .style(ButtonStyle::Filled)
+                                    .disabled(
+                                        current
+                                            || parsed.is_err()
+                                            || self.operation.is_some()
+                                            || self.loading,
+                                    )
+                                    .on_click(cx.listener(|view, _, _, cx| view.save_recipe(cx))),
+                            )
+                            .child(self.recipe_menu(cx)),
+                    ),
+            )
+            .when(!existing, |detail| {
+                detail
+                    .child(
+                        PopoverMenu::new("new-recipe-project")
+                            .trigger(management_button(
+                                "choose-new-recipe-project",
+                                self.project_label(cx),
+                            ))
+                            .menu(move |window, cx| {
+                                Some(ContextMenu::build(window, cx, |mut menu, _, _| {
+                                    for (id, label) in &roots {
+                                        let weak = weak.clone();
+                                        let id = *id;
+                                        menu = menu.entry(label.clone(), None, move |_, cx| {
+                                            weak.update(cx, |view, cx| {
+                                                view.worktree = Some(id);
+                                                cx.notify();
+                                            })
+                                            .log_err();
+                                        });
+                                    }
+                                    menu
+                                }))
+                            }),
+                    )
+                    .child(management_field("Filename", self.filename.clone(), border))
+                    .when(!is_workflow, |detail| {
+                        detail.child(management_button("new-workflow", "New workflow").on_click(
+                            cx.listener(|view, _, window, cx| view.new_workflow(window, cx)),
+                        ))
+                    })
+            })
+            .child(
+                div()
+                    .h(rems(19.))
+                    .border_1()
+                    .border_color(border)
+                    .rounded_sm()
+                    .child(self.yaml.clone()),
+            )
+            .child(match &parsed {
+                Ok(_) => meta("Valid recipe"),
+                Err(error) => meta(error.to_string()).color(Color::Error),
+            })
+            .when(is_workflow, |detail| {
+                detail.child(
+                    h_flex().gap_2().child(Label::new("Workflow steps")).child(
+                        management_button("add-workflow-step", "Add step")
+                            .start_icon(management_icon(IconName::Plus))
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.append_workflow_step(window, cx)
+                            })),
+                    ),
+                )
+            })
+            .when_some(
+                parsed.ok().filter(|recipe| recipe.version == 2),
+                |detail, recipe| {
+                    detail.children(
+                        recipe
+                            .steps
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, step)| meta(format!("{}. {}", index + 1, step.id))),
+                    )
+                },
+            )
+            .into_any_element()
+    }
+
+    fn render_import_review(&self, cx: &mut Context<Self>) -> AnyElement {
+        let url = self.import_url.read(cx).text(cx);
+        let (github, explicit_pin) = import_fields(&url);
+        let border = cx.theme().colors().border_variant;
+        let pending = self.import_task.is_some();
+        v_flex()
+            .gap_2()
+            .child(Headline::new("Import recipe").size(HeadlineSize::Small))
+            .child(meta(self.project_label(cx)))
+            .child(management_field(
+                "Recipe URL or Made link",
+                self.import_url.clone(),
+                border,
+            ))
+            .when(explicit_pin, |detail| {
+                detail
+                    .child(management_field(
+                        "Revision",
+                        self.import_revision.clone(),
+                        border,
+                    ))
+                    .child(management_field(
+                        "Recipe file path",
+                        self.import_path.clone(),
+                        border,
+                    ))
+            })
+            .when(github, |detail| {
+                detail.child(
+                    Checkbox::new(
+                        "import-github-token",
+                        if self.import_use_token {
+                            ToggleState::Selected
+                        } else {
+                            ToggleState::Unselected
+                        },
+                    )
+                    .label("Use existing GITHUB_TOKEN for this GitHub import")
+                    .on_click(cx.listener(
+                        |view, state: &ToggleState, _, cx| {
+                            view.import_use_token = *state == ToggleState::Selected;
+                            cx.notify();
+                        },
+                    )),
+                )
+            })
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        management_button(
+                            "fetch-recipe-import",
+                            if pending {
+                                "Fetching…"
+                            } else {
+                                "Fetch for review"
+                            },
+                        )
+                        .style(ButtonStyle::Filled)
+                        .disabled(pending || url.trim().is_empty())
+                        .on_click(cx.listener(|view, _, window, cx| view.fetch_import(window, cx))),
+                    )
+                    .when(pending || self.import_preview.is_some(), |actions| {
+                        actions.child(
+                            management_button("cancel-recipe-import", "Cancel import")
+                                .on_click(cx.listener(|view, _, _, cx| view.cancel_import(cx))),
+                        )
+                    }),
+            )
+            .when_some(self.import_preview.as_ref(), |detail, preview| {
+                let parsed = Recipe::from_yaml(&preview.yaml);
+                let provenance = parsed
+                    .as_ref()
+                    .ok()
+                    .and_then(|recipe| recipe.imported_from.as_ref());
+                let destination = if preview.updating {
+                    format!(".agents/recipes/{}", self.filename.read(cx).text(cx))
+                } else {
+                    ".agents/recipes/imported-recipe.yaml".into()
+                };
+                detail
+                    .child(Divider::horizontal())
+                    .child(Headline::new("Review import").size(HeadlineSize::Small))
+                    .child(meta(provenance.map_or(
+                        "Source · Embedded Made recipe link".into(),
+                        |source| format!("Source · {}", source.request.url),
+                    )))
+                    .child(meta(
+                        provenance
+                            .and_then(|source| {
+                                source
+                                    .commit
+                                    .as_ref()
+                                    .map(|commit| format!("Revision · {commit}"))
+                            })
+                            .or_else(|| {
+                                provenance.map(|source| format!("SHA-256 · {}", source.sha256))
+                            })
+                            .unwrap_or_else(|| "Revision · Embedded document".into()),
+                    ))
+                    .child(meta(match parsed {
+                        Ok(_) => "Validation · Valid recipe".into(),
+                        Err(error) => format!("Validation · {error}"),
+                    }))
+                    .child(meta(format!(
+                        "Destination · {} / {destination}",
+                        self.project_label(cx)
+                    )))
+                    .child(
+                        div()
+                            .whitespace_normal()
+                            .child(Label::new(preview.yaml.clone()).size(LabelSize::Small)),
+                    )
+                    .child(
+                        management_button("apply-recipe-import", "Apply to draft")
+                            .style(ButtonStyle::Filled)
+                            .on_click(cx.listener(|view, _, window, cx| {
+                                view.apply_import_preview(window, cx)
+                            })),
+                    )
+            })
+            .into_any_element()
+    }
+
+    fn render_managed_schedule(&self, cx: &mut Context<Self>) -> AnyElement {
+        let store = self.store.read(cx);
+        let Some(schedule) = self
+            .selected_schedule
+            .and_then(|id| store.state.schedules.iter().find(|row| row.id == id))
+            .cloned()
+        else {
+            return meta("Schedule unavailable").into_any_element();
+        };
+        let id = schedule.id;
+        let last = store
+            .state
+            .runs
+            .iter()
+            .rev()
+            .find(|run| run.schedule_id == id)
+            .cloned();
+        let busy = self.operation.is_some() || store.busy;
+        let now = cx
+            .background_executor()
+            .scheduler_executor()
+            .scheduler()
+            .clock()
+            .utc_now();
+        v_flex()
+            .gap_2()
+            .child(Headline::new(schedule.title.clone()).size(HeadlineSize::Small))
+            .child(meta(format!(
+                "{} · {}",
+                schedule.recipe.title,
+                self.project_label(cx)
+            )))
+            .child(meta(schedule_identity(&schedule)))
+            .child(Label::new(if schedule.paused {
+                "Paused".into()
+            } else {
+                format!(
+                    "Enabled · Next run {}",
+                    schedule_time_label(schedule.next_run, &schedule.timezone, now)
+                )
+            }))
+            .child(meta(SCHEDULE_AVAILABILITY))
+            .child(
+                h_flex()
+                    .gap_1()
+                    .flex_wrap()
+                    .child(
+                        management_button("edit-managed-schedule", "Edit schedule")
+                            .style(ButtonStyle::Filled)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.management_page = ManagementPage::EditSchedule;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        management_button(
+                            "toggle-managed-schedule",
+                            if schedule.paused { "Resume" } else { "Pause" },
+                        )
+                        .disabled(busy)
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            if schedule.paused {
+                                view.management_page = ManagementPage::EditSchedule;
+                                cx.notify();
+                            } else {
+                                let task = view.store.update(cx, |store, cx| {
+                                    store.set_enabled(id, false, false, cx)
+                                });
+                                view.report(task, cx);
+                            }
+                        })),
+                    ),
+            )
+            .when(!schedule.parameters.is_empty(), |detail| {
+                detail.child(Label::new("Inputs")).children(
+                    schedule.recipe.parameters.iter().filter_map(|param| {
+                        schedule
+                            .parameters
+                            .get(&param.name)
+                            .map(|value| meta(format!("{} · {value}", param.name)))
+                    }),
+                )
+            })
+            .child(Divider::horizontal())
+            .when(last.is_none(), |detail| detail.child(meta("No runs yet")))
+            .when_some(last, |detail, run| {
+                detail
+                    .child(meta(schedule_time_label(
+                        run.scheduled_for,
+                        &schedule.timezone,
+                        now,
+                    )))
+                    .child(
+                        management_button(
+                            "open-managed-run",
+                            format!("Last outcome · {}", run.status.label()),
+                        )
+                        .on_click(cx.listener(
+                            move |view, _, window, cx| {
+                                view.panel
+                                    .update(cx, |panel, cx| {
+                                        panel.open_recipe_run(run.id, window, cx)
+                                    })
+                                    .log_err();
+                                cx.emit(DismissEvent);
+                            },
+                        )),
+                    )
+            })
+            .into_any_element()
+    }
+}
+
+fn import_fields(value: &str) -> (bool, bool) {
+    let Ok(url) = url::Url::parse(value) else {
+        return (false, false);
+    };
+    let github = url.host_str() == Some("github.com");
+    (
+        github,
+        github && url.path().trim_matches('/').split('/').count() == 2,
+    )
+}
+
+fn schedule_identity(schedule: &RecipeSchedule) -> String {
+    let short = schedule.id.as_simple().to_string();
+    format!(
+        "{} · {} · {}",
+        schedule.cron,
+        schedule.timezone,
+        &short[..8]
+    )
+}
+
+fn recipe_labels(entry: &RecipeEntry) -> (String, String) {
+    entry.recipe.as_ref().map_or_else(
+        |error| {
+            (
+                entry
+                    .path
+                    .as_ref()
+                    .and_then(|path| path.path.file_name())
+                    .unwrap_or(&entry.origin)
+                    .to_owned(),
+                error.clone(),
+            )
+        },
+        |recipe| {
+            (
+                recipe.title.clone(),
+                recipe
+                    .description
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned(),
+            )
+        },
+    )
+}
+
+fn management_button(
+    id: impl Into<gpui::ElementId>,
+    label: impl Into<gpui::SharedString>,
+) -> Button {
+    Button::new(id, label)
+        .size(ButtonSize::Compact)
+        .tab_index(0_isize)
+}
+
+fn management_icon(icon: IconName) -> Icon {
+    Icon::new(icon).size(IconSize::Small).color(Color::Muted)
+}
+
+fn meta(text: impl Into<gpui::SharedString>) -> Label {
+    Label::new(text).size(LabelSize::Small).color(Color::Muted)
+}
+
+fn management_field(
+    label: &'static str,
+    editor: Entity<Editor>,
+    border: gpui::Hsla,
+) -> impl IntoElement {
+    v_flex().gap_0p5().child(meta(label)).child(
+        div()
+            .p_1p5()
+            .border_1()
+            .border_color(border)
+            .rounded_sm()
+            .child(editor),
+    )
+}
+
+impl Render for RecipesView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.schedule_form {
+            self.render_schedule_form(cx)
+        } else if self.proposal.is_some() {
+            self.render_proposal(cx)
+        } else {
+            self.render_management(window, cx)
+        }
     }
 }
 

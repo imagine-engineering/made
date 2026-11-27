@@ -185,6 +185,7 @@ pub enum HighlightKey {
     Rename,
     SearchWithinRange,
     SpecificationTaskReference,
+    SpecificationTaskTitle,
     SelectedTextHighlight,
     SyntaxTreeView(usize),
     VimExchange,

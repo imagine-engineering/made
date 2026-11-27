@@ -6260,22 +6260,58 @@ impl ThreadView {
         cx.notify();
     }
 
-    pub(crate) fn reveal_specification_tool_call(
+    pub(crate) fn reveal_tool_call(
         &mut self,
         tool_call_id: &acp::ToolCallId,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(index) = self.thread.read(cx).entries().iter().position(|entry| {
-            matches!(entry, AgentThreadEntry::ToolCall(call) if &call.id == tool_call_id)
-        }) else {
+        let Some(index) = self.thread.read(cx).entries().iter().position(
+            |entry| matches!(entry, AgentThreadEntry::ToolCall(call) if &call.id == tool_call_id),
+        ) else {
             return false;
         };
         self.entry_view_state.update(cx, |state, _| {
             state.expand_tool_call(tool_call_id.clone());
         });
-        self.list_state.scroll_to(ListOffset { item_ix: index, offset_in_item: px(0.) });
+        self.list_state.scroll_to(ListOffset {
+            item_ix: index,
+            offset_in_item: px(0.),
+        });
         cx.notify();
         true
+    }
+
+    pub(crate) fn reveal_recipe_turn(
+        &mut self,
+        turn: &acp_thread::ClientUserMessageId,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(index) = self.thread.read(cx).entries().iter().position(|entry| {
+            matches!(entry, AgentThreadEntry::UserMessage(message) if message.client_id.as_ref() == Some(turn))
+        }) {
+            self.list_state.scroll_to(ListOffset { item_ix: index, offset_in_item: px(0.) });
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn reveal_recipe_decision(
+        &mut self,
+        decision: &agent::recipe_schedule::RecipeDecision,
+        cx: &mut Context<Self>,
+    ) {
+        match decision {
+            agent::recipe_schedule::RecipeDecision::Tool(id) => {
+                self.reveal_tool_call(&acp::ToolCallId::new(id.clone()), cx);
+            }
+            agent::recipe_schedule::RecipeDecision::Elicitation(id) => {
+                if let Some(index) = self.thread.read(cx).entries().iter().position(|entry| {
+                    matches!(entry, AgentThreadEntry::Elicitation(entry_id) if entry_id.0.as_ref() == id)
+                }) {
+                    self.list_state.scroll_to(ListOffset { item_ix: index, offset_in_item: px(0.) });
+                    cx.notify();
+                }
+            }
+        }
     }
 
     fn render_entry(

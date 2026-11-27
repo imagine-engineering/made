@@ -1,4 +1,7 @@
-use crate::recipe_schedule::{RecipeRunStatus, RecipeSchedule, RecipeScheduleState};
+use crate::recipe_schedule::{
+    RecipeActivity, RecipeActivityStep, RecipeDecision, RecipeRunStatus, RecipeSchedule,
+    RecipeScheduleState, RecipeStepStatus,
+};
 use acp_thread::AgentConnection as _;
 use acp_thread::ClientUserMessageId;
 use agent_client_protocol::schema::v1 as acp;
@@ -9,6 +12,7 @@ use fs::Fs;
 use gpui::{App, AppContext as _, Context, Entity, Global, Task, TaskExt as _, WeakEntity};
 use project::{Project, ProjectPath, trusted_worktrees::TrustedWorktrees};
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use util::ResultExt as _;
@@ -142,6 +146,7 @@ pub struct RecipeStore {
     pub(crate) scan_cancellation: Option<futures::channel::oneshot::Sender<()>>,
     proposals: Vec<(gpui::EntityId, gpui::EntityId, Rc<RecipeProposal>)>,
     pub state: RecipeScheduleState,
+    pub activity: HashMap<Uuid, RecipeActivity>,
     pub error: Option<String>,
     pub busy: bool,
     revision: i64,
@@ -376,6 +381,7 @@ impl RecipeStore {
             scan_cancellation: None,
             proposals: Vec::new(),
             state: RecipeScheduleState::default(),
+            activity: HashMap::default(),
             error: None,
             busy: true,
             revision: 0,
@@ -400,12 +406,23 @@ impl RecipeStore {
                 let initialized = async {
                     let database = database.await.map_err(|error| anyhow::anyhow!(error))?;
                     let (revision, mut state) = database.load_recipe_state().await?;
+                    let mut activity = database.load_recipe_activity().await?;
                     let now = this.read_with(cx, |this, _| this.clock.utc_now())?;
                     state.recover(now)?;
+                    for run in &mut activity {
+                        if run.status.is_active() {
+                            run.finish(RecipeRunStatus::Interrupted);
+                            run.revision += 1;
+                            database.save_recipe_activity(run.clone()).await?;
+                        }
+                    }
                     let revision = database.save_recipe_state(revision, state.clone()).await?;
                     this.update(cx, |this, cx| {
                         this.database = Some(database);
                         this.state = state;
+                        for run in activity {
+                            this.activity.entry(run.id).or_insert(run);
+                        }
                         this.revision = revision;
                         this.busy = false;
                         this.recover_scans(cx);
@@ -696,6 +713,7 @@ impl RecipeStore {
                 final_thread = Some((thread.clone(), util::path_list::PathList::deserialize(&schedule.project_paths)));
                 thread.update(cx, |thread, cx| {
                     thread.set_model(model, cx);
+                    thread.set_title(schedule.title.clone().into(), cx);
                     thread.set_automatic_retries(false);
                 });
                 let payload = thread.read_with(cx, |thread, cx| thread.to_db(cx)).await;
@@ -715,7 +733,6 @@ impl RecipeStore {
                     this.active_schedule = Some(schedule.clone());
                     cx.subscribe(&session, |this, session, event, cx| {
                         let status = match event {
-                            acp_thread::AcpThreadEvent::ToolAuthorizationRequested(_) | acp_thread::AcpThreadEvent::ElicitationRequested(_) => Some(RecipeRunStatus::NeedsAttention),
                             acp_thread::AcpThreadEvent::Retry(_) => Some(RecipeRunStatus::Failed),
                             _ => None,
                         };
@@ -732,7 +749,7 @@ impl RecipeStore {
                 let run = session.update(cx, |session, cx| session.run_turn(cx, async move |_, cx| {
                     cx.update(|cx| {
                         validate_scheduled_project(&project, &schedule, cx).map_err(|_| anyhow::anyhow!(ScheduleNeedsAttention))?;
-                        anyhow::Ok(execute_recipe(&connection, session_id, ClientUserMessageId::new(), &schedule.recipe, &schedule.parameters, Vec::new(), cx))
+                        anyhow::Ok(run_tracked_recipe(&connection, session_id, ClientUserMessageId::new(), &schedule.recipe, &schedule.parameters, Vec::new(), Some((id, schedule.id)), cx))
                     })?.await
                 }));
                 let response = run.await?;
@@ -984,17 +1001,23 @@ pub fn start_recipe(
         .0
         .update(cx, |agent, cx| agent.new_session(project, cx));
     let session_id = session.read(cx).session_id().clone();
+    if let Some(thread) = connection.thread(&session_id, cx) {
+        thread.update(cx, |thread, cx| {
+            thread.set_title(recipe.title.clone().into(), cx)
+        });
+    }
     let cleanup = (connection.clone(), session_id.clone());
     let run = session.update(cx, |session, cx| {
         session.run_turn(cx, async move |_, cx| {
             cx.update(|cx| {
-                execute_recipe(
+                run_tracked_recipe(
                     &connection,
                     session_id,
                     ClientUserMessageId::new(),
                     &recipe,
                     &parameters,
                     Vec::new(),
+                    None,
                     cx,
                 )
             })
@@ -1140,25 +1163,337 @@ pub(crate) fn run_command(
             )));
         }
     }
-    execute_recipe(
+    run_tracked_recipe(
         connection,
         session_id,
         client_user_message_id,
         &recipe,
         &parameters,
         attachments,
+        None,
         cx,
     )
 }
 
 pub fn builtin_recipes() -> Vec<RecipeEntry> {
-    vec![RecipeEntry {
-        id: "builtin/release-risk".to_owned(),
+    [
+        (
+            "release-risk",
+            include_str!("templates/recipes/release-risk.yaml"),
+        ),
+        (
+            "feature-specification",
+            include_str!("templates/recipes/feature-specification.yaml"),
+        ),
+    ]
+    .into_iter()
+    .map(|(id, yaml)| RecipeEntry {
+        id: format!("builtin/{id}"),
         origin: "Built-in".to_owned(),
         path: None,
-        recipe: Recipe::from_yaml(include_str!("templates/recipes/release-risk.yaml"))
-            .map_err(|error| error.to_string()),
-    }]
+        recipe: Recipe::from_yaml(yaml).map_err(|error| error.to_string()),
+    })
+    .collect()
+}
+
+pub(crate) fn recipe_request<'a>(
+    entries: &[RecipeEntry],
+    prompt: &'a str,
+) -> Option<Result<(RecipeEntry, &'a str)>> {
+    let prompt = prompt.trim().trim_end_matches(['.', '!']);
+    let lower = prompt.to_ascii_lowercase();
+    let after_verb = lower.strip_prefix("run ")?;
+    let offset = prompt.len() - after_verb.len();
+    let name_end = lower.find(" with ").unwrap_or(prompt.len());
+    let name = lower.get(offset..name_end)?.trim();
+    let name = name.strip_prefix("the ").unwrap_or(name);
+    let name = name
+        .strip_suffix(" recipe")
+        .or_else(|| name.strip_suffix(" workflow"))
+        .unwrap_or(name)
+        .trim();
+    let arguments = if name_end == prompt.len() {
+        ""
+    } else {
+        prompt.get(name_end + 6..)?.trim()
+    };
+    let mut matches = entries.iter().filter(|entry| {
+        let Ok(recipe) = &entry.recipe else {
+            return false;
+        };
+        recipe.title.eq_ignore_ascii_case(name)
+            || recipe
+                .command
+                .as_deref()
+                .is_some_and(|command| command.eq_ignore_ascii_case(name))
+    });
+    let entry = matches.next()?;
+    if matches.next().is_some() {
+        return Some(Err(anyhow::anyhow!(
+            "More than one recipe has that name. Choose a recipe from the library."
+        )));
+    }
+    Some(Ok((entry.clone(), arguments)))
+}
+
+#[derive(Clone)]
+struct RecipeTracking {
+    store: WeakEntity<RecipeStore>,
+    id: Uuid,
+}
+
+impl RecipeTracking {
+    fn edit(
+        &self,
+        cx: &mut App,
+        update: impl FnOnce(&mut RecipeActivity) -> bool,
+    ) -> Task<Result<()>> {
+        self.store
+            .update(cx, |store, cx| {
+                let Some(run) = store.activity.get_mut(&self.id) else {
+                    return Task::ready(Ok(()));
+                };
+                if !update(run) {
+                    return Task::ready(Ok(()));
+                }
+                run.revision += 1;
+                let task = store
+                    .database
+                    .as_ref()
+                    .map(|database| database.save_recipe_activity(run.clone()))
+                    .unwrap_or_else(|| Task::ready(Ok(())));
+                cx.notify();
+                task
+            })
+            .unwrap_or_else(|error| Task::ready(Err(error)))
+    }
+
+    fn step(&self, index: usize, status: RecipeStepStatus, iteration: u8, cx: &mut App) {
+        self.edit(cx, |run| {
+            let Some(step) = run.steps.get_mut(index) else {
+                return false;
+            };
+            step.status = status;
+            step.iteration = iteration;
+            run.current_step = (status == RecipeStepStatus::Running).then_some(index);
+            if run.current_step.is_none() {
+                run.decision = None;
+            }
+            true
+        })
+        .detach_and_log_err(cx);
+    }
+    fn turn(&self, index: usize, turn: ClientUserMessageId, cx: &mut App) {
+        self.edit(cx, |run| {
+            let Some(step) = run.steps.get_mut(index) else {
+                return false;
+            };
+            step.turn = Some(turn);
+            step.outcome = None;
+            true
+        })
+        .detach_and_log_err(cx);
+    }
+
+    fn outcome(&self, index: usize, output: &str, cx: &mut App) {
+        let mut chars = output.trim().chars();
+        let mut excerpt: String = chars.by_ref().take(1500).collect();
+        if chars.next().is_some() {
+            excerpt.push('…');
+        }
+        self.edit(cx, |run| {
+            let Some(step) = run.steps.get_mut(index) else {
+                return false;
+            };
+            step.outcome = (!excerpt.is_empty()).then_some(excerpt);
+            true
+        })
+        .detach_and_log_err(cx);
+    }
+}
+
+fn run_tracked_recipe(
+    connection: &crate::NativeAgentConnection,
+    session_id: acp::SessionId,
+    message_id: ClientUserMessageId,
+    recipe: &Recipe,
+    parameters: &HashMap<String, String>,
+    attachments: Vec<acp::ContentBlock>,
+    schedule: Option<(Uuid, Uuid)>,
+    cx: &mut App,
+) -> Task<Result<acp::PromptResponse>> {
+    let Some(store) = RecipeStore::try_global(cx) else {
+        return execute_recipe(
+            connection,
+            session_id,
+            message_id,
+            recipe,
+            parameters,
+            attachments,
+            cx,
+        );
+    };
+    let Some((thread, session, project)) =
+        connection
+            .0
+            .read(cx)
+            .sessions
+            .get(&session_id)
+            .map(|session| {
+                (
+                    session.thread.clone(),
+                    session.acp_thread.clone(),
+                    session.thread.read(cx).project().clone(),
+                )
+            })
+    else {
+        return Task::ready(Err(anyhow::anyhow!("Recipe session is unavailable")));
+    };
+    let id = schedule.map_or_else(Uuid::new_v4, |(run, _)| run);
+    let steps = if recipe.version == 1 {
+        vec![RecipeActivityStep {
+            id: "run-recipe".into(),
+            status: RecipeStepStatus::Pending,
+            iteration: 0,
+            repetitions: 1,
+            turn: Some(message_id.clone()),
+            outcome: None,
+        }]
+    } else {
+        recipe
+            .steps
+            .iter()
+            .map(|step| RecipeActivityStep {
+                id: step.id.clone(),
+                status: RecipeStepStatus::Pending,
+                iteration: 0,
+                repetitions: step.repeat.unwrap_or(1),
+                turn: None,
+                outcome: None,
+            })
+            .collect()
+    };
+    let project_paths = project
+        .read(cx)
+        .worktree_paths(cx)
+        .folder_path_list()
+        .serialize();
+    store.update(cx, |store, cx| {
+        store.activity.insert(
+            id,
+            RecipeActivity {
+                id,
+                schedule_id: schedule.map(|(_, schedule)| schedule),
+                session_id: session_id.to_string(),
+                project_paths,
+                title: recipe.title.clone(),
+                started_at: store.clock.utc_now(),
+                status: RecipeRunStatus::Running,
+                steps,
+                current_step: None,
+                decision: None,
+                revision: 0,
+            },
+        );
+        cx.notify();
+    });
+    let tracking = RecipeTracking {
+        store: store.downgrade(),
+        id,
+    };
+    let subscription = cx.subscribe(&session, {
+        let tracking = tracking.clone();
+        let pending = RefCell::new(Vec::new());
+        move |_, event, cx| {
+            let (decision, waiting) = match event {
+                acp_thread::AcpThreadEvent::ToolAuthorizationRequested(id) => {
+                    (RecipeDecision::Tool(id.to_string()), true)
+                }
+                acp_thread::AcpThreadEvent::ToolAuthorizationReceived(id) => {
+                    (RecipeDecision::Tool(id.to_string()), false)
+                }
+                acp_thread::AcpThreadEvent::ElicitationRequested(id) => {
+                    (RecipeDecision::Elicitation(id.0.to_string()), true)
+                }
+                acp_thread::AcpThreadEvent::ElicitationResponded(id) => {
+                    (RecipeDecision::Elicitation(id.0.to_string()), false)
+                }
+                _ => return,
+            };
+            let mut pending = pending.borrow_mut();
+            if waiting {
+                if !pending.contains(&decision) {
+                    pending.push(decision);
+                }
+            } else {
+                pending.retain(|request| request != &decision);
+            }
+            tracking
+                .edit(cx, |run| {
+                    let current = pending.first();
+                    if run.decision.as_ref() == current {
+                        return false;
+                    }
+                    run.decision = current.cloned();
+                    true
+                })
+                .detach_and_log_err(cx);
+        }
+    });
+    if recipe.version == 1 {
+        tracking.step(0, RecipeStepStatus::Running, 1, cx);
+    } else {
+        tracking.edit(cx, |_| true).detach_and_log_err(cx);
+    }
+    let version = recipe.version;
+    let first_message = thread.read(cx).recipe_message_count();
+    let run = execute_recipe_inner(
+        connection,
+        session_id,
+        message_id,
+        recipe,
+        parameters,
+        attachments,
+        Some(tracking.clone()),
+        cx,
+    );
+    let connection = connection.clone();
+    cx.spawn(async move |cx| {
+        let result = run.await;
+        drop(subscription);
+        persist_workflow_session(&connection, &thread, &project, cx)
+            .await
+            .log_err();
+        let status = match &result {
+            Ok(response) if response.stop_reason == acp::StopReason::EndTurn => {
+                RecipeRunStatus::Succeeded
+            }
+            Ok(response) if response.stop_reason == acp::StopReason::Cancelled => {
+                RecipeRunStatus::Cancelled
+            }
+            Err(error) if needs_attention(error) => RecipeRunStatus::NeedsAttention,
+            _ => RecipeRunStatus::Failed,
+        };
+        if version == 1 {
+            let output = thread.read_with(cx, |thread, _| thread.recipe_step_output(first_message));
+            match output {
+                Ok((output, _)) => cx.update(|cx| tracking.outcome(0, &output, cx)),
+                Err(error) => log::error!("Unable to read recipe outcome: {error:#}"),
+            }
+            if status == RecipeRunStatus::Succeeded {
+                cx.update(|cx| tracking.step(0, RecipeStepStatus::Completed, 1, cx));
+            }
+        }
+        cx.update(|cx| {
+            tracking.edit(cx, |run| {
+                run.finish(status);
+                true
+            })
+        })
+        .await
+        .log_err();
+        result
+    })
 }
 
 pub(crate) fn execute_recipe(
@@ -1170,6 +1505,48 @@ pub(crate) fn execute_recipe(
     attachments: Vec<acp::ContentBlock>,
     cx: &mut App,
 ) -> Task<Result<acp::PromptResponse>> {
+    execute_recipe_inner(
+        connection,
+        session_id,
+        client_user_message_id,
+        recipe,
+        parameters,
+        attachments,
+        None,
+        cx,
+    )
+}
+
+fn execute_recipe_inner(
+    connection: &crate::NativeAgentConnection,
+    session_id: acp::SessionId,
+    client_user_message_id: ClientUserMessageId,
+    recipe: &Recipe,
+    parameters: &HashMap<String, String>,
+    attachments: Vec<acp::ContentBlock>,
+    tracking: Option<RecipeTracking>,
+    cx: &mut App,
+) -> Task<Result<acp::PromptResponse>> {
+    if recipe.specification {
+        let Some(thread) = connection
+            .0
+            .read(cx)
+            .sessions
+            .get(&session_id)
+            .map(|session| session.thread.clone())
+        else {
+            return Task::ready(Err(anyhow::anyhow!("Recipe session is unavailable")));
+        };
+        if !thread.read(cx).can_use_spec_workflow(cx) {
+            return Task::ready(Err(anyhow::anyhow!(
+                "Feature recipes require a trusted local project and the built-in agent"
+            )));
+        }
+        thread.update(cx, |thread, cx| {
+            thread.spec_session.get_or_insert_with(Default::default);
+            cx.notify();
+        });
+    }
     if recipe.version == 2 {
         return execute_workflow(
             connection,
@@ -1178,6 +1555,7 @@ pub(crate) fn execute_recipe(
             recipe.clone(),
             parameters.clone(),
             attachments,
+            tracking,
             cx,
         );
     }
@@ -1203,6 +1581,38 @@ pub(crate) fn execute_recipe(
     })
 }
 
+fn workflow_deadline(
+    tracking: Option<RecipeTracking>,
+    duration: std::time::Duration,
+    cx: &mut App,
+) -> Task<()> {
+    let executor = cx.background_executor().clone();
+    cx.spawn(async move |cx| {
+        let Some(tracking) = tracking else {
+            executor.timer(duration).await;
+            return;
+        };
+        let mut remaining = duration;
+        let clock = executor.scheduler_executor().scheduler().clock();
+        while !remaining.is_zero() {
+            let started = clock.now();
+            executor
+                .timer(remaining.min(std::time::Duration::from_secs(1)))
+                .await;
+            let waiting = tracking.store.read_with(cx, |store, _| {
+                store
+                    .activity
+                    .get(&tracking.id)
+                    .is_some_and(|run| run.decision.is_some())
+            });
+            let Ok(waiting) = waiting else { return };
+            if !waiting {
+                remaining = remaining.saturating_sub(clock.now().duration_since(started));
+            }
+        }
+    })
+}
+
 fn execute_workflow(
     connection: &crate::NativeAgentConnection,
     session_id: acp::SessionId,
@@ -1210,6 +1620,7 @@ fn execute_workflow(
     recipe: Recipe,
     parameters: HashMap<String, String>,
     attachments: Vec<acp::ContentBlock>,
+    tracking: Option<RecipeTracking>,
     cx: &mut App,
 ) -> Task<Result<acp::PromptResponse>> {
     use crate::recipe_workflow::{FailurePolicy, StepOutcome, StepStatus};
@@ -1263,10 +1674,12 @@ fn execute_workflow(
             })
         }
     });
-    let overall_deadline = cx
-        .background_executor()
-        .timer(std::time::Duration::from_secs(15 * 60))
-        .fuse();
+    let overall_deadline = workflow_deadline(
+        tracking.clone(),
+        std::time::Duration::from_secs(15 * 60),
+        cx,
+    )
+    .fuse();
     let connection = connection.clone();
     cx.spawn(async move |cx| {
         let _restore_policy = restore_policy;
@@ -1289,6 +1702,7 @@ fn execute_workflow(
             let operation = async {
                 let mut outcomes = HashMap::<String, StepOutcome>::default();
                 let mut index = 0;
+                let mut iteration = 1;
                 let mut output_bytes = 0usize;
                 let mut first_message_id = Some(first_message_id);
                 let mut attachments = Some(attachments);
@@ -1318,6 +1732,9 @@ fn execute_workflow(
                         .transpose()?
                         .unwrap_or(true);
                     if !enabled {
+                        if let Some(tracking) = &tracking {
+                            cx.update(|cx| tracking.step(index, RecipeStepStatus::Skipped, 0, cx));
+                        }
                         outcomes.insert(
                             step.id.clone(),
                             StepOutcome {
@@ -1333,6 +1750,9 @@ fn execute_workflow(
                         );
                         index += 1;
                         continue;
+                    }
+                    if let Some(tracking) = &tracking {
+                        cx.update(|cx| tracking.step(index, RecipeStepStatus::Running, iteration, cx));
                     }
                     let prompt = crate::recipe_workflow::render_step(step, &parameters, &outcomes)?;
                     let mut single = recipe.clone();
@@ -1365,10 +1785,9 @@ fn execute_workflow(
                         rendered.len() <= MAX_RENDERED_RECIPE_BYTES,
                         "Rendered step exceeds 1 MiB"
                     );
-                    let step_deadline = cx
-                        .background_executor()
-                        .timer(std::time::Duration::from_secs(5 * 60))
-                        .fuse();
+                    let step_deadline = cx.update(|cx| {
+                        workflow_deadline(tracking.clone(), std::time::Duration::from_secs(5 * 60), cx)
+                    }).fuse();
                     futures::pin_mut!(step_deadline);
                     workflow_progress(
                         &thread,
@@ -1389,6 +1808,9 @@ fn execute_workflow(
                     let message_id = first_message_id
                         .take()
                         .unwrap_or_else(ClientUserMessageId::new);
+                    if let Some(tracking) = &tracking {
+                        cx.update(|cx| tracking.turn(index, message_id.clone(), cx));
+                    }
                     let attachments = attachments.take().unwrap_or_default();
                     let path_style = project.read_with(cx, |project, cx| project.path_style(cx));
                     let operation = cx
@@ -1492,6 +1914,9 @@ fn execute_workflow(
                     if !succeeded {
                         thread.update(cx, |thread, cx| thread.cancel(cx)).await;
                     }
+                    if let Some(tracking) = &tracking {
+                        cx.update(|cx| tracking.outcome(index, &output, cx));
+                    }
                     let status = if succeeded {
                         StepStatus::Succeeded
                     } else {
@@ -1518,6 +1943,15 @@ fn execute_workflow(
                             result = persistence => result?,
                         }
                     }
+                    if succeeded && iteration < step.repeat.unwrap_or(1) {
+                        iteration += 1;
+                        continue;
+                    }
+                    if let Some(tracking) = &tracking {
+                        let status = if succeeded { RecipeStepStatus::Completed } else { RecipeStepStatus::Failed };
+                        cx.update(|cx| tracking.step(index, status, iteration, cx));
+                    }
+                    iteration = 1;
                     let target = if succeeded {
                         step.next.as_ref()
                     } else {
@@ -1538,7 +1972,10 @@ fn execute_workflow(
                             .context("Workflow target is unavailable")?,
                         None => index + 1,
                     };
-                    for unvisited in recipe.steps.iter().take(next).skip(index + 1) {
+                    for (unvisited_index, unvisited) in recipe.steps.iter().enumerate().take(next).skip(index + 1) {
+                        if let Some(tracking) = &tracking {
+                            cx.update(|cx| tracking.step(unvisited_index, RecipeStepStatus::Skipped, 0, cx));
+                        }
                         outcomes.insert(
                             unvisited.id.clone(),
                             StepOutcome {
@@ -1593,6 +2030,7 @@ fn workflow_progress(
     message: String,
     cx: &mut gpui::AsyncApp,
 ) {
+    let transcript_message = format!("\n\n{message}\n\n");
     thread.update(cx, |thread, cx| {
         if let Some(policy) = &thread.recipe_scan_policy {
             let now = cx
@@ -1606,10 +2044,10 @@ fn workflow_progress(
                 .borrow_mut()
                 .push(format!("{now} · {message}"));
         }
-        thread.push_acp_agent_block(message.clone().into(), cx)
+        thread.push_acp_agent_block(transcript_message.clone().into(), cx);
     });
     session.update(cx, |session, cx| {
-        session.push_assistant_content_block(message.into(), false, cx)
+        session.push_assistant_content_block(transcript_message.into(), false, cx)
     });
 }
 
@@ -1807,6 +2245,8 @@ pub struct Recipe {
     pub version: u32,
     pub title: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub specification: bool,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub prompt: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2215,6 +2655,26 @@ mod tests {
             recipe
                 .render(&HashMap::default())?
                 .contains("the current changes")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn recipe_request_matches_an_explicit_catalog_name() -> Result<()> {
+        let entries = builtin_recipes();
+        let (recipe, arguments) = recipe_request(
+            &entries,
+            "Run the Feature specification recipe with feature=Add CSV import.",
+        )
+        .context("Expected a recipe launch")??;
+        assert_eq!(recipe.id, "builtin/feature-specification");
+        assert_eq!(arguments, "feature=Add CSV import");
+        assert!(recipe_request(&entries, "How do I run a recipe?").is_none());
+        assert!(recipe_request(&entries, "Run the importer tests").is_none());
+        let duplicate = [recipe.clone(), recipe];
+        assert!(
+            recipe_request(&duplicate, "Run the Feature specification recipe")
+                .is_some_and(|request| request.is_err())
         );
         Ok(())
     }
