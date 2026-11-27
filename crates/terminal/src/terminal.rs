@@ -828,7 +828,10 @@ impl NativeTerminalEnvironment {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 use native_task_helper::{
-    linux_coverage_completion::CoverageTaskCompletion, task_actor::OriginalTaskActor,
+    linux_coverage_completion::{
+        CoverageTaskCompletion, CoverageTaskReportReservation, SealedCoverageTaskReport,
+    },
+    task_actor::OriginalTaskActor,
     task_completion::TaskBuildInvocation,
 };
 
@@ -842,6 +845,7 @@ struct CoverageTaskSpawn {
 pub struct CoverageTaskObservation {
     completion: CoverageTaskCompletion,
     invocation: TaskBuildInvocation,
+    report: CoverageTaskReportReservation,
     original_actor: futures::channel::oneshot::Receiver<OriginalTaskActor>,
     terminal_exit: Receiver<Option<ExitStatus>>,
     executor: BackgroundExecutor,
@@ -849,12 +853,15 @@ pub struct CoverageTaskObservation {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 impl CoverageTaskObservation {
-    pub async fn finish(self) -> Result<ExitStatus> {
+    pub async fn finish(self) -> Result<(ExitStatus, Option<SealedCoverageTaskReport>)> {
         let actor = self
             .original_actor
             .await
             .context("Coverage Task was not launched")?;
-        let receipt = self.completion.observe(actor, self.invocation).await?;
+        let receipt = self
+            .completion
+            .observe(actor, self.invocation, Some(self.report))
+            .await?;
         let status = futures::future::select(
             Box::pin(self.terminal_exit.recv()),
             self.executor.timer(Duration::from_secs(10)),
@@ -1512,6 +1519,7 @@ impl TerminalBuilder {
         launch: SpawnInTerminal,
         structured_task: Option<task::StructuredTaskHandle>,
         invocation: TaskBuildInvocation,
+        report: CoverageTaskReportReservation,
         window_id: u64,
         cx: &App,
     ) -> Result<(Task<Result<Self>>, CoverageTaskObservation)> {
@@ -1570,6 +1578,7 @@ impl TerminalBuilder {
             CoverageTaskObservation {
                 completion,
                 invocation,
+                report,
                 original_actor,
                 terminal_exit,
                 executor: cx.background_executor().clone(),

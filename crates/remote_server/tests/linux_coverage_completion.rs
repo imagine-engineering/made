@@ -47,6 +47,11 @@ fn coverage_helper_refuses_an_oversized_invocation() -> io::Result<()> {
 }
 
 #[test]
+fn coverage_helper_refuses_unbound_replaced_and_changed_reports() -> io::Result<()> {
+    run_fixture("report-replacement")
+}
+
+#[test]
 fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_coverage_completion::CoverageTaskCompletion;
 

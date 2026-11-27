@@ -3,11 +3,16 @@ use crate::{
     task_completion::{MAX_TASK_BUILD_INVOCATION_BYTES, TaskBuildInvocation},
 };
 use futures_lite::{AsyncReadExt as _, AsyncWriteExt as _, future};
+use sha2::{Digest as _, Sha256};
 use smol::net::unix::{UnixListener, UnixStream};
 use std::{
+    fs::{self, File, Metadata},
     io,
     net::Shutdown,
-    os::unix::{fs::PermissionsExt as _, process::CommandExt as _, process::ExitStatusExt as _},
+    os::unix::{
+        fs::{FileExt as _, MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
+        process::{CommandExt as _, ExitStatusExt as _},
+    },
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
     time::Duration,
@@ -17,6 +22,132 @@ const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const PROTOCOL_VERSION: u8 = 1;
 const COMPLETION_ACKNOWLEDGED: u8 = 1;
+const MAX_REPORT_BYTES: usize = 32 * 1024 * 1024;
+
+pub struct CoverageTaskReportReservation {
+    directory: tempfile::TempDir,
+    directory_metadata: Metadata,
+    file: File,
+    byte_limit: usize,
+}
+
+impl CoverageTaskReportReservation {
+    pub fn new(byte_limit: usize) -> io::Result<Self> {
+        if !(1..=MAX_REPORT_BYTES).contains(&byte_limit) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid Coverage Task report limit",
+            ));
+        }
+        let directory = tempfile::Builder::new()
+            .prefix("zed-coverage-report-")
+            .tempdir_in("/tmp")?;
+        fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700))?;
+        let directory_metadata = fs::symlink_metadata(directory.path())?;
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(directory.path().join("report.json"))?;
+        Ok(Self {
+            directory,
+            directory_metadata,
+            file,
+            byte_limit,
+        })
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.directory.path().join("report.json")
+    }
+
+    fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()> {
+        let path = self.path();
+        if self.checked_metadata()?.len() != 0
+            || invocation
+                .arguments()
+                .iter()
+                .filter(|argument| std::ffi::OsStr::new(argument) == path.as_os_str())
+                .count()
+                != 1
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Coverage Task invocation does not own its empty report",
+            ));
+        }
+        Ok(())
+    }
+
+    fn checked_metadata(&self) -> io::Result<Metadata> {
+        let directory = fs::symlink_metadata(self.directory.path())?;
+        if !directory.is_dir()
+            || directory.dev() != self.directory_metadata.dev()
+            || directory.ino() != self.directory_metadata.ino()
+        {
+            return Err(io::Error::other(
+                "Coverage Task report directory was replaced",
+            ));
+        }
+        let named = fs::symlink_metadata(self.path())?;
+        let held = self.file.metadata()?;
+        if !named.is_file() || named.nlink() != 1 || !same_report_version(&named, &held) {
+            return Err(io::Error::other("Coverage Task report was replaced"));
+        }
+        Ok(held)
+    }
+
+    fn read_bytes(&self) -> io::Result<Vec<u8>> {
+        let before = self.checked_metadata()?;
+        let length = usize::try_from(before.len())
+            .ok()
+            .filter(|length| (1..=self.byte_limit).contains(length))
+            .ok_or_else(|| {
+                io::Error::other("Coverage Task report is empty or exceeds its limit")
+            })?;
+        let mut bytes = vec![0; length];
+        self.file.read_exact_at(&mut bytes, 0)?;
+        if !same_report_version(&before, &self.checked_metadata()?) {
+            return Err(io::Error::other("Coverage Task report changed during read"));
+        }
+        Ok(bytes)
+    }
+
+    fn seal(self) -> io::Result<SealedCoverageTaskReport> {
+        let digest = Sha256::digest(self.read_bytes()?).into();
+        Ok(SealedCoverageTaskReport {
+            reservation: self,
+            digest,
+        })
+    }
+}
+
+fn same_report_version(left: &Metadata, right: &Metadata) -> bool {
+    left.dev() == right.dev()
+        && left.ino() == right.ino()
+        && left.len() == right.len()
+        && left.ctime() == right.ctime()
+        && left.ctime_nsec() == right.ctime_nsec()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+}
+
+pub struct SealedCoverageTaskReport {
+    reservation: CoverageTaskReportReservation,
+    digest: [u8; 32],
+}
+
+impl SealedCoverageTaskReport {
+    pub fn read(self) -> io::Result<Vec<u8>> {
+        let bytes = self.reservation.read_bytes()?;
+        let digest: [u8; 32] = Sha256::digest(&bytes).into();
+        if digest != self.digest {
+            return Err(io::Error::other("Sealed Coverage Task report changed"));
+        }
+        Ok(bytes)
+    }
+}
 
 pub struct CoverageTaskCompletion {
     listener: UnixListener,
@@ -46,7 +177,11 @@ impl CoverageTaskCompletion {
         self,
         actor: OriginalTaskActor,
         invocation: TaskBuildInvocation,
+        report: Option<CoverageTaskReportReservation>,
     ) -> io::Result<CoverageTaskReceipt> {
+        if let Some(report) = report.as_ref() {
+            report.validate_invocation(&invocation)?;
+        }
         let request = invocation.encode_helper_environment()?;
         let mut challenge = [0; 32];
         getrandom::fill(&mut challenge)
@@ -87,8 +222,18 @@ impl CoverageTaskCompletion {
                 _ => return Err(invalid_completion()),
             };
             actor.revalidate()?;
+            let report = match (termination, report) {
+                (CoverageTaskTermination::Exited(0), Some(report)) => {
+                    Some(smol::unblock(move || report.seal()).await?)
+                }
+                _ => None,
+            };
+            actor.revalidate()?;
             connection.write_all(&[COMPLETION_ACKNOWLEDGED]).await?;
-            Ok(CoverageTaskReceipt { termination })
+            Ok(CoverageTaskReceipt {
+                termination,
+                report,
+            })
         })
         .await
     }
@@ -123,14 +268,18 @@ impl CoverageTaskTermination {
 
 pub struct CoverageTaskReceipt {
     termination: CoverageTaskTermination,
+    report: Option<SealedCoverageTaskReport>,
 }
 
 impl CoverageTaskReceipt {
-    pub fn verify_exit(self, status: ExitStatus) -> io::Result<ExitStatus> {
+    pub fn verify_exit(
+        self,
+        status: ExitStatus,
+    ) -> io::Result<(ExitStatus, Option<SealedCoverageTaskReport>)> {
         if self.termination != CoverageTaskTermination::from_status(status)? {
             return Err(invalid_completion());
         }
-        Ok(status)
+        Ok((status, self.report))
     }
 }
 

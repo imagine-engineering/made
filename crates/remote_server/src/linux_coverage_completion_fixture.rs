@@ -1,7 +1,8 @@
-use anyhow::{Result, ensure};
+use anyhow::{Context as _, Result, ensure};
 use futures::io::AsyncReadExt as _;
 use native_task_helper::{
-    linux_coverage_completion::CoverageTaskCompletion, task_actor::OriginalTaskActor,
+    linux_coverage_completion::{CoverageTaskCompletion, CoverageTaskReportReservation},
+    task_actor::OriginalTaskActor,
     task_completion::TaskBuildInvocation,
 };
 use std::{
@@ -28,15 +29,32 @@ fn spawn_helper(completion: &CoverageTaskCompletion) -> io::Result<smol::process
 }
 
 fn invocation(directory: &Path, shell: &str) -> io::Result<TaskBuildInvocation> {
+    shell_invocation(directory, shell, None)
+}
+
+fn shell_invocation(
+    directory: &Path,
+    shell: &str,
+    report: Option<&Path>,
+) -> io::Result<TaskBuildInvocation> {
+    let mut arguments = vec![
+        "-c".into(),
+        shell.into(),
+        "fixture".into(),
+        String::new(),
+        "two words".into(),
+    ];
+    if let Some(report) = report {
+        arguments.push(
+            report
+                .to_str()
+                .ok_or_else(|| io::Error::other("Report path is not Unicode"))?
+                .into(),
+        );
+    }
     TaskBuildInvocation::new(
         "/bin/sh".into(),
-        vec![
-            "-c".into(),
-            shell.into(),
-            "fixture".into(),
-            String::new(),
-            "two words".into(),
-        ],
+        arguments,
         directory.to_path_buf(),
         BTreeMap::from([("COPPER_APPROVED_TEST_VALUE".into(), "literal value".into())]),
     )
@@ -81,9 +99,9 @@ fn terminal_child_exit(directory: &Path) -> Result<()> {
             let mut helper = spawn_helper(&completion)?;
             let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
             let receipt = completion
-                .observe(actor, invocation(directory, shell)?)
+                .observe(actor, invocation(directory, shell)?, None)
                 .await?;
-            let actual = receipt.verify_exit(wait(&mut helper).await?)?;
+            let (actual, _) = receipt.verify_exit(wait(&mut helper).await?)?;
             let mut output = String::new();
             helper
                 .stdout
@@ -128,6 +146,7 @@ fn observer_drop(directory: &Path) -> Result<()> {
                     .observe(
                         actor,
                         invocation(directory, "printf '%s' $$ > workload; exec /bin/sleep 60")?,
+                        None,
                     )
                     .await?;
                 Err(io::Error::other(
@@ -173,7 +192,7 @@ fn foreign_child(directory: &Path) -> Result<()> {
         let actor = OriginalTaskActor::from_smol_child(&mut original, &expected_image)?;
         let mut other = spawn_helper(&completion)?;
         let result = completion
-            .observe(actor, invocation(directory, "touch report")?)
+            .observe(actor, invocation(directory, "touch report")?, None)
             .await;
         ensure!(
             matches!(result, Err(error) if error.kind() == io::ErrorKind::PermissionDenied),
@@ -234,16 +253,16 @@ fn oversized_invocation(directory: &Path) -> Result<()> {
 }
 
 fn terminal_handoff(
-    directory: &Path,
     headless: bool,
     invocation: TaskBuildInvocation,
-    verify_report: fn(&Path) -> Result<()>,
+    report: CoverageTaskReportReservation,
+    verify_report: fn(&[u8]) -> Result<()>,
 ) -> Result<()> {
     use gpui::AppContext as _;
     use terminal::{HeadlessTerminal, TerminalBuilder};
 
-    let directory = directory.to_path_buf();
     let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let report_path = report.path();
     gpui_platform::headless().run(move |cx| {
         release_channel::init(semver::Version::new(1, 16, 2), cx);
         cx.set_global(HeadlessTerminal(headless));
@@ -254,6 +273,7 @@ fn terminal_handoff(
             },
             None,
             invocation,
+            report,
             1,
             cx,
         );
@@ -270,12 +290,14 @@ fn terminal_handoff(
                     completion,
                 )
                 .await;
-                let observed = observed?;
+                let (observed, report) = observed?;
                 ensure!(
                     observed.success() && ordinary_completion == Some(observed),
                     "The authenticated receipt and ordinary Terminal observer must share the same exit"
                 );
-                verify_report(&directory)?;
+                let report = report.context("Authenticated Task receipt has no sealed report")?;
+                let bytes = cx.background_spawn(async move { report.read() }).await?;
+                verify_report(&bytes)?;
                 Ok(())
             };
             let result = match futures::future::select(Box::pin(observation), deadline).await {
@@ -289,26 +311,84 @@ fn terminal_handoff(
         })
         .detach();
     });
-    receive.recv()?
+    receive.recv()??;
+    ensure!(!report_path.exists(), "Coverage report was retained");
+    Ok(())
 }
 
 fn shell_terminal(directory: &Path, headless: bool) -> Result<()> {
-    let invocation = invocation(
+    let report = CoverageTaskReportReservation::new(1024)?;
+    let invocation = shell_invocation(
         directory,
-        r#"test "$1" = "" && test "$2" = 'two words' && printf '%s' "$COPPER_APPROVED_TEST_VALUE" > report"#,
+        r#"test "$1" = "" && test "$2" = 'two words' && printf '%s' "$COPPER_APPROVED_TEST_VALUE" > "$3""#,
+        Some(&report.path()),
     )?;
-    terminal_handoff(directory, headless, invocation, |directory| {
+    terminal_handoff(headless, invocation, report, |bytes| {
         ensure!(
-            std::fs::read(directory.join("report"))? == b"literal value",
+            bytes == b"literal value",
             "Coverage Task report did not come from the approved invocation"
         );
         Ok(())
     })
 }
 
-fn collector_terminal(directory: &Path) -> Result<()> {
-    use anyhow::Context as _;
+fn report_replacement(directory: &Path) -> Result<()> {
+    smol::block_on(async {
+        let expected_image = File::open("/proc/self/exe")?;
+        let shell = r#"printf 'valid' > "$3""#;
+        for (command, attach_output, expected_error) in [
+            (shell, false, Some("does not own its empty report")),
+            ("true", true, Some("report is empty or exceeds its limit")),
+            (
+                r#"printf 'exceeds-limit' > "$3""#,
+                true,
+                Some("report is empty or exceeds its limit"),
+            ),
+            (
+                r#"rm "$3" && printf 'valid' > "$3""#,
+                true,
+                Some("report was replaced"),
+            ),
+            (shell, true, None),
+        ] {
+            let report = CoverageTaskReportReservation::new(5)?;
+            let path = report.path();
+            let completion = CoverageTaskCompletion::bind()?;
+            let mut helper = spawn_helper(&completion)?;
+            let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
+            let invocation =
+                shell_invocation(directory, command, attach_output.then_some(path.as_path()))?;
+            let result = completion.observe(actor, invocation, Some(report)).await;
+            let exit = wait(&mut helper).await?;
+            if let Some(message) = expected_error {
+                ensure!(!exit.success(), "An invalid report was acknowledged");
+                let error = result
+                    .err()
+                    .context("Expected Coverage Task report refusal")?;
+                ensure!(
+                    error.to_string().contains(message),
+                    "Unexpected report refusal: {error}"
+                );
+            } else {
+                let (status, report) = result?.verify_exit(exit)?;
+                ensure!(status.success(), "Expected a successful coverage workload");
+                let report = report.context("Successful receipt is missing its report")?;
+                std::fs::write(&path, b"other")?;
+                let error = report.read().err().context("Changed report was accepted")?;
+                ensure!(
+                    error
+                        .to_string()
+                        .contains("Sealed Coverage Task report changed"),
+                    "Unexpected sealed report refusal: {error}"
+                );
+            }
+            ensure!(!path.exists(), "Invalid coverage report was retained");
+        }
+        Ok(())
+    })
+}
 
+fn collector_terminal(directory: &Path) -> Result<()> {
     for (name, bytes) in [
         (
             "Cargo.toml",
@@ -353,7 +433,7 @@ fn collector_terminal(directory: &Path) -> Result<()> {
 
     let cargo = std::env::var_os("RUST_TOOLS_COVERAGE_CARGO")
         .context("The independently installed Cargo is required")?;
-    let report = directory.join("coverage.json");
+    let report = CoverageTaskReportReservation::new(task::MAX_TASK_ARTIFACT_BYTES as usize)?;
     let mut environment = BTreeMap::new();
     for name in [
         "PATH",
@@ -378,6 +458,7 @@ fn collector_terminal(directory: &Path) -> Result<()> {
             "--json".into(),
             "--output-path".into(),
             report
+                .path()
                 .to_str()
                 .context("Report path is not Unicode")?
                 .into(),
@@ -390,9 +471,8 @@ fn collector_terminal(directory: &Path) -> Result<()> {
         directory.to_path_buf(),
         environment,
     )?;
-    terminal_handoff(directory, false, invocation, |directory| {
-        let report: serde_json::Value =
-            serde_json::from_reader(File::open(directory.join("coverage.json"))?)?;
+    terminal_handoff(false, invocation, report, |bytes| {
+        let report: serde_json::Value = serde_json::from_slice(bytes)?;
         ensure!(
             report["type"].as_str() == Some("llvm.coverage.json.export"),
             "Unexpected coverage export type"
@@ -427,6 +507,7 @@ pub enum Scenario {
     PtyTerminal,
     HeadlessTerminal,
     CollectorTerminal,
+    ReportReplacement,
 }
 
 pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
@@ -442,5 +523,6 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::PtyTerminal => shell_terminal(directory, false),
         Scenario::HeadlessTerminal => shell_terminal(directory, true),
         Scenario::CollectorTerminal => collector_terminal(directory),
+        Scenario::ReportReplacement => report_replacement(directory),
     }
 }
