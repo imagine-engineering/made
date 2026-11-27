@@ -4,7 +4,8 @@
     feature = "test-support"
 ))]
 
-use std::{ffi::OsStr, io, process::Command};
+use smol::process::Command;
+use std::{ffi::OsStr, io};
 
 fn run_fixture(scenario: &str) -> io::Result<()> {
     run_fixture_with_host(OsStr::new(env!("CARGO_BIN_EXE_remote_server")), scenario)
@@ -12,12 +13,14 @@ fn run_fixture(scenario: &str) -> io::Result<()> {
 
 fn run_fixture_with_host(host: &OsStr, scenario: &str) -> io::Result<()> {
     let directory = tempfile::tempdir()?;
-    let output = Command::new(host)
-        .arg("coverage-completion-fixture")
-        .arg("--directory")
-        .arg(directory.path())
-        .arg(scenario)
-        .output()?;
+    let output = smol::block_on(
+        Command::new(host)
+            .arg("coverage-completion-fixture")
+            .arg("--directory")
+            .arg(directory.path())
+            .arg(scenario)
+            .output(),
+    )?;
     assert!(
         output.status.success(),
         "{}",
@@ -56,11 +59,13 @@ fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_coverage_completion::CoverageTaskCompletion;
 
     let completion = CoverageTaskCompletion::bind()?;
-    let output = Command::new(env!("CARGO_BIN_EXE_remote_server"))
-        .arg("observe-coverage-task")
-        .arg("--socket")
-        .arg(completion.socket())
-        .output()?;
+    let output = smol::block_on(
+        Command::new(env!("CARGO_BIN_EXE_remote_server"))
+            .arg("observe-coverage-task")
+            .arg("--socket")
+            .arg(completion.socket())
+            .output(),
+    )?;
     assert!(!output.status.success());
     assert!(
         String::from_utf8_lossy(&output.stderr)
