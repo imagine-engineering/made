@@ -19958,6 +19958,7 @@ async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mu
         .read_with(cx, |client, _| client.proto_client())
         .request(proto::GetRustCoverageTaskSession {
             project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            authorization: None,
         })
         .await
         .expect("disabled host returns typed session unsupported");
@@ -20391,6 +20392,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     let transport = client.read_with(cx, |client, _| client.proto_client());
     let get_session = || proto::GetRustCoverageTaskSession {
         project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        authorization: None,
     };
     let obtain_session = |response: proto::RustCoverageTaskResponse| {
         assert_eq!(response.operation_id, 0);
@@ -20421,6 +20423,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         target_kind: proto::RustCoverageTargetKind::Binary as i32,
         target_name: target_name.into(),
         session_token: session.clone(),
+        authorization: None,
     };
     let require_failure = |result: proto::RustCoverageTaskResponse, expected| {
         assert_eq!(
@@ -20596,6 +20599,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         project_id: proto::REMOTE_SERVER_PROJECT_ID,
         operation_id,
         session_token: session.clone(),
+        authorization: None,
     };
     require_failure(
         transport

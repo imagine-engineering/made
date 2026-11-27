@@ -37,7 +37,10 @@ use rpc::proto;
 use std::sync::{Arc, Mutex};
 use util::rel_path::rel_path;
 
-#[cfg(all(feature = "rust-tools-test", target_os = "macos"))]
+#[cfg(all(
+    feature = "rust-tools-test",
+    any(target_os = "linux", target_os = "macos")
+))]
 async fn wait_for_scanned_relay_artifacts(
     project: &gpui::Entity<project::Project>,
     root: &std::path::Path,
@@ -1454,6 +1457,40 @@ async fn rust_tools_relay_enforces_guest_capability(
         denied_import_cancel.is_err(),
         "a read-only guest cannot cancel a native profile import"
     );
+
+    for denied in [
+        client_b
+            .client()
+            .request(proto::GetRustCoverageTaskSession {
+                project_id,
+                authorization: None,
+            })
+            .await,
+        client_b
+            .client()
+            .request(proto::RunRustCoverageTask {
+                project_id,
+                operation_id: 1,
+                ..Default::default()
+            })
+            .await,
+        client_b
+            .client()
+            .request(proto::CancelRustCoverageTask {
+                project_id,
+                operation_id: 1,
+                ..Default::default()
+            })
+            .await,
+    ] {
+        let error = denied.expect_err("a read-only guest cannot use a Coverage Task");
+        assert!(
+            error
+                .to_string()
+                .contains("not authorized to edit projects"),
+            "{error:#}"
+        );
+    }
 
     let denied = client_b
         .client()
@@ -4527,6 +4564,556 @@ async fn rust_tools_relay_reports_missing_host_capabilities(
             .is_some(),
         "{error:#}"
     );
+}
+
+#[gpui::test]
+#[cfg(all(feature = "rust-tools-test", target_os = "linux"))]
+async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_revokes_old_member(
+    executor: BackgroundExecutor,
+    cx_host: &mut TestAppContext,
+    cx_owner: &mut TestAppContext,
+    cx_other: &mut TestAppContext,
+) {
+    use project::{
+        ProjectPath,
+        cargo_workspace::{CargoTargetKind, CargoWorkspaceKey},
+        cargo_workspace_store::CargoCoverageSelection,
+        trusted_worktrees::{PathTrust, TrustedWorktrees},
+    };
+    use proto::rust_coverage_task_response::Outcome;
+    use remote::{
+        ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteClient, RemoteConnection,
+    };
+    use std::{path::PathBuf, time::Duration};
+
+    let binary = std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY")
+        .map(PathBuf::from)
+        .expect("independently built enabled Linux host");
+    let host_data = tempfile::tempdir_in("/tmp").expect("create isolated host data");
+    std::fs::create_dir(host_data.path().join("config")).expect("host config directory");
+    std::fs::write(
+        host_data.path().join("config/settings.json"),
+        r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
+    )
+    .expect("host coverage opt-in");
+    let fixture = tempfile::tempdir_in("/tmp").expect("create Rust fixture");
+    std::fs::create_dir_all(fixture.path().join("src/bin")).expect("fixture binary directory");
+    for (path, source) in [
+        (
+            "Cargo.toml",
+            "[package]\nname = \"relay-fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[workspace]\n",
+        ),
+        (
+            "Cargo.lock",
+            "version = 4\n[[package]]\nname = \"relay-fixture\"\nversion = \"0.0.0\"\n",
+        ),
+        (
+            "src/bin/short.rs",
+            "fn main() {\n    println!(\"coverage\");\n}\n",
+        ),
+        (
+            "src/bin/held.rs",
+            "fn main() {\n    std::fs::write(\"target/started\", std::process::id().to_string()).expect(\"announce\");\n    for _ in 0..500 {\n        if std::path::Path::new(\"target/release\").exists() { return; }\n        std::thread::sleep(std::time::Duration::from_millis(50));\n    }\n}\n",
+        ),
+        (".gitignore", "/target/\n"),
+    ] {
+        std::fs::write(fixture.path().join(path), source).expect("write fixture source");
+    }
+    executor.allow_parking();
+    cx_host.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    for cx in [&mut *cx_host, &mut *cx_owner, &mut *cx_other] {
+        cx.executor().allow_parking();
+        cx.update(|cx| project::trusted_worktrees::init(Default::default(), cx));
+    }
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server
+        .create_client(cx_host, "coverage_producer_owner")
+        .await;
+    let owner = server
+        .create_client(cx_owner, "coverage_request_owner")
+        .await;
+    let other = server
+        .create_client(cx_other, "second_coverage_member")
+        .await;
+    server
+        .create_room(&mut [(&host, cx_host), (&owner, cx_owner), (&other, cx_other)])
+        .await;
+    for cx in [&mut *cx_host, &mut *cx_owner, &mut *cx_other] {
+        cx.update(|cx| {
+            project::task_store::set_experimental_feature_for_test(
+                "rust-coverage-experimental",
+                true,
+                cx,
+            )
+        });
+    }
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host_data.path().join("server_state"))
+            .with_test_data_directory(host_data.path().to_path_buf())
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel_proxy, proxy_cancelled) = futures::channel::oneshot::channel();
+    let transport = cx_host
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::setup(),
+                connection.clone(),
+                proxy_cancelled,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to the separate producer")
+        .expect("remote client");
+    let (project_host, _) = host
+        .build_ssh_project(fixture.path(), transport.clone(), true, cx_host)
+        .await;
+    let active_call = cx_host.read(ActiveCall::global);
+    let project_id = active_call
+        .update(cx_host, |call, cx| {
+            call.share_project(project_host.clone(), cx)
+        })
+        .await
+        .expect("share the separately produced project");
+    let project_owner = owner.join_remote_project(project_id, cx_owner).await;
+    let project_other = other.join_remote_project(project_id, cx_other).await;
+    for (project, cx) in [
+        (&project_host, &mut *cx_host),
+        (&project_owner, &mut *cx_owner),
+        (&project_other, &mut *cx_other),
+    ] {
+        wait_for_scanned_relay_artifacts(
+            project,
+            fixture.path(),
+            &["Cargo.toml", "src/bin/short.rs"],
+            &executor,
+            cx,
+        )
+        .await;
+        let (store, id) = project.read_with(cx, |project, cx| {
+            (
+                project.worktree_store(),
+                project
+                    .visible_worktrees(cx)
+                    .next()
+                    .expect("fixture worktree")
+                    .read(cx)
+                    .id(),
+            )
+        });
+        cx.update(|cx| {
+            TrustedWorktrees::try_get_global(cx)
+                .expect("worktree trust owner")
+                .update(cx, |trust, cx| {
+                    trust.trust(
+                        &store,
+                        std::iter::once(PathTrust::Worktree(id)).collect(),
+                        cx,
+                    );
+                });
+        });
+    }
+    executor.run_until_parked();
+    let worktree_id = project_owner.read_with(cx_owner, |project, cx| {
+        project
+            .visible_worktrees(cx)
+            .next()
+            .expect("owner worktree")
+            .read(cx)
+            .id()
+    });
+    transport
+        .read_with(cx_host, |transport, _| transport.proto_client())
+        .request(proto::TrustWorktrees {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            trusted_paths: vec![proto::PathTrust {
+                content: Some(proto::path_trust::Content::WorktreeId(
+                    worktree_id.to_proto(),
+                )),
+            }],
+        })
+        .await
+        .expect("explicit trust from the owner of the separate producer");
+    let get_session = || proto::GetRustCoverageTaskSession {
+        project_id,
+        authorization: None,
+    };
+    let session_token = |response: proto::RustCoverageTaskResponse| {
+        assert_eq!(response.native_receiver, 0);
+        assert!(response.authorization.is_none());
+        let Some(Outcome::SessionToken(token)) = response.outcome else {
+            panic!("producing host did not issue a session: {response:?}");
+        };
+        assert_eq!(token.len(), 16);
+        token
+    };
+    let owner_token = session_token(
+        owner
+            .client()
+            .request(proto::GetRustCoverageTaskSession {
+                authorization: Some(proto::RustCoverageTaskAuthorization {
+                    project_id: u64::MAX,
+                    participant_id: u64::MAX,
+                    generation: u64::MAX,
+                }),
+                ..get_session()
+            })
+            .await
+            .expect("owner coverage session"),
+    );
+    let other_token = session_token(
+        other
+            .client()
+            .request(get_session())
+            .await
+            .expect("other member coverage session"),
+    );
+    assert_ne!(owner_token, other_token);
+    let run = |operation_id, token: &[u8], target_name: &str| proto::RunRustCoverageTask {
+        project_id,
+        operation_id,
+        workspace_root: Some(proto::ProjectPath {
+            worktree_id: worktree_id.to_proto(),
+            path: String::new(),
+        }),
+        package_manifest: Some(proto::ProjectPath {
+            worktree_id: worktree_id.to_proto(),
+            path: "Cargo.toml".into(),
+        }),
+        target_kind: proto::RustCoverageTargetKind::Binary as i32,
+        target_name: target_name.into(),
+        session_token: token.to_vec(),
+        authorization: None,
+    };
+    let catalog = owner
+        .client()
+        .request(proto::GetCargoWorkspace {
+            project_id,
+            request_id: 1,
+            worktree_ids: vec![worktree_id.to_proto()],
+        })
+        .await
+        .expect("authoritative Cargo catalog through the relay");
+    assert!(
+        catalog.workspaces.iter().any(|workspace| workspace
+            .members
+            .iter()
+            .any(|member| member.targets.iter().any(|target| target.name == "held"))),
+        "producing host must catalogue the held target: {:?}",
+        catalog.failures
+    );
+    let pending = executor.spawn(owner.client().request(run(101, &owner_token, "held")));
+    let marker = fixture.path().join("target/started");
+    let (child, pending) = match futures::future::select(
+        pending,
+        Box::pin(wait_for_relay_coverage_child(&marker, &executor)),
+    )
+    .await
+    {
+        futures::future::Either::Left((reply, _)) => {
+            panic!("owner Coverage Task returned before its workload started: {reply:?}")
+        }
+        futures::future::Either::Right((child, pending)) => (child, pending),
+    };
+    let cancel = || proto::CancelRustCoverageTask {
+        project_id,
+        operation_id: 101,
+        session_token: owner_token.clone(),
+        authorization: None,
+    };
+    let wrong_operation = owner
+        .client()
+        .request(proto::CancelRustCoverageTask {
+            operation_id: 100,
+            ..cancel()
+        })
+        .await
+        .expect("typed reply for a foreign operation");
+    assert_eq!(
+        wrong_operation.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Stale as i32
+        ))
+    );
+    let other_cancel = other
+        .client()
+        .request(cancel())
+        .await
+        .expect("typed reply for a foreign cancel");
+    assert_eq!(
+        other_cancel.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Stale as i32
+        ))
+    );
+    let busy = other
+        .client()
+        .request(run(72, &other_token, "short"))
+        .await
+        .expect("typed busy reply");
+    assert_eq!(
+        busy.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Busy as i32
+        ))
+    );
+
+    let owner_id = owner.user_id().expect("authenticated owner id");
+    let set_role = |role, cx: &mut TestAppContext| {
+        active_call.update(cx, |call, cx| {
+            call.room()
+                .expect("host room")
+                .update(cx, |room, cx| room.set_participant_role(owner_id, role, cx))
+        })
+    };
+    set_role(proto::ChannelRole::Guest, cx_host)
+        .await
+        .expect("revoke owner write access");
+    let result = futures::future::select(pending, executor.timer(Duration::from_secs(8))).await;
+    let futures::future::Either::Left((Err(error), _)) = result else {
+        panic!("revoked owner must lose its pending Coverage Task");
+    };
+    assert!(
+        error.to_string().contains("authorization changed"),
+        "{error:#}"
+    );
+    for denied in [
+        owner.client().request(get_session()).await,
+        owner.client().request(cancel()).await,
+        owner
+            .client()
+            .request(run(102, &owner_token, "short"))
+            .await,
+    ] {
+        let error = denied.expect_err("a read-only guest cannot use coverage task operations");
+        assert!(
+            error
+                .to_string()
+                .contains("not authorized to edit projects"),
+            "{error:#}"
+        );
+    }
+    wait_for_relay_coverage_child_to_stop(child, &executor).await;
+    set_role(proto::ChannelRole::Member, cx_host)
+        .await
+        .expect("restore coverage owner write access");
+    let fresh = session_token(
+        owner
+            .client()
+            .request(get_session())
+            .await
+            .expect("renewed owner session"),
+    );
+    assert_ne!(fresh, owner_token);
+    let stale = owner
+        .client()
+        .request(run(102, &owner_token, "short"))
+        .await
+        .expect("retired owner token reply");
+    assert_eq!(
+        stale.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Stale as i32
+        ))
+    );
+
+    std::fs::remove_file(&marker).expect("clear the revoked workload marker");
+    let pending = executor.spawn(owner.client().request(run(103, &fresh, "held")));
+    let (child, pending) = await_relay_coverage_start(pending, &marker, &executor).await;
+    let owner_call = cx_owner.read(ActiveCall::global);
+    owner_call
+        .update(cx_owner, |call, cx| call.hang_up(cx))
+        .await
+        .expect("leave the project room during coverage");
+    assert!(matches!(
+        futures::future::select(pending, executor.timer(Duration::from_secs(8))).await,
+        futures::future::Either::Left((Err(_), _))
+    ));
+    wait_for_relay_coverage_child_to_stop(child, &executor).await;
+    active_call
+        .update(cx_host, |call, cx| call.invite(owner_id, None, cx))
+        .await
+        .expect("invite the former owner into the room");
+    owner_call
+        .update(cx_owner, |call, cx| call.accept_incoming(cx))
+        .await
+        .expect("rejoin the coverage room");
+    let rejoined = owner.join_remote_project(project_id, cx_owner).await;
+    let rejoined_token = session_token(
+        owner
+            .client()
+            .request(get_session())
+            .await
+            .expect("new participant receives a session"),
+    );
+    assert_ne!(rejoined_token, fresh);
+    let obsolete = owner
+        .client()
+        .request(run(104, &fresh, "short"))
+        .await
+        .expect("old participant token reply");
+    assert_eq!(
+        obsolete.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Stale as i32
+        ))
+    );
+
+    let provider = project_other.read_with(cx_other, |project, _| {
+        project.rust_coverage_provider_store().clone()
+    });
+    let (_, result) = provider
+        .update(cx_other, |provider, cx| {
+            provider.start_native_cargo_coverage(
+                CargoCoverageSelection {
+                    workspace: CargoWorkspaceKey {
+                        root: ProjectPath {
+                            worktree_id,
+                            path: rel_path("").into_arc(),
+                        },
+                    },
+                    package_manifest: ProjectPath {
+                        worktree_id,
+                        path: rel_path("Cargo.toml").into_arc(),
+                    },
+                    target_kind: CargoTargetKind::Binary,
+                    target_name: "short".into(),
+                },
+                cx,
+            )
+        })
+        .expect("start using the other member's production coverage store");
+    let snapshot = result
+        .await
+        .expect("fresh result via authenticated relay")
+        .expect("coverage report");
+    assert_eq!(snapshot.status, SourceCoverageStatus::Current);
+    assert_eq!(snapshot.files.len(), 1);
+    assert_eq!(
+        snapshot
+            .files
+            .first()
+            .expect("covered file")
+            .path
+            .path
+            .as_unix_str(),
+        "src/bin/short.rs"
+    );
+    assert_eq!(
+        snapshot.files.first().expect("covered file").covered_lines,
+        3
+    );
+    std::fs::remove_file(&marker).expect("clear the stopped workload marker");
+    let pending = executor.spawn(other.client().request(run(73, &other_token, "held")));
+    let (_, pending) = await_relay_coverage_start(pending, &marker, &executor).await;
+    let held_source = fixture.path().join("src/bin/held.rs");
+    let previous =
+        std::fs::read_to_string(&held_source).expect("read the mapped source before the edit");
+    std::fs::write(held_source, format!("// changed after launch\n{previous}"))
+        .expect("edit the mapped producing source");
+    let release = fixture.path().join("target/release");
+    std::fs::write(&release, "release").expect("complete the held workload");
+    let result = futures::future::select(pending, executor.timer(Duration::from_secs(8))).await;
+    let futures::future::Either::Left((Ok(stale), _)) = result else {
+        panic!("the edited source must receive a typed stale result");
+    };
+    assert_eq!(
+        stale.outcome,
+        Some(Outcome::Failure(
+            proto::RustCoverageTaskFailure::Stale as i32
+        ))
+    );
+
+    std::fs::remove_file(&release).expect("reinstate the hold for the next workload");
+    std::fs::remove_file(&marker).expect("clear the completed workload marker");
+    let pending = executor.spawn(other.client().request(run(74, &other_token, "held")));
+    let (child, pending) = await_relay_coverage_start(pending, &marker, &executor).await;
+    active_call
+        .update(cx_host, |call, cx| {
+            call.unshare_project(project_host.clone(), cx)
+        })
+        .expect("retire the project host's share");
+    assert!(matches!(
+        futures::future::select(pending, executor.timer(Duration::from_secs(8))).await,
+        futures::future::Either::Left((Err(_), _))
+    ));
+    wait_for_relay_coverage_child_to_stop(child, &executor).await;
+    drop(project_owner);
+    drop(project_other);
+    drop(rejoined);
+    for cx in [&mut *cx_owner, &mut *cx_other, &mut *cx_host] {
+        let active_call = cx.read(ActiveCall::global);
+        active_call
+            .update(cx, |call, cx| call.hang_up(cx))
+            .await
+            .expect("close room while the collaboration server is still running");
+    }
+    executor.run_until_parked();
+    connection.kill().await.expect("stop the owned Linux host");
+}
+
+#[cfg(all(feature = "rust-tools-test", target_os = "linux"))]
+async fn await_relay_coverage_start(
+    pending: gpui::Task<anyhow::Result<proto::RustCoverageTaskResponse>>,
+    marker: &std::path::Path,
+    executor: &BackgroundExecutor,
+) -> (
+    u32,
+    gpui::Task<anyhow::Result<proto::RustCoverageTaskResponse>>,
+) {
+    match futures::future::select(
+        pending,
+        Box::pin(wait_for_relay_coverage_child(marker, executor)),
+    )
+    .await
+    {
+        futures::future::Either::Left((reply, _)) => {
+            panic!("Coverage Task returned before the workload started: {reply:?}")
+        }
+        futures::future::Either::Right((child, pending)) => (child, pending),
+    }
+}
+
+#[cfg(all(feature = "rust-tools-test", target_os = "linux"))]
+async fn wait_for_relay_coverage_child(
+    marker: &std::path::Path,
+    executor: &BackgroundExecutor,
+) -> u32 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+    loop {
+        if let Ok(marker) = std::fs::read_to_string(marker)
+            && let Ok(child) = marker.parse::<u32>()
+        {
+            return child;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the separate producer never ran its held workload"
+        );
+        executor.timer(std::time::Duration::from_millis(20)).await;
+    }
+}
+
+#[cfg(all(feature = "rust-tools-test", target_os = "linux"))]
+async fn wait_for_relay_coverage_child_to_stop(child: u32, executor: &BackgroundExecutor) {
+    let status_path = format!("/proc/{child}/status");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let stopped = match std::fs::read_to_string(&status_path) {
+            Ok(text) => text.lines().any(|line| line.starts_with("State:\tZ")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(error) => panic!("could not inspect the held workload: {error}"),
+        };
+        if stopped {
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "revoked work survived on the producer"
+        );
+        executor.timer(std::time::Duration::from_millis(20)).await;
+    }
 }
 
 #[gpui::test]

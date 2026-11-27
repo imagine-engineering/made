@@ -593,6 +593,7 @@ pub struct RustCoverageProviderStore {
     source_coverage_store: Entity<SourceCoverageStore>,
     provider: RustCoverageArtifactProvider,
     experimental_subscription: Option<gpui::Subscription>,
+    coverage_relay: Option<CoverageRelayShare>,
     #[cfg(feature = "cargo-workspace")]
     native_cargo_capture: std::rc::Weak<()>,
     #[cfg(any(test, feature = "test-support"))]
@@ -612,6 +613,12 @@ pub struct RustCoverageProviderStore {
     )>,
 }
 
+struct CoverageRelayShare {
+    project_id: u64,
+    _lifetime: async_channel::Sender<()>,
+    closed: async_channel::Receiver<()>,
+}
+
 enum RustCoverageProviderStoreMode {
     Local,
     Remote {
@@ -625,6 +632,192 @@ impl RustCoverageProviderStore {
         client.add_entity_request_handler(Self::handle_interpret_artifact);
     }
 
+    pub(crate) fn init_coverage_relay(client: &AnyProtoClient) {
+        client.add_entity_request_handler(Self::relay_coverage_session);
+        client.add_entity_request_handler(Self::relay_run_coverage);
+        client.add_entity_request_handler(Self::relay_cancel_coverage);
+    }
+
+    pub(crate) fn set_coverage_relay_share(&mut self, project_id: Option<u64>) {
+        self.coverage_relay = project_id.map(|project_id| {
+            let (lifetime, closed) = async_channel::bounded(1);
+            CoverageRelayShare {
+                project_id,
+                _lifetime: lifetime,
+                closed,
+            }
+        });
+    }
+
+    fn coverage_relay_client(
+        &self,
+        project_id: u64,
+        original_sender: Option<proto::PeerId>,
+        authorization: Option<proto::RustCoverageTaskAuthorization>,
+    ) -> Result<(AnyProtoClient, proto::PeerId, async_channel::Receiver<()>)> {
+        let peer = original_sender.context("Coverage Task has no authenticated requesting peer")?;
+        anyhow::ensure!(
+            authorization.is_some_and(|authorization| authorization.project_id == project_id
+                && authorization.participant_id != 0
+                && authorization.generation != 0)
+                && project_id != proto::REMOTE_SERVER_PROJECT_ID,
+            "Coverage Task has no current collaboration authorization"
+        );
+        let share = self
+            .coverage_relay
+            .as_ref()
+            .filter(|share| share.project_id == project_id)
+            .context("Coverage Task project is no longer shared by this host")?;
+        match &self.mode {
+            RustCoverageProviderStoreMode::Remote { project_id, client }
+                if *project_id == proto::REMOTE_SERVER_PROJECT_ID && !client.is_via_collab() =>
+            {
+                Ok((client.clone(), peer, share.closed.clone()))
+            }
+            _ => Err(tag_remote_coverage_unsupported(
+                SourceCoverageUnsupportedHost.into(),
+            )),
+        }
+    }
+
+    async fn relay_coverage_session(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::GetRustCoverageTaskSession>,
+        cx: AsyncApp,
+    ) -> Result<proto::RustCoverageTaskResponse> {
+        use gpui::FutureExt as _;
+        use std::time::Duration;
+
+        let mut request = envelope.payload;
+        let (client, peer, _) = this.read_with(&cx, |store, cx| {
+            anyhow::ensure!(
+                cx.has_flag::<RustCoverageExperimentalFeatureFlag>(),
+                tag_remote_coverage_unsupported(SourceCoverageUnsupportedHost.into())
+            );
+            anyhow::ensure!(
+                !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                "Coverage Task worktree is restricted"
+            );
+            store.coverage_relay_client(
+                request.project_id,
+                envelope.original_sender_id,
+                request.authorization.clone(),
+            )
+        })?;
+        request.project_id = proto::REMOTE_SERVER_PROJECT_ID;
+        let executor = cx.background_executor();
+        let timeout = Duration::from_secs(3);
+        match client
+            .forward_request(peer, request)
+            .with_timeout(timeout, executor)
+            .await
+        {
+            Ok(reply) => reply,
+            Err(_) => {
+                client
+                    .request(proto::Ping {})
+                    .with_timeout(timeout, executor)
+                    .await??;
+                Err(tag_remote_coverage_unsupported(
+                    SourceCoverageUnsupportedHost.into(),
+                ))
+            }
+        }
+    }
+
+    async fn relay_run_coverage(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::RunRustCoverageTask>,
+        cx: AsyncApp,
+    ) -> Result<proto::RustCoverageTaskResponse> {
+        use gpui::FutureExt as _;
+        use proto::rust_coverage_task_response::Outcome;
+        use std::time::Duration;
+
+        let mut request = envelope.payload;
+        let (client, peer, closed, coverage, version) = this.read_with(&cx, |store, cx| {
+            anyhow::ensure!(
+                cx.has_flag::<RustCoverageExperimentalFeatureFlag>(),
+                tag_remote_coverage_unsupported(SourceCoverageUnsupportedHost.into())
+            );
+            anyhow::ensure!(
+                !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                "Coverage Task worktree is restricted"
+            );
+            let (client, peer, closed) = store.coverage_relay_client(
+                request.project_id,
+                envelope.original_sender_id,
+                request.authorization.clone(),
+            )?;
+            let coverage = store.source_coverage_store.clone();
+            let version = coverage.read(cx).remote_request_version()?;
+            anyhow::Ok((client, peer, closed, coverage, version))
+        })?;
+        request.project_id = proto::REMOTE_SERVER_PROJECT_ID;
+        let cancellation = proto::CancelRustCoverageTask {
+            project_id: request.project_id,
+            operation_id: request.operation_id,
+            session_token: request.session_token.clone(),
+            authorization: request.authorization.clone(),
+        };
+        let pending = client.forward_request(peer, request);
+        let mut reply =
+            match futures::future::select(std::pin::pin!(pending), std::pin::pin!(closed.recv()))
+                .await
+            {
+                futures::future::Either::Left((reply, _)) if !closed.is_closed() => reply?,
+                _ => {
+                    match client
+                        .forward_request(peer, cancellation)
+                        .with_timeout(Duration::from_secs(3), cx.background_executor())
+                        .await
+                    {
+                        Ok(Ok(_)) => {}
+                        Ok(Err(error)) => {
+                            log::debug!("Could not retire the unshared Coverage Task: {error:#}")
+                        }
+                        Err(error) => {
+                            log::debug!("Retiring the unshared Coverage Task timed out: {error:#}")
+                        }
+                    }
+                    bail!("Coverage Task project is no longer shared by this host");
+                }
+            };
+        if let Some(Outcome::Coverage(wire)) = &mut reply.outcome {
+            let mut snapshot = snapshot_from_proto(std::mem::take(wire))?;
+            this.read_with(&cx, |store, cx| {
+                anyhow::ensure!(
+                    cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                        && !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                    "Coverage Task authorization expired before publication"
+                );
+                let coverage = coverage.read(cx);
+                coverage.validate_snapshot_version(&snapshot, version)?;
+                coverage.filter_remote_snapshot(&mut snapshot, cx);
+                anyhow::Ok(())
+            })?;
+            *wire = snapshot_to_proto(&snapshot, None);
+        }
+        Ok(reply)
+    }
+
+    async fn relay_cancel_coverage(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::CancelRustCoverageTask>,
+        cx: AsyncApp,
+    ) -> Result<proto::RustCoverageTaskResponse> {
+        let mut request = envelope.payload;
+        let (client, peer, _) = this.read_with(&cx, |store, _| {
+            store.coverage_relay_client(
+                request.project_id,
+                envelope.original_sender_id,
+                request.authorization.clone(),
+            )
+        })?;
+        request.project_id = proto::REMOTE_SERVER_PROJECT_ID;
+        client.forward_request(peer, request).await
+    }
+
     pub fn local(
         worktree_store: Entity<WorktreeStore>,
         source_coverage_store: Entity<SourceCoverageStore>,
@@ -636,6 +829,7 @@ impl RustCoverageProviderStore {
             source_coverage_store,
             provider: RustCoverageArtifactProvider::new(project_generation),
             experimental_subscription: None,
+            coverage_relay: None,
             #[cfg(feature = "cargo-workspace")]
             native_cargo_capture: Default::default(),
             #[cfg(any(test, feature = "test-support"))]
@@ -660,6 +854,7 @@ impl RustCoverageProviderStore {
             source_coverage_store,
             provider: RustCoverageArtifactProvider::new(project_generation),
             experimental_subscription: None,
+            coverage_relay: None,
             #[cfg(feature = "cargo-workspace")]
             native_cargo_capture: Default::default(),
             #[cfg(any(test, feature = "test-support"))]
@@ -1379,7 +1574,7 @@ impl RustCoverageProviderStore {
         let RustCoverageProviderStoreMode::Remote { project_id, client } = &self.mode else {
             return Err(SourceCoverageUnsupportedHost.into());
         };
-        if *project_id != proto::REMOTE_SERVER_PROJECT_ID || client.is_via_collab() {
+        if (*project_id == proto::REMOTE_SERVER_PROJECT_ID) == client.is_via_collab() {
             return Err(SourceCoverageUnsupportedHost.into());
         }
         anyhow::ensure!(
@@ -1391,6 +1586,7 @@ impl RustCoverageProviderStore {
             CargoTargetKind::Example => proto::RustCoverageTargetKind::Example,
             _ => bail!("Coverage requires a binary or example target"),
         };
+        let project_id = *project_id;
         let client = client.clone();
         let token = self.begin_run(cx)?;
         let request_version = token
@@ -1407,13 +1603,14 @@ impl RustCoverageProviderStore {
         let active = Rc::new(());
         self.native_cargo_capture = Rc::downgrade(&active);
         let request = proto::RunRustCoverageTask {
-            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            project_id,
             operation_id: token.generation,
             workspace_root: Some(selection.workspace.root.to_proto()),
             package_manifest: Some(selection.package_manifest.to_proto()),
             target_kind: target_kind as i32,
             target_name: selection.target_name,
             session_token: Vec::new(),
+            authorization: None,
         };
         let capture = cx.spawn(async move |this, cx| {
             let _active = active;
@@ -1422,6 +1619,7 @@ impl RustCoverageProviderStore {
             let session = client
                 .request(proto::GetRustCoverageTaskSession {
                     project_id: request.project_id,
+                    authorization: None,
                 })
                 .with_timeout(timeout, &executor)
                 .await;
@@ -1438,7 +1636,9 @@ impl RustCoverageProviderStore {
                 }
             };
             anyhow::ensure!(
-                session.operation_id == 0 && session.native_receiver == 0,
+                session.operation_id == 0
+                    && session.native_receiver == 0
+                    && session.authorization.is_none(),
                 "Coverage host returned an invalid session response"
             );
             let session_token = match session.outcome {
@@ -1464,6 +1664,7 @@ impl RustCoverageProviderStore {
                     project_id: request.project_id,
                     operation_id: request.operation_id,
                     session_token: session_token.clone(),
+                    authorization: None,
                 };
                 move || {
                     let task_executor = executor.clone();
@@ -1494,7 +1695,9 @@ impl RustCoverageProviderStore {
                 .await
                 .map_err(map_remote_coverage_error)?;
             anyhow::ensure!(
-                response.operation_id == token.generation && response.native_receiver == 0,
+                response.operation_id == token.generation
+                    && response.native_receiver == 0
+                    && response.authorization.is_none(),
                 "Coverage host returned a response for a different Task"
             );
             let outcome = response

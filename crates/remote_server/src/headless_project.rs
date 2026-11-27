@@ -100,23 +100,102 @@ pub struct HeadlessProject {
 struct CoverageTaskTransport {
     connection: Entity<crate::NativeProjectTransport>,
     _subscription: gpui::Subscription,
-    session: Option<uuid::Uuid>,
-    last_operation: u64,
+    native: Option<CoverageTaskSession>,
+    forwarded: HashMap<proto::PeerId, (proto::RustCoverageTaskAuthorization, CoverageTaskSession)>,
     active: Option<ActiveCoverageTask>,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+struct CoverageTaskSession {
+    token: uuid::Uuid,
+    last_operation: u64,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
+impl CoverageTaskSession {
+    fn new() -> Self {
+        Self {
+            token: uuid::Uuid::new_v4(),
+            last_operation: 0,
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
 impl CoverageTaskTransport {
-    fn validate_session(&self, token: &[u8]) -> Result<(), CoverageFailure> {
-        self.session
-            .is_some_and(|session| session.as_bytes() == token)
-            .then_some(())
+    fn session(
+        &mut self,
+        forwarded_peer: Option<proto::PeerId>,
+        authorization: Option<proto::RustCoverageTaskAuthorization>,
+        issue: bool,
+    ) -> Result<&mut CoverageTaskSession, CoverageFailure> {
+        let (peer, authorization) = match (forwarded_peer, authorization) {
+            (None, None) => return self.native.as_mut().ok_or(CoverageFailure::Stale),
+            (Some(peer), Some(authorization))
+                if authorization.project_id != 0
+                    && authorization.participant_id != 0
+                    && authorization.generation != 0 =>
+            {
+                (peer, authorization)
+            }
+            _ => return Err(CoverageFailure::Restricted),
+        };
+        if issue {
+            let previous = self.forwarded.get(&peer);
+            if previous.is_some_and(|(previous, _)| {
+                (authorization.participant_id, authorization.generation)
+                    < (previous.participant_id, previous.generation)
+            }) {
+                return Err(CoverageFailure::Stale);
+            }
+            if previous.is_none_or(|(previous, _)| *previous != authorization) {
+                if let Some((_, previous)) = previous
+                    && self
+                        .active
+                        .as_ref()
+                        .is_some_and(|active| active.session == previous.token)
+                {
+                    drop(self.active.take());
+                }
+                if self.forwarded.len() >= 256
+                    && !self.forwarded.contains_key(&peer)
+                    && let Some(expired) = self.forwarded.iter().find_map(|(peer, (_, session))| {
+                        self.active
+                            .as_ref()
+                            .is_none_or(|active| active.session != session.token)
+                            .then_some(*peer)
+                    })
+                {
+                    self.forwarded.remove(&expired);
+                }
+                self.forwarded
+                    .insert(peer, (authorization.clone(), CoverageTaskSession::new()));
+            }
+        }
+        self.forwarded
+            .get_mut(&peer)
+            .filter(|(current, _)| *current == authorization)
+            .map(|(_, session)| session)
             .ok_or(CoverageFailure::Stale)
+    }
+
+    fn validate_session(
+        &mut self,
+        forwarded_peer: Option<proto::PeerId>,
+        authorization: Option<proto::RustCoverageTaskAuthorization>,
+        token: &[u8],
+    ) -> Result<&mut CoverageTaskSession, CoverageFailure> {
+        let session = self.session(forwarded_peer, authorization, false)?;
+        if session.token.as_bytes() != token {
+            return Err(CoverageFailure::Stale);
+        }
+        Ok(session)
     }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-tools"))]
 struct ActiveCoverageTask {
+    session: uuid::Uuid,
     operation_id: u64,
     cancellation: Option<futures::channel::oneshot::Sender<()>>,
 }
@@ -140,9 +219,9 @@ impl HeadlessProject {
     ) {
         let subscription = cx.subscribe(connection, |host, _, connected, cx| {
             if let Some(transport) = host.coverage_transport.as_mut() {
-                transport.session = connected.then(uuid::Uuid::new_v4);
+                transport.native = connected.then(CoverageTaskSession::new);
+                transport.forwarded.clear();
                 drop(transport.active.take());
-                transport.last_operation = 0;
             }
             if !connected {
                 host.source_coverage_store
@@ -153,11 +232,11 @@ impl HeadlessProject {
         self.coverage_transport = Some(CoverageTaskTransport {
             connection: connection.clone(),
             _subscription: subscription,
-            session: connection
+            native: connection
                 .read(cx)
                 .connection_id
-                .map(|_| uuid::Uuid::new_v4()),
-            last_operation: 0,
+                .map(|_| CoverageTaskSession::new()),
+            forwarded: HashMap::default(),
             active: None,
         });
     }
@@ -166,14 +245,13 @@ impl HeadlessProject {
     fn coverage_transport_for(
         &mut self,
         peer: proto::PeerId,
-        forwarded_peer: Option<proto::PeerId>,
         cx: &App,
     ) -> Result<&mut CoverageTaskTransport, CoverageFailure> {
         let transport = self
             .coverage_transport
             .as_mut()
             .ok_or(CoverageFailure::Unsupported)?;
-        if forwarded_peer.is_some() || transport.connection.read(cx).connection_id != Some(peer) {
+        if transport.connection.read(cx).connection_id != Some(peer) {
             return Err(CoverageFailure::Restricted);
         }
         Ok(transport)
@@ -185,6 +263,7 @@ impl HeadlessProject {
         cx: AsyncApp,
     ) -> Result<proto::RustCoverageTaskResponse> {
         let peer = message.sender_id;
+        let authorization = message.payload.authorization;
         #[cfg(all(target_os = "linux", feature = "rust-tools"))]
         let outcome = {
             use feature_flags::{FeatureFlagAppExt as _, RustCoverageExperimentalFeatureFlag};
@@ -193,10 +272,12 @@ impl HeadlessProject {
                 if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
                     return Err(CoverageFailure::Unsupported);
                 }
-                let transport =
-                    host.coverage_transport_for(peer, message.original_sender_id, cx)?;
-                let session = transport.session.ok_or(CoverageFailure::Stale)?;
-                Ok(CoverageOutcome::SessionToken(session.as_bytes().to_vec()))
+                let transport = host.coverage_transport_for(peer, cx)?;
+                let session =
+                    transport.session(message.original_sender_id, authorization.clone(), true)?;
+                Ok(CoverageOutcome::SessionToken(
+                    session.token.as_bytes().to_vec(),
+                ))
             })
         };
         #[cfg(not(all(target_os = "linux", feature = "rust-tools")))]
@@ -204,7 +285,12 @@ impl HeadlessProject {
             drop((this, cx));
             Err(CoverageFailure::Unsupported)
         };
-        Ok(Self::coverage_task_response(peer, 0, outcome))
+        Ok(Self::coverage_task_response(
+            peer,
+            0,
+            authorization,
+            outcome,
+        ))
     }
 
     async fn handle_run_rust_coverage_task(
@@ -214,6 +300,7 @@ impl HeadlessProject {
     ) -> Result<proto::RustCoverageTaskResponse> {
         let peer = message.sender_id;
         let operation_id = message.payload.operation_id;
+        let authorization = message.payload.authorization.clone();
         #[cfg(all(target_os = "linux", feature = "rust-tools"))]
         let outcome = Self::run_rust_coverage_request(this, message, cx).await;
         #[cfg(not(all(target_os = "linux", feature = "rust-tools")))]
@@ -221,7 +308,12 @@ impl HeadlessProject {
             drop((this, cx));
             Err(CoverageFailure::Unsupported)
         };
-        Ok(Self::coverage_task_response(peer, operation_id, outcome))
+        Ok(Self::coverage_task_response(
+            peer,
+            operation_id,
+            authorization,
+            outcome,
+        ))
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-tools"))]
@@ -237,6 +329,7 @@ impl HeadlessProject {
         let peer = message.sender_id;
         let mut request = message.payload;
         let operation_id = request.operation_id;
+        let authorization = request.authorization.take();
         let session_token = std::mem::take(&mut request.session_token);
         let (task, cancellation) = this.update(&mut cx, |host, cx| {
             if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
@@ -245,12 +338,17 @@ impl HeadlessProject {
             if TrustedWorktrees::has_restricted_worktrees(&host.worktree_store, cx) {
                 return Err(CoverageFailure::Restricted);
             }
-            let transport = host.coverage_transport_for(peer, message.original_sender_id, cx)?;
-            transport.validate_session(&session_token)?;
-            if operation_id <= transport.last_operation {
+            let transport = host.coverage_transport_for(peer, cx)?;
+            let active = transport.active.is_some();
+            let session = transport.validate_session(
+                message.original_sender_id,
+                authorization.clone(),
+                &session_token,
+            )?;
+            if operation_id <= session.last_operation {
                 return Err(CoverageFailure::Stale);
             }
-            if transport.active.is_some() {
+            if active {
                 return Err(CoverageFailure::Busy);
             }
             let path = |path: Option<proto::ProjectPath>| {
@@ -271,7 +369,8 @@ impl HeadlessProject {
                 target_kind,
                 target_name: request.target_name,
             };
-            transport.last_operation = operation_id;
+            session.last_operation = operation_id;
+            let session = session.token;
             let task = host
                 .run_selected_host_coverage_task(selection, cx)
                 .map_err(|error| {
@@ -279,8 +378,8 @@ impl HeadlessProject {
                     CoverageFailure::InvalidSelection
                 })?;
             let (cancel, cancellation) = futures::channel::oneshot::channel();
-            host.coverage_transport_for(peer, message.original_sender_id, cx)?
-                .active = Some(ActiveCoverageTask {
+            host.coverage_transport_for(peer, cx)?.active = Some(ActiveCoverageTask {
+                session,
                 operation_id,
                 cancellation: Some(cancel),
             });
@@ -294,13 +393,13 @@ impl HeadlessProject {
             }
         };
         this.update(&mut cx, |host, cx| {
-            let transport = host.coverage_transport_for(peer, message.original_sender_id, cx)?;
-            transport.validate_session(&session_token)?;
-            if transport
-                .active
-                .as_ref()
-                .is_none_or(|active| active.operation_id != operation_id)
-            {
+            let transport = host.coverage_transport_for(peer, cx)?;
+            let session = transport
+                .validate_session(message.original_sender_id, authorization, &session_token)?
+                .token;
+            if transport.active.as_ref().is_none_or(|active| {
+                active.operation_id != operation_id || active.session != session
+            }) {
                 return Err(CoverageFailure::Stale);
             }
             let active = transport.active.take().ok_or(CoverageFailure::Stale)?;
@@ -331,22 +430,37 @@ impl HeadlessProject {
     ) -> Result<proto::RustCoverageTaskResponse> {
         let peer = message.sender_id;
         let operation_id = message.payload.operation_id;
+        let authorization = message.payload.authorization;
         #[cfg(all(target_os = "linux", feature = "rust-tools"))]
         let outcome = {
             let mut cx = cx;
             this.update(&mut cx, |host, cx| {
-                let transport =
-                    host.coverage_transport_for(peer, message.original_sender_id, cx)?;
-                transport.validate_session(&message.payload.session_token)?;
+                let transport = host.coverage_transport_for(peer, cx)?;
+                let session = transport
+                    .validate_session(
+                        message.original_sender_id,
+                        authorization.clone(),
+                        &message.payload.session_token,
+                    )?
+                    .token;
                 match transport.active.as_mut() {
-                    Some(active) if active.operation_id == operation_id => {
+                    Some(active)
+                        if active.session == session && active.operation_id == operation_id =>
+                    {
                         drop(active.cancellation.take());
                     }
-                    None if operation_id > transport.last_operation => {
+                    _ => {
                         // A cancelled run may still be queued for dispatch.
-                        transport.last_operation = operation_id;
+                        let session = transport.session(
+                            message.original_sender_id,
+                            authorization.clone(),
+                            false,
+                        )?;
+                        if operation_id <= session.last_operation {
+                            return Err(CoverageFailure::Stale);
+                        }
+                        session.last_operation = operation_id;
                     }
-                    _ => return Err(CoverageFailure::Stale),
                 }
                 Ok(CoverageOutcome::Cancelled(true))
             })
@@ -356,12 +470,18 @@ impl HeadlessProject {
             drop((this, cx));
             Err(CoverageFailure::Unsupported)
         };
-        Ok(Self::coverage_task_response(peer, operation_id, outcome))
+        Ok(Self::coverage_task_response(
+            peer,
+            operation_id,
+            authorization,
+            outcome,
+        ))
     }
 
     fn coverage_task_response(
         peer: proto::PeerId,
         operation_id: u64,
+        authorization: Option<proto::RustCoverageTaskAuthorization>,
         outcome: Result<CoverageOutcome, CoverageFailure>,
     ) -> proto::RustCoverageTaskResponse {
         proto::RustCoverageTaskResponse {
@@ -370,6 +490,7 @@ impl HeadlessProject {
                 outcome.unwrap_or_else(|failure| CoverageOutcome::Failure(failure as i32)),
             ),
             native_receiver: peer.id,
+            authorization,
         }
     }
 

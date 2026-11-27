@@ -23,6 +23,7 @@ message RunRustCoverageTask {
   RustCoverageTargetKind target_kind = 5;
   string target_name = 6;
   bytes session_token = 7;
+  RustCoverageTaskAuthorization authorization = 8;
 }
 
 enum RustCoverageTargetKind {
@@ -35,10 +36,19 @@ message CancelRustCoverageTask {
   uint64 project_id = 1;
   uint64 operation_id = 2;
   bytes session_token = 3;
+  RustCoverageTaskAuthorization authorization = 4;
 }
 
 message GetRustCoverageTaskSession {
   uint64 project_id = 1;
+  RustCoverageTaskAuthorization authorization = 2;
+}
+
+// The collaboration relay fills this from the authenticated project route.
+message RustCoverageTaskAuthorization {
+  uint64 project_id = 1;
+  uint64 participant_id = 2;
+  uint64 generation = 3;
 }
 
 message RustCoverageTaskResponse {
@@ -51,6 +61,7 @@ message RustCoverageTaskResponse {
   }
   // Assigned and consumed by the direct remote server before sending the reply.
   uint32 native_receiver = 5;
+  RustCoverageTaskAuthorization authorization = 7;
 }
 
 enum RustCoverageTaskFailure {

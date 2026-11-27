@@ -525,6 +525,9 @@ impl Server {
             .add_request_handler(
                 forward_mutating_project_request::<proto::InterpretRustCoverageArtifact>,
             )
+            .add_request_handler(forward_coverage_task_session)
+            .add_request_handler(forward_run_coverage_task)
+            .add_request_handler(forward_cancel_coverage_task)
             .add_request_handler(
                 forward_mutating_project_request::<proto::PrepareProfileTaskBinding>,
             )
@@ -2637,6 +2640,149 @@ where
     {
         return Err(anyhow::anyhow!(
             "project request authorization changed while awaiting host response"
+        )
+        .into());
+    }
+    response.send(payload)?;
+    Ok(())
+}
+
+async fn forward_coverage_task_session(
+    request: proto::GetRustCoverageTaskSession,
+    response: Response<proto::GetRustCoverageTaskSession>,
+    session: MessageContext,
+) -> Result<()> {
+    forward_coverage_task(
+        request,
+        response,
+        session,
+        |request| &mut request.authorization,
+        0,
+        None,
+    )
+    .await
+}
+
+async fn forward_run_coverage_task(
+    request: proto::RunRustCoverageTask,
+    response: Response<proto::RunRustCoverageTask>,
+    session: MessageContext,
+) -> Result<()> {
+    let cancellation = proto::CancelRustCoverageTask {
+        project_id: request.project_id,
+        operation_id: request.operation_id,
+        session_token: request.session_token.clone(),
+        authorization: None,
+    };
+    forward_coverage_task(
+        request,
+        response,
+        session,
+        |request| &mut request.authorization,
+        cancellation.operation_id,
+        Some(cancellation),
+    )
+    .await
+}
+
+async fn forward_cancel_coverage_task(
+    request: proto::CancelRustCoverageTask,
+    response: Response<proto::CancelRustCoverageTask>,
+    session: MessageContext,
+) -> Result<()> {
+    let operation_id = request.operation_id;
+    forward_coverage_task(
+        request,
+        response,
+        session,
+        |request| &mut request.authorization,
+        operation_id,
+        None,
+    )
+    .await
+}
+
+async fn forward_coverage_task<T>(
+    mut request: T,
+    response: Response<T>,
+    session: MessageContext,
+    request_authorization: impl FnOnce(&mut T) -> &mut Option<proto::RustCoverageTaskAuthorization>
+    + Send,
+    operation_id: u64,
+    cancellation: Option<proto::CancelRustCoverageTask>,
+) -> Result<()>
+where
+    T: EntityMessage + RequestMessage<Response = proto::RustCoverageTaskResponse>,
+{
+    let project_id = request.remote_entity_id();
+    if !(1..=i32::MAX as u64).contains(&project_id) {
+        return Err(anyhow!("Coverage Task has an invalid project ID").into());
+    }
+    let project_id = ProjectId::from_proto(project_id);
+    let current_route = || async {
+        session
+            .db()
+            .await
+            .host_for_mutating_project_request(project_id, session.connection_id)
+            .await
+    };
+    let route = current_route().await?;
+    let authorization = proto::RustCoverageTaskAuthorization {
+        project_id: project_id.to_proto(),
+        participant_id: route.1.to_proto(),
+        generation: route.2,
+    };
+    *request_authorization(&mut request) = Some(authorization.clone());
+    let mut pending = std::pin::pin!(session.forward_request(route.0, request));
+    let mut payload = if let Some(mut cancellation) = cancellation {
+        let changed = async {
+            loop {
+                session._executor.sleep(Duration::from_millis(500)).await;
+                if current_route().await.ok() != Some(route) {
+                    break;
+                }
+            }
+        };
+        match futures::future::select(pending.as_mut(), std::pin::pin!(changed)).await {
+            futures::future::Either::Left((payload, _))
+                if current_route().await.ok() == Some(route) =>
+            {
+                payload?
+            }
+            _ => {
+                cancellation.authorization = Some(authorization);
+                // Use the admitted route to retire this operation after its owner loses access.
+                session
+                    .peer
+                    .forward_send(session.connection_id, route.0, cancellation)
+                    .trace_err();
+                return Err(anyhow!(
+                    "project request authorization changed while awaiting host response"
+                )
+                .into());
+            }
+        }
+    } else {
+        let payload = pending.await?;
+        if current_route().await? != route {
+            return Err(anyhow!(
+                "project request authorization changed while awaiting host response"
+            )
+            .into());
+        }
+        payload
+    };
+    if payload.authorization.take() != Some(authorization)
+        || payload.native_receiver != 0
+        || payload.operation_id != operation_id
+    {
+        return Err(anyhow!(
+            ErrorCode::Internal
+                .with_tag("reason", "rust_tools_unsupported")
+                .message(
+                    "The project host did not return an authorization-bound Coverage Task response"
+                        .to_string()
+                )
         )
         .into());
     }

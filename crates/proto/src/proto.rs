@@ -2193,6 +2193,11 @@ mod tests {
 
     #[test]
     fn rust_coverage_task_uses_project_relative_selectors_and_stable_envelope_numbers() {
+        let authorization = Some(RustCoverageTaskAuthorization {
+            project_id: 7,
+            participant_id: 4,
+            generation: 6,
+        });
         let run = RunRustCoverageTask {
             project_id: 7,
             operation_id: 2,
@@ -2207,20 +2212,26 @@ mod tests {
             target_kind: RustCoverageTargetKind::Binary as i32,
             target_name: "worker".into(),
             session_token: vec![3; 16],
+            authorization: authorization.clone(),
         };
         assert_eq!(run.remote_entity_id(), 7);
         let cancel = CancelRustCoverageTask {
             project_id: 7,
             operation_id: run.operation_id,
             session_token: run.session_token.clone(),
+            authorization: authorization.clone(),
         };
         assert_eq!(cancel.remote_entity_id(), 7);
-        let session = GetRustCoverageTaskSession { project_id: 7 };
+        let session = GetRustCoverageTaskSession {
+            project_id: 7,
+            authorization: authorization.clone(),
+        };
         assert_eq!(session.remote_entity_id(), 7);
         let response = RustCoverageTaskResponse {
             operation_id: run.operation_id,
             outcome: Some(rust_coverage_task_response::Outcome::Cancelled(true)),
             native_receiver: 1,
+            authorization,
         };
         for (tag, message) in [
             (546, run.into_envelope(0, None, None)),

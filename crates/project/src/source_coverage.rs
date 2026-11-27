@@ -732,7 +732,7 @@ impl SourceCoverageStore {
         Ok(())
     }
 
-    fn filter_remote_snapshot(&self, snapshot: &mut SourceCoverageSnapshot, cx: &App) {
+    pub(crate) fn filter_remote_snapshot(&self, snapshot: &mut SourceCoverageSnapshot, cx: &App) {
         if TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx) {
             snapshot.files.clear();
             snapshot.truncated = true;

@@ -1570,6 +1570,7 @@ impl CargoPanel {
                     == project::cargo_workspace::CargoWorkspaceErrorCategory::CargoNotFound
             }),
             host_capable: self.execution_host_available && project.supports_terminal(cx),
+            coverage_via_relay: self.execution_host_available && project.is_via_collab(),
         }
     }
 
@@ -1635,8 +1636,7 @@ impl CargoPanel {
             );
             return;
         }
-        if action == CargoAction::RunWithCoverage && self.project.read(cx).remote_client().is_some()
-        {
+        if action == CargoAction::RunWithCoverage && self.project.read(cx).is_remote() {
             let Some(workspace) = self.workspace.upgrade() else {
                 self.set_action_notice("The workspace is no longer available", cx);
                 return;

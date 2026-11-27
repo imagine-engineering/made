@@ -173,6 +173,7 @@ pub struct CargoActionRuntime {
     pub writable: bool,
     pub cargo_available: bool,
     pub host_capable: bool,
+    pub coverage_via_relay: bool,
 }
 
 impl Default for CargoActionRuntime {
@@ -183,6 +184,7 @@ impl Default for CargoActionRuntime {
             writable: true,
             cargo_available: true,
             host_capable: true,
+            coverage_via_relay: false,
         }
     }
 }
@@ -204,7 +206,7 @@ pub fn cargo_action_availability(
         .map(|action| {
             let reason = action_inapplicable_reason(action, selection)
                 .map(str::to_string)
-                .or_else(|| runtime_denial_reason(runtime).map(str::to_string));
+                .or_else(|| runtime_denial_reason(action, runtime).map(str::to_string));
             let accessibility_label = reason
                 .as_ref()
                 .map(|reason| format!("{} unavailable: {reason}", action.label()))
@@ -249,7 +251,7 @@ pub fn cargo_action_availability_with_preset(
     entries
 }
 
-fn runtime_denial_reason(runtime: CargoActionRuntime) -> Option<&'static str> {
+fn runtime_denial_reason(action: CargoAction, runtime: CargoActionRuntime) -> Option<&'static str> {
     if !runtime.trusted {
         Some("trust this worktree before running Cargo commands")
     } else if !runtime.connected {
@@ -258,7 +260,9 @@ fn runtime_denial_reason(runtime: CargoActionRuntime) -> Option<&'static str> {
         Some("multiplayer guests with read-only access cannot run Cargo commands")
     } else if !runtime.cargo_available {
         Some("Cargo is not available on the authoritative project host")
-    } else if !runtime.host_capable {
+    } else if !(runtime.host_capable
+        || action == CargoAction::RunWithCoverage && runtime.coverage_via_relay)
+    {
         Some("the authoritative project host does not support Tasks and DAP")
     } else {
         None
@@ -1076,9 +1080,7 @@ pub(crate) fn run_native_cargo_coverage(
     let project = workspace.project().clone();
     let (provider, coverage, worktrees) = project.read_with(cx, |project, cx| {
         anyhow::ensure!(
-            project.remote_client().is_some()
-                && !project.is_read_only(cx)
-                && !project.is_disconnected(cx),
+            project.is_remote() && !project.is_read_only(cx) && !project.is_disconnected(cx),
             "Coverage requires a writable, connected project host"
         );
         let worktrees = project.worktree_store();
@@ -4161,6 +4163,29 @@ mod tests {
                     .is_some_and(|entry| entry.accessibility_label.contains(expected_reason))
             );
         }
+
+        let relay = CargoActionRuntime {
+            host_capable: false,
+            coverage_via_relay: true,
+            ..Default::default()
+        };
+        let enabled = cargo_action_availability(&selection(Target(Binary)), relay)
+            .into_iter()
+            .filter(|entry| entry.enabled)
+            .map(|entry| entry.action)
+            .collect::<Vec<_>>();
+        assert_eq!(enabled, [CargoAction::RunWithCoverage]);
+        assert!(
+            cargo_action_availability(
+                &selection(Target(Binary)),
+                CargoActionRuntime {
+                    writable: false,
+                    ..relay
+                }
+            )
+            .iter()
+            .all(|entry| !entry.enabled)
+        );
     }
 
     #[gpui::test]

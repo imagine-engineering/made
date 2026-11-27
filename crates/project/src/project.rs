@@ -1336,6 +1336,8 @@ impl Project {
         source_coverage::SourceCoverageStore::init(&client);
         #[cfg(feature = "rust-coverage")]
         rust_coverage_provider::RustCoverageProviderStore::init(&client);
+        #[cfg(feature = "rust-coverage")]
+        rust_coverage_provider::RustCoverageProviderStore::init_coverage_relay(&client);
         #[cfg(feature = "rust-tests")]
         rust_test_provider::RustTestProviderStore::init(&client);
         DapStore::init(&client, cx);
@@ -3605,6 +3607,10 @@ impl Project {
         self.client_state = ProjectClientState::Shared {
             remote_id: project_id,
         };
+        #[cfg(feature = "rust-coverage")]
+        self.rust_coverage_provider_store.update(cx, |store, _| {
+            store.set_coverage_relay_share(Some(project_id))
+        });
 
         cx.emit(Event::RemoteIdChanged(Some(project_id)));
         Ok(())
@@ -3620,6 +3626,12 @@ impl Project {
         // Reshare expires the old connection's leases even if its snapshot is invalid.
         self.source_coverage_store
             .update(cx, |store, cx| store.invalidate_remote_session(cx));
+        #[cfg(feature = "rust-coverage")]
+        {
+            let project_id = self.remote_id();
+            self.rust_coverage_provider_store
+                .update(cx, |store, _| store.set_coverage_relay_share(project_id));
+        }
         if let Some(store) = &self.profile_results_store {
             store.update(cx, |store, _| store.invalidate());
         }
@@ -3704,6 +3716,9 @@ impl Project {
         if let ProjectClientState::Shared { remote_id, .. } = self.client_state {
             self.client_state = ProjectClientState::Local;
             self.collaborators.clear();
+            #[cfg(feature = "rust-coverage")]
+            self.rust_coverage_provider_store
+                .update(cx, |store, _| store.set_coverage_relay_share(None));
             if let Some(store) = &self.profile_results_store {
                 store.update(cx, |store, _| store.invalidate());
             }
