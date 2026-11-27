@@ -5071,6 +5071,46 @@ impl EditorElement {
         })
     }
 
+    fn paint_block_guides(&self, layout: &EditorLayout, window: &mut Window, cx: &mut App) {
+        let position_map = &layout.position_map;
+        let display = &position_map.snapshot;
+        let text_bounds = position_map.text_hitbox.bounds;
+        let line_height = position_map.line_height;
+        let scroll = position_map.scroll_position;
+        for guide in &self.editor.read(cx).block_guides {
+            if display.intersects_fold(guide.range.start) {
+                continue;
+            }
+            let start = guide.range.start.to_display_point(display);
+            let end = guide.range.end.to_display_point(display);
+            let block_row = DisplayRow(start.row().0.saturating_sub(1));
+            if end.row() < position_map.visible_row_range.start
+                || block_row >= position_map.visible_row_range.end
+                || !display
+                    .blocks_in_range(block_row..start.row())
+                    .any(|(_, block)| block.id() == BlockId::Custom(guide.block))
+            {
+                continue;
+            }
+
+            let column =
+                display.tab_expanded_column(guide.range.start.to_point(display.buffer_snapshot()));
+            let x = text_bounds.left() + column_pixels(&self.style, column as usize, window)
+                - position_map.em_layout_width * scroll.x as f32;
+            if x < text_bounds.left() || x >= text_bounds.right() {
+                continue;
+            }
+            let top = text_bounds.top() + line_height * (block_row.0 as f64 - scroll.y) as f32;
+            let bottom = top + line_height * (end.row().0 + 1 - block_row.0) as f32;
+            let top = top.max(text_bounds.top());
+            let bottom = bottom.min(text_bounds.bottom());
+            window.paint_quad(fill(
+                window.pixel_snap_bounds(Bounds::new(point(x, top), size(px(1.0), bottom - top))),
+                cx.theme().colors().border_variant,
+            ));
+        }
+    }
+
     fn paint_indent_guides(
         &mut self,
         layout: &mut EditorLayout,
@@ -5559,10 +5599,11 @@ impl EditorElement {
                 ) {
                     window
                         .set_cursor_style(CursorStyle::DragCopy, &layout.position_map.text_hitbox);
-                } else if editor
-                    .hovered_link_state
-                    .as_ref()
-                    .is_some_and(|hovered_link_state| !hovered_link_state.links.is_empty())
+                } else if editor.hovered_text_action
+                    || editor
+                        .hovered_link_state
+                        .as_ref()
+                        .is_some_and(|hovered_link_state| !hovered_link_state.links.is_empty())
                 {
                     window.set_cursor_style(
                         CursorStyle::PointingHand,
@@ -9542,6 +9583,7 @@ impl Element for EditorElement {
                         self.paint_background(layout, window, cx);
 
                         self.paint_indent_guides(layout, window, cx);
+                        self.paint_block_guides(layout, window, cx);
 
                         if layout.gutter_hitbox.size.width > Pixels::ZERO {
                             self.paint_blamed_display_rows(layout, window, cx);

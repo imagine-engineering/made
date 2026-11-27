@@ -184,6 +184,7 @@ pub enum HighlightKey {
     ProjectSearchView,
     Rename,
     SearchWithinRange,
+    SpecificationTaskReference,
     SelectedTextHighlight,
     SyntaxTreeView(usize),
     VimExchange,

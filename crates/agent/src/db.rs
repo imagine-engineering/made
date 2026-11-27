@@ -56,6 +56,8 @@ pub struct DbThread {
     pub recipe_scan: bool,
     #[serde(default)]
     pub doctor_repair_proposal: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specification_path: Option<String>,
     pub title: SharedString,
     pub messages: Vec<Arc<DbMessage>>,
     pub updated_at: DateTime<Utc>,
@@ -166,6 +168,7 @@ impl SharedThread {
         DbThread {
             recipe_scan: self.recipe_scan,
             doctor_repair_proposal: self.doctor_repair_proposal,
+            specification_path: None,
             title: format!("🔗 {}", self.title).into(),
             messages: self.messages,
             updated_at: self.updated_at,
@@ -361,6 +364,7 @@ impl DbThread {
         Ok(Self {
             recipe_scan: false,
             doctor_repair_proposal: false,
+            specification_path: None,
             title: thread.summary,
             messages,
             updated_at: thread.updated_at,
@@ -893,6 +897,7 @@ mod tests {
         DbThread {
             recipe_scan: false,
             doctor_repair_proposal: false,
+            specification_path: None,
             title: title.to_string().into(),
             messages: Vec::new(),
             updated_at,

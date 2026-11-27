@@ -30,6 +30,8 @@ mod model_selector;
 mod model_selector_popover;
 mod profile_selector;
 mod recipes_view;
+mod specification_editor;
+pub use specification_editor::SpecificationEditor;
 mod terminal_codegen;
 mod terminal_inline_assistant;
 pub mod terminal_thread_metadata_store;
@@ -223,6 +225,16 @@ actions!(
         ToggleNewThreadMenu,
         /// Toggles the options menu for agent settings and preferences.
         ToggleOptionsMenu,
+        /// Open the active or selected project specification in the native workflow.
+        ResumeSpecification,
+        /// Run an independent review of the selected or active specification.
+        ReviewSpecification,
+        /// Move keyboard focus from the Markdown editor to its specification controls.
+        FocusSpecificationControls,
+        /// Open the actions for the specification task at the editor cursor.
+        OpenSpecificationTaskActions,
+        /// Compare an existing specification with explicitly selected code references.
+        CheckSpecificationDrift,
         /// Toggles the profile or mode selector for switching between agent profiles.
         ToggleProfileSelector,
         /// Cycles through available session modes.
@@ -643,6 +655,7 @@ pub fn init(
         init_language_model_settings(cx);
     }
     agent_panel::init(cx);
+    specification_editor::init(cx);
     context_server_configuration::init(language_registry, fs.clone(), cx);
     thread_metadata_store::init(cx);
     terminal_thread_metadata_store::init(cx);

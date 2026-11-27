@@ -1572,7 +1572,11 @@ impl Buffer {
 
     /// Reloads the contents of the buffer from disk.
     pub fn reload(&mut self, cx: &Context<Self>) -> oneshot::Receiver<Option<Transaction>> {
-        self.reload_impl(None, cx)
+        self.reload_impl(None, false, cx)
+    }
+
+    pub fn reload_if_clean(&mut self, cx: &Context<Self>) -> oneshot::Receiver<Option<Transaction>> {
+        self.reload_impl(None, true, cx)
     }
 
     /// Reloads the contents of the buffer from disk using the specified encoding.
@@ -1584,12 +1588,13 @@ impl Buffer {
         encoding: &'static Encoding,
         cx: &Context<Self>,
     ) -> oneshot::Receiver<Option<Transaction>> {
-        self.reload_impl(Some(encoding), cx)
+        self.reload_impl(Some(encoding), false, cx)
     }
 
     fn reload_impl(
         &mut self,
         force_encoding: Option<&'static Encoding>,
+        only_clean: bool,
         cx: &Context<Self>,
     ) -> oneshot::Receiver<Option<Transaction>> {
         let (tx, rx) = futures::channel::oneshot::channel();
@@ -1642,6 +1647,11 @@ impl Buffer {
 
             let diff = this.update(cx, |this, cx| this.diff(new_text, cx))?.await;
             this.update(cx, |this, cx| {
+                if only_clean && (this.is_dirty() || this.version() != prev_version) {
+                    tx.send(None).ok();
+                    this.reload_task.take();
+                    return;
+                }
                 if this.version() == diff.base_version {
                     this.finalize_last_transaction();
                     let old_encoding = this.encoding;

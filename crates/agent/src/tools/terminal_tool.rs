@@ -1098,7 +1098,28 @@ async fn run_terminal_tool(
         })
         .map_err(|error| error.to_string())?;
     }
+    let exit_code = output
+        .exit_status
+        .as_ref()
+        .and_then(|status| status.exit_code);
     let result = process_content(output, &input.command, timed_out, user_stopped, selection);
+    let receipt = cx
+        .update(|cx| {
+            event_stream.record_specification_terminal(
+                &input.command,
+                working_dir.as_deref(),
+                exit_code,
+                !failed,
+                &result,
+                cx,
+            )
+        })
+        .map_err(|error| error.to_string())?;
+    let result = if let Some(receipt) = receipt {
+        format!("{result}\n\nSpecification check receipt: {receipt}")
+    } else {
+        result
+    };
     let result = if failed {
         result
     } else {

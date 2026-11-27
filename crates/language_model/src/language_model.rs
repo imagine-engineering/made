@@ -156,6 +156,10 @@ pub trait LanguageModel: Send + Sync {
         false
     }
 
+    fn supports_isolated_review(&self, _cx: &App) -> bool {
+        false
+    }
+
     fn supports_explicit_compaction(&self) -> bool {
         false
     }

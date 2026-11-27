@@ -2759,6 +2759,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                         agent::DbThread {
                             recipe_scan: false,
                             doctor_repair_proposal: false,
+                            specification_path: None,
                             goal: None,
                             title: title.to_string().into(),
                             messages: Vec::new(),

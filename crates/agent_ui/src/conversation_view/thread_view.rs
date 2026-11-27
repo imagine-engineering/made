@@ -6260,6 +6260,24 @@ impl ThreadView {
         cx.notify();
     }
 
+    pub(crate) fn reveal_specification_tool_call(
+        &mut self,
+        tool_call_id: &acp::ToolCallId,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(index) = self.thread.read(cx).entries().iter().position(|entry| {
+            matches!(entry, AgentThreadEntry::ToolCall(call) if &call.id == tool_call_id)
+        }) else {
+            return false;
+        };
+        self.entry_view_state.update(cx, |state, _| {
+            state.expand_tool_call(tool_call_id.clone());
+        });
+        self.list_state.scroll_to(ListOffset { item_ix: index, offset_in_item: px(0.) });
+        cx.notify();
+        true
+    }
+
     fn render_entry(
         &self,
         entry_ix: usize,

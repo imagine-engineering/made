@@ -10,6 +10,12 @@ pub mod recipe_workflow;
 pub mod recipes;
 pub mod remote_provider_config;
 mod sandboxing;
+mod spec_review;
+mod spec_workflow;
+pub use spec_workflow::{
+    SpecificationCriterion, SpecificationOverview, SpecificationPhase, SpecificationSession,
+    SpecificationTask, specification_for_editor, specification_task_rows,
+};
 mod templates;
 #[cfg(test)]
 mod tests;
@@ -1199,6 +1205,9 @@ impl NativeAgent {
         let weak = cx.weak_entity();
         let weak_thread = thread_handle.downgrade();
         thread_handle.update(cx, |thread, cx| {
+            if thread.specification_path.is_some() {
+                thread.resume_specification(None, cx).detach_and_log_err(cx);
+            }
             thread.set_summarization_model(summarization_model, cx);
             thread.add_default_tools(
                 Rc::new(NativeThreadEnvironment {
@@ -1790,7 +1799,7 @@ impl NativeAgent {
         &mut self,
         project: Entity<Project>,
         event: &project::Event,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
         let project_id = project.entity_id();
         let Some(state) = self.projects.get_mut(&project_id) else {
@@ -1804,6 +1813,20 @@ impl NativeAgent {
                 state.project_context_needs_refresh.send(()).ok();
             }
             project::Event::WorktreeUpdatedEntries(_, items) => {
+                for session in self
+                    .sessions
+                    .values()
+                    .filter(|session| session.project_id == project_id)
+                {
+                    if items
+                        .iter()
+                        .any(|(path, _, _)| session.thread.read(cx).specification_depends_on(path))
+                    {
+                        session.thread.update(cx, |thread, cx| {
+                            thread.resume_specification(None, cx).detach_and_log_err(cx);
+                        });
+                    }
+                }
                 if items.iter().any(|(path, _, _)| {
                     let path_ref = path.as_ref();
                     RULES_FILE_REL_PATHS

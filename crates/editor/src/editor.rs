@@ -1007,6 +1007,9 @@ pub struct Editor {
     highlighted_rows: TypeIdHashMap<Vec<RowHighlight>>,
     background_highlights: HashMap<HighlightKey, BackgroundHighlight>,
     navigation_overlays: HashMap<NavigationOverlayKey, Arc<[NavigationTargetOverlay]>>,
+    text_actions: Vec<EditorTextAction>,
+    hovered_text_action: bool,
+    block_guides: Vec<EditorBlockGuide>,
     gutter_highlights: TypeIdHashMap<GutterHighlight>,
     allow_git_diff_scrollbar_markers: bool,
     scrollbar_marker_state: ScrollbarMarkerState,
@@ -1240,6 +1243,33 @@ pub struct EditorSnapshot {
     current_line_highlight: CurrentLineHighlight,
     gutter_hovered: bool,
     semantic_tokens_enabled: bool,
+}
+
+type TextActionHandler = Rc<dyn Fn(&mut Editor, &Range<Anchor>, &mut Window, &mut Context<Editor>)>;
+
+pub struct EditorTextAction {
+    range: Range<Anchor>,
+    require_modifier: bool,
+    activate: TextActionHandler,
+}
+
+impl EditorTextAction {
+    pub fn new(
+        range: Range<Anchor>,
+        require_modifier: bool,
+        activate: impl Fn(&mut Editor, &Range<Anchor>, &mut Window, &mut Context<Editor>) + 'static,
+    ) -> Self {
+        Self {
+            range,
+            require_modifier,
+            activate: Rc::new(activate),
+        }
+    }
+}
+
+pub struct EditorBlockGuide {
+    pub block: CustomBlockId,
+    pub range: Range<Anchor>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2335,6 +2365,9 @@ impl Editor {
             highlighted_rows: Default::default(),
             background_highlights: HashMap::default(),
             navigation_overlays: HashMap::default(),
+            text_actions: Vec::new(),
+            hovered_text_action: false,
+            block_guides: Vec::new(),
             gutter_highlights: Default::default(),
             allow_git_diff_scrollbar_markers: false,
             scrollbar_marker_state: ScrollbarMarkerState::default(),
@@ -9558,6 +9591,44 @@ impl Editor {
         cx: &'a App,
     ) -> Option<(HighlightStyle, &'a [Range<Anchor>])> {
         self.display_map.read(cx).text_highlights(key)
+    }
+
+    pub fn set_text_actions(&mut self, mut actions: Vec<EditorTextAction>, cx: &mut Context<Self>) {
+        let snapshot = self.buffer.read(cx).snapshot(cx);
+        actions.sort_by(|left, right| left.range.start.cmp(&right.range.start, &snapshot));
+        self.text_actions = actions;
+        self.hovered_text_action = false;
+        cx.notify();
+    }
+
+    fn text_action_at(
+        &self,
+        point: DisplayPoint,
+        has_modifier: bool,
+        snapshot: &DisplaySnapshot,
+    ) -> Option<&EditorTextAction> {
+        if self.text_actions.is_empty() || snapshot.is_block_line(point.row()) {
+            return None;
+        }
+        let anchor = snapshot.display_point_to_anchor(point, Bias::Left);
+        let buffer = snapshot.buffer_snapshot();
+        let index = self
+            .text_actions
+            .partition_point(|action| action.range.start.cmp(&anchor, buffer).is_le())
+            .checked_sub(1)?;
+        let action = self.text_actions.get(index)?;
+        if action.require_modifier != has_modifier
+            || action.range.end.cmp(&anchor, buffer).is_le()
+            || snapshot.intersects_fold(action.range.start)
+        {
+            return None;
+        }
+        Some(action)
+    }
+
+    pub fn set_block_guides(&mut self, guides: Vec<EditorBlockGuide>, cx: &mut Context<Self>) {
+        self.block_guides = guides;
+        cx.notify();
     }
 
     pub fn set_navigation_overlays(

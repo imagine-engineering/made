@@ -2505,6 +2505,12 @@ fn initialize_pane(
             toolbar.add_item(solo_diff_style_toolbar, window, cx);
             let breadcrumbs = cx.new(|_| Breadcrumbs::new());
             toolbar.add_item(breadcrumbs, window, cx);
+            #[cfg(feature = "agentic-tools")]
+            {
+                let specification =
+                    cx.new(|cx| agent_ui::SpecificationEditor::new(workspace_handle.clone(), cx));
+                toolbar.add_item(specification, window, cx);
+            }
             let buffer_search_bar = cx.new(|cx| {
                 search::BufferSearchBar::new(
                     Some(workspace.project().read(cx).languages().clone()),

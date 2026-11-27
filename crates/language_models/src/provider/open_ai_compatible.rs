@@ -402,6 +402,11 @@ impl LanguageModel for OpenAiCompatibleLanguageModel {
         self.model.max_output_tokens
     }
 
+    fn supports_isolated_review(&self, cx: &App) -> bool {
+        self.model.capabilities.chat_completions
+            && self.state.read(cx).settings.custom_headers.is_empty()
+    }
+
     fn stream_completion(
         &self,
         mut request: LanguageModelRequest,

@@ -277,6 +277,10 @@ impl FakeLanguageModel {
 }
 
 impl LanguageModel for FakeLanguageModel {
+    fn supports_isolated_review(&self, _: &App) -> bool {
+        true
+    }
+
     fn is_endpoint_scoped(&self) -> bool {
         true
     }

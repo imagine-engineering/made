@@ -1189,6 +1189,7 @@
           "create_directory": true,
           "create_thread": true,
           "propose_recipe": true,
+          "specification_workflow": true,
           "delete_path": true,
           "diagnostics": true,
           "apply_code_action": true,

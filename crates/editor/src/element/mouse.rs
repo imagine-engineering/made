@@ -49,6 +49,22 @@ impl EditorElement {
         let point_for_position = position_map.point_for_position(event.position);
         let valid_point = point_for_position.nearest_valid;
 
+        let has_modifier = Editor::is_cmd_or_ctrl_pressed(&modifiers, cx);
+        let hovered_text_action = text_hovered
+            && !event.dragging()
+            && (!modifiers.modified() || has_modifier)
+            && editor
+                .text_action_at(
+                    point_for_position.exact_unclipped,
+                    has_modifier,
+                    &position_map.snapshot,
+                )
+                .is_some();
+        if editor.hovered_text_action != hovered_text_action {
+            editor.hovered_text_action = hovered_text_action;
+            cx.notify();
+        }
+
         #[cfg(feature = "agentic")]
         if editor.diff_review_drag_state.is_some() {
             editor.update_diff_review_drag(valid_point.row(), window, cx);
@@ -956,6 +972,37 @@ impl EditorElement {
         } else {
             true
         };
+
+        if let ClickEvent::Mouse(mouse_event) = event
+            && mouse_event.down.click_count == 1
+            && mouse_event.up.button == MouseButton::Left
+            && !pending_nonempty_selections
+            && text_hitbox.is_hovered(window)
+            && (!mouse_event.down.modifiers.modified() || mouse_down_hovered_link_modifier)
+            && (!mouse_event.up.modifiers.modified() || hovered_link_modifier)
+            && let Some(action) = editor.text_action_at(
+                position_map
+                    .point_for_position(mouse_event.up.position)
+                    .exact_unclipped,
+                hovered_link_modifier,
+                &position_map.snapshot,
+            )
+            && editor
+                .text_action_at(
+                    position_map
+                        .point_for_position(mouse_event.down.position)
+                        .exact_unclipped,
+                    mouse_down_hovered_link_modifier,
+                    &position_map.snapshot,
+                )
+                .is_some_and(|pressed| std::ptr::eq(pressed, action))
+        {
+            let activate = action.activate.clone();
+            let range = action.range.clone();
+            activate(editor, &range, window, cx);
+            cx.stop_propagation();
+            return;
+        }
 
         if let Some(mouse_position) = event.mouse_position()
             && !pending_nonempty_selections

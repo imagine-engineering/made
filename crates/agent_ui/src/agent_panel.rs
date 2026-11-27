@@ -48,9 +48,10 @@ use crate::{
     NewNativeAgentThreadFromSummary,
 };
 use crate::{
-    AgentDiffPane, ConversationView, CopyThreadToClipboard, Follow, LoadThreadFromClipboard,
-    NewTerminalThread, NewThread, OpenActiveThreadAsMarkdown, OpenAgentDiff, ResetFastModeWarnings,
-    ResetTrialEndUpsell, ResetTrialUpsell, ShowAllSidebarThreadMetadata, ShowThreadMetadata,
+    AgentDiffPane, CheckSpecificationDrift, ConversationView, CopyThreadToClipboard, Follow,
+    LoadThreadFromClipboard, NewTerminalThread, NewThread, OpenActiveThreadAsMarkdown,
+    OpenAgentDiff, ResetFastModeWarnings, ResetTrialEndUpsell, ResetTrialUpsell,
+    ResumeSpecification, ReviewSpecification, ShowAllSidebarThreadMetadata, ShowThreadMetadata,
     ToggleNewThreadMenu, ToggleOptionsMenu,
     conversation_view::{
         AcpThreadViewEvent, RootThreadUpdated, ThreadView, reset_fast_mode_warnings,
@@ -383,7 +384,7 @@ fn new_thread_in_workspace(
     }
 }
 
-fn doctor_history_session_available(project: &Entity<Project>, session: &str, cx: &App) -> bool {
+fn native_project_session_available(project: &Entity<Project>, session: &str, cx: &App) -> bool {
     if session.is_empty() || session.len() > 4096 || session.chars().any(char::is_control) {
         return false;
     }
@@ -460,6 +461,15 @@ pub fn init(cx: &mut App) {
                 })
                 .register_action(|workspace, _: &workspace::NewThread, window, cx| {
                     new_thread_in_workspace(workspace, window, cx);
+                })
+                .register_action(|workspace, _: &ResumeSpecification, window, cx| {
+                    AgentPanel::specification_workspace_action(workspace, SpecificationAction::Resume, window, cx);
+                })
+                .register_action(|workspace, _: &ReviewSpecification, window, cx| {
+                    AgentPanel::specification_workspace_action(workspace, SpecificationAction::Review, window, cx);
+                })
+                .register_action(|workspace, _: &CheckSpecificationDrift, window, cx| {
+                    AgentPanel::specification_workspace_action(workspace, SpecificationAction::Drift, window, cx);
                 })
                 .register_action(|workspace, _: &NewTerminalThread, window, cx| {
                     if let Some(panel) = workspace.panel::<AgentPanel>(cx) {
@@ -589,7 +599,7 @@ pub fn init(cx: &mut App) {
                 })
                 .register_action(|workspace, action: &crate::OpenDoctorSession, window, cx| {
                     let session_id = acp::SessionId::new(action.session_id.clone());
-                    let available = doctor_history_session_available(workspace.project(), &action.session_id, cx);
+                    let available = native_project_session_available(workspace.project(), &action.session_id, cx);
                     let panel = workspace.panel::<AgentPanel>(cx);
                     if !available || panel.is_none() {
                         workspace.show_toast(workspace::Toast::new(
@@ -1246,6 +1256,18 @@ impl BaseView {
     }
 }
 
+#[derive(Clone)]
+enum SpecificationAction {
+    Resume,
+    Review,
+    Drift,
+    Findings,
+    Approval,
+    Plan,
+    StartTask(String),
+    Verify,
+}
+
 pub struct AgentPanel {
     workspace: WeakEntity<Workspace>,
     /// Workspace id is used as a database key
@@ -1277,6 +1299,8 @@ pub struct AgentPanel {
     new_user_onboarding_upsell_dismissed: AtomicBool,
     selected_agent: Agent,
     _thread_view_subscription: Option<Subscription>,
+    specification_observation: Option<(gpui::EntityId, Subscription)>,
+    specification_details_open: bool,
     _active_thread_focus_subscription: Option<Subscription>,
     _base_view_observation: Option<Subscription>,
     _draft_editor_observation: Option<Subscription>,
@@ -1762,6 +1786,8 @@ impl AgentPanel {
             thread_store,
             selected_agent: Agent::default(),
             _thread_view_subscription: None,
+            specification_observation: None,
+            specification_details_open: false,
             _active_thread_focus_subscription: None,
             new_user_onboarding_upsell_dismissed: AtomicBool::new(OnboardingUpsell::dismissed(cx)),
             _base_view_observation: None,
@@ -6256,6 +6282,516 @@ impl AgentPanel {
         }
     }
 
+    pub(crate) fn editor_specification_conversation(
+        &mut self,
+        specification: &agent::SpecificationOverview,
+        session: Option<&agent::SpecificationSession>,
+        require_session: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<Entity<ConversationView>> {
+        let already_open = session.is_some_and(|session| {
+            self.active_agent_thread(cx)
+                .is_some_and(|thread| thread.read(cx).session_id().0.as_ref() == session.session_id)
+        });
+        if !already_open {
+            if let Some(session) = session
+                && native_project_session_available(&self.project, &session.session_id, cx)
+            {
+                self.open_thread(
+                    acp::SessionId::new(session.session_id.clone()),
+                    None,
+                    None,
+                    window,
+                    cx,
+                );
+            } else {
+                anyhow::ensure!(
+                    !require_session,
+                    "The recorded conversation is unavailable in this project"
+                );
+                let usable = self.active_native_agent_thread(cx).is_some_and(|thread| {
+                    thread
+                        .read(cx)
+                        .specification_overview()
+                        .is_none_or(|overview| overview.path == specification.path)
+                });
+                if !usable {
+                    self.selected_agent = Agent::NativeAgent;
+                    self.activate_new_thread(false, AgentThreadSource::AgentPanel, window, cx);
+                }
+            }
+        }
+        self.active_conversation_view()
+            .cloned()
+            .context("Open the built-in agent for this specification")
+    }
+
+    fn specification_workspace_action(
+        workspace: &mut Workspace,
+        action: SpecificationAction,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let Some(panel) = workspace.panel::<AgentPanel>(cx) else {
+            return;
+        };
+        Self::reveal_conversation(workspace, true, window, cx);
+        panel.update(cx, |panel, cx| {
+            panel.run_specification_action(action, true, cx)
+        });
+    }
+
+    fn run_specification_action(
+        &mut self,
+        action: SpecificationAction,
+        prefer_editor: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(native) = self.active_native_agent_thread(cx) else {
+            self.show_specification_error(
+                "Open a built-in agent conversation to work with a specification",
+                cx,
+            );
+            return;
+        };
+        let Some(conversation) = self.active_agent_thread(cx) else {
+            return;
+        };
+        if conversation.read(cx).status() != acp_thread::ThreadStatus::Idle {
+            self.show_specification_error("Wait for the current agent turn to finish", cx);
+            return;
+        }
+        let project = self.project.read(cx);
+        let editor_path = prefer_editor
+            .then(|| {
+                project
+                    .active_entry()
+                    .and_then(|entry| project.path_for_entry(entry, cx))
+                    .and_then(|path| project.absolute_path(&path, cx))
+                    .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
+            })
+            .flatten();
+        let load = native.update(cx, |thread, cx| {
+            thread.resume_specification(editor_path, cx)
+        });
+        cx.spawn(async move |panel, cx| {
+            let result: Result<()> = async {
+                load.await?;
+                let action = match action {
+                    SpecificationAction::Resume => return Ok(()),
+                    SpecificationAction::Review => "Independently review this revision and show me the findings.".to_owned(),
+                    SpecificationAction::Drift => "Check this specification against the current code and show me the evidence.".to_owned(),
+                    SpecificationAction::Findings => "Show me the blocking review findings and help me resolve them.".to_owned(),
+                    SpecificationAction::Approval => "Show me what needs my decision before I approve this revision.".to_owned(),
+                    SpecificationAction::Plan => "Prepare the implementation plan and tasks for the approved revision.".to_owned(),
+                    SpecificationAction::StartTask(id) => format!("Start {id} and record its acceptance checks."),
+                    SpecificationAction::Verify => "Run any missing acceptance checks and show me the verification results.".to_owned(),
+                };
+                conversation.update(cx, |thread, cx| thread.send(vec![action.into()], cx)).await?;
+                Ok(())
+            }.await;
+            if let Err(error) = result {
+                panel.update(cx, |panel, cx| panel.show_specification_error(format!("{error:#}"), cx)).log_err();
+            }
+        }).detach();
+    }
+
+    fn show_specification_error(
+        &self,
+        message: impl Into<std::borrow::Cow<'static, str>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.workspace
+            .update(cx, |workspace, cx| {
+                workspace.show_toast(
+                    workspace::Toast::new(
+                        workspace::notifications::NotificationId::unique::<ResumeSpecification>(),
+                        message,
+                    )
+                    .autohide(),
+                    cx,
+                );
+            })
+            .log_err();
+    }
+
+    fn open_specification_file(&self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                workspace
+                    .open_abs_path(path, workspace::OpenOptions::default(), window, cx)
+                    .detach_and_log_err(cx);
+            });
+        }
+    }
+
+    fn render_specification_header(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use agent::SpecificationPhase;
+        use ui::{Button, ButtonSize, ButtonStyle, Checkbox, ToggleState};
+
+        let native = self.active_native_agent_thread(cx)?;
+        if self
+            .specification_observation
+            .as_ref()
+            .is_none_or(|(id, _)| *id != native.entity_id())
+        {
+            let observation = cx.observe(&native, |_, _, cx| cx.notify());
+            self.specification_observation = Some((native.entity_id(), observation));
+            self.specification_details_open = false;
+        }
+        let thread = native.read(cx);
+        if !thread.in_specification_workflow() {
+            return None;
+        }
+        let color = cx.theme().colors();
+        let header = v_flex()
+            .flex_none()
+            .gap_1p5()
+            .px_3()
+            .py_2()
+            .border_b_1()
+            .border_color(color.border_variant)
+            .bg(color.toolbar_background);
+        let Some(specification) = thread.specification_overview().cloned() else {
+            return Some(
+                header
+                    .child(
+                        Label::new("Specification · Clarify requirements").size(LabelSize::Small),
+                    )
+                    .into_any_element(),
+            );
+        };
+        let active_task = thread.active_specification_task().map(str::to_owned);
+        let busy = self
+            .active_agent_thread(cx)
+            .is_some_and(|thread| thread.read(cx).status() == acp_thread::ThreadStatus::Generating);
+        let complete = specification
+            .tasks
+            .iter()
+            .filter(|task| task.complete)
+            .count();
+        let verified = specification
+            .criteria
+            .iter()
+            .filter(|criterion| criterion.passed == Some(true))
+            .count();
+        let (stage, tone, next) = match specification.phase {
+            SpecificationPhase::Draft => (
+                "Draft",
+                Color::Muted,
+                Some(("Review revision", SpecificationAction::Review)),
+            ),
+            SpecificationPhase::NeedsReview => (
+                "Revision needs review",
+                Color::Warning,
+                Some(("Review revision", SpecificationAction::Review)),
+            ),
+            SpecificationPhase::ResolveFindings => (
+                "Blocking review findings",
+                Color::Warning,
+                Some(("Discuss findings", SpecificationAction::Findings)),
+            ),
+            SpecificationPhase::AwaitingApproval => (
+                "Awaiting approval",
+                Color::Warning,
+                Some(("Discuss approval", SpecificationAction::Approval)),
+            ),
+            SpecificationPhase::ReadyToPlan => (
+                "Approved",
+                Color::Success,
+                Some(("Prepare tasks", SpecificationAction::Plan)),
+            ),
+            SpecificationPhase::Implementation => (
+                "Implementation",
+                Color::Default,
+                specification
+                    .tasks
+                    .iter()
+                    .find(|task| !task.complete && task.blocked_by.is_empty())
+                    .map(|task| {
+                        (
+                            if active_task.as_deref() == Some(task.id.as_str()) {
+                                "Resume task"
+                            } else {
+                                "Start next task"
+                            },
+                            SpecificationAction::StartTask(task.id.clone()),
+                        )
+                    }),
+            ),
+            SpecificationPhase::Verification => (
+                "Verification",
+                Color::Warning,
+                Some(("Check evidence", SpecificationAction::Verify)),
+            ),
+            SpecificationPhase::Verified => ("Verified", Color::Success, None),
+        };
+        let show_details = self.specification_details_open;
+        let path = specification.path.clone();
+        let short = |revision: Option<&str>| -> String {
+            revision.map_or_else(
+                || "Pending".into(),
+                |revision| revision.chars().take(10).collect(),
+            )
+        };
+        Some(
+            header
+                .child(
+                    h_flex()
+                        .gap_1p5()
+                        .justify_between()
+                        .child(
+                            Label::new(specification.title.clone())
+                                .truncate()
+                                .size(LabelSize::Small),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "open-feature-specification".into())
+                                .child(
+                                    Button::new("open-feature-specification", "Open spec")
+                                        .size(ButtonSize::Compact)
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_specification_file(path.clone(), window, cx)
+                                        })),
+                                ),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_1p5()
+                        .child(Label::new(stage).size(LabelSize::Small).color(tone))
+                        .when(!specification.tasks.is_empty(), |row| {
+                            row.child(
+                                Label::new(format!(
+                                    "{complete}/{} tasks",
+                                    specification.tasks.len()
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                            )
+                        })
+                        .when(!specification.criteria.is_empty(), |row| {
+                            row.child(
+                                Label::new(format!(
+                                    "{verified}/{} criteria passed",
+                                    specification.criteria.len()
+                                ))
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                            )
+                        }),
+                )
+                .child(
+                    h_flex()
+                        .flex_wrap()
+                        .gap_1p5()
+                        .when_some(next, |row, (label, action)| {
+                            row.child(
+                                div()
+                                    .debug_selector(|| "specification-next-action".into())
+                                    .child(
+                                        Button::new("specification-next-action", label)
+                                            .size(ButtonSize::Compact)
+                                            .style(ButtonStyle::Filled)
+                                            .disabled(busy)
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.run_specification_action(
+                                                    action.clone(),
+                                                    false,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                            )
+                        })
+                        .child(
+                            div()
+                                .debug_selector(|| "specification-details".into())
+                                .child(
+                                    Button::new(
+                                        "specification-details",
+                                        if show_details {
+                                            "Hide details"
+                                        } else {
+                                            "Details"
+                                        },
+                                    )
+                                    .size(ButtonSize::Compact)
+                                    .on_click(cx.listener(
+                                        |this, _, _, cx| {
+                                            this.specification_details_open =
+                                                !this.specification_details_open;
+                                            cx.notify();
+                                        },
+                                    )),
+                                ),
+                        ),
+                )
+                .when(show_details, |header| {
+                    let links = [
+                        ("Plan", specification.plan_path),
+                        ("Tasks file", specification.tasks_path),
+                        ("Evidence file", specification.verification_path),
+                    ];
+                    let details = v_flex()
+                        .debug_selector(|| "specification-details-content".into())
+                        .id("specification-details-content")
+                        .gap_2()
+                        .pt_2()
+                        .border_t_1()
+                        .border_color(color.border_variant)
+                        .max_h(rems(14.))
+                        .overflow_y_scroll()
+                        .child(
+                            h_flex()
+                                .flex_wrap()
+                                .gap_2()
+                                .child(
+                                    Label::new(format!(
+                                        "Current {}",
+                                        short(Some(&specification.revision))
+                                    ))
+                                    .size(LabelSize::Small),
+                                )
+                                .child(
+                                    Label::new(format!(
+                                        "Reviewed {}",
+                                        short(specification.reviewed.as_deref())
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted),
+                                )
+                                .child(
+                                    Label::new(format!(
+                                        "Approved {}",
+                                        short(specification.approved.as_deref())
+                                    ))
+                                    .size(LabelSize::Small)
+                                    .color(Color::Muted),
+                                ),
+                        )
+                        .when(specification.findings > 0, |details| {
+                            details.child(
+                                Label::new(if specification.findings == 1 {
+                                    "1 review finding in chat".to_owned()
+                                } else {
+                                    format!("{} review findings in chat", specification.findings)
+                                })
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                            )
+                        })
+                        .child(
+                            h_flex()
+                                .flex_wrap()
+                                .gap_1()
+                                .children(links.into_iter().filter_map(|(label, path)| {
+                                    path.map(|path| {
+                                        Button::new(
+                                            format!("open-specification-artifact-{label}"),
+                                            label,
+                                        )
+                                        .size(ButtonSize::Compact)
+                                        .on_click(
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.open_specification_file(
+                                                    path.clone(),
+                                                    window,
+                                                    cx,
+                                                )
+                                            }),
+                                        )
+                                    })
+                                })),
+                        )
+                        .children(specification.tasks.into_iter().map(|task| {
+                            let running = active_task.as_deref() == Some(task.id.as_str());
+                            let id = task.id.clone();
+                            let runnable = !task.complete
+                                && task.blocked_by.is_empty()
+                                && specification.phase == SpecificationPhase::Implementation;
+                            h_flex()
+                                .gap_2()
+                                .items_start()
+                                .child(
+                                    Checkbox::new(
+                                        format!("specification-task-checkbox-{}", task.id),
+                                        if task.complete {
+                                            ToggleState::Selected
+                                        } else {
+                                            ToggleState::Unselected
+                                        },
+                                    )
+                                    .visualization_only(true),
+                                )
+                                .child(
+                                    v_flex()
+                                        .flex_1()
+                                        .child(
+                                            Label::new(task.id.clone())
+                                                .size(LabelSize::Small)
+                                                .color(Color::Muted),
+                                        )
+                                        .child(Label::new(task.description).size(LabelSize::Small)),
+                                )
+                                .when(running && busy, |row| {
+                                    row.child(
+                                        Label::new("In progress")
+                                            .size(LabelSize::Small)
+                                            .color(Color::Muted),
+                                    )
+                                })
+                                .when(!task.complete && !task.blocked_by.is_empty(), |row| {
+                                    row.child(
+                                        Label::new(format!(
+                                            "Blocked by {}",
+                                            task.blocked_by.join(", ")
+                                        ))
+                                        .size(LabelSize::Small)
+                                        .color(Color::Warning),
+                                    )
+                                })
+                                .when(runnable && !(running && busy), |row| {
+                                    row.child(
+                                        Button::new(
+                                            format!("start-specification-task-{}", task.id),
+                                            if running { "Resume" } else { "Start task" },
+                                        )
+                                        .size(ButtonSize::Compact)
+                                        .disabled(busy)
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.run_specification_action(
+                                                    SpecificationAction::StartTask(id.clone()),
+                                                    false,
+                                                    cx,
+                                                )
+                                            }),
+                                        ),
+                                    )
+                                })
+                        }))
+                        .children(specification.criteria.into_iter().map(|criterion| {
+                            let (status, color) = match criterion.passed {
+                                Some(true) => ("Passed", Color::Success),
+                                Some(false) => ("Failed or interrupted", Color::Error),
+                                None => ("Unverified", Color::Muted),
+                            };
+                            h_flex()
+                                .gap_2()
+                                .justify_between()
+                                .child(Label::new(criterion.id).size(LabelSize::Small))
+                                .child(Label::new(status).size(LabelSize::Small).color(color))
+                        }));
+                    header.child(details)
+                })
+                .into_any_element(),
+        )
+    }
+
     fn render_panel_options_menu(
         &self,
         _window: &mut Window,
@@ -6287,6 +6823,8 @@ impl AgentPanel {
                         .as_native_thread(cx)
                         .is_some_and(|thread| !thread.read(cx).is_generating_title())
             });
+
+        let native_spec_actions = self.active_native_agent_thread(cx).is_some();
 
         let has_thread_messages = conversation_view.as_ref().is_some_and(|conversation_view| {
             conversation_view.read(cx).has_user_submitted_prompt(cx)
@@ -6329,6 +6867,17 @@ impl AgentPanel {
                 move |window, cx| {
                     Some(ContextMenu::build(window, cx, |mut menu, _window, cx| {
                         menu = menu.context(menu_action_context.clone());
+                        if native_spec_actions {
+                            menu = menu
+                                .header("Specifications")
+                                .action("Resume Specification", Box::new(ResumeSpecification))
+                                .action("Review Specification", Box::new(ReviewSpecification))
+                                .action(
+                                    "Check Specification Drift",
+                                    Box::new(CheckSpecificationDrift),
+                                )
+                                .separator();
+                        }
 
                         if has_thread_messages {
                             menu = menu.header("Current Thread");
@@ -7214,6 +7763,18 @@ impl Render for AgentPanel {
             .on_action(cx.listener(Self::open_active_thread_as_markdown))
             .on_action(cx.listener(Self::manage_skills))
             .on_action(cx.listener(Self::toggle_options_menu))
+            .on_action(cx.listener(|this, _: &ResumeSpecification, _, cx| {
+                cx.stop_propagation();
+                this.run_specification_action(SpecificationAction::Resume, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ReviewSpecification, _, cx| {
+                cx.stop_propagation();
+                this.run_specification_action(SpecificationAction::Review, true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CheckSpecificationDrift, _, cx| {
+                cx.stop_propagation();
+                this.run_specification_action(SpecificationAction::Drift, true, cx);
+            }))
             .on_action(cx.listener(Self::increase_font_size))
             .on_action(cx.listener(Self::decrease_font_size))
             .on_action(cx.listener(Self::reset_font_size))
@@ -7234,6 +7795,7 @@ impl Render for AgentPanel {
                 }
             }))
             .child(self.render_toolbar(window, cx))
+            .children(self.render_specification_header(cx))
             .children(self.render_new_user_onboarding(window, cx))
             .map(|parent| match self.visible_surface() {
                 VisibleSurface::Uninitialized if !self.has_open_project(cx) => {
@@ -12084,6 +12646,7 @@ mod tests {
         let db_thread = agent::DbThread {
             recipe_scan: false,
             doctor_repair_proposal: false,
+            specification_path: None,
             goal: None,
             title: source_title.clone(),
             messages: Vec::new(),
@@ -15208,7 +15771,7 @@ mod tests {
             .expect("Real session")
             .as_str()
             .to_owned();
-        assert!(visual.read(|cx| doctor_history_session_available(&project, &session, cx)));
+        assert!(visual.read(|cx| native_project_session_available(&project, &session, cx)));
         workspace.update_in(&mut visual, |workspace, window, cx| {
             diagnostics::doctor_view::DoctorView::deploy(
                 workspace,
@@ -15488,7 +16051,7 @@ mod tests {
             .expect("Existing session link")
             .as_str();
         let project = workspace.read_with(&visual, |workspace, _| workspace.project().clone());
-        assert!(visual.read(|cx| doctor_history_session_available(&project, session, cx)));
+        assert!(visual.read(|cx| native_project_session_available(&project, session, cx)));
         assert_eq!(
             project
                 .read_with(&visual, |project, _| project.fs().clone())
@@ -15989,7 +16552,7 @@ mod tests {
                 launches.is_empty(),
                 "Recheck comparison and navigation never replay a Task"
             );
-            assert!(visual.read(|cx| doctor_history_session_available(&project, &session, cx)));
+            assert!(visual.read(|cx| native_project_session_available(&project, &session, cx)));
             assert_eq!(
                 requests.load(Ordering::SeqCst),
                 archive_requests + 1,
@@ -16038,7 +16601,7 @@ mod tests {
                 .map(diagnostics::doctor::DiagnosticText::as_str),
             Some(session.as_str())
         );
-        assert!(visual.read(|cx| doctor_history_session_available(&project, &session, cx)));
+        assert!(visual.read(|cx| native_project_session_available(&project, &session, cx)));
         doctor_investigation_flow_click(&mut visual, "doctor-security-verify");
         assert!(
             view.read_with(&visual, |view, _| view.error_fixture().is_some()),
@@ -16268,7 +16831,7 @@ mod tests {
                 .map(diagnostics::doctor::DiagnosticText::as_str),
             Some(session.as_str())
         );
-        assert!(visual.read(|cx| doctor_history_session_available(&project, &session, cx)));
+        assert!(visual.read(|cx| native_project_session_available(&project, &session, cx)));
         assert_eq!(
             filesystem
                 .load(Path::new("/project/file.txt"))
@@ -16429,7 +16992,7 @@ mod tests {
         );
         assert_eq!(records.len(), 1);
         let project = workspace.read_with(&visual, |workspace, _| workspace.project().clone());
-        assert!(visual.read(|cx| doctor_history_session_available(&project, &session, cx)));
+        assert!(visual.read(|cx| native_project_session_available(&project, &session, cx)));
         visual.dispatch_action(crate::OpenDoctorSession {
             session_id: session.clone(),
         });
@@ -17171,7 +17734,7 @@ mod tests {
         let session = active_session_id(&panel, &visual);
         let thread = active_thread_id(&panel, &visual);
         let project = workspace.read_with(&visual, |workspace, _| workspace.project().clone());
-        assert!(visual.read(|cx| doctor_history_session_available(
+        assert!(visual.read(|cx| native_project_session_available(
             &project,
             session.0.as_ref(),
             cx
@@ -17199,7 +17762,7 @@ mod tests {
         visual.run_until_parked();
         assert_eq!(*connection.next_session_number.lock(), created);
         assert_eq!(active_thread_id(&panel, &visual), thread);
-        assert!(!visual.read(|cx| doctor_history_session_available(
+        assert!(!visual.read(|cx| native_project_session_available(
             &project,
             session.0.as_ref(),
             cx
@@ -17236,7 +17799,7 @@ mod tests {
             });
         };
         save(metadata.clone(), &mut visual);
-        assert!(visual.read(|cx| doctor_history_session_available(
+        assert!(visual.read(|cx| native_project_session_available(
             &project,
             session.0.as_ref(),
             cx
@@ -17245,7 +17808,7 @@ mod tests {
         other.worktree_paths =
             WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from("/other-project")]));
         save(other, &mut visual);
-        assert!(!visual.read(|cx| doctor_history_session_available(
+        assert!(!visual.read(|cx| native_project_session_available(
             &project,
             session.0.as_ref(),
             cx
@@ -17253,13 +17816,13 @@ mod tests {
         let mut external = metadata;
         external.agent_id = "External".into();
         save(external, &mut visual);
-        assert!(!visual.read(|cx| doctor_history_session_available(
+        assert!(!visual.read(|cx| native_project_session_available(
             &project,
             session.0.as_ref(),
             cx
         )));
         for invalid in ["", "unknown-session", "bad\nsession"] {
-            assert!(!visual.read(|cx| doctor_history_session_available(&project, invalid, cx)));
+            assert!(!visual.read(|cx| native_project_session_available(&project, invalid, cx)));
             visual.dispatch_action(crate::OpenDoctorSession {
                 session_id: invalid.into(),
             });

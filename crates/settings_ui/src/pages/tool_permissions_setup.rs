@@ -1423,6 +1423,7 @@ mod tests {
             // tool calls inside the spawned thread, not the spawning itself.
             "create_thread",
             "propose_recipe", // Opens a draft; saving and consent belong to the desktop UI.
+            "specification_workflow", // Uses a revision-specific decision in the conversation.
             "spawn_agent",
         ];
 

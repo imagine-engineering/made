@@ -1315,6 +1315,10 @@ pub struct Thread {
     pub(crate) recipe_cancellation: Option<oneshot::Sender<()>>,
     pub(crate) recipe_scan_policy: Option<crate::recipe_scan::RecipeScanSessionPolicy>,
     doctor_repair_proposal: bool,
+    pub(crate) spec_session: Option<crate::tools::spec_workflow_tool::SpecSession>,
+    pub(crate) editor_specification_task: Option<(String, String)>,
+    pub(crate) specification_path: Option<String>,
+    pub(crate) specification_overview: Option<crate::SpecificationOverview>,
     pending_message: Option<AgentMessage>,
     pub(crate) tools: BTreeMap<SharedString, Arc<dyn AnyAgentTool>>,
     request_token_usage: HashMap<ClientUserMessageId, language_model::TokenUsage>,
@@ -1502,6 +1506,10 @@ impl Thread {
             recipe_cancellation: None,
             recipe_scan_policy: None,
             doctor_repair_proposal: false,
+            spec_session: None,
+            editor_specification_task: None,
+            specification_path: None,
+            specification_overview: None,
             sandboxed_terminal_temp_dir: None,
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
         }
@@ -1892,6 +1900,10 @@ impl Thread {
             recipe_permission_denied: None,
             recipe_cancellation: None,
             doctor_repair_proposal: db_thread.doctor_repair_proposal,
+            spec_session: None,
+            editor_specification_task: None,
+            specification_path: db_thread.specification_path,
+            specification_overview: None,
             recipe_scan_policy: db_thread.recipe_scan.then(|| {
                 let mut policy = crate::recipe_scan::RecipeScanSessionPolicy::default();
                 policy.read_only = true;
@@ -1978,6 +1990,7 @@ impl Thread {
         let mut thread = DbThread {
             recipe_scan: self.recipe_scan_policy.is_some(),
             doctor_repair_proposal: self.doctor_repair_proposal,
+            specification_path: self.specification_path.clone(),
             title: self.title().unwrap_or_default(),
             messages: self.messages.clone(),
             updated_at: self.updated_at,
@@ -2111,6 +2124,135 @@ impl Thread {
     pub(crate) fn can_propose_recipe(&self) -> bool {
         // Scheduled runs disable retries until their unattended turn has finished.
         self.automatic_retries && self.parent_thread_id().is_none()
+    }
+
+    pub fn specification_overview(&self) -> Option<&crate::SpecificationOverview> {
+        self.specification_overview.as_ref()
+    }
+
+    pub fn in_specification_workflow(&self) -> bool {
+        self.spec_session.is_some() || self.specification_path.is_some()
+    }
+
+    pub(crate) fn specification_depends_on(&self, path: &util::rel_path::RelPath) -> bool {
+        self.specification_path
+            .as_deref()
+            .is_some_and(|specification| {
+                crate::spec_workflow::is_workflow_input(specification, &path.as_unix_str())
+            })
+    }
+
+    pub fn active_specification_task(&self) -> Option<&str> {
+        self.spec_session.as_ref()?.task.as_deref()
+    }
+
+    pub fn request_editor_specification_task(&mut self, task: String, revision: String) -> Result<()> {
+        anyhow::ensure!(self.editor_specification_task.is_none(), "Another editor task is running");
+        self.finish_editor_specification_task();
+        self.editor_specification_task = Some((task, revision));
+        Ok(())
+    }
+
+    pub fn finish_editor_specification_task(&mut self) {
+        self.editor_specification_task = None;
+        if let Some(session) = &mut self.spec_session {
+            session.task = None;
+            session.task_run = None;
+            session.evidence.clear();
+        }
+    }
+
+    pub fn resume_specification(
+        &mut self,
+        path: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        let root = match crate::tools::spec_workflow_tool::spec_root(self, cx) {
+            Ok(root) if self.can_use_spec_workflow(cx) => root,
+            Ok(_) => {
+                return Task::ready(Err(anyhow!("A trusted built-in agent thread is required")));
+            }
+            Err(error) => return Task::ready(Err(error)),
+        };
+        let explicit = if let Some(path) = path {
+            match path.strip_prefix(&root).ok().and_then(Path::to_str) {
+                Some(path) => Some(path.replace(std::path::MAIN_SEPARATOR, "/")),
+                None => {
+                    return Task::ready(Err(anyhow!("Select a Markdown file inside the project")));
+                }
+            }
+        } else {
+            self.specification_path.clone()
+        };
+        let load = cx.background_spawn(async move {
+            let project = crate::spec_workflow::SpecProject::open(root)?;
+            let path = project.locate(explicit.as_deref())?;
+            let snapshot = project.snapshot(&path)?;
+            let overview = project.overview(&snapshot)?;
+            Ok::<_, anyhow::Error>((
+                crate::spec_workflow::SpecBinding { project, path },
+                overview,
+            ))
+        });
+        cx.spawn(async move |thread, cx| {
+            let (binding, overview) = load.await?;
+            thread.update(cx, |thread, cx| {
+                if thread.specification_path.as_deref() != Some(binding.path.as_str())
+                    || thread.spec_session.is_none()
+                {
+                    thread.specification_path = Some(binding.path.clone());
+                    thread.spec_session = Some(crate::tools::spec_workflow_tool::SpecSession {
+                        binding: Some(binding),
+                        ..Default::default()
+                    });
+                }
+                thread.specification_overview = Some(overview);
+                cx.notify();
+            })
+        })
+    }
+
+    pub(crate) fn can_use_spec_workflow(&self, cx: &App) -> bool {
+        self.can_propose_recipe()
+            && self.recipe_scan_policy.is_none()
+            && !self.doctor_repair_proposal
+            && self.grind_turn_context.is_none()
+            && self.project.read(cx).is_local()
+            && !TrustedWorktrees::has_restricted_worktrees(
+                &self.project.read(cx).worktree_store(),
+                cx,
+            )
+    }
+
+    fn tool_in_specification_design(name: &str) -> bool {
+        matches!(
+            name,
+            "specification_workflow"
+                | "diagnostics"
+                | "find_path"
+                | "find_references"
+                | "go_to_definition"
+                | "grep"
+                | "list_directory"
+                | "read_file"
+        )
+    }
+
+    fn workflow_mutating_tool(name: &str) -> bool {
+        matches!(
+            name,
+            "apply_code_action"
+                | "copy_path"
+                | "create_directory"
+                | "delete_path"
+                | "edit_file"
+                | "streaming_edit_file"
+                | "move_path"
+                | "rename_symbol"
+                | "terminal"
+                | "sandboxed_terminal"
+                | "write_file"
+        )
     }
 
     pub fn model(&self) -> Option<&Arc<dyn LanguageModel>> {
@@ -2358,6 +2500,9 @@ impl Thread {
 
         let language_registry = self.project.read(cx).languages().clone();
         self.add_tool(crate::ProposeRecipeTool::new(cx.weak_entity()));
+        self.add_tool(crate::tools::spec_workflow_tool::SpecWorkflowTool::new(
+            cx.weak_entity(),
+        ));
         self.add_tool(CopyPathTool::new(self.project.clone()));
         self.add_tool(CreateDirectoryTool::new(self.project.clone()));
         self.add_tool(DeletePathTool::new(
@@ -4278,7 +4423,7 @@ impl Thread {
 
         let fs = self.project.read(cx).fs().clone();
         let tool_call_id = scoped_tool_call_id(owning_message_ix, &tool_use_id);
-        let tool_event_stream = ToolCallEventStream::new(
+        let mut tool_event_stream = ToolCallEventStream::new(
             tool_use_id.clone(),
             tool_call_id,
             event_stream.clone(),
@@ -4287,6 +4432,10 @@ impl Thread {
             self.sandbox_grants.clone(),
             Some(cx.weak_entity()),
         );
+        tool_event_stream.specification_task_run = self
+            .spec_session
+            .as_ref()
+            .and_then(|session| session.task_run);
         if tool.reports_execution_start() {
             tool_event_stream.execution.set(ToolExecution::NotStarted);
         } else {
@@ -4295,7 +4444,35 @@ impl Thread {
             );
         }
         let supports_images = self.model().is_some_and(|model| model.supports_images());
-        let tool_result = tool.run(tool_input, tool_event_stream.clone(), cx);
+        let tool_result = match &self.spec_session {
+            Some(session) if !Self::tool_in_specification_design(&tool.name()) => {
+                let active = session.binding.clone().zip(session.task.clone());
+                let project = self.project.clone();
+                let editor_task = self.editor_specification_task.clone();
+                if !Self::workflow_mutating_tool(&tool.name()) || active.is_none() {
+                    Task::ready(Err(anyhow!("This tool is unavailable while the specification is in design. Start an approved task first.").into()))
+                } else {
+                    let events = tool_event_stream.clone();
+                    cx.spawn(async move |_, cx| {
+                        let (binding, task) =
+                            active.context("Start an approved implementation task")?;
+                        cx.update(|cx| crate::tools::spec_workflow_tool::ensure_saved(&project, &binding, &[], cx))?;
+                        cx.background_executor()
+                            .spawn(async move {
+                                let snapshot = binding.project.snapshot(&binding.path)?;
+                                if let Some((requested, revision)) = editor_task {
+                                    anyhow::ensure!(task == requested && snapshot.revision == revision,
+                                        "The selected task or approved specification revision changed");
+                                }
+                                binding.project.registered_task(&snapshot, &task)
+                            })
+                            .await?;
+                        cx.update(|cx| tool.run(tool_input, events, cx)).await
+                    })
+                }
+            }
+            _ => tool.run(tool_input, tool_event_stream.clone(), cx),
+        };
         cx.foreground_executor().spawn(async move {
             let (is_error, mut output) = match tool_result.await {
                 Ok(mut output) => {
@@ -4832,6 +5009,13 @@ impl Thread {
             .filter(|(name, _)| {
                 name.as_ref() != crate::ProposeRecipeTool::NAME || self.can_propose_recipe()
             })
+            .filter(|(name, _)| {
+                (name.as_ref() != "specification_workflow" || self.can_use_spec_workflow(cx))
+                    && (!self.in_specification_workflow()
+                        || Self::tool_in_specification_design(name)
+                        || self.active_specification_task().is_some()
+                            && Self::workflow_mutating_tool(name))
+            })
             .filter(|(_, tool)| !is_restricted || tool.allow_in_restricted_mode())
             .filter_map(|(tool_name, tool)| {
                 let terminal_variant = matches!(
@@ -4864,7 +5048,10 @@ impl Thread {
             .filter(|(tool_name, _)| crate::tools::tool_feature_flag_enabled(tool_name, cx))
             .collect::<BTreeMap<_, _>>();
 
-        if self.recipe_scan_policy.is_some() || self.doctor_repair_proposal {
+        if self.recipe_scan_policy.is_some()
+            || self.doctor_repair_proposal
+            || self.in_specification_workflow()
+        {
             return tools;
         }
 
@@ -4873,6 +5060,9 @@ impl Thread {
         let mut duplicate_tool_names = HashSet::default();
         for (server_id, server_tools) in self.context_server_registry.read(cx).servers() {
             for (tool_name, tool) in server_tools {
+                if provider_compatible_tool_name(tool_name.as_ref()) == "specification_workflow" {
+                    continue;
+                }
                 if profile.is_context_server_tool_enabled(&server_id.0, &tool_name) {
                     let tool_name: SharedString =
                         provider_compatible_tool_name(tool_name.as_ref()).into();
@@ -5005,8 +5195,11 @@ impl Thread {
         let end_ix = end_ix.min(self.messages.len());
         log::trace!("Building request messages from {} thread messages", end_ix);
 
+        let use_specification_workflow = available_tools
+            .iter()
+            .any(|tool| tool.as_ref() == "specification_workflow");
         let user_agents_md = UserAgentsMd::global(cx).and_then(|s| s.content().cloned());
-        let system_prompt = SystemPromptTemplate {
+        let mut system_prompt = SystemPromptTemplate {
             project: self.project_context.read(cx),
             available_tools,
             model_name: self.model().map(|m| m.name().0.to_string()),
@@ -5022,6 +5215,10 @@ impl Thread {
         .render(&self.templates)
         .context("failed to build system prompt")
         .expect("Invalid template");
+        if use_specification_workflow {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(crate::spec_workflow::WORKFLOW_INSTRUCTIONS);
+        }
         let mut messages = vec![LanguageModelRequestMessage {
             role: Role::System,
             content: vec![system_prompt.into()],
@@ -6414,6 +6611,7 @@ pub struct ToolCallEventStream {
     execution: Rc<Cell<ToolExecution>>,
     failure: Rc<Cell<Option<&'static str>>>,
     working_directory: Rc<RefCell<Option<String>>>,
+    specification_task_run: Option<Uuid>,
     /// Shared, thread-scoped sandbox grants (see [`Thread::sandbox_grants`]).
     sandbox_grants: Rc<RefCell<ThreadSandboxGrants>>,
     /// The owning thread, used to trigger a save when a "for this thread"
@@ -6505,6 +6703,7 @@ impl ToolCallEventStream {
             execution: Rc::new(Cell::new(ToolExecution::Unconfirmed)),
             failure: Rc::new(Cell::new(None)),
             working_directory: Rc::new(RefCell::new(None)),
+            specification_task_run: None,
             sandbox_grants,
             thread,
         }
@@ -6583,6 +6782,51 @@ impl ToolCallEventStream {
             );
         }
         meta
+    }
+
+    pub(crate) fn record_specification_terminal(
+        &self,
+        command: &str,
+        working_directory: Option<&Path>,
+        exit_code: Option<u32>,
+        passed: bool,
+        output: &str,
+        cx: &mut App,
+    ) -> Result<Option<String>> {
+        let (Some(thread), Some(working_directory)) = (&self.thread, working_directory) else {
+            return Ok(None);
+        };
+        thread.update(cx, |thread, _cx| {
+            let Some(session) = thread.spec_session.as_mut() else {
+                return Ok(None);
+            };
+            let Some(binding) = &session.binding else {
+                return Ok(None);
+            };
+            if self.specification_task_run.is_none()
+                || self.specification_task_run != session.task_run
+                || !working_directory.starts_with(binding.project.root())
+            {
+                return Ok(None);
+            }
+            let id = Uuid::new_v4().to_string();
+            if session.evidence.len() == 32 {
+                session.evidence.remove(0);
+            }
+            let relative = working_directory.strip_prefix(binding.project.root())?;
+            session
+                .evidence
+                .push(crate::spec_workflow::TerminalEvidence {
+                    id: id.clone(),
+                    command: command.to_owned(),
+                    working_directory: relative.display().to_string(),
+                    exit_code,
+                    passed,
+                    output: output.chars().take(2000).collect(),
+                    observed_at: chrono::Utc::now(),
+                });
+            Ok(Some(id))
+        })?
     }
 
     pub(crate) fn mark_execution_started(&self) {

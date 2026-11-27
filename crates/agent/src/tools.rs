@@ -23,6 +23,7 @@ mod read_file_tool;
 mod rename_tool;
 mod skill_tool;
 mod spawn_agent_tool;
+pub(crate) mod spec_workflow_tool;
 mod symbol_locator;
 mod terminal_tool;
 mod tool_permissions;
@@ -212,6 +213,7 @@ tools! {
     ListDirectoryTool,
     MovePathTool,
     ProposeRecipeTool,
+    spec_workflow_tool::SpecWorkflowTool,
     ReadFileTool,
     RenameTool,
     SkillTool,

@@ -171,6 +171,7 @@ mod tests {
         DbThread {
             recipe_scan: false,
             doctor_repair_proposal: false,
+            specification_path: None,
             title: title.to_string().into(),
             messages: Vec::new(),
             updated_at,
