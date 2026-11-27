@@ -705,6 +705,7 @@ pub struct DependenciesPanel {
     build_phase_notice: Option<String>,
     remote_build_reimport_pending: bool,
     graph_search: Entity<Editor>,
+    graph_search_has_no_matches: bool,
     graph_inspection: Option<GraphInspection>,
     graph_pin: Option<GraphPin>,
     graph_selection_set: Vec<GraphPin>,
@@ -3152,6 +3153,7 @@ impl DependenciesPanel {
                     build_phase_notice: None,
                     remote_build_reimport_pending: false,
                     graph_search,
+                    graph_search_has_no_matches: false,
                     graph_inspection: None,
                     graph_pin: None,
                     graph_selection_set: Vec::new(),
@@ -4931,6 +4933,7 @@ impl DependenciesPanel {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
+        self.graph_search_has_no_matches = false;
         if self.host_unavailable(cx) {
             self.navigation.clear();
             self.configuration_selections.clear();
@@ -5247,7 +5250,10 @@ impl DependenciesPanel {
         }
         let search = graph_search_query(&self.graph_search.read(cx).text(cx));
         match &search {
-            Ok(Some(query)) => search_project_graph_rows(&mut roots, query),
+            Ok(Some(query)) => {
+                self.graph_search_has_no_matches =
+                    search_project_graph_rows(&mut roots, query) == Some(false);
+            }
             Err(_) => suppress_invalid_graph_search(&mut roots),
             Ok(None) => {}
         }
@@ -7408,9 +7414,13 @@ fn retain_graph_search_matches(row: &mut LanguageToolNode, query: &str) -> bool 
     !row.children.is_empty()
 }
 
-fn search_project_graph_rows(rows: &mut [LanguageToolNode], query: &str) {
+fn search_project_graph_rows(rows: &mut [LanguageToolNode], query: &str) -> Option<bool> {
+    let mut any_match = None;
     for row in rows {
-        if row.id.0.starts_with("graph:") {
+        let row_match = if row.id.0.starts_with("graph:") {
+            if row.children.is_empty() {
+                continue;
+            }
             let matched = retain_graph_search_matches(row, query);
             let status = if matched {
                 "Matching admitted graph facts"
@@ -7423,14 +7433,26 @@ fn search_project_graph_rows(rows: &mut [LanguageToolNode], query: &str) {
             }
             row.accessibility_label.push_str("; ");
             row.accessibility_label.push_str(status);
+            Some(matched)
         } else if row.id.0.starts_with("gradle-configuration:") {
+            let mut configuration_match = None;
             row.children.retain_mut(|child| {
-                !child.id.0.starts_with("graph:") || retain_graph_search_matches(child, query)
+                if !child.id.0.starts_with("graph:") {
+                    return true;
+                }
+                let matched = retain_graph_search_matches(child, query);
+                configuration_match = Some(configuration_match.unwrap_or(false) || matched);
+                matched
             });
+            configuration_match
         } else {
-            search_project_graph_rows(&mut row.children, query);
+            search_project_graph_rows(&mut row.children, query)
+        };
+        if let Some(matched) = row_match {
+            any_match = Some(any_match.unwrap_or(false) || matched);
         }
     }
+    any_match
 }
 
 fn graph_search_expansion_ids(row: &LanguageToolNode, ids: &mut Vec<LanguageToolNodeId>) -> bool {
@@ -7450,6 +7472,9 @@ fn suppress_invalid_graph_search(rows: &mut [LanguageToolNode]) {
             row.children.clear();
             row.accessibility_label
                 .push_str("; Invalid graph search; clear it to inspect admitted facts");
+        } else if row.id.0.starts_with("gradle-configuration:") {
+            row.children
+                .retain(|child| !child.id.0.starts_with("graph:"));
         } else {
             suppress_invalid_graph_search(&mut row.children);
         }
@@ -9575,6 +9600,12 @@ impl DependenciesPanel {
             (
                 "Build view preferences status",
                 self.preferences_notice.clone(),
+            ),
+            (
+                "No matching dependency facts",
+                self.graph_search_has_no_matches.then(|| {
+                    "Clear the search to show the dependency facts in this view.".to_owned()
+                }),
             ),
         ]
         .into_iter()
@@ -12023,7 +12054,10 @@ mod tests {
                         .contains("collection complete false")
                 );
                 let mut searched = vec![root];
-                search_project_graph_rows(&mut searched, "no-match-scope-fixture");
+                assert_eq!(
+                    search_project_graph_rows(&mut searched, "no-match-scope-fixture"),
+                    Some(false)
+                );
                 assert_eq!(searched.len(), 1);
                 assert!(searched[0].children.is_empty());
             }
@@ -12870,7 +12904,7 @@ mod tests {
                 enabled: true,
                 activation_label: Some("Open manifest".into()),
             }];
-            search_project_graph_rows(&mut roots, &query);
+            assert_eq!(search_project_graph_rows(&mut roots, &query), Some(true));
             let matched = flat(roots);
             assert!(matched.iter().any(|row| row.label.contains("shared")));
             assert!(matched.iter().any(|row| row.id.0 == "task:test"));
@@ -12888,7 +12922,10 @@ mod tests {
                         .contains("Matching admitted graph facts")
             }));
             let mut no_match = vec![graph.clone()];
-            search_project_graph_rows(&mut no_match, "never-present-private-canary");
+            assert_eq!(
+                search_project_graph_rows(&mut no_match, "never-present-private-canary"),
+                Some(false)
+            );
             assert_eq!(flat(no_match.clone()).len(), 1);
             assert!(
                 no_match
@@ -12915,34 +12952,26 @@ mod tests {
                     .contains("Invalid graph search")
             );
         }
-        let mut unicode = vec![graph_fact_row(
+        let mut unicode = graph_fact_row(
             graph_fact_id(&module, "unicode", &[]),
             "Dependency Härt-α 📦".into(),
             "Partial scope metadata".into(),
             vec![],
-        )];
-        search_project_graph_rows(
+        );
+        assert!(retain_graph_search_matches(
             &mut unicode,
             &graph_search_query("HÄRT-Α 📦")
                 .expect("Unicode")
                 .expect("query"),
-        );
-        assert!(
-            unicode
-                .first()
-                .expect("Unicode row")
-                .accessibility_label
-                .contains("Matching admitted graph facts")
-        );
+        ));
         let mut unknown = vec![maven_graph_node(&module, None)];
-        search_project_graph_rows(&mut unknown, "leaf");
-        assert!(
-            unknown
-                .first()
-                .expect("uncollected root")
-                .accessibility_label
-                .contains("Not collected")
-        );
+        assert_eq!(search_project_graph_rows(&mut unknown, "leaf"), None);
+        let uncollected = &unknown
+            .first()
+            .expect("uncollected root")
+            .accessibility_label;
+        assert!(uncollected.contains("Not collected"));
+        assert!(!uncollected.contains("No matching"));
         assert_eq!(graph_search_query(" ").expect("empty"), None);
         assert!(graph_search_query(&"α".repeat(MAX_GRAPH_SEARCH_BYTES / 2)).is_ok());
         for invalid in [
@@ -12955,6 +12984,55 @@ mod tests {
                 .to_string();
             assert!(!error.contains("private-canary"));
         }
+    }
+
+    #[test]
+    fn gradle_configuration_search_preserves_declared_rows() {
+        let (_, gradle) = captured_graphs();
+        let module = LanguageToolNodeId("graph-search-fixture".into());
+        let resolution = &gradle.resolution;
+        let declaration = LanguageToolNode {
+            id: LanguageToolNodeId("declared-dependency".into()),
+            label: "Declared dependency".into(),
+            secondary_label: None,
+            accessibility_label: "Declared dependency".into(),
+            icon: None,
+            children: Vec::new(),
+            enabled: false,
+            activation_label: None,
+        };
+        let declaration_id = declaration.id.clone();
+        let configuration = LanguageToolNode {
+            id: gradle_configuration_node_id(&module, &resolution.configuration),
+            label: resolution.configuration.clone(),
+            secondary_label: None,
+            accessibility_label: resolution.configuration.clone(),
+            icon: None,
+            children: std::iter::once(declaration)
+                .chain(gradle_dependency_path_rows(&module, resolution))
+                .collect(),
+            enabled: false,
+            activation_label: None,
+        };
+        let mut matched = [configuration.clone()];
+        assert_eq!(
+            search_project_graph_rows(&mut matched, "shared"),
+            Some(true)
+        );
+        assert!(matched[0].children.len() > 1);
+        let mut unmatched = [configuration.clone()];
+        assert_eq!(
+            search_project_graph_rows(&mut unmatched, "never-present-private-canary"),
+            Some(false)
+        );
+        assert_eq!(unmatched[0].id, configuration.id);
+        assert_eq!(unmatched[0].children.len(), 1);
+        assert_eq!(unmatched[0].children[0].id, declaration_id);
+        assert_eq!(search_project_graph_rows(&mut unmatched, "shared"), None);
+        let mut invalid = [configuration];
+        suppress_invalid_graph_search(&mut invalid);
+        assert_eq!(invalid[0].children.len(), 1);
+        assert_eq!(invalid[0].children[0].id, declaration_id);
     }
 
     #[test]
@@ -18263,16 +18341,42 @@ mod tests {
             });
             cx.run_until_parked();
             panel.read_with(cx, |panel, _| {
+                assert!(panel.graph_search_has_no_matches);
+                assert!(
+                    panel
+                        .host
+                        .visible_rows()
+                        .iter()
+                        .any(|row| row.id == module_row)
+                );
                 assert!(panel.host.visible_rows().iter().any(|row| {
                     row.accessibility_label
                         .contains("No matching admitted graph facts")
                 }))
             });
+            focus_tree_control(cx, "Dependency status details");
+            press_tree_key(cx, "enter");
+            settle_tool_menu(cx);
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("search status"))
+                        .expect("a11y JSON");
+                let nodes = tree["nodes"].as_object().expect("nodes");
+                assert!(nodes.values().any(|node| {
+                    node["aria"]["role"] == "Status"
+                        && node["aria"]["label"] == "No matching dependency facts"
+                        && node["aria"]["value"]
+                            == "Clear the search to show the dependency facts in this view."
+                }));
+            });
+            press_tree_key(cx, "escape");
             search_editor.update_in(cx, |editor, window, cx| {
                 editor.set_text("α".repeat(MAX_GRAPH_SEARCH_BYTES / 2 + 1), window, cx)
             });
             cx.run_until_parked();
             panel.read_with(cx, |panel, _| {
+                assert!(!panel.graph_search_has_no_matches);
                 assert!(matches!(
                     panel.host.status(),
                     language_tool_tree::LanguageToolTreeStatus::Error(_)
@@ -18283,12 +18387,14 @@ mod tests {
                         .host
                         .visible_rows()
                         .iter()
-                        .all(|row| !row.id.0.contains("-edge:"))
+                        .all(|row| !row.id.0.contains("-edge:")
+                            && !row.id.0.contains(":gradle-path:"))
                 );
             });
             cx.dispatch_action(ClearGraphFactSearch);
             cx.run_until_parked();
             assert!(search_editor.read_with(cx, |editor, cx| editor.text(cx).is_empty()));
+            assert!(!panel.read_with(cx, |panel, _| panel.graph_search_has_no_matches));
             assert_eq!(
                 commands.load(Ordering::SeqCst),
                 before_search,
