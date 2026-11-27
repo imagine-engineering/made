@@ -687,7 +687,7 @@ impl ImportFailure {
                 "Java Maven import needs cached dependencies; populate the host Maven cache or disable Maven offline mode, then reimport"
             }
             Self::GradlePlugin => {
-                "Java Gradle import could not resolve a build plugin; check the host plugin repositories and cache, then reimport"
+                "Java Gradle import could not resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Java language server."
             }
         }
     }

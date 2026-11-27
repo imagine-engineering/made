@@ -775,6 +775,175 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 #[gpui::test]
 #[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
+async fn docker_gradle_recovers_offline_import_after_java_restart(cx: &mut TestAppContext) {
+    use jvm_ui::ShowGradle;
+    use project::lsp_store::LspStoreEvent;
+    use rpc::proto;
+    use std::{cell::RefCell, path::Path, rc::Rc};
+
+    let fixture = cached_jvm_fixture_path("GROOVY_GRADLE_ORDERED_DOCKER_ROOT");
+    let gradle_home = cached_jvm_fixture_path("GROOVY_GRADLE_RECOVERY_HOME");
+    assert_eq!(fixture.parent(), gradle_home.parent());
+    let caches = gradle_home.join("caches");
+    let restored = gradle_home.join("restorable-caches");
+    let failed = gradle_home.join("failed-caches");
+    let kotlin_plugin = "modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/2.0.21";
+    assert!(!caches.join(kotlin_plugin).exists());
+    assert!(restored.join(kotlin_plugin).is_dir());
+    assert!(!failed.exists());
+
+    let container = docker_test_fixture_container(JvmTestBuildTool::Gradle);
+    let (project, worktree_id) =
+        connect_ordered_jvm_task_fixture(Path::new("/workspaces/gradle"), &container, cx).await;
+    let store = project.read_with(cx, |project, _| project.lsp_store());
+    let health = Rc::new(RefCell::new(Vec::new()));
+    let _health_subscription = cx.update(|cx| {
+        cx.subscribe(&store, {
+            let health = health.clone();
+            move |_, event, _| {
+                if let LspStoreEvent::LanguageServerUpdate {
+                    language_server_id,
+                    name: Some(name),
+                    message: proto::update_language_server::Variant::StatusUpdate(status),
+                } = event
+                    && name == &lsp::LanguageServerName::new_static("jdtls")
+                    && status.status
+                        == Some(proto::status_update::Status::Health(
+                            proto::ServerHealth::Error as i32,
+                        ))
+                    && let Some(message) = &status.message
+                {
+                    health
+                        .borrow_mut()
+                        .push((*language_server_id, message.clone()));
+                }
+            }
+        })
+    });
+    let java = project::ProjectPath {
+        worktree_id,
+        path: util::rel_path::RelPath::from_unix_str(
+            "application/src/main/java/evidence/Main.java",
+        )
+        .expect("Gradle Java source")
+        .into(),
+    };
+    let (buffer, _language_server) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(java.clone(), cx)
+        })
+        .await
+        .expect("open Java on the Gradle project host");
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    cx.dispatch_action(ShowGradle);
+
+    let deadline = Instant::now() + Duration::from_secs(75);
+    let failed_server = loop {
+        cx.run_until_parked();
+        if let Some((server_id, _)) = health.borrow().iter().find(|(_, message)| {
+            message == "Java Gradle import could not resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Java language server."
+        }) {
+            break *server_id;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the client did not receive the pinned Java provider's cache failure: {:?}",
+            health.borrow()
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    assert!(!caches.join(kotlin_plugin).exists());
+    assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains("class Main")));
+    panel.read_with(cx, |panel, _| {
+        let (_, rows, _) = panel.snapshot_for_test();
+        assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
+    });
+    eprintln!(
+        "Connected Gradle reported the sanitized offline plugin failure with Java source open"
+    );
+
+    let stop = util::command::new_command("docker")
+        .args([
+            "exec",
+            &container,
+            "/qualification/gradle/bin/gradle",
+            "--offline",
+            "--gradle-user-home",
+            "/qualification/gradle-home",
+            "--stop",
+        ])
+        .output()
+        .await
+        .expect("stop the isolated cold-cache daemon");
+    assert!(
+        stop.status.success(),
+        "{}",
+        String::from_utf8_lossy(&stop.stderr)
+    );
+    std::fs::rename(caches, &failed).expect("retain the cold cache under its fixture");
+    std::fs::rename(restored, gradle_home.join("caches"))
+        .expect("restore the primed fixture cache");
+
+    let editor = workspace
+        .update_in(cx, |workspace, window, cx| {
+            workspace.open_path(java, None, true, window, cx)
+        })
+        .await
+        .expect("keep Java source available during recovery")
+        .downcast::<editor::Editor>()
+        .expect("Java editor");
+    cx.update(|window, cx| editor.read(cx).focus_handle(cx).focus(window, cx));
+    cx.dispatch_action(editor::actions::RestartLanguageServer);
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now() + Duration::from_secs(5);
+    loop {
+        cx.run_until_parked();
+        let snapshot = store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .map(|(snapshot, current)| {
+                    let imported = snapshot.projects.iter().any(|module| {
+                        module.module_root.path.as_unix_str() == "application"
+                            && module.imported_build_kind
+                                == project::jvm_project::JdtlsImportedBuildKind::Gradle
+                    });
+                    (snapshot.server_id, current, imported)
+                })
+        });
+        if snapshot.is_some_and(|(server, current, imported)| {
+            server != failed_server && current && imported
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Java server restart did not recover the offline Gradle project: {snapshot:?}"
+        );
+        if Instant::now() >= refresh_at {
+            store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains("class Main")));
+    assert!(store.read_with(cx, |store, _| {
+        store
+            .language_server_statuses()
+            .all(|(server_id, _)| server_id != failed_server)
+    }));
+    eprintln!(
+        "Connected Gradle reimported the application from the restored cache after restarting JDTLS"
+    );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
 async fn docker_gradle_ordered_operations_run_on_a_cold_host(cx: &mut TestAppContext) {
     run_docker_gradle_ordered_operations(DockerGradleRun::Cold, cx).await;
 }
