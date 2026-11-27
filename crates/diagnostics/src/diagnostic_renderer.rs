@@ -219,15 +219,8 @@ impl DiagnosticBlock {
         let line_height = editor_line_height;
         let diagnostics_editor = self.diagnostics_editor.clone();
 
-        let copy_button_id = format!(
-            "copy-diagnostic-{}-{}-{}-{}",
-            self.initial_range.start.row,
-            self.initial_range.start.column,
-            self.initial_range.end.row,
-            self.initial_range.end.column
-        );
-
         h_flex()
+            .id(bcx.block_id)
             .max_w(max_width)
             .pl_1p5()
             .pr_0p5()
@@ -260,7 +253,7 @@ impl DiagnosticBlock {
                 ),
             )
             .child(
-                CopyButton::new(copy_button_id, self.copy_message.clone())
+                CopyButton::new("copy-diagnostic", self.copy_message.clone())
                     .height(editor_line_height)
                     .tooltip_label("Copy Diagnostic"),
             )

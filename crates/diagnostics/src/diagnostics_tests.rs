@@ -36,6 +36,87 @@ fn init_logger() {
 }
 
 #[gpui::test]
+async fn equal_source_ranges_in_diagnostics_keep_distinct_copy_buttons(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/test"),
+        json!({
+            "Main.java": "class Main {}",
+            "Other.java": "class Other {}",
+        }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/test").as_ref()], cx).await;
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    for (file, message) in [
+        (path!("/test/Main.java"), "Main diagnostic"),
+        (path!("/test/Other.java"), "Other diagnostic"),
+    ] {
+        lsp_store.update(cx, |store, cx| {
+            store
+                .update_diagnostics(
+                    LanguageServerId(0),
+                    lsp::PublishDiagnosticsParams {
+                        uri: lsp::Uri::from_file_path(file).expect("fixture file URI"),
+                        diagnostics: vec![lsp::Diagnostic {
+                            range: lsp::Range::new(
+                                lsp::Position::new(0, 6),
+                                lsp::Position::new(0, 10),
+                            ),
+                            severity: Some(lsp::DiagnosticSeverity::ERROR),
+                            message: message.into(),
+                            ..Default::default()
+                        }],
+                        version: None,
+                    },
+                    None,
+                    DiagnosticSourceKind::Pushed,
+                    &[],
+                    cx,
+                )
+                .expect("publish fixture diagnostic");
+        });
+    }
+
+    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+    let cx = &mut VisualTestContext::from_window(window.into(), cx);
+    let workspace = window
+        .read_with(cx, |container, _| container.workspace().clone())
+        .expect("diagnostics workspace");
+    let diagnostics = window.build_entity(cx, |window, cx| {
+        ProjectDiagnosticsEditor::new(true, project, workspace.downgrade(), window, cx)
+    });
+    workspace.update_in(cx, |workspace, window, cx| {
+        workspace.add_item_to_center(Box::new(diagnostics.clone()), window, cx);
+    });
+    diagnostics
+        .next_notification(DIAGNOSTICS_UPDATE_DEBOUNCE + Duration::from_millis(10), cx)
+        .await;
+    cx.update(|window, cx| {
+        window.activate_a11y_for_test();
+        window.draw(cx).clear(cx);
+        let tree: serde_json::Value = serde_json::from_str(
+            &window
+                .debug_a11y_tree_json()
+                .expect("diagnostics accessibility tree"),
+        )
+        .expect("diagnostics accessibility JSON");
+        let copy_buttons = tree["nodes"]
+            .as_object()
+            .expect("accessibility nodes")
+            .values()
+            .filter(|node| {
+                node["element_id"]
+                    .as_str()
+                    .is_some_and(|id| id.contains("copy-diagnostic"))
+            })
+            .count();
+        assert_eq!(copy_buttons, 2, "{tree}");
+    });
+}
+
+#[gpui::test]
 async fn test_diagnostics(cx: &mut TestAppContext) {
     init_test(cx);
 
