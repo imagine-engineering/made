@@ -293,6 +293,10 @@ messages!(
     (GetSourceCoverage, Background),
     (SourceCoverageResponse, Background),
     (InterpretRustCoverageArtifact, Background),
+    (RunRustCoverageTask, Background),
+    (CancelRustCoverageTask, Foreground),
+    (RustCoverageTaskResponse, Background),
+    (GetRustCoverageTaskSession, Background),
     (ImportProfileResults, Background),
     (PrepareProfileTaskBinding, Background),
     (GetProfileTaskBinding, Background),
@@ -682,6 +686,9 @@ request_messages!(
     (GetStructuredExecutionEvents, StructuredExecutionEventChunk),
     (GetSourceCoverage, SourceCoverageResponse),
     (InterpretRustCoverageArtifact, SourceCoverageResponse),
+    (RunRustCoverageTask, RustCoverageTaskResponse),
+    (CancelRustCoverageTask, RustCoverageTaskResponse),
+    (GetRustCoverageTaskSession, RustCoverageTaskResponse),
     (ImportProfileResults, ProfileResultPage),
     (PrepareProfileTaskBinding, ProfileTaskBindingResponse),
     (GetProfileTaskBinding, ProfileTaskBindingResponse),
@@ -998,6 +1005,9 @@ entity_messages!(
     GetStructuredExecutionEvents,
     GetSourceCoverage,
     InterpretRustCoverageArtifact,
+    RunRustCoverageTask,
+    CancelRustCoverageTask,
+    GetRustCoverageTaskSession,
     ImportProfileResults,
     PrepareProfileTaskBinding,
     GetProfileTaskBinding,
@@ -2179,6 +2189,55 @@ mod tests {
             .expect("source coverage response should decode");
         assert_eq!(decoded, response);
         assert!(!String::from_utf8_lossy(&bytes).contains("/Users/"));
+    }
+
+    #[test]
+    fn rust_coverage_task_uses_project_relative_selectors_and_stable_envelope_numbers() {
+        let run = RunRustCoverageTask {
+            project_id: 7,
+            operation_id: 2,
+            workspace_root: Some(ProjectPath {
+                worktree_id: 4,
+                path: "workspace".into(),
+            }),
+            package_manifest: Some(ProjectPath {
+                worktree_id: 4,
+                path: "workspace/bin/Cargo.toml".into(),
+            }),
+            target_kind: RustCoverageTargetKind::Binary as i32,
+            target_name: "worker".into(),
+            session_token: vec![3; 16],
+        };
+        assert_eq!(run.remote_entity_id(), 7);
+        let cancel = CancelRustCoverageTask {
+            project_id: 7,
+            operation_id: run.operation_id,
+            session_token: run.session_token.clone(),
+        };
+        assert_eq!(cancel.remote_entity_id(), 7);
+        let session = GetRustCoverageTaskSession { project_id: 7 };
+        assert_eq!(session.remote_entity_id(), 7);
+        let response = RustCoverageTaskResponse {
+            operation_id: run.operation_id,
+            outcome: Some(rust_coverage_task_response::Outcome::Cancelled(true)),
+            native_receiver: 1,
+        };
+        for (tag, message) in [
+            (546, run.into_envelope(0, None, None)),
+            (547, cancel.into_envelope(0, None, None)),
+            (548, response.into_envelope(0, None, None)),
+            (549, session.into_envelope(0, None, None)),
+        ] {
+            let mut header = Vec::new();
+            prost::encoding::encode_key(
+                tag,
+                prost::encoding::WireType::LengthDelimited,
+                &mut header,
+            );
+            let bytes = message.encode_to_vec();
+            assert!(bytes.windows(header.len()).any(|window| window == header));
+            assert_eq!(Envelope::decode(bytes.as_slice()).expect("decode"), message);
+        }
     }
 
     #[test]

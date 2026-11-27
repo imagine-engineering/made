@@ -19851,6 +19851,37 @@ async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mu
         }));
     }
 
+    let session = client
+        .read_with(cx, |client, _| client.proto_client())
+        .request(proto::GetRustCoverageTaskSession {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        })
+        .await
+        .expect("disabled host returns typed session unsupported");
+    assert_eq!(
+        session.outcome,
+        Some(proto::rust_coverage_task_response::Outcome::Failure(
+            proto::RustCoverageTaskFailure::Unsupported as i32,
+        ))
+    );
+    let response = client
+        .read_with(cx, |client, _| client.proto_client())
+        .request(proto::RunRustCoverageTask {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            operation_id: 1,
+            ..Default::default()
+        })
+        .await
+        .expect("disabled host returns a typed Coverage Task failure");
+    assert_eq!(response.operation_id, 1);
+    assert_eq!(response.native_receiver, 0);
+    assert_eq!(
+        response.outcome,
+        Some(proto::rust_coverage_task_response::Outcome::Failure(
+            proto::RustCoverageTaskFailure::Unsupported as i32,
+        ))
+    );
+
     let cargo = project.read_with(cx, |project, _| project.cargo_workspace_store().clone());
     let error = cargo
         .update(cx, |store, cx| store.refresh(cx))
@@ -20148,6 +20179,442 @@ async fn rust_tools_headless_runtime_cargo_configuration_invalidation(cx: &mut T
         .kill()
         .await
         .expect("stop the owned host process");
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+#[gpui::test]
+async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut TestAppContext) {
+    use proto::rust_coverage_task_response::Outcome;
+    use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
+
+    let binary = std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY")
+        .map(PathBuf::from)
+        .expect("independently built enabled host");
+    let fixture = tempfile::tempdir_in("/tmp").expect("create Rust workspace");
+    let host_data = tempfile::tempdir_in("/tmp").expect("create isolated host data");
+    std::fs::create_dir(host_data.path().join("config")).expect("host config directory");
+    std::fs::write(
+        host_data.path().join("config/settings.json"),
+        r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
+    )
+    .expect("explicit host opt-in");
+    std::fs::create_dir_all(fixture.path().join("src/bin")).expect("binary directory");
+    for (path, content) in [
+        (
+            "Cargo.toml",
+            include_str!(
+                "../../project/test_data/rust_test_provider/physical-workspace/Cargo.toml"
+            ),
+        ),
+        (
+            "Cargo.lock",
+            include_str!(
+                "../../project/test_data/rust_test_provider/physical-workspace/Cargo.lock"
+            ),
+        ),
+        (
+            "src/bin/fixture.rs",
+            include_str!(
+                "../../project/test_data/rust_test_provider/physical-workspace/src/bin/fixture.rs"
+            ),
+        ),
+        (
+            "src/lib.rs",
+            include_str!(
+                "../../project/test_data/rust_test_provider/physical-workspace/src/lib.rs"
+            ),
+        ),
+        (
+            "tests/integration.rs",
+            include_str!(
+                "../../project/test_data/rust_test_provider/physical-workspace/tests/integration.rs"
+            ),
+        ),
+        (
+            "src/bin/held.rs",
+            "fn main() { std::fs::write(\"target/started\", std::process::id().to_string()).expect(\"announce\"); std::thread::sleep(std::time::Duration::from_secs(15)); }",
+        ),
+        (".gitignore", "/target/\n"),
+    ] {
+        let destination = fixture.path().join(path);
+        std::fs::create_dir_all(destination.parent().expect("fixture parent"))
+            .expect("fixture parent");
+        std::fs::write(destination, content).expect("fixture source");
+    }
+    cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    cx.update(|cx| project::trusted_worktrees::init(HashMap::default(), cx));
+    init_logger();
+    cx.executor().allow_parking();
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host_data.path().join("server_state"))
+            .with_test_data_directory(host_data.path().to_path_buf())
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel, cancel) = futures::channel::oneshot::channel();
+    let client = cx
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::Workspace(-i64::from(std::process::id())),
+                connection.clone(),
+                cancel,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to separate Linux host")
+        .expect("remote client");
+    let project = build_project_with_worktree_trust(client.clone(), true, cx);
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(fixture.path(), true, cx)
+        })
+        .await
+        .expect("register host worktree");
+    let scan = worktree.update(cx, |worktree, _| worktree.wait_for_snapshot(1));
+    let deadline = cx
+        .background_executor
+        .timer(std::time::Duration::from_secs(10));
+    match futures::future::select(Box::pin(scan), Box::pin(deadline)).await {
+        futures::future::Either::Left((result, _)) => result.expect("host worktree scan"),
+        futures::future::Either::Right(_) => panic!("host worktree scan timed out"),
+    }
+    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+    let transport = client.read_with(cx, |client, _| client.proto_client());
+    let get_session = || proto::GetRustCoverageTaskSession {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+    };
+    let obtain_session = |response: proto::RustCoverageTaskResponse| {
+        assert_eq!(response.operation_id, 0);
+        assert_eq!(response.native_receiver, 0);
+        let Some(Outcome::SessionToken(token)) = response.outcome else {
+            panic!("expected a host-issued coverage session");
+        };
+        assert_eq!(token.len(), 16);
+        token
+    };
+    let session = obtain_session(
+        transport
+            .request(get_session())
+            .await
+            .expect("host-issued coverage session"),
+    );
+    let run = |operation_id, target_name: &str| proto::RunRustCoverageTask {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        operation_id,
+        workspace_root: Some(proto::ProjectPath {
+            worktree_id: worktree_id.to_proto(),
+            path: String::new(),
+        }),
+        package_manifest: Some(proto::ProjectPath {
+            worktree_id: worktree_id.to_proto(),
+            path: "Cargo.toml".into(),
+        }),
+        target_kind: proto::RustCoverageTargetKind::Binary as i32,
+        target_name: target_name.into(),
+        session_token: session.clone(),
+    };
+    let require_failure = |result: proto::RustCoverageTaskResponse, expected| {
+        assert_eq!(
+            result.native_receiver, 0,
+            "transport metadata must stay on the host"
+        );
+        assert_eq!(result.outcome, Some(Outcome::Failure(expected)));
+    };
+    require_failure(
+        transport
+            .request(run(1, "fixture-bin"))
+            .await
+            .expect("typed restricted reply"),
+        proto::RustCoverageTaskFailure::Restricted as i32,
+    );
+    transport
+        .request(proto::TrustWorktrees {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            trusted_paths: vec![proto::PathTrust {
+                content: Some(proto::path_trust::Content::WorktreeId(
+                    worktree_id.to_proto(),
+                )),
+            }],
+        })
+        .await
+        .expect("explicit host trust");
+    let catalog = transport
+        .request(proto::GetCargoWorkspace {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            request_id: 1,
+            worktree_ids: vec![worktree_id.to_proto()],
+        })
+        .await
+        .expect("registered host Cargo catalog");
+    assert!(
+        catalog.workspaces.iter().any(|workspace| {
+            workspace.members.iter().any(|member| {
+                member
+                    .targets
+                    .iter()
+                    .any(|target| target.name == "fixture-bin")
+            })
+        }),
+        "fixture target is missing from the producing host catalog: {:?}",
+        catalog.failures,
+    );
+    require_failure(
+        transport
+            .request(proto::RunRustCoverageTask {
+                session_token: vec![0; 16],
+                ..run(1, "fixture-bin")
+            })
+            .await
+            .expect("foreign session reply"),
+        proto::RustCoverageTaskFailure::Stale as i32,
+    );
+    require_failure(
+        transport
+            .request(run(1, "--output-path"))
+            .await
+            .expect("unknown target reply"),
+        proto::RustCoverageTaskFailure::HostFailed as i32,
+    );
+    require_failure(
+        transport
+            .request(run(1, "fixture-bin"))
+            .await
+            .expect("replayed operation reply"),
+        proto::RustCoverageTaskFailure::Stale as i32,
+    );
+    let require_coverage = |result: proto::RustCoverageTaskResponse, operation_id| {
+        assert_eq!(result.operation_id, operation_id);
+        assert_eq!(
+            result.native_receiver, 0,
+            "transport metadata must stay on the host"
+        );
+        let Some(Outcome::Coverage(coverage)) = result.outcome else {
+            let diagnostics = std::fs::read_dir(host_data.path().join("logs"))
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .filter_map(|file| std::fs::read_to_string(file.path()).ok())
+                .flat_map(|log| {
+                    log.lines()
+                        .filter(|line| line.contains("Selected Coverage Task failed"))
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            panic!("expected host coverage, got {result:?}: {diagnostics:?}");
+        };
+        assert!(coverage.files.iter().all(|file| {
+            file.path.as_ref().is_some_and(|path| {
+                path.worktree_id == worktree_id.to_proto() && !Path::new(&path.path).is_absolute()
+            })
+        }));
+        let file = coverage
+            .files
+            .iter()
+            .find(|file| {
+                file.path
+                    .as_ref()
+                    .is_some_and(|path| path.path == "src/bin/fixture.rs")
+            })
+            .expect("selected executable in host response");
+        assert_eq!(file.covered_lines, 3);
+        assert_eq!(file.uncovered_lines, 0);
+        coverage.generation
+    };
+    let first = require_coverage(
+        transport
+            .request(run(2, "fixture-bin"))
+            .await
+            .expect("selected host coverage"),
+        2,
+    );
+    let pending = cx.background_spawn(transport.request(run(3, "held")));
+    let marker = fixture.path().join("target/started");
+    let child = wait_for_coverage_workload(&marker, cx).await;
+    let cancel = |operation_id| proto::CancelRustCoverageTask {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        operation_id,
+        session_token: session.clone(),
+    };
+    require_failure(
+        transport
+            .request(cancel(2))
+            .await
+            .expect("foreign operation cancellation reply"),
+        proto::RustCoverageTaskFailure::Stale as i32,
+    );
+    assert_eq!(
+        transport
+            .request(cancel(3))
+            .await
+            .expect("matching cancellation")
+            .outcome,
+        Some(Outcome::Cancelled(true)),
+    );
+    assert_eq!(
+        pending.await.expect("ended host Task reply").outcome,
+        Some(Outcome::Cancelled(true))
+    );
+    assert_coverage_workload_stopped(child, cx).await;
+    let recovered = require_coverage(
+        transport
+            .request(run(4, "fixture-bin"))
+            .await
+            .expect("fresh host recovery"),
+        4,
+    );
+    assert!(recovered > first);
+    std::fs::remove_file(&marker).expect("retire the cancelled workload marker");
+    let interrupted = cx.background_spawn(transport.request(run(5, "held")));
+    let interrupted_child = wait_for_coverage_workload(&marker, cx).await;
+    let identity_path = std::fs::read_dir(host_data.path().join("server_state"))
+        .expect("read host state directory")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("server.identity"))
+        .find(|path| path.is_file())
+        .expect("native server identity file");
+    let identity = std::fs::read_to_string(&identity_path).expect("original native server");
+    let close_proxy = client.update(cx, |client, cx| {
+        client
+            .shutdown_processes::<proto::ShutdownRemoteServer>(
+                None,
+                cx.background_executor().clone(),
+            )
+            .expect("initial proxy is connected")
+    });
+    close_proxy.await;
+    drop(interrupted);
+    drop(transport);
+    drop(worktree);
+    drop(project);
+    drop(client);
+    cx.run_until_parked();
+    let (incoming, incoming_receiver) = futures::channel::mpsc::unbounded();
+    let (outgoing, outgoing_receiver) = futures::channel::mpsc::unbounded();
+    let (activity, _activity_receiver) = futures::channel::mpsc::channel(1);
+    let _replacement_proxy = connection.start_proxy(
+        "coverage-replacement".into(),
+        remote::ProxyMode::Reconnect,
+        incoming,
+        outgoing_receiver,
+        activity,
+        Arc::new(MockDelegate),
+        &mut cx.to_async(),
+    );
+    let transport = cx.update(|cx| {
+        RemoteClient::proto_client_from_channels(
+            incoming_receiver,
+            outgoing,
+            cx,
+            "coverage replacement client",
+            false,
+        )
+    });
+    // A fresh channel's RemoteStarted handshake also uses message ID zero. The
+    // production reconnect reuses its channel's message counter.
+    transport
+        .send(proto::Ping {})
+        .expect("bootstrap the channel");
+    let reply = transport.request(get_session());
+    let deadline = cx
+        .background_executor
+        .timer(std::time::Duration::from_secs(10));
+    let replacement_session = obtain_session(
+        match futures::future::select(Box::pin(reply), Box::pin(deadline)).await {
+            futures::future::Either::Left((result, _)) => result.expect("replacement session"),
+            futures::future::Either::Right(_) => panic!("replacement proxy did not reach the host"),
+        },
+    );
+    assert_eq!(
+        std::fs::read_to_string(identity_path).expect("replacement native server"),
+        identity,
+        "the replacement proxy must reach the same host process"
+    );
+    assert_ne!(replacement_session, session);
+    assert_coverage_workload_stopped(interrupted_child, cx).await;
+    require_failure(
+        transport
+            .request(run(5, "fixture-bin"))
+            .await
+            .expect("retired session reply"),
+        proto::RustCoverageTaskFailure::Stale as i32,
+    );
+    let reconnected = require_coverage(
+        transport
+            .request(proto::RunRustCoverageTask {
+                session_token: replacement_session,
+                ..run(1, "fixture-bin")
+            })
+            .await
+            .expect("fresh coverage over the replacement connection"),
+        1,
+    );
+    assert!(reconnected > recovered);
+    connection.kill().await.expect("stop owned host");
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+async fn wait_for_coverage_workload(marker: &Path, cx: &mut TestAppContext) -> u32 {
+    let mut child = None;
+    for _ in 0..500 {
+        if let Ok(contents) = std::fs::read_to_string(marker)
+            && let Ok(process_id) = contents.parse::<u32>()
+        {
+            child = Some(process_id);
+            break;
+        }
+        cx.background_executor
+            .timer(std::time::Duration::from_millis(20))
+            .await;
+    }
+    child.expect("the held workload actually starts")
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+async fn assert_coverage_workload_stopped(child: u32, cx: &mut TestAppContext) {
+    let status_path = Path::new("/proc").join(child.to_string()).join("status");
+    let mut stopped = false;
+    for _ in 0..200 {
+        if match std::fs::read_to_string(&status_path) {
+            Ok(status) => status.lines().any(|line| line.starts_with("State:\tZ")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(error) => panic!("read held process status: {error}"),
+        } {
+            stopped = true;
+            break;
+        }
+        cx.background_executor
+            .timer(std::time::Duration::from_millis(10))
+            .await;
+    }
+    assert!(stopped, "the cancelled Rust workload survived");
+}
+
+#[test]
+fn rust_tools_headless_runtime_coverage_task_capture_drops_buffered_replies_for_old_connections() {
+    let mut response = proto::Envelope {
+        payload: Some(proto::envelope::Payload::RustCoverageTaskResponse(
+            proto::RustCoverageTaskResponse {
+                native_receiver: 7,
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
+    };
+    assert!(!crate::scope_native_coverage_reply(
+        &mut response,
+        proto::PeerId { owner_id: 0, id: 8 }
+    ));
+    assert!(crate::scope_native_coverage_reply(
+        &mut response,
+        proto::PeerId { owner_id: 0, id: 7 }
+    ));
+    let Some(proto::envelope::Payload::RustCoverageTaskResponse(response)) = response.payload
+    else {
+        panic!("expected Coverage Task response");
+    };
+    assert_eq!(response.native_receiver, 0);
 }
 
 #[cfg(all(feature = "rust-tools-process-test", target_os = "macos"))]

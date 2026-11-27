@@ -765,6 +765,51 @@ impl SourceCoverageStore {
         }
     }
 
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn export_host_rust_coverage(
+        &self,
+        completed: &SourceCoverageSnapshot,
+        cx: &App,
+    ) -> Result<proto::SourceCoverageResponse> {
+        let provider = SourceCoverageProviderId(
+            crate::rust_coverage_provider::RUST_COVERAGE_PROVIDER_ID.into(),
+        );
+        anyhow::ensure!(
+            matches!(self.mode, SourceCoverageStoreMode::Local)
+                && completed.provider_id == provider
+                && cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                && !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx),
+            "Rust coverage is no longer available on the producing host"
+        );
+        let mut snapshot = self
+            .state
+            .provider(&provider)
+            .filter(|snapshot| {
+                snapshot.project_generation == completed.project_generation
+                    && snapshot.generation == completed.generation
+                    && snapshot.status == completed.status
+            })
+            .context("Rust coverage changed before the host response")?
+            .clone();
+        self.filter_remote_snapshot(&mut snapshot, cx);
+        Ok(snapshot_to_proto(&snapshot, None))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn disconnect_host_rust_coverage(&mut self, cx: &mut Context<Self>) -> Result<()> {
+        let provider = SourceCoverageProviderId(
+            crate::rust_coverage_provider::RUST_COVERAGE_PROVIDER_ID.into(),
+        );
+        if let Some(snapshot) = self.state.provider(&provider) {
+            let mut snapshot = snapshot.clone();
+            snapshot.status = SourceCoverageStatus::Disconnected;
+            snapshot.files.clear();
+            snapshot.diagnostic = Some("The producing coverage connection closed".into());
+            self.publish(snapshot, cx)?;
+        }
+        Ok(())
+    }
+
     #[cfg(feature = "rust-coverage")]
     pub(crate) fn replace_remote(
         &mut self,

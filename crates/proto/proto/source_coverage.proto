@@ -15,6 +15,54 @@ message InterpretRustCoverageArtifact {
   uint64 max_bytes = 3;
 }
 
+message RunRustCoverageTask {
+  uint64 project_id = 1;
+  uint64 operation_id = 2;
+  ProjectPath workspace_root = 3;
+  ProjectPath package_manifest = 4;
+  RustCoverageTargetKind target_kind = 5;
+  string target_name = 6;
+  bytes session_token = 7;
+}
+
+enum RustCoverageTargetKind {
+  RUST_COVERAGE_TARGET_KIND_UNSPECIFIED = 0;
+  RUST_COVERAGE_TARGET_KIND_BINARY = 1;
+  RUST_COVERAGE_TARGET_KIND_EXAMPLE = 2;
+}
+
+message CancelRustCoverageTask {
+  uint64 project_id = 1;
+  uint64 operation_id = 2;
+  bytes session_token = 3;
+}
+
+message GetRustCoverageTaskSession {
+  uint64 project_id = 1;
+}
+
+message RustCoverageTaskResponse {
+  uint64 operation_id = 1;
+  oneof outcome {
+    SourceCoverageResponse coverage = 2;
+    bool cancelled = 3;
+    RustCoverageTaskFailure failure = 4;
+    bytes session_token = 6;
+  }
+  // Assigned and consumed by the direct remote server before sending the reply.
+  uint32 native_receiver = 5;
+}
+
+enum RustCoverageTaskFailure {
+  RUST_COVERAGE_TASK_FAILURE_UNSPECIFIED = 0;
+  RUST_COVERAGE_TASK_FAILURE_UNSUPPORTED = 1;
+  RUST_COVERAGE_TASK_FAILURE_RESTRICTED = 2;
+  RUST_COVERAGE_TASK_FAILURE_INVALID_SELECTION = 3;
+  RUST_COVERAGE_TASK_FAILURE_STALE = 4;
+  RUST_COVERAGE_TASK_FAILURE_BUSY = 5;
+  RUST_COVERAGE_TASK_FAILURE_HOST_FAILED = 6;
+}
+
 message SourceCoverageResponse {
   uint64 project_generation = 1;
   string provider_id = 2;

@@ -577,7 +577,11 @@ message Envelope {
     ReimportRemoteMavenProjects reimport_remote_maven_projects = 542;
     ResolveJvmTestDebug resolve_jvm_test_debug = 543;
     JvmTestDebugPlanResponse jvm_test_debug_plan_response = 544;
-    CargoWorkspaceInvalidated cargo_workspace_invalidated = 545; // current max
+    CargoWorkspaceInvalidated cargo_workspace_invalidated = 545;
+    RunRustCoverageTask run_rust_coverage_task = 546;
+    CancelRustCoverageTask cancel_rust_coverage_task = 547;
+    RustCoverageTaskResponse rust_coverage_task_response = 548;
+    GetRustCoverageTaskSession get_rust_coverage_task_session = 549; // current max
   }
 
   reserved 87 to 88;

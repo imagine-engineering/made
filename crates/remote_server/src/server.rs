@@ -661,6 +661,19 @@ impl NativeProjectTransport {
 
 impl gpui::EventEmitter<bool> for NativeProjectTransport {}
 
+fn scope_native_coverage_reply(message: &mut Envelope, connection: proto::PeerId) -> bool {
+    let Some(proto::envelope::Payload::RustCoverageTaskResponse(response)) =
+        message.payload.as_mut()
+    else {
+        return true;
+    };
+    if response.native_receiver != connection.id {
+        return false;
+    }
+    response.native_receiver = 0;
+    true
+}
+
 fn start_server(
     listeners: ServerListeners,
     log_rx: Receiver<Vec<u8>>,
@@ -810,10 +823,13 @@ async fn handle_native_connection(
             }
 
             outgoing_message  = outgoing_rx.next().fuse() => {
-                let Some(message) = outgoing_message else {
+                let Some(mut message) = outgoing_message else {
                     log::error!("stdout handler, no message");
                     break;
                 };
+                if !scope_native_coverage_reply(&mut message, connection_id) {
+                    continue;
+                }
 
                 if let Err(error) =
                     write_message(&mut stdout_stream, &mut output_buffer, message).await
@@ -999,6 +1015,8 @@ fn execute_run_with_ownership(
 
         log::info!("gpui app started, initializing server");
         let project_transport = cx.new(|_| NativeProjectTransport::default());
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        let coverage_transport = project_transport.clone();
         #[cfg(feature = "rust-tools")]
         let profile_import_transport = project_transport.clone();
         #[cfg(feature = "jvm-tools")]
@@ -1091,6 +1109,12 @@ fn execute_run_with_ownership(
                 store.observe_transport(&profile_import_transport, false, cx);
             });
         });
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        if !isolated_recipe_test {
+            project.update(cx, |project, cx| {
+                project.observe_coverage_transport(&coverage_transport, cx);
+            });
+        }
         #[cfg(feature = "jvm-tools")]
         if !isolated_recipe_test {
             project.update(cx, |project, cx| {
