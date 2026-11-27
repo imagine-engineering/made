@@ -19734,7 +19734,10 @@ async fn rust_tools_headless_runtime_disabled_refuses_rust_requests(
     }
 }
 
-#[cfg(all(feature = "rust-tools-process-test", target_os = "macos"))]
+#[cfg(all(
+    feature = "rust-tools-process-test",
+    any(target_os = "linux", target_os = "macos")
+))]
 #[gpui::test]
 async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mut TestAppContext) {
     use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
@@ -19744,15 +19747,32 @@ async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mu
         .expect(
             "set RUST_TOOLS_DISABLED_HOST_BINARY to a separately built no-Rust-tools remote_server",
         );
-    let server_state_dir = std::env::var_os("RUST_TOOLS_DISABLED_HOST_STATE_DIR")
-        .map(PathBuf::from)
-        .expect("set RUST_TOOLS_DISABLED_HOST_STATE_DIR to that binary's server_state directory");
     assert!(binary.is_file(), "missing disabled host binary: {binary:?}");
-    assert!(
-        server_state_dir.is_dir(),
-        "missing disabled host state directory: {server_state_dir:?}"
-    );
-    let fixture = tempfile::tempdir_in("/private/tmp").expect("create host fixture");
+    let fixture = tempfile::tempdir_in(if cfg!(target_os = "macos") {
+        "/private/tmp"
+    } else {
+        "/tmp"
+    })
+    .expect("create host fixture");
+    #[cfg(target_os = "linux")]
+    let host_data =
+        tempfile::tempdir_in("/tmp").expect("create isolated Linux host data directory");
+    #[cfg(target_os = "linux")]
+    let connection = ProcessRemoteConnection::new(binary, host_data.path().join("server_state"))
+        .with_test_data_directory(host_data.path().to_path_buf());
+    #[cfg(target_os = "macos")]
+    let connection = {
+        let server_state_dir = std::env::var_os("RUST_TOOLS_DISABLED_HOST_STATE_DIR")
+            .map(PathBuf::from)
+            .expect(
+                "set RUST_TOOLS_DISABLED_HOST_STATE_DIR to that binary's server_state directory",
+            );
+        assert!(
+            server_state_dir.is_dir(),
+            "missing disabled host state directory: {server_state_dir:?}"
+        );
+        ProcessRemoteConnection::new(binary, server_state_dir)
+    };
     std::fs::create_dir(fixture.path().join("src")).expect("create source directory");
     std::fs::write(
         fixture.path().join("Cargo.toml"),
@@ -19768,9 +19788,7 @@ async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mu
     cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
     init_logger();
     cx.executor().allow_parking();
-    let connection = Arc::new(
-        ProcessRemoteConnection::new(binary, server_state_dir).with_isolated_server_namespace(),
-    );
+    let connection = Arc::new(connection.with_isolated_server_namespace());
     let (_cancel_tx, cancel_rx) = futures::channel::oneshot::channel();
     let client = cx
         .update(|cx| {
@@ -19785,8 +19803,20 @@ async fn rust_tools_headless_runtime_separate_disabled_host_typed_client(cx: &mu
         .await
         .expect("connect to separate disabled host")
         .expect("remote client");
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        client
+            .read_with(cx, |client, _| client.remote_platform())
+            .os,
+        remote::RemoteOs::Linux
+    );
     let project = build_project(client.clone(), cx);
     cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-coverage-experimental",
+            true,
+            cx,
+        );
         project::task_store::set_experimental_feature_for_test(
             "rust-native-profiling-experimental",
             true,

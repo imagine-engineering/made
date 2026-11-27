@@ -33,7 +33,7 @@ use crate::remote_client::{
     ChannelClient, CommandTemplate, Interactive, RemoteClientDelegate, RemoteConnection,
     RemoteConnectionOptions,
 };
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use anyhow::Context as _;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -51,7 +51,7 @@ use rpc::{
     AnyProtoClient,
     proto::{Envelope, PeerId},
 };
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::sync::atomic::AtomicBool;
 use std::{
     path::PathBuf,
@@ -60,7 +60,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use util::command::{Stdio, new_command};
 use util::paths::{PathStyle, RemotePathBuf};
 
@@ -412,7 +412,7 @@ impl RemoteConnection for MockRemoteConnection {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub struct ProcessRemoteConnection {
     binary: PathBuf,
     server_state_dir: PathBuf,
@@ -424,7 +424,7 @@ pub struct ProcessRemoteConnection {
     killed: AtomicBool,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl ProcessRemoteConnection {
     pub fn new(binary: PathBuf, server_state_dir: PathBuf) -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
@@ -459,7 +459,7 @@ impl ProcessRemoteConnection {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[async_trait(?Send)]
 impl RemoteConnection for ProcessRemoteConnection {
     fn doctor_server_binary(&self) -> Option<String> {
@@ -476,6 +476,12 @@ impl RemoteConnection for ProcessRemoteConnection {
         _delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
+        #[cfg(target_os = "linux")]
+        if self.test_data_directory.is_none() || !self.isolated_server_namespace {
+            return Task::ready(Err(anyhow::anyhow!(
+                "Linux process fixture requires an isolated namespace in an explicit test data directory"
+            )));
+        }
         let unique_identifier = if self.isolated_server_namespace {
             let prepare_namespace = || -> Result<String> {
                 // Test-support paths use a synthetic home, unlike the actual host executable.
@@ -623,7 +629,11 @@ impl RemoteConnection for ProcessRemoteConnection {
 
     fn remote_platform(&self) -> crate::RemotePlatform {
         crate::RemotePlatform {
-            os: crate::RemoteOs::MacOs,
+            os: if cfg!(target_os = "linux") {
+                crate::RemoteOs::Linux
+            } else {
+                crate::RemoteOs::MacOs
+            },
             arch: if cfg!(target_arch = "aarch64") {
                 crate::RemoteArch::Aarch64
             } else {

@@ -27,7 +27,10 @@ pub use transport::wsl::WslConnectionOptions;
 #[cfg(target_os = "windows")]
 pub use transport::wsl::wsl_path_to_windows_path;
 
-#[cfg(all(any(test, feature = "test-support"), target_os = "macos"))]
+#[cfg(all(
+    any(test, feature = "test-support"),
+    any(target_os = "linux", target_os = "macos")
+))]
 pub use transport::mock::ProcessRemoteConnection;
 #[cfg(any(test, feature = "test-support"))]
 pub use transport::mock::{
