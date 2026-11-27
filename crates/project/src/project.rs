@@ -1072,6 +1072,8 @@ enum EntitySubscription {
     SettingsObserver(PendingEntitySubscription<SettingsObserver>),
     DapStore(PendingEntitySubscription<DapStore>),
     BreakpointStore(PendingEntitySubscription<BreakpointStore>),
+    #[cfg(feature = "cargo-workspace")]
+    CargoWorkspaceStore(PendingEntitySubscription<cargo_workspace_store::CargoWorkspaceStore>),
 }
 
 #[derive(Debug, Clone)]
@@ -2005,6 +2007,8 @@ impl Project {
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.breakpoint_store);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.settings_observer);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.git_store);
+            #[cfg(feature = "cargo-workspace")]
+            remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.cargo_workspace_store);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.agent_server_store);
 
             remote_proto.add_entity_message_handler(Self::handle_create_buffer_for_peer);
@@ -2066,6 +2070,8 @@ impl Project {
             EntitySubscription::BreakpointStore(
                 client.subscribe_to_entity::<BreakpointStore>(remote_id)?,
             ),
+            #[cfg(feature = "cargo-workspace")]
+            EntitySubscription::CargoWorkspaceStore(client.subscribe_to_entity(remote_id)?),
         ];
         let committer = get_git_committer(&cx).await;
         let response = client
@@ -2094,7 +2100,7 @@ impl Project {
 
     async fn from_join_project_response(
         response: TypedEnvelope<proto::JoinProjectResponse>,
-        subscriptions: [EntitySubscription; 8],
+        subscriptions: impl IntoIterator<Item = EntitySubscription>,
         client: Arc<Client>,
         run_tasks: bool,
         user_store: Entity<UserStore>,
@@ -2318,7 +2324,7 @@ impl Project {
                 user_store: user_store.clone(),
                 task_store,
                 #[cfg(feature = "cargo-workspace")]
-                cargo_workspace_store,
+                cargo_workspace_store: cargo_workspace_store.clone(),
                 #[cfg(feature = "structured-execution")]
                 structured_execution_store,
                 profile_results_store,
@@ -2405,6 +2411,10 @@ impl Project {
                 }
                 EntitySubscription::BreakpointStore(subscription) => {
                     subscription.set_entity(&breakpoint_store, &cx)
+                }
+                #[cfg(feature = "cargo-workspace")]
+                EntitySubscription::CargoWorkspaceStore(subscription) => {
+                    subscription.set_entity(&cargo_workspace_store, &cx)
                 }
             })
             .collect::<Vec<_>>();
@@ -3656,6 +3666,9 @@ impl Project {
         if self.host().map(|host| host.peer_id) != previous_host_peer {
             self.worktree_store
                 .update(cx, |store, _| store.reset_upstream_session());
+            #[cfg(feature = "cargo-workspace")]
+            self.cargo_workspace_store
+                .update(cx, |store, cx| store.reset_remote_host(cx));
         }
         self.source_coverage_store
             .update(cx, |store, cx| store.reconnected_to_host(cx));
@@ -3705,6 +3718,9 @@ impl Project {
             self.task_store.update(cx, |task_store, cx| {
                 task_store.unshared(cx);
             });
+            #[cfg(feature = "cargo-workspace")]
+            self.cargo_workspace_store
+                .update(cx, |store, _| store.unshared());
             #[cfg(feature = "structured-execution")]
             self.structured_execution_store
                 .update(cx, |store, _| store.unshared());

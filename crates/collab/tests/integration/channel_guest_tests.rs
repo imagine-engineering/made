@@ -4656,9 +4656,29 @@ async fn rust_tools_relay_separate_enabled_host_coverage_reply_rejects_replaced_
 }
 
 #[cfg(all(feature = "rust-tools-test", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires an independently built Rust-tools RemoteServer"]
+async fn rust_tools_relay_separate_host_cargo_configuration_invalidation(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+    cx_c: &mut TestAppContext,
+) {
+    run_separate_enabled_host_tools(
+        executor,
+        cx_a,
+        cx_b,
+        cx_c,
+        SeparateEnabledHostScenario::CargoConfiguration,
+    )
+    .await;
+}
+
+#[cfg(all(feature = "rust-tools-test", target_os = "macos"))]
 #[derive(PartialEq)]
 enum SeparateEnabledHostScenario {
     NativeProfile,
+    CargoConfiguration,
     CoverageVisibility,
     CoverageSession,
     LegacyAuthorization,
@@ -4732,6 +4752,25 @@ async fn run_separate_enabled_host_tools(
         "#[cfg(test)] mod tests { #[test] fn unit_passes() {} }\n",
     )
     .expect("write Cargo test source");
+    let included_configuration = (scenario == SeparateEnabledHostScenario::CargoConfiguration)
+        .then(|| {
+            let directory =
+                tempfile::tempdir_in("/private/tmp").expect("own external configuration directory");
+            let include = directory.path().join("cargo-include.toml");
+            std::fs::write(&include, "[net]\noffline = true\n")
+                .expect("initial offline configuration");
+            std::fs::create_dir(fixture.path().join(".cargo"))
+                .expect("worktree Cargo configuration directory");
+            std::fs::write(
+                fixture.path().join(".cargo/config.toml"),
+                format!(
+                    "include = [{}]\n",
+                    serde_json::to_string(&include).expect("encode include path")
+                ),
+            )
+            .expect("configure a file outside the visible worktree");
+            (directory, include)
+        });
     let ownership_build_output = needs_isolated_build_output
         .then(|| tempfile::tempdir_in("/private/tmp").expect("create isolated owner build output"));
     let compiler_wrapper = discovery_cancellation_gate.as_ref().map(|gate| {
@@ -5026,6 +5065,52 @@ os.execvp(compiler,arguments)
         .await
         .expect("collaborator receives enabled host Cargo metadata");
     assert_eq!(metadata.workspaces.len(), 1);
+    if let Some((directory, include)) = included_configuration {
+        executor.run_until_parked();
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        let mut sender = Some(sender);
+        let _subscription = cx_b.update(|cx| {
+            cx.subscribe(&cargo, move |_, _, _| {
+                if let Some(sender) = sender.take()
+                    && sender.send(()).is_err()
+                {
+                    log::error!("Cargo change observer closed");
+                }
+            })
+        });
+        let replacement = directory.path().join("replacement.toml");
+        std::fs::write(&replacement, "[net]\noffline = true\nretry = 1\n")
+            .expect("write replacement external Cargo configuration");
+        std::fs::rename(replacement, include).expect("atomically replace external configuration");
+        let deadline = executor.timer(std::time::Duration::from_secs(10));
+        match futures::future::select(receiver, deadline).await {
+            futures::future::Either::Left((result, _)) => {
+                result.expect("collaborator invalidation")
+            }
+            futures::future::Either::Right(_) => {
+                panic!("host change did not reach the collaborator")
+            }
+        }
+        assert!(cargo.read_with(cx_b, |store, cx| {
+            store
+                .cached_snapshot(cx)
+                .is_some_and(|(snapshot, current)| {
+                    !current && snapshot.workspaces == metadata.workspaces
+                })
+        }));
+        let fresh = cargo
+            .update(cx_b, |store, cx| store.refresh(cx))
+            .await
+            .expect("read authoritative model after the host edit");
+        assert!(fresh.revision > metadata.revision);
+        assert_eq!(fresh.workspaces, metadata.workspaces);
+        connection
+            .kill()
+            .await
+            .expect("stop the owned RemoteServer process");
+        return;
+    }
+
     if matches!(scenario, SeparateEnabledHostScenario::LegacyAuthorization) {
         use client::ErrorExt as _;
 
@@ -8477,6 +8562,106 @@ async fn rust_tools_relay_separate_disabled_host_returns_typed_unsupported(
         .kill()
         .await
         .expect("stop separate disabled host");
+}
+
+#[gpui::test]
+#[cfg(feature = "rust-tools-test")]
+async fn rust_tools_relay_cargo_configuration_invalidation_requires_the_host(
+    executor: BackgroundExecutor,
+    cx_a: &mut TestAppContext,
+    cx_b: &mut TestAppContext,
+    cx_c: &mut TestAppContext,
+) {
+    let mut server = TestServer::start(executor.clone()).await;
+    let host = server.create_client(cx_a, "config_host").await;
+    let member = server.create_client(cx_b, "config_member").await;
+    let other_member = server.create_client(cx_c, "config_observer").await;
+    server
+        .create_room(&mut [(&host, cx_a), (&member, cx_b), (&other_member, cx_c)])
+        .await;
+    host.fs()
+        .insert_tree(
+            "/relay",
+            serde_json::json!({
+                "Cargo.toml": "[package]\nname = \"standalone\"\nversion = \"1.0.0\"\n",
+                "src": { "main.rs": "fn main() {}" },
+            }),
+        )
+        .await;
+    let host_project = host.build_local_project_with_trust("/relay", cx_a).await.0;
+    let (host_store, worktrees, environment) = host_project.read_with(cx_a, |project, _| {
+        (
+            project.cargo_workspace_store().clone(),
+            project.worktree_store(),
+            project.environment().clone(),
+        )
+    });
+    host_store.update(cx_a, |store, _| {
+        *store = CargoWorkspaceStore::local_with_runner(
+            worktrees,
+            environment,
+            Arc::new(RelayFixtureMetadataRunner),
+        );
+    });
+    let project_id = cx_a
+        .read(ActiveCall::global)
+        .update(cx_a, |call, cx| {
+            call.share_project(host_project.clone(), cx)
+        })
+        .await
+        .expect("share owned fixture");
+    let member_project = member.join_remote_project(project_id, cx_b).await;
+    let observer_project = other_member.join_remote_project(project_id, cx_c).await;
+    executor.run_until_parked();
+    let member_store =
+        member_project.read_with(cx_b, |project, _| project.cargo_workspace_store().clone());
+    let observer_store =
+        observer_project.read_with(cx_c, |project, _| project.cargo_workspace_store().clone());
+    let member_model = member_store
+        .update(cx_b, |store, cx| store.refresh(cx))
+        .await
+        .expect("member receives host model");
+    let observer_model = observer_store
+        .update(cx_c, |store, cx| store.refresh(cx))
+        .await
+        .expect("observer receives host model");
+    assert_eq!(member_model.workspaces.len(), 1);
+    assert_eq!(observer_model.workspaces, member_model.workspaces);
+
+    let received = std::rc::Rc::new(std::cell::Cell::new(0));
+    let _subscription = cx_c.update(|cx| {
+        cx.subscribe(&observer_store, {
+            let received = received.clone();
+            move |_, _, _| received.set(received.get() + 1)
+        })
+    });
+    member
+        .client()
+        .send(proto::CargoWorkspaceInvalidated {
+            project_id,
+            revision: u64::MAX,
+        })
+        .expect("exercise a nonhost sender");
+    executor.run_until_parked();
+    assert_eq!(received.get(), 0, "the relay must reject a nonhost sender");
+
+    host.client()
+        .send(proto::CargoWorkspaceInvalidated {
+            project_id,
+            revision: observer_model.revision + 1,
+        })
+        .expect("send authoritative invalidation");
+    executor.run_until_parked();
+    assert_eq!(received.get(), 1, "the relay delivers the host change");
+    for (store, cx) in [(&member_store, cx_b), (&observer_store, cx_c)] {
+        assert!(store.read_with(cx, |store, cx| {
+            store
+                .cached_snapshot(cx)
+                .is_some_and(|(snapshot, current)| {
+                    !current && snapshot.workspaces == observer_model.workspaces
+                })
+        }));
+    }
 }
 
 #[gpui::test]

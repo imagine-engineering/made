@@ -510,6 +510,7 @@ impl Server {
             .add_request_handler(forward_read_only_project_request::<proto::DownloadFileByPath>)
             .add_request_handler(forward_mutating_project_request::<proto::GetCargoWorkspace>)
             .add_request_handler(forward_mutating_project_request::<proto::CancelCargoWorkspace>)
+            .add_message_handler(broadcast_cargo_workspace_invalidation)
             .add_request_handler(forward_mutating_project_request::<proto::GetRustTestDiscovery>)
             .add_request_handler(forward_mutating_project_request::<proto::CancelRustTestDiscovery>)
             .add_request_handler(forward_rust_test_action)
@@ -3043,6 +3044,30 @@ async fn broadcast_project_buffer_metadata_from_host<T: EntityMessage<Entity = S
         }
     }
 
+    broadcast(
+        Some(session.connection_id),
+        project_connection_ids.iter().copied(),
+        |connection_id| {
+            session
+                .peer
+                .forward_send(session.connection_id, connection_id, request.clone())
+        },
+    );
+    Ok(())
+}
+
+async fn broadcast_cargo_workspace_invalidation(
+    request: proto::CargoWorkspaceInvalidated,
+    session: MessageContext,
+) -> Result<()> {
+    let project_connection_ids = session
+        .db()
+        .await
+        .project_host_connection_ids(
+            ProjectId::from_proto(request.project_id),
+            session.connection_id,
+        )
+        .await?;
     broadcast(
         Some(session.connection_id),
         project_connection_ids.iter().copied(),

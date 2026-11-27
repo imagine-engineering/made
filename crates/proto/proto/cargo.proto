@@ -14,6 +14,11 @@ message CancelCargoWorkspace {
   uint64 request_id = 2;
 }
 
+message CargoWorkspaceInvalidated {
+  uint64 project_id = 1;
+  uint64 revision = 2;
+}
+
 message CargoWorkspaceResponse {
   uint64 request_id = 1;
   uint64 revision = 2;

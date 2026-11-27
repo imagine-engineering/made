@@ -1264,6 +1264,9 @@ impl CargoPanel {
                 CargoWorkspaceRemoteErrorKind::Restricted => {
                     LanguageToolProviderStatus::Restricted(remote_error.to_string())
                 }
+                CargoWorkspaceRemoteErrorKind::Superseded => {
+                    LanguageToolProviderStatus::Stale(remote_error.to_string())
+                }
             }
         } else {
             LanguageToolProviderStatus::Error(error.to_string())

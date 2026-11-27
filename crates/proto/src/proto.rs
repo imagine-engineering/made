@@ -258,6 +258,7 @@ messages!(
     (GetChannelMessagesResponse, Background),
     (GetCargoWorkspace, Background),
     (CargoWorkspaceResponse, Background),
+    (CargoWorkspaceInvalidated, Foreground),
     (GetRustTestDiscovery, Background),
     (CancelRustTestDiscovery, Foreground),
     (RustTestDiscoveryResponse, Background),
@@ -975,6 +976,7 @@ entity_messages!(
     FormatBuffers,
     GetCodeActions,
     GetCargoWorkspace,
+    CargoWorkspaceInvalidated,
     GetRustTestDiscovery,
     CancelRustTestDiscovery,
     GetJvmTestDiscovery,
@@ -1918,6 +1920,7 @@ mod tests {
         check::<KotlinWorkspaceSnapshotResponse>(&[0xfa, 0x20, 0]);
         check::<GetCargoWorkspace>(&[0xf2, 0x1d, 0]);
         check::<CargoWorkspaceResponse>(&[0xfa, 0x1d, 0]);
+        check::<CargoWorkspaceInvalidated>(&[0x8a, 0x22, 0]);
     }
 
     #[test]

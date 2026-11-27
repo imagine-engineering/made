@@ -65,6 +65,7 @@ pub enum CargoWorkspaceRemoteErrorKind {
     UnsupportedHost,
     Disconnected,
     Restricted,
+    Superseded,
 }
 
 #[derive(Debug)]
@@ -84,6 +85,9 @@ impl std::fmt::Display for CargoWorkspaceRemoteError {
             CargoWorkspaceRemoteErrorKind::Restricted => formatter.write_str(
                 "Cargo refresh was cancelled because worktree trust was revoked on the host. Trust the worktree and refresh Cargo.",
             ),
+            CargoWorkspaceRemoteErrorKind::Superseded => {
+                formatter.write_str("Cargo inputs changed during refresh.")
+            }
         }
     }
 }
@@ -411,18 +415,33 @@ async fn revalidate_native_cargo_configuration(
 
 pub struct CargoConfigurationObservation {
     paths: parking_lot::Mutex<HashSet<PathBuf>>,
+    registrations: parking_lot::Mutex<HashSet<PathBuf>>,
     watcher: Arc<dyn fs::Watcher>,
     executor: BackgroundExecutor,
 }
 
 impl CargoConfigurationObservation {
     async fn watch(&self, path: &Path) {
-        if self.paths.lock().insert(path.to_path_buf()) {
-            let watcher = self.watcher.clone();
-            let path = path.to_path_buf();
+        let watcher = self.watcher.clone();
+        let path = path.to_path_buf();
+        let (path, registration) = self
+            .executor
+            .spawn(async move {
+                if let Some(parent) = path.parent()
+                    && let Some(name) = path.file_name()
+                    && let Ok(parent) = std::fs::canonicalize(parent)
+                {
+                    // File watches can be retired by atomic replacement on Linux.
+                    return (parent.join(name), parent);
+                }
+                (path.clone(), path)
+            })
+            .await;
+        if self.paths.lock().insert(path) && self.registrations.lock().insert(registration.clone())
+        {
             self.executor
                 .spawn(async move {
-                    if let Err(error) = watcher.add(&path) {
+                    if let Err(error) = watcher.add(&registration) {
                         log::warn!("Cargo configuration could not be observed: {error:#}");
                     }
                 })
@@ -1794,12 +1813,14 @@ pub struct CargoWorkspaceStore {
     cached_metadata_settings_revision: Option<u64>,
     cached_generation: u64,
     cached_scope: Option<HashSet<settings::WorktreeId>>,
+    remote_revision: Option<u64>,
     active_remote_request_id: Option<u64>,
     active_remote_request_abort: Option<AbortHandle>,
     disconnected: bool,
     cancelled_remote_requests: HashSet<(proto::PeerId, u64)>,
     active_remote_requests: HashMap<(proto::PeerId, u64), AbortHandle>,
     configuration_watch: Option<Task<()>>,
+    configuration_watch_revision: Option<u64>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -4490,6 +4511,7 @@ enum CargoWorkspaceStoreMode {
     Remote {
         project_id: u64,
         client: AnyProtoClient,
+        shared: Option<(u64, AnyProtoClient)>,
     },
 }
 
@@ -4509,6 +4531,7 @@ impl CargoWorkspaceStore {
     pub fn init(client: &AnyProtoClient) {
         client.add_entity_request_handler(Self::handle_get_workspace);
         client.add_entity_request_handler(Self::handle_cancel_workspace);
+        client.add_entity_message_handler(Self::handle_remote_configuration_invalidated);
     }
 
     pub fn local(
@@ -4523,6 +4546,7 @@ impl CargoWorkspaceStore {
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
             subscriptions.push(cx.subscribe(&trusted_worktrees, |store, _, _, cx| {
                 drop(store.configuration_watch.take());
+                store.configuration_watch_revision = None;
                 store.invalidate(cx);
             }));
         }
@@ -4544,12 +4568,14 @@ impl CargoWorkspaceStore {
             cached_metadata_settings_revision: None,
             cached_generation: 0,
             cached_scope: None,
+            remote_revision: None,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
             configuration_watch: None,
+            configuration_watch_revision: None,
             _subscriptions: subscriptions,
         }
     }
@@ -4595,12 +4621,14 @@ impl CargoWorkspaceStore {
             cached_metadata_settings_revision: None,
             cached_generation: 0,
             cached_scope: None,
+            remote_revision: None,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
             configuration_watch: None,
+            configuration_watch_revision: None,
             _subscriptions: Vec::new(),
         }
     }
@@ -4626,12 +4654,14 @@ impl CargoWorkspaceStore {
             cached_metadata_settings_revision: None,
             cached_generation: 0,
             cached_scope: None,
+            remote_revision: None,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
             configuration_watch: None,
+            configuration_watch_revision: None,
             _subscriptions: Vec::new(),
         }
     }
@@ -4654,7 +4684,11 @@ impl CargoWorkspaceStore {
             }));
         }
         Self {
-            mode: CargoWorkspaceStoreMode::Remote { project_id, client },
+            mode: CargoWorkspaceStoreMode::Remote {
+                project_id,
+                client,
+                shared: None,
+            },
             worktree_store,
             revision: 0,
             cached_snapshot: None,
@@ -4662,12 +4696,14 @@ impl CargoWorkspaceStore {
             cached_metadata_settings_revision: None,
             cached_generation: 0,
             cached_scope: None,
+            remote_revision: None,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
             configuration_watch: None,
+            configuration_watch_revision: None,
             _subscriptions: subscriptions,
         }
     }
@@ -4704,9 +4740,87 @@ impl CargoWorkspaceStore {
     }
 
     pub fn shared(&mut self, project_id: u64, client: AnyProtoClient, _cx: &mut Context<Self>) {
-        if let CargoWorkspaceStoreMode::Local { shared, .. } = &mut self.mode {
-            *shared = Some((project_id, client));
-            self.clear_metadata_facts();
+        match &mut self.mode {
+            CargoWorkspaceStoreMode::Local { shared, .. }
+            | CargoWorkspaceStoreMode::Remote { shared, .. } => {
+                *shared = Some((project_id, client))
+            }
+        }
+        self.clear_metadata_facts();
+    }
+
+    pub(crate) fn unshared(&mut self) {
+        match &mut self.mode {
+            CargoWorkspaceStoreMode::Local { shared, .. }
+            | CargoWorkspaceStoreMode::Remote { shared, .. } => *shared = None,
+        }
+        self.clear_metadata_facts();
+    }
+
+    fn send_configuration_invalidation(&self) {
+        let shared = match &self.mode {
+            CargoWorkspaceStoreMode::Local { shared, .. }
+            | CargoWorkspaceStoreMode::Remote { shared, .. } => shared,
+        };
+        if let Some((project_id, client)) = shared
+            && let Err(error) = client.send(proto::CargoWorkspaceInvalidated {
+                project_id: *project_id,
+                revision: self.revision,
+            })
+        {
+            log::warn!("Could not send Cargo workspace invalidation: {error:#}");
+        }
+    }
+
+    fn invalidate_observed_configuration(&mut self, cx: &mut Context<Self>) {
+        self.invalidate(cx);
+        self.send_configuration_invalidation();
+    }
+
+    async fn handle_remote_configuration_invalidated(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::CargoWorkspaceInvalidated>,
+        mut cx: AsyncApp,
+    ) -> Result<()> {
+        this.update(&mut cx, |store, cx| {
+            store.remote_configuration_invalidated(envelope.payload, cx);
+        });
+        Ok(())
+    }
+
+    fn remote_configuration_invalidated(
+        &mut self,
+        message: proto::CargoWorkspaceInvalidated,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(&self.mode, CargoWorkspaceStoreMode::Remote { project_id, .. } if *project_id == message.project_id)
+            || self.disconnected
+            || self
+                .remote_revision
+                .is_some_and(|revision| revision >= message.revision)
+        {
+            return;
+        }
+        self.remote_revision = Some(message.revision);
+        if self.cached_snapshot.is_some()
+            || self.active_remote_request_id.is_some()
+            || matches!(
+                self.mode,
+                CargoWorkspaceStoreMode::Remote {
+                    shared: Some(_),
+                    ..
+                }
+            )
+        {
+            self.invalidate(cx);
+            self.send_configuration_invalidation();
+        }
+    }
+
+    pub(crate) fn reset_remote_host(&mut self, cx: &mut Context<Self>) {
+        self.remote_revision = None;
+        if self.cached_snapshot.is_some() || self.active_remote_request_id.is_some() {
+            self.invalidate(cx);
         }
     }
 
@@ -4715,7 +4829,8 @@ impl CargoWorkspaceStore {
             return;
         }
         self.disconnected = false;
-        cx.emit(CargoWorkspaceStoreEvent::Invalidated);
+        self.invalidate(cx);
+        self.send_configuration_invalidation();
     }
 
     pub fn disconnected_from_host(&mut self, cx: &mut Context<Self>) {
@@ -4726,6 +4841,7 @@ impl CargoWorkspaceStore {
             return;
         }
         self.disconnected = true;
+        self.remote_revision = None;
         self.clear_metadata_facts();
         self.revision = self.revision.wrapping_add(1);
         self.active_remote_request_id = None;
@@ -4733,6 +4849,7 @@ impl CargoWorkspaceStore {
             abort.abort();
         }
         cx.emit(CargoWorkspaceStoreEvent::Invalidated);
+        self.send_configuration_invalidation();
     }
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) -> Task<Result<CargoWorkspaceSnapshot>> {
@@ -4853,12 +4970,13 @@ impl CargoWorkspaceStore {
                 kind: CargoWorkspaceRemoteErrorKind::Disconnected,
             })));
         }
-        drop(self.configuration_watch.take());
         self.revision = self.revision.wrapping_add(1);
         self.clear_metadata_facts();
         let revision = self.revision;
         match &self.mode {
-            CargoWorkspaceStoreMode::Remote { project_id, client } => {
+            CargoWorkspaceStoreMode::Remote {
+                project_id, client, ..
+            } => {
                 let project_id = *project_id;
                 let client = client.clone();
                 if let Some(request_id) = self.active_remote_request_id.replace(revision) {
@@ -4932,6 +5050,7 @@ impl CargoWorkspaceStore {
                                 },
                             })
                         });
+                    let snapshot = response.and_then(snapshot_from_proto);
                     this.update(cx, |store, _| {
                         if store.active_remote_request_id == Some(revision) {
                             store.active_remote_request_id = None;
@@ -4939,13 +5058,28 @@ impl CargoWorkspaceStore {
                         }
                         if store.revision != revision {
                             return Err(anyhow!(CargoWorkspaceRemoteError {
-                                kind: CargoWorkspaceRemoteErrorKind::Disconnected,
+                                kind: if store.disconnected {
+                                    CargoWorkspaceRemoteErrorKind::Disconnected
+                                } else {
+                                    CargoWorkspaceRemoteErrorKind::Superseded
+                                },
                             }));
+                        }
+                        if let Ok(snapshot) = &snapshot {
+                            if store
+                                .remote_revision
+                                .is_some_and(|host_revision| host_revision > snapshot.revision)
+                            {
+                                return Err(anyhow!(CargoWorkspaceRemoteError {
+                                    kind: CargoWorkspaceRemoteErrorKind::Superseded,
+                                }));
+                            }
+                            store.remote_revision = Some(snapshot.revision);
                         }
                         Ok(())
                     })??;
                     Ok(CargoMetadataCollection {
-                        snapshot: snapshot_from_proto(response?)?,
+                        snapshot: snapshot?,
                         metadata_facts: Vec::new(),
                     })
                 })
@@ -4956,6 +5090,7 @@ impl CargoWorkspaceStore {
                 configuration_probe,
                 ..
             } => {
+                self.configuration_watch_revision = Some(revision);
                 let wait_for_scan = self.worktree_store.read(cx).wait_for_initial_scan();
                 let environment = environment.clone();
                 let runner = runner.clone();
@@ -4982,36 +5117,35 @@ impl CargoWorkspaceStore {
                         });
                         (candidates, input_fingerprint, omitted_candidates, subscription)
                     });
-                    let observation = if let Some((filesystem, candidate)) =
+                    let (observation, configuration_watch) = if let Some((filesystem, candidate)) =
                         filesystem.zip(candidates.iter().find(|candidate| candidate.trusted))
                     {
-                        let initial_path = candidate.absolute_path.with_file_name(".cargo").join("config");
+                        let initial_path = candidate.absolute_path.with_file_name(".cargo");
                         let executor = cx.background_executor().clone();
                         let (mut events, watcher) = executor.spawn(async move {
                             filesystem.watch(&initial_path, Duration::from_millis(100)).await
                         }).await;
                         let observation = Arc::new(CargoConfigurationObservation {
                             paths: Default::default(),
+                            registrations: Default::default(),
                             watcher,
                             executor,
                         });
-                        this.update(cx, |store, cx| {
-                            if store.revision == revision {
-                                let observation = observation.clone();
-                                store.configuration_watch = Some(cx.spawn(async move |store, cx| {
-                                    while let Some(events) = events.next().await {
-                                        if observation.changed(&events)
-                                            && store.update(cx, |store, cx| store.invalidate(cx)).is_err()
-                                        {
-                                            break;
-                                        }
+                        let configuration_watch = this.update(cx, |_, cx| {
+                            let observation = observation.clone();
+                            cx.spawn(async move |store, cx| {
+                                while let Some(events) = events.next().await {
+                                    if observation.changed(&events)
+                                        && store.update(cx, |store, cx| store.invalidate_observed_configuration(cx)).is_err()
+                                    {
+                                        break;
                                     }
-                                }));
-                            }
+                                }
+                            })
                         })?;
-                        Some(observation)
+                        (Some(observation), Some(configuration_watch))
                     } else {
-                        None
+                        (None, None)
                     };
                     let collection = collect_snapshot(
                         revision,
@@ -5028,6 +5162,12 @@ impl CargoWorkspaceStore {
                                 .with_tag("reason", "cargo_trust_revoked")
                                 .message("Cargo workspace trust was revoked during metadata collection".into())
                         })?;
+                    this.update(cx, |store, _| {
+                        if store.configuration_watch_revision == Some(revision) {
+                            // Keep coverage while a newer refresh enumerates its configuration inputs.
+                            store.configuration_watch = configuration_watch;
+                        }
+                    })?;
                     drop(trust_subscription);
                     if omitted_candidates > 0 && let Ok(collection) = &mut result {
                         collection.snapshot.omitted.candidates = omitted_candidates;
@@ -7636,8 +7776,15 @@ impl CargoWorkspaceStore {
         if !proceed {
             return Err(anyhow!("Cargo workspace request was cancelled"));
         }
-        let refresh = this.update(&mut cx, |store, cx| {
-            store.refresh_scoped(Some(allowed_worktree_ids), cx)
+        let (refresh, relay_revision) = this.update(&mut cx, |store, cx| {
+            let refresh = store.refresh_scoped(Some(allowed_worktree_ids), cx);
+            let relay_revision = match store.mode {
+                CargoWorkspaceStoreMode::Remote {
+                    shared: Some(_), ..
+                } => Some(store.revision),
+                _ => None,
+            };
+            (refresh, relay_revision)
         });
         let snapshot = Abortable::new(refresh, abort_registration)
             .await
@@ -7649,7 +7796,7 @@ impl CargoWorkspaceStore {
         if was_cancelled {
             return Err(anyhow!("Cargo workspace request was cancelled"));
         }
-        let snapshot = snapshot?.map_err(|error| {
+        let mut snapshot = snapshot?.map_err(|error| {
             if error
                 .downcast_ref::<CargoWorkspaceRemoteError>()
                 .is_some_and(|error| error.kind == CargoWorkspaceRemoteErrorKind::UnsupportedHost)
@@ -7662,6 +7809,10 @@ impl CargoWorkspaceStore {
                 error
             }
         })?;
+        if let Some(relay_revision) = relay_revision {
+            // A replacement upstream can restart its revision while the shared project stays live.
+            snapshot.revision = relay_revision;
+        }
         Ok(snapshot_to_proto(snapshot, request_id))
     }
 
@@ -13813,6 +13964,54 @@ printf 'metadata\n'
         let mut requests = HashSet::new();
         requests.insert(((1_u64, 2_u64), 9_u64));
         assert!(!requests.contains(&((1_u64, 3_u64), 9_u64)));
+    }
+
+    #[gpui::test]
+    async fn cargo_workspace_remote_invalidation_ignores_foreign_and_obsolete_revisions(
+        cx: &mut TestAppContext,
+    ) {
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+        });
+        let filesystem = fs::FakeFs::new(cx.executor());
+        let project = crate::Project::test(filesystem, std::iter::empty::<&Path>(), cx).await;
+        let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+        let client = cx.update(|cx| {
+            client::Client::new(
+                Arc::new(clock::FakeSystemClock::new()),
+                http_client::FakeHttpClient::with_404_response(),
+                cx,
+            )
+        });
+        let store = cx.new(|cx| CargoWorkspaceStore::remote(1, worktrees, client.into(), cx));
+        store.update(cx, |store, cx| {
+            let message = |project_id, revision| proto::CargoWorkspaceInvalidated {
+                project_id,
+                revision,
+            };
+            store.remote_configuration_invalidated(message(1, 10), cx);
+            assert_eq!(store.revision, 0, "an unopened panel remains dormant");
+
+            store.active_remote_request_id = Some(1);
+            for obsolete in [message(2, 11), message(1, 9), message(1, 10)] {
+                store.remote_configuration_invalidated(obsolete, cx);
+                assert_eq!(store.revision, 0);
+            }
+            store.remote_configuration_invalidated(message(1, 11), cx);
+            assert_eq!(store.revision, 1, "a newer event invalidates the request");
+
+            store.disconnected_from_host(cx);
+            store.remote_configuration_invalidated(message(1, 19), cx);
+            assert_eq!(store.remote_revision, None);
+            store.reconnected_to_host(cx);
+            store.remote_configuration_invalidated(message(1, 2), cx);
+            assert_eq!(
+                store.remote_revision,
+                Some(2),
+                "the new host can start at a lower revision"
+            );
+        });
     }
 
     #[gpui::test]
