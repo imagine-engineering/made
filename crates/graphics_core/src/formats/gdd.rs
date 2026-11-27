@@ -69,7 +69,7 @@ use graphite_editor::{
 };
 use graphite_glam::{DAffine2, DVec2, IVec2, UVec2};
 use graphite_graph_craft::application_io::resource::{
-    HashMapResourceStorage, ResourceHash, ResourceStorage,
+    HashMapResourceStorage, Resource, ResourceHash, ResourceId, ResourceStorage,
 };
 use graphite_graph_craft::{
     document::{
@@ -100,10 +100,12 @@ use graphite_std::{
 use zip::ZipArchive;
 
 use super::{OriginalJson, legacy::PreservedLegacyDocument};
+#[cfg(test)]
+use crate::evaluate::evaluate_cpu_svg;
 use crate::evaluate::{
     CanvasGpuRenderer, CpuSvgEvaluationBudget, NUMERIC_NETWORK_WRAPPER, NumericGraphEvaluator,
-    NumericGraphPreparationError, UnaryNumericOperation, evaluate_cpu_svg,
-    evaluate_merge_thumbnail, typecheck_detached_numeric_network,
+    NumericGraphPreparationError, SavedGraphResources, UnaryNumericOperation,
+    evaluate_cpu_svg_with_resources, evaluate_merge_thumbnail, typecheck_detached_numeric_network,
     typecheck_detached_ranked_network, validate_svg_configuration,
 };
 
@@ -242,7 +244,7 @@ pub enum GddArchiveError {
     GraphClipboardTypeMismatch(String),
     #[error("Enter a different Graphite node name.")]
     UnchangedGraphNodeName,
-    #[error("Select a Graphite Text node with editable text and the source default font.")]
+    #[error("Select a Graphite Text node with editable text and a supported font input.")]
     UnsupportedGraphArtworkText,
     #[error("Enter a finite artwork font size of at least 1 px.")]
     InvalidArtworkFontSize,
@@ -1167,6 +1169,7 @@ pub struct GddGraphNode {
     boolean_input: Option<GddGraphBooleanInput>,
     artwork_text: Option<String>,
     artwork_text_layout: Option<GddArtworkTextLayout>,
+    artwork_font: Option<ResourceId>,
     artboard_geometry: Option<GddArtboardGeometry>,
     artboard_background: Option<Color>,
     fill_color: Option<Color>,
@@ -1413,6 +1416,10 @@ impl GddGraphNode {
 
     pub fn artwork_text_layout(&self) -> Option<GddArtworkTextLayout> {
         self.artwork_text_layout
+    }
+
+    pub fn artwork_font_resource(&self) -> Option<ResourceId> {
+        self.artwork_font
     }
 
     pub fn fill_color(&self) -> Option<Color> {
@@ -1942,6 +1949,7 @@ impl InspectedGddV1 {
                     boolean_input: None,
                     artwork_text: None,
                     artwork_text_layout: None,
+                    artwork_font: None,
                     artboard_geometry: None,
                     artboard_background: None,
                     fill_color: None,
@@ -2183,6 +2191,7 @@ impl InspectedGddV1 {
                 {
                     node.artwork_text = Some(text.to_owned());
                     node.artwork_text_layout = Some(layout);
+                    node.artwork_font = saved_artwork_font_reference(document);
                 }
                 node.can_preview_merge_thumbnail = acyclic
                     && matches!(
@@ -3653,7 +3662,8 @@ impl InspectedGddV1 {
             clipboard,
             selected,
             async |document, layers| {
-                Self::center_pasted_canvas_layers(document, layers, target, camera).await
+                self.center_pasted_canvas_layers(document, layers, target, camera)
+                    .await
             },
             budget,
         )
@@ -3741,6 +3751,7 @@ impl InspectedGddV1 {
     }
 
     async fn center_pasted_canvas_layers(
+        &self,
         document: &mut DocumentMessageHandler,
         layers: &[LayerNodeIdentifier],
         target: GddCanvasRenderTarget<'_>,
@@ -3760,7 +3771,8 @@ impl InspectedGddV1 {
             return Err(GddArchiveError::GraphLayerPreviewBudget);
         }
         let (_, detached) = saved_canvas_network(document.network_interface.document_network())?;
-        let render = Self::render_detached_canvas(&detached, target, transform).await?;
+        let resources = self.saved_graph_resources(&detached).await?;
+        let render = Self::render_detached_canvas(&detached, &resources, target, transform).await?;
         set_canvas_layer_metadata(&mut document.network_interface, &render, transform);
         document.document_ptz = camera;
         let mut viewport = ViewportMessageHandler::default();
@@ -4367,7 +4379,8 @@ impl InspectedGddV1 {
         if graph.network.exports != [NodeInput::node(selected, 0)] {
             return Err(GddArchiveError::UnsupportedGraphLayerPreview);
         }
-        Self::render_saved_layer_svg(&graph.network, selected, configuration, budget).await
+        self.render_saved_layer_svg(&graph.network, selected, configuration, budget)
+            .await
     }
 
     pub async fn render_merge_thumbnail_svg(
@@ -4430,9 +4443,10 @@ impl InspectedGddV1 {
         let configuration = canvas_render_configuration(resolution, 1., DAffine2::IDENTITY);
         validate_svg_configuration(configuration, budget)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
-        validate_saved_graphic_work(&detached)?;
+        let resources = self.saved_graph_resources(&detached).await?;
+        validate_saved_graphic_work(&detached, &resources)?;
         validate_saved_ellipse_radius_sources(&detached).await?;
-        evaluate_merge_thumbnail(&detached, configuration, budget, owner, monitor)
+        evaluate_merge_thumbnail(&detached, configuration, budget, owner, monitor, &resources)
             .await
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
     }
@@ -4577,6 +4591,7 @@ impl InspectedGddV1 {
             apply_document_artboard_resize(&mut interface, node, pick, geometry)?;
         }
         let (_, mut detached) = saved_canvas_network(interface.document_network())?;
+        let resources = self.saved_graph_resources(&detached).await?;
         let saved = detached
             .nodes
             .get(&root)
@@ -4586,8 +4601,14 @@ impl InspectedGddV1 {
                 return Err(GddArchiveError::UnsupportedArtboardGeometry);
             }
             let can_draw_artboard = classify_document_artboard_source(&mut interface).is_ok();
-            let mut output =
-                Self::render_unframed_canvas(&detached, target, camera, can_draw_artboard).await?;
+            let mut output = Self::render_unframed_canvas(
+                &detached,
+                &resources,
+                target,
+                camera,
+                can_draw_artboard,
+            )
+            .await?;
             if can_draw_artboard {
                 output.snapping_document = Some(self.canvas_snapping_document(
                     interface,
@@ -4662,7 +4683,7 @@ impl InspectedGddV1 {
         let camera = camera.unwrap_or_else(|| fit_canvas_camera(origin, size, logical_size));
         let transform = NavigationMessageHandler::default()
             .calculate_offset_transform(logical_size / 2., &camera);
-        let render = Self::render_detached_canvas(&detached, target, transform).await?;
+        let render = Self::render_detached_canvas(&detached, &resources, target, transform).await?;
         let pane_to_document = transform.inverse();
         let metadata = &render.metadata;
         let can_draw_artboard = draft.is_none()
@@ -4757,6 +4778,7 @@ impl InspectedGddV1 {
 
     async fn render_unframed_canvas(
         detached: &NodeNetwork,
+        resources: &SavedGraphResources,
         target: GddCanvasRenderTarget<'_>,
         requested_camera: Option<PTZ>,
         can_draw_artboard: bool,
@@ -4768,7 +4790,8 @@ impl InspectedGddV1 {
         let navigation = NavigationMessageHandler::default();
         let mut camera = requested_camera.unwrap_or_default();
         let initial_transform = navigation.calculate_offset_transform(logical_size / 2., &camera);
-        let mut render = Self::render_detached_canvas(detached, target, initial_transform).await?;
+        let mut render =
+            Self::render_detached_canvas(detached, resources, target, initial_transform).await?;
         let pane_to_document = initial_transform.inverse();
         let metadata = &render.metadata;
         let bounds = metadata
@@ -4802,7 +4825,8 @@ impl InspectedGddV1 {
                     camera = fitted;
                     let transform =
                         navigation.calculate_offset_transform(logical_size / 2., &camera);
-                    render = Self::render_detached_canvas(detached, target, transform).await?;
+                    render = Self::render_detached_canvas(detached, resources, target, transform)
+                        .await?;
                 }
             }
         }
@@ -4891,7 +4915,47 @@ impl InspectedGddV1 {
         document
     }
 
+    async fn load_saved_artwork_font(&self, id: ResourceId) -> Result<Resource, GddArchiveError> {
+        let entry = self
+            .document
+            .registry()
+            .resources
+            .get(&id)
+            .ok_or(GddArchiveError::UnresolvedResource)?;
+        if !entry.has_embedded_source() {
+            return Err(GddArchiveError::UnresolvedLinkedResource);
+        }
+        let hash = entry.hash.ok_or(GddArchiveError::UnresolvedResource)?;
+        let bytes = self
+            .document
+            .read_resource(&hash)
+            .await
+            .map_err(|_| GddArchiveError::InvalidResource(hash))?;
+        let resource = Resource::new(bytes);
+        if resource.hash() != hash {
+            return Err(GddArchiveError::InvalidResource(hash));
+        }
+        Ok(resource)
+    }
+
+    async fn saved_graph_resources(
+        &self,
+        detached: &NodeNetwork,
+    ) -> Result<SavedGraphResources, GddArchiveError> {
+        let ids = detached
+            .nodes
+            .values()
+            .filter_map(saved_artwork_font_reference)
+            .collect::<BTreeSet<_>>();
+        let mut resources = SavedGraphResources::default();
+        for id in ids {
+            resources.insert(id, self.load_saved_artwork_font(id).await?);
+        }
+        Ok(resources)
+    }
+
     async fn render_saved_layer_svg(
+        &self,
         network: &NodeNetwork,
         selected: NodeId,
         configuration: RenderConfig,
@@ -4902,11 +4966,13 @@ impl InspectedGddV1 {
             ..Default::default()
         };
         collect_layer_preview_node(network, selected, &mut detached, &mut BTreeSet::new())?;
-        Self::render_detached_saved_layer_svg(&detached, configuration, budget).await
+        let resources = self.saved_graph_resources(&detached).await?;
+        Self::render_detached_saved_layer_svg(&detached, &resources, configuration, budget).await
     }
 
     async fn render_detached_canvas(
         detached: &NodeNetwork,
+        resources: &SavedGraphResources,
         target: GddCanvasRenderTarget<'_>,
         transform: DAffine2,
     ) -> Result<RenderOutput, GddArchiveError> {
@@ -4916,26 +4982,28 @@ impl InspectedGddV1 {
             configuration.render_mode = mode;
             configuration.export_format = SvgExportFormat::Raster;
             configuration.for_export = false;
-            validate_saved_graphic_work(detached)?;
+            validate_saved_graphic_work(detached, resources)?;
             validate_saved_ellipse_radius_sources(detached).await?;
             return renderer
-                .render(detached, configuration, target.budget)
+                .render(detached, configuration, target.budget, resources)
                 .await
                 .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()));
         }
-        Self::render_detached_saved_layer_svg(detached, configuration, target.budget).await
+        Self::render_detached_saved_layer_svg(detached, resources, configuration, target.budget)
+            .await
     }
 
     async fn render_detached_saved_layer_svg(
         detached: &NodeNetwork,
+        resources: &SavedGraphResources,
         configuration: RenderConfig,
         budget: CpuSvgEvaluationBudget,
     ) -> Result<RenderOutput, GddArchiveError> {
         validate_svg_configuration(configuration, budget)
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))?;
-        validate_saved_graphic_work(detached)?;
+        validate_saved_graphic_work(detached, resources)?;
         validate_saved_ellipse_radius_sources(detached).await?;
-        evaluate_cpu_svg(detached, configuration, budget, None)
+        evaluate_cpu_svg_with_resources(detached, configuration, budget, None, resources)
             .await
             .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
     }
@@ -5750,7 +5818,11 @@ impl InspectedGddV1 {
         {
             return Err(GddArchiveError::InvalidArtworkTextBounds);
         }
-        validate_artwork_text_layout(&text, layout)?;
+        let font = match node.artwork_font_resource() {
+            Some(id) => self.load_saved_artwork_font(id).await?,
+            None => graphite_std::text::FALLBACK_FONT_RESOURCE.clone(),
+        };
+        validate_artwork_text_layout(&text, layout, &font)?;
         let mut interface = self.runtime_graph().await?.into_interface()?;
         let path = &node.network_path;
         let current = interface
@@ -8197,7 +8269,8 @@ impl InspectedGddV1 {
                 &mut detached,
                 &mut BTreeSet::new(),
             )?;
-            validate_saved_graphic_work(&detached)?;
+            let resources = self.saved_graph_resources(&detached).await?;
+            validate_saved_graphic_work(&detached, &resources)?;
         }
         self.finish_graph_numeric_input(
             node,
@@ -10274,6 +10347,18 @@ fn saved_artwork_text_input(node: &DocumentNode, index: usize) -> Option<&Tagged
     input.as_value()
 }
 
+fn saved_artwork_font_reference(node: &DocumentNode) -> Option<ResourceId> {
+    if !matches!(&node.implementation, DocumentNodeImplementation::ProtoNode(identifier)
+        if identifier == &artwork_text::IDENTIFIER)
+    {
+        return None;
+    }
+    match saved_artwork_text_input(node, artwork_text::FontInput::INDEX)? {
+        TaggedValue::Resource(id) => Some(*id),
+        _ => None,
+    }
+}
+
 fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, GddArtworkTextLayout)> {
     let [
         Some(TaggedValue::String(text)),
@@ -10307,16 +10392,14 @@ fn saved_artwork_text_literals(node: &DocumentNode) -> Option<(&str, GddArtworkT
 fn validate_artwork_text_layout(
     text: &str,
     layout: GddArtworkTextLayout,
+    font: &Resource,
 ) -> Result<(), GddArchiveError> {
     use graphite_core_types::{
         ATTR_FONT, ATTR_FONT_SIZE, ATTR_MAX_HEIGHT, ATTR_MAX_WIDTH, ATTR_TEXT_ALIGN, list::Item,
     };
 
     let mut source = Item::new_from_element(text.to_owned())
-        .with_attribute(
-            ATTR_FONT,
-            graphite_std::text::FALLBACK_FONT_RESOURCE.clone(),
-        )
+        .with_attribute(ATTR_FONT, font.clone())
         .with_attribute(ATTR_FONT_SIZE, layout.size)
         .with_attribute(ATTR_TEXT_ALIGN, layout.alignment);
     if let Some(width) = layout.max_width {
@@ -10336,7 +10419,10 @@ fn validate_artwork_text_layout(
     .map_err(|error| GddArchiveError::GraphLayerPreviewEvaluation(error.to_string()))
 }
 
-fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveError> {
+fn validate_saved_graphic_work(
+    network: &NodeNetwork,
+    resources: &SavedGraphResources,
+) -> Result<(), GddArchiveError> {
     validate_saved_repeat_work(network)?;
     for node in network.nodes.values() {
         if matches!(&node.implementation, DocumentNodeImplementation::ProtoNode(identifier)
@@ -10344,7 +10430,13 @@ fn validate_saved_graphic_work(network: &NodeNetwork) -> Result<(), GddArchiveEr
         {
             let (text, layout) = saved_artwork_text_literals(node)
                 .ok_or(GddArchiveError::UnsupportedGraphArtworkText)?;
-            validate_artwork_text_layout(text, layout)?;
+            let font = match saved_artwork_font_reference(node) {
+                Some(id) => resources
+                    .resource(id)
+                    .ok_or(GddArchiveError::UnresolvedResource)?,
+                None => &graphite_std::text::FALLBACK_FONT_RESOURCE,
+            };
+            validate_artwork_text_layout(text, layout, font)?;
         }
         let [_, modification] = node.inputs.as_slice() else {
             continue;
@@ -10599,12 +10691,17 @@ fn checked_saved_graphic_node(node: &DocumentNode) -> Option<(DocumentNode, Save
             if identifier == &artwork_text::IDENTIFIER =>
         {
             saved_artwork_text_literals(node)?;
+            let mut replacements = ARTWORK_TEXT_INPUTS
+                .into_iter()
+                .map(|index| Some((index, node.inputs.get(index)?)))
+                .collect::<Option<Vec<_>>>()?;
+            if saved_artwork_font_reference(node).is_some() {
+                let index = artwork_text::FontInput::INDEX;
+                replacements.push((index, node.inputs.get(index)?));
+            }
             (
                 resolve_proto_node_type(artwork_text::IDENTIFIER)?,
-                ARTWORK_TEXT_INPUTS
-                    .into_iter()
-                    .map(|index| Some((index, node.inputs.get(index)?)))
-                    .collect::<Option<Vec<_>>>()?,
+                replacements,
                 SavedGraphicProfile::Text,
             )
         }
@@ -16075,9 +16172,10 @@ mod tests {
                 ..Default::default()
             }
         };
-        validate_saved_graphic_work(&path(2)).expect("admitted open Path");
+        validate_saved_graphic_work(&path(2), &SavedGraphResources::default())
+            .expect("admitted open Path");
         assert!(matches!(
-            validate_saved_graphic_work(&path(1024)),
+            validate_saved_graphic_work(&path(1024), &SavedGraphResources::default()),
             Err(GddArchiveError::GraphLayerPreviewBudget)
         ));
     }
@@ -16807,7 +16905,7 @@ mod tests {
                             .get_mut(absolute_value::ValueInput::INDEX)
                             .expect("numeric Value slot") = invalid_input;
                         assert!(matches!(
-                            InspectedGddV1::render_saved_layer_svg(&invalid, board_id, configuration, output_budget).await,
+                            saved.render_saved_layer_svg(&invalid, board_id, configuration, output_budget).await,
                             Err(GddArchiveError::InvalidEllipseRadiusSource { node, .. }) if node == horizontal_source
                         ));
                     }
@@ -16997,6 +17095,154 @@ mod tests {
                     .registry()
                     .value_equal(graph.document.registry())
             );
+        });
+    }
+
+    #[test]
+    fn at_r14_embedded_font_renders_and_survives_saved_text_edits() {
+        use graphite_graph_craft::document::value::RenderOutputType;
+
+        struct TextLayerMetadata;
+        impl NodeMetadataSource for TextLayerMetadata {
+            fn is_layer(&self, path: &[NodeId], node: NodeId) -> bool {
+                path.is_empty() && node == NodeId(1)
+            }
+
+            fn reference(&self, path: &[NodeId]) -> Option<&str> {
+                (path == [NodeId(1)]).then_some("Merge")
+            }
+        }
+
+        let font_id = ResourceId::from(17_u64);
+        let embedded_font =
+            include_bytes!("../../../../assets/fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf");
+        let render_budget = CpuSvgEvaluationBudget {
+            max_viewport_pixels: 512 * 512,
+            max_output_bytes: 64 * 1024,
+        };
+        futures::executor::block_on(async {
+            let save = |font: Option<&'static [u8]>| async move {
+                let layer = merge_node_definition()
+                    .expect("pinned Merge")
+                    .node_template_input_override([None, Some(NodeInput::node(NodeId(3), 0))])
+                    .into_parts()
+                    .0;
+                let mut text = resolve_proto_node_type(artwork_text::IDENTIFIER)
+                    .expect("pinned Text")
+                    .node_template_input_override([])
+                    .into_parts()
+                    .0;
+                text.inputs[artwork_text::TextInput::INDEX] =
+                    NodeInput::value(TaggedValue::String("Made".into()), false);
+                if font.is_some() {
+                    text.inputs[artwork_text::FontInput::INDEX] =
+                        NodeInput::value(TaggedValue::Resource(font_id), false);
+                }
+                let outline = resolve_proto_node_type(text_to_vector::IDENTIFIER)
+                    .expect("pinned Text to Vector")
+                    .node_template_input_override([Some(NodeInput::node(NodeId(2), 0))])
+                    .into_parts()
+                    .0;
+                let network = NodeNetwork {
+                    exports: vec![NodeInput::node(NodeId(1), 0)],
+                    nodes: [(NodeId(1), layer), (NodeId(2), text), (NodeId(3), outline)]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                };
+                let mut document = document();
+                let storage = HashMapResourceStorage::new();
+                if let Some(font) = font {
+                    document
+                        .add_resource(font_id, font)
+                        .expect("embedded font source");
+                    storage.store(font);
+                }
+                let registry = document
+                    .registry()
+                    .to_resource_registry()
+                    .expect("font registry");
+                document
+                    .commit_from_runtime(&network, &TextLayerMetadata, &registry, &storage)
+                    .expect("persist pinned text graph");
+                let bytes: Arc<[u8]> = document
+                    .export_to_bytes(ExportFormat::Zip, ExportOptions::default(), &storage, None)
+                    .await
+                    .expect("export text archive")
+                    .into();
+                open_gdd_zip(&bytes, budget())
+                    .await
+                    .expect("reopen text archive")
+            };
+            let svg = async |document: &InspectedGddV1| {
+                let output = document
+                    .render_document_canvas_svg(
+                        UVec2::splat(512),
+                        1.,
+                        Some(PTZ::default()),
+                        render_budget,
+                    )
+                    .await
+                    .expect("saved canvas outlines");
+                let RenderOutputType::Svg { svg, image_data } = output.render.data else {
+                    panic!("source SVG output");
+                };
+                assert!(image_data.is_empty());
+                assert!(svg.contains("<path"));
+                svg
+            };
+            let fallback = save(None).await;
+            let embedded = save(Some(embedded_font)).await;
+            let original = svg(&embedded).await;
+            assert_ne!(original, svg(&fallback).await);
+            let nodes = embedded
+                .graph_nodes()
+                .await
+                .expect("addressable embedded text");
+            let node = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(2))
+                .expect("Text");
+            assert_eq!(node.artwork_font_resource(), Some(font_id));
+            let edited = embedded
+                .set_graph_artwork_text_and_size_in_copy(node, "Élan".into(), 30., budget())
+                .await
+                .expect("edit layout against the embedded font");
+            let bytes: Arc<[u8]> = edited
+                .export_archive(ArchiveFormat::Zip, budget().max_archive_bytes)
+                .expect("save edited text")
+                .into();
+            let reopened = open_gdd_zip(&bytes, budget())
+                .await
+                .expect("reopen edited text");
+            let nodes = reopened.graph_nodes().await.expect("same editable graph");
+            let node = nodes
+                .iter()
+                .find(|node| node.local_id == NodeId(2))
+                .expect("Text");
+            assert_eq!(node.artwork_font_resource(), Some(font_id));
+            assert_eq!(
+                reopened
+                    .load_saved_artwork_font(font_id)
+                    .await
+                    .expect("same embedded bytes")
+                    .hash(),
+                ResourceHash::from(embedded_font.as_slice())
+            );
+            assert_ne!(svg(&reopened).await, original);
+
+            let invalid = save(Some(b"invalid font data")).await;
+            assert!(matches!(
+                invalid
+                    .render_document_canvas_svg(
+                        UVec2::splat(512),
+                        1.,
+                        Some(PTZ::default()),
+                        render_budget
+                    )
+                    .await,
+                Err(GddArchiveError::GraphLayerPreviewEvaluation(_))
+            ));
         });
     }
 
@@ -17328,7 +17574,8 @@ mod tests {
                     &mut BTreeSet::new(),
                 )
                 .expect("admit the original Text to Vector branch");
-                validate_saved_graphic_work(&branch).expect("bounded text layout");
+                validate_saved_graphic_work(&branch, &SavedGraphResources::default())
+                    .expect("bounded text layout");
                 graphite_preprocessor::Preprocessor::new()
                     .preprocess(&mut branch, &|_| None)
                     .expect("source compiler preprocessing");

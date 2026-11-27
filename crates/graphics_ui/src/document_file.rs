@@ -8868,7 +8868,14 @@ impl GraphiteDocumentItem {
         v_flex()
             .gap_2()
             .child(Label::new("Artwork text"))
-            .child(Label::new("Source default font").color(Color::Muted))
+            .child(
+                Label::new(if node.artwork_font_resource().is_some() {
+                    "Saved font resource"
+                } else {
+                    "Source default font"
+                })
+                .color(Color::Muted),
+            )
             .child(
                 h_flex().gap_2().child(Label::new("Font size (px)")).child(
                     div()

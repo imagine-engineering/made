@@ -1,4 +1,6 @@
-use std::{fmt, future::Future, ops::Sub, panic::AssertUnwindSafe, sync::Arc};
+use std::{
+    collections::BTreeMap, fmt, future::Future, ops::Sub, panic::AssertUnwindSafe, sync::Arc,
+};
 
 use futures::FutureExt as _;
 use graphite_core_types::{
@@ -11,7 +13,10 @@ use graphite_glam::{DAffine2, DVec2, UVec2};
 use graphite_graph_craft::{
     application_io::{
         PlatformApplicationIo, PlatformEditorApi,
-        resource::{HashMapResourceStorage, ResourceHash, ResourceStorage},
+        resource::{
+            HashMapResourceStorage, LoadResource, Resource, ResourceFuture, ResourceHash,
+            ResourceId, ResourceStorage,
+        },
     },
     document::{
         DocumentNode, DocumentNodeImplementation, NodeId, NodeInput, NodeNetwork,
@@ -1168,20 +1173,70 @@ impl CpuSvgEvaluation {
     }
 }
 
+#[derive(Clone, Default)]
+pub(crate) struct SavedGraphResources {
+    hashes: BTreeMap<ResourceId, ResourceHash>,
+    bytes: BTreeMap<ResourceHash, Resource>,
+}
+
+impl SavedGraphResources {
+    pub(crate) fn insert(&mut self, id: ResourceId, resource: Resource) {
+        let hash = resource.hash();
+        self.hashes.insert(id, hash);
+        self.bytes.entry(hash).or_insert(resource);
+    }
+
+    pub(crate) fn resource(&self, id: ResourceId) -> Option<&Resource> {
+        self.hashes.get(&id).and_then(|hash| self.bytes.get(hash))
+    }
+
+    fn is_empty(&self) -> bool {
+        self.hashes.is_empty()
+    }
+}
+
+impl LoadResource for SavedGraphResources {
+    fn load(&self, hash: ResourceHash) -> ResourceFuture<'_> {
+        Box::pin(std::future::ready(self.bytes.get(&hash).cloned()))
+    }
+}
+
 pub(crate) async fn evaluate_cpu_svg(
     network: &NodeNetwork,
     configuration: RenderConfig,
     budget: CpuSvgEvaluationBudget,
     encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
 ) -> Result<RenderOutput, CpuSvgEvaluationError> {
+    evaluate_cpu_svg_with_resources(
+        network,
+        configuration,
+        budget,
+        encoded_png,
+        &SavedGraphResources::default(),
+    )
+    .await
+}
+
+pub(crate) async fn evaluate_cpu_svg_with_resources(
+    network: &NodeNetwork,
+    configuration: RenderConfig,
+    budget: CpuSvgEvaluationBudget,
+    encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
+    resources: &SavedGraphResources,
+) -> Result<RenderOutput, CpuSvgEvaluationError> {
     AssertUnwindSafe(async {
-        // The private network has either no resource or exactly one sealed PNG.
-        // Its original memory proxy grants no filesystem or host-service authority.
+        // Both resource paths use memory-only proxies to keep rendering independent
+        // of filesystem or host-service access.
         let mut application_io = PlatformApplicationIo::default();
         if let Some((_, input)) = encoded_png {
+            if !resources.is_empty() {
+                return Err(CpuSvgEvaluationError::UnexpectedContract);
+            }
             let storage = HashMapResourceStorage::new();
             storage.store(input.source.encoded_bytes().as_ref());
             application_io.inject_resource_proxy(Box::new(storage));
+        } else if !resources.is_empty() {
+            application_io.inject_resource_proxy(Box::new(resources.clone()));
         }
         let (output, _) = execute_source_render(
             network,
@@ -1189,6 +1244,7 @@ pub(crate) async fn evaluate_cpu_svg(
             budget,
             Arc::new(application_io),
             encoded_png,
+            resources,
         )
         .await?;
         let RenderOutputType::Svg { svg, image_data } = &output.data else {
@@ -1213,14 +1269,20 @@ pub(crate) async fn evaluate_merge_thumbnail(
     budget: CpuSvgEvaluationBudget,
     owner: NodeId,
     monitor: NodeId,
+    resources: &SavedGraphResources,
 ) -> Result<String, CpuSvgEvaluationError> {
     AssertUnwindSafe(async {
+        let mut application_io = PlatformApplicationIo::default();
+        if !resources.is_empty() {
+            application_io.inject_resource_proxy(Box::new(resources.clone()));
+        }
         let (_, executor) = execute_source_render(
             network,
             configuration,
             budget,
-            Arc::new(PlatformApplicationIo::default()),
+            Arc::new(application_io),
             None,
+            resources,
         )
         .await?;
         let observed = executor
@@ -1303,6 +1365,7 @@ async fn execute_source_render(
     budget: CpuSvgEvaluationBudget,
     application_io: Arc<PlatformApplicationIo>,
     encoded_png: Option<(NodeId, &CpuSvgEncodedPngInput)>,
+    resources: &SavedGraphResources,
 ) -> Result<(RenderOutput, DynamicExecutor), CpuSvgEvaluationError> {
     let api = Arc::new(PlatformEditorApi {
         application_io: Some(application_io),
@@ -1312,7 +1375,7 @@ async fn execute_source_render(
     let mut network =
         graphite_interpreted_executor::util::wrap_network_in_scope(network.clone(), api);
     graphite_preprocessor::Preprocessor::new()
-        .preprocess(&mut network, &|_| None)
+        .preprocess(&mut network, &|id| resources.hashes.get(&id).copied())
         .map_err(|error| CpuSvgEvaluationError::Preprocessing(error.to_string()))?;
     let proto = Compiler {}
         .compile_single(network)
@@ -1376,6 +1439,7 @@ impl CanvasGpuRenderer {
         network: &NodeNetwork,
         configuration: RenderConfig,
         budget: CpuSvgEvaluationBudget,
+        resources: &SavedGraphResources,
     ) -> Result<RenderOutput, CanvasGpuError> {
         if configuration.export_format != ExportFormat::Raster
             || configuration.for_export
@@ -1397,12 +1461,21 @@ impl CanvasGpuRenderer {
             return Err(CanvasGpuError::ViewportBudgetExceeded);
         }
         AssertUnwindSafe(async {
+            let application_io = if resources.is_empty() {
+                self.application_io.clone()
+            } else {
+                let mut application_io =
+                    PlatformApplicationIo::new_with_context(executor.context().clone());
+                application_io.inject_resource_proxy(Box::new(resources.clone()));
+                Arc::new(application_io)
+            };
             let (RenderOutput { data, metadata }, _) = execute_source_render(
                 network,
                 configuration,
                 budget,
-                self.application_io.clone(),
+                application_io,
                 None,
+                resources,
             )
             .await?;
             let RenderOutputType::Texture(texture) = data else {
