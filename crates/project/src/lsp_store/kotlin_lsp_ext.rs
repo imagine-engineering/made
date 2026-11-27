@@ -533,6 +533,14 @@ pub(super) fn fallback_log_health(
         return (!memory_failed.swap(true, Ordering::Relaxed))
             .then_some((proto::ServerHealth::Error, FALLBACK_MEMORY_MESSAGE));
     }
+    if message.contains(
+        "Internal error: java.lang.NullPointerException: null cannot be cast to non-null type V of org.jetbrains.kotlin.util.slicedMap.OpenAddressLinearProbingHashTable",
+    ) {
+        return Some((
+            proto::ServerHealth::Error,
+            "Kotlin fallback analysis failed. Restart the server for this project, view its logs, or select another Kotlin server.",
+        ));
+    }
     if message.contains("KotlinFrontEndException") {
         return Some((
             proto::ServerHealth::Error,

@@ -2881,7 +2881,7 @@ async fn kotlin_early_import_success_refreshes_after_server_registration(cx: &mu
 
 #[cfg(feature = "jvm-tools")]
 #[gpui::test]
-async fn kotlin_fallback_stderr_reports_heap_exhaustion_once(cx: &mut TestAppContext) {
+async fn kotlin_fallback_reports_compiler_and_heap_failures(cx: &mut TestAppContext) {
     use language::{Language, LanguageConfig, LanguageMatcher};
     use rpc::proto;
 
@@ -2959,6 +2959,28 @@ async fn kotlin_fallback_stderr_reports_heap_exhaustion_once(cx: &mut TestAppCon
     cx.run_until_parked();
     assert!(health_events.lock().is_empty());
 
+    let compiler_error = "async2    Internal error: java.lang.NullPointerException: null cannot be cast to non-null type V of org.jetbrains.kotlin.util.slicedMap.OpenAddressLinearProbingHashTable";
+    for message in [
+        "async2    Internal error: java.lang.NullPointerException: /private/host/path",
+        "\tat org.jetbrains.kotlin.util.slicedMap.OpenAddressLinearProbingHashTable.forEach(OpenAddressLinearProbingHashTable.kt:123)",
+        compiler_error,
+        "Caused by: java.lang.NullPointerException: null cannot be cast to non-null type V of org.jetbrains.kotlin.util.slicedMap.OpenAddressLinearProbingHashTable",
+    ] {
+        server.notify::<lsp::notification::LogMessage>(lsp::LogMessageParams {
+            typ: lsp::MessageType::ERROR,
+            message: message.into(),
+        });
+    }
+    cx.run_until_parked();
+    let compiler_health = (
+        proto::ServerHealth::Error as i32,
+        "Kotlin fallback analysis failed. Restart the server for this project, view its logs, or select another Kotlin server.".to_string(),
+    );
+    assert_eq!(
+        &*health_events.lock(),
+        std::slice::from_ref(&compiler_health)
+    );
+
     server
         .write_stderr(
             "Exception: java.lang.OutOfMemoryError thrown from the UncaughtExceptionHandler in thread \"async2\" at /private/host/path\n\
@@ -2971,14 +2993,21 @@ async fn kotlin_fallback_stderr_reports_heap_exhaustion_once(cx: &mut TestAppCon
         typ: lsp::MessageType::ERROR,
         message: "KotlinFrontEndException at /private/host/path".into(),
     });
+    server.notify::<lsp::notification::LogMessage>(lsp::LogMessageParams {
+        typ: lsp::MessageType::ERROR,
+        message: compiler_error.into(),
+    });
     cx.run_until_parked();
 
     assert_eq!(
         *health_events.lock(),
-        [(
-            proto::ServerHealth::Error as i32,
-            "Kotlin fallback ran out of memory. Review its JVM memory settings on the project host, then restart it or select another Kotlin server.".to_string(),
-        )]
+        [
+            compiler_health,
+            (
+                proto::ServerHealth::Error as i32,
+                "Kotlin fallback ran out of memory. Review its JVM memory settings on the project host, then restart it or select another Kotlin server.".to_string(),
+            ),
+        ]
     );
 }
 
