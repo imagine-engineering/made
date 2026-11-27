@@ -43,7 +43,7 @@ use crate::{
         parse_rust_toolchain, parse_rust_toolchain_configuration, parse_rustc_verbose_version,
         validate_cargo_snapshot_bounds, workspace_from_metadata,
     },
-    trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent},
+    trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent, TrustedWorktreesStore},
     worktree_store::{WorktreeStore, WorktreeStoreEvent},
 };
 
@@ -4544,11 +4544,7 @@ impl CargoWorkspaceStore {
             store.clear_metadata_facts();
         }));
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-            subscriptions.push(cx.subscribe(&trusted_worktrees, |store, _, _, cx| {
-                drop(store.configuration_watch.take());
-                store.configuration_watch_revision = None;
-                store.invalidate(cx);
-            }));
+            subscriptions.push(cx.subscribe(&trusted_worktrees, Self::handle_trust_event));
         }
         Self {
             mode: CargoWorkspaceStoreMode::Local {
@@ -4677,11 +4673,7 @@ impl CargoWorkspaceStore {
             store.clear_metadata_facts();
         }));
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-            subscriptions.push(cx.subscribe(&trusted_worktrees, |store, _, _, cx| {
-                store.revision = store.revision.wrapping_add(1);
-                store.clear_metadata_facts();
-                cx.emit(CargoWorkspaceStoreEvent::Invalidated);
-            }));
+            subscriptions.push(cx.subscribe(&trusted_worktrees, Self::handle_trust_event));
         }
         Self {
             mode: CargoWorkspaceStoreMode::Remote {
@@ -4706,6 +4698,22 @@ impl CargoWorkspaceStore {
             configuration_watch_revision: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    fn handle_trust_event(
+        &mut self,
+        _: Entity<TrustedWorktreesStore>,
+        event: &TrustedWorktreesEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let (TrustedWorktreesEvent::Trusted(worktree_store, _)
+        | TrustedWorktreesEvent::Restricted(worktree_store, _)) = event;
+        if *worktree_store != self.worktree_store.downgrade() {
+            return;
+        }
+        drop(self.configuration_watch.take());
+        self.configuration_watch_revision = None;
+        self.invalidate(cx);
     }
 
     fn handle_worktree_event(
@@ -13599,6 +13607,32 @@ printf 'metadata\n'
                 .is_some_and(|(_, current)| current)
         }));
 
+        let unrelated_worktree_store = cx.new(|cx| {
+            WorktreeStore::local(
+                false,
+                fs::FakeFs::new(cx.background_executor().clone()),
+                crate::worktree_store::WorktreeIdCounter::get(cx),
+            )
+        });
+        trust.update(cx, |trust, cx| {
+            trust.trust(
+                &unrelated_worktree_store,
+                [PathTrust::AbsPath(root.join("unrelated"))]
+                    .into_iter()
+                    .collect(),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+        assert!(
+            store.read_with(cx, |store, cx| {
+                store
+                    .cached_snapshot(cx)
+                    .is_some_and(|(_, current)| current)
+            }),
+            "trusting another project must keep the current Cargo snapshot"
+        );
+
         let (sender, receiver) = futures::channel::oneshot::channel();
         let mut sender = Some(sender);
         let subscription = cx.update(|cx| {
@@ -13642,6 +13676,19 @@ printf 'metadata\n'
             store
                 .cached_snapshot(cx)
                 .is_some_and(|(_, current)| current)
+        }));
+        trust.update(cx, |trust, cx| {
+            trust.restrict(
+                worktree_store.downgrade(),
+                [PathTrust::Worktree(worktree_id)].into_iter().collect(),
+                cx,
+            );
+        });
+        assert!(store.read_with(cx, |store, cx| {
+            store.configuration_watch.is_none()
+                && store
+                    .cached_snapshot(cx)
+                    .is_some_and(|(_, current)| !current)
         }));
     }
 
