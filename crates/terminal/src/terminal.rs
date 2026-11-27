@@ -827,12 +827,14 @@ impl NativeTerminalEnvironment {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-use native_task_helper::{
-    linux_coverage_completion::{
-        CoverageTaskCompletion, CoverageTaskReportReservation, SealedCoverageTaskReport,
-    },
-    task_actor::OriginalTaskActor,
+pub use native_task_helper::{
+    linux_coverage_completion::{CoverageTaskReportReservation, SealedCoverageTaskReport},
     task_completion::TaskBuildInvocation,
+};
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+use native_task_helper::{
+    linux_coverage_completion::CoverageTaskCompletion, task_actor::OriginalTaskActor,
 };
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]

@@ -388,7 +388,7 @@ fn report_replacement(directory: &Path) -> Result<()> {
     })
 }
 
-fn collector_terminal(directory: &Path) -> Result<()> {
+fn collector_invocation(directory: &Path, report: &Path) -> Result<TaskBuildInvocation> {
     for (name, bytes) in [
         (
             "Cargo.toml",
@@ -433,7 +433,6 @@ fn collector_terminal(directory: &Path) -> Result<()> {
 
     let cargo = std::env::var_os("RUST_TOOLS_COVERAGE_CARGO")
         .context("The independently installed Cargo is required")?;
-    let report = CoverageTaskReportReservation::new(task::MAX_TASK_ARTIFACT_BYTES as usize)?;
     let mut environment = BTreeMap::new();
     for name in [
         "PATH",
@@ -451,14 +450,13 @@ fn collector_terminal(directory: &Path) -> Result<()> {
             .context("Fixture path is not Unicode")?
             .into(),
     );
-    let invocation = TaskBuildInvocation::new(
+    Ok(TaskBuildInvocation::new(
         cargo.into(),
         vec![
             "llvm-cov".into(),
             "--json".into(),
             "--output-path".into(),
             report
-                .path()
                 .to_str()
                 .context("Report path is not Unicode")?
                 .into(),
@@ -470,7 +468,12 @@ fn collector_terminal(directory: &Path) -> Result<()> {
         ],
         directory.to_path_buf(),
         environment,
-    )?;
+    )?)
+}
+
+fn collector_terminal(directory: &Path) -> Result<()> {
+    let report = CoverageTaskReportReservation::new(task::MAX_TASK_ARTIFACT_BYTES as usize)?;
+    let invocation = collector_invocation(directory, &report.path())?;
     terminal_handoff(false, invocation, report, |bytes| {
         let report: serde_json::Value = serde_json::from_slice(bytes)?;
         ensure!(
@@ -498,6 +501,336 @@ fn collector_terminal(directory: &Path) -> Result<()> {
     })
 }
 
+fn headless_report_group(path: String) -> task::TaskArtifactGroup {
+    task::TaskArtifactGroup {
+        format: "llvm-cov-json-v1".into(),
+        files: BTreeMap::from([(
+            "report".into(),
+            task::TaskArtifact {
+                kind: task::TaskArtifactKind::Data,
+                path,
+                max_bytes: task::MAX_TASK_ARTIFACT_BYTES,
+            },
+        )]),
+    }
+}
+
+async fn headless_failure_controls(
+    host: &gpui::Entity<crate::HeadlessProject>,
+    directory: &Path,
+    cx: &mut gpui::AsyncApp,
+) -> Result<()> {
+    use project::source_coverage::{SourceCoverageSourceChanged, SourceCoverageStatus};
+
+    for (command, expected) in [
+        (r#"printf '{}' > "$2"; exit 5"#, SourceCoverageStatus::Error),
+        (
+            r#"printf '\n// source changed during coverage\n' >> src/bin/fixture.rs &&
+                /bin/cat expected-coverage.json > "$2""#,
+            SourceCoverageStatus::Stale,
+        ),
+    ] {
+        let run_id = uuid::Uuid::new_v4();
+        let path = format!("target/zed-coverage-{}.json", run_id.simple());
+        let group = headless_report_group(path.clone());
+        let launch = task::SpawnInTerminal {
+            command: Some("/bin/sh".into()),
+            args: vec![
+                "-c".into(),
+                command.into(),
+                "fixture".into(),
+                "--output-path".into(),
+                path,
+            ],
+            cwd: Some(directory.to_path_buf()),
+            label: "Coverage rejection fixture".into(),
+            ..Default::default()
+        };
+        let result = host
+            .update(cx, |host, cx| {
+                host.run_host_coverage_task(run_id.to_string(), launch, &group, cx)
+            })?
+            .await;
+        let error = result.err().context("A rejected Task published coverage")?;
+        if expected == SourceCoverageStatus::Stale {
+            ensure!(
+                error.is::<SourceCoverageSourceChanged>(),
+                "Expected the mapped source to expire, got: {error:#}"
+            );
+        } else {
+            ensure!(
+                error.to_string().contains("exit status: 5"),
+                "The observed nonzero exit was lost: {error:#}"
+            );
+        }
+        let status = host.read_with(cx, |host, cx| {
+            host.source_coverage_store
+                .read(cx)
+                .cached_snapshots()
+                .next()
+                .map(|snapshot| snapshot.status)
+        });
+        ensure!(
+            status == Some(expected),
+            "Unexpected rejected Task status: {status:?}"
+        );
+    }
+    Ok(())
+}
+
+async fn headless_cancel_control(
+    host: &gpui::Entity<crate::HeadlessProject>,
+    directory: &Path,
+    cx: &mut gpui::AsyncApp,
+) -> Result<()> {
+    use project::source_coverage::SourceCoverageStatus;
+
+    let marker = directory.with_extension("coverage-workload");
+    File::options().write(true).create_new(true).open(&marker)?;
+    let run_id = uuid::Uuid::new_v4();
+    let path = format!("target/zed-coverage-{}.json", run_id.simple());
+    let group = headless_report_group(path.clone());
+    let launch = task::SpawnInTerminal {
+        command: Some("/bin/sh".into()),
+        args: vec![
+            "-c".into(),
+            r#"printf '%s' $$ > "$1"; exec /bin/sleep 60"#.into(),
+            "fixture".into(),
+            marker.to_str().context("Non-Unicode fixture path")?.into(),
+            "--output-path".into(),
+            path,
+        ],
+        cwd: Some(directory.to_path_buf()),
+        label: "Coverage cancellation fixture".into(),
+        ..Default::default()
+    };
+    let task = host.update(cx, |host, cx| {
+        host.run_host_coverage_task(run_id.to_string(), launch, &group, cx)
+    })?;
+    let child = {
+        let mut child = None;
+        for _ in 0..200 {
+            let value = std::fs::read_to_string(&marker)?;
+            if !value.is_empty() {
+                child = Some(value.parse::<u32>()?);
+                break;
+            }
+            cx.background_executor()
+                .timer(Duration::from_millis(10))
+                .await;
+        }
+        child.context("Coverage workload never started")?
+    };
+    std::fs::remove_file(marker)?;
+    drop(task);
+    for _ in 0..200 {
+        let status = host.read_with(cx, |host, cx| {
+            host.source_coverage_store
+                .read(cx)
+                .cached_snapshots()
+                .next()
+                .map(|snapshot| snapshot.status)
+        });
+        if status == Some(SourceCoverageStatus::Cancelled)
+            && !Path::new("/proc").join(child.to_string()).exists()
+        {
+            return Ok(());
+        }
+        cx.background_executor()
+            .timer(Duration::from_millis(10))
+            .await;
+    }
+    anyhow::bail!("Dropping the host capture did not cancel and reap its workload")
+}
+
+fn headless_collector(directory: &Path) -> Result<()> {
+    use gpui::{AppContext as _, UpdateGlobal as _};
+    use project::source_coverage::SourceCoverageStatus;
+    use project::worktree_store::{WorktreeIdCounter, WorktreeStore};
+    use std::sync::Arc;
+
+    let directory = std::fs::canonicalize(directory)?;
+    let run_id = uuid::Uuid::new_v4();
+    let artifact_path = format!("target/zed-coverage-{}.json", run_id.simple());
+    let invocation = collector_invocation(&directory, Path::new(&artifact_path))?;
+    let logical_report = directory.join(&artifact_path);
+    std::fs::create_dir_all(directory.join("target"))?;
+    std::fs::write(directory.join(".gitignore"), "/target/\n")?;
+    std::fs::write(&logical_report, b"unrelated stale report")?;
+    std::fs::write(
+        directory.join("expected-coverage.json"),
+        include_str!("../../project/test_data/source_coverage/llvm3-run.json").replace(
+            "/workspace",
+            directory.to_str().context("Non-Unicode fixture root")?,
+        ),
+    )?;
+    let launch = task::SpawnInTerminal {
+        command: Some(invocation.program().to_string_lossy().into_owned()),
+        args: invocation.arguments().to_vec(),
+        cwd: Some(directory.clone()),
+        env: invocation.environment().clone().into_iter().collect(),
+        label: "Run with Coverage".into(),
+        required_experimental_features: vec!["rust-coverage-experimental".into()],
+        ..Default::default()
+    };
+    let group = headless_report_group(artifact_path);
+
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    gpui_platform::headless().run(move |cx| {
+        release_channel::init(semver::Version::new(1, 16, 2), cx);
+        gpui_tokio::init(cx);
+        crate::HeadlessProject::init(cx);
+        let opt_in = settings::SettingsStore::update_global(cx, |store, cx| {
+            store.register_setting::<feature_flags::FeatureFlagsSettings>();
+            store
+                .set_user_settings(
+                    r#"{"feature_flags":{"rust-coverage-experimental":"on"}}"#,
+                    cx,
+                )
+                .result()
+        });
+        project::trusted_worktrees::init(
+            [(None, [directory.clone()].into_iter().collect())]
+                .into_iter()
+                .collect(),
+            cx,
+        );
+        git::GitHostingProviderRegistry::set_global(
+            Arc::new(git::GitHostingProviderRegistry::new()),
+            cx,
+        );
+        git_hosting_providers::init(cx);
+        dap_adapters::init(cx);
+        cx.set_global(terminal::HeadlessTerminal(true));
+        let (incoming, incoming_receiver) = futures::channel::mpsc::unbounded();
+        let (outgoing, outgoing_receiver) = futures::channel::mpsc::unbounded();
+        let session = remote::RemoteClient::proto_client_from_channels(
+            incoming_receiver,
+            outgoing,
+            cx,
+            "coverage fixture host",
+            false,
+        );
+        let client = remote::RemoteClient::proto_client_from_channels(
+            outgoing_receiver,
+            incoming,
+            cx,
+            "coverage fixture client",
+            false,
+        );
+        WorktreeStore::init_remote(&client);
+        let client_worktrees = cx.new(|cx| {
+            WorktreeStore::remote(
+                true,
+                client.clone(),
+                proto::REMOTE_SERVER_PROJECT_ID,
+                util::paths::PathStyle::local(),
+                WorktreeIdCounter::get(cx),
+            )
+        });
+        client.subscribe_to_entity(proto::REMOTE_SERVER_PROJECT_ID, &client_worktrees);
+        let fs = Arc::new(fs::RealFs::new(None, cx.background_executor().clone()));
+        let languages = Arc::new(language::LanguageRegistry::new(
+            cx.background_executor().clone(),
+        ));
+        let host = cx.new(|cx| {
+            crate::HeadlessProject::new(
+                crate::HeadlessAppState {
+                    session,
+                    fs,
+                    languages,
+                    http_client: Arc::new(http_client::BlockedHttpClient),
+                    node_runtime: node_runtime::NodeRuntime::unavailable(),
+                    extension_host_proxy: Arc::new(extension::ExtensionHostProxy::new()),
+                    startup_time: std::time::Instant::now(),
+                },
+                true,
+                cx,
+            )
+        });
+        cx.spawn(async move |cx| {
+            let _client_worktrees = client_worktrees;
+            let deadline = cx.background_executor().timer(Duration::from_secs(20));
+            let stage = std::cell::Cell::new("registering the worktree");
+            let run = async {
+                opt_in?;
+                let worktrees = host.read_with(cx, |host, _| host.worktree_store.clone());
+                let (worktree, _) = worktrees
+                    .update(cx, |worktrees, cx| {
+                        worktrees.find_or_create_worktree(&directory, true, cx)
+                    })
+                    .await?;
+                stage.set("scanning the worktree");
+                worktree
+                    .read_with(cx, |worktree, _| {
+                        worktree
+                            .as_local()
+                            .context("Expected a local host worktree")
+                            .map(|tree| tree.scan_complete())
+                    })?
+                    .await;
+                stage.set("running the Cargo LLVM collector");
+                let snapshot = host
+                    .update(cx, |host, cx| {
+                        host.run_host_coverage_task(run_id.to_string(), launch, &group, cx)
+                    })?
+                    .await?;
+                ensure!(
+                    matches!(
+                        snapshot.status,
+                        SourceCoverageStatus::Current | SourceCoverageStatus::Partial
+                    ),
+                    "Unexpected coverage status: {:?}",
+                    snapshot.status
+                );
+                let file = snapshot
+                    .files
+                    .iter()
+                    .find(|file| file.path.path.as_std_path() == Path::new("src/bin/fixture.rs"))
+                    .context("Host report is missing the selected Rust source")?;
+                ensure!(
+                    file.covered_lines == 3 && file.uncovered_lines == 0,
+                    "Expected three covered Rust lines, got {} covered and {} uncovered",
+                    file.covered_lines,
+                    file.uncovered_lines,
+                );
+                let cached = host.read_with(cx, |host, cx| {
+                    host.source_coverage_store
+                        .read(cx)
+                        .cached_snapshots()
+                        .any(|cached| cached == &snapshot)
+                });
+                ensure!(
+                    cached,
+                    "The authoritative provider did not publish its result"
+                );
+                ensure!(
+                    std::fs::read(&logical_report)? == b"unrelated stale report",
+                    "The host collected through the logical workspace report"
+                );
+                stage.set("cancelling the active workload");
+                headless_cancel_control(&host, &directory, cx).await?;
+                stage.set("checking failed and stale runs");
+                headless_failure_controls(&host, &directory, cx).await?;
+                Ok(())
+            };
+            let result = match futures::future::select(Box::pin(run), deadline).await {
+                futures::future::Either::Left((result, _)) => result,
+                futures::future::Either::Right(_) => Err(anyhow::anyhow!(
+                    "Headless Coverage Task fixture timed out while {}",
+                    stage.get()
+                )),
+            };
+            if let Err(error) = send.send(result) {
+                log::error!("Headless Coverage Task fixture lost its caller: {error}");
+            }
+            cx.update(|cx| cx.quit());
+        })
+        .detach();
+    });
+    receive.recv()?
+}
+
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Scenario {
     TerminalChildExit,
@@ -508,6 +841,7 @@ pub enum Scenario {
     HeadlessTerminal,
     CollectorTerminal,
     ReportReplacement,
+    HeadlessCollector,
 }
 
 pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
@@ -524,5 +858,6 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::HeadlessTerminal => shell_terminal(directory, true),
         Scenario::CollectorTerminal => collector_terminal(directory),
         Scenario::ReportReplacement => report_replacement(directory),
+        Scenario::HeadlessCollector => headless_collector(directory),
     }
 }

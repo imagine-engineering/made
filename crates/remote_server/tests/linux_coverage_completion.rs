@@ -96,3 +96,9 @@ fn coverage_receipt_binds_to_the_original_headless_terminal_exit() -> io::Result
 fn authenticated_pty_terminal_produces_the_rust_coverage_report() -> io::Result<()> {
     run_terminal_fixture("collector-terminal")
 }
+
+#[test]
+#[ignore = "requires an independently built host and the pinned Linux coverage toolchain"]
+fn headless_task_store_publishes_the_authenticated_rust_coverage_report() -> io::Result<()> {
+    run_terminal_fixture("headless-collector")
+}

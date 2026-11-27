@@ -101,6 +101,25 @@ pub struct HeadlessAppState {
 }
 
 impl HeadlessProject {
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn run_host_coverage_task(
+        &self,
+        run_id: String,
+        launch: task::SpawnInTerminal,
+        group: &task::TaskArtifactGroup,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<project::source_coverage::SourceCoverageSnapshot>>> {
+        self.task_store.update(cx, |store, cx| {
+            store.run_host_coverage_task(
+                self.rust_coverage_provider_store.clone(),
+                run_id,
+                launch,
+                group,
+                cx,
+            )
+        })
+    }
+
     #[cfg(feature = "jvm-tools")]
     pub(crate) fn observe_jvm_transport(
         &mut self,

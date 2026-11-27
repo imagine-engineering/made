@@ -36,6 +36,19 @@ const MAX_RUST_COVERAGE_EXPORTS: usize = 16;
 #[cfg(any(test, feature = "test-support"))]
 static LOCAL_RUST_COVERAGE_INTERPRET_CALLS: AtomicU64 = AtomicU64::new(0);
 
+fn resolve_reported_source(
+    worktree_id: worktree::WorktreeId,
+    root: &Path,
+    absolute_path: &Path,
+) -> Option<ProjectPath> {
+    let relative = absolute_path.strip_prefix(root).ok()?;
+    let path = util::rel_path::RelPath::new(relative, util::paths::PathStyle::local()).ok()?;
+    Some(ProjectPath {
+        worktree_id,
+        path: path.into_arc(),
+    })
+}
+
 #[cfg(any(test, feature = "test-support"))]
 pub fn local_rust_coverage_interpret_calls_for_test() -> u64 {
     LOCAL_RUST_COVERAGE_INTERPRET_CALLS.load(Ordering::Relaxed)
@@ -1011,6 +1024,99 @@ impl RustCoverageProviderStore {
         })
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn owns_host_task_worktrees(&self, worktrees: &Entity<WorktreeStore>) -> bool {
+        matches!(self.mode, RustCoverageProviderStoreMode::Local)
+            && self.worktree_store == *worktrees
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn publish_host_task_report(
+        &self,
+        capture: &RustCoverageTaskCapture,
+        report: terminal::SealedCoverageTaskReport,
+        observer_released: async_channel::Sender<()>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<SourceCoverageSnapshot>>> {
+        anyhow::ensure!(
+            capture.provider.entity_id() == cx.entity_id()
+                && self.task_capture_current(capture, cx),
+            COVERAGE_TASK_EXPIRED_DIAGNOSTIC
+        );
+        let token = capture.token.get();
+        let cancellation = capture.cancellation.clone();
+        let Some(CoverageMappedSourceBaselineState::Ready(baseline)) =
+            capture.source_baseline.as_ref()
+        else {
+            bail!("Coverage Task source baseline was not prepared");
+        };
+        let baseline = baseline.clone();
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Coverage filesystem is unavailable")?;
+        let executor = cx.background_executor().clone();
+        Ok(cx.spawn(async move |this, cx| {
+            let verification = cx.background_spawn(async move {
+                let verification = async {
+                    let bytes = report.read()?;
+                    let snapshot = parse_coverage_artifact(
+                        token.project_generation,
+                        token.generation,
+                        &bytes,
+                        |absolute_path| {
+                            baseline.roots.iter().find_map(|root| {
+                                resolve_reported_source(root.id(), root.abs_path(), absolute_path)
+                            })
+                        },
+                    )?;
+                    let paths = snapshot
+                        .files
+                        .iter()
+                        .map(|file| file.path.clone())
+                        .collect::<Vec<_>>();
+                    baseline
+                        .validate_reported_disk_sources(&paths, filesystem.as_ref(), &cancellation)
+                        .await?;
+                    Ok((snapshot, baseline, cancellation))
+                };
+                match futures::future::select(
+                    Box::pin(verification),
+                    Box::pin(executor.timer(std::time::Duration::from_secs(30))),
+                )
+                .await
+                {
+                    futures::future::Either::Left((result, _)) => result,
+                    futures::future::Either::Right(_) => {
+                        bail!("Coverage source publication verification timed out")
+                    }
+                }
+            });
+            let (snapshot, baseline, cancellation) = verification.await?;
+            this.update(cx, |store, cx| {
+                anyhow::ensure!(
+                    !observer_released.is_closed()
+                        && !cancellation.load(Ordering::Relaxed)
+                        && store.is_run_current(token, cx)
+                        && !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                    COVERAGE_TASK_EXPIRED_DIAGNOSTIC
+                );
+                baseline.validate_buffers(&snapshot, cx)?;
+                store.source_coverage_store.update(cx, |store, cx| {
+                    store.validate_snapshot_version(
+                        &snapshot,
+                        token
+                            .request_version
+                            .context("Rust coverage admission is missing")?,
+                    )?;
+                    store.publish(snapshot.clone(), cx)
+                })?;
+                Ok(snapshot)
+            })?
+        }))
+    }
+
     fn complete_local_task_capture_with_sources(
         &mut self,
         mut capture: RustCoverageTaskCapture,
@@ -1508,16 +1614,7 @@ impl RustCoverageProviderStore {
                     loaded_text.as_bytes(),
                     |absolute_path| {
                         roots.iter().find_map(|(worktree_id, root)| {
-                            let relative = absolute_path.strip_prefix(root).ok()?;
-                            let path = util::rel_path::RelPath::new(
-                                relative,
-                                util::paths::PathStyle::local(),
-                            )
-                            .ok()?;
-                            Some(ProjectPath {
-                                worktree_id: *worktree_id,
-                                path: path.as_ref().into(),
-                            })
+                            resolve_reported_source(*worktree_id, root, absolute_path)
                         })
                     },
                 )

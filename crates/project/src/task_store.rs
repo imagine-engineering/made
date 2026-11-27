@@ -846,6 +846,469 @@ pub fn validate_experimental_task_requirements(
     Ok(())
 }
 
+#[cfg(feature = "rust-coverage")]
+fn validate_coverage_task_declaration(
+    run_id: &str,
+    launch: &task::SpawnInTerminal,
+    group: &task::TaskArtifactGroup,
+) -> anyhow::Result<task::TaskArtifact> {
+    anyhow::ensure!(
+        run_id.len() == 36
+            && run_id.bytes().enumerate().all(|(index, byte)| {
+                if matches!(index, 8 | 13 | 18 | 23) {
+                    byte == b'-'
+                } else {
+                    byte.is_ascii_hexdigit()
+                }
+            })
+            && run_id.bytes().any(|byte| byte != b'0' && byte != b'-'),
+        "Coverage Task run identity is invalid"
+    );
+    anyhow::ensure!(
+        group.files.len() == 1,
+        "Coverage capture requires exactly one report role"
+    );
+    group.with_resolved_files(group.files.clone())?;
+    let artifact = group
+        .files
+        .get("report")
+        .context("Coverage capture requires the report role")?
+        .clone();
+    let invocation_suffix = format!("-{}", run_id.replace('-', "").to_ascii_lowercase());
+    anyhow::ensure!(
+        artifact.kind == task::TaskArtifactKind::Data
+            && Path::new(&artifact.path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| stem.ends_with(&invocation_suffix))
+            && launch
+                .args
+                .iter()
+                .filter(|argument| *argument == &artifact.path)
+                .count()
+                == 1,
+        "Coverage report must be uniquely bound to this Task invocation"
+    );
+    Ok(artifact)
+}
+
+#[cfg(feature = "rust-coverage")]
+fn begin_coverage_task_capture<Owner: EventEmitter<crate::Event> + 'static>(
+    provider: &Entity<crate::rust_coverage_provider::RustCoverageProviderStore>,
+    buffer_store: &Entity<BufferStore>,
+    worktree_store: &Entity<WorktreeStore>,
+    run_id: String,
+    launch: &task::SpawnInTerminal,
+    artifact: task::TaskArtifact,
+    working_directory: Option<PathBuf>,
+    cx: &mut Context<Owner>,
+) -> anyhow::Result<crate::rust_coverage_provider::RustCoverageTaskCapture> {
+    use crate::source_coverage::SourceCoverageStatus;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    crate::rust_coverage_provider::validate_capture_task_environment(&launch.env)?;
+    let token = provider.update(cx, |provider, cx| provider.begin_task_capture_run(cx))?;
+    let token = std::rc::Rc::new(std::cell::Cell::new(token));
+    let admitted_output = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let cancellation = Arc::new(AtomicBool::new(false));
+    let (stop, stopped) = async_channel::bounded::<()>(1);
+    let provider_cleanup = provider.downgrade();
+    let token_cleanup = token.clone();
+    let cancellation_cleanup = cancellation.clone();
+    let admitted_output_cleanup = admitted_output.clone();
+    cx.spawn(async move |_, cx| match stopped.recv().await {
+        Err(_) if cancellation_cleanup.load(Ordering::Relaxed) => {
+            if let Err(error) = provider_cleanup.update(cx, |provider, cx| {
+                provider.finish_task_capture_status_with_output(
+                    token_cleanup.get(),
+                    SourceCoverageStatus::Cancelled,
+                    "Coverage Task capture was cancelled",
+                    admitted_output_cleanup.borrow().as_ref(),
+                    cx,
+                );
+            }) {
+                log::debug!("Coverage capture owner closed during cancellation: {error:#}");
+            }
+        }
+        Ok(()) | Err(_) => {}
+    })
+    .detach();
+    let mut subscriptions = vec![cx.subscribe(&cx.entity(), {
+        let provider = provider.clone();
+        let token = token.clone();
+        let cancellation = cancellation.clone();
+        let stop = stop.clone();
+        move |_, _, event, cx| {
+            let status = match event {
+                crate::Event::Closed
+                | crate::Event::DisconnectedFromHost
+                | crate::Event::DisconnectedFromRemote { .. } => {
+                    Some(SourceCoverageStatus::Disconnected)
+                }
+                crate::Event::WorktreeRemoved(_)
+                | crate::Event::WorktreeOrderChanged
+                | crate::Event::WorktreePathsChanged { .. }
+                | crate::Event::RemoteIdChanged(_)
+                | crate::Event::Rejoined
+                | crate::Event::Reshared
+                | crate::Event::HostReshared
+                | crate::Event::UpstreamSessionChanged => Some(SourceCoverageStatus::Stale),
+                _ => None,
+            };
+            if let Some(status) = status {
+                cancellation.store(true, Ordering::Relaxed);
+                provider.update(cx, |provider, cx| {
+                    provider.finish_task_capture_status(
+                        token.get(),
+                        status,
+                        crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
+                        cx,
+                    )
+                });
+                stop.close();
+            }
+        }
+    })];
+    subscriptions.push(cx.observe_global::<feature_flags::FeatureFlagStore>({
+        let provider = provider.clone();
+        let token = token.clone();
+        let cancellation = cancellation.clone();
+        let stop = stop.clone();
+        move |_, cx| {
+            if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
+                cancellation.store(true, Ordering::Relaxed);
+                stop.close();
+                provider.update(cx, |provider, cx| {
+                    provider.finish_task_capture_status(
+                        token.get(),
+                        SourceCoverageStatus::Stale,
+                        crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
+                        cx,
+                    )
+                });
+            }
+        }
+    }));
+    subscriptions.push(provider.update(cx, |provider, cx| {
+        provider.subscribe_capture_buffer_changes(buffer_store, cx)
+    }));
+    subscriptions.push(cx.on_release({
+        let cancellation = cancellation.clone();
+        let stop = stop.clone();
+        move |_, _| {
+            cancellation.store(true, Ordering::Relaxed);
+            stop.close();
+        }
+    }));
+    if let Some(trust) = crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx) {
+        let worktree_store = worktree_store.downgrade();
+        subscriptions.push(cx.subscribe(&trust, {
+            let provider = provider.clone();
+            let token = token.clone();
+            let cancellation = cancellation.clone();
+            let stop = stop.clone();
+            move |_, _, event, cx| {
+                let (changed_store, status) = match event {
+                    crate::trusted_worktrees::TrustedWorktreesEvent::Restricted(store, _) => {
+                        (store, SourceCoverageStatus::Restricted)
+                    }
+                    crate::trusted_worktrees::TrustedWorktreesEvent::Trusted(store, _) => {
+                        (store, SourceCoverageStatus::Stale)
+                    }
+                };
+                if *changed_store == worktree_store {
+                    cancellation.store(true, Ordering::Relaxed);
+                    provider.update(cx, |provider, cx| {
+                        provider.finish_task_capture_status(
+                            token.get(),
+                            status,
+                            crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
+                            cx,
+                        )
+                    });
+                    stop.close();
+                }
+            }
+        }));
+    }
+    Ok(crate::rust_coverage_provider::RustCoverageTaskCapture {
+        provider: provider.clone(),
+        token,
+        run_id,
+        task_id: launch.id.clone(),
+        artifact,
+        path: None,
+        admitted_output,
+        command: launch.command.clone(),
+        arguments: launch.args.clone(),
+        environment: launch.env.clone(),
+        working_directory,
+        admitted: false,
+        source_baseline: None,
+        cancellation,
+        stop,
+        _subscriptions: subscriptions,
+        armed: true,
+    })
+}
+
+#[cfg(feature = "rust-coverage")]
+fn admit_coverage_task_sources(
+    capture: &mut crate::rust_coverage_provider::RustCoverageTaskCapture,
+    path: crate::ProjectPath,
+    working_directory: PathBuf,
+    buffer_store: &Entity<BufferStore>,
+    cx: &App,
+) -> anyhow::Result<()> {
+    capture.path = Some(path);
+    capture.working_directory = Some(working_directory);
+    capture.token.set(
+        capture
+            .provider
+            .read(cx)
+            .seal_source_revision(capture.token.get(), cx)?,
+    );
+    capture.admitted = true;
+    capture.source_baseline = Some(capture.provider.read(cx).begin_capture_source_baseline(
+        capture,
+        buffer_store,
+        cx,
+    )?);
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl TaskStore {
+    /// The launch comes from the producing host's Task resolver. A peer request cannot supply it.
+    pub fn run_host_coverage_task(
+        &self,
+        provider: Entity<crate::rust_coverage_provider::RustCoverageProviderStore>,
+        run_id: String,
+        launch: task::SpawnInTerminal,
+        group: &task::TaskArtifactGroup,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Task<anyhow::Result<crate::source_coverage::SourceCoverageSnapshot>>> {
+        use crate::source_coverage::{SourceCoverageSourceChanged, SourceCoverageStatus};
+        use gpui::AppContext as _;
+        use terminal::{CoverageTaskReportReservation, TaskBuildInvocation, TerminalBuilder};
+
+        let TaskStore::Functional(StoreState {
+            mode: StoreMode::Local { .. },
+            buffer_store,
+            worktree_store,
+            ..
+        }) = self
+        else {
+            anyhow::bail!("Coverage Task requires a local producing Task store");
+        };
+        anyhow::ensure!(
+            group.format == "llvm-cov-json-v1"
+                && provider.read(cx).owns_host_task_worktrees(worktree_store)
+                && !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
+                    worktree_store,
+                    cx
+                ),
+            "Coverage Task requires the trusted producing project"
+        );
+        validate_experimental_task_requirements(&launch, cx)?;
+        let artifact = validate_coverage_task_declaration(&run_id, &launch, group)?;
+        let working_directory = launch
+            .cwd
+            .as_ref()
+            .filter(|path| path.is_absolute())
+            .context("Coverage Task requires an absolute host working directory")?;
+        let worktrees = worktree_store.read(cx);
+        let report_path = worktrees
+            .project_path_for_absolute_path(&working_directory.join(&artifact.path), cx)
+            .context("Coverage Task report binding is outside the host project")?;
+        let root = worktrees
+            .worktree_for_id(report_path.worktree_id, cx)
+            .filter(|tree| tree.read(cx).is_visible() && tree.read(cx).is_local())
+            .context("Coverage Task requires a visible local worktree")?;
+        anyhow::ensure!(
+            working_directory.starts_with(root.read(cx).abs_path()),
+            "Coverage Task working directory is outside its worktree"
+        );
+        let filesystem = worktrees
+            .fs()
+            .context("Coverage filesystem is unavailable")?;
+        let buffer_store = buffer_store
+            .upgrade()
+            .context("Coverage Task buffers are unavailable")?;
+        let report = CoverageTaskReportReservation::new(usize::try_from(artifact.max_bytes)?)?;
+        let mut arguments = launch.args.clone();
+        let report_argument = launch
+            .args
+            .windows(2)
+            .position(|pair| pair == ["--output-path", artifact.path.as_str()])
+            .and_then(|index| arguments.get_mut(index + 1))
+            .context("Coverage Task report must be bound to the collector output argument")?;
+        *report_argument = report
+            .path()
+            .to_str()
+            .context("Coverage Task reserved path is not Unicode")?
+            .to_owned();
+        let invocation = TaskBuildInvocation::new(
+            launch
+                .command
+                .as_ref()
+                .context("Coverage Task has no host executable")?
+                .into(),
+            arguments,
+            working_directory.clone(),
+            launch.env.clone().into_iter().collect(),
+        )?;
+        let mut capture = begin_coverage_task_capture(
+            &provider,
+            &buffer_store,
+            worktree_store,
+            run_id,
+            &launch,
+            artifact,
+            Some(working_directory.clone()),
+            cx,
+        )?;
+        capture._subscriptions.push(cx.subscribe(worktree_store, {
+            use crate::worktree_store::WorktreeStoreEvent;
+            use std::sync::atomic::Ordering;
+
+            let provider = provider.clone();
+            let token = capture.token.clone();
+            let cancellation = capture.cancellation.clone();
+            let stop = capture.stop.clone();
+            move |_, _, event, cx| {
+                if matches!(
+                    event,
+                    WorktreeStoreEvent::WorktreeAdded(_)
+                        | WorktreeStoreEvent::WorktreeRemoved(..)
+                        | WorktreeStoreEvent::WorktreeReleased(..)
+                        | WorktreeStoreEvent::WorktreeOrderChanged
+                        | WorktreeStoreEvent::WorktreePathPrivacyChanged(_)
+                ) {
+                    cancellation.store(true, Ordering::Relaxed);
+                    provider.update(cx, |store, cx| {
+                        store.finish_task_capture_status(
+                            token.get(),
+                            SourceCoverageStatus::Stale,
+                            "Coverage Task worktrees changed before publication",
+                            cx,
+                        );
+                    });
+                    stop.close();
+                }
+            }
+        }));
+        admit_coverage_task_sources(
+            &mut capture,
+            report_path,
+            working_directory.clone(),
+            &buffer_store,
+            cx,
+        )?;
+        let working_directory = working_directory.clone();
+        let prepared = provider.update(cx, |store, cx| {
+            store.prepare_capture_sources(capture, true, cx)
+        });
+        let (observer_released, retained_observer) = async_channel::bounded::<()>(1);
+        let worker = cx.spawn(async move |_, cx| {
+            let mut capture = prepared.await?;
+            let cancelled =
+                || smol::future::race(capture.stop.closed(), observer_released.closed());
+            let run = async {
+                anyhow::ensure!(
+                    filesystem.canonicalize(&working_directory).await? == working_directory,
+                    "Coverage Task working directory changed before launch"
+                );
+                let (builder, observation) = cx.update(|cx| {
+                    anyhow::ensure!(
+                        !observer_released.is_closed(),
+                        "Coverage Task capture was cancelled"
+                    );
+                    provider
+                        .read(cx)
+                        .revalidate_task_capture_before_launch(&capture, cx)?;
+                    TerminalBuilder::new_with_coverage_task(launch, None, invocation, report, 0, cx)
+                })?;
+                let builder = builder.await?;
+                let terminal = cx.new(|cx| builder.subscribe(cx));
+                let result =
+                    futures::future::select(Box::pin(observation.finish()), Box::pin(cancelled()))
+                        .await;
+                let (status, report) = match result {
+                    futures::future::Either::Left((result, _)) => result?,
+                    futures::future::Either::Right(((), observation)) => {
+                        // Closing the connection lets the helper reap its child before Terminal
+                        // releases the helper process.
+                        drop(observation);
+                        let exit = terminal
+                            .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                        let deadline = cx
+                            .background_executor()
+                            .timer(std::time::Duration::from_secs(10));
+                        anyhow::ensure!(
+                            matches!(
+                                futures::future::select(exit, deadline).await,
+                                futures::future::Either::Left((Some(_), _))
+                            ),
+                            "Terminal did not observe Coverage Task cancellation"
+                        );
+                        anyhow::bail!("Coverage Task capture was cancelled")
+                    }
+                };
+                anyhow::ensure!(status.success(), "Coverage Task exited with {status}");
+                let report = report.context("Coverage Task did not return a sealed report")?;
+                let publication = provider.update(cx, |store, cx| {
+                    store.publish_host_task_report(&capture, report, observer_released.clone(), cx)
+                })?;
+                match futures::future::select(publication, Box::pin(cancelled())).await {
+                    futures::future::Either::Left((result, _)) => result,
+                    futures::future::Either::Right(_) => {
+                        anyhow::bail!("Coverage Task capture was cancelled")
+                    }
+                }
+            }
+            .await;
+            if let Err(error) = &run {
+                provider.update(cx, |store, cx| {
+                    if observer_released.is_closed() {
+                        store.finish_cancelled_run(capture.token.get(), cx);
+                    } else if !store.finish_expired_task_capture(&capture, cx) {
+                        let stale = error.is::<SourceCoverageSourceChanged>()
+                            || !store.is_task_capture_source_revision_current(&capture, cx);
+                        store.finish_task_capture_status(
+                            capture.token.get(),
+                            if stale {
+                                SourceCoverageStatus::Stale
+                            } else {
+                                SourceCoverageStatus::Error
+                            },
+                            if stale {
+                                "Coverage Task source changed before publication"
+                            } else {
+                                "Coverage Task failed before publishing an authenticated report"
+                            },
+                            cx,
+                        );
+                    }
+                });
+            }
+            capture.armed = false;
+            run
+        });
+        let (finish, outcome) = futures::channel::oneshot::channel();
+        cx.spawn(async move |_, _| {
+            if finish.send(worker.await).is_err() {
+                log::debug!("Coverage Task observer released the result");
+            }
+        })
+        .detach();
+        Ok(cx.spawn(async move |_, _| {
+            let _retained_observer = retained_observer;
+            outcome.await.context("Coverage Task lost its host owner")?
+        }))
+    }
+}
+
 impl crate::Project {
     pub fn begin_task_artifact_capture(
         &self,
@@ -869,49 +1332,11 @@ impl crate::Project {
                 cx.has_flag::<RustCoverageExperimentalFeatureFlag>(),
                 "Rust coverage requires local experimental opt-in"
             );
-            use crate::source_coverage::SourceCoverageStatus;
-            use std::sync::atomic::{AtomicBool, Ordering};
             anyhow::ensure!(
                 self.is_local(),
                 "Coverage Task capture requires authoritative local Terminal completion; remote host capture is unavailable"
             );
-            anyhow::ensure!(
-                run_id.len() == 36
-                    && run_id.bytes().enumerate().all(|(index, byte)| {
-                        if matches!(index, 8 | 13 | 18 | 23) {
-                            byte == b'-'
-                        } else {
-                            byte.is_ascii_hexdigit()
-                        }
-                    })
-                    && run_id.bytes().any(|byte| byte != b'0' && byte != b'-'),
-                "Coverage Task run identity is invalid"
-            );
-            anyhow::ensure!(
-                group.files.len() == 1,
-                "Coverage capture requires exactly one report role"
-            );
-            group.with_resolved_files(group.files.clone())?;
-            let artifact = group
-                .files
-                .get("report")
-                .context("Coverage capture requires the report role")?
-                .clone();
-            let invocation_suffix = format!("-{}", run_id.replace('-', "").to_ascii_lowercase());
-            anyhow::ensure!(
-                artifact.kind == task::TaskArtifactKind::Data
-                    && Path::new(&artifact.path)
-                        .file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .is_some_and(|stem| stem.ends_with(&invocation_suffix))
-                    && launch
-                        .args
-                        .iter()
-                        .filter(|argument| *argument == &artifact.path)
-                        .count()
-                        == 1,
-                "Coverage report must be uniquely bound to this Task invocation"
-            );
+            let artifact = validate_coverage_task_declaration(&run_id, launch, group)?;
             anyhow::ensure!(
                 !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
                     &self.worktree_store(),
@@ -928,143 +1353,18 @@ impl crate::Project {
                         .context("Coverage Task working directory is unavailable")
                 })
                 .transpose()?;
-            crate::rust_coverage_provider::validate_capture_task_environment(&launch.env)?;
-            let provider = self.rust_coverage_provider_store().clone();
-            let token = provider.update(cx, |provider, cx| provider.begin_task_capture_run(cx))?;
-            let token = std::rc::Rc::new(std::cell::Cell::new(token));
-            let admitted_output = std::rc::Rc::new(std::cell::RefCell::new(None));
-            let cancellation = Arc::new(AtomicBool::new(false));
-            let (stop, stopped) = async_channel::bounded::<()>(1);
-            let provider_cleanup = provider.downgrade();
-            let token_cleanup = token.clone();
-            let cancellation_cleanup = cancellation.clone();
-            let admitted_output_cleanup = admitted_output.clone();
-            cx.spawn(async move |_, cx| match stopped.recv().await {
-                Err(_) if cancellation_cleanup.load(Ordering::Relaxed) => {
-                    if let Err(error) = provider_cleanup.update(cx, |provider, cx| {
-                        provider.finish_task_capture_status_with_output(
-                            token_cleanup.get(),
-                            SourceCoverageStatus::Cancelled,
-                            "Coverage Task capture was cancelled",
-                            admitted_output_cleanup.borrow().as_ref(),
-                            cx,
-                        );
-                    }) {
-                        log::debug!("Coverage capture owner closed during cancellation: {error:#}");
-                    }
-                }
-                Ok(()) | Err(_) => {}
-            })
-            .detach();
-            let mut subscriptions = vec![cx.subscribe(&cx.entity(), {
-                let provider = provider.clone();
-                let token = token.clone();
-                let cancellation = cancellation.clone();
-                move |_, _, event, cx| {
-                    let status = match event {
-                        crate::Event::Closed
-                        | crate::Event::DisconnectedFromHost
-                        | crate::Event::DisconnectedFromRemote { .. } => {
-                            Some(SourceCoverageStatus::Disconnected)
-                        }
-                        crate::Event::WorktreeRemoved(_)
-                        | crate::Event::WorktreeOrderChanged
-                        | crate::Event::WorktreePathsChanged { .. }
-                        | crate::Event::RemoteIdChanged(_)
-                        | crate::Event::Rejoined
-                        | crate::Event::Reshared
-                        | crate::Event::HostReshared
-                        | crate::Event::UpstreamSessionChanged => Some(SourceCoverageStatus::Stale),
-                        _ => None,
-                    };
-                    if let Some(status) = status {
-                        cancellation.store(true, Ordering::Relaxed);
-                        provider.update(cx, |provider, cx| {
-                            provider.finish_task_capture_status(
-                                token.get(),
-                                status,
-                                crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
-                                cx,
-                            )
-                        });
-                    }
-                }
-            })];
-            subscriptions.push(cx.observe_global::<feature_flags::FeatureFlagStore>({
-                let provider = provider.clone();
-                let token = token.clone();
-                let cancellation = cancellation.clone();
-                let stop = stop.clone();
-                move |_, cx| {
-                    if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
-                        cancellation.store(true, Ordering::Relaxed);
-                        stop.close();
-                        provider.update(cx, |provider, cx| {
-                            provider.finish_task_capture_status(
-                                token.get(),
-                                SourceCoverageStatus::Stale,
-                                crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
-                                cx,
-                            )
-                        });
-                    }
-                }
-            }));
-            subscriptions.push(provider.update(cx, |provider, cx| {
-                provider.subscribe_capture_buffer_changes(self.buffer_store(), cx)
-            }));
-            if let Some(trust) = crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx) {
-                let worktree_store = self.worktree_store().downgrade();
-                subscriptions.push(cx.subscribe(&trust, {
-                    let provider = provider.clone();
-                    let token = token.clone();
-                    let cancellation = cancellation.clone();
-                    move |_, _, event, cx| {
-                        let (changed_store, status) = match event {
-                            crate::trusted_worktrees::TrustedWorktreesEvent::Restricted(
-                                store,
-                                _,
-                            ) => (store, SourceCoverageStatus::Restricted),
-                            crate::trusted_worktrees::TrustedWorktreesEvent::Trusted(store, _) => {
-                                (store, SourceCoverageStatus::Stale)
-                            }
-                        };
-                        if *changed_store == worktree_store {
-                            cancellation.store(true, Ordering::Relaxed);
-                            provider.update(cx, |provider, cx| {
-                                provider.finish_task_capture_status(
-                                    token.get(),
-                                    status,
-                                    crate::rust_coverage_provider::COVERAGE_TASK_EXPIRED_DIAGNOSTIC,
-                                    cx,
-                                )
-                            });
-                        }
-                    }
-                }));
-            }
+            let capture = begin_coverage_task_capture(
+                self.rust_coverage_provider_store(),
+                self.buffer_store(),
+                &self.worktree_store(),
+                run_id,
+                launch,
+                artifact,
+                working_directory,
+                cx,
+            )?;
             Ok(Some(ProjectTaskArtifactCapture {
-                inner: ProjectTaskArtifactCaptureKind::RustCoverage(
-                    crate::rust_coverage_provider::RustCoverageTaskCapture {
-                        provider,
-                        token,
-                        run_id,
-                        task_id: launch.id.clone(),
-                        artifact,
-                        path: None,
-                        admitted_output,
-                        command: launch.command.clone(),
-                        arguments: launch.args.clone(),
-                        environment: launch.env.clone(),
-                        working_directory,
-                        admitted: false,
-                        source_baseline: None,
-                        cancellation,
-                        stop,
-                        _subscriptions: subscriptions,
-                        armed: true,
-                    },
-                ),
+                inner: ProjectTaskArtifactCaptureKind::RustCoverage(capture),
             }))
         }
     }
@@ -1113,21 +1413,13 @@ impl crate::Project {
                 let path = self
                     .find_project_path(working_directory.join(&capture.artifact.path), cx)
                     .context("Coverage Task report is outside the visible project")?;
-                capture.path = Some(path.clone());
-                capture.working_directory = Some(working_directory);
-                capture.token.set(
-                    capture
-                        .provider
-                        .read(cx)
-                        .seal_source_revision(capture.token.get(), cx)?,
-                );
-                capture.admitted = true;
-                capture.source_baseline =
-                    Some(capture.provider.read(cx).begin_capture_source_baseline(
-                        capture,
-                        self.buffer_store(),
-                        cx,
-                    )?);
+                admit_coverage_task_sources(
+                    capture,
+                    path.clone(),
+                    working_directory,
+                    self.buffer_store(),
+                    cx,
+                )?;
                 *capture.admitted_output.borrow_mut() = Some(path);
                 Ok(())
             }
