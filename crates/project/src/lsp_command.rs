@@ -2774,6 +2774,58 @@ impl LspCommand for GetOutgoingCalls {
     }
 }
 
+#[cfg(feature = "jvm-tools")]
+fn kotlin_fallback_highlight_position(
+    buffer: &BufferSnapshot,
+    position: PointUtf16,
+) -> Option<PointUtf16> {
+    let offset = position.to_offset(buffer);
+    let Some(layer) = buffer.syntax_layer_at(offset) else {
+        return Some(position);
+    };
+    let Some(character) = buffer.chars_at(offset).next() else {
+        return Some(position);
+    };
+    let root = layer.node();
+    let Some(token) = root.descendant_for_byte_range(offset, offset + character.len_utf8()) else {
+        return Some(position);
+    };
+
+    // Kotlin Language Server 1.3.13 tries to compile the whole class as an expression
+    // at the trailing edge of its name and at class syntax with no symbol.
+    if let Some(previous) = buffer.reversed_chars_at(offset).next() {
+        let previous_offset = offset - previous.len_utf8();
+        if root
+            .descendant_for_byte_range(previous_offset, offset)
+            .is_some_and(|name| {
+                name.kind() == "type_identifier"
+                    && name.end_byte() == offset
+                    && name.parent().is_some_and(|parent| {
+                        matches!(parent.kind(), "class_declaration" | "object_declaration")
+                    })
+            })
+        {
+            return Some(buffer.offset_to_point_utf16(previous_offset));
+        }
+    }
+
+    let class_declaration = |kind| matches!(kind, "class_declaration" | "object_declaration");
+    let class_body = |kind| matches!(kind, "class_body" | "enum_class_body");
+    let no_symbol = if character.is_whitespace() {
+        class_declaration(token.kind()) || class_body(token.kind())
+    } else if matches!(token.kind(), "class" | "interface" | "object") {
+        token
+            .parent()
+            .is_some_and(|parent| class_declaration(parent.kind()))
+    } else {
+        matches!(token.kind(), "{" | "}")
+            && token
+                .parent()
+                .is_some_and(|parent| class_body(parent.kind()))
+    };
+    (!no_symbol).then_some(position)
+}
+
 #[async_trait(?Send)]
 impl LspCommand for GetDocumentHighlights {
     type Response = Vec<DocumentHighlight>;
@@ -2792,6 +2844,36 @@ impl LspCommand for GetDocumentHighlights {
                 OneOf::Left(supported) => supported,
                 OneOf::Right(_options) => true,
             })
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn to_lsp_params_or_response(
+        &self,
+        path: &Path,
+        buffer: &Buffer,
+        language_server: &Arc<LanguageServer>,
+        cx: &App,
+    ) -> Result<LspParamsOrResponse<lsp::DocumentHighlightParams, Self::Response>> {
+        if !self.check_capabilities(language_server.adapter_server_capabilities()) {
+            return Ok(LspParamsOrResponse::Response(Vec::new()));
+        }
+        let mut position = self.position;
+        if language_server.name() == lsp::LanguageServerName::new_static("kotlin-language-server")
+            && language_server.version().as_deref() == Some("1.3.13")
+        {
+            let Some(highlight_position) =
+                kotlin_fallback_highlight_position(&buffer.snapshot(), position)
+            else {
+                return Ok(LspParamsOrResponse::Response(Vec::new()));
+            };
+            position = highlight_position;
+        }
+        Ok(LspParamsOrResponse::Params(Self { position }.to_lsp(
+            path,
+            buffer,
+            language_server,
+            cx,
+        )?))
     }
 
     fn to_lsp(

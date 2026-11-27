@@ -27,6 +27,144 @@ use util::path;
 
 use crate::init_test;
 
+#[cfg(feature = "jvm-tools")]
+#[gpui::test]
+#[ignore = "requires the installed Kotlin grammar at GROOVY_KOTLIN_GRAMMAR"]
+async fn pinned_kotlin_fallback_keeps_symbol_highlights_at_class_boundaries(
+    cx: &mut TestAppContext,
+) {
+    use language::{LanguageConfig, LanguageMatcher, LoadedLanguage, PointUtf16};
+
+    init_test(cx);
+    let grammar = std::env::var_os("GROOVY_KOTLIN_GRAMMAR").expect("pinned Kotlin grammar path");
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/kotlin"),
+        json!({"Greeting.kt": "package evidence\n\nclass Greeting {\n    fun message(): String = \"ready\"\n}\n"}),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/kotlin").as_ref()], cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.register_wasm_grammars(vec![("kotlin".into(), grammar.into())]);
+    let config = LanguageConfig {
+        name: "Kotlin".into(),
+        grammar: Some("kotlin".into()),
+        matcher: LanguageMatcher {
+            path_suffixes: vec!["kt".into()],
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
+    languages.register_language(
+        config.name.clone(),
+        config.grammar.clone(),
+        config.matcher.clone(),
+        false,
+        None,
+        Arc::new(move || {
+            Ok(LoadedLanguage {
+                config: config.clone(),
+                queries: Default::default(),
+                context_provider: None,
+                toolchain_provider: None,
+                manifest_name: None,
+            })
+        }),
+    );
+    let capabilities = lsp::ServerCapabilities {
+        document_highlight_provider: Some(lsp::OneOf::Left(true)),
+        ..Default::default()
+    };
+    let mut servers = languages.register_fake_lsp(
+        "Kotlin",
+        FakeLspAdapter {
+            name: "kotlin-language-server",
+            capabilities: capabilities.clone(),
+            initializer: Some(Box::new(move |server| {
+                let capabilities = capabilities.clone();
+                server.set_request_handler::<lsp::request::Initialize, _, _>(move |_, _| {
+                    let capabilities = capabilities.clone();
+                    async move {
+                        Ok(lsp::InitializeResult {
+                            capabilities,
+                            server_info: Some(lsp::ServerInfo {
+                                name: "Kotlin Language Server".into(),
+                                version: Some("1.3.13".into()),
+                            }),
+                        })
+                    }
+                });
+            })),
+            ..Default::default()
+        },
+    );
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/kotlin/Greeting.kt"), cx)
+        })
+        .await
+        .expect("open Kotlin fixture");
+    let server = servers.next().await.expect("Kotlin fallback server");
+    cx.run_until_parked();
+    assert!(
+        buffer.read_with(cx, |buffer, _| buffer
+            .snapshot()
+            .syntax_layer_at(0)
+            .is_some()),
+        "the pinned Kotlin grammar must parse the fixture"
+    );
+    let positions = Arc::new(Mutex::new(Vec::new()));
+    let _requests = server.set_request_handler::<lsp::request::DocumentHighlightRequest, _, _>({
+        let positions = positions.clone();
+        move |params, _| {
+            let positions = positions.clone();
+            async move {
+                let position = params.text_document_position_params.position;
+                positions.lock().push(position);
+                let range = if position == lsp::Position::new(2, 13) {
+                    lsp::Range::new(lsp::Position::new(2, 6), lsp::Position::new(2, 14))
+                } else if position == lsp::Position::new(3, 9) {
+                    lsp::Range::new(lsp::Position::new(3, 8), lsp::Position::new(3, 15))
+                } else {
+                    anyhow::bail!("unsupported fallback highlight position {position:?}");
+                };
+                Ok(Some(vec![lsp::DocumentHighlight {
+                    range,
+                    kind: Some(lsp::DocumentHighlightKind::READ),
+                }]))
+            }
+        }
+    });
+    for (requested, expected_highlights) in [
+        ((2, 14), 1),
+        ((2, 13), 1),
+        ((3, 9), 1),
+        ((2, 2), 0),
+        ((2, 5), 0),
+        ((2, 15), 0),
+        ((2, 16), 0),
+        ((3, 2), 0),
+        ((4, 0), 0),
+    ] {
+        let highlights = project
+            .update(cx, |project, cx| {
+                project.document_highlights(&buffer, PointUtf16::new(requested.0, requested.1), cx)
+            })
+            .await
+            .expect("document highlights");
+        assert_eq!(highlights.len(), expected_highlights, "{requested:?}");
+    }
+    assert_eq!(
+        *positions.lock(),
+        [
+            lsp::Position::new(2, 13),
+            lsp::Position::new(2, 13),
+            lsp::Position::new(3, 9),
+        ]
+    );
+}
+
 #[gpui::test]
 async fn lsp_response_ranges_are_normalized_before_anchoring(cx: &mut TestAppContext) {
     use language::{PointUtf16, ToPointUtf16 as _};
