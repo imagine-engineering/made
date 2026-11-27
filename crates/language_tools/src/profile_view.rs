@@ -1,4 +1,5 @@
 use std::{
+    cell::Cell,
     path::PathBuf,
     rc::Rc,
     sync::{
@@ -15,7 +16,7 @@ use feature_flags::{
 use futures::StreamExt as _;
 use gpui::{
     App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, PathPromptOptions, Render,
-    Task, WeakEntity, actions, relative, uniform_list,
+    Task, UniformListScrollHandle, WeakEntity, actions, relative, uniform_list,
 };
 use project::{
     DirectoryLister, Project, ProjectPath,
@@ -23,7 +24,7 @@ use project::{
     profile_results_store::RemoteProfileError,
 };
 use remote::{ConnectionState, RemoteClientEvent};
-use ui::{Button, ButtonStyle, prelude::*};
+use ui::{Button, ButtonStyle, ContextMenu, PopoverMenu, TintColor, Tooltip, prelude::*};
 use util::ResultExt as _;
 use workspace::{
     Item, Toast, Workspace, notifications::NotificationId, tasks::CompletedTaskArtifactGroup,
@@ -132,7 +133,7 @@ pub fn open_diagnostic_profile_result(
     let workspace_handle = cx.entity().downgrade();
     let view = cx.new(|cx| {
         let mut view = ProfileView::new(project, workspace_handle, cx);
-        view.notice = format!("{} samples from explicitly selected bounded artifacts. Import does not prove the workload was captured or a repair verified. This view only.", result.total_samples);
+        view.notice = "Imported explicitly selected bounded artifacts. Import does not prove the workload was captured or a repair verified. This view only.".into();
         view.result = Some(Arc::new(result));
         view.result_paths = result_paths;
         view.flame_rows = flame_rows;
@@ -356,14 +357,17 @@ pub struct ProfileView {
     project: Entity<Project>,
     workspace: WeakEntity<Workspace>,
     focus: FocusHandle,
-    toolbar_focus: [FocusHandle; 8],
+    toolbar_focus: [FocusHandle; 10],
+    pane_width: gpui::Pixels,
+    flame_scroll: UniformListScrollHandle,
+    hovered_bar: Option<(usize, usize)>,
     host: LanguageToolTreeHost,
     result: Option<Arc<ProfileResults>>,
     task_group: Option<Rc<CompletedTaskArtifactGroup>>,
     result_paths: collections::HashSet<ProjectPath>,
     importing_paths: collections::HashSet<ProjectPath>,
     flamegraph: bool,
-    zoomed: bool,
+    zoom_root: Option<usize>,
     zoom_generation: u64,
     zoom_cancellation: Arc<AtomicBool>,
     zoom_task: Task<()>,
@@ -548,12 +552,15 @@ impl ProfileView {
             host: LanguageToolTreeHost::with_focus_handle(focus.clone()),
             focus,
             toolbar_focus: std::array::from_fn(|_| cx.focus_handle()),
+            pane_width: px(800.0),
+            flame_scroll: UniformListScrollHandle::new(),
+            hovered_bar: None,
             result: None,
             task_group: None,
             result_paths: collections::HashSet::default(),
             importing_paths: collections::HashSet::default(),
             flamegraph: false,
-            zoomed: false,
+            zoom_root: None,
             zoom_generation: 0,
             zoom_cancellation: Arc::new(AtomicBool::new(false)),
             zoom_task: Task::ready(()),
@@ -606,7 +613,8 @@ impl ProfileView {
         self.zoom_generation = self.zoom_generation.wrapping_add(1);
         self.zoom_cancellation.store(true, Ordering::Relaxed);
         self.zoom_task = Task::ready(());
-        self.zoomed = false;
+        self.zoom_root = None;
+        self.hovered_bar = None;
         self.host.replace_snapshot(LanguageToolSnapshot {
             roots: Vec::new(),
             status: LanguageToolProviderStatus::Empty(
@@ -1145,9 +1153,10 @@ impl ProfileView {
                         this.zoom_generation = this.zoom_generation.wrapping_add(1);
                         this.zoom_cancellation.store(true, Ordering::Relaxed);
                         this.zoom_task = Task::ready(());
-                        this.zoomed = false;
+                        this.zoom_root = None;
+                        this.hovered_bar = None;
                         this.flame_rows = flame_rows;
-                        this.notice = format!("{} samples; {} unresolved frames; {} samples without stacks. This view only.", result.total_samples, result.unresolved_frames, result.unattributed_samples);
+                        this.notice = "This view only.".to_string();
                         this.task_group = task_group.clone();
                         this.result = Some(result);
                         this.result_paths = result_paths;
@@ -1205,7 +1214,9 @@ impl ProfileView {
                 match layout {
                     Ok(rows) => {
                         this.flame_rows = Arc::new(rows);
-                        this.zoomed = root.is_some();
+                        this.zoom_root = root;
+                        this.hovered_bar = None;
+                        this.reveal_flame_selection();
                     }
                     Err(_) => {
                         this.notice = "Cannot zoom this profile".to_string();
@@ -1484,16 +1495,172 @@ impl ProfileView {
             .is_some_and(|frame| frame.source.is_some())
     }
 
+    fn set_flamegraph(&mut self, flamegraph: bool, cx: &mut Context<Self>) {
+        self.flamegraph = flamegraph;
+        self.hovered_bar = None;
+        if flamegraph {
+            self.reveal_flame_selection();
+        } else {
+            self.host.reveal_selection(gpui::ScrollStrategy::Center);
+        }
+        cx.notify();
+    }
+
+    fn activate_flame_bar(
+        &mut self,
+        index: usize,
+        click_count: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_node(index);
+        window.focus(&self.focus, cx);
+        if click_count > 1 {
+            self.zoom_selected(cx);
+        }
+        cx.notify();
+    }
+
+    fn displayed_samples(&self) -> u64 {
+        let Some(profile) = &self.result else {
+            return 0;
+        };
+        self.zoom_root
+            .and_then(|index| profile.nodes.get(index))
+            .map_or(profile.total_samples, |node| node.inclusive_samples)
+    }
+
+    fn status_counts(&self) -> Vec<(String, Color)> {
+        let Some(profile) = &self.result else {
+            return Vec::new();
+        };
+        let mut counts = vec![(sample_count(profile.total_samples), Color::Default)];
+        if self.zoom_root.is_some() {
+            counts.push((
+                format!("{} in zoom", self.displayed_samples()),
+                Color::Muted,
+            ));
+        }
+        match profile.unresolved_frames {
+            0 => {}
+            1 => counts.push(("1 unresolved frame".into(), Color::Warning)),
+            count => counts.push((format!("{count} unresolved frames"), Color::Warning)),
+        }
+        match profile.unattributed_samples {
+            0 => {}
+            1 => counts.push(("1 sample without a stack".into(), Color::Warning)),
+            count => counts.push((format!("{count} samples without stacks"), Color::Warning)),
+        }
+        counts
+    }
+
+    fn accessible_status(&self, counts: &[(String, Color)]) -> String {
+        counts
+            .iter()
+            .map(|(label, _)| label.as_str())
+            .chain(std::iter::once(self.notice.as_str()))
+            .collect::<Vec<_>>()
+            .join(". ")
+    }
+
+    fn compact_toolbar(&self) -> bool {
+        self.pane_width < px(700.0)
+    }
+
+    fn flame_depth(&self, index: usize) -> Option<usize> {
+        let profile = self.result.as_ref()?;
+        let mut depth = 0;
+        let mut current = index;
+        while Some(current) != self.zoom_root {
+            match profile.nodes.get(current)?.parent {
+                Some(parent) => current = parent,
+                None => return self.zoom_root.is_none().then_some(depth),
+            }
+            depth += 1;
+        }
+        Some(depth)
+    }
+
+    fn reveal_flame_selection(&self) {
+        if let Some(depth) = self
+            .selected_node_index()
+            .and_then(|index| self.flame_depth(index))
+        {
+            self.flame_scroll
+                .scroll_to_item(depth, gpui::ScrollStrategy::Center);
+        }
+    }
+
+    fn navigate_flamegraph(&mut self, key: &str) {
+        let Some(profile) = &self.result else {
+            return;
+        };
+        let first = self
+            .flame_rows
+            .first()
+            .and_then(|row| row.first())
+            .map(|bar| bar.node);
+        let next = match (
+            key,
+            self.selected_node_index()
+                .filter(|index| self.flame_depth(*index).is_some()),
+        ) {
+            ("home", _) | (_, None) => first,
+            ("end", _) => self
+                .flame_rows
+                .last()
+                .and_then(|row| row.last())
+                .map(|bar| bar.node),
+            (_, Some(index)) => {
+                let Some(node) = profile.nodes.get(index) else {
+                    return;
+                };
+                match key {
+                    "up" => node
+                        .parent
+                        .filter(|&parent| self.flame_depth(parent).is_some()),
+                    "down" => node.children.first().copied(),
+                    "left" | "right" if Some(index) != self.zoom_root => {
+                        let siblings = node
+                            .parent
+                            .and_then(|parent| profile.nodes.get(parent))
+                            .map_or(&profile.roots, |parent| &parent.children);
+                        let position = siblings.iter().position(|&sibling| sibling == index);
+                        let position = position.and_then(|position| {
+                            if key == "left" {
+                                position.checked_sub(1)
+                            } else {
+                                Some(position + 1)
+                            }
+                        });
+                        position
+                            .and_then(|position| siblings.get(position))
+                            .copied()
+                    }
+                    _ => None,
+                }
+            }
+        };
+        self.hovered_bar = None;
+        if let Some(next) = next {
+            self.select_node(next);
+            self.reveal_flame_selection();
+        }
+    }
+
     fn move_control_focus(&self, forward: bool, window: &mut Window, cx: &mut App) {
+        let compact = self.compact_toolbar();
         let enabled = [
+            cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>(),
             true,
             true,
             self.selected_node_index().is_some(),
-            self.zoomed,
+            self.zoom_root.is_some(),
             self.source_available(),
             self.importing,
-            true,
-            true,
+            !compact,
+            !compact && !self.flamegraph,
+            compact,
         ];
         let controls = std::iter::once(&self.focus)
             .chain(
@@ -1523,129 +1690,291 @@ impl ProfileView {
     }
 }
 
+fn sample_count(samples: u64) -> String {
+    if samples == 1 {
+        "1 sample".into()
+    } else {
+        format!("{samples} samples")
+    }
+}
+
+fn frame_sample_summary(samples: u64, total: u64) -> String {
+    let percentage = if total == 0 {
+        0.0
+    } else {
+        100.0 * samples as f64 / total as f64
+    };
+    format!(
+        "{} · {percentage:.1}% of displayed samples",
+        sample_count(samples)
+    )
+}
+
 impl Render for ProfileView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let [
             import_focus,
-            mode_focus,
+            flame_focus,
+            tree_focus,
             zoom_focus,
             reset_focus,
             source_focus,
             cancel_focus,
             clear_focus,
             expand_focus,
+            overflow_focus,
         ] = &self.toolbar_focus;
         let source_available = self.source_available();
+        let compact = self.compact_toolbar();
+        let displayed_samples = self.displayed_samples();
+        let selected = self.selected_node_index();
         let click = cx.entity().downgrade();
         let toggle = click.clone();
+        let measure = click.clone();
+        let pane_width = self.pane_width;
         let content = if self.flamegraph {
             let rows = self.flame_rows.clone();
             let result = self.result.clone();
             let view = cx.entity().downgrade();
-            let selected = self.selected_node_index();
-            let label_width = (64.0 / f32::from(window.viewport_size().width).max(1.0)).min(1.0);
+            let hovered = self.hovered_bar.map(|(_, index)| index);
+            let label_width = (48.0 / f32::from(pane_width).max(1.0)).min(1.0);
             #[cfg(test)]
             let painted_bars = self.painted_flame_bars.clone();
             let row_count = rows.len();
             let render_rows = move |range: std::ops::Range<usize>, _: &mut Window, cx: &mut App| {
+                let colors = cx.theme().colors();
+                let status = cx.theme().status();
+                let base = colors.editor_background;
+                let palette = [
+                    status.info,
+                    status.modified,
+                    status.created,
+                    colors.text_accent,
+                ]
+                .map(|accent| base.blend(accent.opacity(0.32)));
+                let selection = palette[0].blend(colors.text.opacity(0.18));
+                let focus_outline = colors.text;
                 range
                     .filter_map(|depth| rows.get(depth).map(|bars| (depth, bars)))
                     .map(|(depth, bars)| {
-                        let measured_bounds = Rc::new(std::cell::Cell::new(None));
+                        let measured_bounds = Rc::new(Cell::new(None));
                         let paint_bounds = measured_bounds.clone();
                         let paint_rows = rows.clone();
-                        let click_rows = rows.clone();
+                        let hit_rows = rows.clone();
+                        let hit_test = move |position: gpui::Pixels| {
+                            let bounds: gpui::Bounds<gpui::Pixels> = measured_bounds.get()?;
+                            let normalized = f32::from(position - bounds.origin.x)
+                                / f32::from(bounds.size.width);
+                            flamegraph_bar_at(hit_rows.get(depth)?, normalized).map(|bar| bar.node)
+                        };
+                        let click_hit = hit_test.clone();
                         let click_view = view.clone();
+                        let hover_view = view.clone();
+                        let leave_view = view.clone();
                         #[cfg(test)]
                         let painted_bars = painted_bars.clone();
-                        div().relative().h_7().w_full()
+                        div()
+                            .relative()
+                            .h_7()
+                            .w_full()
                             .id(("native-flamegraph-row", depth))
                             .debug_selector(move || format!("native-flamegraph-row-{depth}"))
                             .role(gpui::Role::Group)
-                            .aria_label("Flamegraph row. Use Call Tree and Zoom Selected to navigate every frame.")
-                            .child(gpui::canvas(
-                                move |bounds, _, _| paint_bounds.set(Some(bounds)),
-                                move |bounds, _, window, cx| {
-                                    let Some(bars) = paint_rows.get(depth) else { return; };
-                                    let background = cx.theme().colors().element_background;
-                                    let selected_background = cx.theme().colors().element_selected;
-                                    let paint_run = |bounds, selected, window: &mut Window| {
-                                        window.paint_quad(gpui::fill(bounds, if selected { selected_background } else { background }));
-                                    };
-                                    let mut pending: Option<(gpui::Bounds<gpui::Pixels>, bool)> = None;
-                                    let mut borders = gpui::PathBuilder::stroke(px(1.0));
-                                    let mut has_borders = false;
-                                    for bar in bars.iter().filter(|bar| bar.width > 0.0 && bar.width < label_width) {
-                                        let bar_bounds = gpui::Bounds::new(
-                                            bounds.origin + gpui::point(bounds.size.width * bar.left, px(0.0)),
-                                            gpui::size(bounds.size.width * bar.width, bounds.size.height),
-                                        );
-                                        let is_selected = selected == Some(bar.node);
-                                        match pending.as_mut() {
-                                            // Independently scaled adjacent sample boundaries can differ by subpixel rounding.
-                                            Some((pending_bounds, pending_selected)) if *pending_selected == is_selected && (pending_bounds.right() - bar_bounds.left()).abs() <= px(0.01) => {
-                                                pending_bounds.size.width = bar_bounds.right() - pending_bounds.left();
-                                            }
-                                            _ => {
-                                                if let Some((bounds, selected)) = pending.take() {
-                                                    paint_run(bounds, selected, window);
+                            .aria_label("Flame graph row")
+                            .child(
+                                gpui::canvas(
+                                    move |bounds, _, _| paint_bounds.set(Some(bounds)),
+                                    move |bounds, _, window, _| {
+                                        let Some(bars) = paint_rows.get(depth) else {
+                                            return;
+                                        };
+                                        let mut pending: Option<gpui::Bounds<gpui::Pixels>> = None;
+                                        for (position, bar) in
+                                            bars.iter().enumerate().filter(|(_, bar)| {
+                                                bar.width > 0.0 && bar.width < label_width
+                                            })
+                                        {
+                                            let mut bar_bounds = gpui::Bounds::new(
+                                                bounds.origin
+                                                    + gpui::point(
+                                                        bounds.size.width * bar.left,
+                                                        px(1.0),
+                                                    ),
+                                                gpui::size(
+                                                    bounds.size.width * bar.width,
+                                                    bounds.size.height - px(2.0),
+                                                ),
+                                            );
+                                            let is_selected = selected == Some(bar.node);
+                                            let is_hovered = hovered == Some(bar.node);
+                                            // Batch adjacent subpixel bars to bound paint work on very wide stacks.
+                                            let batch = bar_bounds.size.width < px(1.0)
+                                                && !is_selected
+                                                && !is_hovered;
+                                            if batch
+                                                && let Some(run) = &mut pending
+                                                && (run.right() - bar_bounds.left()).abs()
+                                                    <= px(0.01)
+                                            {
+                                                run.size.width = bar_bounds.right() - run.left();
+                                            } else {
+                                                if let Some(run) = pending.take() {
+                                                    window.paint_quad(gpui::fill(run, palette[0]));
                                                 }
-                                                pending = Some((bar_bounds, is_selected));
+                                                if batch {
+                                                    pending = Some(bar_bounds);
+                                                } else {
+                                                    if bar_bounds.size.width >= px(4.0) {
+                                                        bar_bounds.size.width -= px(1.0);
+                                                    }
+                                                    let background = if is_selected {
+                                                        selection
+                                                    } else {
+                                                        palette[position % palette.len()]
+                                                    };
+                                                    let background = if is_hovered {
+                                                        background
+                                                            .blend(focus_outline.opacity(0.10))
+                                                    } else {
+                                                        background
+                                                    };
+                                                    window.paint_quad(gpui::fill(
+                                                        bar_bounds, background,
+                                                    ));
+                                                }
                                             }
+                                            #[cfg(test)]
+                                            painted_bars.fetch_add(1, Ordering::Relaxed);
                                         }
-                                        if bar_bounds.size.width >= px(2.0) {
-                                            let inset = bar_bounds.dilate(-px(0.5));
-                                            borders.add_polygon(&[inset.origin, inset.top_right(), inset.bottom_right(), inset.bottom_left()], true);
-                                            has_borders = true;
+                                        if let Some(run) = pending {
+                                            window.paint_quad(gpui::fill(run, palette[0]));
                                         }
-                                        #[cfg(test)]
-                                        painted_bars.fetch_add(1, Ordering::Relaxed);
-                                    }
-                                    if let Some((bounds, selected)) = pending {
-                                        paint_run(bounds, selected, window);
-                                    }
-                                    if has_borders && let Some(path) = borders.build().log_err() {
-                                        window.paint_path(path, cx.theme().colors().border);
-                                    }
-                                },
-                            ).absolute().size_full())
-                            .on_click(move |event, _, cx| {
-                                let Some(bounds) = measured_bounds.get() else { return; };
-                                if bounds.size.width <= px(0.0) { return; }
-                                let position = f32::from(event.position().x - bounds.origin.x) / f32::from(bounds.size.width);
-                                let Some(bars) = click_rows.get(depth) else { return; };
-                                let Some(bar) = flamegraph_bar_at(bars, position) else { return; };
-                                if bar.width >= label_width { return; }
-                                click_view.update(cx, |this, cx| {
-                                    this.select_node(bar.node);
-                                    this.zoom_selected(cx);
-                                }).log_err();
+                                    },
+                                )
+                                .absolute()
+                                .size_full(),
+                            )
+                            .on_mouse_move(move |event, _, cx| {
+                                let hovered =
+                                    hit_test(event.position.x).map(|index| (depth, index));
+                                hover_view
+                                    .update(cx, |this, cx| {
+                                        if this.hovered_bar != hovered {
+                                            this.hovered_bar = hovered;
+                                            cx.notify();
+                                        }
+                                    })
+                                    .log_err();
                             })
-                            .children(bars.iter().filter(|bar| bar.width >= label_width).filter_map(|bar| {
-                                let result = result.as_ref()?;
-                                let node = result.nodes.get(bar.node)?;
-                                let frame = result.frames.get(node.frame)?;
-                                let view = view.clone();
-                                let index = bar.node;
-                                Some(div().id(index)
-                                    .absolute().left(relative(bar.left)).w(relative(bar.width)).h_full()
-                                    .overflow_hidden()
-                                    .bg(if selected == Some(index) { cx.theme().colors().element_selected } else { cx.theme().colors().element_background })
-                                    .border_1().border_color(cx.theme().colors().border)
-                                    .role(gpui::Role::Button)
-                                    .aria_label(format!("{}, {} samples", frame.label, node.inclusive_samples))
-                                    .child(frame.label.clone())
-                                    .on_click(move |_, _, cx| {
-                                        view.update(cx, |this, cx| {
-                                            this.select_node(index);
-                                            this.zoom_selected(cx);
-                                        }).log_err();
-                                    }))
-                            }))
+                            .on_hover(move |inside, _, cx| {
+                                if !*inside {
+                                    leave_view
+                                        .update(cx, |this, cx| {
+                                            if this.hovered_bar.is_some_and(|(row, _)| row == depth)
+                                            {
+                                                this.hovered_bar = None;
+                                                cx.notify();
+                                            }
+                                        })
+                                        .log_err();
+                                }
+                            })
+                            .on_click(move |event, window, cx| {
+                                if let Some(index) = click_hit(event.position().x) {
+                                    click_view
+                                        .update(cx, |this, cx| {
+                                            this.activate_flame_bar(
+                                                index,
+                                                event.click_count(),
+                                                window,
+                                                cx,
+                                            );
+                                        })
+                                        .log_err();
+                                }
+                            })
+                            .children(
+                                bars.iter()
+                                    .enumerate()
+                                    .filter(|(_, bar)| bar.width >= label_width)
+                                    .filter_map(|(position, bar)| {
+                                        let result = result.as_ref()?;
+                                        let node = result.nodes.get(bar.node)?;
+                                        let frame = result.frames.get(node.frame)?;
+                                        let view = view.clone();
+                                        let index = bar.node;
+                                        let is_selected = selected == Some(index);
+                                        let background = if is_selected {
+                                            selection
+                                        } else {
+                                            palette[position % palette.len()]
+                                        };
+                                        let background = if hovered == Some(index) {
+                                            background.blend(focus_outline.opacity(0.10))
+                                        } else {
+                                            background
+                                        };
+                                        let summary = frame_sample_summary(
+                                            node.inclusive_samples,
+                                            displayed_samples,
+                                        );
+                                        Some(
+                                            div()
+                                                .id(index)
+                                                .absolute()
+                                                .left(relative(bar.left))
+                                                .w(relative(bar.width))
+                                                .h_full()
+                                                .py(px(1.0))
+                                                .pr(px(1.0))
+                                                .overflow_hidden()
+                                                .role(gpui::Role::Button)
+                                                .aria_selected(is_selected)
+                                                .aria_label(format!("{}, {summary}", frame.label))
+                                                .when(is_selected, |bar| {
+                                                    bar.aria_active_descendant()
+                                                })
+                                                .child(
+                                                    h_flex()
+                                                        .size_full()
+                                                        .overflow_hidden()
+                                                        .rounded_sm()
+                                                        .border_1()
+                                                        .border_color(if is_selected {
+                                                            focus_outline
+                                                        } else {
+                                                            gpui::transparent_black()
+                                                        })
+                                                        .bg(background)
+                                                        .px_2()
+                                                        .child(
+                                                            div()
+                                                                .flex_1()
+                                                                .min_w_0()
+                                                                .truncate()
+                                                                .child(frame.label.clone()),
+                                                        ),
+                                                )
+                                                .on_click(move |event, window, cx| {
+                                                    cx.stop_propagation();
+                                                    view.update(cx, |this, cx| {
+                                                        this.activate_flame_bar(
+                                                            index,
+                                                            event.click_count(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    })
+                                                    .log_err();
+                                                }),
+                                        )
+                                    }),
+                            )
                     })
                     .collect::<Vec<_>>()
             };
             uniform_list("native-flamegraph", row_count, render_rows)
+                .track_scroll(&self.flame_scroll)
                 .flex_1()
                 .into_any_element()
         } else {
@@ -1677,10 +2006,29 @@ impl Render for ProfileView {
             )
             .into_any_element()
         };
+
+        let frame_details = self
+            .flamegraph
+            .then(|| {
+                let index = self.hovered_bar.map(|(_, index)| index).or(selected)?;
+                self.flame_depth(index)?;
+                let result = self.result.as_ref()?;
+                let node = result.nodes.get(index)?;
+                let frame = result.frames.get(node.frame)?;
+                Some((
+                    frame.label.clone(),
+                    frame_sample_summary(node.inclusive_samples, displayed_samples),
+                ))
+            })
+            .flatten();
+        let overflow_view = cx.entity().downgrade();
+        let counts = self.status_counts();
+        let status = self.accessible_status(&counts);
         v_flex()
             .id("native-profile-view")
             .role(gpui::Role::Group)
             .aria_label("Native profile")
+            .relative()
             .size_full()
             .tab_group()
             .tab_index(0isize)
@@ -1689,8 +2037,7 @@ impl Render for ProfileView {
             .on_action(cx.listener(|this, _: &ZoomToSelectedFrame, _, cx| this.zoom_selected(cx)))
             .on_action(cx.listener(|this, _: &ResetProfileZoom, _, cx| this.zoom(None, cx)))
             .on_action(cx.listener(|this, _: &ToggleProfileView, _, cx| {
-                this.flamegraph = !this.flamegraph;
-                cx.notify();
+                this.set_flamegraph(!this.flamegraph, cx);
             }))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let modifiers = event.keystroke.modifiers;
@@ -1708,24 +2055,55 @@ impl Render for ProfileView {
                     return;
                 }
                 match event.keystroke.key.as_str() {
+                    key @ ("up" | "down" | "left" | "right" | "home" | "end")
+                        if this.flamegraph =>
+                    {
+                        this.navigate_flamegraph(key);
+                    }
                     "up" => this.host.select_previous(),
                     "down" => this.host.select_next(),
                     "home" => this.host.select_first(),
                     "end" => this.host.select_last(),
                     "left" => this.host.select_parent(),
                     "right" => this.host.select_first_child(),
-                    "space" => this.host.toggle_selected(),
+                    "space" if !this.flamegraph => this.host.toggle_selected(),
                     "enter" => this.open_selected(window, cx),
                     _ => return,
                 }
-                this.host.reveal_selection(gpui::ScrollStrategy::Center);
+                if !this.flamegraph {
+                    this.host.reveal_selection(gpui::ScrollStrategy::Center);
+                }
                 cx.stop_propagation();
                 cx.notify();
             }))
             .child(
+                gpui::canvas(
+                    move |bounds, window, cx| {
+                        if bounds.size.width != pane_width {
+                            let measure = measure.clone();
+                            window.defer(cx, move |_, cx| {
+                                measure
+                                    .update(cx, |this, cx| {
+                                        this.pane_width = bounds.size.width;
+                                        cx.notify();
+                                    })
+                                    .log_err();
+                            });
+                        }
+                    },
+                    |_, (), _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            .child(
                 h_flex()
                     .flex_wrap()
-                    .gap_2()
+                    .when_else(
+                        compact,
+                        |toolbar| toolbar.gap_x_1().gap_y_2(),
+                        |toolbar| toolbar.gap_2(),
+                    )
                     .p_2()
                     .child(
                         Button::new("import", "Import Profile")
@@ -1735,80 +2113,198 @@ impl Render for ProfileView {
                             .on_click(cx.listener(|this, _, window, cx| this.prompt(window, cx))),
                     )
                     .child(
-                        Button::new(
-                            "mode",
-                            if self.flamegraph {
-                                "Call Tree"
-                            } else {
-                                "Flamegraph"
-                            },
-                        )
-                        .track_focus(&mode_focus.clone().tab_index(2).tab_stop(true))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.flamegraph = !this.flamegraph;
-                            cx.notify();
-                        })),
-                    )
-                    .child(
-                        Button::new("zoom-selected", "Zoom Selected")
-                            .track_focus(
-                                &zoom_focus
-                                    .clone()
-                                    .tab_index(3)
-                                    .tab_stop(self.selected_node_index().is_some()),
+                        h_flex()
+                            .gap_0p5()
+                            .rounded_md()
+                            .p_0p5()
+                            .bg(cx.theme().colors().element_background)
+                            .child(
+                                Button::new("flame-graph", "Flame Graph")
+                                    .track_focus(&flame_focus.clone().tab_index(2).tab_stop(true))
+                                    .toggle_state(self.flamegraph)
+                                    .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.set_flamegraph(true, cx)),
+                                    ),
                             )
-                            .disabled(self.selected_node_index().is_none())
-                            .on_click(cx.listener(|this, _, _, cx| this.zoom_selected(cx))),
-                    )
-                    .child(
-                        Button::new("reset-zoom", "Reset Zoom")
-                            .track_focus(&reset_focus.clone().tab_index(4).tab_stop(self.zoomed))
-                            .disabled(!self.zoomed)
-                            .on_click(cx.listener(|this, _, _, cx| this.zoom(None, cx))),
-                    )
-                    .child(
-                        Button::new("open-source", "Open Source")
-                            .track_focus(
-                                &source_focus.clone().tab_index(5).tab_stop(source_available),
-                            )
-                            .disabled(!source_available)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.open_selected(window, cx)),
+                            .child(
+                                Button::new("call-tree", "Call Tree")
+                                    .track_focus(&tree_focus.clone().tab_index(3).tab_stop(true))
+                                    .toggle_state(!self.flamegraph)
+                                    .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| {
+                                            this.set_flamegraph(false, cx)
+                                        }),
+                                    ),
                             ),
                     )
                     .child(
-                        Button::new("cancel-import", "Cancel Import")
-                            .track_focus(
-                                &cancel_focus.clone().tab_index(6).tab_stop(self.importing),
+                        h_flex()
+                            .gap_1()
+                            .child(
+                                Button::new(
+                                    "zoom-selected",
+                                    if compact { "Zoom" } else { "Zoom Selected" },
+                                )
+                                .aria_label("Zoom Selected")
+                                .tooltip(Tooltip::text("Zoom Selected"))
+                                .track_focus(
+                                    &zoom_focus.clone().tab_index(4).tab_stop(selected.is_some()),
+                                )
+                                .disabled(selected.is_none())
+                                .on_click(cx.listener(|this, _, _, cx| this.zoom_selected(cx))),
                             )
-                            .disabled(!self.importing)
-                            .on_click(cx.listener(|this, _, _, cx| this.cancel_import(cx))),
+                            .child(
+                                Button::new(
+                                    "reset-zoom",
+                                    if compact { "Reset" } else { "Reset Zoom" },
+                                )
+                                .aria_label("Reset Zoom")
+                                .tooltip(Tooltip::text("Reset Zoom"))
+                                .track_focus(
+                                    &reset_focus
+                                        .clone()
+                                        .tab_index(5)
+                                        .tab_stop(self.zoom_root.is_some()),
+                                )
+                                .disabled(self.zoom_root.is_none())
+                                .on_click(cx.listener(|this, _, _, cx| this.zoom(None, cx))),
+                            )
+                            .child(
+                                Button::new(
+                                    "open-source",
+                                    if compact { "Source" } else { "Open Source" },
+                                )
+                                .aria_label("Open Source")
+                                .tooltip(Tooltip::text("Open Source"))
+                                .track_focus(
+                                    &source_focus.clone().tab_index(6).tab_stop(source_available),
+                                )
+                                .disabled(!source_available)
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| {
+                                        this.open_selected(window, cx)
+                                    }),
+                                ),
+                            ),
                     )
-                    .child(
-                        Button::new("clear", "Clear")
-                            .track_focus(&clear_focus.clone().tab_index(7).tab_stop(true))
-                            .on_click(cx.listener(|this, _, _, cx| this.clear(cx))),
-                    )
-                    .child(
-                        Button::new("expand", "Expand All")
-                            .track_focus(&expand_focus.clone().tab_index(8).tab_stop(true))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.host.expand_all();
-                                cx.notify();
-                            })),
-                    ),
+                    .when(self.importing, |toolbar| {
+                        toolbar.child(
+                            Button::new("cancel-import", "Cancel Import")
+                                .track_focus(&cancel_focus.clone().tab_index(7).tab_stop(true))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.cancel_import(cx);
+                                    window.focus(&this.toolbar_focus[0], cx);
+                                })),
+                        )
+                    })
+                    .when(!compact, |toolbar| {
+                        toolbar
+                            .child(
+                                Button::new("clear", "Clear")
+                                    .track_focus(&clear_focus.clone().tab_index(8).tab_stop(true))
+                                    .on_click(cx.listener(|this, _, _, cx| this.clear(cx))),
+                            )
+                            .when(!self.flamegraph, |toolbar| {
+                                toolbar.child(
+                                    Button::new("expand", "Expand All")
+                                        .track_focus(
+                                            &expand_focus.clone().tab_index(9).tab_stop(true),
+                                        )
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.host.expand_all();
+                                            cx.notify();
+                                        })),
+                                )
+                            })
+                    })
+                    .when(compact, |toolbar| {
+                        let call_tree = !self.flamegraph;
+                        toolbar.child(
+                            PopoverMenu::new("profile-actions")
+                                .anchor(gpui::Anchor::TopRight)
+                                .trigger_with_tooltip(
+                                    IconButton::new("profile-actions-trigger", IconName::Ellipsis)
+                                        .aria_label("More profile actions")
+                                        .track_focus(
+                                            &overflow_focus.clone().tab_index(10).tab_stop(true),
+                                        ),
+                                    Tooltip::text("More profile actions"),
+                                )
+                                .menu(move |window, cx| {
+                                    let clear = overflow_view.clone();
+                                    let expand = overflow_view.clone();
+                                    Some(ContextMenu::build(window, cx, move |menu, _, _| {
+                                        let menu = menu.entry("Clear", None, move |_, cx| {
+                                            clear.update(cx, |this, cx| this.clear(cx)).log_err();
+                                        });
+                                        if call_tree {
+                                            menu.entry("Expand All", None, move |_, cx| {
+                                                expand
+                                                    .update(cx, |this, cx| {
+                                                        this.host.expand_all();
+                                                        cx.notify();
+                                                    })
+                                                    .log_err();
+                                            })
+                                        } else {
+                                            menu
+                                        }
+                                    }))
+                                }),
+                        )
+                    }),
             )
             .child(
-                div()
+                v_flex()
                     .id("native-profile-status")
                     .role(gpui::Role::Status)
                     .aria_label("Native profile status")
-                    .aria_value(self.notice.clone())
+                    .aria_value(status)
                     .aria_live(gpui::accesskit::Live::Polite)
-                    .p_2()
-                    .child(self.notice.clone()),
+                    .px_2()
+                    .pb_2()
+                    .gap_1()
+                    .when(!counts.is_empty(), |status| {
+                        status.child(
+                            h_flex().flex_wrap().gap_x_3().gap_y_1().children(
+                                counts
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(index, (label, color))| {
+                                        let label = Label::new(label).color(color);
+                                        if index == 0 {
+                                            label.weight(gpui::FontWeight::SEMIBOLD)
+                                        } else {
+                                            label
+                                        }
+                                    }),
+                            ),
+                        )
+                    })
+                    .child(Label::new(self.notice.clone()).color(Color::Muted)),
             )
             .child(content)
+            .when(self.flamegraph && self.result.is_some(), |view| {
+                view.child(
+                    v_flex()
+                        .w_full()
+                        .px_2()
+                        .py_1()
+                        .border_t_1()
+                        .border_color(cx.theme().colors().border)
+                        .map(|details| match frame_details {
+                            Some((label, summary)) => details
+                                .child(div().child(label))
+                                .child(Label::new(summary).color(Color::Muted)),
+                            None => details.child(
+                                Label::new("Select a frame or use the arrow keys to explore.")
+                                    .color(Color::Muted),
+                            ),
+                        }),
+                )
+            })
     }
 }
 
@@ -2213,7 +2709,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn profile_view_narrow_flamegraph_click_selects_and_zooms(cx: &mut gpui::TestAppContext) {
+    async fn profile_view_subpixel_flamegraph_selects_before_zoom(cx: &mut gpui::TestAppContext) {
         cx.update(|cx| {
             let settings = settings::SettingsStore::test(cx);
             cx.set_global(settings);
@@ -2273,11 +2769,22 @@ mod tests {
             .expect("painted row");
         let position =
             bounds.origin + gpui::point(bounds.size.width * 0.50025, bounds.size.height / 2.0);
+        cx.simulate_mouse_move(position, None, gpui::Modifiers::default());
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.hovered_bar, Some((0, 1_000)));
+            assert!(view.selected_node_index().is_none());
+        });
         cx.simulate_click(position, gpui::Modifiers::default());
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
             assert_eq!(view.selected_node_index(), Some(1_000));
-            assert!(view.zoomed);
+            assert_eq!(view.zoom_root, None);
+        });
+        view.update(cx, |view, cx| view.zoom_selected(cx));
+        cx.run_until_parked();
+        view.read_with(cx, |view, _| {
+            assert_eq!(view.zoom_root, Some(1_000));
             let bar = view
                 .flame_rows
                 .first()
@@ -3454,6 +3961,8 @@ mod tests {
             cx.update(|window, cx| dispatch(window, cx, key));
             cx.run_until_parked();
         };
+        cx.simulate_resize(gpui::size(px(1200.0), px(720.0)));
+        cx.run_until_parked();
         let assert_accessibility_focus =
             |cx: &mut gpui::VisualTestContext, focus_field: &str, role: &str, label: &str| {
                 for _ in 0..2 {
@@ -3485,13 +3994,13 @@ mod tests {
             };
         let mut previous_status_id = None;
         let mut assert_accessibility_status = |cx: &mut gpui::VisualTestContext| {
-            let (notice, zoom_disabled, reset_disabled, cancel_disabled) =
+            let (notice, zoom_disabled, reset_disabled, importing) =
                 view.read_with(cx, |view, _| {
                     (
-                        view.notice.clone(),
+                        view.accessible_status(&view.status_counts()),
                         view.selected_node_index().is_none(),
-                        !view.zoomed,
-                        !view.importing,
+                        view.zoom_root.is_none(),
+                        view.importing,
                     )
                 });
             for _ in 0..2 {
@@ -3516,7 +4025,6 @@ mod tests {
                     for (label, disabled) in [
                         ("Zoom Selected", zoom_disabled),
                         ("Reset Zoom", reset_disabled),
-                        ("Cancel Import", cancel_disabled),
                     ] {
                         let control = tree["nodes"]
                             .as_object()
@@ -3527,6 +4035,15 @@ mod tests {
                             })
                             .expect("native toolbar control");
                         assert_eq!(control["aria"]["disabled"], disabled, "{control}");
+                    }
+                    let cancel = tree["nodes"]
+                        .as_object()
+                        .expect("profile nodes")
+                        .values()
+                        .find(|node| node["aria"]["label"] == "Cancel Import");
+                    assert_eq!(cancel.is_some(), importing);
+                    if let Some(cancel) = cancel {
+                        assert_eq!(cancel["aria"]["disabled"], false);
                     }
                 });
             }
@@ -3554,13 +4071,16 @@ mod tests {
         cx.run_until_parked();
         press(cx, "tab");
         press(cx, "tab");
+        press(cx, "space");
+        press(cx, "tab");
         press(cx, "enter");
         assert!(
             view.read_with(cx, |view, _| view.notice.starts_with("Profile cleared")),
             "disabled controls are skipped and Clear is activated"
         );
-        press(cx, "shift-tab");
-        press(cx, "shift-tab");
+        for _ in 0..3 {
+            press(cx, "shift-tab");
+        }
         press(cx, "enter");
         assert!(cx.did_prompt_for_paths());
         cx.simulate_path_prompt_response(|_| {
@@ -3592,21 +4112,16 @@ mod tests {
             (index, line, result.nodes.len())
         });
         assert_accessibility_status(cx);
-        press(cx, "tab");
-        press(cx, "space");
-        assert!(
-            !view.read_with(cx, |view, _| view.flamegraph),
-            "successful import preserves toolbar navigation"
-        );
-        press(cx, "tab");
-        press(cx, "tab");
+        for _ in 0..4 {
+            press(cx, "tab");
+        }
         press(cx, "enter");
         assert_eq!(
             view.read_with(cx, |view, _| view.host.visible_rows().len()),
             node_count,
             "Expand All activates from the toolbar"
         );
-        for _ in 0..4 {
+        for _ in 0..5 {
             press(cx, "shift-tab");
         }
         for _ in 0..node_count {
@@ -3621,19 +4136,41 @@ mod tests {
         );
         assert_accessibility_focus(cx, "gpui_focus", "Group", "Native profile");
         assert_accessibility_focus(cx, "active_descendant_focus", "TreeItem", "workload::leaf");
-        for _ in 0..3 {
+        press(cx, "tab");
+        press(cx, "tab");
+        press(cx, "space");
+        press(cx, "shift-tab");
+        press(cx, "shift-tab");
+        press(cx, "home");
+        for _ in 0..node_count {
+            if view.read_with(cx, |view, _| view.selected_node_index()) == Some(source_node) {
+                break;
+            }
+            press(cx, "down");
+        }
+        assert_eq!(
+            view.read_with(cx, |view, _| view.selected_node_index()),
+            Some(source_node)
+        );
+        assert_accessibility_focus(
+            cx,
+            "active_descendant_focus",
+            "Button",
+            "of displayed samples",
+        );
+        for _ in 0..4 {
             press(cx, "tab");
         }
         press(cx, "space");
         assert!(
-            view.read_with(cx, |view, _| view.zoomed),
+            view.read_with(cx, |view, _| view.zoom_root.is_some()),
             "Zoom Selected activates from the toolbar"
         );
         assert_accessibility_status(cx);
         press(cx, "tab");
         press(cx, "enter");
         assert!(
-            !view.read_with(cx, |view, _| view.zoomed),
+            !view.read_with(cx, |view, _| view.zoom_root.is_some()),
             "Reset Zoom activates from the toolbar"
         );
         assert_accessibility_status(cx);
@@ -3677,7 +4214,7 @@ mod tests {
             .expect("background import reached its processing boundary");
         assert_accessibility_status(cx);
         cx.update(|window, cx| {
-            for _ in 0..5 {
+            for _ in 0..6 {
                 dispatch(window, cx, "tab");
             }
             dispatch(window, cx, "enter");
@@ -3718,7 +4255,7 @@ mod tests {
                 assert!(view.importing);
                 view.cancellation.clone()
             });
-            for _ in 0..5 {
+            for _ in 0..6 {
                 dispatch(window, cx, "tab");
             }
             dispatch(window, cx, "enter");
@@ -3737,12 +4274,12 @@ mod tests {
             ));
             assert!(view.notice.starts_with("Import cancelled"));
         });
-        press(cx, "tab");
+        assert_accessibility_focus(cx, "gpui_focus", "Button", "Import Profile");
+        for _ in 0..5 {
+            press(cx, "tab");
+        }
         press(cx, "space");
-        assert!(
-            view.read_with(cx, |view, _| view.result.is_none()),
-            "Tab after disabled Cancel reaches Clear"
-        );
+        assert!(view.read_with(cx, |view, _| view.result.is_none()));
         assert_accessibility_status(cx);
         cx.deactivate_window();
         container.update_in(cx, |_, window, _| window.remove_window());
@@ -4307,12 +4844,12 @@ mod tests {
         cx.dispatch_action(ZoomToSelectedFrame);
         cx.run_until_parked();
         view.read_with(cx, |view, _| {
-            assert!(view.flamegraph && view.zoomed);
+            assert!(view.flamegraph && view.zoom_root.is_some());
             assert_eq!(view.selected_node_index(), Some(source_node));
         });
         cx.dispatch_action(ResetProfileZoom);
         cx.run_until_parked();
-        view.read_with(cx, |view, _| assert!(!view.zoomed));
+        view.read_with(cx, |view, _| assert!(!view.zoom_root.is_some()));
         cx.dispatch_action(ToggleProfileView);
         cx.run_until_parked();
         view.read_with(cx, |view, _| assert!(!view.flamegraph));
@@ -4334,7 +4871,7 @@ mod tests {
             source_line - 1
         );
         view.read_with(cx, |view, _| {
-            assert!(view.zoomed);
+            assert!(view.zoom_root.is_some());
             assert_eq!(
                 view.flame_rows
                     .first()
