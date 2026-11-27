@@ -3487,7 +3487,7 @@ async fn selected_junit_process_running(
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-async fn verify_docker_maven_test_authority(
+async fn verify_docker_test_authority(
     project: &Entity<Project>,
     worktree_id: WorktreeId,
     selection: &TestExplorerSelection,
@@ -5919,10 +5919,13 @@ async fn selected_java_case_with_debug_hooks(
         assert!(fresh_report.contains(r#"name="os.arch" value="aarch64""#));
         assert!(fresh_report.contains(r#"name="user.dir" value="/workspaces/tests/"#));
         eprintln!("Selected Maven case passed in Linux ARM64 with host-produced Surefire XML");
+    }
+    #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+    if connection == JvmWorkflowConnection::Docker && outcome == JavaTestOutcome::Pass {
         let report_mtime = std::fs::metadata(&report)
             .and_then(|metadata| metadata.modified())
-            .expect("Docker Surefire report time");
-        verify_docker_maven_test_authority(&project, worktree_id, &selection, cx).await;
+            .expect("Docker test report time");
+        verify_docker_test_authority(&project, worktree_id, &selection, cx).await;
         assert_eq!(
             std::fs::read_to_string(&report).expect("retained report"),
             fresh_report
