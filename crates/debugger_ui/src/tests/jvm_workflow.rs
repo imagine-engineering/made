@@ -160,6 +160,48 @@ async fn cached_maven_debug_selected_java_test(cx: &mut gpui::TestAppContext) {
     .await;
 }
 
+#[cfg(target_os = "macos")]
+#[gpui::test]
+#[ignore = "requires a disposable Linux Gradle host with pinned Java and verified cached dependencies"]
+async fn docker_gradle_debug_selected_java_test(cx: &mut gpui::TestAppContext) {
+    tasks_ui::jvm_workflow::run_docker_selected_java_debug(
+        cx,
+        JvmTestBuildTool::Gradle,
+        JvmWorkflowDebugHooks::SelectedJavaTest {
+            initialize: initialize_selected_java_debug,
+            run: |context, cx| {
+                Box::pin(run_selected_java_debug(
+                    context,
+                    JvmTestBuildTool::Gradle,
+                    cx,
+                ))
+            },
+        },
+    )
+    .await;
+}
+
+#[cfg(target_os = "macos")]
+#[gpui::test]
+#[ignore = "requires a disposable Linux Maven host with pinned Java and verified cached dependencies"]
+async fn docker_maven_debug_selected_java_test(cx: &mut gpui::TestAppContext) {
+    tasks_ui::jvm_workflow::run_docker_selected_java_debug(
+        cx,
+        JvmTestBuildTool::Maven,
+        JvmWorkflowDebugHooks::SelectedJavaTest {
+            initialize: initialize_selected_java_debug,
+            run: |context, cx| {
+                Box::pin(run_selected_java_debug(
+                    context,
+                    JvmTestBuildTool::Maven,
+                    cx,
+                ))
+            },
+        },
+    )
+    .await;
+}
+
 #[cfg(unix)]
 fn initialize_selected_java_debug(cx: &mut gpui::App) {
     zlog::init_test();
@@ -207,35 +249,61 @@ async fn run_selected_java_debug(
         }
     });
     let cached_report = std::fs::read(&report).expect("Tests discovery report");
+    let source_path = project::ProjectPath {
+        worktree_id,
+        path: util::rel_path::RelPath::from_unix_str(
+            "application/src/test/java/evidence/GreetingTest.java",
+        )
+        .expect("fixture source")
+        .into_arc(),
+    };
+    let (connected, frame_path) = project.read_with(cx, |project, cx| {
+        (
+            project.is_remote(),
+            project
+                .absolute_path(&source_path, cx)
+                .expect("selected Java source path"),
+        )
+    });
     let (buffer, _handle) = project
         .update(cx, |project, cx| {
-            project.open_local_buffer_with_lsp(java_path.clone(), cx)
+            project.open_buffer_with_lsp(source_path.clone(), cx)
         })
         .await
         .expect("selected Java test buffer");
     let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let server = loop {
-        cx.run_until_parked();
-        let server = buffer.update(cx, |buffer, cx| {
-            lsp_store.update(cx, |store, cx| {
-                store
-                    .running_language_servers_for_local_buffer(buffer, cx)
-                    .map(|(_, server)| server.clone())
-                    .next()
-            })
+    if !connected {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let server = loop {
+            cx.run_until_parked();
+            let server = buffer.update(cx, |buffer, cx| {
+                lsp_store.update(cx, |store, cx| {
+                    store
+                        .running_language_servers_for_local_buffer(buffer, cx)
+                        .map(|(_, server)| server.clone())
+                        .next()
+                })
+            });
+            if let Some(server) = server {
+                break server;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "pinned JDTLS did not start for the selected test"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
+        cx.update(|_, cx| {
+            dap::DapRegistry::global(cx).add_adapter(Arc::new(
+                CachedJavaDebugAdapter::SelectedTest {
+                    server,
+                    source_root,
+                },
+            ))
         });
-        if let Some(server) = server {
-            break server;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "pinned JDTLS did not start for the selected test"
-        );
-        cx.background_executor
-            .timer(Duration::from_millis(100))
-            .await;
-    };
+    }
     let deadline = Instant::now() + Duration::from_secs(60);
     let mut refresh_at = Instant::now();
     loop {
@@ -259,23 +327,12 @@ async fn run_selected_java_debug(
             .timer(Duration::from_millis(100))
             .await;
     }
-    cx.update(|_, cx| {
-        dap::DapRegistry::global(cx).add_adapter(Arc::new(CachedJavaDebugAdapter::SelectedTest {
-            server,
-            source_root,
-        }))
-    });
     let mut async_cx = cx.update(|window, cx| window.to_async(cx));
     let debug_panel = DebugPanel::load(workspace.downgrade(), &mut async_cx)
         .await
         .expect("existing Debug panel");
     workspace.update_in(cx, |workspace, window, cx| {
         workspace.add_panel(debug_panel.clone(), window, cx);
-    });
-    let source_path = project.read_with(cx, |project, cx| {
-        project
-            .find_project_path(&java_path, cx)
-            .expect("current fixture source path")
     });
     let item = workspace
         .update_in(cx, |workspace, window, cx| {
@@ -349,13 +406,7 @@ async fn run_selected_java_debug(
                         .read(cx)
                         .terminal
                         .as_ref()
-                        .map(|view| {
-                            view.read(cx)
-                                .terminal()
-                                .read(cx)
-                                .last_n_non_empty_lines(30)
-                                .join("\n")
-                        })
+                        .map(|view| view.read(cx).terminal().read(cx).get_content())
                         .unwrap_or_default()
                 });
                 panic!("the selected Debug session ended before its breakpoint\n{output}");
@@ -392,14 +443,18 @@ async fn run_selected_java_debug(
                             .as_ref()
                             .and_then(|source| source.path.as_deref())
                             .is_some_and(|path| {
-                                std::fs::canonicalize(path).is_ok_and(|path| path == java_path)
+                                if connected {
+                                    std::path::Path::new(path) == frame_path
+                                } else {
+                                    std::fs::canonicalize(path).is_ok_and(|path| path == frame_path)
+                                }
                             })
                 }))
             })
             .unwrap_or_default();
         let editor_matches = breakpoints.read_with(cx, |store, cx| {
             store.active_position().is_some_and(|frame| {
-                frame.path.as_ref() == java_path.as_path()
+                frame.path.as_ref() == frame_path.as_path()
                     && frame.position.to_point(&buffer.read(cx).snapshot()).row as usize
                         == breakpoint_row
             })
@@ -466,7 +521,7 @@ async fn run_selected_java_debug(
     );
     assert_eq!(parsed.cases[0].state, StructuredNodeState::Passed);
     eprintln!(
-        "{build_tool:?} Tests Debug stopped at GreetingTest.java:{}, opened that frame and continued to one passing report",
+        "{build_tool:?} Tests Debug (remote={connected}) stopped at GreetingTest.java:{}, opened that frame and continued to one passing report",
         breakpoint_row + 1
     );
 }

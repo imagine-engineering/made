@@ -45,7 +45,10 @@ pub async fn run_cached_gradle_workflow(cx: &mut TestAppContext, hooks: JvmWorkf
     .await;
 }
 
-#[cfg(all(test, unix))]
+#[cfg(any(
+    all(test, unix),
+    all(feature = "jvm-test-actions", target_os = "macos")
+))]
 fn cached_jvm_fixture_path(name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var_os(name).expect(name))
         .canonicalize()
@@ -3214,11 +3217,31 @@ pub async fn run_cached_selected_java_debug(
     .await;
 }
 
+#[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
+pub async fn run_docker_selected_java_debug(
+    cx: &mut TestAppContext,
+    build_tool: JvmTestBuildTool,
+    hooks: JvmWorkflowDebugHooks,
+) {
+    assert!(matches!(
+        hooks,
+        JvmWorkflowDebugHooks::SelectedJavaTest { .. }
+    ));
+    selected_java_case_with_debug_hooks(
+        cx,
+        build_tool,
+        JavaTestOutcome::Pass,
+        JvmWorkflowConnection::Docker,
+        Some(hooks),
+    )
+    .await;
+}
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum JvmWorkflowConnection {
     Local,
     Ssh,
-    #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+    #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
     Docker,
 }
 
@@ -3382,7 +3405,7 @@ pub(super) async fn selected_java_case_through_docker_tests_panel(
     .await;
 }
 
-#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
 fn docker_test_fixture_container(build_tool: JvmTestBuildTool) -> String {
     let variable = match build_tool {
         JvmTestBuildTool::Maven => "GROOVY_MAVEN_TEST_DOCKER_CONTAINER",
@@ -3401,7 +3424,7 @@ async fn selected_junit_process_running(
     process_id: u32,
 ) -> bool {
     match connection {
-        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
         JvmWorkflowConnection::Docker => {
             let output = util::command::new_command("docker")
                 .args([
@@ -3635,7 +3658,7 @@ async fn selected_java_case_with_debug_hooks(
     let connected = connection != JvmWorkflowConnection::Local;
     let use_gradle = build_tool == JvmTestBuildTool::Gradle;
     let use_docker = match connection {
-        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
         JvmWorkflowConnection::Docker => true,
         _ => false,
     };
@@ -3733,7 +3756,7 @@ async fn selected_java_case_with_debug_hooks(
         .join("../project/test_data")
         .join(fixture_name);
     let root = match connection {
-        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
         JvmWorkflowConnection::Docker => {
             tempfile::tempdir_in(cached_jvm_fixture_path(if use_gradle {
                 "GROOVY_GRADLE_TEST_DOCKER_ROOT"
@@ -3764,7 +3787,7 @@ async fn selected_java_case_with_debug_hooks(
         std::fs::Permissions::from_mode(0o755),
     )
     .expect("make project wrapper executable");
-    let provider_state = (with_real_providers || debug_selected)
+    let provider_state = (with_real_providers || (debug_selected && !connected))
         .then(|| tempfile::tempdir().expect("isolated JVM provider state"));
     let mut java_settings = serde_json::json!({
         "import": {"gradle": {"enabled": true,
@@ -3975,7 +3998,7 @@ async fn selected_java_case_with_debug_hooks(
 
     cx.update(|cx| project::trusted_worktrees::init(collections::HashMap::default(), cx));
 
-    if connected {
+    if connected && !debug_selected {
         std::fs::create_dir_all(root.path().join(".zed")).expect("remote fixture settings");
         std::fs::write(
             root.path().join(".zed/settings.json"),
@@ -3994,7 +4017,7 @@ async fn selected_java_case_with_debug_hooks(
                 panic!("the opt-in loopback SSH fixture is currently macOS-only")
             }
         }
-        #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+        #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
         JvmWorkflowConnection::Docker => {
             use remote::{DockerConnectionOptions, RemoteConnectionOptions};
 
@@ -4016,8 +4039,29 @@ async fn selected_java_case_with_debug_hooks(
                 )
                 .expect("isolated offline Maven configuration");
             }
-            connect_cached_jvm_fixture(&host_root, app_state, options, &[("java", "6.8.30")], cx)
-                .await
+            if debug_selected {
+                let settings = cached_jvm_fixture_path(if use_gradle {
+                    "GROOVY_GRADLE_TEST_DOCKER_SETTINGS"
+                } else {
+                    "GROOVY_MAVEN_TEST_DOCKER_SETTINGS"
+                });
+                std::fs::create_dir_all(root.path().join(".zed")).expect("remote fixture settings");
+                std::fs::copy(settings, root.path().join(".zed/settings.json"))
+                    .expect("host-pinned Java provider settings");
+                if use_gradle {
+                    std::fs::write(
+                        root.path().join("gradle.properties"),
+                        "org.gradle.java.home=/qualification/jdk17\norg.gradle.java.installations.auto-download=false\n",
+                    )
+                    .expect("offline host Gradle JVM configuration");
+                }
+            }
+            let extensions: &[(&str, &str)] = if debug_selected {
+                &[("java", "6.8.30"), ("kotlin", "0.3.5")]
+            } else {
+                &[("java", "6.8.30")]
+            };
+            connect_cached_jvm_fixture(&host_root, app_state, options, extensions, cx).await
         }
         JvmWorkflowConnection::Local => {
             Project::test(
@@ -4058,7 +4102,7 @@ async fn selected_java_case_with_debug_hooks(
     })
     .expect("pinned Java extension runnable contract");
     languages.add(Arc::new(java));
-    if debug_selected {
+    if debug_selected && !connected {
         let debug_jar = std::env::var("GROOVY_JAVA_DEBUG_JAR").expect("verified Java Debug bundle");
         assert!(Path::new(&debug_jar).is_absolute() && Path::new(&debug_jar).is_file());
         languages.register_fake_lsp_adapter(
@@ -4095,6 +4139,14 @@ async fn selected_java_case_with_debug_hooks(
             cx,
         )
     });
+    if connected && debug_selected {
+        let store = project.read_with(cx, |project, _| project.lsp_store());
+        store.update(cx, |store, cx| {
+            store
+                .set_default_jvm_project_languages_enabled(true, cx)
+                .expect("enable the trusted host's Java provider");
+        });
+    }
 
     let provider = project.read_with(cx, |project, _| {
         project
@@ -5005,13 +5057,24 @@ async fn selected_java_case_with_debug_hooks(
             panel.active = true;
             panel.refresh(cx);
         });
-        cx.run_until_parked();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let id = loop {
+            cx.run_until_parked();
+            if let Some(id) = tests_panel.read_with(cx, |panel, _| {
+                let case = find_node(&panel.projection.snapshot.roots, case_label)?;
+                panel.projection.can_run(&case.id).then(|| case.id.clone())
+            }) {
+                break id;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Tests did not publish the selected runnable Java case"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
         tests_panel.update(cx, |panel, cx| {
-            let id = find_node(&panel.projection.snapshot.roots, case_label)
-                .expect("selected Java case in Tests")
-                .id
-                .clone();
-            assert!(panel.projection.can_run(&id));
             panel.host.expand_all();
             panel.host.select(id);
             cx.notify();

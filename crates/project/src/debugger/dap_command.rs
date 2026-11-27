@@ -1236,7 +1236,12 @@ impl LocalDapCommand for StackTraceCommand {
 }
 
 const JAVA_STACK_SOURCE_ERROR: &str =
-    "Request failed: Cannot read field \"path\" because \"lspFrame.source\" is null";
+    "Cannot read field \"path\" because \"lspFrame.source\" is null";
+
+fn is_java_stack_source_error(error: &anyhow::Error) -> bool {
+    let message = error.to_string();
+    message.strip_prefix("Request failed: ").unwrap_or(&message) == JAVA_STACK_SOURCE_ERROR
+}
 
 impl StackTraceCommand {
     async fn send_stack_trace<ResponseFuture>(
@@ -1255,7 +1260,7 @@ impl StackTraceCommand {
         if !self.recover_java_frames
             || self.start_frame.is_some()
             || self.levels.is_some()
-            || error.to_string() != JAVA_STACK_SOURCE_ERROR
+            || !is_java_stack_source_error(&error)
         {
             return Err(error);
         }
@@ -1285,7 +1290,7 @@ impl StackTraceCommand {
             }
             match request_page(start, count).await {
                 Ok(response) => frames.extend(response.stack_frames),
-                Err(error) if error.to_string() == JAVA_STACK_SOURCE_ERROR => {
+                Err(error) if is_java_stack_source_error(&error) => {
                     if count > 1 {
                         let first_half = count / 2;
                         pages.push((start + first_half, count - first_half));
@@ -1315,6 +1320,12 @@ async fn java_stack_trace_preserves_other_frames_when_one_source_is_missing(
         levels: None,
         recover_java_frames: true,
     };
+    assert!(is_java_stack_source_error(&anyhow::anyhow!(
+        "Request failed: {JAVA_STACK_SOURCE_ERROR}"
+    )));
+    assert!(!is_java_stack_source_error(&anyhow::anyhow!(
+        "Request failed: missing Java source"
+    )));
     let requests = std::cell::RefCell::new(Vec::new());
     let send = |args: dap::StackTraceArguments| {
         assert_eq!(args.thread_id, 42);
