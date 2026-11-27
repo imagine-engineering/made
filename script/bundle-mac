@@ -484,10 +484,6 @@ NATIVE_HELPER_POLICY
 function sign_app_binaries() {
     mkdir -p "${app_path}/Contents/Resources"
 
-    if [[ ",${ZED_PRODUCT_APP_FEATURES}," == *,agentic-tools,* ]]; then
-        python3 script/bundle-managed-runtime --platform "macos-${arch_suffix}" --destination "${app_path}/Contents/Resources/llama-cpp"
-    fi
-
     echo "Downloading git binary"
     download_git "${target_triple}" "${app_path}/Contents/Resources/git/launch-git"
 

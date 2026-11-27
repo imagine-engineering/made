@@ -15,6 +15,7 @@ use crate::provider::{
 
 #[derive(Debug, RegisterSetting)]
 pub struct AllLanguageModelSettings {
+    pub(crate) disable_ai: bool,
     pub anthropic: AnthropicSettings,
     pub anthropic_compatible: HashMap<Arc<str>, AnthropicCompatibleSettings>,
     pub bedrock: AmazonBedrockSettings,
@@ -66,6 +67,10 @@ impl settings::Settings for AllLanguageModelSettings {
         let x_ai = language_models.x_ai.unwrap();
         let zed_dot_dev = language_models.zed_dot_dev.unwrap();
         Self {
+            disable_ai: content
+                .project
+                .disable_ai
+                .is_some_and(|disabled| disabled.0),
             anthropic: AnthropicSettings {
                 api_url: anthropic.api_url.unwrap(),
                 available_models: anthropic.available_models.unwrap_or_default(),
@@ -121,7 +126,7 @@ impl settings::Settings for AllLanguageModelSettings {
                 custom_headers: custom_headers_from("Google AI", google.custom_headers, &[]),
             },
             llama_cpp: LlamaCppSettings {
-                managed_model: llama_cpp.managed_model,
+                retired_model: llama_cpp.retired_managed_model,
                 api_url: llama_cpp.api_url.unwrap(),
                 auto_discover: llama_cpp.auto_discover.unwrap_or(true),
                 available_models: llama_cpp.available_models.unwrap_or_default(),

@@ -610,19 +610,25 @@ struct ItemColors {
 
 fn get_item_color(is_sticky: bool, cx: &App) -> ItemColors {
     let colors = cx.theme().colors();
+    let (background, hover, marked) = if is_sticky {
+        let background = colors.panel_background.alpha(1.);
+        (
+            background,
+            background.blend(colors.panel_overlay_hover),
+            background.blend(colors.element_selected),
+        )
+    } else {
+        (
+            colors.panel_background,
+            colors.element_hover,
+            colors.element_selected,
+        )
+    };
 
     ItemColors {
-        default: if is_sticky {
-            colors.panel_overlay_background
-        } else {
-            colors.panel_background
-        },
-        hover: if is_sticky {
-            colors.panel_overlay_hover
-        } else {
-            colors.element_hover
-        },
-        marked: colors.element_selected,
+        default: background,
+        hover,
+        marked,
         focused: colors.panel_focused_border,
         drag_over: colors.drop_target_background,
     }
@@ -5795,7 +5801,7 @@ impl ProjectPanel {
             .border_r_2()
             .border_color(border_color)
             .hover(|style| style.bg(bg_hover_color).border_color(border_hover_color))
-            .when(is_sticky, |this| this.block_mouse_except_scroll())
+            .when(is_sticky, |this| this.w_full().block_mouse_except_scroll())
             .when(!is_sticky, |this| {
                 this.when(
                     is_highlighted && folded_directory_drag_target.is_none(),

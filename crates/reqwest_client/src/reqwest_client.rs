@@ -56,11 +56,6 @@ impl ReqwestClient {
             .into()
     }
 
-    pub fn loopback() -> anyhow::Result<Self> {
-        // Local inference must not inherit a cloud proxy, including system proxy settings.
-        Ok(Self::builder(None).no_proxy().build()?.into())
-    }
-
     pub fn user_agent(agent: &str) -> anyhow::Result<Self> {
         let mut map = HeaderMap::new();
         map.insert(http::header::USER_AGENT, HeaderValue::from_str(agent)?);

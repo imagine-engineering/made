@@ -8,7 +8,7 @@
 //! remain separate from the server-wide capabilities because they depend on the document.
 
 use anyhow::{Context as _, Result};
-use collections::{BTreeSet, HashSet};
+use collections::HashSet;
 use globset::{GlobBuilder, GlobMatcher};
 use gpui::{Context, SharedString};
 use lsp::{
@@ -75,9 +75,13 @@ pub(super) struct DynamicRegistrations {
         DocumentSelectorRegistrations<lsp::DocumentOnTypeFormattingOptions>,
     pub(super) formatting_selectors: DocumentSelectorRegistrations<()>,
     rename: CapabilityRegistrations<OneOf<bool, lsp::RenameOptions>>,
+    pub(super) rename_selectors: DocumentSelectorRegistrations<OneOf<bool, lsp::RenameOptions>>,
     code_action: CapabilityRegistrations<lsp::CodeActionProviderCapability>,
+    pub(super) definition_selectors: DocumentSelectorRegistrations<()>,
     definition: CapabilityRegistrations<OneOf<bool, lsp::DefinitionOptions>>,
-    completion: CapabilityRegistrations<lsp::CompletionOptions>,
+    completion: CapabilityRegistrations<CompletionOptions>,
+    pub(super) completion_selectors: DocumentSelectorRegistrations<CompletionOptions>,
+    pub(super) hover_selectors: DocumentSelectorRegistrations<()>,
     hover: CapabilityRegistrations<lsp::HoverProviderCapability>,
     signature_help: CapabilityRegistrations<lsp::SignatureHelpOptions>,
     color: CapabilityRegistrations<lsp::ColorProviderCapability>,
@@ -208,7 +212,7 @@ impl<T: Clone> DocumentSelectorRegistrations<T> {
 }
 
 impl LspStore {
-    fn register_formatting_selector<T: Clone>(
+    fn register_document_selector<T: Clone>(
         &mut self,
         server_id: LanguageServerId,
         id: String,
@@ -225,7 +229,7 @@ impl LspStore {
         selectors(registrations).register(id, selector, options)
     }
 
-    fn unregister_formatting_selector<T: Clone>(
+    fn unregister_document_selector<T: Clone>(
         &mut self,
         server_id: LanguageServerId,
         id: &str,
@@ -366,12 +370,8 @@ impl LspStore {
         }
     }
 
-    fn apply_completion_triggers(
-        &self,
-        server_id: LanguageServerId,
-        options: Option<CompletionOptions>,
-        cx: &mut Context<Self>,
-    ) {
+    fn apply_completion_triggers(&self, server: &LanguageServer, cx: &mut Context<Self>) {
+        let server_id = server.server_id();
         let Some(local) = self.as_local() else {
             return;
         };
@@ -387,14 +387,9 @@ impl LspStore {
                 buffers_with_language_server.push(handle);
             }
         }
-        let triggers = options
-            .and_then(|options| options.trigger_characters)
-            .unwrap_or_default()
-            .into_iter()
-            .collect::<BTreeSet<_>>();
         for handle in buffers_with_language_server {
-            let triggers = triggers.clone();
-            handle.update(cx, move |buffer, cx| {
+            handle.update(cx, |buffer, cx| {
+                let triggers = local.completion_triggers_for_buffer(buffer, server, cx);
                 buffer.set_completion_triggers(server_id, triggers, cx);
             });
         }
@@ -498,9 +493,9 @@ impl LspStore {
                     }
                 }
                 "textDocument/rangeFormatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
-                    self.register_formatting_selector(
+                    self.register_document_selector(
                         server_id,
                         reg.id.clone(),
                         selector,
@@ -518,13 +513,13 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     if let Some(options) = reg
                         .register_options
                         .map(serde_json::from_value::<lsp::DocumentOnTypeFormattingOptions>)
                         .transpose()?
                     {
-                        self.register_formatting_selector(
+                        self.register_document_selector(
                             server_id,
                             reg.id.clone(),
                             selector,
@@ -543,9 +538,9 @@ impl LspStore {
                     }
                 }
                 "textDocument/formatting" => {
-                    let selector = parse_formatting_selector(reg.register_options.as_ref())?;
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
-                    self.register_formatting_selector(
+                    self.register_document_selector(
                         server_id,
                         reg.id.clone(),
                         selector,
@@ -563,7 +558,15 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        options.clone(),
+                        |registrations| &mut registrations.rename_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -619,7 +622,15 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/definition" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.definition_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -631,31 +642,45 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/completion" => {
-                    if let Some(caps) = reg
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
+                    if let Some(options) = reg
                         .register_options
                         .map(serde_json::from_value::<CompletionOptions>)
                         .transpose()?
                     {
-                        if self.register_dynamic_capability(
+                        self.register_document_selector(
+                            server_id,
+                            reg.id.clone(),
+                            selector,
+                            options.clone(),
+                            |registrations| &mut registrations.completion_selectors,
+                        )?;
+                        self.register_dynamic_capability(
                             &server,
                             &reg.method,
                             reg.id,
-                            caps,
+                            options,
                             cx,
                             |registrations| &mut registrations.completion,
                             |capabilities| &mut capabilities.completion_provider,
-                        )? {
-                            let active = server.capabilities().completion_provider;
-                            self.apply_completion_triggers(server_id, active, cx);
-                        }
+                        )?;
+                        self.apply_completion_triggers(&server, cx);
                     }
                 }
                 "textDocument/hover" => {
+                    let selector = parse_document_selector(reg.register_options.as_ref())?;
                     let options = parse_register_capabilities(reg.register_options)?;
                     let provider = match options {
                         OneOf::Left(value) => lsp::HoverProviderCapability::Simple(value),
                         OneOf::Right(caps) => caps,
                     };
+                    self.register_document_selector(
+                        server_id,
+                        reg.id.clone(),
+                        selector,
+                        (),
+                        |registrations| &mut registrations.hover_selectors,
+                    )?;
                     self.register_dynamic_capability(
                         &server,
                         &reg.method,
@@ -956,7 +981,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rangeFormatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.range_formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -968,7 +993,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/onTypeFormatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.on_type_formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -980,7 +1005,7 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/formatting" => {
-                    self.unregister_formatting_selector(server_id, &unreg.id, |registrations| {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
                         &mut registrations.formatting_selectors
                     });
                     self.unregister_dynamic_capability(
@@ -992,6 +1017,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/rename" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.rename_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1010,6 +1038,9 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/definition" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.definition_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1019,21 +1050,22 @@ impl LspStore {
                     )?;
                 }
                 "textDocument/completion" => {
-                    if self
-                        .unregister_dynamic_capability(
-                            &server,
-                            unreg,
-                            cx,
-                            |registrations| &mut registrations.completion,
-                            |capabilities| &mut capabilities.completion_provider,
-                        )?
-                        .capability_changed()
-                    {
-                        let restored = server.capabilities().completion_provider;
-                        self.apply_completion_triggers(server_id, restored, cx);
-                    }
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.completion_selectors
+                    });
+                    self.unregister_dynamic_capability(
+                        &server,
+                        unreg,
+                        cx,
+                        |registrations| &mut registrations.completion,
+                        |capabilities| &mut capabilities.completion_provider,
+                    )?;
+                    self.apply_completion_triggers(&server, cx);
                 }
                 "textDocument/hover" => {
+                    self.unregister_document_selector(server_id, &unreg.id, |registrations| {
+                        &mut registrations.hover_selectors
+                    });
                     self.unregister_dynamic_capability(
                         &server,
                         unreg,
@@ -1205,7 +1237,7 @@ impl LspStore {
     }
 }
 
-fn parse_formatting_selector(
+fn parse_document_selector(
     options: Option<&serde_json::Value>,
 ) -> Result<Option<lsp::DocumentSelector>> {
     Ok(options

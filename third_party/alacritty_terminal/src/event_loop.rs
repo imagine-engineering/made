@@ -117,29 +117,30 @@ where
         let _terminal_lease = Some(self.terminal.lease());
         let mut terminal = None;
 
-        loop {
+        let result = loop {
             // Read from the PTY.
-            match self.pty.reader().read(&mut buf[unprocessed..]) {
-                // This is received on Windows/macOS when no more data is readable from the PTY.
-                Ok(0) if unprocessed == 0 => break,
-                Ok(got) => unprocessed += got,
-                Err(err) => match err.kind() {
-                    ErrorKind::Interrupted | ErrorKind::WouldBlock => {
-                        // Go back to mio if we're caught up on parsing and the PTY would block.
-                        if unprocessed == 0 {
-                            break;
-                        }
-                    },
-                    _ => return Err(err),
+            let (read_finished, result) = match self.pty.reader().read(&mut buf[unprocessed..]) {
+                Ok(0) => (true, Ok(())),
+                Ok(got) => {
+                    unprocessed += got;
+                    (false, Ok(()))
                 },
+                Err(err) if err.kind() == ErrorKind::WouldBlock => (true, Ok(())),
+                Err(err) if err.kind() == ErrorKind::Interrupted => (false, Ok(())),
+                Err(err) => (true, Err(err)),
+            };
+            if unprocessed == 0 {
+                break result;
             }
 
             // Attempt to lock the terminal.
             let terminal = match &mut terminal {
                 Some(terminal) => terminal,
                 None => terminal.insert(match self.terminal.try_lock_unfair() {
-                    // Force block if we are at the buffer size limit.
-                    None if unprocessed >= READ_BUFFER_SIZE => self.terminal.lock_unfair(),
+                    // Commit buffered output before reporting a hangup (EIO on Linux).
+                    None if read_finished || unprocessed >= READ_BUFFER_SIZE => {
+                        self.terminal.lock_unfair()
+                    },
                     None => continue,
                     Some(terminal) => terminal,
                 }),
@@ -157,17 +158,17 @@ where
             unprocessed = 0;
 
             // Assure we're not blocking the terminal too long unnecessarily.
-            if processed >= MAX_LOCKED_READ {
-                break;
+            if read_finished || processed >= MAX_LOCKED_READ {
+                break result;
             }
-        }
+        };
 
         // Queue terminal redraw unless all processed bytes were synchronized.
         if state.parser.sync_bytes_count() < processed && processed > 0 {
             self.event_proxy.send_event(Event::Wakeup);
         }
 
-        Ok(())
+        result
     }
 
     #[inline]
@@ -482,5 +483,105 @@ impl<T> PeekableReceiver<T> {
                 res => res.ok(),
             }
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::event::{OnResize, VoidListener};
+    use crate::index::{Column, Line, Point};
+    use crate::term::Config;
+    use crate::tty::{ChildEvent, EventedPty, EventedReadWrite};
+
+    struct HangingUpPty {
+        output: &'static [u8],
+        release_terminal: Option<Sender<()>>,
+        writer: io::Sink,
+    }
+
+    impl Read for HangingUpPty {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if !self.output.is_empty() {
+                return self.output.read(buffer);
+            }
+            if let Some(release_terminal) = self.release_terminal.take() {
+                release_terminal.send(()).map_err(io::Error::other)?;
+            }
+            Err(io::Error::from_raw_os_error(libc::EIO))
+        }
+    }
+
+    impl OnResize for HangingUpPty {
+        fn on_resize(&mut self, _: WindowSize) {}
+    }
+
+    impl EventedReadWrite for HangingUpPty {
+        type Reader = Self;
+        type Writer = io::Sink;
+
+        unsafe fn register(
+            &mut self,
+            _: &Arc<Poller>,
+            _: PollingEvent,
+            _: PollMode,
+        ) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn reregister(&mut self, _: &Arc<Poller>, _: PollingEvent, _: PollMode) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn deregister(&mut self, _: &Arc<Poller>) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn reader(&mut self) -> &mut Self::Reader {
+            self
+        }
+
+        fn writer(&mut self) -> &mut Self::Writer {
+            &mut self.writer
+        }
+    }
+
+    impl EventedPty for HangingUpPty {
+        fn next_child_event(&mut self) -> Option<ChildEvent> {
+            None
+        }
+    }
+
+    #[test]
+    fn pty_hangup_parses_output_buffered_while_terminal_is_locked() -> io::Result<()> {
+        let terminal =
+            Arc::new(FairMutex::new(Term::new(Config::default(), &(80, 24), VoidListener)));
+        let (ready_sender, ready_receiver) = mpsc::channel();
+        let (release_sender, release_receiver) = mpsc::channel();
+        std::thread::scope(|scope| -> io::Result<()> {
+            let terminal_to_lock = &terminal;
+            scope.spawn(move || {
+                let _guard = terminal_to_lock.lock_unfair();
+                ready_sender.send(()).expect("signal terminal lock held");
+                release_receiver.recv().expect("release terminal lock");
+            });
+            ready_receiver.recv().map_err(io::Error::other)?;
+            let pty = HangingUpPty {
+                output: b"final output",
+                release_terminal: Some(release_sender),
+                writer: io::sink(),
+            };
+            let mut event_loop = EventLoop::new(terminal.clone(), VoidListener, pty, true, false)?;
+            let mut buffer = vec![0; READ_BUFFER_SIZE];
+            let error = event_loop
+                .pty_read(&mut State::default(), &mut buffer, None::<&mut io::Sink>)
+                .expect_err("PTY hangup");
+            assert_eq!(error.raw_os_error(), Some(libc::EIO));
+            let line = terminal
+                .lock_unfair()
+                .bounds_to_string(Point::new(Line(0), Column(0)), Point::new(Line(0), Column(11)));
+            assert_eq!(line, "final output");
+            Ok(())
+        })
     }
 }

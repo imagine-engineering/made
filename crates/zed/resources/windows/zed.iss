@@ -63,10 +63,6 @@ Name: "addtopath"; Description: "{cm:AddToPath}"; GroupDescription: "{cm:Other}"
 Name: "{app}"; AfterInstall: DisableAppDirInheritance
 
 [Files]
-#ifdef ManagedRuntime
-Source: "{#ResourcesDir}\llama-cpp\*"; DestDir: "{code:GetInstallDir}\llama-cpp"; Flags: ignoreversion recursesubdirs createallsubdirs
-#endif
-
 Source: "{#ResourcesDir}\{#AppExeName}.exe"; DestDir: "{code:GetInstallDir}"; Flags: ignoreversion
 #ifdef Sim
 Source: "{#ResourcesDir}\sim-worker.exe"; DestDir: "{code:GetInstallDir}"; Flags: ignoreversion
@@ -1379,6 +1375,11 @@ begin
     begin
       SaveStringToFile(ExpandConstant('{app}\updates\versions.txt'), '{#Version}' + #13#10, True);
     end
+    else if FileExists(ExpandConstant('{app}\llama-cpp\.copper-bundled-runtime.json')) then
+    begin
+      if not DelTree(ExpandConstant('{app}\llama-cpp'), True, True, True) then
+        Log('Could not remove the retired Copper runtime');
+    end;
   end;
 end;
 

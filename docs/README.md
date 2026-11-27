@@ -5,7 +5,7 @@ Start with the Copper-specific pages:
 
 - [Product flavors](src/development/product-flavors.md) for source builds,
   configuration, optional features and packaging.
-- [Managed local models](src/ai/use-a-local-model.md#copper-managed-local-models)
+- [Connect to a local or self-hosted model server](src/ai/use-a-local-model.md)
   for Copper's native-agent setup and model qualification limits.
 - [Rust](src/languages/rust.md) for language-server and toolchain configuration.
 - [Product releases](src/development/product-releases.md) for maintainer operations.

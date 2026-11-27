@@ -672,6 +672,10 @@ impl LanguageModels {
     }
 
     fn authenticate_all_language_model_providers(cx: &mut App) -> Task<()> {
+        if project::DisableAiSettings::try_get(cx).is_some_and(|settings| settings.disable_ai) {
+            return Task::ready(());
+        }
+
         let authenticate_all_providers = LanguageModelRegistry::global(cx)
             .read(cx)
             .visible_providers()
@@ -950,7 +954,16 @@ impl NativeAgent {
                         cx.has_flag::<feature_flags::CopperDoctor>(),
                         cx.has_flag::<feature_flags::CopperSchedules>(),
                     );
+                    let mut ai_disabled = project::DisableAiSettings::try_get(cx)
+                        .is_some_and(|settings| settings.disable_ai);
                     cx.observe_global::<settings::SettingsStore>(move |this: &mut Self, cx| {
+                        let currently_disabled = project::DisableAiSettings::try_get(cx)
+                            .is_some_and(|settings| settings.disable_ai);
+                        if ai_disabled && !currently_disabled {
+                            this.models._authenticate_all_providers_task =
+                                LanguageModels::authenticate_all_language_model_providers(cx);
+                        }
+                        ai_disabled = currently_disabled;
                         let current = (
                             cx.has_flag::<feature_flags::CopperDoctor>(),
                             cx.has_flag::<feature_flags::CopperSchedules>(),
@@ -13778,6 +13791,137 @@ mod internal_tests {
 
             LanguageModelRegistry::test(cx);
         });
+    }
+
+    #[gpui::test]
+    fn test_disabled_ai_does_not_read_provider_credentials(cx: &mut TestAppContext) {
+        use credentials_provider::CredentialsProvider;
+        use language_model::{LanguageModelProvider, LanguageModelProviderState};
+        use std::{
+            future::Future,
+            pin::Pin,
+            sync::atomic::{AtomicUsize, Ordering},
+        };
+
+        #[derive(Default)]
+        struct CountingCredentials(AtomicUsize);
+
+        impl CredentialsProvider for CountingCredentials {
+            fn read_credentials<'a>(
+                &'a self,
+                _url: &'a str,
+                _cx: &'a gpui::AsyncApp,
+            ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<(String, Vec<u8>)>>> + 'a>>
+            {
+                Box::pin(async {
+                    self.0.fetch_add(1, Ordering::SeqCst);
+                    Ok(Some(("Bearer".to_owned(), b"synthetic-test-key".to_vec())))
+                })
+            }
+
+            fn write_credentials<'a>(
+                &'a self,
+                _url: &'a str,
+                _username: &'a str,
+                _password: &'a [u8],
+                _cx: &'a gpui::AsyncApp,
+            ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'a>> {
+                Box::pin(async { Ok(()) })
+            }
+
+            fn delete_credentials<'a>(
+                &'a self,
+                _url: &'a str,
+                _cx: &'a gpui::AsyncApp,
+            ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'a>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        fn set_ai_settings(disabled: bool, endpoint: &str, cx: &mut App) {
+            SettingsStore::update_global(cx, |store, cx| {
+                store
+                    .set_user_settings(
+                        &json!({
+                            "disable_ai": disabled,
+                            "language_models": {
+                                "anthropic": { "api_url": endpoint },
+                                "openai": { "api_url": endpoint },
+                                "open_router": { "api_url": endpoint },
+                                "vercel_ai_gateway": { "api_url": endpoint },
+                            }
+                        })
+                        .to_string(),
+                        cx,
+                    )
+                    .expect("set test AI settings");
+            });
+        }
+
+        fn register_provider<T: LanguageModelProvider + LanguageModelProviderState>(
+            constructor: impl FnOnce(
+                Arc<dyn http_client::HttpClient>,
+                Arc<dyn CredentialsProvider>,
+                &mut App,
+            ) -> T,
+            cx: &mut App,
+        ) -> (Arc<dyn LanguageModelProvider>, Arc<CountingCredentials>) {
+            let credentials = Arc::new(CountingCredentials::default());
+            let provider = Arc::new(constructor(
+                http_client::FakeHttpClient::with_404_response(),
+                credentials.clone(),
+                cx,
+            ));
+            LanguageModelRegistry::global(cx).update(cx, |registry, cx| {
+                registry.register_provider(provider.clone(), cx);
+            });
+            (provider, credentials)
+        }
+
+        init_test(cx);
+        let (providers, _models) = cx.update(|cx| {
+            use language_models::provider::{
+                anthropic::AnthropicLanguageModelProvider, open_ai::OpenAiLanguageModelProvider,
+                open_router::OpenRouterLanguageModelProvider,
+                vercel_ai_gateway::VercelAiGatewayLanguageModelProvider,
+            };
+
+            project::DisableAiSettings::register(cx);
+            language_models::AllLanguageModelSettings::register(cx);
+            set_ai_settings(true, "https://first.invalid", cx);
+            let providers = [
+                register_provider(AnthropicLanguageModelProvider::new, cx),
+                register_provider(OpenAiLanguageModelProvider::new, cx),
+                register_provider(OpenRouterLanguageModelProvider::new, cx),
+                register_provider(VercelAiGatewayLanguageModelProvider::new, cx),
+            ];
+            (providers, LanguageModels::new(cx))
+        });
+        let counts = || {
+            providers
+                .each_ref()
+                .map(|(_, credentials)| credentials.0.load(Ordering::SeqCst))
+        };
+        cx.run_until_parked();
+        let startup_reads = counts();
+
+        cx.update(|cx| set_ai_settings(true, "https://second.invalid", cx));
+        cx.run_until_parked();
+        let disabled_settings_reads = counts();
+
+        cx.update(|cx| set_ai_settings(false, "https://second.invalid", cx));
+        cx.run_until_parked();
+        let reenabled_reads = counts();
+        assert_eq!(
+            (startup_reads, disabled_settings_reads, reenabled_reads),
+            ([0; 4], [0; 4], [1; 4]),
+            "credential reads at disabled startup, disabled settings change, and re-enabling AI"
+        );
+        assert!(cx.update(|cx| {
+            providers
+                .iter()
+                .all(|(provider, _)| provider.is_authenticated(cx))
+        }));
     }
 
     #[test]

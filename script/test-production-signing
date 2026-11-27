@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Local signing contract tests; fixtures do not prove production signing."""
 import base64
-import hashlib
 import importlib.machinery
 import importlib.util
 import io
@@ -16,7 +15,6 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
 
 def module(name, path):
@@ -28,14 +26,13 @@ def module(name, path):
 
 
 policy = module("signing_policy", "script/check-signing-environment")
-runtime = module("runtime_package", "script/bundle-managed-runtime")
 linux_signature = module("linux_signature", "script/sign-linux-archive")
 macos_signature = module("macos_signature", "script/verify-macos-signature")
 
 
 class MacosVerification(unittest.TestCase):
     def test_package_minimum_covers_every_native_deployment_target(self):
-        native = Path("Fixture.app/Contents/Resources/llama-cpp/llama-server")
+        native = Path("Fixture.app/Contents/Resources/git/bin/git")
         output = b"platform MACOS\n    minos 13.3\n    sdk 26.0\n"
         with patch.object(macos_signature, "run", return_value=output):
             with self.assertRaisesRegex(ValueError, "above package minimum"):
@@ -59,7 +56,7 @@ class MacosVerification(unittest.TestCase):
             application = Path(directory) / "Fixture With Spaces.app"
             main = application / "Contents/MacOS/copper"
             files = [main, application / "Contents/MacOS/cli",
-                     application / "Contents/Resources/llama-cpp/macos-aarch64/bin/llama-server"]
+                     application / "Contents/Resources/git/libexec/git-core/git-remote-http"]
             for path in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"fixture")
@@ -83,11 +80,12 @@ class MacosVerification(unittest.TestCase):
                 "CFBundleExecutable": "copper", "CFBundlePackageType": "APPL", "CFBundleVersion": "1",
             }))
             for relative in ("Contents/MacOS/cli", "Contents/Resources/git/bin/git",
-                             "Contents/Resources/llama-cpp/macos-aarch64/bin/llama-server"):
+                             "Contents/Resources/git/libexec/git-core/git-remote-http"):
                 path = application / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(main, path)
-            receipt = application / "Contents/Resources/llama-cpp/.copper-bundled-runtime.json"
+            receipt = application / "Contents/Resources/git-config/config.json"
+            receipt.parent.mkdir()
             receipt.write_text("{}")
             launcher = application / "Contents/MacOS/git"
             launcher.write_text("#!/bin/sh\nexit 0\n")
@@ -101,16 +99,16 @@ class MacosVerification(unittest.TestCase):
             self.assertIn(b"Contents/MacOS/git", original.stderr)
             launcher.rename(application / "Contents/Resources/git/launch-git")
             (application / "Contents/Frameworks").mkdir()
-            receipt.parent.rename(application / "Contents/Frameworks/llama-cpp")
+            receipt.parent.rename(application / "Contents/Frameworks/git-config")
             mixed = subprocess.run([*signing, str(application)], capture_output=True)
             self.assertNotEqual(mixed.returncode, 0)
-            self.assertIn(b".copper-bundled-runtime.json", mixed.stderr)
-            (application / "Contents/Frameworks/llama-cpp").rename(application / "Contents/Resources/llama-cpp")
+            self.assertIn(b"config.json", mixed.stderr)
+            (application / "Contents/Frameworks/git-config").rename(application / "Contents/Resources/git-config")
             subprocess.run([*signing, str(application)], capture_output=True, check=True)
             subprocess.run(("/usr/bin/codesign", "--verify", "--deep", "--strict", str(application)), capture_output=True, check=True)
             envelope = plistlib.loads((application / "Contents/_CodeSignature/CodeResources").read_bytes())
             self.assertIn("Resources/git/launch-git", envelope["files2"])
-            self.assertIn("Resources/llama-cpp/.copper-bundled-runtime.json", envelope["files2"])
+            self.assertIn("Resources/git-config/config.json", envelope["files2"])
 
     def test_developer_id_timestamp_runtime_and_team_are_required(self):
         identity = "Developer ID Application: Fixture (A1B2C3D4E5)"
@@ -404,44 +402,6 @@ class LinuxSignature(unittest.TestCase):
                 self.assertNotEqual(rejected.returncode, 0)
             finally:
                 subprocess.run(("gpgconf", "--homedir", str(home), "--kill", "gpg-agent"), check=True, capture_output=True)
-
-
-class RuntimePackage(unittest.TestCase):
-    def test_pinned_archive_and_receipt_without_network_or_weights(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            cache = root / "cache"
-            cache.mkdir()
-            archive = cache / "llama-fixture.zip"
-            with zipfile.ZipFile(archive, "w") as output:
-                output.writestr("runtime/llama-server.exe", b"runtime fixture")
-            asset = {"platform": "windows-x86_64", "name": archive.name,
-                     "url": "https://github.com/ggml-org/llama.cpp/releases/download/fixture/" + archive.name,
-                     "bytes": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
-            catalog = {"runtime_version": "fixture", "runtime_revision": "abc", "runtime_assets": [asset]}
-            destination = root / "package/llama-cpp"
-            with patch("urllib.request.urlopen", side_effect=AssertionError("Unexpected network")):
-                runtime.stage(catalog, "windows-x86_64", destination, cache)
-            receipt = json.loads((destination / ".copper-bundled-runtime.json").read_text())
-            self.assertEqual(receipt["assets"]["windows-x86_64"], asset["sha256"])
-            self.assertEqual((destination / "windows-x86_64/runtime/llama-server.exe").read_bytes(), b"runtime fixture")
-            self.assertFalse(list(destination.rglob("*.gguf")))
-            (destination / ".copper-bundled-runtime.json").unlink()
-            with self.assertRaisesRegex(ValueError, "not owned"):
-                runtime.stage(catalog, "windows-x86_64", destination, cache)
-
-    def test_archive_path_escape_is_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            archive = root / "invalid.zip"
-            with zipfile.ZipFile(archive, "w") as output:
-                output.writestr("../escape", b"no")
-            asset = {"platform": "windows-x86_64", "name": archive.name,
-                     "url": "https://github.com/ggml-org/llama.cpp/releases/download/fixture/invalid.zip",
-                     "bytes": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
-            with self.assertRaisesRegex(ValueError, "Unsafe"):
-                runtime.stage({"runtime_version": "fixture", "runtime_assets": [asset]}, "windows-x86_64", root / "package", root)
-            self.assertFalse((root / "escape").exists())
 
 
 if __name__ == "__main__":

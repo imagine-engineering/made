@@ -11590,6 +11590,14 @@ impl ThreadView {
         let (title, description): (SharedString, SharedString) =
             match thread.read(cx).thread_model() {
                 agent::ThreadModel::Ready(_) => return None,
+                agent::ThreadModel::Unresolved(selection)
+                    if language_models::provider::llama_cpp::LlamaCppLanguageModelProvider::is_retired_selection(selection, cx) =>
+                {
+                    (
+                        format!("Model {} is unavailable", selection.model.0).into(),
+                        "Copper no longer runs this model. Choose another model or connect to a llama.cpp server you run.".into(),
+                    )
+                }
                 agent::ThreadModel::Unresolved(selected_model) => {
                     if let Some(provider) = LanguageModelRegistry::global(cx)
                         .read(cx)

@@ -51,9 +51,9 @@
       "kind": "file",
       "original_path": "src/event_loop.rs",
       "import_path": "src/event_loop.rs",
-      "import_sha256": "6da2897b76d8c0e7f989daa1463fd6fdeb3469a0a63e0c6ba703a9562663163c",
-      "import_bytes": 15426,
-      "delta": null
+      "import_sha256": "701713bb3db73e55c6e899b583e99aefd2ec572d961bb0ee80aa1db27105a9bf",
+      "import_bytes": 18766,
+      "delta": "Drain buffered PTY output before reporting a hangup, with a regression test for output queued while the terminal is locked"
     },
     {
       "sha256": "e523b4702a62c699461586955d54a441b86edc3c0f753a30c05493d75b2e2caa",
