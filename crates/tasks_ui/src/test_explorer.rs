@@ -2491,14 +2491,39 @@ impl TestsPanel {
         self.handle_action_result(delegate.debug(&selection, &workspace, window, cx), cx);
     }
 
+    fn cancelable_run(&self, cx: &App) -> Option<TestExplorerSelection> {
+        let store = self.project.read(cx).structured_execution_store().read(cx);
+        let active_run = |provider_id: &StructuredProviderId| {
+            let provider = store.state().provider(provider_id)?;
+            let run = provider.current_run.as_ref()?;
+            (!run.phase.is_terminal()).then_some((provider, run))
+        };
+        if let Some(selection) = self.selected() {
+            let (_, run) = active_run(&selection.provider_id)?;
+            return (selection.run_id.as_ref() == Some(&run.id)
+                && selection.discovery_generation == run.discovery_generation)
+                .then(|| selection.clone());
+        }
+
+        let mut active_runs = self.provider_ids.iter().filter_map(active_run);
+        let (provider, run) = active_runs.next()?;
+        if active_runs.next().is_some() {
+            return None;
+        }
+        let node_id = run
+            .scope_node_ids
+            .first()
+            .or_else(|| provider.nodes.first().map(|node| &node.id))?;
+        Some(TestExplorerSelection {
+            provider_id: provider.provider_id.clone(),
+            discovery_generation: run.discovery_generation,
+            node_id: node_id.clone(),
+            run_id: Some(run.id.clone()),
+        })
+    }
+
     fn cancel_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(selection) = self.selected().cloned().or_else(|| {
-            self.projection
-                .selections
-                .values()
-                .find(|selection| selection.run_id.is_some())
-                .cloned()
-        }) else {
+        let Some(selection) = self.cancelable_run(cx) else {
             self.set_notice("No structured test run is active", cx);
             return;
         };
@@ -2581,6 +2606,7 @@ impl TestsPanel {
             .selected()
             .is_some_and(|id| self.current_source_path(id, cx).is_some());
         let has_selection = self.selected().is_some();
+        let can_cancel = self.cancelable_run(cx).is_some();
         let can_run = self
             .host
             .selected()
@@ -2601,7 +2627,7 @@ impl TestsPanel {
             menu.context(self.focus_handle.clone())
                 .action_disabled_when(!can_run, run_label, Box::new(RunSelectedTests))
                 .action_disabled_when(!can_debug, debug_label, Box::new(DebugSelectedTests))
-                .action_disabled_when(!has_selection, "Cancel", Box::new(CancelTestRun))
+                .action_disabled_when(!can_cancel, "Cancel", Box::new(CancelTestRun))
                 .action_disabled_when(!has_failed, "Rerun Failed", Box::new(RerunFailedTests))
                 .action_disabled_when(
                     !has_selection,
@@ -2752,11 +2778,7 @@ impl Render for TestsPanel {
             .clone()
             .unwrap_or_else(|| "Run Selected Tests".to_string());
         let has_failed = !self.projection.enabled_failed(cx).is_empty();
-        let has_run = self
-            .projection
-            .selections
-            .values()
-            .any(|selection| selection.run_id.is_some());
+        let can_cancel = self.cancelable_run(cx).is_some();
         let summary_label = self.projection.summary_label();
         let click_panel = cx.weak_entity();
         let toggle_panel = cx.weak_entity();
@@ -2910,7 +2932,7 @@ impl Render for TestsPanel {
                                     .shape(ui::IconButtonShape::Square)
                                     .aria_label("Cancel Test Run")
                                     .tooltip(Tooltip::text("Cancel Test Run"))
-                                    .disabled(!has_run)
+                                    .disabled(!can_cancel)
                                     .on_click(cx.listener(|panel, _, window, cx| {
                                         panel.cancel_selected(window, cx)
                                     })),
@@ -4671,7 +4693,10 @@ mod tests {
             panel.read_with(cx, |panel, _| panel.projection.failed.len()),
             1
         );
-        assert_disabled_controls(cx, &[("Rerun Failed Tests", false)]);
+        assert_disabled_controls(
+            cx,
+            &[("Rerun Failed Tests", false), ("Cancel Test Run", true)],
+        );
         let root_id = tree_id(&provider_id, &StructuredNodeId("web-root".into()));
         let mut previous_status_id = None;
         for (index, (phase, diagnostic, label)) in [
@@ -4759,6 +4784,13 @@ mod tests {
                     panel.selected().expect("unknown child selection").node_id.0,
                     "renders-home"
                 );
+                let cancellation = panel.cancelable_run(cx);
+                assert_eq!(
+                    cancellation
+                        .as_ref()
+                        .and_then(|selection| selection.run_id.as_ref()),
+                    (!phase.is_terminal()).then_some(&run_id),
+                );
                 cx.notify();
             });
             cx.update(|window, cx| window.draw(cx).clear(cx));
@@ -4824,7 +4856,7 @@ mod tests {
                 &[
                     ("Run Selected Tests", false),
                     ("Debug Selected Test", false),
-                    ("Cancel Test Run", false),
+                    ("Cancel Test Run", phase.is_terminal()),
                     ("Rerun Failed Tests", true),
                     ("Show Task Terminal", false),
                 ],
@@ -4853,6 +4885,10 @@ mod tests {
             (
                 Box::new(RerunFailedTests) as Box<dyn gpui::Action>,
                 "No failed tests are available to rerun",
+            ),
+            (
+                Box::new(CancelTestRun) as Box<dyn gpui::Action>,
+                "No structured test run is active",
             ),
         ] {
             cx.update(|window, cx| window.dispatch_action(action, cx));
