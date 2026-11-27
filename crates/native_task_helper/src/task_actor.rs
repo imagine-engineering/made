@@ -174,7 +174,7 @@ impl CoverageTaskParent {
     pub(crate) fn authenticate(connection: &impl AsRawFd) -> io::Result<Self> {
         let peer = peer_identity(connection.as_raw_fd())?;
         let parent = Self::current_process_parent();
-        if parent <= 1 || peer.process_id != parent || peer.user_id != current_user_id() {
+        if parent == 0 || peer.process_id != parent || peer.user_id != current_user_id() {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "Coverage Task connection does not belong to its launch owner",

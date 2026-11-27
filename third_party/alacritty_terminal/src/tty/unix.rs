@@ -397,15 +397,26 @@ fn from_fd_with_environment(
 
 impl Drop for Pty {
     fn drop(&mut self) {
-        // Make sure the PTY is terminated properly.
-        unsafe {
-            libc::kill(self.child.id() as i32, libc::SIGHUP);
+        // The event loop may already have reaped this child and released its PID.
+        match self.child.try_wait() {
+            Ok(None) => {
+                if unsafe { libc::kill(self.child.id() as i32, libc::SIGHUP) } != 0 {
+                    log::debug!(
+                        "Could not signal the closing PTY child: {}",
+                        Error::last_os_error()
+                    );
+                }
+            },
+            Ok(Some(_)) => (),
+            Err(error) => log::debug!("Could not check the closing PTY child: {error}"),
         }
 
         // Clear signal-hook handler.
         unregister_signal(self.sig_id);
 
-        let _ = self.child.wait();
+        if let Err(error) = self.child.wait() {
+            log::debug!("Could not wait for the closing PTY child: {error}");
+        }
     }
 }
 

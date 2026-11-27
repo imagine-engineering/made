@@ -187,7 +187,11 @@ pub(super) fn open_pty(
     clear_environment: bool,
 ) -> io::Result<AlacrittyPty> {
     if clear_environment {
-        #[cfg(any(target_os = "macos", windows))]
+        #[cfg(any(
+            target_os = "macos",
+            windows,
+            all(target_os = "linux", feature = "rust-coverage")
+        ))]
         {
             return tty::new_with_environment(
                 options,
@@ -196,7 +200,11 @@ pub(super) fn open_pty(
                 true,
             );
         }
-        #[cfg(not(any(target_os = "macos", windows)))]
+        #[cfg(not(any(
+            target_os = "macos",
+            windows,
+            all(target_os = "linux", feature = "rust-coverage")
+        )))]
         {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,

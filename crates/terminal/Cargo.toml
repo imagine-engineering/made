@@ -6,6 +6,7 @@ publish.workspace = true
 license = "GPL-3.0-or-later"
 
 [features]
+rust-coverage = ["dep:native_task_helper"]
 test-support = [
     "collections/test-support",
     "gpui/test-support",
@@ -46,6 +47,9 @@ urlencoding.workspace = true
 vte.workspace = true
 parking_lot.workspace = true
 percent-encoding.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+native_task_helper = { path = "../native_task_helper", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

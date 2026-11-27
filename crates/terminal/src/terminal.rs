@@ -826,19 +826,80 @@ impl NativeTerminalEnvironment {
     }
 }
 
-#[derive(Clone, Copy)]
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+use native_task_helper::{
+    linux_coverage_completion::CoverageTaskCompletion, task_actor::OriginalTaskActor,
+    task_completion::TaskBuildInvocation,
+};
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+struct CoverageTaskSpawn {
+    expected_image: std::fs::File,
+    original_actor: futures::channel::oneshot::Sender<OriginalTaskActor>,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct CoverageTaskObservation {
+    completion: CoverageTaskCompletion,
+    invocation: TaskBuildInvocation,
+    original_actor: futures::channel::oneshot::Receiver<OriginalTaskActor>,
+    terminal_exit: Receiver<Option<ExitStatus>>,
+    executor: BackgroundExecutor,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl CoverageTaskObservation {
+    pub async fn finish(self) -> Result<ExitStatus> {
+        let actor = self
+            .original_actor
+            .await
+            .context("Coverage Task was not launched")?;
+        let receipt = self.completion.observe(actor, self.invocation).await?;
+        let status = futures::future::select(
+            Box::pin(self.terminal_exit.recv()),
+            self.executor.timer(Duration::from_secs(10)),
+        )
+        .await;
+        let status = match status {
+            futures::future::Either::Left((result, _)) => {
+                result?.context("Coverage Task closed before Terminal observed its exit")?
+            }
+            futures::future::Either::Right(_) => {
+                anyhow::bail!("Terminal did not observe the Coverage Task exit")
+            }
+        };
+        Ok(receipt.verify_exit(status)?)
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl CoverageTaskSpawn {
+    fn send_actor(self, actor: OriginalTaskActor) -> std::io::Result<()> {
+        self.original_actor.send(actor).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Coverage Task was cancelled before launch",
+            )
+        })
+    }
+}
+
 enum TerminalEnvironmentMode {
     Inherited,
     #[cfg(target_os = "macos")]
     ExactNative,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    Coverage(CoverageTaskSpawn, Sender<Option<ExitStatus>>),
 }
 
 impl TerminalEnvironmentMode {
-    fn clears_environment(self) -> bool {
+    fn clears_environment(&self) -> bool {
         match self {
             Self::Inherited => false,
             #[cfg(target_os = "macos")]
             Self::ExactNative => true,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            Self::Coverage(..) => true,
         }
     }
 }
@@ -1269,6 +1330,8 @@ impl TerminalBuilder {
             terminal_type: TerminalType::DisplayOnly,
             subprocess: None,
             completion_tx: None,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            coverage_exit: None,
             task_completion: OnceLock::new(),
             term,
             term_config: config,
@@ -1442,6 +1505,76 @@ impl TerminalBuilder {
             path_style,
             TerminalEnvironmentMode::ExactNative,
         )
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn new_with_coverage_task(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: TaskBuildInvocation,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(Task<Result<Self>>, CoverageTaskObservation)> {
+        let helper = std::env::current_exe()?;
+        let helper = helper
+            .to_str()
+            .context("Coverage Task helper path is not Unicode")?;
+        let expected_image = std::fs::File::open("/proc/self/exe")?;
+        let completion = CoverageTaskCompletion::bind()?;
+        let socket = completion.socket();
+        let socket = socket
+            .to_str()
+            .context("Coverage Task socket path is not Unicode")?;
+        let (terminal_exit_sender, terminal_exit) = bounded(1);
+        let (completion_sender, completion_rx) = bounded(1);
+        let (actor_sender, original_actor) = futures::channel::oneshot::channel();
+        let builder = Self::new_with_environment_mode(
+            Some(invocation.working_directory().to_path_buf()),
+            Some(TaskState {
+                status: TaskStatus::Running,
+                completion_rx,
+                spawned_task: launch,
+                structured_task,
+            }),
+            Shell::WithArguments {
+                program: helper.to_owned(),
+                args: vec![
+                    "observe-coverage-task".into(),
+                    "--socket".into(),
+                    socket.into(),
+                ],
+                title_override: None,
+            },
+            HashMap::default(),
+            SettingsCursorShape::default(),
+            AlternateScroll::On,
+            None,
+            Vec::new(),
+            0,
+            false,
+            window_id,
+            Some(completion_sender),
+            cx,
+            Vec::new(),
+            PathStyle::local(),
+            TerminalEnvironmentMode::Coverage(
+                CoverageTaskSpawn {
+                    expected_image,
+                    original_actor: actor_sender,
+                },
+                terminal_exit_sender,
+            ),
+        );
+        Ok((
+            builder,
+            CoverageTaskObservation {
+                completion,
+                invocation,
+                original_actor,
+                terminal_exit,
+                executor: cx.background_executor().clone(),
+            },
+        ))
     }
 
     fn new_with_environment_mode(
@@ -1623,6 +1756,11 @@ impl TerminalBuilder {
                 "The structured Task was cancelled before process creation"
             );
 
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            let (coverage, coverage_exit) = match environment_mode {
+                TerminalEnvironmentMode::Coverage(coverage, exit) => (Some(coverage), Some(exit)),
+                _ => (None, None),
+            };
             // When `no_pty` is set (headless hosts), run the task as a plain
             // subprocess and pump its piped output into the same emulator the
             // PTY path would feed.
@@ -1643,7 +1781,11 @@ impl TerminalBuilder {
                     term.clone(),
                     events_tx,
                     &background_executor,
-                ) {
+                    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+                    coverage,
+                )
+                .await
+                {
                     Ok(subprocess) => subprocess,
                     Err(error) => {
                         bail!(TerminalError {
@@ -1715,6 +1857,25 @@ impl TerminalBuilder {
                     }
                 };
 
+                #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+                let pty = if let Some(coverage) = coverage {
+                    let mut pty = pty;
+                    let actor = OriginalTaskActor::from_std_child(
+                        pty.child_mut(),
+                        &coverage.expected_image,
+                    )
+                    .and_then(|actor| coverage.send_actor(actor));
+                    if let Err(error) = actor {
+                        if let Err(stop_error) = pty.child_mut().kill() {
+                            log::debug!("Coverage helper was already unavailable: {stop_error}");
+                        }
+                        return Err(error.into());
+                    }
+                    pty
+                } else {
+                    pty
+                };
+
                 let pty_info = PtyProcessInfo::new(ProcessIdGetter::from(&pty));
 
                 //And connect them together
@@ -1737,6 +1898,8 @@ impl TerminalBuilder {
                 terminal_type,
                 subprocess,
                 completion_tx,
+                #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+                coverage_exit,
                 task_completion: OnceLock::new(),
                 term,
                 term_config: config,
@@ -2070,6 +2233,8 @@ pub struct Terminal {
     /// subprocess and the task pumping its output into the grid.
     subprocess: Option<SubprocessHandle>,
     completion_tx: Option<Sender<Option<ExitStatus>>>,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    coverage_exit: Option<Sender<Option<ExitStatus>>>,
     task_completion:
         OnceLock<futures::future::Shared<futures::future::BoxFuture<'static, Option<ExitStatus>>>>,
     term: Arc<AlacrittyTermLock>,
@@ -3805,6 +3970,12 @@ impl Terminal {
         if let Some(tx) = &self.completion_tx {
             tx.try_send(exit_status).ok();
         }
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        if let Some(sender) = self.coverage_exit.take()
+            && let Err(error) = sender.try_send(exit_status)
+        {
+            log::debug!("Coverage Task observer closed before Terminal exit: {error}");
+        }
         if let Some(e) = exit_status {
             self.child_exited = Some(e);
         }
@@ -4014,7 +4185,7 @@ impl SubprocessHandle {
 /// Spawns `program`/`args` as a plain subprocess with piped stdout/stderr and
 /// drives its output into `term`, mirroring what the Alacritty event loop does
 /// for a PTY but without one. Used when [`HeadlessTerminal`] is enabled.
-fn spawn_task_subprocess(
+async fn spawn_task_subprocess(
     program: String,
     args: Vec<String>,
     env: HashMap<String, String>,
@@ -4023,6 +4194,7 @@ fn spawn_task_subprocess(
     term: Arc<AlacrittyTermLock>,
     events_tx: futures::channel::mpsc::UnboundedSender<PtyEvent>,
     executor: &BackgroundExecutor,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))] coverage: Option<CoverageTaskSpawn>,
 ) -> Result<SubprocessHandle> {
     use futures::io::AsyncReadExt as _;
     use std::process::Stdio;
@@ -4039,6 +4211,22 @@ fn spawn_task_subprocess(
 
     let mut child =
         util::process::Child::spawn(command, Stdio::null(), Stdio::piped(), Stdio::piped())?;
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    if let Some(coverage) = coverage {
+        let actor = OriginalTaskActor::from_smol_child(&mut child, &coverage.expected_image)
+            .and_then(|actor| coverage.send_actor(actor));
+        if let Err(error) = actor {
+            use std::ops::DerefMut as _;
+            let stop = child.deref_mut().kill();
+            child.status().await?;
+            if let Err(stop) = stop
+                && stop.raw_os_error() != Some(libc::ESRCH)
+            {
+                return Err(stop.into());
+            }
+            return Err(error.into());
+        }
+    }
     let process_id = child.id();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();

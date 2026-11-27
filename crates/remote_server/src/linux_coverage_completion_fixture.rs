@@ -233,12 +233,200 @@ fn oversized_invocation(directory: &Path) -> Result<()> {
     })
 }
 
+fn terminal_handoff(
+    directory: &Path,
+    headless: bool,
+    invocation: TaskBuildInvocation,
+    verify_report: fn(&Path) -> Result<()>,
+) -> Result<()> {
+    use gpui::AppContext as _;
+    use terminal::{HeadlessTerminal, TerminalBuilder};
+
+    let directory = directory.to_path_buf();
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    gpui_platform::headless().run(move |cx| {
+        release_channel::init(semver::Version::new(1, 16, 2), cx);
+        cx.set_global(HeadlessTerminal(headless));
+        let prepared = TerminalBuilder::new_with_coverage_task(
+            task::SpawnInTerminal {
+                label: "Coverage owner fixture".into(),
+                ..Default::default()
+            },
+            None,
+            invocation,
+            1,
+            cx,
+        );
+        cx.spawn(async move |cx| {
+            let deadline = cx.background_executor().timer(Duration::from_secs(15));
+            let observation = async {
+                let (builder, observation) = prepared?;
+                let builder = builder.await?;
+                let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
+                let completion = terminal
+                    .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (observed, ordinary_completion) = futures::future::join(
+                    observation.finish(),
+                    completion,
+                )
+                .await;
+                let observed = observed?;
+                ensure!(
+                    observed.success() && ordinary_completion == Some(observed),
+                    "The authenticated receipt and ordinary Terminal observer must share the same exit"
+                );
+                verify_report(&directory)?;
+                Ok(())
+            };
+            let result = match futures::future::select(Box::pin(observation), deadline).await {
+                futures::future::Either::Left((result, _)) => result,
+                futures::future::Either::Right(_) => Err(anyhow::anyhow!("Coverage Terminal fixture timed out")),
+            };
+            if let Err(error) = send.send(result) {
+                log::error!("Coverage Terminal fixture lost its caller: {error}");
+            }
+            cx.update(|cx| cx.quit());
+        })
+        .detach();
+    });
+    receive.recv()?
+}
+
+fn shell_terminal(directory: &Path, headless: bool) -> Result<()> {
+    let invocation = invocation(
+        directory,
+        r#"test "$1" = "" && test "$2" = 'two words' && printf '%s' "$COPPER_APPROVED_TEST_VALUE" > report"#,
+    )?;
+    terminal_handoff(directory, headless, invocation, |directory| {
+        ensure!(
+            std::fs::read(directory.join("report"))? == b"literal value",
+            "Coverage Task report did not come from the approved invocation"
+        );
+        Ok(())
+    })
+}
+
+fn collector_terminal(directory: &Path) -> Result<()> {
+    use anyhow::Context as _;
+
+    for (name, bytes) in [
+        (
+            "Cargo.toml",
+            include_bytes!(
+                "../../project/test_data/rust_test_provider/physical-workspace/Cargo.toml"
+            )
+            .as_slice(),
+        ),
+        (
+            "Cargo.lock",
+            include_bytes!(
+                "../../project/test_data/rust_test_provider/physical-workspace/Cargo.lock"
+            )
+            .as_slice(),
+        ),
+        (
+            "src/lib.rs",
+            include_bytes!(
+                "../../project/test_data/rust_test_provider/physical-workspace/src/lib.rs"
+            )
+            .as_slice(),
+        ),
+        (
+            "src/bin/fixture.rs",
+            include_bytes!(
+                "../../project/test_data/rust_test_provider/physical-workspace/src/bin/fixture.rs"
+            )
+            .as_slice(),
+        ),
+        (
+            "tests/integration.rs",
+            include_bytes!(
+                "../../project/test_data/rust_test_provider/physical-workspace/tests/integration.rs"
+            )
+            .as_slice(),
+        ),
+    ] {
+        let path = directory.join(name);
+        std::fs::create_dir_all(path.parent().context("Invalid fixture path")?)?;
+        std::fs::write(path, bytes)?;
+    }
+
+    let cargo = std::env::var_os("RUST_TOOLS_COVERAGE_CARGO")
+        .context("The independently installed Cargo is required")?;
+    let report = directory.join("coverage.json");
+    let mut environment = BTreeMap::new();
+    for name in [
+        "PATH",
+        "LLVM_COV",
+        "LLVM_PROFDATA",
+        "RUSTUP_HOME",
+        "RUSTUP_TOOLCHAIN",
+    ] {
+        environment.insert(name.to_owned(), std::env::var(name)?);
+    }
+    environment.insert(
+        "HOME".into(),
+        directory
+            .to_str()
+            .context("Fixture path is not Unicode")?
+            .into(),
+    );
+    let invocation = TaskBuildInvocation::new(
+        cargo.into(),
+        vec![
+            "llvm-cov".into(),
+            "--json".into(),
+            "--output-path".into(),
+            report
+                .to_str()
+                .context("Report path is not Unicode")?
+                .into(),
+            "run".into(),
+            "--locked".into(),
+            "--offline".into(),
+            "--bin".into(),
+            "fixture-bin".into(),
+        ],
+        directory.to_path_buf(),
+        environment,
+    )?;
+    terminal_handoff(directory, false, invocation, |directory| {
+        let report: serde_json::Value =
+            serde_json::from_reader(File::open(directory.join("coverage.json"))?)?;
+        ensure!(
+            report["type"].as_str() == Some("llvm.coverage.json.export"),
+            "Unexpected coverage export type"
+        );
+        let file = report["data"]
+            .as_array()
+            .context("Missing coverage data")?
+            .iter()
+            .filter_map(|data| data["files"].as_array())
+            .flatten()
+            .find(|file| {
+                file["filename"]
+                    .as_str()
+                    .is_some_and(|name| name.ends_with("/src/bin/fixture.rs"))
+            })
+            .context("Coverage export did not contain the selected fixture binary")?;
+        ensure!(
+            file["summary"]["lines"]["count"].as_u64() == Some(3)
+                && file["summary"]["lines"]["covered"].as_u64() == Some(3),
+            "Expected all three fixture lines to be covered"
+        );
+        Ok(())
+    })
+}
+
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Scenario {
     TerminalChildExit,
     ObserverDrop,
     ForeignChild,
     OversizedInvocation,
+    PtyTerminal,
+    HeadlessTerminal,
+    CollectorTerminal,
 }
 
 pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
@@ -251,5 +439,8 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::ObserverDrop => observer_drop(directory),
         Scenario::ForeignChild => foreign_child(directory),
         Scenario::OversizedInvocation => oversized_invocation(directory),
+        Scenario::PtyTerminal => shell_terminal(directory, false),
+        Scenario::HeadlessTerminal => shell_terminal(directory, true),
+        Scenario::CollectorTerminal => collector_terminal(directory),
     }
 }

@@ -211,9 +211,9 @@
       "kind": "file",
       "original_path": "src/tty/unix.rs",
       "import_path": "src/tty/unix.rs",
-      "import_sha256": "8b06bab812466a94a66c6b262e5d5c0bbb1e11e67cc8713aa33d5e8eee63cc83",
-      "import_bytes": 30813,
-      "delta": "Reviewed exact child environment API/two tests plus generic privacy failure messages; compatible passwd fallback grouping and a function-scoped expected repo async-process lint for the existing synchronous PTY ABI; additive mutable Unix child accessor for original-actor pinning before the existing event loop starts"
+      "import_sha256": "360a4b09ff419339d5064b5696edd0f345d97f4d355f595ae026afa3853df904",
+      "import_bytes": 31341,
+      "delta": "Reviewed exact child environment API/two tests plus generic privacy failure messages; compatible passwd fallback grouping and a function-scoped expected repo async-process lint for the existing synchronous PTY ABI; additive mutable Unix child accessor for original-actor pinning before the existing event loop starts; avoid signalling the saved PID if the PTY child has already been reaped"
     },
     {
       "sha256": "60121a65df120c4a227520d6672231c9e3c515cb75241241e6b37a0c5bc186ca",

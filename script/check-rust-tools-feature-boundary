@@ -17,6 +17,7 @@ cargo_ui = tomllib.loads((root / "crates/cargo_ui/Cargo.toml").read_text())
 settings = tomllib.loads((root / "crates/settings/Cargo.toml").read_text())
 settings_content = tomllib.loads((root / "crates/settings_content/Cargo.toml").read_text())
 tasks_ui = tomllib.loads((root / "crates/tasks_ui/Cargo.toml").read_text())
+terminal = tomllib.loads((root / "crates/terminal/Cargo.toml").read_text())
 terminal_view = tomllib.loads((root / "crates/terminal_view/Cargo.toml").read_text())
 diagnostics = tomllib.loads((root / "crates/diagnostics/Cargo.toml").read_text())
 agent_ui = tomllib.loads((root / "crates/agent_ui/Cargo.toml").read_text())
@@ -44,12 +45,16 @@ for feature in ["default", "rust-tools", "jvm-tools"]:
     assert "dep:graphics_ui" not in zed["features"][feature]
 assert project["features"]["cargo-workspace"] == ["dep:cargo_metadata"]
 assert project["features"]["rust-tests"] == ["cargo-workspace", "structured-execution"]
-assert project["features"]["rust-coverage"] == ["structured-execution"]
+assert project["features"]["rust-coverage"] == ["structured-execution", "terminal/rust-coverage"]
 assert project["dependencies"]["cargo_metadata"].get("optional") is True
 assert remote["features"]["rust-tools"] == [
     "project/rust-tests", "project/rust-coverage", "dep:native_task_helper",
 ]
 assert remote["target"]["cfg(target_os = \"linux\")"]["dependencies"]["native_task_helper"]["optional"]
+assert remote["features"]["rust-tools-process-test"] == ["rust-tools", "dep:terminal"]
+assert remote["target"]["cfg(target_os = \"linux\")"]["dependencies"]["terminal"]["optional"]
+assert terminal["features"]["rust-coverage"] == ["dep:native_task_helper"]
+assert terminal["target"]["cfg(target_os = \"linux\")"]["dependencies"]["native_task_helper"]["optional"]
 assert settings["features"]["rust-tools"] == ["settings_content/rust-tools"]
 assert "rust-tools" in settings_content["features"]
 assert terminal_view["features"]["default"] == []

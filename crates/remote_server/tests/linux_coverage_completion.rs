@@ -4,11 +4,15 @@
     feature = "test-support"
 ))]
 
-use std::{io, process::Command};
+use std::{ffi::OsStr, io, process::Command};
 
 fn run_fixture(scenario: &str) -> io::Result<()> {
+    run_fixture_with_host(OsStr::new(env!("CARGO_BIN_EXE_remote_server")), scenario)
+}
+
+fn run_fixture_with_host(host: &OsStr, scenario: &str) -> io::Result<()> {
     let directory = tempfile::tempdir()?;
-    let output = Command::new(env!("CARGO_BIN_EXE_remote_server"))
+    let output = Command::new(host)
         .arg("coverage-completion-fixture")
         .arg("--directory")
         .arg(directory.path())
@@ -58,4 +62,32 @@ fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
             .contains("Coverage Task launch owner image did not match the helper")
     );
     Ok(())
+}
+
+fn run_terminal_fixture(scenario: &str) -> io::Result<()> {
+    let host = std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY").ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "An independently built host is required",
+        )
+    })?;
+    run_fixture_with_host(&host, scenario)
+}
+
+#[test]
+#[ignore = "requires RUST_TOOLS_ENABLED_HOST_BINARY built separately from the test dependency graph"]
+fn coverage_receipt_binds_to_the_original_pty_terminal_exit() -> io::Result<()> {
+    run_terminal_fixture("pty-terminal")
+}
+
+#[test]
+#[ignore = "requires RUST_TOOLS_ENABLED_HOST_BINARY built separately from the test dependency graph"]
+fn coverage_receipt_binds_to_the_original_headless_terminal_exit() -> io::Result<()> {
+    run_terminal_fixture("headless-terminal")
+}
+
+#[test]
+#[ignore = "requires an independently built host and the pinned Linux coverage toolchain"]
+fn authenticated_pty_terminal_produces_the_rust_coverage_report() -> io::Result<()> {
+    run_terminal_fixture("collector-terminal")
 }
