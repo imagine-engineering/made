@@ -15,6 +15,8 @@ fn run_fixture_with_host(host: &OsStr, scenario: &str) -> io::Result<()> {
     let directory = tempfile::tempdir()?;
     let output = smol::block_on(
         Command::new(host)
+            .env_remove("CARGO_TARGET_DIR")
+            .env("CARGO_NET_OFFLINE", "true")
             .arg("coverage-completion-fixture")
             .arg("--directory")
             .arg(directory.path())
@@ -106,4 +108,10 @@ fn authenticated_pty_terminal_produces_the_rust_coverage_report() -> io::Result<
 #[ignore = "requires an independently built host and the pinned Linux coverage toolchain"]
 fn headless_task_store_publishes_the_authenticated_rust_coverage_report() -> io::Result<()> {
     run_terminal_fixture("headless-collector")
+}
+
+#[test]
+#[ignore = "requires an independently built host and the pinned Linux coverage toolchain"]
+fn headless_cargo_selection_runs_only_the_selected_binary_with_coverage() -> io::Result<()> {
+    run_terminal_fixture("selected-headless-collector")
 }

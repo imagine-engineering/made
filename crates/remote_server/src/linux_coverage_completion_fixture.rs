@@ -388,7 +388,7 @@ fn report_replacement(directory: &Path) -> Result<()> {
     })
 }
 
-fn collector_invocation(directory: &Path, report: &Path) -> Result<TaskBuildInvocation> {
+fn write_collector_fixture(directory: &Path) -> Result<()> {
     for (name, bytes) in [
         (
             "Cargo.toml",
@@ -430,7 +430,11 @@ fn collector_invocation(directory: &Path, report: &Path) -> Result<TaskBuildInvo
         std::fs::create_dir_all(path.parent().context("Invalid fixture path")?)?;
         std::fs::write(path, bytes)?;
     }
+    Ok(())
+}
 
+fn collector_invocation(directory: &Path, report: &Path) -> Result<TaskBuildInvocation> {
+    write_collector_fixture(directory)?;
     let cargo = std::env::var_os("RUST_TOOLS_COVERAGE_CARGO")
         .context("The independently installed Cargo is required")?;
     let mut environment = BTreeMap::new();
@@ -643,16 +647,80 @@ async fn headless_cancel_control(
     anyhow::bail!("Dropping the host capture did not cancel and reap its workload")
 }
 
-fn headless_collector(directory: &Path) -> Result<()> {
-    use gpui::{AppContext as _, UpdateGlobal as _};
+fn verify_headless_coverage(
+    host: &gpui::Entity<crate::HeadlessProject>,
+    snapshot: &project::source_coverage::SourceCoverageSnapshot,
+    cx: &gpui::AsyncApp,
+) -> Result<()> {
     use project::source_coverage::SourceCoverageStatus;
+
+    ensure!(
+        matches!(
+            snapshot.status,
+            SourceCoverageStatus::Current | SourceCoverageStatus::Partial
+        ),
+        "Unexpected coverage status: {:?}",
+        snapshot.status
+    );
+    let file = snapshot
+        .files
+        .iter()
+        .find(|file| file.path.path.as_std_path() == Path::new("src/bin/fixture.rs"))
+        .context("Host report is missing the selected Rust source")?;
+    ensure!(
+        file.covered_lines == 3 && file.uncovered_lines == 0,
+        "Expected three covered Rust lines, got {} covered and {} uncovered",
+        file.covered_lines,
+        file.uncovered_lines,
+    );
+    ensure!(
+        !snapshot
+            .files
+            .iter()
+            .any(|file| file.path.path.as_std_path() == Path::new("src/bin/second.rs")),
+        "Coverage included an unselected binary"
+    );
+    let cached = host.read_with(cx, |host, cx| {
+        host.source_coverage_store
+            .read(cx)
+            .cached_snapshots()
+            .any(|cached| cached == snapshot)
+    });
+    ensure!(
+        cached,
+        "The authoritative provider did not publish its result"
+    );
+    Ok(())
+}
+
+fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()> {
+    use gpui::{AppContext as _, UpdateGlobal as _};
+    use project::ProjectPath;
+    use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
+    use project::cargo_workspace_store::CargoCoverageSelection;
     use project::worktree_store::{WorktreeIdCounter, WorktreeStore};
     use std::sync::Arc;
+    use util::rel_path::RelPath;
 
     let directory = std::fs::canonicalize(directory)?;
     let run_id = uuid::Uuid::new_v4();
     let artifact_path = format!("target/zed-coverage-{}.json", run_id.simple());
-    let invocation = collector_invocation(&directory, Path::new(&artifact_path))?;
+    let launch = if select_cargo_target {
+        write_collector_fixture(&directory)?;
+        std::fs::write(directory.join("src/bin/second.rs"), "fn main() {}\n")?;
+        None
+    } else {
+        let invocation = collector_invocation(&directory, Path::new(&artifact_path))?;
+        Some(task::SpawnInTerminal {
+            command: Some(invocation.program().to_string_lossy().into_owned()),
+            args: invocation.arguments().to_vec(),
+            cwd: Some(directory.clone()),
+            env: invocation.environment().clone().into_iter().collect(),
+            label: "Run with Coverage".into(),
+            required_experimental_features: vec!["rust-coverage-experimental".into()],
+            ..Default::default()
+        })
+    };
     let logical_report = directory.join(&artifact_path);
     std::fs::create_dir_all(directory.join("target"))?;
     std::fs::write(directory.join(".gitignore"), "/target/\n")?;
@@ -664,15 +732,6 @@ fn headless_collector(directory: &Path) -> Result<()> {
             directory.to_str().context("Non-Unicode fixture root")?,
         ),
     )?;
-    let launch = task::SpawnInTerminal {
-        command: Some(invocation.program().to_string_lossy().into_owned()),
-        args: invocation.arguments().to_vec(),
-        cwd: Some(directory.clone()),
-        env: invocation.environment().clone().into_iter().collect(),
-        label: "Run with Coverage".into(),
-        required_experimental_features: vec!["rust-coverage-experimental".into()],
-        ..Default::default()
-    };
     let group = headless_report_group(artifact_path);
 
     let (send, receive) = std::sync::mpsc::sync_channel(1);
@@ -684,7 +743,7 @@ fn headless_collector(directory: &Path) -> Result<()> {
             store.register_setting::<feature_flags::FeatureFlagsSettings>();
             store
                 .set_user_settings(
-                    r#"{"feature_flags":{"rust-coverage-experimental":"on"}}"#,
+                    r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
                     cx,
                 )
                 .result()
@@ -749,7 +808,6 @@ fn headless_collector(directory: &Path) -> Result<()> {
             )
         });
         cx.spawn(async move |cx| {
-            let _client_worktrees = client_worktrees;
             let deadline = cx.background_executor().timer(Duration::from_secs(20));
             let stage = std::cell::Cell::new("registering the worktree");
             let run = async {
@@ -770,40 +828,37 @@ fn headless_collector(directory: &Path) -> Result<()> {
                     })?
                     .await;
                 stage.set("running the Cargo LLVM collector");
-                let snapshot = host
-                    .update(cx, |host, cx| {
+                let (snapshot, recovery) = if let Some(launch) = launch {
+                    let snapshot = host.update(cx, |host, cx| {
                         host.run_host_coverage_task(run_id.to_string(), launch, &group, cx)
-                    })?
-                    .await?;
-                ensure!(
-                    matches!(
-                        snapshot.status,
-                        SourceCoverageStatus::Current | SourceCoverageStatus::Partial
-                    ),
-                    "Unexpected coverage status: {:?}",
-                    snapshot.status
-                );
-                let file = snapshot
-                    .files
-                    .iter()
-                    .find(|file| file.path.path.as_std_path() == Path::new("src/bin/fixture.rs"))
-                    .context("Host report is missing the selected Rust source")?;
-                ensure!(
-                    file.covered_lines == 3 && file.uncovered_lines == 0,
-                    "Expected three covered Rust lines, got {} covered and {} uncovered",
-                    file.covered_lines,
-                    file.uncovered_lines,
-                );
-                let cached = host.read_with(cx, |host, cx| {
-                    host.source_coverage_store
-                        .read(cx)
-                        .cached_snapshots()
-                        .any(|cached| cached == &snapshot)
-                });
-                ensure!(
-                    cached,
-                    "The authoritative provider did not publish its result"
-                );
+                    })?.await?;
+                    (snapshot, None)
+                } else {
+                    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+                    let selection = CargoCoverageSelection {
+                        workspace: CargoWorkspaceKey {
+                            root: ProjectPath { worktree_id, path: RelPath::empty_arc() },
+                        },
+                        package_manifest: ProjectPath {
+                            worktree_id,
+                            path: RelPath::from_unix_str("Cargo.toml")?.into_arc(),
+                        },
+                        target_kind: CargoTargetKind::Binary,
+                        target_name: "--output-path".into(),
+                    };
+                    let rejected = host.update(cx, |host, cx| host.run_selected_host_coverage_task(selection.clone(), cx))?.await;
+                    let error = rejected.err().context("A selector absent from Cargo metadata started a Task")?;
+                    ensure!(format!("{error:#}").contains("Coverage target is no longer available"), "Unexpected selector refusal: {error:#}");
+                    let selection = CargoCoverageSelection {
+                        target_name: "fixture-bin".into(),
+                        ..selection
+                    };
+                    let snapshot = host.update(cx, |host, cx| {
+                        host.run_selected_host_coverage_task(selection.clone(), cx)
+                    })?.await?;
+                    (snapshot, Some(selection))
+                };
+                verify_headless_coverage(&host, &snapshot, cx)?;
                 ensure!(
                     std::fs::read(&logical_report)? == b"unrelated stale report",
                     "The host collected through the logical workspace report"
@@ -812,6 +867,24 @@ fn headless_collector(directory: &Path) -> Result<()> {
                 headless_cancel_control(&host, &directory, cx).await?;
                 stage.set("checking failed and stale runs");
                 headless_failure_controls(&host, &directory, cx).await?;
+                if let Some(selection) = recovery {
+                    stage.set("recovering with a fresh selected run");
+                    let source_path = RelPath::from_unix_str("src/bin/fixture.rs")?.into_arc();
+                    worktree
+                        .update(cx, |worktree, cx| {
+                            worktree
+                                .as_local()
+                                .context("Expected a local host worktree")
+                                .map(|tree| tree.refresh_entry(source_path, None, cx))
+                        })?
+                        .await?
+                        .context("Modified fixture source is unavailable")?;
+                    let recovered = host.update(cx, |host, cx| {
+                        host.run_selected_host_coverage_task(selection, cx)
+                    })?.await?;
+                    ensure!(recovered.generation > snapshot.generation, "Recovery reused its original admission");
+                    verify_headless_coverage(&host, &recovered, cx)?;
+                }
                 Ok(())
             };
             let result = match futures::future::select(Box::pin(run), deadline).await {
@@ -821,10 +894,18 @@ fn headless_collector(directory: &Path) -> Result<()> {
                     stage.get()
                 )),
             };
+            if let Err(error) = &result {
+                eprintln!("Headless coverage fixture failed: {error:#}");
+            }
             if let Err(error) = send.send(result) {
                 log::error!("Headless Coverage Task fixture lost its caller: {error}");
             }
-            cx.update(|cx| cx.quit());
+            drop(host);
+            drop(client_worktrees);
+            cx.update(|cx| {
+                cx.shutdown();
+                cx.quit();
+            });
         })
         .detach();
     });
@@ -842,6 +923,7 @@ pub enum Scenario {
     CollectorTerminal,
     ReportReplacement,
     HeadlessCollector,
+    SelectedHeadlessCollector,
 }
 
 pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
@@ -858,6 +940,7 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::HeadlessTerminal => shell_terminal(directory, true),
         Scenario::CollectorTerminal => collector_terminal(directory),
         Scenario::ReportReplacement => report_replacement(directory),
-        Scenario::HeadlessCollector => headless_collector(directory),
+        Scenario::HeadlessCollector => headless_collector(directory, false),
+        Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
     }
 }

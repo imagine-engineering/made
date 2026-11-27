@@ -29,12 +29,93 @@ use crate::{
 };
 
 pub const RUST_COVERAGE_PROVIDER_ID: &str = "cargo-llvm-cov";
+pub const CARGO_COVERAGE_ARTIFACT_FORMAT: &str = "llvm-cov-json-v1";
+pub const CARGO_COVERAGE_ARTIFACT_PATH: &str = "target/zed-coverage.json";
 pub const MAX_RUST_COVERAGE_ARTIFACT_BYTES: usize = 32 * 1024 * 1024;
 pub(crate) const COVERAGE_TASK_EXPIRED_DIAGNOSTIC: &str =
     "Coverage Task expired because the project session or trust changed";
 const MAX_RUST_COVERAGE_EXPORTS: usize = 16;
 #[cfg(any(test, feature = "test-support"))]
 static LOCAL_RUST_COVERAGE_INTERPRET_CALLS: AtomicU64 = AtomicU64::new(0);
+
+pub fn compile_coverage_task_template(template: &mut task::TaskTemplate) -> Result<()> {
+    use task::{
+        MAX_TASK_ARTIFACT_BYTES, TaskArtifact, TaskArtifactGroup, TaskArtifactGroupArgumentBinding,
+        TaskArtifactKind,
+    };
+
+    if template.command != "cargo" {
+        bail!("Run with Coverage requires the Cargo task runner");
+    }
+    let arguments = &mut template.args;
+    let subcommand_index = usize::from(
+        arguments
+            .first()
+            .is_some_and(|argument| argument.starts_with('+')),
+    );
+    if arguments.get(subcommand_index).map(String::as_str) != Some("run") {
+        bail!("Run with Coverage requires a Cargo run selection");
+    }
+
+    let original_arguments = std::mem::take(arguments);
+    let mut coverage_arguments = Vec::with_capacity(original_arguments.len() + 4);
+    let mut original_arguments = original_arguments.into_iter();
+    if subcommand_index == 1
+        && let Some(toolchain) = original_arguments.next()
+    {
+        coverage_arguments.push(toolchain);
+    }
+    let _run = original_arguments.next();
+    coverage_arguments.extend([
+        "llvm-cov".to_string(),
+        "--json".to_string(),
+        "--output-path".to_string(),
+        CARGO_COVERAGE_ARTIFACT_PATH.to_string(),
+        "run".to_string(),
+    ]);
+    coverage_arguments.extend(original_arguments);
+
+    template.label = format!("Run with Coverage ({})", template.label);
+    template.args = coverage_arguments;
+    template.tags.retain(|tag| !tag.starts_with("cargo-"));
+    template
+        .tags
+        .extend(["cargo-coverage".to_string(), "external-tool".to_string()]);
+    template
+        .env
+        .insert("CARGO_LLVM_COV_SETUP".into(), "no".into());
+    template
+        .env
+        .insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+    template.artifact = None;
+    template.artifact_argument_binding = None;
+    template.artifact_group_argument_binding = Some(TaskArtifactGroupArgumentBinding {
+        argument_index: subcommand_index + 3,
+        role: "report".into(),
+        related: Vec::new(),
+    });
+    template.artifact_group = Some(TaskArtifactGroup {
+        format: CARGO_COVERAGE_ARTIFACT_FORMAT.into(),
+        files: std::collections::BTreeMap::from_iter([(
+            "report".into(),
+            TaskArtifact {
+                path: CARGO_COVERAGE_ARTIFACT_PATH.into(),
+                kind: TaskArtifactKind::Data,
+                max_bytes: MAX_TASK_ARTIFACT_BYTES,
+            },
+        )]),
+    });
+    if !template
+        .required_experimental_features
+        .iter()
+        .any(|flag| flag == "rust-coverage-experimental")
+    {
+        template
+            .required_experimental_features
+            .push("rust-coverage-experimental".into());
+    }
+    Ok(())
+}
 
 fn resolve_reported_source(
     worktree_id: worktree::WorktreeId,

@@ -101,6 +101,31 @@ pub struct CargoMetadataRequest {
     pub environment: Option<HashMap<String, String>>,
 }
 
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CargoCoverageSelection {
+    pub workspace: crate::cargo_workspace::CargoWorkspaceKey,
+    pub package_manifest: ProjectPath,
+    pub target_kind: crate::cargo_workspace::CargoTargetKind,
+    pub target_name: String,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct PreparedHostCoverageTask {
+    run_id: String,
+    resolved: task::ResolvedTask,
+    snapshot_revision: u64,
+    worktree_store: gpui::EntityId,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+struct HostCoverageContext {
+    template: task::TaskTemplate,
+    directory: PathBuf,
+    environment: Shared<Task<Option<HashMap<String, String>>>>,
+    revision: u64,
+}
+
 #[async_trait]
 pub trait CargoMetadataRunner: Send + Sync {
     async fn run(&self, request: CargoMetadataRequest) -> Result<Vec<u8>>;
@@ -4990,6 +5015,288 @@ impl CargoWorkspaceStore {
             && snapshot.input_fingerprint
                 == cargo_input_fingerprint(&self.worktree_store, self.cached_scope.as_ref(), cx);
         Some((snapshot, current))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn prepare_host_coverage_task(
+        &mut self,
+        selection: CargoCoverageSelection,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<PreparedHostCoverageTask>>> {
+        use feature_flags::RustCoverageExperimentalFeatureFlag;
+
+        ensure!(
+            cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                && matches!(self.mode, CargoWorkspaceStoreMode::Local { .. })
+                && !self.disconnected
+                && !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx),
+            "Coverage requires a trusted producing Cargo workspace"
+        );
+        let worktree = self.coverage_manifest_worktree(&selection.package_manifest, cx)?;
+        ensure!(
+            matches!(
+                selection.target_kind,
+                crate::cargo_workspace::CargoTargetKind::Binary
+                    | crate::cargo_workspace::CargoTargetKind::Example
+            ) && (1..=256).contains(&selection.target_name.len())
+                && !selection.target_name.chars().any(char::is_control),
+            "Coverage requires a runnable Cargo target"
+        );
+        let worktree_id = worktree.read(cx).id();
+        let discovery = match self.cached_snapshot(cx) {
+            Some((snapshot, true))
+                if snapshot
+                    .workspaces
+                    .iter()
+                    .any(|workspace| workspace.key == selection.workspace) =>
+            {
+                None
+            }
+            _ => Some(
+                self.refresh_scoped(
+                    Some(
+                        [selection.workspace.root.worktree_id, worktree_id]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    cx,
+                ),
+            ),
+        };
+        let executor = cx.background_executor().clone();
+        let worktree_store = self.worktree_store.entity_id();
+        Ok(cx.spawn(async move |this, cx| {
+            if let Some(discovery) = discovery {
+                discovery.await?;
+            }
+            let HostCoverageContext {
+                mut template,
+                directory,
+                environment,
+                revision,
+            } = this.update(cx, |store, cx| store.host_coverage_context(&selection, cx))??;
+            let project_environment = environment
+                .await
+                .context("Coverage host environment is unavailable")?;
+            let resolved = cx
+                .background_spawn(async move {
+                    let mut environment = std::env::vars_os()
+                        .map(|(key, value)| {
+                            Ok((
+                                key.into_string().map_err(|_| {
+                                    anyhow!("Coverage host environment contains a non-Unicode name")
+                                })?,
+                                value.into_string().map_err(|_| {
+                                    anyhow!(
+                                        "Coverage host environment contains a non-Unicode value"
+                                    )
+                                })?,
+                            ))
+                        })
+                        .collect::<Result<HashMap<_, _>>>()?;
+                    environment.extend(project_environment);
+                    ensure!(
+                        smol::fs::canonicalize(&directory).await? == directory,
+                        "Coverage working directory changed before planning"
+                    );
+                    let cargo = which::which_in(
+                        "cargo",
+                        environment.get("PATH").map(OsString::from),
+                        &directory,
+                    )
+                    .map_err(|_| anyhow!("Coverage requires Cargo on the producing host's PATH"))?;
+                    let passive = PassiveRustEnvironment::from_request(Some(&environment));
+                    if let Some(installed) = check_passive_rustup_executable(
+                        cargo.as_os_str(),
+                        &directory,
+                        &passive,
+                        &executor,
+                    )
+                    .await?
+                    {
+                        environment.insert(
+                            "RUSTUP_TOOLCHAIN".into(),
+                            installed
+                                .root
+                                .to_str()
+                                .context("Coverage toolchain path is not Unicode")?
+                                .into(),
+                        );
+                    }
+                    crate::rust_coverage_provider::validate_capture_task_environment(&environment)?;
+                    crate::rust_coverage_provider::compile_coverage_task_template(&mut template)?;
+                    template.command = cargo
+                        .to_str()
+                        .context("Coverage Cargo path is not Unicode")?
+                        .into();
+                    let context = task::TaskContext {
+                        cwd: Some(directory),
+                        project_env: environment,
+                        ..Default::default()
+                    };
+                    let run_id = uuid::Uuid::new_v4();
+                    let resolved = template
+                        .resolve_task_with_literal_arguments("host Cargo coverage", &context)
+                        .context("Unable to resolve the selected Coverage Task")?
+                        .bind_artifact_invocation(&run_id.simple().to_string())?;
+                    Ok::<_, anyhow::Error>(PreparedHostCoverageTask {
+                        run_id: run_id.to_string(),
+                        resolved,
+                        snapshot_revision: revision,
+                        worktree_store,
+                    })
+                })
+                .await?;
+            this.read_with(cx, |store, cx| {
+                store.validate_host_coverage_task(&resolved, cx)
+            })??;
+            Ok(resolved)
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn coverage_manifest_worktree(
+        &self,
+        manifest: &ProjectPath,
+        cx: &App,
+    ) -> Result<Entity<worktree::Worktree>> {
+        let tree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(manifest.worktree_id, cx)
+            .context("Coverage worktree is unavailable")?;
+        let worktree = tree.read(cx);
+        ensure!(
+            TrustedWorktrees::try_get_global(cx).and_then(|trust| {
+                trust.read(cx).observed_worktree_trust(
+                    &self.worktree_store,
+                    manifest.worktree_id,
+                    cx,
+                )
+            }) == Some(true)
+                && worktree.is_visible()
+                && worktree.is_local()
+                && manifest.path.file_name() == Some("Cargo.toml")
+                && worktree
+                    .entry_for_path(&manifest.path)
+                    .is_some_and(|entry| {
+                        entry.is_file()
+                            && !entry.is_private
+                            && !entry.is_external
+                            && !entry.is_ignored
+                            && !entry.is_fifo
+                    }),
+            "Coverage requires a trusted, visible Cargo manifest on the producing host"
+        );
+        Ok(tree)
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn host_coverage_context(
+        &self,
+        selection: &CargoCoverageSelection,
+        cx: &mut App,
+    ) -> Result<HostCoverageContext> {
+        use crate::cargo_workspace::CargoTargetKind;
+
+        let (snapshot, true) = self
+            .cached_snapshot(cx)
+            .context("Coverage Cargo snapshot is unavailable")?
+        else {
+            anyhow::bail!("Coverage Cargo snapshot changed before planning");
+        };
+        let workspace = snapshot
+            .workspaces
+            .iter()
+            .find(|workspace| workspace.key == selection.workspace)
+            .context("Coverage workspace is unavailable")?;
+        let member = workspace
+            .members
+            .iter()
+            .find(|member| member.manifest_path == selection.package_manifest)
+            .context("Coverage package is not in the selected workspace")?;
+        self.coverage_manifest_worktree(&member.manifest_path, cx)?;
+        let target = member
+            .targets
+            .iter()
+            .find(|target| {
+                target.kind == selection.target_kind && target.name == selection.target_name
+            })
+            .context("Coverage target is no longer available")?;
+        let selector = match target.kind {
+            CargoTargetKind::Binary => "--bin",
+            CargoTargetKind::Example => "--example",
+            _ => anyhow::bail!("Coverage requires a runnable Cargo target"),
+        };
+        let manifest = workspace
+            .root_manifest
+            .as_ref()
+            .context("Coverage workspace manifest is unavailable")?;
+        let worktree = self.coverage_manifest_worktree(manifest, cx)?;
+        let directory = worktree
+            .read(cx)
+            .absolutize(&manifest.path)
+            .parent()
+            .context("Coverage Cargo manifest has no parent")?
+            .to_path_buf();
+        let CargoWorkspaceStoreMode::Local { environment, .. } = &self.mode else {
+            anyhow::bail!("Coverage planning requires the producing host");
+        };
+        let environment = environment.update(cx, |environment, cx| {
+            environment.directory_environment(Arc::from(directory.as_path()), cx)
+        });
+        Ok(HostCoverageContext {
+            template: task::TaskTemplate {
+                label: format!("{} ({})", target.name, member.name),
+                command: "cargo".into(),
+                args: vec![
+                    "run".into(),
+                    "--package".into(),
+                    member.name.clone(),
+                    selector.into(),
+                    target.name.clone(),
+                ],
+                experimental_policy_version: task::EXPERIMENTAL_TASK_POLICY_VERSION,
+                ..Default::default()
+            },
+            directory,
+            environment,
+            revision: snapshot.revision,
+        })
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn validate_host_coverage_task(
+        &self,
+        prepared: &PreparedHostCoverageTask,
+        cx: &App,
+    ) -> Result<()> {
+        use feature_flags::RustCoverageExperimentalFeatureFlag;
+        ensure!(
+            self.worktree_store.entity_id() == prepared.worktree_store
+                && cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                && !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx)
+                && self.cached_snapshot(cx).is_some_and(|(snapshot, current)| {
+                    current && snapshot.revision == prepared.snapshot_revision
+                }),
+            "Coverage Cargo selection changed before launch"
+        );
+        Ok(())
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn take_host_coverage_launch(
+        &self,
+        prepared: PreparedHostCoverageTask,
+        cx: &App,
+    ) -> Result<(String, task::SpawnInTerminal, task::TaskArtifactGroup)> {
+        self.validate_host_coverage_task(&prepared, cx)?;
+        let group = prepared
+            .resolved
+            .resolved_artifact_group()
+            .context("Coverage Task has no bound report")?
+            .clone();
+        Ok((prepared.run_id, prepared.resolved.resolved, group))
     }
 
     pub(crate) fn refresh_scoped(

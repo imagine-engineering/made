@@ -1,96 +1,18 @@
-use anyhow::{Result, bail};
-use collections::BTreeMap;
-use task::{
-    MAX_TASK_ARTIFACT_BYTES, TaskArtifact, TaskArtifactGroup, TaskArtifactGroupArgumentBinding,
-    TaskArtifactKind,
-};
+use anyhow::Result;
+use project::rust_coverage_provider::compile_coverage_task_template;
 
 use crate::cargo_preset::CompiledCargoPreset;
 
-pub const CARGO_COVERAGE_ARTIFACT_FORMAT: &str = "llvm-cov-json-v1";
-pub const CARGO_COVERAGE_ARTIFACT_PATH: &str = "target/zed-coverage.json";
+pub use project::rust_coverage_provider::{
+    CARGO_COVERAGE_ARTIFACT_FORMAT, CARGO_COVERAGE_ARTIFACT_PATH,
+};
+
 pub const CARGO_COVERAGE_FAILURE_GUIDANCE: &str = "Coverage failed. Verify that cargo-llvm-cov is installed on the project host with `cargo install cargo-llvm-cov`, then inspect the task output.";
 
 pub fn compile_coverage_plan(
     mut compiled_cargo_context: CompiledCargoPreset,
 ) -> Result<CompiledCargoPreset> {
-    if compiled_cargo_context.task_template.command != "cargo" {
-        bail!("Run with Coverage requires the Cargo task runner");
-    }
-    let arguments = &mut compiled_cargo_context.task_template.args;
-    let subcommand_index = usize::from(
-        arguments
-            .first()
-            .is_some_and(|argument| argument.starts_with('+')),
-    );
-    if arguments.get(subcommand_index).map(String::as_str) != Some("run") {
-        bail!("Run with Coverage requires a Cargo run selection");
-    }
-
-    let original_arguments = std::mem::take(arguments);
-    let mut coverage_arguments = Vec::with_capacity(original_arguments.len() + 4);
-    let mut original_arguments = original_arguments.into_iter();
-    if subcommand_index == 1
-        && let Some(toolchain) = original_arguments.next()
-    {
-        coverage_arguments.push(toolchain);
-    }
-    let _run = original_arguments.next();
-    coverage_arguments.extend([
-        "llvm-cov".to_string(),
-        "--json".to_string(),
-        "--output-path".to_string(),
-        CARGO_COVERAGE_ARTIFACT_PATH.to_string(),
-        "run".to_string(),
-    ]);
-    coverage_arguments.extend(original_arguments);
-
-    compiled_cargo_context.task_template.label = format!(
-        "Run with Coverage ({})",
-        compiled_cargo_context.task_template.label
-    );
-    compiled_cargo_context.task_template.args = coverage_arguments;
-    compiled_cargo_context
-        .task_template
-        .tags
-        .retain(|tag| !tag.starts_with("cargo-"));
-    compiled_cargo_context
-        .task_template
-        .tags
-        .extend(["cargo-coverage".to_string(), "external-tool".to_string()]);
-    compiled_cargo_context.task_template.artifact = None;
-    compiled_cargo_context
-        .task_template
-        .artifact_argument_binding = None;
-    compiled_cargo_context
-        .task_template
-        .artifact_group_argument_binding = Some(TaskArtifactGroupArgumentBinding {
-        argument_index: subcommand_index + 3,
-        role: "report".into(),
-        related: Vec::new(),
-    });
-    compiled_cargo_context.task_template.artifact_group = Some(TaskArtifactGroup {
-        format: CARGO_COVERAGE_ARTIFACT_FORMAT.into(),
-        files: BTreeMap::from_iter([(
-            "report".into(),
-            TaskArtifact {
-                path: CARGO_COVERAGE_ARTIFACT_PATH.into(),
-                kind: TaskArtifactKind::Data,
-                max_bytes: MAX_TASK_ARTIFACT_BYTES,
-            },
-        )]),
-    });
-    if !compiled_cargo_context
-        .task_template
-        .required_experimental_features
-        .iter()
-        .any(|flag| flag == "rust-coverage-experimental")
-    {
-        compiled_cargo_context
-            .task_template
-            .required_experimental_features
-            .push("rust-coverage-experimental".into());
-    }
+    compile_coverage_task_template(&mut compiled_cargo_context.task_template)?;
     Ok(compiled_cargo_context)
 }
 
@@ -102,6 +24,7 @@ mod tests {
         CargoWorkingDirectoryPolicy, compile_preset,
     };
     use collections::HashMap;
+    use task::{MAX_TASK_ARTIFACT_BYTES, TaskArtifactKind};
 
     #[test]
     fn cargo_coverage_preserves_compiled_context_and_declares_exact_host_artifact() {
@@ -112,8 +35,11 @@ mod tests {
         preset.target = Some(CargoTargetSelector::Binary("server".to_string()));
         preset.toolchain = Some("nightly".to_string());
         preset.features = vec!["telemetry".to_string()];
-        preset.environment =
-            HashMap::from_iter([("SECRET_TOKEN".to_string(), "secret".to_string())]);
+        preset.environment = HashMap::from_iter([
+            ("SECRET_TOKEN".into(), "secret".into()),
+            ("CARGO_LLVM_COV_SETUP".into(), "yes".into()),
+            ("RUSTUP_AUTO_INSTALL".into(), "1".into()),
+        ]);
         preset.working_directory = CargoWorkingDirectoryPolicy::Package;
         let compiled = compile_preset(
             &preset,
@@ -156,6 +82,22 @@ mod tests {
                 .get("SECRET_TOKEN")
                 .map(String::as_str),
             Some("secret")
+        );
+        assert_eq!(
+            coverage
+                .task_template
+                .env
+                .get("CARGO_LLVM_COV_SETUP")
+                .map(String::as_str),
+            Some("no")
+        );
+        assert_eq!(
+            coverage
+                .task_template
+                .env
+                .get("RUSTUP_AUTO_INSTALL")
+                .map(String::as_str),
+            Some("0")
         );
         let artifact = coverage
             .task_template

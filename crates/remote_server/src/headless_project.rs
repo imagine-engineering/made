@@ -102,6 +102,28 @@ pub struct HeadlessAppState {
 
 impl HeadlessProject {
     #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn run_selected_host_coverage_task(
+        &self,
+        selection: project::cargo_workspace_store::CargoCoverageSelection,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<project::source_coverage::SourceCoverageSnapshot>>> {
+        let planned = self.cargo_workspace_store.update(cx, |store, cx| {
+            store.prepare_host_coverage_task(selection, cx)
+        })?;
+        Ok(cx.spawn(async move |this, cx| {
+            let prepared = planned.await?;
+            this.update(cx, |host, cx| {
+                let (run_id, launch, group) = host
+                    .cargo_workspace_store
+                    .read(cx)
+                    .take_host_coverage_launch(prepared, cx)?;
+                host.run_host_coverage_task(run_id, launch, &group, cx)
+            })??
+            .await
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
     pub fn run_host_coverage_task(
         &self,
         run_id: String,
