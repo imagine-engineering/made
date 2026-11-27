@@ -100,6 +100,14 @@ You can also point either server to a binary you installed yourself. See the
 guides. A project setting can override your user default. Keep only one Kotlin
 server enabled for a buffer.
 
+The alternate Kotlin server is experimental. With version `1.3.13`, the native
+Maven and Gradle fixtures could navigate to definitions, complete methods, and
+report diagnostics while document highlights failed. If **Language Servers**
+reports a fallback analysis error, open **View Logs** for that server. You can
+select the preferred provider again and restart the language server. Native
+fallback runs have exceeded the 8 GiB qualification ceiling, and the 32 GiB
+reference-host check remains open.
+
 For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
 repository. Cache the Maven Dependency Plugin used by `dependency:list` and
