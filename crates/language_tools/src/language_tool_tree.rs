@@ -165,6 +165,7 @@ pub fn language_tool_tree(
         };
         div()
             .id(row.id.0.clone())
+            .debug_selector(|| row.id.0.clone())
             .role(Role::TreeItem)
             .aria_label(row.accessibility_label.clone())
             .aria_level(row.level)
@@ -181,12 +182,10 @@ pub fn language_tool_tree(
             .when(wrapped, |row| row.min_h_7().py_2().items_start())
             .when(!wrapped && !compact, |row| row.h_7().items_center())
             .when(compact, |element| {
-                let id = row.id.0.clone();
                 element
                     .h_6()
                     .items_center()
                     .text_ui_sm(cx)
-                    .debug_selector(move || id)
                     .tooltip(Tooltip::text(row.accessibility_label.clone()))
             })
             .when(is_selected, |element| {

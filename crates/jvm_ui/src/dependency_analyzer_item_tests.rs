@@ -1086,6 +1086,53 @@ async fn analyzer_row_menu_deploys_targets_and_dismisses(cx: &mut TestAppContext
         item.select_node_row(analyzer_row_id_for_node("leaf"), cx)
     });
 
+    cx.simulate_resize(gpui::size(gpui::px(1536.0), gpui::px(1096.0)));
+    cx.update(|window, cx| {
+        item.read(cx).focus_handle(cx).focus(window, cx);
+        window.activate_a11y_for_test();
+        window.draw(cx).clear(cx);
+    });
+    let container_bounds = cx
+        .debug_bounds("groovy-analyzer-results")
+        .expect("analyzer results container");
+    let tree_bounds = cx
+        .debug_bounds("language-tool-tree")
+        .expect("analyzer tree");
+    assert!(
+        tree_bounds.size.height > container_bounds.size.height - gpui::px(4.0),
+        "the tree fills its results container: {tree_bounds:?} in {container_bounds:?}"
+    );
+    let row_bounds = cx
+        .debug_bounds("analyzer-node:leaf")
+        .expect("analyzer leaf row");
+    assert!(
+        tree_bounds.contains(&row_bounds.center()),
+        "analyzer leaf is clipped: {row_bounds:?} in {tree_bounds:?}"
+    );
+    let position = gpui::point(row_bounds.left() + gpui::px(100.0), row_bounds.center().y);
+    cx.update(|window, cx| {
+        window.dispatch_event(
+            gpui::MouseDownEvent {
+                button: gpui::MouseButton::Right,
+                position,
+                modifiers: Default::default(),
+                click_count: 1,
+                first_mouse: false,
+            }
+            .to_platform_input(),
+            cx,
+        );
+    });
+    cx.simulate_mouse_up(position, gpui::MouseButton::Right, Default::default());
+    assert!(item.read_with(cx, |item, _| item.row_context_menu_is_deployed()));
+    cx.update(|window, cx| {
+        window.draw(cx).clear(cx);
+        let cancel = cx
+            .build_action("menu::Cancel", None)
+            .expect("menu cancel action");
+        window.dispatch_action(cancel, cx);
+    });
+
     use gpui::Focusable as _;
     cx.update(|window, cx| {
         item.read(cx).focus_handle(cx).focus(window, cx);

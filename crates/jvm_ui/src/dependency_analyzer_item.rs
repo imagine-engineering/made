@@ -1877,7 +1877,11 @@ impl Render for DependencyAnalyzerItem {
             })
             .child(
                 div()
+                    .debug_selector(|| "groovy-analyzer-results".into())
+                    .flex()
+                    .flex_col()
                     .flex_1()
+                    .min_h_0()
                     .border_1()
                     .border_color(theme.border)
                     .child(language_tool_tree(
