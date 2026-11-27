@@ -1,10 +1,12 @@
 # Product releases
 
-Copper uses **push tag → automatically prepare draft → review → publish**.
-Pushing a valid Copper tag prepares **Apple Silicon macOS only**. It never
-publishes. Stable and prerelease versions use the same process. Main pushes run
-CI and release-policy contracts; publication events do not build packages.
-Website refresh remains paused, including manual website dispatches.
+Use **Actions → Release Copper** to publish a stable release or prerelease for
+**Apple Silicon macOS**. A prerelease can also include unsigned Windows x86_64
+and Linux x86_64 downloads for manual installation. The workflow creates the
+tag, builds and verifies the selected packages, and publishes them on GitHub.
+A standalone tag push still prepares a draft for manual publication. Main
+pushes run CI and release-policy contracts. Website refresh remains paused,
+including manual website dispatches.
 
 ## Eligibility and version selection
 
@@ -70,6 +72,32 @@ no preparation and never changes a published release.
 
 ## Prepare and publish
 
+1. Wait for required CI to pass on the `main` commit you want to release.
+2. On GitHub, open **Actions → Release Copper → Run workflow** and select
+   `main`.
+3. Enter a Copper tag and choose its release type. Use a tag such as
+   `copper-v0.1.2-rc.1` for **prerelease** or `copper-v0.1.2` for **stable**.
+4. For a prerelease, optionally select **Include unsigned Windows and Linux
+   downloads**. The checkbox defaults to off. Stable releases require signed
+   packages and reject this option.
+5. Click **Run workflow**. The workflow tags the dispatch commit and publishes
+   after every selected package passes platform smoke checks and every uploaded
+   asset matches its verified SHA-256 checksum. The macOS DMG also passes
+   signing and notarization checks. Open the run summary for the release link.
+   Stable releases are marked **Latest**.
+
+The optional Windows installer and Linux archive have
+`-unsigned-manual-install` in their filenames. Download them from GitHub
+Releases for manual installation. They stay out of automatic update feeds, and
+the signed macOS DMG remains eligible for macOS preview updates.
+
+If a run fails after creating the tag, rerun the original workflow to keep its
+commit. Rerun failed jobs after an upload failure to reuse the verified packages.
+If the tag already has a matching verified published release, the workflow
+returns its link.
+
+### Prepare a draft from a standalone tag
+
 These are operator commands, not implementation validation. Choose a reviewed
 main commit with successful required CI and a new version:
 
@@ -95,9 +123,8 @@ or adds packages.
 
 ## Manual qualification, recovery and platform selection
 
-One generated workflow owns all modes; there is no separate signing or
-publication workflow to dispatch. The former release, release-promotion and
-signing-check entry points remain retired. Archives remain unchanged.
+`release_prepare` also supports qualification and draft recovery. The
+**Release Copper** workflow calls the same build and verification pipeline.
 
 For non-publishing production qualification, leave `release_tag` empty, select
 an exact `version`, `preparation_scope=macos-only` or `full`, and set
@@ -169,9 +196,10 @@ conditional lock against concurrent human publication; do not publish mid-run.
 
 Drafts never enter updater selection. Even after publication, Copper requires
 the final verification marker and complete, digest-bearing package/evidence set.
-Unsigned CI artifacts and interrupted drafts are ineligible. macOS-only releases
-are eligible only for `--platform macos`; generic, Windows and Linux feeds still
-require full-platform releases. Stable and preview remain separate:
+Unsigned CI artifacts, unsigned manual downloads, and interrupted drafts are
+ineligible. Releases with only a signed macOS package are eligible only for
+`--platform macos`. Generic, Windows and Linux feeds require full-platform
+signed releases. Stable and preview use separate feeds:
 
 ```sh
 python3 script/product_release.py latest --product rust --channel preview --platform macos

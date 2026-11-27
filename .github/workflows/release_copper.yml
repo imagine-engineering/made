@@ -1,0 +1,36 @@
+name: Release Copper
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Copper tag (for example, copper-v0.1.2-rc.1 or copper-v0.1.2)
+        required: true
+        type: string
+      release_type:
+        description: Release type
+        required: true
+        type: choice
+        default: prerelease
+        options:
+          - prerelease
+          - stable
+      include_unsigned_downloads:
+        description: Include unsigned Windows and Linux downloads
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      actions: read
+      contents: write
+    uses: ./.github/workflows/release_prepare.yml
+    with:
+      release_tag: ${{ inputs.tag }}
+      publish_release_type: ${{ inputs.release_type || 'invalid' }}
+      include_unsigned_downloads: ${{ inputs.include_unsigned_downloads }}
+    secrets: inherit
