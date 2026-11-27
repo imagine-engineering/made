@@ -16148,6 +16148,13 @@ impl LspStore {
             .map(|(server_id, _)| *server_id);
         if let Some(server_id) = server_id {
             if self.as_local().is_some() {
+                // A replacement read cannot retain configured facts from an already stale snapshot.
+                if self
+                    .jdtls_project_query_token(worktree_id)
+                    .is_some_and(|token| token.server_id() == server_id)
+                {
+                    return;
+                }
                 self.schedule_local_jdtls_project_refresh(
                     server_id,
                     worktree_id,

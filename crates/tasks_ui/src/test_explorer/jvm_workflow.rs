@@ -1504,6 +1504,17 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
             .await;
     }
     cx.dispatch_action(Refresh);
+    let refresh = lsp_store.read_with(cx, |store, _| {
+        store
+            .jdtls_project_query_token(worktree_id)
+            .expect("the toolbar started a read refresh")
+    });
+    cx.dispatch_action(Refresh);
+    assert_eq!(
+        lsp_store.read_with(cx, |store, _| store.jdtls_project_query_token(worktree_id)),
+        Some(refresh),
+        "a repeated toolbar refresh must keep the read that retained configured Gradle metadata"
+    );
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         cx.run_until_parked();
@@ -1522,6 +1533,25 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
             .timer(Duration::from_millis(100))
             .await;
     }
+    assert!(
+        lsp_store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot.projects.iter().any(|module| {
+                            module.module_root.path.as_unix_str() == "application"
+                                && module.gradle.as_ref().is_some_and(|gradle| {
+                                    gradle
+                                        .configurations
+                                        .iter()
+                                        .any(|config| config.name == "qualificationGraph")
+                                })
+                        })
+                })
+        }),
+        "the read refresh must retain the configured application graph"
+    );
     if matches!(run, GradleFixtureRun::OrderedTasks) {
         verify_gradle_queue(
             &root,
