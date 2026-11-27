@@ -4099,7 +4099,8 @@ async fn fingerprint_native_probe_file(
     #[cfg(not(target_os = "macos"))]
     let mut fingerprint = Sha256::new();
     let mut bytes = 0_u64;
-    let mut buffer = [0_u8; 64 * 1024];
+    // Several nested validation futures embed this buffer in their state.
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     loop {
         let remaining = limit
             .saturating_sub(bytes)
@@ -9678,16 +9679,21 @@ mod tests {
                     native_probe_directory_children(filesystem.as_ref(), &root, &mut remaining)
                         .await
                         .expect("controlled directory membership");
-                let actual = Box::pin(fingerprint_native_probe_file(
+                let fingerprint = fingerprint_native_probe_file(
                     filesystem.as_ref(),
                     &root,
                     root_inode,
                     &relative,
                     before,
                     bytes.len() as u64,
-                ))
-                .await
-                .expect("actual no-follow bounded native reader");
+                );
+                assert!(
+                    std::mem::size_of_val(&fingerprint) < 16 * 1024,
+                    "nested native validation must not carry the file read buffer in its future"
+                );
+                let actual = fingerprint
+                    .await
+                    .expect("actual no-follow bounded native reader");
                 let legacy: [u8; 32] = Sha256::digest(&bytes).into();
                 assert_eq!(actual, legacy);
                 if let Some(known) = known {
