@@ -565,6 +565,11 @@ port 5005. Maven uses a separate loopback port for each launch. Stopping the
 Debug session or restricting project trust cancels its selected test Task,
 including during terminal preparation.
 
+On a compatible direct Groovy connection, **Debug Selected Test** uses the
+project host's Java extension, build wrapper, and loopback port. Refresh Tests
+after upgrading or reconnecting the project host. The host rechecks the selected
+case and trust before the Task starts and confirms when the port is ready.
+
 If the Task ends before the test JVM suspends, the Debug console reports
 its exit status, cancellation, or an interruption without an exit status.
 The Debug terminal retains the build output.

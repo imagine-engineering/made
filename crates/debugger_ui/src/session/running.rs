@@ -39,7 +39,7 @@ use language::Buffer;
 use loaded_source_list::LoadedSourceList;
 use module_list::ModuleList;
 use project::{
-    DebugScenarioContext, Project, WorktreeId,
+    DebugScenarioContext, LocalJavaTestDebugTask, Project, RemoteJavaTestDebugTask, WorktreeId,
     debugger::session::{self, Session, SessionEvent, SessionStateEvent, ThreadId, ThreadStatus},
 };
 use rpc::proto::ViewId;
@@ -65,66 +65,98 @@ use workspace::{
 static PROCESS_ID_PLACEHOLDER: LazyLock<String> =
     LazyLock::new(|| task::VariableName::PickProcessId.template_value());
 
+enum SelectedJavaTestBuild {
+    Local {
+        worktree_id: WorktreeId,
+        node_id: String,
+        generation: u64,
+        port: u16,
+        plan: LocalJavaTestDebugTask,
+    },
+    Remote(RemoteJavaTestDebugTask),
+}
+
 async fn wait_for_java_test_debugger(
     terminal: &Entity<terminal::Terminal>,
     port: u16,
     use_terminal_output: bool,
+    remote: Option<(&Entity<Project>, &RemoteJavaTestDebugTask)>,
     cx: &mut gpui::AsyncWindowContext,
 ) -> Result<()> {
     let ready = format!("Listening for transport dt_socket at address: {port}");
-    for _ in 0..600 {
-        let completed = terminal.read_with(cx, |terminal, cx| {
-            let task = terminal
-                .task()
-                .context("The selected Java test Debug terminal no longer has a Task")?;
-            if task.structured_task.as_ref().is_some_and(|handle| {
-                matches!(handle.state(), task::StructuredTaskState::Cancelled { .. })
-            }) {
-                bail!("The selected Java test Task was cancelled before the JVM suspended.");
+    let deadline = cx.background_executor().timer(Duration::from_secs(60));
+    let wait = async {
+        loop {
+            let completed = terminal.read_with(cx, |terminal, cx| {
+                let task = terminal
+                    .task()
+                    .context("The selected Java test Debug terminal no longer has a Task")?;
+                if task.structured_task.as_ref().is_some_and(|handle| {
+                    matches!(handle.state(), task::StructuredTaskState::Cancelled { .. })
+                }) {
+                    bail!("The selected Java test Task was cancelled before the JVM suspended.");
+                }
+                Ok::<_, anyhow::Error>(
+                    (task.status != terminal::TaskStatus::Running)
+                        .then(|| terminal.wait_for_completed_task(cx)),
+                )
+            })?;
+            if let Some(completion) = completed {
+                match completion.await {
+                    Some(status) if status.success() => bail!(
+                        "The selected Java test Task finished successfully before the JVM suspended. Check the Debug terminal for the build output."
+                    ),
+                    Some(status) => bail!(
+                        "The selected Java test Task failed before the JVM suspended ({status}). Check the Debug terminal for the build output."
+                    ),
+                    None => bail!(
+                        "The selected Java test Task stopped before the JVM suspended. Check the Debug terminal for the build output."
+                    ),
+                }
             }
-            Ok::<_, anyhow::Error>(
-                (task.status != terminal::TaskStatus::Running)
-                    .then(|| terminal.wait_for_completed_task(cx)),
-            )
-        })?;
-        if let Some(completion) = completed {
-            match completion.await {
-                Some(status) if status.success() => bail!(
-                    "The selected Java test Task finished successfully before the JVM suspended. Check the Debug terminal for the build output."
-                ),
-                Some(status) => bail!(
-                    "The selected Java test Task failed before the JVM suspended ({status}). Check the Debug terminal for the build output."
-                ),
-                None => bail!(
-                    "The selected Java test Task stopped before the JVM suspended. Check the Debug terminal for the build output."
-                ),
-            }
-        }
-        let is_ready = terminal.read_with(cx, |terminal, _| {
-            if use_terminal_output {
-                Ok(terminal
-                    .last_n_non_empty_lines(32)
-                    .iter()
-                    .any(|line| line.trim() == ready))
+            let announced = !use_terminal_output
+                || terminal.read_with(cx, |terminal, _| {
+                    terminal
+                        .last_n_non_empty_lines(32)
+                        .iter()
+                        .any(|line| line.trim() == ready)
+                });
+            let is_ready = if !announced {
+                false
+            } else if let Some((project, plan)) = remote {
+                project
+                    .update(cx, |project, cx| {
+                        project.check_remote_java_test_debug_task(plan, true, cx)
+                    })
+                    .await?
+            } else if use_terminal_output {
+                true
             } else {
                 // Surefire can buffer the fork's stdout while it is suspended.
                 match std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)) {
-                    Ok(_) => Ok(false),
-                    Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => Ok(true),
+                    Ok(_) => false,
+                    Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => true,
                     Err(error) => {
-                        Err(error).context("Could not check the selected Maven test Debug port")
+                        return Err(error)
+                            .context("Could not check the selected Maven test Debug port");
                     }
                 }
+            };
+            if is_ready {
+                return Ok(());
             }
-        })?;
-        if is_ready {
-            return Ok(());
+            cx.background_executor()
+                .timer(Duration::from_millis(100))
+                .await;
         }
-        cx.background_executor()
-            .timer(Duration::from_millis(100))
-            .await;
+    };
+    futures::pin_mut!(wait);
+    match futures::future::select(wait, deadline).await {
+        futures::future::Either::Left((result, _)) => result,
+        futures::future::Either::Right(_) => {
+            bail!("The selected Java test did not open its Debug port within 60 seconds")
+        }
     }
-    bail!("The selected Java test did not open its Debug port within 60 seconds")
 }
 
 pub struct RunningState {
@@ -1202,11 +1234,16 @@ impl RunningState {
                 Self::substitute_process_id_in_config(&mut config, process_id);
             }
 
-            let request_type = match dap_registry
-                .adapter(&adapter)
-                .with_context(|| format!("{adapter}: is not a valid adapter name")) {
+            let remote_selected_test = matches!(build, Some(BuildTaskDefinition::SelectedJavaTest { .. }))
+                && project.read_with(cx, |project, _| project.is_remote());
+            let request_type = if remote_selected_test {
+                Ok(dap::StartDebuggingRequestArgumentsRequest::Attach)
+            } else {
+                match dap_registry.adapter(&adapter)
+                    .with_context(|| format!("{adapter}: is not a valid adapter name")) {
                     Ok(adapter) => adapter.request_kind(&config).await,
-                    Err(e) => Err(e)
+                    Err(error) => Err(error),
+                }
                 };
 
 
@@ -1221,34 +1258,43 @@ impl RunningState {
                         locator_name,
                     } => (task_template, locator_name),
                     BuildTaskDefinition::SelectedJavaTest { node_id, discovery_generation } => {
-                        let worktree_id = worktree_id.context("Select a local Java test worktree")?;
-                        let mut plan = project.update(cx, |project, cx| {
-                            project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, None, cx)
-                        })?;
+                        let worktree_id = worktree_id.context("Select a Java test worktree")?;
                         anyhow::ensure!(
                             config_is_valid && adapter.as_ref() == "Java"
                                 && config["request"] == "attach"
                                 && config["hostName"] == "127.0.0.1",
                             "The selected Java test Debug endpoint changed; reselect it in Tests"
                         );
-                        let port = match plan.fixed_port {
-                            Some(port) => port,
-                            None => {
-                                let port = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-                                    .context("Could not allocate a local Maven Debug port")?
-                                    .local_addr()?.port();
-                                plan = project.update(cx, |project, cx| {
-                                    project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, Some(port), cx)
-                                })?;
-                                port
-                            }
+                        let (port, source_root, template, build) = if remote_selected_test {
+                            let plan = project.update(cx, |project, cx| {
+                                project.prepare_remote_java_test_debug_task(worktree_id, node_id, discovery_generation, cx)
+                            }).await?;
+                            (plan.port, plan.source_root.clone(), plan.template.clone(), SelectedJavaTestBuild::Remote(plan))
+                        } else {
+                            let mut plan = project.update(cx, |project, cx| {
+                                project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, None, cx)
+                            })?;
+                            let port = match plan.fixed_port {
+                                Some(port) => port,
+                                None => {
+                                    let port = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                                        .context("Could not allocate a local Maven Debug port")?
+                                        .local_addr()?.port();
+                                    plan = project.update(cx, |project, cx| {
+                                        project.selected_java_test_debug_task(worktree_id, &node_id, discovery_generation, Some(port), cx)
+                                    })?;
+                                    port
+                                }
+                            };
+                            (port, plan.source_root.clone(), plan.template.clone(), SelectedJavaTestBuild::Local {
+                                worktree_id, node_id, generation: discovery_generation, port, plan,
+                            })
                         };
                         config["port"] = port.into();
                         config["sourcePaths"] = serde_json::json!([
-                            plan.source_root.to_str().context("The Java test source path is not Unicode")?
+                            source_root.to_str().context("The Java test source path is not Unicode")?
                         ]);
-                        let template = plan.template.clone();
-                        selected_java_test = Some((worktree_id, node_id, discovery_generation, port, plan));
+                        selected_java_test = Some(build);
                         (template, None)
                     }
                     BuildTaskDefinition::ByName(ref label) => {
@@ -1276,7 +1322,14 @@ impl RunningState {
                         session.ensure_experimental_access(cx)
                     })
                 })??;
-                let Some(mut task) = task_template.resolve_task("debug-build-task", &task_context) else {
+                let task = if remote_selected_test {
+                    let mut template = task_template;
+                    template.label = template.label.replace('$', "$$");
+                    template.resolve_task_with_literal_arguments("debug-build-task", &task_context)
+                } else {
+                    task_template.resolve_task("debug-build-task", &task_context)
+                };
+                let Some(mut task) = task else {
                     anyhow::bail!("Could not resolve task variables within a debug scenario");
                 };
 
@@ -1323,16 +1376,18 @@ impl RunningState {
                 let (command, args) =
                     builder.build(task.resolved.command.clone(), &task.resolved.args);
 
-                let task_with_shell = SpawnInTerminal {
+                let task_with_shell = if remote_selected_test {
+                    task.resolved.clone()
+                } else { SpawnInTerminal {
                     command_label,
                     command: Some(command),
                     args,
                     ..task.resolved.clone()
-                };
+                }};
 
                 Workspace::save_for_task(&weak_workspace, task_with_shell.save, cx).await;
                 this.read_with(cx, |this, cx| this.ensure_experimental_access(cx))??;
-                if let Some((worktree_id, node_id, generation, port, plan)) = &selected_java_test {
+                if let Some(SelectedJavaTestBuild::Local { worktree_id, node_id, generation, port, plan }) = &selected_java_test {
                     let current = project.update(cx, |project, cx| {
                         project.selected_java_test_debug_task(*worktree_id, node_id, *generation, Some(*port), cx)
                     })?;
@@ -1345,8 +1400,24 @@ impl RunningState {
                 }
 
                 let creation = if selected_java_test.is_some() {
+                    let preflight = if let Some(SelectedJavaTestBuild::Remote(plan)) = &selected_java_test {
+                        let project = project.downgrade();
+                        let plan = plan.clone();
+                        let check: project::terminals::TaskTerminalCheck = Box::new(move |cx| {
+                            cx.spawn(async move |cx| {
+                                let verification = project.update(cx, |project, cx| {
+                                    project.check_remote_java_test_debug_task(&plan, false, cx)
+                                })?;
+                                anyhow::ensure!(!verification.await?, "The Java test Debug port opened before the Task started");
+                                Ok(())
+                            })
+                        });
+                        Some(check)
+                    } else {
+                        None
+                    };
                     this.update(cx, |this, cx| {
-                        this.create_selected_java_test_terminal(&project, task_with_shell, cx)
+                        this.create_selected_java_test_terminal(&project, task_with_shell, preflight, cx)
                     })?
                 } else {
                     project.update(cx, |project, cx| {
@@ -1374,9 +1445,9 @@ impl RunningState {
                     });
                 })?;
 
-                if let Some((worktree_id, node_id, generation, port, plan)) = selected_java_test {
+                if let Some(SelectedJavaTestBuild::Local { worktree_id, node_id, generation, port, plan }) = selected_java_test {
                     // The selected JVM is suspended until DAP attaches. Waiting for Task exit would deadlock.
-                    wait_for_java_test_debugger(&terminal, port, plan.fixed_port.is_some(), cx).await?;
+                    wait_for_java_test_debugger(&terminal, port, plan.fixed_port.is_some(), None, cx).await?;
                     let current = project.update(cx, |project, cx| {
                         project.selected_java_test_debug_task(worktree_id, &node_id, generation, Some(port), cx)
                     })?;
@@ -1384,6 +1455,8 @@ impl RunningState {
                         current == plan,
                         "The selected Java test changed while waiting for Debug; refresh Tests"
                     );
+                } else if let Some(SelectedJavaTestBuild::Remote(plan)) = selected_java_test {
+                    wait_for_java_test_debugger(&terminal, plan.port, plan.announces_port, Some((&project, &plan)), cx).await?;
                 } else {
                     let exit_status = terminal
                         .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
@@ -2123,6 +2196,7 @@ impl RunningState {
         &mut self,
         project: &Entity<Project>,
         spawn_task: SpawnInTerminal,
+        preflight: Option<project::terminals::TaskTerminalCheck>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<terminal::Terminal>>> {
         if self.session.read(cx).is_terminated() {
@@ -2131,7 +2205,14 @@ impl RunningState {
         let task = StructuredTaskHandle::new(spawn_task.id.clone());
         self.selected_java_test_task = Some(task.clone());
         project.update(cx, |project, cx| {
-            project.create_terminal_task_with_structured_handle(spawn_task, Some(task), cx)
+            project.create_terminal_task_with_preflight(
+                spawn_task,
+                Some(task),
+                None,
+                None,
+                preflight,
+                cx,
+            )
         })
     }
 
@@ -2336,7 +2417,8 @@ mod tests {
                 .await
                 .expect("test Debug terminal");
             let mut window = cx.update(|window, cx| window.to_async(cx));
-            let result = wait_for_java_test_debugger(&terminal, 5005, true, &mut window).await;
+            let result =
+                wait_for_java_test_debugger(&terminal, 5005, true, None, &mut window).await;
             if let Some(expected) = error_message {
                 let error = result.expect_err("only a suspended JVM authorizes attachment");
                 let error = error.to_string();
@@ -2355,7 +2437,7 @@ mod tests {
                     );
                 });
                 assert!(cx.update(|_, cx| handle.expect("selected test Task handle").cancel(cx)));
-                let error = wait_for_java_test_debugger(&terminal, 5005, true, &mut window)
+                let error = wait_for_java_test_debugger(&terminal, 5005, true, None, &mut window)
                     .await
                     .expect_err("the cancelled Task cannot authorize attachment");
                 assert!(
@@ -2462,6 +2544,7 @@ mod tests {
                         args: vec!["-c".into(), "read answer".into()],
                         ..Default::default()
                     },
+                    None,
                     cx,
                 );
                 let handle = running.selected_java_test_task.clone().expect("Owned Task");

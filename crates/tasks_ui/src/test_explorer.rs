@@ -543,25 +543,30 @@ fn dispatch_java_test_debug_action(
         .jvm_test_provider_store()
         .cloned()
         .context("The project host does not support Java test actions")?;
-    if provider.read(cx).is_remote() {
-        anyhow::bail!("Remote Java test Debug needs the host action protocol");
-    }
-    let plan = provider.read_with(cx, |provider, cx| {
-        provider.plan_selected_case_debug(&selection.node_id, selection.discovery_generation, cx)
+    let (worktree_id, label, port) = provider.read_with(cx, |provider, cx| {
+        if provider.is_remote() {
+            let (module, label) = provider.remote_debug_case(
+                &selection.node_id, selection.discovery_generation, cx,
+            )?;
+            Ok::<_, anyhow::Error>((module.worktree_id, label, 0))
+        } else {
+            let plan = provider.plan_selected_case_debug(
+                &selection.node_id, selection.discovery_generation, cx,
+            )?;
+            cx.try_global::<dap::DapRegistry>()
+                .and_then(|registry| registry.adapter("Java"))
+                .context("The approved Java Debug adapter is not installed; install it to debug this Java test. No unverified adapter is downloaded")?;
+            Ok((plan.worktree_id, plan.template.label, plan.debug_port))
+        }
     })?;
-    dap::DapRegistry::global(cx)
-        .adapter("Java")
-        .context(
-            "The approved Java Debug adapter is not installed; install it to debug this Java test. No unverified adapter is downloaded",
-        )?;
     let task_contexts = workspace_entity.update(cx, |workspace, cx| {
         crate::task_contexts(workspace, window, cx)
     });
     let scenario = java_test_debug_scenario(
-        &plan.template.label,
+        &label,
         selection.node_id.clone(),
         selection.discovery_generation,
-        plan.debug_port,
+        port,
     );
     let workspace = workspace_entity.downgrade();
     window
@@ -569,7 +574,7 @@ fn dispatch_java_test_debug_action(
             let task_contexts = task_contexts.await;
             let result = (|| {
                 let task_context = task_contexts
-                    .task_context_for_worktree_id(plan.worktree_id)
+                    .task_context_for_worktree_id(worktree_id)
                     .cloned()
                     .context("No task context exists for the selected Java test worktree")?;
                 workspace.update_in(cx, |workspace, window, cx| {
@@ -577,7 +582,7 @@ fn dispatch_java_test_debug_action(
                         scenario,
                         task::SharedTaskContext::from(task_context),
                         None,
-                        Some(plan.worktree_id),
+                        Some(worktree_id),
                         window,
                         cx,
                     );
@@ -2436,24 +2441,29 @@ impl TestsPanel {
             }
             let project = self.project.read(cx);
             let admission = || {
-                anyhow::ensure!(
-                    !project.is_remote(),
-                    "Remote Java test Debug needs the host action protocol"
-                );
                 let provider = project
                     .jvm_test_provider_store()
                     .context("The project host does not support Java test actions")?;
-                // A cached JUnit result is stale even when its source selector is current.
-                let plan = provider.read(cx).plan_selected_case_debug(
-                    &selection.node_id,
-                    selection.discovery_generation,
-                    cx,
-                )?;
+                let provider = provider.read(cx);
+                let worktree_id = if project.is_remote() {
+                    provider
+                        .remote_debug_case(&selection.node_id, selection.discovery_generation, cx)?
+                        .0
+                        .worktree_id
+                } else {
+                    provider
+                        .plan_selected_case_debug(
+                            &selection.node_id,
+                            selection.discovery_generation,
+                            cx,
+                        )?
+                        .worktree_id
+                };
                 let worktrees = project.worktree_store();
                 let trusted = TrustedWorktrees::try_get_global(cx).and_then(|trusted| {
                     trusted
                         .read(cx)
-                        .observed_worktree_trust(&worktrees, plan.worktree_id, cx)
+                        .observed_worktree_trust(&worktrees, worktree_id, cx)
                 });
                 anyhow::ensure!(
                     trusted == Some(true)

@@ -571,6 +571,20 @@ pub struct LocalJavaTestDebugTask {
     pub source_root: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct RemoteJavaTestDebugTask {
+    pub template: task::TaskTemplate,
+    pub port: u16,
+    pub announces_port: bool,
+    pub source_root: PathBuf,
+    #[cfg(feature = "jvm-tools")]
+    request: proto::ResolveJvmTestDebug,
+    #[cfg(feature = "jvm-tools")]
+    client_generation: u64,
+    #[cfg(feature = "jvm-tools")]
+    relative_source_root: Arc<RelPath>,
+}
+
 impl ProjectPath {
     pub fn from_file(value: &dyn language::File, cx: &App) -> Self {
         ProjectPath {
@@ -3018,6 +3032,45 @@ impl Project {
         }
         #[cfg(not(feature = "jvm-tools"))]
         anyhow::bail!("This product does not support selected Java test Debug")
+    }
+
+    pub fn prepare_remote_java_test_debug_task(
+        &self,
+        _worktree: WorktreeId,
+        _node_id: String,
+        _discovery_generation: u64,
+        _cx: &mut App,
+    ) -> Task<Result<RemoteJavaTestDebugTask>> {
+        #[cfg(feature = "jvm-tools")]
+        if self.remote_connection_state(_cx) == Some(remote::ConnectionState::Connected)
+            && let Some(provider) = self.jvm_test_provider_store()
+        {
+            return provider.update(_cx, |provider, cx| {
+                provider.prepare_remote_test_debug(_worktree, _node_id, _discovery_generation, cx)
+            });
+        }
+        Task::ready(Err(anyhow::anyhow!(
+            "Connect to a compatible Groovy project host before debugging the selected Java test"
+        )))
+    }
+
+    pub fn check_remote_java_test_debug_task(
+        &self,
+        _plan: &RemoteJavaTestDebugTask,
+        _check_readiness: bool,
+        _cx: &mut App,
+    ) -> Task<Result<bool>> {
+        #[cfg(feature = "jvm-tools")]
+        if self.remote_connection_state(_cx) == Some(remote::ConnectionState::Connected)
+            && let Some(provider) = self.jvm_test_provider_store()
+        {
+            return provider.update(_cx, |provider, cx| {
+                provider.check_remote_test_debug(_plan, _check_readiness, cx)
+            });
+        }
+        Task::ready(Err(anyhow::anyhow!(
+            "The Groovy project host disconnected while preparing Java test Debug"
+        )))
     }
 
     #[inline]

@@ -32,7 +32,7 @@ use task::{
 use util::rel_path::RelPath;
 
 use crate::{
-    ProjectPath, WorktreeId,
+    ProjectPath, RemoteJavaTestDebugTask, WorktreeId,
     buffer_store::BufferStore,
     structured_execution::{
         DiscoveryGeneration, StructuredDebugCapability, StructuredExecutionEvent,
@@ -242,6 +242,7 @@ pub struct JvmTestProviderStore {
     interrupted_gradle_case: Option<JvmVerifiedCase>,
     run_handles: HashMap<StructuredRunId, StructuredTaskHandle>,
     current_remote_discovery: Option<DiscoveryGeneration>,
+    remote_debug_supported: bool,
     active_remote_request_id: Option<u64>,
     active_remote_request_abort: Option<AbortHandle>,
     active_remote_requests: HashMap<(proto::PeerId, u64), AbortHandle>,
@@ -286,6 +287,7 @@ impl JvmTestProviderStore {
                 request_id: request.request_id,
                 status: proto::StructuredProviderStatus::Mismatch as i32,
                 diagnostic: Some("Java test discovery protocol mismatch".to_string()),
+                selected_debug_protocol_version: 0,
             });
         }
         ensure!(
@@ -340,6 +342,14 @@ impl JvmTestProviderStore {
             request_id: request.request_id,
             status: provider_status_to_proto(snapshot.status),
             diagnostic: snapshot.diagnostic,
+            selected_debug_protocol_version: if cfg!(unix)
+                && request.project_id == proto::REMOTE_SERVER_PROJECT_ID
+                && envelope.original_sender_id.is_none()
+            {
+                JVM_TEST_DEBUG_PROTOCOL_VERSION
+            } else {
+                0
+            },
         })
     }
 
@@ -897,6 +907,205 @@ impl JvmTestProviderStore {
 
     pub fn is_remote(&self) -> bool {
         self.remote.is_some()
+    }
+
+    pub fn remote_debug_case(
+        &self,
+        node_id: &StructuredNodeId,
+        generation: DiscoveryGeneration,
+        cx: &gpui::App,
+    ) -> Result<(ProjectPath, String)> {
+        ensure!(
+            self.remote.as_ref().is_some_and(|(project_id, client)| {
+                *project_id == proto::REMOTE_SERVER_PROJECT_ID && !client.is_via_collab()
+            }) && !self.closed
+                && !self.disconnected,
+            "Connect to a direct Groovy project host before debugging the selected Java test"
+        );
+        ensure!(
+            self.current_remote_discovery == Some(generation),
+            "The selected Java test discovery is stale; refresh Tests"
+        );
+        ensure!(
+            self.remote_debug_supported,
+            "The project host does not support selected Java test Debug; reconnect to a compatible host"
+        );
+        let store = self.structured_store.read(cx);
+        let snapshot = store
+            .state()
+            .provider(&StructuredProviderId(JVM_JUNIT_PROVIDER_ID.into()))
+            .filter(|snapshot| snapshot.discovery_generation == generation)
+            .context("Remote Java test discovery is unavailable; refresh Tests")?;
+        let find_node = |id: &StructuredNodeId, kind| {
+            snapshot
+                .nodes
+                .iter()
+                .find(|node| &node.id == id && node.kind == kind)
+        };
+        let case = find_node(node_id, StructuredNodeKind::Case)
+            .context("Select a current Java test case to debug")?;
+        match &case.debug_capability {
+            Some(StructuredDebugCapability::Supported) => {}
+            Some(StructuredDebugCapability::Unsupported(reason)) => bail!("{reason}"),
+            None => {
+                bail!("The project host did not verify this Java test for Debug; refresh Tests")
+            }
+        }
+        let module = case
+            .parent_id
+            .as_ref()
+            .and_then(|id| find_node(id, StructuredNodeKind::Suite))
+            .and_then(|suite| suite.parent_id.as_ref())
+            .and_then(|id| find_node(id, StructuredNodeKind::Group))
+            .and_then(|group| group.path.clone())
+            .context("The selected Java test module is no longer visible; refresh Tests")?;
+        ensure!(
+            self.worktree_store
+                .read(cx)
+                .visible_worktrees(cx)
+                .any(|worktree| { worktree.read(cx).id() == module.worktree_id }),
+            "The selected Java test worktree is no longer visible; refresh Tests"
+        );
+        Ok((module, case.label.clone()))
+    }
+
+    pub(crate) fn prepare_remote_test_debug(
+        &self,
+        worktree_id: WorktreeId,
+        node_id: String,
+        discovery_generation: u64,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<RemoteJavaTestDebugTask>> {
+        let prepare = || {
+            let (module, _) = self.remote_debug_case(
+                &StructuredNodeId(node_id.clone()),
+                DiscoveryGeneration(discovery_generation),
+                cx,
+            )?;
+            ensure!(
+                module.worktree_id == worktree_id,
+                "The Java test worktree changed; refresh Tests"
+            );
+            let (project_id, client) = self
+                .remote
+                .clone()
+                .context("Remote Java Debug host is unavailable")?;
+            let request = proto::ResolveJvmTestDebug {
+                project_id,
+                protocol_version: JVM_TEST_DEBUG_PROTOCOL_VERSION,
+                discovery_generation,
+                node_id,
+                worktree_id: worktree_id.to_proto(),
+                authorization: 0,
+                check_readiness: false,
+            };
+            Ok((module, client, request))
+        };
+        let (module, client, mut request) = match prepare() {
+            Ok(prepared) => prepared,
+            Err(error) => return Task::ready(Err(error)),
+        };
+        let client_generation = self.generation;
+        cx.spawn(async move |this, cx| {
+            let response = client.request(request.clone()).await?;
+            validate_remote_debug_response(&request, &response)?;
+            ensure!(!response.ready, "The project host returned a started Java Debug plan");
+            let port = u16::try_from(response.port)?;
+            ensure!(port > 0, "The project host returned an invalid Java Debug port");
+            let template = serde_json::from_str(&response.template_json)?;
+            validate_remote_jvm_template(&template)?;
+            let relative = module.path.parent().unwrap_or(RelPath::empty())
+                .join(RelPath::from_unix_str("src/test/java")?);
+            ensure!(response.source_root == relative.as_unix_str(),
+                "The project host returned a Java Debug source directory outside the selected module");
+            let relative_source_root = relative.into_arc();
+            let source_root = this.read_with(cx, |store, cx| {
+                ensure!(store.generation == client_generation, "The project connection changed while preparing Java Debug");
+                let (current, _) = store.remote_debug_case(
+                    &StructuredNodeId(request.node_id.clone()),
+                    DiscoveryGeneration(request.discovery_generation),
+                    cx,
+                )?;
+                ensure!(current == module, "The selected Java test module changed; refresh Tests");
+                let root = store.worktree_store.read(cx).worktree_for_id(worktree_id, cx)
+                    .context("The selected Java Debug worktree closed")?;
+                let root = root.read(cx);
+                ensure!(root.is_visible() && root.snapshot().entry_for_path(&relative_source_root)
+                    .is_some_and(|source| source.is_dir() && !source.is_external && !source.is_private),
+                    "The selected Java Debug source directory is unavailable");
+                Ok::<_, anyhow::Error>(root.abs_path().join(relative_source_root.as_unix_str()))
+            })??;
+            request.authorization = response.authorization;
+            Ok(RemoteJavaTestDebugTask {
+                template,
+                source_root,
+                port,
+                announces_port: response.announces_port,
+                request,
+                client_generation,
+                relative_source_root,
+            })
+        })
+    }
+
+    pub(crate) fn check_remote_test_debug(
+        &self,
+        plan: &RemoteJavaTestDebugTask,
+        check_readiness: bool,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<bool>> {
+        if self.generation != plan.client_generation
+            || self.closed
+            || self.disconnected
+            || self.current_remote_discovery
+                != Some(DiscoveryGeneration(plan.request.discovery_generation))
+        {
+            return Task::ready(Err(anyhow::anyhow!(
+                "The project connection or Java test selection changed while preparing Debug"
+            )));
+        }
+        let Some((_, client)) = self.remote.clone() else {
+            return Task::ready(Err(anyhow::anyhow!(
+                "Remote Java Debug host is unavailable"
+            )));
+        };
+        let plan = plan.clone();
+        cx.spawn(async move |this, cx| {
+            let request = proto::ResolveJvmTestDebug {
+                check_readiness,
+                ..plan.request
+            };
+            let response = client.request(request.clone()).await?;
+            validate_remote_debug_response(&request, &response)?;
+            ensure!(
+                response.authorization == request.authorization
+                    && response.port == u32::from(plan.port)
+                    && response.announces_port == plan.announces_port
+                    && response.source_root == plan.relative_source_root.as_unix_str()
+                    && serde_json::from_str::<TaskTemplate>(&response.template_json)?
+                        == plan.template
+                    && (check_readiness || !response.ready),
+                "The project host changed the Java Debug authorization"
+            );
+            this.read_with(cx, |store, cx| {
+                ensure!(
+                    !store.closed
+                        && !store.disconnected
+                        && store.generation == plan.client_generation,
+                    "The project connection or Java test selection changed while preparing Debug"
+                );
+                let (module, _) = store.remote_debug_case(
+                    &StructuredNodeId(request.node_id.clone()),
+                    DiscoveryGeneration(request.discovery_generation),
+                    cx,
+                )?;
+                ensure!(
+                    module.worktree_id.to_proto() == request.worktree_id,
+                    "The selected Java test worktree changed; refresh Tests"
+                );
+                Ok(response.ready)
+            })?
+        })
     }
 
     pub fn plan_remote_action(
@@ -1832,6 +2041,7 @@ impl JvmTestProviderStore {
             interrupted_gradle_case: None,
             run_handles: HashMap::new(),
             current_remote_discovery: None,
+            remote_debug_supported: false,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             active_remote_requests: HashMap::new(),
@@ -1936,6 +2146,7 @@ impl JvmTestProviderStore {
             interrupted_gradle_case: None,
             run_handles: HashMap::new(),
             current_remote_discovery: None,
+            remote_debug_supported: false,
             active_remote_request_id: None,
             active_remote_request_abort: None,
             active_remote_requests: HashMap::new(),
@@ -2080,6 +2291,7 @@ impl JvmTestProviderStore {
             }
             self.generation = self.generation.wrapping_add(1);
             self.current_remote_discovery = None;
+            self.remote_debug_supported = false;
             self.selectors.clear();
             cx.notify();
             return;
@@ -2212,7 +2424,7 @@ impl JvmTestProviderStore {
                         snapshot.discovery_generation.0 == response.discovery_generation,
                         "Java test discovery changed during remote refresh"
                     );
-                    Ok(snapshot)
+                    Ok((snapshot, response.selected_debug_protocol_version))
                 };
                 let result = Abortable::new(operation, abort_registration)
                     .await
@@ -2223,8 +2435,12 @@ impl JvmTestProviderStore {
                         store.active_remote_request_abort = None;
                     }
                     ensure!(store.generation == generation && !store.closed, "Stale Java test discovery");
-                    let mut snapshot = result?;
-                    apply_java_test_remote_debug_capability(&mut snapshot);
+                    let (mut snapshot, debug_version) = result?;
+                    store.remote_debug_supported =
+                        debug_version == JVM_TEST_DEBUG_PROTOCOL_VERSION;
+                    if !store.remote_debug_supported {
+                        apply_java_test_remote_debug_capability(&mut snapshot);
+                    }
                     store.current_remote_discovery = Some(snapshot.discovery_generation);
                     Ok(snapshot)
                 })?
@@ -2884,6 +3100,22 @@ fn validate_remote_jvm_field(name: &str, value: &str) -> Result<()> {
     ensure!(
         !value.is_empty() && value.len() <= MAX_REMOTE_JVM_FIELD_BYTES && !value.contains('\0'),
         "{name} is invalid or exceeds the supported limit"
+    );
+    Ok(())
+}
+
+fn validate_remote_debug_response(
+    request: &proto::ResolveJvmTestDebug,
+    response: &proto::JvmTestDebugPlanResponse,
+) -> Result<()> {
+    ensure!(
+        response.protocol_version == JVM_TEST_DEBUG_PROTOCOL_VERSION
+            && response.discovery_generation == request.discovery_generation
+            && response.node_id == request.node_id
+            && response.worktree_id == request.worktree_id
+            && response.authorization != 0
+            && response.template_json.len() <= MAX_REMOTE_JVM_PLAN_BYTES,
+        "The project host returned an incompatible Java Debug plan"
     );
     Ok(())
 }
@@ -3624,15 +3856,11 @@ fn remote_java_spawn_errors_do_not_export_raw_task_diagnostics() {
     }
 }
 
-/// Marks every reported Java test case as not debuggable for remote consumers:
-/// the host action protocol does not yet start a Debug session on their behalf,
-/// so the Tests view disables Debug with an explicit reason instead of failing
-/// on activation.
 fn apply_java_test_remote_debug_capability(snapshot: &mut StructuredProviderSnapshot) {
     for node in &mut snapshot.nodes {
         if node.kind == StructuredNodeKind::Case {
             node.debug_capability = Some(StructuredDebugCapability::Unsupported(
-                "Remote Java test Debug needs the host action protocol".to_string(),
+                "The project host does not support selected Java test Debug; reconnect to a compatible host".to_string(),
             ));
         }
     }

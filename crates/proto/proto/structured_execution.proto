@@ -28,6 +28,7 @@ message JvmTestDiscoveryResponse {
   uint64 request_id = 3;
   StructuredProviderStatus status = 4;
   optional string diagnostic = 5;
+  uint32 selected_debug_protocol_version = 6;
 }
 
 message ResolveJvmTestAction {

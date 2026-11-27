@@ -192,12 +192,21 @@ impl DebugPanel {
         cx: &mut Context<Self>,
     ) {
         let dap_store = self.project.read(cx).dap_store();
-        let Some(adapter) = DapRegistry::global(cx).adapter(&scenario.adapter) else {
-            return;
-        };
-        let quirks = SessionQuirks {
-            compact: adapter.compact_child_session(),
-            prefer_thread_name: adapter.prefer_thread_name(),
+        let quirks = match DapRegistry::global(cx).adapter(&scenario.adapter) {
+            Some(adapter) => SessionQuirks {
+                compact: adapter.compact_child_session(),
+                prefer_thread_name: adapter.prefer_thread_name(),
+            },
+            None if self.project.read(cx).is_remote()
+                && scenario.adapter.as_ref() == "Java"
+                && matches!(
+                    scenario.build,
+                    Some(task::BuildTaskDefinition::SelectedJavaTest { .. })
+                ) =>
+            {
+                SessionQuirks::default()
+            }
+            None => return,
         };
         let session = dap_store.update(cx, |dap_store, cx| {
             dap_store.new_session(

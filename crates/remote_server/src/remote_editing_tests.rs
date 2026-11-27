@@ -7752,6 +7752,68 @@ mod jvm_tools_runtime_tests {
             client.request(request).await.is_err(),
             "trust never revives a stale authorization"
         );
+        let snapshot = provider
+            .update(cx, |provider, cx| provider.refresh(cx))
+            .await
+            .expect("refresh on the compatible host");
+        let case = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.kind == StructuredNodeKind::Case)
+            .expect("current Java test case");
+        assert_eq!(
+            case.debug_capability,
+            Some(project::structured_execution::StructuredDebugCapability::Supported)
+        );
+        let worktree = project::WorktreeId::from_proto(worktree_id);
+        let plan = project
+            .update(cx, |project, cx| {
+                project.prepare_remote_java_test_debug_task(
+                    worktree,
+                    case.id.0.clone(),
+                    snapshot.discovery_generation.0,
+                    cx,
+                )
+            })
+            .await
+            .expect("client admits the current host plan");
+        assert_eq!(plan.source_root, PathBuf::from(path!("/jvm/src/test/java")));
+        assert_eq!(plan.template.command, "./mvnw");
+        assert!(
+            !project
+                .update(cx, |project, cx| {
+                    project.check_remote_java_test_debug_task(&plan, false, cx)
+                })
+                .await
+                .expect("client preflight")
+        );
+        assert!(
+            !project
+                .update(cx, |project, cx| {
+                    project.check_remote_java_test_debug_task(&plan, true, cx)
+                })
+                .await
+                .expect("client waits for the host port")
+        );
+        let listener =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, plan.port)).expect("host port bound");
+        assert!(
+            project
+                .update(cx, |project, cx| {
+                    project.check_remote_java_test_debug_task(&plan, true, cx)
+                })
+                .await
+                .expect("client admits host readiness")
+        );
+        assert!(
+            project
+                .update(cx, |project, cx| {
+                    project.check_remote_java_test_debug_task(&plan, true, cx)
+                })
+                .await
+                .is_err()
+        );
+        drop(listener);
         headless.read_with(server_cx, |headless, cx| {
             let store = headless.structured_execution_store.read(cx);
             let provider = store
