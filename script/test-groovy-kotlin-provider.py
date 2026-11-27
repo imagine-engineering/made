@@ -1180,7 +1180,7 @@ def main():
     parser.add_argument(
         "--cached-denied-network",
         action="store_true",
-        help="Require successful official Gradle import with isolated cloned caches and denied external downloads (macOS)",
+        help="Use isolated cloned Gradle caches and deny external downloads on every launch (macOS)",
     )
     parser.add_argument(
         "--expect-gradle-denied-network",
@@ -1220,12 +1220,13 @@ def main():
     if (arguments.cached_denied_network or arguments.expect_gradle_denied_network) and (
         sys.platform != "darwin"
         or arguments.fixture != "gradle"
-        or arguments.server_kind != "official"
         or arguments.java_home is None
         or arguments.expect_denied_network
         or (arguments.cached_denied_network and arguments.expect_gradle_denied_network)
     ):
-        parser.error("Gradle denial requires macOS, official Gradle, an explicit build Java home and one cache mode")
+        parser.error("Gradle denial requires macOS, Gradle, an explicit build Java home and one cache mode")
+    if arguments.expect_gradle_denied_network and arguments.server_kind != "official":
+        parser.error("empty-cache Gradle denial requires the official server's import failure status")
     if arguments.require_workspace_export and (
         arguments.server_kind != "official" or arguments.expect_denied_network or arguments.expect_gradle_denied_network
     ):
