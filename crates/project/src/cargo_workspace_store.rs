@@ -17,7 +17,7 @@ use anyhow::{Context as _, Result, anyhow, ensure};
 use async_trait::async_trait;
 use collections::HashMap;
 use futures::{
-    FutureExt as _,
+    FutureExt as _, StreamExt as _,
     future::{AbortHandle, Abortable, Either, Shared},
     io::AsyncReadExt as _,
 };
@@ -100,6 +100,14 @@ pub struct CargoMetadataRequest {
 #[async_trait]
 pub trait CargoMetadataRunner: Send + Sync {
     async fn run(&self, request: CargoMetadataRequest) -> Result<Vec<u8>>;
+
+    async fn run_observing_configuration(
+        &self,
+        request: CargoMetadataRequest,
+        _observation: Option<&CargoConfigurationObservation>,
+    ) -> Result<Vec<u8>> {
+        self.run(request).await
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -401,7 +409,41 @@ async fn revalidate_native_cargo_configuration(
     Ok(())
 }
 
-struct PassiveCargoConfigurationLoader {
+pub struct CargoConfigurationObservation {
+    paths: parking_lot::Mutex<HashSet<PathBuf>>,
+    watcher: Arc<dyn fs::Watcher>,
+    executor: BackgroundExecutor,
+}
+
+impl CargoConfigurationObservation {
+    async fn watch(&self, path: &Path) {
+        if self.paths.lock().insert(path.to_path_buf()) {
+            let watcher = self.watcher.clone();
+            let path = path.to_path_buf();
+            self.executor
+                .spawn(async move {
+                    if let Err(error) = watcher.add(&path) {
+                        log::warn!("Cargo configuration could not be observed: {error:#}");
+                    }
+                })
+                .await;
+        }
+    }
+
+    fn changed(&self, events: &[fs::PathEvent]) -> bool {
+        let paths = self.paths.lock();
+        events.iter().any(|event| {
+            paths.contains(&event.path)
+                || matches!(
+                    event.kind,
+                    Some(fs::PathEventKind::Removed | fs::PathEventKind::Rescan)
+                ) && paths.iter().any(|path| path.starts_with(&event.path))
+        })
+    }
+}
+
+struct PassiveCargoConfigurationLoader<'observation> {
+    observation: Option<&'observation CargoConfigurationObservation>,
     native_filesystem: Option<Arc<dyn fs::Fs>>,
     native_seals: Vec<NativeCargoConfigurationSeal>,
     active: HashSet<PathBuf>,
@@ -409,7 +451,7 @@ struct PassiveCargoConfigurationLoader {
     bytes: usize,
 }
 
-impl PassiveCargoConfigurationLoader {
+impl PassiveCargoConfigurationLoader<'_> {
     fn load<'a>(
         &'a mut self,
         path: PathBuf,
@@ -421,6 +463,9 @@ impl PassiveCargoConfigurationLoader {
                 return Err(anyhow!(
                     "Cargo configuration search exceeds the supported limit"
                 ));
+            }
+            if let Some(observation) = self.observation {
+                observation.watch(&path).await;
             }
             let native_contents = if let Some(filesystem) = &self.native_filesystem {
                 ensure!(
@@ -449,6 +494,9 @@ impl PassiveCargoConfigurationLoader {
                     Err(_) => return Err(anyhow!("Cargo configuration cannot be read")),
                 }
             };
+            if let Some(observation) = self.observation {
+                observation.watch(&identity).await;
+            }
             if !self.active.insert(identity.clone()) {
                 return Err(anyhow!("Cargo configuration includes form a cycle"));
             }
@@ -490,18 +538,20 @@ impl PassiveCargoConfigurationLoader {
 async fn passive_cargo_configuration(
     working_directory: &Path,
     environment: &PassiveRustEnvironment,
+    observation: Option<&CargoConfigurationObservation>,
 ) -> Result<CargoHostExecutionConfiguration> {
     Ok(
-        passive_cargo_configuration_with_native_review(working_directory, environment, None)
+        load_passive_cargo_configuration(working_directory, environment, None, observation)
             .await?
             .0,
     )
 }
 
-async fn passive_cargo_configuration_with_native_review(
+async fn load_passive_cargo_configuration(
     working_directory: &Path,
     environment: &PassiveRustEnvironment,
     native_filesystem: Option<Arc<dyn fs::Fs>>,
+    observation: Option<&CargoConfigurationObservation>,
 ) -> Result<(
     CargoHostExecutionConfiguration,
     Vec<NativeCargoConfigurationSeal>,
@@ -543,6 +593,7 @@ async fn passive_cargo_configuration_with_native_review(
             .map(|directory| directory.join(".cargo")),
     );
     let mut loader = PassiveCargoConfigurationLoader {
+        observation,
         native_filesystem,
         native_seals: Vec::new(),
         active: HashSet::new(),
@@ -555,6 +606,9 @@ async fn passive_cargo_configuration_with_native_review(
         let mut selected = None;
         for name in ["config", "config.toml"] {
             let path = directory.join(name);
+            if let Some(observation) = observation {
+                observation.watch(&path).await;
+            }
             if let Some(filesystem) = &loader.native_filesystem {
                 if filesystem.metadata(&path).await?.is_some() {
                     selected = Some(path);
@@ -629,6 +683,7 @@ async fn prepare_passive_rust_execution_in_environment(
         parent_environment,
         CargoDependencyNetwork::Offline,
         executor,
+        None,
     )
     .await
 }
@@ -640,6 +695,7 @@ async fn prepare_rust_execution_in_environment(
     parent_environment: PassiveRustEnvironment,
     network: CargoDependencyNetwork,
     executor: &BackgroundExecutor,
+    configuration_observation: Option<&CargoConfigurationObservation>,
 ) -> Result<PassiveRustExecution> {
     let preparation = async {
         let mut parent_environment = parent_environment;
@@ -657,7 +713,11 @@ async fn prepare_rust_execution_in_environment(
         let mut compiler_chain = Vec::new();
         let mut cargo_options = Vec::new();
         if program.is_none_or(|program| Path::new(program).file_stem() == Some(OsStr::new("cargo"))) {
-            let configuration = passive_cargo_configuration(working_directory, &parent_environment).await?;
+            let configuration = passive_cargo_configuration(
+                working_directory,
+                &parent_environment,
+                configuration_observation,
+            ).await?;
             for (name, value) in &configuration.environment {
                 let is_variable = |expected: &str| name == expected || (cfg!(windows) && name.eq_ignore_ascii_case(expected));
                 if ["CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"].into_iter().any(is_variable) {
@@ -1507,6 +1567,14 @@ struct UnavailableCargoConfigurationProbe;
 #[async_trait]
 impl CargoMetadataRunner for ProcessCargoMetadataRunner {
     async fn run(&self, request: CargoMetadataRequest) -> Result<Vec<u8>> {
+        self.run_observing_configuration(request, None).await
+    }
+
+    async fn run_observing_configuration(
+        &self,
+        request: CargoMetadataRequest,
+        observation: Option<&CargoConfigurationObservation>,
+    ) -> Result<Vec<u8>> {
         #[cfg(any(test, feature = "test-support"))]
         LOCAL_CARGO_PROCESS_CALLS.fetch_add(1, Ordering::Relaxed);
         let environment = PassiveRustEnvironment::from_request(request.environment.as_ref());
@@ -1523,6 +1591,7 @@ impl CargoMetadataRunner for ProcessCargoMetadataRunner {
             environment,
             CargoDependencyNetwork::Configured,
             &self.executor,
+            observation,
         )
         .await?;
         let command = || {
@@ -1730,6 +1799,7 @@ pub struct CargoWorkspaceStore {
     disconnected: bool,
     cancelled_remote_requests: HashSet<(proto::PeerId, u64)>,
     active_remote_requests: HashMap<(proto::PeerId, u64), AbortHandle>,
+    configuration_watch: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -3222,12 +3292,9 @@ async fn revalidate_native_compiler_facts(
         .as_ref()
         .context("Native runtime complete environment disappeared")?;
     let environment = PassiveRustEnvironment::from_native_recipe(recipe);
-    let (configuration, _) = passive_cargo_configuration_with_native_review(
-        &intent.cwd,
-        &environment,
-        Some(filesystem.clone()),
-    )
-    .await?;
+    let (configuration, _) =
+        load_passive_cargo_configuration(&intent.cwd, &environment, Some(filesystem.clone()), None)
+            .await?;
     ensure!(
         configuration == facts.configuration,
         "Native runtime configured compiler selection changed"
@@ -4455,9 +4522,8 @@ impl CargoWorkspaceStore {
         }));
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
             subscriptions.push(cx.subscribe(&trusted_worktrees, |store, _, _, cx| {
-                store.revision = store.revision.wrapping_add(1);
-                store.clear_metadata_facts();
-                cx.emit(CargoWorkspaceStoreEvent::Invalidated);
+                drop(store.configuration_watch.take());
+                store.invalidate(cx);
             }));
         }
         Self {
@@ -4483,6 +4549,7 @@ impl CargoWorkspaceStore {
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
+            configuration_watch: None,
             _subscriptions: subscriptions,
         }
     }
@@ -4533,6 +4600,7 @@ impl CargoWorkspaceStore {
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
+            configuration_watch: None,
             _subscriptions: Vec::new(),
         }
     }
@@ -4563,6 +4631,7 @@ impl CargoWorkspaceStore {
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
+            configuration_watch: None,
             _subscriptions: Vec::new(),
         }
     }
@@ -4598,6 +4667,7 @@ impl CargoWorkspaceStore {
             disconnected: false,
             cancelled_remote_requests: HashSet::new(),
             active_remote_requests: HashMap::default(),
+            configuration_watch: None,
             _subscriptions: subscriptions,
         }
     }
@@ -4623,10 +4693,14 @@ impl CargoWorkspaceStore {
             | WorktreeStoreEvent::WorktreeDeletedEntry(_, _) => true,
         };
         if relevant {
-            self.revision = self.revision.wrapping_add(1);
-            self.clear_metadata_facts();
-            cx.emit(CargoWorkspaceStoreEvent::Invalidated);
+            self.invalidate(cx);
         }
+    }
+
+    fn invalidate(&mut self, cx: &mut Context<Self>) {
+        self.revision = self.revision.wrapping_add(1);
+        self.clear_metadata_facts();
+        cx.emit(CargoWorkspaceStoreEvent::Invalidated);
     }
 
     pub fn shared(&mut self, project_id: u64, client: AnyProtoClient, _cx: &mut Context<Self>) {
@@ -4779,6 +4853,7 @@ impl CargoWorkspaceStore {
                 kind: CargoWorkspaceRemoteErrorKind::Disconnected,
             })));
         }
+        drop(self.configuration_watch.take());
         self.revision = self.revision.wrapping_add(1);
         self.clear_metadata_facts();
         let revision = self.revision;
@@ -4886,7 +4961,8 @@ impl CargoWorkspaceStore {
                 let runner = runner.clone();
                 let configuration_probe = configuration_probe.clone();
                 let worktree_store = self.worktree_store.clone();
-                cx.spawn(async move |_this, cx| {
+                let filesystem = worktree_store.read(cx).fs();
+                cx.spawn(async move |this, cx| {
                     wait_for_scan.await;
                     let (abort_handle, abort_registration) = AbortHandle::new_pair();
                     let (candidates, input_fingerprint, omitted_candidates, trust_subscription) = cx.update(|cx| {
@@ -4906,12 +4982,44 @@ impl CargoWorkspaceStore {
                         });
                         (candidates, input_fingerprint, omitted_candidates, subscription)
                     });
+                    let observation = if let Some((filesystem, candidate)) =
+                        filesystem.zip(candidates.iter().find(|candidate| candidate.trusted))
+                    {
+                        let initial_path = candidate.absolute_path.with_file_name(".cargo").join("config");
+                        let executor = cx.background_executor().clone();
+                        let (mut events, watcher) = executor.spawn(async move {
+                            filesystem.watch(&initial_path, Duration::from_millis(100)).await
+                        }).await;
+                        let observation = Arc::new(CargoConfigurationObservation {
+                            paths: Default::default(),
+                            watcher,
+                            executor,
+                        });
+                        this.update(cx, |store, cx| {
+                            if store.revision == revision {
+                                let observation = observation.clone();
+                                store.configuration_watch = Some(cx.spawn(async move |store, cx| {
+                                    while let Some(events) = events.next().await {
+                                        if observation.changed(&events)
+                                            && store.update(cx, |store, cx| store.invalidate(cx)).is_err()
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }));
+                            }
+                        })?;
+                        Some(observation)
+                    } else {
+                        None
+                    };
                     let collection = collect_snapshot(
                         revision,
                         input_fingerprint,
                         candidates,
                         runner,
                         configuration_probe,
+                        observation.as_deref(),
                     );
                     let mut result = Abortable::new(collection, abort_registration)
                         .await
@@ -5301,8 +5409,8 @@ impl CargoWorkspaceStore {
                     revalidate_native_build_filesystem(filesystem.as_ref(), &intent).await?;
                     let recipe = intent.environment_recipe.as_ref().context("Native runtime complete environment disappeared")?;
                     let environment = PassiveRustEnvironment::from_native_recipe(recipe);
-                    let (configuration, configuration_seals) = passive_cargo_configuration_with_native_review(
-                        &intent.cwd, &environment, Some(filesystem.clone())).await?;
+                    let (configuration, configuration_seals) = load_passive_cargo_configuration(
+                        &intent.cwd, &environment, Some(filesystem.clone()), None).await?;
                     validate_native_precompiler_loader_environment(&environment, &configuration)?;
                     ensure!(!configuration.native_runtime_target_or_runner_configured,
                         "Native runtime preparation does not yet support authored target, runner or unstable host configuration");
@@ -7995,6 +8103,7 @@ async fn collect_snapshot(
     candidates: Vec<Candidate>,
     runner: Arc<dyn CargoMetadataRunner>,
     configuration_probe: Arc<dyn CargoConfigurationProbe>,
+    observation: Option<&CargoConfigurationObservation>,
 ) -> Result<CargoMetadataCollection> {
     let mut loaded_candidates = Vec::with_capacity(candidates.len());
     let mut manifest_contents = std::collections::BTreeMap::new();
@@ -8077,7 +8186,10 @@ async fn collect_snapshot(
             manifest_path: absolute_path.clone(),
             environment: environment.clone(),
         };
-        match runner.run(request).await {
+        match runner
+            .run_observing_configuration(request, observation)
+            .await
+        {
             Ok(output) => match parse_metadata(&output) {
                 Ok(metadata) => {
                     for package in &metadata.packages {
@@ -10209,13 +10321,10 @@ mod tests {
             inherit_process: false,
         };
         let cwd = Path::new("/native/runtime/workspace/nested");
-        let (configuration, seals) = passive_cargo_configuration_with_native_review(
-            cwd,
-            &environment,
-            Some(filesystem.clone()),
-        )
-        .await
-        .expect("actual selected configuration");
+        let (configuration, seals) =
+            load_passive_cargo_configuration(cwd, &environment, Some(filesystem.clone()), None)
+                .await
+                .expect("actual selected configuration");
         assert_eq!(
             configuration
                 .environment
@@ -10242,13 +10351,10 @@ mod tests {
                 .is_err(),
             "used raw include changes must retire the receipt even with equal merged values"
         );
-        let (_, fresh) = passive_cargo_configuration_with_native_review(
-            cwd,
-            &environment,
-            Some(filesystem.clone()),
-        )
-        .await
-        .expect("fresh review after include change");
+        let (_, fresh) =
+            load_passive_cargo_configuration(cwd, &environment, Some(filesystem.clone()), None)
+                .await
+                .expect("fresh review after include change");
         filesystem
             .insert_file(
                 "/native/runtime/home/.cargo/config.toml",
@@ -10261,13 +10367,10 @@ mod tests {
                 .is_err(),
             "new initially absent configuration must retire the receipt"
         );
-        let (_, current) = passive_cargo_configuration_with_native_review(
-            cwd,
-            &environment,
-            Some(filesystem.clone()),
-        )
-        .await
-        .expect("fresh review after configuration appeared");
+        let (_, current) =
+            load_passive_cargo_configuration(cwd, &environment, Some(filesystem.clone()), None)
+                .await
+                .expect("fresh review after configuration appeared");
         revalidate_native_cargo_configuration(filesystem.as_ref(), &current)
             .await
             .expect("fresh configuration recovery");
@@ -13262,6 +13365,135 @@ printf 'metadata\n'
         }
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[gpui::test]
+    async fn cargo_workspace_refresh_observes_included_host_configuration(cx: &mut TestAppContext) {
+        use crate::trusted_worktrees::{DbTrustedPaths, PathTrust};
+
+        cx.executor().allow_parking();
+        cx.update(|cx| {
+            let settings = settings::SettingsStore::test(cx);
+            cx.set_global(settings);
+            crate::trusted_worktrees::init(DbTrustedPaths::default(), cx);
+        });
+        let fixture = tempfile::tempdir().expect("isolated configuration fixture");
+        let root = std::fs::canonicalize(fixture.path()).expect("canonical fixture");
+        let workspace = root.join("worktree");
+        let included = root.join("included.toml");
+        std::fs::create_dir_all(workspace.join(".cargo")).expect("configuration directory");
+        std::fs::create_dir_all(workspace.join("src")).expect("source directory");
+        std::fs::write(
+            workspace.join("Cargo.toml"),
+            "[package]\nname = 'config_watch_fixture'\nversion = '0.1.0'\nedition = '2024'\n",
+        )
+        .expect("dependency-free manifest");
+        let lockfile = concat!(
+            "# This file is automatically @generated by Cargo.\n",
+            "# It is not intended for manual editing.\n",
+            "version = 4\n\n[[package]]\n",
+            "name = \"config_watch_fixture\"\nversion = \"0.1.0\"\n",
+        );
+        let lockfile_path = workspace.join("Cargo.lock");
+        std::fs::write(&lockfile_path, lockfile).expect("current dependency-free lockfile");
+        std::fs::write(workspace.join("src/lib.rs"), "pub fn fixture() {}\n")
+            .expect("fixture source");
+        std::fs::write(
+            workspace.join(".cargo/config.toml"),
+            "include = ['../../included.toml']\n",
+        )
+        .expect("include host configuration outside the worktree");
+        std::fs::write(&included, "[net]\noffline = true\n")
+            .expect("initial included configuration");
+
+        let filesystem = Arc::new(fs::RealFs::new(None, cx.background_executor.clone()));
+        let project =
+            crate::Project::test_with_worktree_trust(filesystem, std::iter::empty::<&Path>(), cx)
+                .await;
+        let (worktree, _) = project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(&workspace, true, cx)
+            })
+            .await
+            .expect("local worktree");
+        worktree
+            .read_with(cx, |tree, _| {
+                tree.as_local().expect("local worktree").scan_complete()
+            })
+            .await;
+        let worktree_id = worktree.read_with(cx, |tree, _| tree.id());
+        let (store, worktree_store) = project.read_with(cx, |project, _| {
+            (
+                project.cargo_workspace_store().clone(),
+                project.worktree_store(),
+            )
+        });
+        let trust = cx.update(|cx| TrustedWorktrees::try_get_global(cx).expect("trust owner"));
+        trust.update(cx, |trust, cx| {
+            trust.trust(
+                &worktree_store,
+                [PathTrust::Worktree(worktree_id)].into_iter().collect(),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        let first = store
+            .update(cx, |store, cx| store.refresh(cx))
+            .await
+            .expect("first refresh");
+        assert_eq!(first.workspaces.len(), 1, "{first:?}");
+        assert!(store.read_with(cx, |store, cx| {
+            store
+                .cached_snapshot(cx)
+                .is_some_and(|(_, current)| current)
+        }));
+
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        let mut sender = Some(sender);
+        let subscription = cx.update(|cx| {
+            cx.subscribe(&store, move |_, _, _| {
+                if let Some(sender) = sender.take()
+                    && sender.send(()).is_err()
+                {
+                    log::error!("Cargo configuration invalidation receiver closed");
+                }
+            })
+        });
+        // Editors can replace an input atomically, including files outside the visible worktree.
+        let replacement = root.join("replacement.toml");
+        std::fs::write(&replacement, "[net]\noffline = true\nretry = 1\n")
+            .expect("replacement configuration");
+        std::fs::rename(replacement, &included).expect("replace included configuration");
+        let deadline = cx.background_executor.timer(Duration::from_secs(5));
+        match futures::future::select(receiver, deadline).await {
+            Either::Left((result, _)) => result.expect("include change publishes invalidation"),
+            Either::Right(_) => panic!("included configuration did not invalidate the cache"),
+        }
+        assert!(store.read_with(cx, |store, cx| {
+            store
+                .cached_snapshot(cx)
+                .is_some_and(|(snapshot, current)| {
+                    !current && snapshot.workspaces == first.workspaces
+                })
+        }));
+        drop(subscription);
+        let recovered = store
+            .update(cx, |store, cx| store.refresh(cx))
+            .await
+            .expect("refresh after include changed");
+        assert!(recovered.revision > first.revision);
+        assert_eq!(recovered.workspaces.len(), 1, "{recovered:?}");
+        assert_eq!(
+            std::fs::read_to_string(lockfile_path).expect("lockfile after both refreshes"),
+            lockfile
+        );
+        assert!(store.read_with(cx, |store, cx| {
+            store
+                .cached_snapshot(cx)
+                .is_some_and(|(_, current)| current)
+        }));
+    }
+
     #[gpui::test]
     async fn cargo_workspace_fake_runner_uses_candidate_environment(_cx: &mut TestAppContext) {
         let requests = Arc::new(Mutex::new(Vec::new()));
@@ -13293,6 +13525,7 @@ printf 'metadata\n'
             vec![candidate],
             runner,
             successful_configuration_probe(),
+            None,
         )
         .await
         .expect("fake metadata should convert")
@@ -13330,6 +13563,7 @@ printf 'metadata\n'
                 requests: requests.clone(),
             }),
             successful_configuration_probe(),
+            None,
         )
         .await
         .expect("partial fixture collection should succeed")
@@ -13359,6 +13593,7 @@ printf 'metadata\n'
                 requests: requests.clone(),
             }),
             successful_configuration_probe_with_requests(probe_requests.clone()),
+            None,
         )
         .await
         .expect("restricted collection should return a scoped failure")
@@ -13420,6 +13655,7 @@ printf 'metadata\n'
                 requests: Arc::new(Mutex::new(Vec::new())),
             }),
             successful_configuration_probe_with_requests(probe_requests.clone()),
+            None,
         )
         .await
         .expect("configuration fixture should collect")
@@ -13473,6 +13709,7 @@ printf 'metadata\n'
                 output: Err("failed to start rustc: not found".to_string()),
                 requests: Arc::new(Mutex::new(Vec::new())),
             }),
+            None,
         )
         .await
         .expect("configuration failures should not discard metadata")
@@ -13590,6 +13827,7 @@ printf 'metadata\n'
                 requests: Arc::new(Mutex::new(Vec::new())),
             }),
             successful_configuration_probe(),
+            None,
         )
         .await
         .expect("host fixture collection should succeed")
@@ -15402,6 +15640,7 @@ printf 'metadata\n'
                 requests: Arc::new(Mutex::new(Vec::new())),
             }),
             successful_configuration_probe(),
+            None,
         )
         .await
         .expect("Existing Cargo owner")
