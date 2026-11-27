@@ -413,11 +413,46 @@ async fn revalidate_native_cargo_configuration(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum CargoConfigurationMetadata {
+    Present(fs::Metadata),
+    Missing,
+    Unreadable,
+}
+
+impl CargoConfigurationMetadata {
+    async fn read(filesystem: &dyn fs::Fs, path: &Path) -> Self {
+        match filesystem.metadata(path).await {
+            Ok(Some(metadata)) => Self::Present(metadata),
+            Ok(None) => Self::Missing,
+            Err(_) => Self::Unreadable,
+        }
+    }
+
+    fn matches(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Present(left), Self::Present(right)) => {
+                native_probe_metadata_matches(left, right)
+            }
+            (Self::Missing, Self::Missing) | (Self::Unreadable, Self::Unreadable) => true,
+            _ => false,
+        }
+    }
+}
+
 pub struct CargoConfigurationObservation {
     paths: parking_lot::Mutex<HashSet<PathBuf>>,
     registrations: parking_lot::Mutex<HashSet<PathBuf>>,
+    polled_paths: parking_lot::Mutex<HashMap<PathBuf, CargoConfigurationMetadata>>,
+    polling_started: async_channel::Sender<()>,
+    filesystem: Arc<dyn fs::Fs>,
     watcher: Arc<dyn fs::Watcher>,
     executor: BackgroundExecutor,
+}
+
+struct CargoConfigurationWatch {
+    observation: Arc<CargoConfigurationObservation>,
+    _task: Task<()>,
 }
 
 impl CargoConfigurationObservation {
@@ -431,22 +466,59 @@ impl CargoConfigurationObservation {
                     && let Some(name) = path.file_name()
                     && let Ok(parent) = std::fs::canonicalize(parent)
                 {
-                    // File watches can be retired by atomic replacement on Linux.
-                    return (parent.join(name), parent);
+                    // A native watch on the parent survives atomic file replacement.
+                    let native_registration =
+                        (!fs::requires_poll_watcher(&parent)).then_some(parent.clone());
+                    return (parent.join(name), native_registration);
                 }
-                (path.clone(), path)
+                (path.clone(), Some(path))
             })
             .await;
-        if self.paths.lock().insert(path) && self.registrations.lock().insert(registration.clone())
-        {
-            self.executor
-                .spawn(async move {
-                    if let Err(error) = watcher.add(&registration) {
-                        log::warn!("Cargo configuration could not be observed: {error:#}");
-                    }
-                })
-                .await;
+        if !self.paths.lock().insert(path.clone()) {
+            return;
         }
+        if let Some(registration) = registration {
+            if self.registrations.lock().insert(registration.clone()) {
+                self.executor
+                    .spawn(async move {
+                        if let Err(error) = watcher.add(&registration) {
+                            log::warn!("Cargo configuration could not be observed: {error:#}");
+                        }
+                    })
+                    .await;
+            }
+        } else {
+            let metadata = CargoConfigurationMetadata::read(self.filesystem.as_ref(), &path).await;
+            let mut polled_paths = self.polled_paths.lock();
+            let start_polling = polled_paths.is_empty();
+            polled_paths.insert(path, metadata);
+            if start_polling && let Err(error) = self.polling_started.try_send(()) {
+                log::debug!("Cargo configuration polling could not start: {error}");
+            }
+        }
+    }
+
+    async fn poll(&self) -> bool {
+        let paths = self.polled_paths.lock().keys().cloned().collect::<Vec<_>>();
+        let mut changed = false;
+        for path in paths {
+            let current = CargoConfigurationMetadata::read(self.filesystem.as_ref(), &path).await;
+            if let Some(previous) = self.polled_paths.lock().get_mut(&path) {
+                changed |= !previous.matches(current);
+                *previous = current;
+            }
+        }
+        changed
+    }
+
+    fn polled_inputs_changed_since(&self, previous: &Self) -> bool {
+        let current = self.polled_paths.lock();
+        let previous = previous.polled_paths.lock();
+        current.iter().any(|(path, metadata)| {
+            previous
+                .get(path)
+                .is_some_and(|previous| !metadata.matches(*previous))
+        })
     }
 
     fn changed(&self, events: &[fs::PathEvent]) -> bool {
@@ -1819,7 +1891,7 @@ pub struct CargoWorkspaceStore {
     disconnected: bool,
     cancelled_remote_requests: HashSet<(proto::PeerId, u64)>,
     active_remote_requests: HashMap<(proto::PeerId, u64), AbortHandle>,
-    configuration_watch: Option<Task<()>>,
+    configuration_watch: Option<CargoConfigurationWatch>,
     configuration_watch_revision: Option<u64>,
     _subscriptions: Vec<Subscription>,
 }
@@ -5128,20 +5200,43 @@ impl CargoWorkspaceStore {
                     let (observation, configuration_watch) = if let Some((filesystem, candidate)) =
                         filesystem.zip(candidates.iter().find(|candidate| candidate.trusted))
                     {
-                        let initial_path = candidate.absolute_path.with_file_name(".cargo");
+                        let initial_path = candidate.absolute_path.with_file_name(".cargo").join("config");
                         let executor = cx.background_executor().clone();
-                        let (mut events, watcher) = executor.spawn(async move {
-                            filesystem.watch(&initial_path, Duration::from_millis(100)).await
+                        let (mut events, watcher) = executor.spawn({
+                            let filesystem = filesystem.clone();
+                            async move { filesystem.watch(&initial_path, Duration::from_millis(100)).await }
                         }).await;
+                        let (polling_started, polling_requested) = async_channel::bounded(1);
                         let observation = Arc::new(CargoConfigurationObservation {
                             paths: Default::default(),
                             registrations: Default::default(),
+                            polled_paths: Default::default(),
+                            polling_started,
+                            filesystem,
                             watcher,
                             executor,
                         });
                         let configuration_watch = this.update(cx, |_, cx| {
                             let observation = observation.clone();
                             cx.spawn(async move |store, cx| {
+                                let _polling = cx.spawn({
+                                    let store = store.clone();
+                                    let observation = observation.clone();
+                                    async move |cx| {
+                                        if polling_requested.recv().await.is_ok() {
+                                            loop {
+                                                observation.executor.timer(fs::fs_watcher::poll_interval()).await;
+                                                // Exact metadata catches replacements within one second
+                                                // without recursively scanning a network Cargo home.
+                                                if observation.poll().await
+                                                    && store.update(cx, |store, cx| store.invalidate_observed_configuration(cx)).is_err()
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
                                 while let Some(events) = events.next().await {
                                     if observation.changed(&events)
                                         && store.update(cx, |store, cx| store.invalidate_observed_configuration(cx)).is_err()
@@ -5151,6 +5246,10 @@ impl CargoWorkspaceStore {
                                 }
                             })
                         })?;
+                        let configuration_watch = CargoConfigurationWatch {
+                            observation: observation.clone(),
+                            _task: configuration_watch,
+                        };
                         (Some(observation), Some(configuration_watch))
                     } else {
                         (None, None)
@@ -5170,10 +5269,21 @@ impl CargoWorkspaceStore {
                                 .with_tag("reason", "cargo_trust_revoked")
                                 .message("Cargo workspace trust was revoked during metadata collection".into())
                         })?;
-                    this.update(cx, |store, _| {
+                    this.update(cx, |store, cx| {
                         if store.configuration_watch_revision == Some(revision) {
-                            // Keep coverage while a newer refresh enumerates its configuration inputs.
+                            // A refresh can finish before the previous observer takes its next poll.
+                            let changed_before_poll = configuration_watch
+                                .as_ref()
+                                .zip(store.configuration_watch.as_ref())
+                                .is_some_and(|(current, previous)| {
+                                    current
+                                        .observation
+                                        .polled_inputs_changed_since(&previous.observation)
+                                });
                             store.configuration_watch = configuration_watch;
+                            if changed_before_poll {
+                                store.invalidate_observed_configuration(cx);
+                            }
                         }
                     })?;
                     drop(trust_subscription);
@@ -13646,8 +13756,16 @@ printf 'metadata\n'
         });
         // Editors can replace an input atomically, including files outside the visible worktree.
         let replacement = root.join("replacement.toml");
-        std::fs::write(&replacement, "[net]\noffline = true\nretry = 1\n")
-            .expect("replacement configuration");
+        let previous_modified = std::fs::metadata(&included)
+            .and_then(|metadata| metadata.modified())
+            .expect("included configuration timestamp");
+        std::fs::write(&replacement, "[net]\noffline =true\n\n")
+            .expect("write equally sized replacement configuration");
+        std::fs::File::options()
+            .write(true)
+            .open(&replacement)
+            .and_then(|file| file.set_modified(previous_modified))
+            .expect("keep the previous modification time during replacement");
         std::fs::rename(replacement, &included).expect("replace included configuration");
         let deadline = cx.background_executor.timer(Duration::from_secs(5));
         match futures::future::select(receiver, deadline).await {
