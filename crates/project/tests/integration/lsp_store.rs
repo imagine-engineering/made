@@ -2881,6 +2881,109 @@ async fn kotlin_early_import_success_refreshes_after_server_registration(cx: &mu
 
 #[cfg(feature = "jvm-tools")]
 #[gpui::test]
+async fn kotlin_fallback_stderr_reports_heap_exhaustion_once(cx: &mut TestAppContext) {
+    use language::{Language, LanguageConfig, LanguageMatcher};
+    use rpc::proto;
+
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/kotlin-memory"),
+        json!({ "Main.kt": "fun main() {}" }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/kotlin-memory").as_ref()], cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(Arc::new(Language::new(
+        LanguageConfig {
+            name: "Kotlin".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["kt".into()],
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        },
+        None,
+    )));
+    let mut fake_servers = languages.register_fake_lsp(
+        "Kotlin",
+        FakeLspAdapter {
+            name: "kotlin-language-server",
+            ..Default::default()
+        },
+    );
+    let (_buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/kotlin-memory/Main.kt"), cx)
+        })
+        .await
+        .expect("open Kotlin source");
+    let mut server = fake_servers.next().await.expect("Kotlin fallback");
+    let server_id = server.server.server_id();
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    let health_events = Arc::new(Mutex::new(Vec::new()));
+    cx.update({
+        let health_events = health_events.clone();
+        |cx| {
+            cx.subscribe(&lsp_store, move |_, event, _| {
+                if let LspStoreEvent::LanguageServerUpdate {
+                    language_server_id,
+                    message: proto::update_language_server::Variant::StatusUpdate(update),
+                    ..
+                } = event
+                    && *language_server_id == server_id
+                    && let Some(proto::status_update::Status::Health(health)) = &update.status
+                {
+                    health_events
+                        .lock()
+                        .push((*health, update.message.clone().unwrap_or_default()));
+                }
+            })
+            .detach();
+        }
+    });
+
+    let opened = server
+        .receive_notification::<lsp::notification::DidOpenTextDocument>()
+        .await;
+    assert_eq!(
+        opened.text_document.uri,
+        Uri::from_file_path(path!("/kotlin-memory/Main.kt")).expect("Kotlin fixture URI")
+    );
+
+    server
+        .write_stderr("Indexing fixture java.lang.OutOfMemoryError.kt\n")
+        .await
+        .expect("send an unrelated stderr line");
+    cx.run_until_parked();
+    assert!(health_events.lock().is_empty());
+
+    server
+        .write_stderr(
+            "Exception: java.lang.OutOfMemoryError thrown from the UncaughtExceptionHandler in thread \"async2\" at /private/host/path\n\
+             Exception in thread \"client\" java.lang.OutOfMemoryError: Java heap space at /private/host/path\n",
+        )
+        .await
+        .expect("send fallback memory errors on stderr");
+    cx.run_until_parked();
+    server.notify::<lsp::notification::LogMessage>(lsp::LogMessageParams {
+        typ: lsp::MessageType::ERROR,
+        message: "KotlinFrontEndException at /private/host/path".into(),
+    });
+    cx.run_until_parked();
+
+    assert_eq!(
+        *health_events.lock(),
+        [(
+            proto::ServerHealth::Error as i32,
+            "Kotlin fallback ran out of memory. Review its JVM memory settings on the project host, then restart it or select another Kotlin server.".to_string(),
+        )]
+    );
+}
+
+#[cfg(feature = "jvm-tools")]
+#[gpui::test]
 async fn jdtls_import_failure_logs_reach_shared_health_without_host_paths(cx: &mut TestAppContext) {
     use language::{Language, LanguageConfig, LanguageMatcher};
     use rpc::proto;

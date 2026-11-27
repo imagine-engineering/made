@@ -991,6 +991,8 @@ impl LocalLspStore {
                         &language_server,
                         delegate.clone(),
                         adapter.clone(),
+                        #[cfg(feature = "jvm-tools")]
+                        cx,
                     );
 
                     let did_change_configuration_params = lsp::DidChangeConfigurationParams {
@@ -1286,9 +1288,16 @@ impl LocalLspStore {
         language_server: &LanguageServer,
         delegate: Arc<dyn LspAdapterDelegate>,
         adapter: Arc<CachedLspAdapter>,
+        #[cfg(feature = "jvm-tools")] cx: &AsyncApp,
     ) {
         let name = language_server.name();
         let server_id = language_server.server_id();
+        #[cfg(feature = "jvm-tools")]
+        let fallback_memory_failed = (name
+            == LanguageServerName::new_static("kotlin-language-server"))
+        .then(|| {
+            kotlin_lsp_ext::register_fallback_memory_health(lsp_store.clone(), language_server, cx)
+        });
         #[cfg(feature = "jvm-tools")]
         let jdtls_pending_import_failure = Arc::new(atomic::AtomicU8::new(0));
         language_server
@@ -1716,9 +1725,10 @@ impl LocalLspStore {
                             .store(failure as u8, atomic::Ordering::Release);
                     }
                     #[cfg(feature = "jvm-tools")]
-                    let fallback_health = fallback_name
-                        .as_ref()
-                        .and_then(|_| kotlin_lsp_ext::fallback_log_health(&params.message));
+                    let fallback_health =
+                        fallback_memory_failed.as_ref().and_then(|memory_failed| {
+                            kotlin_lsp_ext::fallback_log_health(&params.message, memory_failed)
+                        });
                     if let Some(this) = this.upgrade() {
                         this.update(cx, |_, cx| {
                             cx.emit(LspStoreEvent::LanguageServerLog(

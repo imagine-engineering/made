@@ -1860,6 +1860,7 @@ pub struct FakeLanguageServer {
     pub binary: LanguageServerBinary,
     pub server: Arc<LanguageServer>,
     notifications_rx: async_channel::Receiver<(String, String)>,
+    stderr: Arc<futures::lock::Mutex<async_pipe::PipeWriter>>,
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -1874,6 +1875,7 @@ impl FakeLanguageServer {
     ) -> (LanguageServer, FakeLanguageServer) {
         let (stdin_writer, stdin_reader) = async_pipe::pipe();
         let (stdout_writer, stdout_reader) = async_pipe::pipe();
+        let (stderr_writer, stderr_reader) = async_pipe::pipe();
         let (notifications_tx, notifications_rx) = async_channel::unbounded();
 
         let server_name = LanguageServerName(name.clone().into());
@@ -1885,7 +1887,7 @@ impl FakeLanguageServer {
             server_name.clone(),
             stdin_writer,
             stdout_reader,
-            None::<async_pipe::PipeReader>,
+            Some(stderr_reader),
             Arc::new(Mutex::new(None)),
             None,
             None,
@@ -1926,6 +1928,7 @@ impl FakeLanguageServer {
                 server
             }),
             notifications_rx,
+            stderr: Arc::new(futures::lock::Mutex::new(stderr_writer)),
         };
         fake.set_request_handler::<request::Initialize, _, _>({
             let capabilities = capabilities;
@@ -1948,6 +1951,10 @@ impl FakeLanguageServer {
 
         (server, fake)
     }
+    pub async fn write_stderr(&self, output: &str) -> std::io::Result<()> {
+        self.stderr.lock().await.write_all(output.as_bytes()).await
+    }
+
     #[cfg(target_os = "windows")]
     fn root_path() -> Uri {
         Uri::from_file_path("C:/").unwrap()

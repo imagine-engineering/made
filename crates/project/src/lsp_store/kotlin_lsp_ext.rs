@@ -1,13 +1,20 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::{Context as _, Result, ensure};
-use futures::AsyncReadExt as _;
+use futures::{AsyncReadExt as _, channel::oneshot};
 use http_client::{HttpClient, HttpRequestExt as _, RedirectPolicy, Request};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use gpui::{App, AsyncApp, Context, Entity, Task, WeakEntity};
-use lsp::{LanguageServer, LanguageServerId};
+use lsp::{IoKind, LanguageServer, LanguageServerId};
 use rpc::{TypedEnvelope, proto};
 use semver::Version;
 
@@ -440,7 +447,92 @@ fn import_log_health(
     }
 }
 
-pub(super) fn fallback_log_health(message: &str) -> Option<(proto::ServerHealth, &'static str)> {
+const FALLBACK_MEMORY_MESSAGE: &str = "Kotlin fallback ran out of memory. Review its JVM memory settings on the project host, then restart it or select another Kotlin server.";
+
+pub(super) fn register_fallback_memory_health(
+    lsp_store: WeakEntity<LspStore>,
+    language_server: &LanguageServer,
+    cx: &AsyncApp,
+) -> Arc<AtomicBool> {
+    let server_id = language_server.server_id();
+    let name = language_server.name();
+    let memory_failed = Arc::new(AtomicBool::new(false));
+    let (memory_signal, received) = oneshot::channel();
+    let mut memory_signal = Some(memory_signal);
+    language_server
+        .on_io({
+            let memory_failed = memory_failed.clone();
+            move |kind, line| {
+                if matches!(kind, IoKind::StdErr)
+                    && fallback_memory_failure(line)
+                    && !memory_failed.swap(true, Ordering::Relaxed)
+                    && let Some(memory_signal) = memory_signal.take()
+                    && memory_signal.send(()).is_err()
+                {
+                    log::debug!(
+                        "Kotlin fallback memory failure arrived after health monitoring ended"
+                    );
+                }
+            }
+        })
+        .detach();
+    cx.spawn(async move |cx| {
+        if received.await.is_ok() {
+            super::emit_jvm_provider_health(
+                &lsp_store,
+                server_id,
+                &name,
+                proto::ServerHealth::Error,
+                FALLBACK_MEMORY_MESSAGE,
+                cx,
+            );
+        }
+    })
+    .detach();
+    memory_failed
+}
+
+fn fallback_memory_failure(line: &str) -> bool {
+    let line = line.trim();
+    let line = [
+        "SEVERE: Internal error:",
+        "java.util.concurrent.CompletionException:",
+        "Caused by:",
+    ]
+    .into_iter()
+    .fold(line, |line, prefix| {
+        line.strip_prefix(prefix)
+            .map(str::trim_start)
+            .unwrap_or(line)
+    });
+    let exception = if let Some(exception) = line.strip_prefix("Exception: ") {
+        exception
+    } else if let Some(thread) = line.strip_prefix("Exception in thread \"") {
+        let Some((_, exception)) = thread.split_once("\" ") else {
+            return false;
+        };
+        exception
+    } else {
+        line
+    };
+    exception
+        .strip_prefix("java.lang.OutOfMemoryError")
+        .is_some_and(|details| {
+            details.is_empty() || details.starts_with(':') || details.starts_with(" thrown from ")
+        })
+}
+
+pub(super) fn fallback_log_health(
+    message: &str,
+    memory_failed: &AtomicBool,
+) -> Option<(proto::ServerHealth, &'static str)> {
+    if memory_failed.load(Ordering::Relaxed) {
+        return None;
+    }
+    if message.lines().any(fallback_memory_failure) {
+        return (!memory_failed.swap(true, Ordering::Relaxed))
+            .then_some((proto::ServerHealth::Error, FALLBACK_MEMORY_MESSAGE));
+    }
     if message.contains("KotlinFrontEndException") {
         return Some((
             proto::ServerHealth::Error,
@@ -685,9 +777,11 @@ mod tests {
 
     #[test]
     fn fallback_logs_report_bounded_import_and_analysis_failures() {
+        let memory_failed = AtomicBool::new(false);
         assert_eq!(
             fallback_log_health(
-                "Could not resolve classpath using Maven: Unable to find the 'mvn' command or suitable wrapper at /private/host/path"
+                "Could not resolve classpath using Maven: Unable to find the 'mvn' command or suitable wrapper at /private/host/path",
+                &memory_failed
             ),
             Some((
                 proto::ServerHealth::Warning,
@@ -695,7 +789,10 @@ mod tests {
             ))
         );
         assert_eq!(
-            fallback_log_health("KotlinFrontEndException in /private/host/path"),
+            fallback_log_health(
+                "KotlinFrontEndException in /private/host/path",
+                &memory_failed
+            ),
             Some((
                 proto::ServerHealth::Error,
                 "Kotlin fallback analysis failed; view language server logs or select another server",
@@ -703,7 +800,8 @@ mod tests {
         );
         assert_eq!(
             fallback_log_health(
-                "Could not resolve kotlin-stdlib using Gradle: /private/host/path/.gradle/caches"
+                "Could not resolve kotlin-stdlib using Gradle: /private/host/path/.gradle/caches",
+                &memory_failed
             ),
             Some((
                 proto::ServerHealth::Error,
@@ -711,9 +809,31 @@ mod tests {
             ))
         );
         assert_eq!(
-            fallback_log_health("No diagnostics in file:///private/host/path"),
+            fallback_log_health(
+                "No diagnostics in file:///private/host/path",
+                &memory_failed
+            ),
             None
         );
+    }
+
+    #[test]
+    fn fallback_reported_memory_failure_takes_precedence_over_analysis_errors() {
+        for message in [
+            "SEVERE: Internal error: java.lang.OutOfMemoryError: Java heap space",
+            "KotlinFrontEndException at /private/root\nCaused by: java.lang.OutOfMemoryError: Java heap space",
+        ] {
+            let memory_failed = AtomicBool::new(false);
+            assert_eq!(
+                fallback_log_health(message, &memory_failed),
+                Some((proto::ServerHealth::Error, FALLBACK_MEMORY_MESSAGE))
+            );
+            assert_eq!(fallback_log_health(message, &memory_failed), None);
+            assert_eq!(
+                fallback_log_health("KotlinFrontEndException at /private/root", &memory_failed),
+                None
+            );
+        }
     }
 
     #[test]

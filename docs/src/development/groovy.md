@@ -105,10 +105,10 @@ Maven and Gradle fixtures could navigate to definitions, complete methods, and
 report diagnostics. Groovy now avoids the provider's class-declaration
 highlight error on the pinned version and still highlights class names.
 If **Language Servers** reports a fallback analysis error, open **View Logs**
-for that server. You can select the preferred provider again and restart the
-language server. Native
-fallback runs have exceeded the 8 GiB qualification ceiling, and the 32 GiB
-reference-host check remains open.
+for that server. If the fallback runs out of memory, review its JVM memory
+settings on the project host. Restart the fallback or select the preferred
+provider to recover. Native fallback runs have exceeded the 8 GiB qualification
+ceiling, and the 32 GiB reference-host check remains open.
 
 For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
