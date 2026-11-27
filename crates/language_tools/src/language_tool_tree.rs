@@ -140,15 +140,51 @@ fn inline_row_text(row: &LanguageToolRow, cx: &App) -> impl IntoElement {
         })
 }
 
+type RenderRowEnd = Box<dyn Fn(&LanguageToolRow) -> Option<AnyElement>>;
+
+#[derive(Default)]
+pub struct LanguageToolTreeOptions {
+    status_message: Option<String>,
+    row_end: Option<RenderRowEnd>,
+    indent_limit: Option<Pixels>,
+}
+
+impl LanguageToolTreeOptions {
+    pub fn with_row_end(
+        indent_limit: Pixels,
+        render: impl Fn(&LanguageToolRow) -> Option<AnyElement> + 'static,
+    ) -> Self {
+        Self {
+            status_message: None,
+            row_end: Some(Box::new(render)),
+            indent_limit: Some(indent_limit),
+        }
+    }
+}
+
+impl From<Option<String>> for LanguageToolTreeOptions {
+    fn from(status_message: Option<String>) -> Self {
+        Self {
+            status_message,
+            ..Self::default()
+        }
+    }
+}
+
 pub fn language_tool_tree(
     rows: Arc<Vec<VisibleLanguageToolRow>>,
     selected: Option<LanguageToolNodeId>,
-    status_message: Option<String>,
+    options: impl Into<LanguageToolTreeOptions>,
     scroll_handle: impl Into<LanguageToolTreeScrollHandle>,
     on_click: impl Fn(LanguageToolNodeId, usize, &mut Window, &mut App) + 'static,
     on_toggle: impl Fn(LanguageToolNodeId, &mut Window, &mut App) + 'static,
     on_context_menu: impl Fn(LanguageToolNodeId, Point<Pixels>, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let LanguageToolTreeOptions {
+        status_message,
+        row_end,
+        indent_limit,
+    } = options.into();
     let on_click = Arc::new(on_click);
     let on_toggle = Arc::new(on_toggle);
     let on_context_menu = Arc::new(on_context_menu);
@@ -163,6 +199,8 @@ pub fn language_tool_tree(
         let on_toggle = on_toggle.clone();
         let on_context_menu = on_context_menu.clone();
         let is_selected = selected.as_ref() == Some(&row.id);
+        let indent = px((row.level.saturating_sub(1) * 16) as f32);
+        let indent = indent_limit.map_or(indent, |limit| indent.min(limit));
         let text = if compact {
             div()
                 .flex_1()
@@ -211,7 +249,7 @@ pub fn language_tool_tree(
             .when(row.is_branch, |element| {
                 element.aria_expanded(row.is_expanded)
             })
-            .pl(px((row.level.saturating_sub(1) * 16) as f32))
+            .pl(indent)
             .flex()
             .gap_1()
             .w_full()
@@ -236,6 +274,7 @@ pub fn language_tool_tree(
                 element.child(Icon::new(icon).size(IconSize::Small))
             })
             .child(text)
+            .children(row_end.as_ref().and_then(|render| render(row)))
             .on_click(move |event, window, cx| {
                 on_click(click_id.clone(), event.click_count(), window, cx)
             })
