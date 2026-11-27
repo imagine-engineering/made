@@ -2401,6 +2401,13 @@ async fn cached_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAp
     run_cached_maven_goals(MavenGoalRun::EffectivePom, cx).await;
 }
 
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Maven host with the cached Help goal and host settings profile"]
+async fn docker_effective_pom_runs_from_maven_view_through_tasks(cx: &mut TestAppContext) {
+    run_maven_goal_fixture(MavenGoalRun::EffectivePom, MavenGoalConnection::Docker, cx).await;
+}
+
 #[cfg(all(test, unix))]
 #[gpui::test]
 #[ignore = "requires cached Maven Help goals, pinned Maven wrapper and pinned JDTLS"]
