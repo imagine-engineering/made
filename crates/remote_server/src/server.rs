@@ -62,6 +62,13 @@ use std::{
 use thiserror::Error;
 use util::{ResultExt, command::new_command};
 
+#[cfg(all(
+    target_os = "linux",
+    feature = "rust-tools-process-test",
+    feature = "test-support"
+))]
+mod linux_coverage_completion_fixture;
+
 #[derive(Subcommand)]
 pub enum Commands {
     #[cfg(target_os = "macos")]
@@ -77,6 +84,24 @@ pub enum Commands {
         capture_build_stdout: bool,
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<std::ffi::OsString>,
+    },
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    #[command(hide = true)]
+    ObserveCoverageTask {
+        #[arg(long)]
+        socket: PathBuf,
+    },
+    #[cfg(all(
+        target_os = "linux",
+        feature = "rust-tools-process-test",
+        feature = "test-support"
+    ))]
+    #[command(hide = true)]
+    CoverageCompletionFixture {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(value_enum)]
+        scenario: linux_coverage_completion_fixture::Scenario,
     },
     Run {
         #[arg(long, hide = true)]
@@ -175,6 +200,25 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
                 util::macos_task_completion::register_and_exec(&socket, &mut command)
             };
             Err(error.into())
+        }
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        Commands::ObserveCoverageTask { socket } => {
+            let status = smol::block_on(
+                native_task_helper::linux_coverage_completion::run_coverage_task(&socket),
+            )?;
+            native_task_helper::task_completion::exit_with_observed_task_status(status);
+        }
+        #[cfg(all(
+            target_os = "linux",
+            feature = "rust-tools-process-test",
+            feature = "test-support"
+        ))]
+        Commands::CoverageCompletionFixture {
+            directory,
+            scenario,
+        } => {
+            linux_coverage_completion_fixture::run(&directory, scenario)?;
+            Ok(())
         }
         Commands::Run {
             isolated_recipe_test,

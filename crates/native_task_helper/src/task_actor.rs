@@ -162,6 +162,52 @@ fn current_user_id() -> u32 {
     unsafe { libc::geteuid() }
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) struct CoverageTaskParent {
+    process_id: u32,
+    image: ImageIdentity,
+    lifetime: ProcessLifetime,
+}
+
+#[cfg(target_os = "linux")]
+impl CoverageTaskParent {
+    pub(crate) fn authenticate(connection: &impl AsRawFd) -> io::Result<Self> {
+        let peer = peer_identity(connection.as_raw_fd())?;
+        let parent = Self::current_process_parent();
+        if parent <= 1 || peer.process_id != parent || peer.user_id != current_user_id() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Coverage Task connection does not belong to its launch owner",
+            ));
+        }
+        let parent = Self {
+            process_id: parent,
+            image: ImageIdentity::read(&File::open("/proc/self/exe")?)?,
+            lifetime: ProcessLifetime::pin(parent)?,
+        };
+        parent.revalidate()?;
+        Ok(parent)
+    }
+
+    fn current_process_parent() -> u32 {
+        // Linux supplies the parent in this process's PID namespace.
+        unsafe { libc::getppid() as u32 }
+    }
+
+    pub(crate) fn revalidate(&self) -> io::Result<()> {
+        self.lifetime.ensure_running()?;
+        if Self::current_process_parent() != self.process_id
+            || ImageIdentity::read(&self.lifetime.executable()?)? != self.image
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Coverage Task launch owner image did not match the helper",
+            ));
+        }
+        self.lifetime.ensure_running()
+    }
+}
+
 fn exited_actor() -> io::Error {
     io::Error::new(
         io::ErrorKind::NotConnected,

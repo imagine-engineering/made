@@ -19,7 +19,7 @@ name = "remote_server"
 [features]
 default = []
 debug-embed = ["dep:rust-embed"]
-rust-tools = ["project/rust-tests", "project/rust-coverage"]
+rust-tools = ["project/rust-tests", "project/rust-coverage", "dep:native_task_helper"]
 rust-tools-process-test = ["rust-tools"]
 jvm-tools = ["project/jvm-tools", "project/structured-execution"]
 test-support = ["fs/test-support"]
@@ -87,6 +87,9 @@ crash-handler.workspace = true
 fork.workspace = true
 libc.workspace = true
 minidumper.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+native_task_helper = { path = "../native_task_helper", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

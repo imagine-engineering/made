@@ -46,7 +46,10 @@ assert project["features"]["cargo-workspace"] == ["dep:cargo_metadata"]
 assert project["features"]["rust-tests"] == ["cargo-workspace", "structured-execution"]
 assert project["features"]["rust-coverage"] == ["structured-execution"]
 assert project["dependencies"]["cargo_metadata"].get("optional") is True
-assert remote["features"]["rust-tools"] == ["project/rust-tests", "project/rust-coverage"]
+assert remote["features"]["rust-tools"] == [
+    "project/rust-tests", "project/rust-coverage", "dep:native_task_helper",
+]
+assert remote["target"]["cfg(target_os = \"linux\")"]["dependencies"]["native_task_helper"]["optional"]
 assert settings["features"]["rust-tools"] == ["settings_content/rust-tools"]
 assert "rust-tools" in settings_content["features"]
 assert terminal_view["features"]["default"] == []

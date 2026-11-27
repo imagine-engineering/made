@@ -1,6 +1,6 @@
 use std::{io, path::Path};
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
 use std::process::ExitStatus;
 
 #[cfg(any(target_os = "macos", test))]
@@ -357,6 +357,47 @@ where
         }
     })
     .await
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub fn exit_with_observed_task_status(status: ExitStatus) -> ! {
+    use std::os::unix::process::ExitStatusExt as _;
+
+    if let Some(signal) = status.signal() {
+        unsafe {
+            if signal != libc::SIGKILL && libc::signal(signal, libc::SIG_DFL) == libc::SIG_ERR {
+                std::process::exit(1);
+            }
+            let mut signals = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+            if libc::sigemptyset(signals.as_mut_ptr()) != 0 {
+                std::process::exit(1);
+            }
+            let mut signals = signals.assume_init();
+            if signal != libc::SIGKILL && libc::sigaddset(&mut signals, signal) != 0 {
+                std::process::exit(1);
+            }
+            let mut previous = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+            if libc::pthread_sigmask(libc::SIG_UNBLOCK, &signals, previous.as_mut_ptr()) != 0 {
+                std::process::exit(1);
+            }
+            let mut wait_mask = previous.assume_init();
+            if libc::sigdelset(&mut wait_mask, signal) != 0 {
+                std::process::exit(1);
+            }
+            if libc::kill(libc::getpid(), signal) != 0 {
+                std::process::exit(1);
+            }
+            // A process-directed signal can arrive after kill returns; do not race it with exit(1).
+            loop {
+                if libc::sigsuspend(&wait_mask) != -1
+                    || io::Error::last_os_error().kind() != io::ErrorKind::Interrupted
+                {
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+    std::process::exit(status.code().unwrap_or(1))
 }
 
 #[cfg(test)]
