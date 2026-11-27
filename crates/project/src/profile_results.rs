@@ -59,6 +59,24 @@ pub enum ProfileHost {
     Windows,
 }
 
+impl ProfileHost {
+    pub fn local_import_host() -> Option<Self> {
+        match std::env::consts::OS {
+            "macos" => Some(Self::MacOs),
+            "linux" => Some(Self::Linux),
+            _ => None,
+        }
+    }
+
+    fn code_id_length(self) -> Option<usize> {
+        match self {
+            Self::MacOs => Some(32),
+            Self::Linux => Some(40),
+            Self::Windows => None,
+        }
+    }
+}
+
 fn array(value: &Value) -> Result<&Vec<Value>> {
     value.as_array().context("Profile column is not an array")
 }
@@ -618,8 +636,8 @@ pub async fn load_samply_profile_with_byte_limit(
     #[cfg(any(test, feature = "test-support"))]
     SAMPLY_PROFILE_LOAD_CALLS.fetch_add(1, Ordering::Relaxed);
     ensure!(
-        host == ProfileHost::MacOs,
-        "Native profiling requires a macOS host"
+        host.code_id_length().is_some(),
+        "Native profile import requires a macOS or Linux host"
     );
     cancelled(cancel)?;
     let profile = inputs[0]
@@ -710,10 +728,9 @@ pub fn parse_samply_profile(
     cancel: &AtomicBool,
     mut source: impl FnMut(&str, u32) -> Option<ProjectPath>,
 ) -> Result<ProfileResults> {
-    ensure!(
-        host == ProfileHost::MacOs,
-        "Native profiling is supported only on macOS"
-    );
+    let code_id_length = host
+        .code_id_length()
+        .context("Native profile import requires a macOS or Linux host")?;
     ensure!(
         profile.len() <= MAX_PROFILE_BYTES && symbols.len() <= MAX_SYMBOL_BYTES,
         "Profile input exceeds the byte limit"
@@ -769,11 +786,11 @@ pub fn parse_samply_profile(
         );
         let debug_id = identity(text(field(library, "debug_id")?)?);
         ensure!(
-            key.len() == 32
+            key.len() == code_id_length
                 && debug_id.len() == 32
                 && key.chars().all(|c| c.is_ascii_hexdigit())
                 && debug_id.chars().all(|c| c.is_ascii_hexdigit()),
-            "Unsupported macOS library identity"
+            "Unsupported profile library identity"
         );
         ensure!(
             libraries.iter().any(|profile_library| {
@@ -1144,10 +1161,6 @@ mod tests {
         cancel: &AtomicBool,
         resolve_source: impl FnMut(&Path, u32) -> Option<ProjectPath>,
     ) -> Result<ProfileResults> {
-        ensure!(
-            host == ProfileHost::MacOs,
-            "Native profiling requires a macOS host"
-        );
         let mut inputs = Vec::new();
         for (path, error) in paths.into_iter().zip([
             "Cannot open the selected profile file",
@@ -1530,13 +1543,19 @@ mod tests {
             root_inode: 0,
             file_inode: 0,
         };
-        for host in [ProfileHost::Linux, ProfileHost::Windows] {
-            let error =
-                load_samply_profile(fs.as_ref(), [&missing_input; 2], host, &cancel, |_, _| None)
-                    .await
-                    .expect_err("unsupported authoritative host");
-            assert_eq!(error.to_string(), "Native profiling requires a macOS host");
-        }
+        let error = load_samply_profile(
+            fs.as_ref(),
+            [&missing_input; 2],
+            ProfileHost::Windows,
+            &cancel,
+            |_, _| None,
+        )
+        .await
+        .expect_err("unsupported authoritative host");
+        assert_eq!(
+            error.to_string(),
+            "Native profile import requires a macOS or Linux host"
+        );
         let error = load_test_samply_profile(
             fs.as_ref(),
             [Path::new("/secret/missing"); 2],
@@ -1742,6 +1761,62 @@ mod tests {
             )
             .expect("repeat parse")
         );
+    }
+
+    #[test]
+    fn profile_results_linux_elf_requires_the_matching_symbol_library() {
+        let mut profile: Value = serde_json::from_slice(PROFILE).expect("profile fixture");
+        let mut symbols: Value = serde_json::from_slice(SYMBOLS).expect("symbols fixture");
+        for (libraries, field) in [
+            (&mut profile["libs"], "codeId"),
+            (&mut symbols["data"], "code_id"),
+        ] {
+            for library in libraries.as_array_mut().expect("libraries") {
+                let code_id = library[field].as_str().expect("fixture code ID");
+                library[field] = Value::from(format!("{}12345678", identity(code_id)));
+            }
+        }
+        let profile = serde_json::to_vec(&profile).expect("serialized profile");
+        let cancel = AtomicBool::new(false);
+        let parse = |symbols: &Value, host| {
+            parse_samply_profile(
+                &profile,
+                &serde_json::to_vec(symbols).expect("serialized symbols"),
+                host,
+                &cancel,
+                |_, _| None,
+            )
+        };
+        let result = parse(&symbols, ProfileHost::Linux).expect("matching ELF sidecar");
+        assert_eq!(result.total_samples, 30);
+        assert!(
+            result
+                .frames
+                .iter()
+                .any(|frame| frame.label == "workload::leaf" && frame.resolved)
+        );
+        assert!(result.frames.iter().all(|frame| frame.source.is_none()));
+
+        assert_eq!(
+            parse(&symbols, ProfileHost::MacOs)
+                .expect_err("an ELF build ID does not match the macOS format")
+                .to_string(),
+            "Unsupported profile library identity",
+        );
+        for (field, replacement) in [
+            ("code_id", "0".repeat(40)),
+            ("debug_id", "0".repeat(32)),
+            ("debug_name", "other-module".to_owned()),
+        ] {
+            let mut mismatched_symbols = symbols.clone();
+            mismatched_symbols["data"][0][field] = replacement.into();
+            assert_eq!(
+                parse(&mismatched_symbols, ProfileHost::Linux)
+                    .expect_err("an ELF sidecar must match every identity field")
+                    .to_string(),
+                "Symbol library identity does not match the profile",
+            );
+        }
     }
 
     #[test]

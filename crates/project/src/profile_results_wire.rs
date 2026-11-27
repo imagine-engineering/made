@@ -26,7 +26,8 @@ pub fn profile_import_paths(
     {
         return Err(ProfileResultStatus::Mismatch);
     }
-    if host != ProfileHost::MacOs {
+    if host == ProfileHost::Windows || (host == ProfileHost::Linux && request.task_run_id.is_some())
+    {
         return Err(ProfileResultStatus::Unsupported);
     }
     if !request.consent_to_transfer {
@@ -559,12 +560,22 @@ mod tests {
         };
         let paths = profile_import_paths(&request, ProfileHost::MacOs).expect("explicit selection");
         assert_ne!(paths[0], paths[1]);
-        for host in [ProfileHost::Linux, ProfileHost::Windows] {
-            assert_eq!(
-                profile_import_paths(&request, host),
-                Err(ProfileResultStatus::Unsupported)
-            );
-        }
+        assert_eq!(
+            profile_import_paths(&request, ProfileHost::Linux).as_ref(),
+            Ok(&paths)
+        );
+        assert_eq!(
+            profile_import_paths(&request, ProfileHost::Windows),
+            Err(ProfileResultStatus::Unsupported)
+        );
+        let linux_task = proto::ImportProfileResults {
+            task_run_id: Some("pending-native-capture".into()),
+            ..request.clone()
+        };
+        assert_eq!(
+            profile_import_paths(&linux_task, ProfileHost::Linux),
+            Err(ProfileResultStatus::Unsupported)
+        );
         let mut invalid = request.clone();
         invalid.consent_to_transfer = false;
         assert_eq!(

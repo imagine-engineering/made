@@ -72,7 +72,9 @@ pub fn init(cx: &mut App) {
         })
         .detach();
         workspace.register_action(|workspace, _: &OpenNativeProfile, window, cx| {
-            if !cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>() {
+            if ProfileHost::local_import_host().is_none()
+                || !cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>()
+            {
                 return;
             }
             let project = workspace.project().clone();
@@ -85,8 +87,8 @@ pub fn init(cx: &mut App) {
 }
 
 fn update_native_profile_command_filter(cx: &mut App) {
-    let enabled =
-        cfg!(target_os = "macos") && cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>();
+    let enabled = ProfileHost::local_import_host().is_some()
+        && cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>();
     CommandPaletteFilter::update_global(cx, |filter, _| {
         let actions = [
             std::any::TypeId::of::<OpenNativeProfile>(),
@@ -547,7 +549,7 @@ impl ProfileView {
         let notice = if project.read(cx).is_local() {
             "Select a Samply 0.13.1 profile JSON and its symbol sidecar. Processing stays local; clearing this view does not delete your files."
         } else {
-            "Select a Samply 0.13.1 profile JSON and its symbol sidecar on the macOS host. Import requires consent to transfer normalized results; raw files stay on the host."
+            "Select a Samply 0.13.1 profile JSON and its symbol sidecar on the project host. Import requires consent to transfer normalized results; raw files stay on the host."
         }.to_string();
         Self {
             project,
@@ -639,8 +641,8 @@ impl ProfileView {
             return;
         }
         let project = self.project.read(cx);
-        if !cfg!(target_os = "macos") {
-            self.notice = "Native profile import supports macOS hosts only".to_string();
+        if ProfileHost::local_import_host().is_none() {
+            self.notice = "Native profile import requires a macOS or Linux host".to_string();
             cx.notify();
             return;
         }
@@ -925,10 +927,8 @@ impl ProfileView {
             "Native profiling opt-in was revoked before import"
         );
         let remote = !self.project.read(cx).is_local();
-        ensure!(
-            cfg!(target_os = "macos"),
-            "Native import supports macOS hosts only"
-        );
+        let local_host = ProfileHost::local_import_host()
+            .context("Native profile import requires a macOS or Linux host")?;
         ensure!(
             !self.project.read(cx).is_disconnected(cx),
             "The profile host is disconnected"
@@ -1060,7 +1060,7 @@ impl ProfileView {
                         admitted_inputs.first().context("Missing profile input")?,
                         admitted_inputs.get(1).context("Missing symbol input")?,
                     ],
-                    ProfileHost::MacOs,
+                    local_host,
                     &cancel,
                     |path, _line| {
                         worktrees.iter().find_map(|(id, root, snapshot)| {

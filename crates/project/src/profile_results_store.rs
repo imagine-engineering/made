@@ -7082,14 +7082,14 @@ impl ProfileResultsStore {
         request: proto::ImportProfileResults,
         cx: &mut Context<Self>,
     ) -> Task<proto::ProfileResultPage> {
-        let host = if cfg!(target_os = "macos") {
-            ProfileHost::MacOs
-        } else if cfg!(target_os = "windows") {
-            ProfileHost::Windows
-        } else {
-            ProfileHost::Linux
-        };
         let import_id = request.import_id;
+        let Some(host) = ProfileHost::local_import_host() else {
+            return Task::ready(Self::status(
+                import_id,
+                0,
+                proto::ProfileResultStatus::Unsupported,
+            ));
+        };
         if !cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>() {
             return Task::ready(Self::status(
                 import_id,
@@ -7499,10 +7499,9 @@ impl ProfileResultsStore {
             if !cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>() {
                 return Err(proto::ProfileResultStatus::Unsupported);
             }
-            if !cfg!(target_os = "macos") {
-                return Err(proto::ProfileResultStatus::Unsupported);
-            }
-            let paths = profile_import_paths(&request, ProfileHost::MacOs)?;
+            let host =
+                ProfileHost::local_import_host().ok_or(proto::ProfileResultStatus::Unsupported)?;
+            let paths = profile_import_paths(&request, host)?;
             if request.task_run_id.is_some() {
                 return Err(proto::ProfileResultStatus::Unsupported);
             }
