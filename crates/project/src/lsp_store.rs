@@ -4958,7 +4958,7 @@ pub struct LspStore {
     #[cfg(feature = "jvm-tools")]
     reviewed_jvm_dependencies: HashMap<(ProjectPath, String), ReviewedJvmDependencySnapshot>,
     #[cfg(feature = "jvm-tools")]
-    jdtls_refresh_tasks: HashMap<WorktreeId, Task<()>>,
+    jdtls_refresh_tasks: HashMap<WorktreeId, JdtlsProjectTask>,
     #[cfg(feature = "jvm-tools")]
     pending_jvm_reloads: HashMap<WorktreeId, PendingJvmReload>,
     #[cfg(feature = "jvm-tools")]
@@ -16148,10 +16148,13 @@ impl LspStore {
             .map(|(server_id, _)| *server_id);
         if let Some(server_id) = server_id {
             if self.as_local().is_some() {
-                // A replacement read cannot retain configured facts from an already stale snapshot.
-                if self
-                    .jdtls_project_query_token(worktree_id)
-                    .is_some_and(|token| token.server_id() == server_id)
+                // A replacement read loses previously configured facts once the snapshot is stale.
+                if let Some(read) = self
+                    .jdtls_refresh_tasks
+                    .get(&worktree_id)
+                    .and_then(|task| task.snapshot_read)
+                    && read.server_id() == server_id
+                    && self.jdtls_project_query_token(worktree_id) == Some(read)
                 {
                     return;
                 }
@@ -17962,7 +17965,13 @@ impl LspStore {
                 log::debug!("{name} graph lost its project binding");
             }
         });
-        self.jdtls_refresh_tasks.insert(worktree_id, query);
+        self.jdtls_refresh_tasks.insert(
+            worktree_id,
+            JdtlsProjectTask {
+                _task: query,
+                snapshot_read: None,
+            },
+        );
         cx.notify();
         Ok(cx.background_spawn(async move {
             receiver.await.map_err(|_| {
@@ -18687,7 +18696,13 @@ impl LspStore {
                 log::debug!("Selected {name} {operation} lost its current project binding");
             }
         });
-        self.jdtls_refresh_tasks.insert(worktree_id, import);
+        self.jdtls_refresh_tasks.insert(
+            worktree_id,
+            JdtlsProjectTask {
+                _task: import,
+                snapshot_read: None,
+            },
+        );
         cx.notify();
         Ok(cx.background_spawn(async move {
             receiver.await.map_err(|_| anyhow!("{name} {operation} cancelled or project changed; import may be partial, refresh before retrying"))?
@@ -19037,7 +19052,13 @@ impl LspStore {
                 log::debug!("Remote JDTLS reply arrived after project teardown: {error:#}");
             }
         });
-        self.jdtls_refresh_tasks.insert(worktree_id, refresh);
+        self.jdtls_refresh_tasks.insert(
+            worktree_id,
+            JdtlsProjectTask {
+                _task: refresh,
+                snapshot_read: None,
+            },
+        );
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -19235,6 +19256,7 @@ impl LspStore {
             || trusted_build_root.is_some()
             || maven_selection.is_some();
         let worktree_root = worktree.read(cx).abs_path();
+        let snapshot_read = gradle_synchronization_root.is_none().then_some(token);
         let refresh = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(250))
@@ -19467,7 +19489,13 @@ impl LspStore {
                 log::debug!("JDTLS project reply arrived after project teardown: {error:#}");
             }
         });
-        self.jdtls_refresh_tasks.insert(worktree_id, refresh);
+        self.jdtls_refresh_tasks.insert(
+            worktree_id,
+            JdtlsProjectTask {
+                _task: refresh,
+                snapshot_read,
+            },
+        );
         Ok(())
     }
 
@@ -23197,6 +23225,12 @@ impl LanguageServerWatchedPaths {
 struct LspBufferSnapshot {
     version: i32,
     snapshot: TextBufferSnapshot,
+}
+
+#[cfg(feature = "jvm-tools")]
+struct JdtlsProjectTask {
+    _task: Task<()>,
+    snapshot_read: Option<jvm_project::ProviderRefreshToken>,
 }
 
 #[cfg(feature = "jvm-tools")]

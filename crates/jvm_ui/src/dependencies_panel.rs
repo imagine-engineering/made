@@ -6659,6 +6659,18 @@ fn project_rows_for_view(
     let mut roots = Vec::new();
     let mut navigation = HashMap::new();
     let mut module_groups = HashMap::new();
+    let mut gradle_path_counts = HashMap::new();
+    if view == BuildToolView::Gradle {
+        for gradle in snapshot
+            .projects
+            .iter()
+            .filter_map(|module| module.gradle.as_ref())
+        {
+            *gradle_path_counts
+                .entry(gradle.project_path.as_str())
+                .or_insert(0) += 1;
+        }
+    }
     for module in &snapshot.projects {
         let gradle_module =
             module.gradle.is_some() || module.imported_build_kind == JdtlsImportedBuildKind::Gradle;
@@ -7126,6 +7138,33 @@ fn project_rows_for_view(
             Some(major) => format!("; JDTLS launch Java {major}"),
             None => "; JDTLS launch Java unknown".into(),
         };
+        let (gradle_label, gradle_context) = if let Some(gradle) = &module.gradle
+            && view == BuildToolView::Gradle
+        {
+            let project_path = gradle.project_path.as_str();
+            let build_path = gradle.build_root.path.as_unix_str();
+            let build_name = if build_path.is_empty() {
+                "Project root"
+            } else {
+                build_path
+            };
+            let label = if project_path == ":" {
+                build_name.to_owned()
+            } else if gradle_path_counts
+                .get(project_path)
+                .is_some_and(|count| *count > 1)
+            {
+                format!("{project_path} · {build_name}")
+            } else {
+                project_path.to_owned()
+            };
+            (
+                Some(label),
+                format!("; Gradle project path {project_path}; containing build {build_name}"),
+            )
+        } else {
+            (None, String::new())
+        };
         roots.push(LanguageToolNode {
             id: module_id,
             label: match view {
@@ -7134,11 +7173,11 @@ fn project_rows_for_view(
                     let name = if preferences.show_maven_version { format!("{name}:{}", maven.version) } else { name };
                     if preferences.show_maven_artifact_id { format!("{name} ({module_name})") } else { name }
                 }).unwrap_or_else(|| module_name.clone()),
-                BuildToolView::Gradle => module.gradle.as_ref().map(|gradle| format!("{} ({})", gradle.project_path, if gradle.build_root.path.is_empty() { "Project root" } else { gradle.build_root.path.as_unix_str() })).unwrap_or_else(|| module_name.clone()),
+                BuildToolView::Gradle => gradle_label.unwrap_or_else(|| module_name.clone()),
                 BuildToolView::Dependencies => module_name.clone(),
             },
             secondary_label: Some(format!(
-                "JDTLS module; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown"
+                "JDTLS module; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown{gradle_context}"
             )),
             icon: match (gradle_module, maven_module) {
                 (true, false) => Some(IconName::Gradle),
@@ -7146,7 +7185,7 @@ fn project_rows_for_view(
                 _ => Some(IconName::Folder),
             },
             accessibility_label: format!(
-                "JDTLS module {module_name}; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown"
+                "JDTLS module {module_name}; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown{gradle_context}"
             ),
             children,
             enabled: true,
@@ -13326,6 +13365,24 @@ mod tests {
                         .iter()
                         .any(|group| group.label == "Project root · :services")
                 );
+                for (label, logical_path, build) in [
+                    (":api · Project root", ":api", "Project root"),
+                    (":api · included", ":api", "included"),
+                    (":implementation", ":implementation", "Project root"),
+                    (":services:service", ":services:service", "Project root"),
+                ] {
+                    let row = flat_rows
+                        .iter()
+                        .find(|row| row.label == label)
+                        .expect(label);
+                    for detail in [
+                        row.secondary_label.as_deref().expect("project details"),
+                        &row.accessibility_label,
+                    ] {
+                        assert!(detail.contains(&format!("Gradle project path {logical_path}")));
+                        assert!(detail.contains(&format!("containing build {build}")));
+                    }
+                }
             } else {
                 assert!(grouped_rows.iter().any(
                     |group| group.label == "Directory: libraries" && group.children.len() == 2
@@ -21873,12 +21930,17 @@ mod tests {
             assert!(
                 first_rows
                     .iter()
-                    .any(|(_, label, accessibility)| label == ": (first/included)"
-                        && !accessibility.is_empty()),
+                    .any(|(_, label, accessibility)| label == "first/included"
+                        && accessibility
+                            .contains("Gradle project path :; containing build first/included")),
                 "included participant reaches the shared accessible tree"
             );
             assert!(
-                first_rows.iter().any(|(_, label, _)| label == ": (first)"),
+                first_rows
+                    .iter()
+                    .any(|(_, label, accessibility)| label == "first"
+                        && accessibility
+                            .ends_with("Gradle project path :; containing build first")),
                 "connection root remains distinct"
             );
         }
