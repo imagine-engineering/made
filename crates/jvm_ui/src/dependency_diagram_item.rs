@@ -1303,6 +1303,8 @@ impl Render for DependencyDiagramItem {
                 ui::right_click_menu("dependency-diagram-context-menu")
                     .with_handle(context_handle)
                     .full_height(true)
+                    // The canvas must resolve the pointer target before the menu is built.
+                    .open_on_right_click(false)
                     .maybe_menu(move |window, cx| {
                         crate::dependency_diagram_menu::build_dependency_diagram_context_menu(
                             &context_state,
@@ -2903,9 +2905,7 @@ mod tests {
     }
 
     #[gpui::test]
-    async fn dependency_diagram_menu_keyboard_gesture_navigates_and_restores_focus(
-        cx: &mut TestAppContext,
-    ) {
+    async fn dependency_diagram_menu_routes_keyboard_and_pointer_targets(cx: &mut TestAppContext) {
         cx.update(|cx| init(cx));
         let fs = project::FakeFs::new(cx.executor());
         fs.insert_tree(
@@ -3047,6 +3047,81 @@ mod tests {
             cx.simulate_keystrokes("escape");
             assert!(!context_handle.is_deployed());
             assert!(cx.update(|window, _| focus.is_focused(window)));
+        }
+
+        let pointer_targets = item.read_with(cx, |item, cx| {
+            let canvas = item.canvas.read(cx);
+            let origin = *canvas.canvas_origin.lock().expect("canvas origin");
+            let point_for_node =
+                |id| origin.translated(canvas.node_screen_position(id).expect("canvas node"));
+            let size = *canvas.canvas_size.lock().expect("canvas size");
+            [
+                (
+                    point_for_node("c1"),
+                    DependencyDiagramContextTarget::Selection {
+                        node: "c1".into(),
+                        members: ["c1".into(), "c2".into()].into(),
+                    },
+                ),
+                (
+                    point_for_node("root"),
+                    DependencyDiagramContextTarget::Node("root".into()),
+                ),
+                (
+                    origin.translated(GraphPoint {
+                        x: size.width - 12.0,
+                        y: size.height - 12.0,
+                    }),
+                    DependencyDiagramContextTarget::Canvas,
+                ),
+            ]
+        });
+        for (target_point, expected_target) in pointer_targets {
+            let position = gpui::point(px(target_point.x), px(target_point.y));
+            let invocation = cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                window.dispatch_event(
+                    gpui::MouseDownEvent {
+                        button: gpui::MouseButton::Right,
+                        position,
+                        modifiers: Default::default(),
+                        click_count: 1,
+                        first_mouse: false,
+                    }
+                    .to_platform_input(),
+                    cx,
+                );
+                item.read(cx)
+                    .context_state
+                    .invocation
+                    .lock()
+                    .expect("staged invocation")
+                    .clone()
+            });
+            cx.simulate_mouse_up(position, gpui::MouseButton::Right, Default::default());
+            assert!(
+                context_handle.is_deployed(),
+                "right-click opens the diagram menu"
+            );
+            assert_eq!(
+                invocation.expect("pointer invocation").target,
+                expected_target
+            );
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("diagram menu"))
+                        .expect("accessibility JSON");
+                let nodes = tree["nodes"].as_object().expect("menu nodes");
+                let has_label = |label| nodes.values().any(|node| node["aria"]["label"] == label);
+                assert!(has_label("Fit Diagram"));
+                assert_eq!(
+                    has_label("Layout"),
+                    expected_target == DependencyDiagramContextTarget::Canvas
+                );
+            });
+            cx.simulate_keystrokes("escape");
+            assert!(!context_handle.is_deployed());
         }
         item.read_with(cx, |item, cx| {
             let canvas = item.canvas.read(cx);

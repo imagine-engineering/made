@@ -102,6 +102,7 @@ pub struct RightClickMenu<M: ManagedView> {
     attach: Option<Anchor>,
     full_width: bool,
     full_height: bool,
+    open_on_right_click: bool,
 }
 
 impl<M: ManagedView> RightClickMenu<M> {
@@ -130,6 +131,11 @@ impl<M: ManagedView> RightClickMenu<M> {
 
     pub fn full_height(mut self, full_height: bool) -> Self {
         self.full_height = full_height;
+        self
+    }
+
+    pub fn open_on_right_click(mut self, open_on_right_click: bool) -> Self {
+        self.open_on_right_click = open_on_right_click;
         self
     }
 
@@ -186,6 +192,7 @@ pub fn right_click_menu<M: ManagedView>(id: impl Into<ElementId>) -> RightClickM
         attach: None,
         full_width: false,
         full_height: false,
+        open_on_right_click: true,
     }
 }
 
@@ -402,18 +409,20 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
                     menu.paint(window, cx);
                 }
 
-                let Some(builder) = this.menu_builder.take() else {
-                    return;
-                };
-
                 let attach = this.attach;
-                let menu = element_state.menu.clone();
-                let position = element_state.position.clone();
                 let child_bounds = prepaint_state.child_bounds;
                 *element_state.attachment_position.borrow_mut() = child_bounds
                     .zip(attach)
                     .map(|(bounds, anchor)| bounds.corner(anchor));
 
+                if !this.open_on_right_click {
+                    return;
+                }
+                let Some(builder) = this.menu_builder.take() else {
+                    return;
+                };
+                let menu = element_state.menu.clone();
+                let position = element_state.position.clone();
                 let hitbox_id = prepaint_state.hitbox.id;
                 window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
                     if phase == DispatchPhase::Bubble
