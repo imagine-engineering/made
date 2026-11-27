@@ -104,6 +104,11 @@ The alternate Kotlin server is experimental. With version `1.3.13`, the native
 Maven and Gradle fixtures could navigate to definitions, complete methods, and
 report diagnostics. Groovy now avoids the provider's class-declaration
 highlight error on the pinned version and still highlights class names.
+After a valid edit, the alternate server can use stale source positions for
+**Go to Definition** even when diagnostics are clear. Cached Maven and Gradle
+fixtures reproduced this on macOS ARM64. The preferred server passed the same
+edit and navigation check on the Gradle fixture.
+
 If **Language Servers** reports a fallback analysis error, open **View Logs**
 for that server. If the fallback runs out of memory, review its JVM memory
 settings on the project host. Restart the fallback or select the preferred
