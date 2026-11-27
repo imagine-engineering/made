@@ -9,6 +9,8 @@ import plistlib
 import subprocess
 import tempfile
 
+from product_release import MIXED_PREVIEW_SCOPE
+
 
 def run(arguments, **kwargs):
     try:
@@ -70,6 +72,13 @@ def main():
     production = os.environ.get("ZED_PRODUCT_SIGNING") == "required"
     if production and plan.get("signing") != "required":
         raise RuntimeError("Production artifact validation requires a production bundle plan")
+    if arguments.plan and plan.get("signing") != os.environ.get("ZED_PRODUCT_SIGNING"):
+        raise RuntimeError("Bundle plan signing policy differs from the package job")
+    unsigned_download = (
+        arguments.plan and plan.get("preparation_scope") == MIXED_PREVIEW_SCOPE
+        and plan.get("channel") == "preview" and arguments.platform in ("windows", "linux")
+        and plan.get("signing") == "off" and bool(os.environ.get("RELEASE_TAG"))
+    )
     windows_verifier = str(Path("crates/zed/resources/windows/sign.ps1").resolve())
     macos_verification = None
 
@@ -176,7 +185,7 @@ def main():
                 if uninstaller.is_file():
                     run([str(uninstaller), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
 
-    if production:
+    if production or unsigned_download:
         with artifact.open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         receipt = {
@@ -185,13 +194,16 @@ def main():
             "channel": plan["channel"], "update_namespace": plan["update_namespace"],
             "preparation_scope": plan["preparation_scope"],
             "platform": arguments.platform, "artifact_name": artifact.name,
-            "signing": "required", "sha256": digest,
-            "signing_identity": os.environ[{
+            "signing": plan["signing"], "sha256": digest, "smoke_passed": True,
+        }
+        if production:
+            receipt["signing_identity"] = os.environ[{
                 "macos": "MACOS_SIGNING_IDENTITY", "windows": "WINDOWS_SIGNING_PUBLISHER",
                 "linux": "LINUX_SIGNING_KEY_FINGERPRINT",
-            }[arguments.platform]],
-            "verification": "Final package signature, installed metadata and launch checks passed",
-        }
+            }[arguments.platform]]
+            receipt["verification"] = "Final package signature, installed metadata and launch checks passed"
+        else:
+            receipt["verification"] = "Unsigned package passed installed metadata and launch checks"
         if macos_verification:
             receipt["macos_verification"] = macos_verification
         receipt_path = artifact.parent / f"verification-{arguments.product}-{arguments.platform}-{arguments.target.split('-')[0]}.json"

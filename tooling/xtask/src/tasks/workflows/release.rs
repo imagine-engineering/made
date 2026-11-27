@@ -91,6 +91,10 @@ pub(crate) fn release_prepare() -> Workflow {
                     .add_input(
                         "publish_release_type",
                         WorkflowInput::string("publish_release_type", None).call_input(),
+                    )
+                    .add_input(
+                        "include_unsigned_downloads",
+                        WorkflowInput::bool("include_unsigned_downloads", None).call_input(),
                     ),
             ))
         .concurrency(
@@ -172,7 +176,7 @@ fn signing_preflight(prepare: &NamedJob, prepared: &PreparedRelease) -> NamedJob
             "python3 script/check-signing-environment --platform {platform} --policy required"
         ));
         step = step.if_condition(Expression::new(format!(
-            "needs.prepare_release.outputs.signing == 'required' && contains(needs.prepare_release.outputs.matrix, '\"platform\":\"{platform}\"')"
+            "contains(needs.prepare_release.outputs.signed_platforms, '\"{platform}\"')"
         )));
         for name in names {
             step = step.add_env((*name, format!("${{{{ secrets.{name} }}}}")));
@@ -196,7 +200,11 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
         if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == tag ]]; then
             python3 script/product_release.py resolve-tag-push
         elif [[ -n "$PUBLISH_RELEASE_TYPE" ]]; then
-            python3 script/product_release.py plan-copper-release --tag "$RELEASE_TAG" --release-type "$PUBLISH_RELEASE_TYPE"
+            options=()
+            if [[ "$INCLUDE_UNSIGNED_DOWNLOADS" == true ]]; then
+                options+=(--include-unsigned-downloads)
+            fi
+            python3 script/product_release.py plan-copper-release --tag "$RELEASE_TAG" --release-type "$PUBLISH_RELEASE_TYPE" "${options[@]}"
         elif [[ -n "$RELEASE_TAG" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
                 echo "Draft preparation must be manually dispatched from main" >&2
@@ -215,6 +223,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
     .id("resolve-release")
     .add_env(("RELEASE_TAG", "${{ inputs.release_tag }}"))
     .add_env(("PUBLISH_RELEASE_TYPE", "${{ inputs.publish_release_type }}"))
+    .add_env(("INCLUDE_UNSIGNED_DOWNLOADS", "${{ inputs.include_unsigned_downloads }}"))
     .add_env(("SIGN_ARTIFACTS", "${{ inputs.sign_artifacts }}"))
     .add_env(("PREPARATION_SCOPE", "${{ inputs.preparation_scope || 'full' }}"))
     .add_env(("VERSION", format!("${{{{ inputs.version || '{initial_version}' }}}}")))
@@ -228,7 +237,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
     let matrix = StepOutput::new_unchecked(&resolve, "matrix");
     let preparation_scope = StepOutput::new_unchecked(&resolve, "preparation_scope");
     let controller_sha = StepOutput::new_unchecked(&resolve, "controller_sha");
-    let signing = StepOutput::new_unchecked(&resolve, "signing");
+    let signed_platforms = StepOutput::new_unchecked(&resolve, "signed_platforms");
     let already_published = StepOutput::new_unchecked(&resolve, "already_published");
     let job = named::job(
         Job::default()
@@ -275,7 +284,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
                 (matrix.name.to_owned(), matrix.to_string()),
                 (preparation_scope.name.to_owned(), preparation_scope.to_string()),
                 (controller_sha.name.to_owned(), controller_sha.to_string()),
-                (signing.name.to_owned(), signing.to_string()),
+                (signed_platforms.name.to_owned(), signed_platforms.to_string()),
                 (already_published.name.to_owned(), already_published.to_string()),
             ]),
     );
@@ -304,6 +313,10 @@ fn verified_release_step(command: &str, prepared: &PreparedRelease) -> Step<Run>
         .add_env((
             "EXPECTED_RELEASE_TYPE",
             "${{ inputs.publish_release_type }}",
+        ))
+        .add_env((
+            "EXPECTED_UNSIGNED_DOWNLOADS",
+            "${{ inputs.include_unsigned_downloads }}",
         ))
 }
 
@@ -800,7 +813,7 @@ fn product_builds(
         .timeout_minutes(90u32)
         .permissions(Permissions::default().contents(Level::Read))
         .add_env(("RELEASE_VERSION", prepared.version.to_string()))
-        .add_env(("ZED_PRODUCT_SIGNING", "${{ needs.prepare_release.outputs.signing }}"))
+        .add_env(("ZED_PRODUCT_SIGNING", "${{ matrix.signing }}"))
         .strategy(
             Strategy::default()
                 .fail_fast(false)
@@ -904,9 +917,9 @@ fn product_builds(
                 .add_env(("TARGET", "${{ matrix.target }}"))
                 .add_env(("CC", "clang"))
                 .add_env(("CXX", "clang++"))
-                .add_env(("LINUX_SIGNING_KEY", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY || '' }}"))
-                .add_env(("LINUX_SIGNING_KEY_PASSWORD", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_PASSWORD || '' }}"))
-                .add_env(("LINUX_SIGNING_KEY_FINGERPRINT", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}")),
+                .add_env(("LINUX_SIGNING_KEY", "${{ matrix.signing == 'required' && secrets.LINUX_SIGNING_KEY || '' }}"))
+                .add_env(("LINUX_SIGNING_KEY_PASSWORD", "${{ matrix.signing == 'required' && secrets.LINUX_SIGNING_KEY_PASSWORD || '' }}"))
+                .add_env(("LINUX_SIGNING_KEY_FINGERPRINT", "${{ matrix.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}")),
         )
         .add_step(
             named::bash(indoc::indoc! {r#"
@@ -915,12 +928,12 @@ fn product_builds(
                 .if_condition(Expression::new("matrix.platform == 'macos'"))
                 .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
                 .add_env(("TARGET", "${{ matrix.target }}"))
-                .add_env(("MACOS_SIGNING_IDENTITY", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}"))
-                .add_env(("MACOS_CERTIFICATE", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_CERTIFICATE || '' }}"))
-                .add_env(("MACOS_CERTIFICATE_PASSWORD", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}"))
-                .add_env(("APPLE_NOTARIZATION_KEY", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY || '' }}"))
-                .add_env(("APPLE_NOTARIZATION_KEY_ID", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY_ID || '' }}"))
-                .add_env(("APPLE_NOTARIZATION_ISSUER_ID", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.APPLE_NOTARIZATION_ISSUER_ID || '' }}")),
+                .add_env(("MACOS_SIGNING_IDENTITY", "${{ matrix.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}"))
+                .add_env(("MACOS_CERTIFICATE", "${{ matrix.signing == 'required' && secrets.MACOS_CERTIFICATE || '' }}"))
+                .add_env(("MACOS_CERTIFICATE_PASSWORD", "${{ matrix.signing == 'required' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}"))
+                .add_env(("APPLE_NOTARIZATION_KEY", "${{ matrix.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY || '' }}"))
+                .add_env(("APPLE_NOTARIZATION_KEY_ID", "${{ matrix.signing == 'required' && secrets.APPLE_NOTARIZATION_KEY_ID || '' }}"))
+                .add_env(("APPLE_NOTARIZATION_ISSUER_ID", "${{ matrix.signing == 'required' && secrets.APPLE_NOTARIZATION_ISSUER_ID || '' }}")),
         )
         .add_step(
             named::pwsh(indoc::indoc! {r#"
@@ -929,16 +942,16 @@ fn product_builds(
             "#})
                 .if_condition(Expression::new("matrix.platform == 'windows'"))
                 .add_env(("TARGET", "${{ matrix.target }}"))
-                .add_env(("AZURE_TENANT_ID", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_TENANT_ID || '' }}"))
-                .add_env(("AZURE_CLIENT_ID", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_CLIENT_ID || '' }}"))
-                .add_env(("AZURE_CLIENT_SECRET", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.AZURE_CLIENT_SECRET || '' }}"))
-                .add_env(("ACCOUNT_NAME", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.ACCOUNT_NAME || '' }}"))
-                .add_env(("CERT_PROFILE_NAME", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.CERT_PROFILE_NAME || '' }}"))
-                .add_env(("ENDPOINT", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.ENDPOINT || '' }}"))
-                .add_env(("WINDOWS_SIGNING_PUBLISHER", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}"))
-                .add_env(("FILE_DIGEST", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.FILE_DIGEST || '' }}"))
-                .add_env(("TIMESTAMP_DIGEST", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.TIMESTAMP_DIGEST || '' }}"))
-                .add_env(("TIMESTAMP_SERVER", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.TIMESTAMP_SERVER || '' }}")),
+                .add_env(("AZURE_TENANT_ID", "${{ matrix.signing == 'required' && secrets.AZURE_TENANT_ID || '' }}"))
+                .add_env(("AZURE_CLIENT_ID", "${{ matrix.signing == 'required' && secrets.AZURE_CLIENT_ID || '' }}"))
+                .add_env(("AZURE_CLIENT_SECRET", "${{ matrix.signing == 'required' && secrets.AZURE_CLIENT_SECRET || '' }}"))
+                .add_env(("ACCOUNT_NAME", "${{ matrix.signing == 'required' && secrets.ACCOUNT_NAME || '' }}"))
+                .add_env(("CERT_PROFILE_NAME", "${{ matrix.signing == 'required' && secrets.CERT_PROFILE_NAME || '' }}"))
+                .add_env(("ENDPOINT", "${{ matrix.signing == 'required' && secrets.ENDPOINT || '' }}"))
+                .add_env(("WINDOWS_SIGNING_PUBLISHER", "${{ matrix.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}"))
+                .add_env(("FILE_DIGEST", "${{ matrix.signing == 'required' && secrets.FILE_DIGEST || '' }}"))
+                .add_env(("TIMESTAMP_DIGEST", "${{ matrix.signing == 'required' && secrets.TIMESTAMP_DIGEST || '' }}"))
+                .add_env(("TIMESTAMP_SERVER", "${{ matrix.signing == 'required' && secrets.TIMESTAMP_SERVER || '' }}")),
         )
         .add_step(
             named::bash(indoc::indoc! {r#"
@@ -955,8 +968,8 @@ fn product_builds(
                 .add_env(("TARGET", "${{ matrix.target }}"))
                 .add_env(("PLAN_FILE", "${{ matrix.plan_file }}"))
                 .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
-                .add_env(("MACOS_SIGNING_IDENTITY", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}"))
-                .add_env(("LINUX_SIGNING_KEY_FINGERPRINT", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}"))
+                .add_env(("MACOS_SIGNING_IDENTITY", "${{ matrix.signing == 'required' && secrets.MACOS_SIGNING_IDENTITY || '' }}"))
+                .add_env(("LINUX_SIGNING_KEY_FINGERPRINT", "${{ matrix.signing == 'required' && secrets.LINUX_SIGNING_KEY_FINGERPRINT || '' }}"))
                 .add_env(("COMMIT_SHA", prepared.commit_sha.to_string())),
         )
         .add_step(
@@ -973,7 +986,7 @@ fn product_builds(
                 .add_env(("TARGET", "${{ matrix.target }}"))
                 .add_env(("PLAN_FILE", "${{ matrix.plan_file }}"))
                 .add_env(("ARTIFACT_SUFFIX", "${{ matrix.artifact_suffix }}"))
-                .add_env(("WINDOWS_SIGNING_PUBLISHER", "${{ needs.prepare_release.outputs.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}"))
+                .add_env(("WINDOWS_SIGNING_PUBLISHER", "${{ matrix.signing == 'required' && secrets.WINDOWS_SIGNING_PUBLISHER || '' }}"))
                 .add_env(("COMMIT_SHA", prepared.commit_sha.to_string())),
         )
         .add_step(
@@ -981,7 +994,7 @@ fn product_builds(
                 .if_condition(Expression::new("always() && matrix.platform == 'macos'")),
         )
         .add_step(
-            steps::upload_artifact("${{ needs.prepare_release.outputs.signing == 'off' && 'UNSIGNED-DEVELOPMENT-' || '' }}${{ matrix.artifact }}", "${{ matrix.artifact_path }}\ntarget/products/${{ matrix.product }}/release/verification-*.json")
+            steps::upload_artifact("${{ matrix.upload_artifact }}", "${{ matrix.artifact_path }}\ntarget/products/${{ matrix.product }}/release/verification-*.json")
                 .if_no_files_found(IfNoFilesFound::Error),
         )
         .add_step(
@@ -1011,7 +1024,7 @@ fn upload_release(prepare: &NamedJob, prepared: &PreparedRelease, build: &NamedJ
         Job::default()
             .needs([prepare.name.clone(), build.name.clone()])
             .cond(Expression::new(
-                "(github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')",
+                "needs.product_builds.result == 'success' && ((github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))",
             ))
             .runs_on("ubuntu-22.04")
             .timeout_minutes(20u32)
@@ -1095,7 +1108,7 @@ mod release_workflow_tests {
             assert!(yaml.contains(phase));
         }
         assert!(yaml.contains("cargo xtask bundle --product"));
-        assert!(yaml.contains("ZED_PRODUCT_SIGNING: ${{ needs.prepare_release.outputs.signing }}"));
+        assert!(yaml.contains("ZED_PRODUCT_SIGNING: ${{ matrix.signing }}"));
         assert!(yaml.contains("script/smoke-product-bundle"));
         assert!(yaml.contains("fromJSON(needs.prepare_release.outputs.matrix)"));
         assert!(yaml.contains("RELEASE_VERSION: ${{ needs.prepare_release.outputs.version }}"));
@@ -1142,6 +1155,12 @@ mod release_workflow_tests {
             upload["if"]
                 .as_str()
                 .expect("upload condition")
+                .contains("needs.product_builds.result == 'success'")
+        );
+        assert!(
+            upload["if"]
+                .as_str()
+                .expect("upload condition")
                 .contains("inputs.release_tag != ''")
         );
         let yaml = release_prepare().to_string().expect("yaml");
@@ -1150,7 +1169,10 @@ mod release_workflow_tests {
         assert!(yaml.contains("product_release.py create-copper-tag"));
         assert!(yaml.contains("product_release.py draft"));
         assert!(!yaml.contains("attach-prerelease"));
-        assert!(yaml.contains("UNSIGNED-DEVELOPMENT-"));
+        assert!(yaml.contains("name: ${{ matrix.upload_artifact }}"));
+        assert!(
+            yaml.contains("contains(needs.prepare_release.outputs.signed_platforms, '\"macos\"')")
+        );
         assert!(yaml.contains("--signing \"$ZED_PRODUCT_SIGNING\""));
         assert!(yaml.contains("product_release.py contract"));
         assert!(yaml.contains("script/test-production-signing"));
@@ -1166,15 +1188,21 @@ mod release_workflow_tests {
         let events = &workflow["on"];
         assert_eq!(events.as_mapping().map(|events| events.len()), Some(1));
         let inputs = &events["workflow_dispatch"]["inputs"];
-        assert_eq!(inputs.as_mapping().map(|inputs| inputs.len()), Some(2));
+        assert_eq!(inputs.as_mapping().map(|inputs| inputs.len()), Some(3));
         assert_eq!(inputs["tag"]["required"], true);
         assert_eq!(inputs["release_type"]["type"], "choice");
         assert_eq!(inputs["release_type"]["default"], "prerelease");
         assert_eq!(inputs["release_type"]["options"][0], "prerelease");
         assert_eq!(inputs["release_type"]["options"][1], "stable");
+        assert_eq!(inputs["include_unsigned_downloads"]["type"], "boolean");
+        assert_eq!(inputs["include_unsigned_downloads"]["default"], false);
         let release = &workflow["jobs"]["release"];
         assert_eq!(release["uses"], "./.github/workflows/release_prepare.yml");
         assert_eq!(release["with"]["release_tag"], "${{ inputs.tag }}");
+        assert_eq!(
+            release["with"]["include_unsigned_downloads"],
+            "${{ inputs.include_unsigned_downloads }}"
+        );
         Ok(())
     }
 }

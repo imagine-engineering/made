@@ -14,6 +14,15 @@ from urllib.parse import quote, urlencode
 
 
 APPLE_SILICON_TARGET = "aarch64-apple-darwin"
+MIXED_PREVIEW_SCOPE = "macos-with-unsigned-downloads"
+MIXED_PREVIEW_TARGETS = {("macos", APPLE_SILICON_TARGET), ("linux", "x86_64-unknown-linux-gnu"),
+                         ("windows", "x86_64-pc-windows-msvc")}
+PACKAGE_EXTENSIONS = {"macos": ".dmg", "linux": ".tar.gz", "windows": ".exe"}
+UNSIGNED_DOWNLOAD_NOTE = (
+    "**Windows and Linux: unsigned, manual install.** These packages passed platform smoke checks "
+    "and have SHA-256 checksums. Download them here for manual installation. Automatic updates "
+    "from this prerelease are available for the signed and notarized macOS package only."
+)
 
 
 def validate_catalog(products):
@@ -154,8 +163,10 @@ def check_tag(name, decision):
 
 
 def check_release_ci(name, decision):
-    if decision["preparation_scope"] not in ("full", "macos-only"):
+    if decision["preparation_scope"] not in ("full", "macos-only", MIXED_PREVIEW_SCOPE):
         raise ValueError("unknown release preparation scope")
+    if decision["preparation_scope"] == MIXED_PREVIEW_SCOPE:
+        check_mixed_preview(decision)
     if decision["preparation_scope"] == "macos-only" and (
             decision["product_id"] != "rust" or not decision["matrix"]["include"]
             or any(row["platform"] != "macos" for row in decision["matrix"]["include"])):
@@ -187,13 +198,22 @@ def guard(decision):
 
 def write_outputs(decision):
     decision.setdefault("signing", "required")
+    signed_platforms = []
+    for row in decision["matrix"]["include"]:
+        row["signing"] = package_signing(decision, row["platform"])
+        if row["signing"] == "required":
+            signed_platforms.append(row["platform"])
+        prefix = ("UNSIGNED-MANUAL-INSTALL-" if decision["preparation_scope"] == MIXED_PREVIEW_SCOPE
+                  else "UNSIGNED-DEVELOPMENT-") if row["signing"] == "off" else ""
+        row["upload_artifact"] = prefix + row["artifact"]
     Path("release-bundle-plans").mkdir(exist_ok=True)
     Path("release-bundle-plans/decision.json").write_text(json.dumps(decision, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
         for key in ("commit_sha", "product_id", "version", "tag", "channel", "matrix", "preparation_scope",
-                    "controller_sha", "signing", "already_published"):
+                    "controller_sha", "already_published"):
             value = decision.get(key, "")
             output.write(f"{key}={json.dumps(value, separators=(',', ':')) if isinstance(value, dict) else value}\n")
+        output.write(f"signed_platforms={json.dumps(signed_platforms)}\n")
 
 
 def resolve(tag, preparation_scope):
@@ -240,6 +260,28 @@ def check_copper_macos(decision):
         raise ValueError("automatic Copper releases require the catalog Apple Silicon target")
 
 
+def check_mixed_preview(decision):
+    rows = decision["matrix"]["include"]
+    if (decision["product_id"] != "rust" or decision["channel"] != "preview"
+            or decision.get("publish_release_type") != "prerelease" or decision["prerelease"] is not True):
+        raise ValueError("unsigned Windows and Linux downloads require a Copper prerelease")
+    if len(rows) != len(MIXED_PREVIEW_TARGETS) or {(row["platform"], row["target"]) for row in rows} != MIXED_PREVIEW_TARGETS:
+        raise ValueError("unsigned downloads require the Apple Silicon macOS, Windows x86_64, and Linux x86_64 catalog targets")
+
+
+def package_signing(decision, platform):
+    if decision["preparation_scope"] == MIXED_PREVIEW_SCOPE and platform != "macos":
+        return "off"
+    return decision.get("signing", "required")
+
+
+def unsigned_download_name(filename, platform):
+    extension = PACKAGE_EXTENSIONS[platform]
+    if not filename.endswith(extension):
+        raise ValueError("unsigned package filename has the wrong platform extension")
+    return filename.removesuffix(extension) + "-unsigned-manual-install" + extension
+
+
 def dispatch_commit():
     commit = os.environ.get("GITHUB_SHA", "")
     if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
@@ -275,17 +317,25 @@ def report_published(name, decision, release):
     return True
 
 
-def plan_copper_release(tag, release_type):
+def plan_copper_release(tag, release_type, include_unsigned_downloads=False):
     commit = dispatch_commit()
+    if include_unsigned_downloads and release_type != "prerelease":
+        raise ValueError("unsigned Windows and Linux downloads require a Copper prerelease")
+    catalog_scope = "full" if include_unsigned_downloads else "macos-only"
     decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag,
-                                  "--preparation-scope", "macos-only", "--plan-only"))
-    check_copper_macos(decision)
+                                  "--preparation-scope", catalog_scope, "--plan-only"))
     check_release_type(decision, release_type)
+    decision["publish_release_type"] = release_type
+    if include_unsigned_downloads:
+        decision["preparation_scope"] = MIXED_PREVIEW_SCOPE
+        check_mixed_preview(decision)
+    else:
+        check_copper_macos(decision)
     name = repository()
     reference = tag_reference(name, tag)
     if reference and peel_tag(name, reference["object"]) != commit:
         raise ValueError("tag already points to a different commit; rerun the original workflow or choose a new tag")
-    decision.update(commit_sha=commit, controller_sha=commit, repository=name, publish_release_type=release_type,
+    decision.update(commit_sha=commit, controller_sha=commit, repository=name,
                     tag_object_sha=reference["object"]["sha"] if reference else commit,
                     create_tag=reference is None)
     release = existing_release(name, tag)
@@ -321,7 +371,7 @@ def bundle_plans():
         catalog_arguments = ["--catalog-commit", decision["commit_sha"]] if decision["tag"] else []
         plan = json.loads(command("target/debug/xtask", "bundle", "--product", decision["product_id"],
                                   "--platform", row["platform"], "--target", row["target"], "--channel", decision["channel"],
-                                  "--signing", decision.get("signing", "required"), "--dry-run", *catalog_arguments, env=environment))
+                                  "--signing", package_signing(decision, row["platform"]), "--dry-run", *catalog_arguments, env=environment))
         plan["commit_sha"] = decision["commit_sha"]
         plan["preparation_scope"] = decision["preparation_scope"]
         Path("release-bundle-plans", row["plan_file"]).write_text(json.dumps(plan, indent=2) + "\n")
@@ -335,11 +385,14 @@ def checksum(path):
 def package_inventory(decision, directory):
     expected = set()
     records = []
+    unsigned_downloads = {}
     for row in decision["matrix"]["include"]:
+        platform = row["platform"]
+        signing = package_signing(decision, platform)
         plan = json.loads(Path("release-bundle-plans", row["plan_file"]).read_text())
         for key, value in {"product_id": decision["product_id"], "commit_sha": decision["commit_sha"],
                            "channel": decision["channel"], "version": decision["version"], "update_namespace": decision["update_namespace"],
-                           "platform": row["platform"], "target": row["target"], "signing": "required",
+                           "platform": platform, "target": row["target"], "signing": signing,
                            "preparation_scope": decision["preparation_scope"]}.items():
             if plan.get(key) != value:
                 raise ValueError(f"bundle plan {key} does not match approved release")
@@ -350,14 +403,21 @@ def package_inventory(decision, directory):
         receipt_name = f"verification-{row['artifact']}.json"
         expected.add(receipt_name)
         receipt = json.loads((directory / receipt_name).read_text())
-        for key, value in dict(identity(decision), platform=row["platform"], artifact_name=filename, signing="required").items():
+        for key, value in dict(identity(decision), platform=platform, artifact_name=filename, signing=signing).items():
             if receipt.get(key) != value:
                 raise ValueError(f"verification evidence {key} does not match approved release")
-        if not receipt.get("signing_identity"):
+        if signing == "required" and not receipt.get("signing_identity"):
             raise ValueError("verified signing identity is missing")
         if receipt.get("sha256") != checksum(directory / filename):
             raise ValueError("verified artifact hash changed")
-        if row["platform"] == "macos":
+        if signing == "off":
+            if (decision["preparation_scope"] != MIXED_PREVIEW_SCOPE or platform == "macos"
+                    or receipt.get("smoke_passed") is not True or "signing_identity" in receipt):
+                raise ValueError("unsigned package requires a successful manual-download smoke receipt")
+            public_name = unsigned_download_name(filename, platform)
+            unsigned_downloads[filename] = public_name
+            receipt["release_asset_name"] = public_name
+        if platform == "macos":
             verification = receipt.get("macos_verification", {})
             for kind in ("application", "dmg"):
                 code = verification.get(kind, {})
@@ -366,13 +426,17 @@ def package_inventory(decision, directory):
                     raise ValueError("macOS notarization, ticket, timestamp or Gatekeeper evidence missing")
             if not verification["application"].get("nested_code") or not verification["application"].get("entitlements"):
                 raise ValueError("macOS nested code or entitlement evidence missing")
-        if row["platform"] == "linux":
+        if platform == "linux" and signing == "required":
             expected.update((filename + ".asc", filename + ".pub"))
             command("python3", "script/sign-linux-archive", "--verify-only", str(directory / filename))
         records.append(receipt)
     actual = {path.name for path in directory.iterdir() if path.is_file()}
     if actual != expected or any(path.is_dir() or path.is_symlink() for path in directory.iterdir()):
         raise ValueError("downloaded files do not exactly match selected product/platform inventory")
+    for filename, public_name in unsigned_downloads.items():
+        (directory / filename).rename(directory / public_name)
+        expected.remove(filename)
+        expected.add(public_name)
     return {name: checksum(directory / name) for name in sorted(expected)}, records
 
 
@@ -391,7 +455,7 @@ def download_packages():
     destination = Path("release-artifacts")
     destination.mkdir(exist_ok=False)
     for row in decision["matrix"]["include"]:
-        command("gh", "run", "download", os.environ["GITHUB_RUN_ID"], "--repo", repository(), "--name", row["artifact"], "--dir", str(destination))
+        command("gh", "run", "download", os.environ["GITHUB_RUN_ID"], "--repo", repository(), "--name", row["upload_artifact"], "--dir", str(destination))
 
 
 def semver_key(value):
@@ -432,6 +496,8 @@ def verified_release(release, product, version, scope):
     if not ownership:
         return False
     decision = json.loads(ownership[1])
+    if scope == MIXED_PREVIEW_SCOPE and (product["id"] != "rust" or release["prerelease"] is not True):
+        return False
     if (decision.get("product_id") != product["id"] or decision.get("version") != version
             or decision.get("tag") != release["tag_name"]
             or decision.get("update_namespace") != product["update_namespace"]
@@ -442,17 +508,19 @@ def verified_release(release, product, version, scope):
             or ready_marker(decision) not in body):
         return False
     targets = [target for target in product.get("targets", [])
-               if scope == "full" or target.startswith("macos-")]
+               if scope in ("full", MIXED_PREVIEW_SCOPE) or target.startswith("macos-")]
     if not targets:
         return False
     required = set(verification_asset_names(product["id"], version))
     for target in targets:
         system, architecture = target.split("-", 1)
-        extension = {"macos": "dmg", "linux": "tar.gz", "windows": "exe"}[system]
+        extension = PACKAGE_EXTENSIONS[system].removeprefix(".")
         package = product["artifact_name"].format(product=product["id"], version=version,
                                                   platform=system, arch=architecture, extension=extension)
-        required.update((package, f"verification-{product['id']}-{target}.json"))
-        if system == "linux":
+        manual_download = scope == MIXED_PREVIEW_SCOPE and system != "macos"
+        required.update((unsigned_download_name(package, system) if manual_download else package,
+                         f"verification-{product['id']}-{target}.json"))
+        if system == "linux" and not manual_download:
             required.update((package + ".asc", package + ".pub"))
     assets = release.get("assets", [])
     names = {asset["name"] for asset in assets
@@ -471,7 +539,7 @@ def latest_release(releases, product, channel, platform=None):
             continue
         try:
             scope = published_scope(release)
-            if scope not in ("full", "macos-only") or (scope == "macos-only" and platform != "macos"):
+            if scope not in ("full", "macos-only", MIXED_PREVIEW_SCOPE) or (scope != "full" and platform != "macos"):
                 continue
             version = tag[len(prefix):]
             key = semver_key(version)
@@ -535,9 +603,15 @@ def checked_decision():
     release_type = os.environ.get("EXPECTED_RELEASE_TYPE", "")
     if decision.get("publish_release_type", "") != release_type:
         raise ValueError("downloaded decision differs from the requested release type")
+    include_unsigned_downloads = os.environ.get("EXPECTED_UNSIGNED_DOWNLOADS") == "true"
+    if include_unsigned_downloads != (decision["preparation_scope"] == MIXED_PREVIEW_SCOPE):
+        raise ValueError("downloaded decision differs from the requested unsigned downloads")
     if release_type:
-        check_copper_macos(decision)
         check_release_type(decision, release_type)
+        if include_unsigned_downloads:
+            check_mixed_preview(decision)
+        else:
+            check_copper_macos(decision)
         if decision["commit_sha"] != dispatch_commit():
             raise ValueError("downloaded decision differs from the dispatch commit")
     if os.environ.get("GITHUB_EVENT_NAME") == "push" and os.environ.get("GITHUB_REF_TYPE") == "tag":
@@ -565,9 +639,12 @@ def draft():
     (directory / checksum_name).write_text("".join(f"{digest}  {filename}\n" for filename, digest in sorted(hashes.items())))
     hashes[checksum_name] = checksum(directory / checksum_name)
     run_url = f"https://github.com/{name}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+    mixed_preview = decision["preparation_scope"] == MIXED_PREVIEW_SCOPE
+    verification = ("All packages passed platform smoke verification. The macOS package passed signing and notarization verification. "
+                    if mixed_preview else "Packages passed required signing and platform smoke verification. ")
     body = (f"{marker(decision)}\n\n{notes}\n\n### Verification\n\n"
             f"Product: `{decision['product_id']}` · Version: `{decision['version']}` · Channel: `{decision['channel']}`\n\n"
-            f"Commit: `{decision['commit_sha']}`\n\nPackages passed required signing and platform smoke verification. "
+            f"Commit: `{decision['commit_sha']}`\n\n{verification}"
             f"See `{manifest_name}` and `{checksum_name}`.\n\nPreparation: {run_url}\n\n"
             + "\n".join(f"Required CI: {run['html_url']}" for run in evidence) + "\n")
     if not publish:
@@ -602,6 +679,8 @@ def draft():
     placeholder = marker(decision) + "\n\nPreparation is incomplete. Do not publish."
     if release.get("body") != placeholder:
         body = release["body"]
+    if mixed_preview and UNSIGNED_DOWNLOAD_NOTE not in body:
+        body += "\n\n" + UNSIGNED_DOWNLOAD_NOTE
     if ready_marker(decision) not in body:
         body += "\n\n" + ready_marker(decision)
     update = {"name": f"{decision['display_name']} {decision['version']}{label}",
@@ -662,7 +741,7 @@ def latest(product_id, channel, platform):
         raise ValueError("no published release for this product/channel")
     assets = release["assets"]
     if platform:
-        suffix = {"macos": ".dmg", "windows": ".exe", "linux": ".tar.gz"}[platform]
+        suffix = PACKAGE_EXTENSIONS[platform]
         assets = [asset for asset in assets if asset["name"].endswith(suffix)]
     print(json.dumps({"product_id": product_id, "update_namespace": product["update_namespace"],
                       "channel": channel, "version": release["tag_name"][len(product["release_tag_prefix"]):],
@@ -687,6 +766,7 @@ def main():
     copper_parser = commands.add_parser("plan-copper-release")
     copper_parser.add_argument("--tag", required=True)
     copper_parser.add_argument("--release-type", choices=("prerelease", "stable"), required=True)
+    copper_parser.add_argument("--include-unsigned-downloads", action="store_true")
     for name in ("bundle-plans", "download-packages", "draft", "resolve-tag-push", "create-copper-tag"):
         commands.add_parser(name)
     arguments = parser.parse_args()
@@ -704,7 +784,7 @@ def main():
         elif arguments.operation == "resolve-tag-push":
             resolve_tag_push()
         elif arguments.operation == "plan-copper-release":
-            plan_copper_release(arguments.tag, arguments.release_type)
+            plan_copper_release(arguments.tag, arguments.release_type, arguments.include_unsigned_downloads)
         elif arguments.operation == "create-copper-tag":
             create_copper_tag()
         elif arguments.operation == "draft":

@@ -1,10 +1,12 @@
 # Product releases
 
 Use **Actions → Release Copper** to publish a stable release or prerelease for
-**Apple Silicon macOS**. The workflow creates the tag, builds and signs the
-package, verifies it, and publishes it on GitHub. A standalone tag push still
-prepares a draft for manual publication. Main pushes run CI and release-policy
-contracts. Website refresh remains paused, including manual website dispatches.
+**Apple Silicon macOS**. A prerelease can also include unsigned Windows x86_64
+and Linux x86_64 downloads for manual installation. The workflow creates the
+tag, builds and verifies the selected packages, and publishes them on GitHub.
+A standalone tag push still prepares a draft for manual publication. Main
+pushes run CI and release-policy contracts. Website refresh remains paused,
+including manual website dispatches.
 
 ## Eligibility and version selection
 
@@ -75,12 +77,22 @@ no preparation and never changes a published release.
    `main`.
 3. Enter a Copper tag and choose its release type. Use a tag such as
    `copper-v0.1.2-rc.1` for **prerelease** or `copper-v0.1.2` for **stable**.
-4. Click **Run workflow**. The workflow tags the dispatch commit and publishes
-   after the signed package and uploaded assets pass verification. Open the run
-   summary for the release link. Stable releases are marked **Latest**.
+4. For a prerelease, optionally select **Include unsigned Windows and Linux
+   downloads**. The checkbox defaults to off. Stable releases require signed
+   packages and reject this option.
+5. Click **Run workflow**. The workflow tags the dispatch commit and publishes
+   after every selected package passes platform smoke checks and every uploaded
+   asset matches its verified SHA-256 checksum. The macOS DMG also passes
+   signing and notarization checks. Open the run summary for the release link.
+   Stable releases are marked **Latest**.
+
+The optional Windows installer and Linux archive have
+`-unsigned-manual-install` in their filenames. Download them from GitHub
+Releases for manual installation. They stay out of automatic update feeds, and
+the signed macOS DMG remains eligible for macOS preview updates.
 
 If a run fails after creating the tag, rerun the original workflow to keep its
-commit. Rerun failed jobs after an upload failure to reuse the signed packages.
+commit. Rerun failed jobs after an upload failure to reuse the verified packages.
 If the tag already has a matching verified published release, the workflow
 returns its link.
 
@@ -184,9 +196,10 @@ conditional lock against concurrent human publication; do not publish mid-run.
 
 Drafts never enter updater selection. Even after publication, Copper requires
 the final verification marker and complete, digest-bearing package/evidence set.
-Unsigned CI artifacts and interrupted drafts are ineligible. macOS-only releases
-are eligible only for `--platform macos`; generic, Windows and Linux feeds still
-require full-platform releases. Stable and preview remain separate:
+Unsigned CI artifacts, unsigned manual downloads, and interrupted drafts are
+ineligible. Releases with only a signed macOS package are eligible only for
+`--platform macos`. Generic, Windows and Linux feeds require full-platform
+signed releases. Stable and preview use separate feeds:
 
 ```sh
 python3 script/product_release.py latest --product rust --channel preview --platform macos

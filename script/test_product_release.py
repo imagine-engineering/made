@@ -275,7 +275,7 @@ class TagPushAndDraft(unittest.TestCase):
             if method == "PATCH":
                 if payload.get("draft") is False:
                     self.assertIn(release.ready_marker(self.decision), payload["body"])
-                    self.assertEqual(len(self.live["assets"]), 4)
+                    self.assertEqual(len(self.live["assets"]), 2 + 2 * len(self.decision["matrix"]["include"]))
                     self.live["published_at"] = "date"
                 self.live.update(payload)
             return self.live.copy()
@@ -410,11 +410,107 @@ class TagPushAndDraft(unittest.TestCase):
         self.enterContext(patch.object(release, "command", side_effect=lambda command, *args:
                                        DECISION["commit_sha"] if command == "git" else json.dumps(self.decision)))
 
+    def prepare_mixed_prerelease(self):
+        self.dispatch()
+        self.enterContext(patch.dict(os.environ, EXPECTED_UNSIGNED_DOWNLOADS="true",
+                                     EXPECTED_SCOPE=release.MIXED_PREVIEW_SCOPE,
+                                     GITHUB_OUTPUT=str(self.root / "outputs")))
+        for platform, target, extension in (("linux", "x86_64-unknown-linux-gnu", "tar.gz"),
+                                            ("windows", "x86_64-pc-windows-msvc", "exe")):
+            artifact = f"rust-{platform}-x86_64"
+            self.decision["matrix"]["include"].append({
+                "platform": platform, "target": target, "artifact": artifact, "plan_file": f"{artifact}.json",
+                "artifact_name": f"rust-{self.decision['version']}-{platform}-x86_64.{extension}",
+            })
+        release.plan_copper_release(self.decision["tag"], "prerelease", include_unsigned_downloads=True)
+        self.decision = release.load_decision()
+        self.prepare_files()
+        for row in self.decision["matrix"]["include"]:
+            if row["platform"] == "macos":
+                continue
+            plan = dict(release.identity(self.decision), platform=row["platform"], target=row["target"],
+                        artifact_name=row["artifact_name"], signing="off")
+            Path("release-bundle-plans", row["plan_file"]).write_text(json.dumps(plan))
+            package = Path("release-artifacts", row["artifact_name"])
+            package.write_bytes(row["platform"].encode())
+            receipt = dict(plan, sha256=release.checksum(package), smoke_passed=True)
+            Path("release-artifacts", f"verification-{row['artifact']}.json").write_text(json.dumps(receipt))
+
+    def test_mixed_prerelease_checks_all_downloads_and_only_feeds_macos(self):
+        self.prepare_mixed_prerelease()
+        self.assertIn('signed_platforms=["macos"]', (self.root / "outputs").read_text())
+        rows = {row["platform"]: row for row in self.decision["matrix"]["include"]}
+        self.assertEqual(rows["macos"]["signing"], "required")
+        for platform in ("windows", "linux"):
+            self.assertEqual(rows[platform]["signing"], "off")
+            self.assertTrue(rows[platform]["upload_artifact"].startswith("UNSIGNED-MANUAL-INSTALL-"))
+        release.draft()
+        self.assertFalse(self.live["draft"])
+        self.assertTrue(self.live["prerelease"])
+        self.assertIn("unsigned, manual install", self.live["body"])
+        assets = {asset["name"] for asset in self.live["assets"]}
+        self.assertIn(rows["macos"]["artifact_name"], assets)
+        self.assertIn(f"rust-{self.decision['version']}-windows-x86_64-unsigned-manual-install.exe", assets)
+        self.assertIn(f"rust-{self.decision['version']}-linux-x86_64-unsigned-manual-install.tar.gz", assets)
+        self.assertNotIn(rows["windows"]["artifact_name"], assets)
+        self.assertNotIn(rows["linux"]["artifact_name"], assets)
+        product = next(product for product in release.catalog_products() if product["id"] == "rust")
+        for platform in (None, "windows", "linux"):
+            self.assertIsNone(release.latest_release([self.live], product, "preview", platform))
+        self.assertEqual(release.latest_release([self.live], product, "preview", "macos"), self.live)
+        self.assertIsNone(release.latest_release([self.live], product, "stable", "macos"))
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            release.latest("rust", "preview", "macos")
+        self.assertEqual([asset["name"] for asset in json.loads(output.getvalue())["assets"]],
+                         [rows["macos"]["artifact_name"]])
+        changes = self.changes.copy()
+        release.plan_copper_release(self.decision["tag"], "prerelease", include_unsigned_downloads=True)
+        self.assertEqual(self.changes, changes)
+        self.assertIn("already_published=true", (self.root / "outputs").read_text())
+
+    def test_mixed_prerelease_requires_every_build_smoke_receipt_and_digest(self):
+        self.prepare_mixed_prerelease()
+        release_directory = Path("release-artifacts")
+        receipt_path = release_directory / "verification-rust-windows-x86_64.json"
+        receipt_text = receipt_path.read_text()
+        receipt_path.unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.draft()
+        receipt_path.write_text(json.dumps(dict(json.loads(receipt_text), smoke_passed=False)))
+        with self.assertRaisesRegex(ValueError, "successful manual-download smoke"):
+            release.draft()
+        receipt_path.write_text(receipt_text)
+        package_path = release_directory / f"rust-{self.decision['version']}-linux-x86_64.tar.gz"
+        package_path.write_bytes(b"tampered")
+        with self.assertRaisesRegex(ValueError, "hash changed"):
+            release.draft()
+        package_path.write_bytes(b"linux")
+        self.assertEqual(self.changes, [])
+
+        def corrupt_uploaded_digest(name, live, path):
+            self.store_asset(name, live, path)
+            if path.name.endswith("-unsigned-manual-install.tar.gz"):
+                self.live["assets"][-1]["digest"] = "sha256:" + "0" * 64
+
+        self.upload.side_effect = corrupt_uploaded_digest
+        with self.assertRaisesRegex(ValueError, "asset conflicts"):
+            release.draft()
+        self.assertTrue(self.live["draft"])
+        self.assertTrue(all(payload.get("draft", True) for _, _, payload in self.changes))
+
+    def test_unsigned_downloads_are_rejected_for_stable(self):
+        self.dispatch("stable")
+        with self.assertRaisesRegex(ValueError, "require a Copper prerelease"):
+            release.plan_copper_release(self.decision["tag"], "stable", include_unsigned_downloads=True)
+        self.assertEqual(self.changes, [])
+
     def test_dispatch_creates_tag_only_after_validation_and_reuses_same_commit(self):
         self.dispatch()
         self.tag_sha = None
         os.environ["GITHUB_OUTPUT"] = str(self.root / "outputs")
         release.plan_copper_release(self.decision["tag"], "prerelease")
+        self.assertIn('signed_platforms=["macos"]', (self.root / "outputs").read_text())
+        self.assertEqual(len(release.load_decision()["matrix"]["include"]), 1)
         self.assertEqual(self.changes, [])
         self.assertIsNone(self.tag_sha)
         release.create_copper_tag()
