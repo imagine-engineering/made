@@ -338,12 +338,16 @@ impl HeadlessProject {
                 let transport =
                     host.coverage_transport_for(peer, message.original_sender_id, cx)?;
                 transport.validate_session(&message.payload.session_token)?;
-                let active = transport
-                    .active
-                    .as_mut()
-                    .filter(|active| active.operation_id == operation_id)
-                    .ok_or(CoverageFailure::Stale)?;
-                drop(active.cancellation.take());
+                match transport.active.as_mut() {
+                    Some(active) if active.operation_id == operation_id => {
+                        drop(active.cancellation.take());
+                    }
+                    None if operation_id > transport.last_operation => {
+                        // A cancelled run may still be queued for dispatch.
+                        transport.last_operation = operation_id;
+                    }
+                    _ => return Err(CoverageFailure::Stale),
+                }
                 Ok(CoverageOutcome::Cancelled(true))
             })
         };

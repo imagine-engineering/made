@@ -20184,6 +20184,11 @@ async fn rust_tools_headless_runtime_cargo_configuration_invalidation(cx: &mut T
 #[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
 #[gpui::test]
 async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut TestAppContext) {
+    use project::{
+        cargo_workspace::{CargoTargetKind, CargoWorkspaceKey},
+        cargo_workspace_store::CargoCoverageSelection,
+        trusted_worktrees::{PathTrust, TrustedWorktrees},
+    };
     use proto::rust_coverage_task_response::Outcome;
     use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
 
@@ -20323,7 +20328,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     };
     require_failure(
         transport
-            .request(run(1, "fixture-bin"))
+            .request(run(101, "fixture-bin"))
             .await
             .expect("typed restricted reply"),
         proto::RustCoverageTaskFailure::Restricted as i32,
@@ -20359,11 +20364,64 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         "fixture target is missing from the producing host catalog: {:?}",
         catalog.failures,
     );
+    let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+    cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-coverage-experimental",
+            true,
+            cx,
+        );
+        TrustedWorktrees::try_get_global(cx)
+            .expect("client trust owner")
+            .update(cx, |trust, cx| {
+                trust.trust(
+                    &worktrees,
+                    std::iter::once(PathTrust::Worktree(worktree_id)).collect(),
+                    cx,
+                );
+            });
+    });
+    let provider = project.read_with(cx, |project, _| {
+        project.rust_coverage_provider_store().clone()
+    });
+    let selection = |target_name: &str| CargoCoverageSelection {
+        workspace: CargoWorkspaceKey {
+            root: project::ProjectPath {
+                worktree_id,
+                path: rel_path("").into_arc(),
+            },
+        },
+        package_manifest: project::ProjectPath {
+            worktree_id,
+            path: rel_path("Cargo.toml").into_arc(),
+        },
+        target_kind: CargoTargetKind::Binary,
+        target_name: target_name.into(),
+    };
+    exercise_native_cargo_panel_coverage(&project, cx).await;
+    let (_, capture) = provider
+        .update(cx, |provider, cx| {
+            provider.start_native_cargo_coverage(selection("held"), cx)
+        })
+        .expect("start a cancellable host workload through the coverage provider");
+    assert!(
+        provider
+            .update(cx, |provider, cx| {
+                provider.start_native_cargo_coverage(selection("fixture-bin"), cx)
+            })
+            .is_err(),
+        "a second client action must preserve the running operation"
+    );
+    let marker = fixture.path().join("target/started");
+    let child = wait_for_coverage_workload(&marker, cx).await;
+    drop(capture);
+    assert_coverage_workload_stopped(child, cx).await;
+    std::fs::remove_file(&marker).expect("retire the provider workload marker");
     require_failure(
         transport
             .request(proto::RunRustCoverageTask {
                 session_token: vec![0; 16],
-                ..run(1, "fixture-bin")
+                ..run(101, "fixture-bin")
             })
             .await
             .expect("foreign session reply"),
@@ -20371,14 +20429,14 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     );
     require_failure(
         transport
-            .request(run(1, "--output-path"))
+            .request(run(101, "--output-path"))
             .await
             .expect("unknown target reply"),
         proto::RustCoverageTaskFailure::HostFailed as i32,
     );
     require_failure(
         transport
-            .request(run(1, "fixture-bin"))
+            .request(run(101, "fixture-bin"))
             .await
             .expect("replayed operation reply"),
         proto::RustCoverageTaskFailure::Stale as i32,
@@ -20424,13 +20482,12 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     };
     let first = require_coverage(
         transport
-            .request(run(2, "fixture-bin"))
+            .request(run(102, "fixture-bin"))
             .await
             .expect("selected host coverage"),
-        2,
+        102,
     );
-    let pending = cx.background_spawn(transport.request(run(3, "held")));
-    let marker = fixture.path().join("target/started");
+    let pending = cx.background_spawn(transport.request(run(103, "held")));
     let child = wait_for_coverage_workload(&marker, cx).await;
     let cancel = |operation_id| proto::CancelRustCoverageTask {
         project_id: proto::REMOTE_SERVER_PROJECT_ID,
@@ -20439,14 +20496,14 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     };
     require_failure(
         transport
-            .request(cancel(2))
+            .request(cancel(102))
             .await
             .expect("foreign operation cancellation reply"),
         proto::RustCoverageTaskFailure::Stale as i32,
     );
     assert_eq!(
         transport
-            .request(cancel(3))
+            .request(cancel(103))
             .await
             .expect("matching cancellation")
             .outcome,
@@ -20459,14 +20516,29 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     assert_coverage_workload_stopped(child, cx).await;
     let recovered = require_coverage(
         transport
-            .request(run(4, "fixture-bin"))
+            .request(run(104, "fixture-bin"))
             .await
             .expect("fresh host recovery"),
-        4,
+        104,
     );
     assert!(recovered > first);
+    assert_eq!(
+        transport
+            .request(cancel(105))
+            .await
+            .expect("reserve an early cancellation")
+            .outcome,
+        Some(Outcome::Cancelled(true)),
+    );
+    require_failure(
+        transport
+            .request(run(105, "held"))
+            .await
+            .expect("cancelled queued run reply"),
+        proto::RustCoverageTaskFailure::Stale as i32,
+    );
     std::fs::remove_file(&marker).expect("retire the cancelled workload marker");
-    let interrupted = cx.background_spawn(transport.request(run(5, "held")));
+    let interrupted = cx.background_spawn(transport.request(run(106, "held")));
     let interrupted_child = wait_for_coverage_workload(&marker, cx).await;
     let identity_path = std::fs::read_dir(host_data.path().join("server_state"))
         .expect("read host state directory")
@@ -20535,7 +20607,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     assert_coverage_workload_stopped(interrupted_child, cx).await;
     require_failure(
         transport
-            .request(run(5, "fixture-bin"))
+            .request(run(106, "fixture-bin"))
             .await
             .expect("retired session reply"),
         proto::RustCoverageTaskFailure::Stale as i32,
@@ -20552,6 +20624,240 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     );
     assert!(reconnected > recovered);
     connection.kill().await.expect("stop owned host");
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+async fn exercise_native_cargo_panel_coverage(project: &Entity<Project>, cx: &mut TestAppContext) {
+    use language_tools::language_tool_tree::{
+        ExpandAll, SelectFirst, SelectFirstChild, SelectNext,
+    };
+    use project::source_coverage::SourceCoverageStatus;
+    use std::time::Duration;
+
+    cx.update(|cx| {
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+        editor::init(cx);
+        cargo_ui::init(cx);
+    });
+    let (workspace, visual) = cx
+        .add_window_view(|window, cx| workspace::Workspace::test_new(project.clone(), window, cx));
+    let async_window = visual.update(|window, cx| window.to_async(cx));
+    let panel = cargo_ui::CargoPanel::load(workspace.downgrade(), async_window)
+        .await
+        .expect("load selected Cargo action panel");
+    workspace.update_in(visual, |workspace, window, cx| {
+        window.activate_a11y_for_test();
+        workspace.add_panel(panel, window, cx);
+        workspace.toggle_panel_focus::<cargo_ui::CargoPanel>(window, cx);
+    });
+    let mut visible = false;
+    for _ in 0..200 {
+        visual.dispatch_action(ExpandAll);
+        visible = visual.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window
+                .debug_a11y_tree_json()
+                .is_some_and(|tree| tree.contains("Cargo target bin fixture-bin"))
+        });
+        if visible {
+            break;
+        }
+        visual
+            .background_executor
+            .timer(Duration::from_millis(25))
+            .await;
+    }
+    assert!(
+        visible,
+        "the producing Cargo catalog must render the executable row"
+    );
+    visual.dispatch_action(SelectFirst);
+    visual.dispatch_action(SelectFirstChild);
+    visual.dispatch_action(SelectFirstChild);
+    visual.dispatch_action(SelectFirstChild);
+    let mut selected = None;
+    for _ in 0..8 {
+        selected = visual.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree = window
+                .debug_a11y_tree_json()
+                .expect("active Cargo accessibility tree");
+            let tree: serde_json::Value =
+                serde_json::from_str(&tree).expect("JSON accessibility tree");
+            tree["nodes"]
+                .as_object()
+                .expect("Cargo accessibility nodes")
+                .values()
+                .find(|node| node["aria"]["selected"] == true)
+                .and_then(|node| node["aria"]["label"].as_str().map(str::to_owned))
+        });
+        if selected.as_deref() == Some("Cargo target bin fixture-bin") {
+            break;
+        }
+        visual.dispatch_action(SelectNext);
+    }
+    assert_eq!(
+        selected.as_deref(),
+        Some("Cargo target bin fixture-bin"),
+        "keyboard navigation must select the executable"
+    );
+    let coverage = project.read_with(visual, |project, _| project.source_coverage_store().clone());
+    let mut events = visual.events(&coverage);
+    visual.dispatch_action(cargo_ui::RunWithCoverageSelected);
+    let deadline = visual.background_executor.timer(Duration::from_secs(10));
+    let check_result = async {
+        loop {
+            let snapshot =
+                coverage.read_with(visual, |store, _| store.selected_snapshot().cloned());
+            if let Some(snapshot) = snapshot
+                && snapshot.status != SourceCoverageStatus::Loading
+            {
+                assert_eq!(
+                    snapshot.status,
+                    SourceCoverageStatus::Current,
+                    "{:?}",
+                    snapshot.diagnostic
+                );
+                assert!(
+                    snapshot
+                        .files
+                        .iter()
+                        .any(|file| file.path.path.as_unix_str() == "src/bin/fixture.rs"
+                            && file.covered_lines == 3)
+                );
+                break;
+            }
+            events
+                .next()
+                .await
+                .expect("watch coverage publication from normal Cargo action");
+        }
+    };
+    match futures::future::select(Box::pin(check_result), Box::pin(deadline)).await {
+        futures::future::Either::Left(_) => {}
+        futures::future::Either::Right(_) => {
+            panic!("the normal Cargo action did not publish coverage")
+        }
+    }
+    visual.deactivate_window();
+    workspace.update_in(visual, |_, window, _| window.remove_window());
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+#[gpui::test]
+async fn rust_tools_headless_runtime_coverage_task_capture_legacy_host(cx: &mut TestAppContext) {
+    use project::{
+        cargo_workspace::{CargoTargetKind, CargoWorkspaceKey},
+        cargo_workspace_store::CargoCoverageSelection,
+        source_coverage::SourceCoverageUnsupportedHost,
+    };
+    use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
+
+    let binary = std::env::var_os("RUST_TOOLS_LEGACY_COVERAGE_HOST_BINARY")
+        .map(PathBuf::from)
+        .expect("independently built host from before the Coverage Task messages");
+    let fixture = tempfile::tempdir_in("/tmp").expect("create isolated Rust project");
+    std::fs::create_dir(fixture.path().join("src")).expect("create source directory");
+    std::fs::write(
+        fixture.path().join("Cargo.toml"),
+        "[package]\nname = \"coverage-legacy\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("write manifest");
+    std::fs::write(
+        fixture.path().join("src/main.rs"),
+        "fn main() { std::fs::write(\"started\", \"run\").expect(\"mark launch\"); }\n",
+    )
+    .expect("write executable source");
+    let host_data = tempfile::tempdir_in("/tmp").expect("create isolated host data");
+    std::fs::create_dir(host_data.path().join("config")).expect("host config directory");
+    std::fs::write(
+        host_data.path().join("config/settings.json"),
+        r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
+    )
+    .expect("explicit legacy host opt-in");
+    cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    init_logger();
+    cx.executor().allow_parking();
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host_data.path().join("server_state"))
+            .with_test_data_directory(host_data.path().to_path_buf())
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel, cancel) = futures::channel::oneshot::channel();
+    let client = cx
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::Workspace(-i64::from(std::process::id())),
+                connection.clone(),
+                cancel,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to the legacy host")
+        .expect("remote client");
+    let project = build_project(client.clone(), cx);
+    cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-coverage-experimental",
+            true,
+            cx,
+        )
+    });
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(fixture.path(), true, cx)
+        })
+        .await
+        .expect("register host worktree");
+    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+    let transport = client.read_with(cx, |client, _| client.proto_client());
+    transport
+        .request(proto::Ping {})
+        .await
+        .expect("working native transport");
+    let provider = project.read_with(cx, |project, _| {
+        project.rust_coverage_provider_store().clone()
+    });
+    let (_, capture) = provider
+        .update(cx, |provider, cx| {
+            provider.start_native_cargo_coverage(
+                CargoCoverageSelection {
+                    workspace: CargoWorkspaceKey {
+                        root: project::ProjectPath {
+                            worktree_id,
+                            path: rel_path("").into_arc(),
+                        },
+                    },
+                    package_manifest: project::ProjectPath {
+                        worktree_id,
+                        path: rel_path("Cargo.toml").into_arc(),
+                    },
+                    target_kind: CargoTargetKind::Binary,
+                    target_name: "coverage-legacy".into(),
+                },
+                cx,
+            )
+        })
+        .expect("admit remote Coverage Task probe");
+    let error = capture
+        .await
+        .expect_err("legacy host does not implement the Coverage Task probe");
+    assert!(error.is::<SourceCoverageUnsupportedHost>(), "{error:#}");
+    assert!(
+        !fixture.path().join("started").exists(),
+        "must not fall back to a local or unscoped Task"
+    );
+    assert!(
+        !fixture.path().join("target").exists(),
+        "must not build a local or unscoped Task"
+    );
+    transport
+        .request(proto::Ping {})
+        .await
+        .expect("legacy connection survives the unsupported request");
+    connection.kill().await.expect("stop owned legacy host");
 }
 
 #[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]

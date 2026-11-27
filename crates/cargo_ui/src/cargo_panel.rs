@@ -1635,6 +1635,25 @@ impl CargoPanel {
             );
             return;
         }
+        if action == CargoAction::RunWithCoverage && self.project.read(cx).remote_client().is_some()
+        {
+            let Some(workspace) = self.workspace.upgrade() else {
+                self.set_action_notice("The workspace is no longer available", cx);
+                return;
+            };
+            let result = workspace.update(cx, |workspace, cx| {
+                crate::cargo_actions::run_native_cargo_coverage(
+                    workspace,
+                    selection,
+                    preset.as_ref(),
+                    cx,
+                )
+            });
+            if let Err(error) = result {
+                self.set_action_notice(format!("Run with Coverage could not start: {error}"), cx);
+            }
+            return;
+        }
         let clean_confirmed = if action == CargoAction::Clean {
             if self.pending_clean_confirmation.as_ref() != Some(&selection) {
                 self.pending_clean_confirmation = Some(selection);

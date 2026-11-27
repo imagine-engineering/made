@@ -101,7 +101,7 @@ pub struct CargoMetadataRequest {
     pub environment: Option<HashMap<String, String>>,
 }
 
-#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+#[cfg(feature = "rust-coverage")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CargoCoverageSelection {
     pub workspace: crate::cargo_workspace::CargoWorkspaceKey,

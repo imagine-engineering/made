@@ -142,6 +142,12 @@ pub struct RustCoverageRunToken {
     request_version: Option<SourceCoverageRequestVersion>,
 }
 
+impl RustCoverageRunToken {
+    pub fn generation(self) -> u64 {
+        self.generation
+    }
+}
+
 pub struct RustCoverageArtifactProvider {
     project_generation: u64,
     generation: u64,
@@ -587,6 +593,8 @@ pub struct RustCoverageProviderStore {
     source_coverage_store: Entity<SourceCoverageStore>,
     provider: RustCoverageArtifactProvider,
     experimental_subscription: Option<gpui::Subscription>,
+    #[cfg(feature = "cargo-workspace")]
+    native_cargo_capture: std::rc::Weak<()>,
     #[cfg(any(test, feature = "test-support"))]
     remote_reply_gate: Option<(
         futures::channel::oneshot::Sender<()>,
@@ -628,6 +636,8 @@ impl RustCoverageProviderStore {
             source_coverage_store,
             provider: RustCoverageArtifactProvider::new(project_generation),
             experimental_subscription: None,
+            #[cfg(feature = "cargo-workspace")]
+            native_cargo_capture: Default::default(),
             #[cfg(any(test, feature = "test-support"))]
             remote_reply_gate: None,
             #[cfg(any(test, feature = "test-support"))]
@@ -650,6 +660,8 @@ impl RustCoverageProviderStore {
             source_coverage_store,
             provider: RustCoverageArtifactProvider::new(project_generation),
             experimental_subscription: None,
+            #[cfg(feature = "cargo-workspace")]
+            native_cargo_capture: Default::default(),
             #[cfg(any(test, feature = "test-support"))]
             remote_reply_gate: None,
             #[cfg(any(test, feature = "test-support"))]
@@ -1350,6 +1362,167 @@ impl RustCoverageProviderStore {
         self.provider.cancel(token);
     }
 
+    #[cfg(feature = "cargo-workspace")]
+    pub fn start_native_cargo_coverage(
+        &mut self,
+        selection: crate::cargo_workspace_store::CargoCoverageSelection,
+        cx: &mut Context<Self>,
+    ) -> Result<(
+        RustCoverageRunToken,
+        Task<Result<Option<SourceCoverageSnapshot>>>,
+    )> {
+        use crate::cargo_workspace::CargoTargetKind;
+        use gpui::FutureExt as _;
+        use proto::rust_coverage_task_response::Outcome;
+        use std::time::Duration;
+
+        let RustCoverageProviderStoreMode::Remote { project_id, client } = &self.mode else {
+            return Err(SourceCoverageUnsupportedHost.into());
+        };
+        if *project_id != proto::REMOTE_SERVER_PROJECT_ID || client.is_via_collab() {
+            return Err(SourceCoverageUnsupportedHost.into());
+        }
+        anyhow::ensure!(
+            self.native_cargo_capture.upgrade().is_none(),
+            "A Coverage Task is already running in this project"
+        );
+        let target_kind = match selection.target_kind {
+            CargoTargetKind::Binary => proto::RustCoverageTargetKind::Binary,
+            CargoTargetKind::Example => proto::RustCoverageTargetKind::Example,
+            _ => bail!("Coverage requires a binary or example target"),
+        };
+        let client = client.clone();
+        let token = self.begin_run(cx)?;
+        let request_version = token
+            .request_version
+            .context("Coverage admission is missing")?;
+        let provider_id = SourceCoverageProviderId(RUST_COVERAGE_PROVIDER_ID.into());
+        let coverage = self.source_coverage_store.clone();
+        if let Err(error) = coverage.update(cx, |store, cx| {
+            store.mark_provider_status(provider_id.clone(), SourceCoverageStatus::Loading, None, cx)
+        }) {
+            self.cancel_run(token);
+            return Err(error);
+        }
+        let active = Rc::new(());
+        self.native_cargo_capture = Rc::downgrade(&active);
+        let request = proto::RunRustCoverageTask {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            operation_id: token.generation,
+            workspace_root: Some(selection.workspace.root.to_proto()),
+            package_manifest: Some(selection.package_manifest.to_proto()),
+            target_kind: target_kind as i32,
+            target_name: selection.target_name,
+            session_token: Vec::new(),
+        };
+        let capture = cx.spawn(async move |this, cx| {
+            let _active = active;
+            let executor = cx.background_executor().clone();
+            let timeout = Duration::from_secs(3);
+            let session = client
+                .request(proto::GetRustCoverageTaskSession {
+                    project_id: request.project_id,
+                })
+                .with_timeout(timeout, &executor)
+                .await;
+            let session = match session {
+                Ok(response) => response.map_err(map_remote_coverage_error)?,
+                Err(_) => {
+                    // The previous wire schema drops unknown envelopes. Only
+                    // classify a silent probe as legacy if the host still answers.
+                    client
+                        .request(proto::Ping {})
+                        .with_timeout(timeout, &executor)
+                        .await??;
+                    return Err(SourceCoverageUnsupportedHost.into());
+                }
+            };
+            anyhow::ensure!(
+                session.operation_id == 0 && session.native_receiver == 0,
+                "Coverage host returned an invalid session response"
+            );
+            let session_token = match session.outcome {
+                Some(Outcome::SessionToken(token)) if token.len() == 16 => token,
+                Some(Outcome::Failure(failure)) => {
+                    return Err(native_coverage_task_failure(failure));
+                }
+                _ => bail!("Coverage host did not issue a session"),
+            };
+            let validate = |store: &Self, cx: &App| {
+                anyhow::ensure!(
+                    store.is_run_current(token, cx)
+                        && !TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx),
+                    crate::source_coverage::SourceCoverageSourceChanged
+                );
+                anyhow::Ok(())
+            };
+            this.read_with(cx, validate)??;
+            let cancel = util::defer({
+                let client = client.clone();
+                let executor = executor.clone();
+                let cancellation = proto::CancelRustCoverageTask {
+                    project_id: request.project_id,
+                    operation_id: request.operation_id,
+                    session_token: session_token.clone(),
+                };
+                move || {
+                    let task_executor = executor.clone();
+                    executor
+                        .spawn(async move {
+                            match client
+                                .request(cancellation)
+                                .with_timeout(timeout, &task_executor)
+                                .await
+                            {
+                                Ok(Ok(_)) => {}
+                                Ok(Err(error)) => log::debug!(
+                                    "Coverage cancellation could not reach its host: {error:#}"
+                                ),
+                                Err(error) => {
+                                    log::debug!("Coverage cancellation response expired: {error:#}")
+                                }
+                            }
+                        })
+                        .detach();
+                }
+            });
+            let response = client
+                .request(proto::RunRustCoverageTask {
+                    session_token,
+                    ..request
+                })
+                .await
+                .map_err(map_remote_coverage_error)?;
+            anyhow::ensure!(
+                response.operation_id == token.generation && response.native_receiver == 0,
+                "Coverage host returned a response for a different Task"
+            );
+            let outcome = response
+                .outcome
+                .context("Coverage host did not report a Task outcome")?;
+            cancel.abort();
+            match outcome {
+                Outcome::Coverage(response) => {
+                    let snapshot = snapshot_from_proto(response)?;
+                    anyhow::ensure!(
+                        snapshot.provider_id == provider_id,
+                        "Coverage host returned a different provider"
+                    );
+                    this.read_with(cx, validate)??;
+                    coverage
+                        .update(cx, |store, cx| {
+                            store.replace_remote(snapshot, request_version, cx)
+                        })
+                        .map(Some)
+                }
+                Outcome::Cancelled(true) => Ok(None),
+                Outcome::Failure(failure) => Err(native_coverage_task_failure(failure)),
+                _ => bail!("Coverage host returned an invalid Task outcome"),
+            }
+        });
+        Ok((token, capture))
+    }
+
     pub fn interpret_artifact_for_run(
         &mut self,
         token: RustCoverageRunToken,
@@ -1891,6 +2064,31 @@ fn map_remote_coverage_error(error: anyhow::Error) -> anyhow::Error {
         SourceCoverageUnsupportedHost.into()
     } else {
         anyhow::anyhow!("The Rust coverage host rejected the request: {error}")
+    }
+}
+
+#[cfg(feature = "cargo-workspace")]
+fn native_coverage_task_failure(failure: i32) -> anyhow::Error {
+    use proto::RustCoverageTaskFailure;
+
+    match RustCoverageTaskFailure::from_i32(failure) {
+        Some(RustCoverageTaskFailure::Unsupported) => SourceCoverageUnsupportedHost.into(),
+        Some(RustCoverageTaskFailure::Stale) => {
+            crate::source_coverage::SourceCoverageSourceChanged.into()
+        }
+        Some(RustCoverageTaskFailure::Restricted) => {
+            anyhow::anyhow!("Trust the producing worktree before running coverage")
+        }
+        Some(RustCoverageTaskFailure::InvalidSelection) => {
+            anyhow::anyhow!("Select a runnable target in the current host Cargo workspace")
+        }
+        Some(RustCoverageTaskFailure::Busy) => {
+            anyhow::anyhow!("A Coverage Task is already running on the producing host")
+        }
+        Some(RustCoverageTaskFailure::HostFailed) => {
+            anyhow::anyhow!("The producing host could not run Cargo LLVM coverage")
+        }
+        _ => anyhow::anyhow!("Coverage host reported an unknown Task failure"),
     }
 }
 

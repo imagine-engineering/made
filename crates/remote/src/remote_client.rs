@@ -4073,6 +4073,9 @@ impl ChannelClient {
         !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::SetJvmProjectConsumers(_))
+                | Some(proto::envelope::Payload::GetRustCoverageTaskSession(_))
+                | Some(proto::envelope::Payload::RunRustCoverageTask(_))
+                | Some(proto::envelope::Payload::CancelRustCoverageTask(_))
         ) && !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::GitRestoreIndexFiles(_))

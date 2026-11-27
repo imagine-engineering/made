@@ -4,7 +4,7 @@ use feature_flags::{
 };
 
 use anyhow::{Result, anyhow, bail};
-use gpui::{Context, Window, actions};
+use gpui::{Context, TaskExt as _, Window, actions};
 use project::{
     ProjectPath, TaskSourceKind, WorktreeId,
     rust_coverage_provider::{MAX_RUST_COVERAGE_ARTIFACT_BYTES, RUST_COVERAGE_PROVIDER_ID},
@@ -1029,6 +1029,191 @@ impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
 struct CargoNativeProfileNotification;
 
 struct CargoCoverageNotification;
+
+struct NativeCargoCoverageNotification;
+
+pub(crate) fn run_native_cargo_coverage(
+    workspace: &mut Workspace,
+    selection: CargoActionSelection,
+    preset: Option<&CargoPreset>,
+    cx: &mut Context<Workspace>,
+) -> Result<()> {
+    use project::{
+        cargo_workspace::{CargoTargetKind, CargoWorkspaceKey},
+        cargo_workspace_store::CargoCoverageSelection,
+        source_coverage::SourceCoverageUnsupportedHost,
+        trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent},
+    };
+    use std::{cell::Cell, rc::Rc};
+
+    anyhow::ensure!(
+        preset.is_none(),
+        "The producing host cannot resolve named coverage presets. Select Default to run this target with coverage."
+    );
+    let (target_kind, target_name) = match selection.target {
+        Some(CargoTargetSelector::Binary(name)) => (CargoTargetKind::Binary, name),
+        Some(CargoTargetSelector::Example(name)) => (CargoTargetKind::Example, name),
+        _ => bail!("Coverage requires a binary or example target"),
+    };
+    let root = selection
+        .workspace_manifest
+        .path
+        .parent()
+        .ok_or_else(|| anyhow!("The selected Cargo workspace has no project directory"))?;
+    let selection = CargoCoverageSelection {
+        workspace: CargoWorkspaceKey {
+            root: ProjectPath {
+                worktree_id: selection.workspace_manifest.worktree_id,
+                path: root.into_arc(),
+            },
+        },
+        package_manifest: selection
+            .package_manifest
+            .ok_or_else(|| anyhow!("The selected target has no Cargo package manifest"))?,
+        target_kind,
+        target_name,
+    };
+    let project = workspace.project().clone();
+    let (provider, coverage, worktrees) = project.read_with(cx, |project, cx| {
+        anyhow::ensure!(
+            project.remote_client().is_some()
+                && !project.is_read_only(cx)
+                && !project.is_disconnected(cx),
+            "Coverage requires a writable, connected project host"
+        );
+        let worktrees = project.worktree_store();
+        anyhow::ensure!(
+            !TrustedWorktrees::has_restricted_worktrees(&worktrees, cx),
+            "Trust the producing worktree before running coverage"
+        );
+        anyhow::Ok((
+            project.rust_coverage_provider_store().clone(),
+            project.source_coverage_store().clone(),
+            worktrees.downgrade(),
+        ))
+    })?;
+    let (token, capture) = provider.update(cx, |provider, cx| {
+        provider.start_native_cargo_coverage(selection, cx)
+    })?;
+    let (cancel, cancellation) = futures::channel::oneshot::channel();
+    let cancel = Rc::new(Cell::new(Some(cancel)));
+    let cancel = move |status| {
+        if let Some(cancel) = cancel.take()
+            && cancel.send(status).is_err()
+        {
+            log::debug!("Coverage Task was already finished");
+        }
+    };
+    let project_lifecycle = cx.subscribe(&project, {
+        let cancel = cancel.clone();
+        move |_, _, event, _| match event {
+            project::Event::Closed
+            | project::Event::DisconnectedFromHost
+            | project::Event::DisconnectedFromRemote { .. } => {
+                cancel(SourceCoverageStatus::Disconnected)
+            }
+            project::Event::WorktreeRemoved(_)
+            | project::Event::WorktreePathsChanged { .. }
+            | project::Event::RemoteIdChanged(_)
+            | project::Event::Reshared
+            | project::Event::HostReshared
+            | project::Event::UpstreamSessionChanged
+            | project::Event::Rejoined => cancel(SourceCoverageStatus::Stale),
+            _ => {}
+        }
+    });
+    let trust = TrustedWorktrees::try_get_global(cx).map(|trust| {
+        let cancel = cancel.clone();
+        cx.subscribe(&trust, move |_, _, event, _| {
+            if let TrustedWorktreesEvent::Restricted(store, _) = event
+                && *store == worktrees
+            {
+                cancel(SourceCoverageStatus::Restricted);
+            }
+        })
+    });
+    let feature = cx.observe_global::<feature_flags::FeatureFlagStore>({
+        let cancel = cancel.clone();
+        move |_, cx| {
+            if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>() {
+                cancel(SourceCoverageStatus::Stale);
+            }
+        }
+    });
+    let toast = NotificationId::composite::<NativeCargoCoverageNotification>(
+        gpui::ElementId::Integer(token.generation()),
+    );
+    workspace.show_toast(
+        Toast::new(toast.clone(), "Running coverage on the project host")
+            .on_click("Cancel Coverage", move |_, _| {
+                cancel(SourceCoverageStatus::Cancelled)
+            }),
+        cx,
+    );
+    cx.spawn(async move |workspace, cx| {
+        let _subscriptions = (project_lifecycle, trust, feature);
+        let (status, message) = match futures::future::select(capture, cancellation).await {
+            futures::future::Either::Left((Ok(Some(snapshot)), _)) => (
+                None,
+                format!("Coverage loaded for {} file(s)", snapshot.files.len()),
+            ),
+            futures::future::Either::Left((Ok(None), _)) => (
+                Some(SourceCoverageStatus::Cancelled),
+                "Coverage Task cancelled".into(),
+            ),
+            futures::future::Either::Left((Err(error), _)) => {
+                if error.is::<SourceCoverageUnsupportedHost>() {
+                    (
+                        Some(SourceCoverageStatus::Mismatch),
+                        "This project host does not support Coverage Tasks".into(),
+                    )
+                } else if error.is::<SourceCoverageSourceChanged>() {
+                    (
+                        Some(SourceCoverageStatus::Stale),
+                        "Coverage Task expired. Run coverage again.".into(),
+                    )
+                } else {
+                    (
+                        Some(SourceCoverageStatus::Error),
+                        format!("Run with Coverage failed: {error}"),
+                    )
+                }
+            }
+            futures::future::Either::Right((status, capture)) => {
+                drop(capture);
+                let status = status.unwrap_or(SourceCoverageStatus::Cancelled);
+                let message = match status {
+                    SourceCoverageStatus::Cancelled => "Coverage Task cancelled",
+                    SourceCoverageStatus::Disconnected => "Coverage host disconnected",
+                    SourceCoverageStatus::Restricted => "Coverage worktree trust was revoked",
+                    _ => "Coverage Task expired. Run coverage again.",
+                };
+                (Some(status), message.into())
+            }
+        };
+        cx.update(|cx| {
+            if let Some(status) = status
+                && provider.read(cx).owns_run(token)
+            {
+                coverage.update(cx, |store, cx| {
+                    store.mark_provider_status(
+                        SourceCoverageProviderId(RUST_COVERAGE_PROVIDER_ID.into()),
+                        status,
+                        Some(message.clone()),
+                        cx,
+                    )
+                })?;
+                provider.update(cx, |provider, _| provider.cancel_run(token));
+            }
+            anyhow::Ok(())
+        })?;
+        workspace.update(cx, |workspace, cx| {
+            workspace.show_toast(Toast::new(toast, message).autohide(), cx);
+        })
+    })
+    .detach_and_log_err(cx);
+    Ok(())
+}
 
 fn cancel_coverage_run(
     provider: &gpui::Entity<project::rust_coverage_provider::RustCoverageProviderStore>,
