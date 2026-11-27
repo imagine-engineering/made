@@ -3944,7 +3944,7 @@ fn selected_java_test_debug_template_appends_the_build_tool_debug_flag() {
 
 #[cfg(test)]
 #[test]
-fn java_discovery_marks_cases_debuggable_and_remote_snapshots_do_not() {
+fn java_discovery_reports_selected_debug_unavailable_on_older_hosts() {
     let report = JunitReport {
         scope_path: ProjectPath {
             worktree_id: WorktreeId::from_usize(1),
@@ -3970,20 +3970,20 @@ fn java_discovery_marks_cases_debuggable_and_remote_snapshots_do_not() {
             .map(|node| node.debug_capability.clone())
             .collect::<Vec<_>>()
     };
-    for capability in case_capability(&discovery.snapshot) {
-        assert_eq!(capability, Some(StructuredDebugCapability::Supported));
-    }
+    assert_eq!(
+        case_capability(&discovery.snapshot),
+        vec![Some(StructuredDebugCapability::Supported)]
+    );
 
     let mut remote_snapshot = discovery.snapshot;
     apply_java_test_remote_debug_capability(&mut remote_snapshot);
-    for capability in case_capability(&remote_snapshot) {
-        assert_eq!(
-            capability,
-            Some(StructuredDebugCapability::Unsupported(
-                "Remote Java test Debug needs the host action protocol".to_string()
-            )),
-        );
-    }
+    assert_eq!(
+        case_capability(&remote_snapshot),
+        vec![Some(StructuredDebugCapability::Unsupported(
+            "The project host does not support selected Java test Debug; reconnect to a compatible host"
+                .to_string()
+        ))]
+    );
     for node in &remote_snapshot.nodes {
         if node.kind != StructuredNodeKind::Case {
             assert_eq!(node.debug_capability, None);
