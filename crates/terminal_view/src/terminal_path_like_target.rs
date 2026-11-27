@@ -80,21 +80,18 @@ fn possible_hover_target(
 
 pub(super) fn open_path_like_target(
     workspace: &WeakEntity<Workspace>,
-    terminal_view: &mut TerminalView,
     path_like_target: &PathLikeTarget,
     window: &mut Window,
     cx: &mut Context<TerminalView>,
 ) {
     #[cfg(not(test))]
     {
-        possibly_open_target(workspace, terminal_view, path_like_target, window, cx)
-            .detach_and_log_err(cx)
+        possibly_open_target(workspace, path_like_target, window, cx).detach_and_log_err(cx)
     }
     #[cfg(test)]
     {
         possibly_open_target(
             workspace,
-            terminal_view,
             path_like_target,
             window,
             cx,
@@ -106,15 +103,11 @@ pub(super) fn open_path_like_target(
 
 fn possibly_open_target(
     workspace: &WeakEntity<Workspace>,
-    terminal_view: &mut TerminalView,
     path_like_target: &PathLikeTarget,
     window: &mut Window,
     cx: &mut Context<TerminalView>,
     #[cfg(test)] background_path_checks: BackgroundPathChecks,
 ) -> Task<Result<Option<OpenTarget>>> {
-    if terminal_view.hover.is_none() {
-        return Task::ready(Ok(None));
-    }
     let workspace = workspace.clone();
     let path_like_target = path_like_target.clone();
     cx.spawn_in(window, async move |terminal_view, cx| {
@@ -226,6 +219,19 @@ mod tests {
                     path_like_target: PathLikeTarget,
                     background_path_checks: BackgroundPathChecks|
                     -> (Option<HoverTarget>, Option<OpenTarget>) {
+            let open_target = terminal_view
+                .update_in(cx, |_, window, cx| {
+                    possibly_open_target(
+                        &workspace.downgrade(),
+                        &path_like_target,
+                        window,
+                        cx,
+                        background_path_checks,
+                    )
+                })
+                .await
+                .expect("Failed to possibly open target");
+
             let workspace_a = workspace.clone();
             terminal_view
                 .update(cx, |_, cx| {
@@ -241,20 +247,6 @@ mod tests {
 
             let hover_target =
                 terminal_view.read_with(cx, |terminal_view, _| terminal_view.hover.clone());
-
-            let open_target = terminal_view
-                .update_in(cx, |terminal_view, window, cx| {
-                    possibly_open_target(
-                        &workspace.downgrade(),
-                        terminal_view,
-                        &path_like_target,
-                        window,
-                        cx,
-                        background_path_checks,
-                    )
-                })
-                .await
-                .expect("Failed to possibly open target");
 
             (hover_target, open_target)
         }
@@ -465,6 +457,40 @@ mod tests {
             }
             $($tests);+
         } }
+    }
+
+    #[gpui::test]
+    async fn rust_panic_location_opens_without_hover(cx: &mut TestAppContext) {
+        let mut open_location = init_test(
+            cx,
+            [(
+                path!("/fixture"),
+                json!({"tests": {"integration.rs": "\n\n    assert!(false);\n"}}),
+            )],
+            [path!("/fixture")],
+        )
+        .await;
+        let location = path!("tests/integration.rs:3:5");
+        let (_, opened) = open_location(
+            HoveredWord {
+                word: location.into(),
+                word_match: Range::new(Point::new(0, 0), Point::new(0, 0)),
+                id: 0,
+            },
+            PathLikeTarget {
+                maybe_path: location.into(),
+                working_directory: Some(PathBuf::from(path!("/fixture"))),
+            },
+            BackgroundPathChecks::ProjectPathResolution,
+        )
+        .await;
+        let target = opened.expect("a direct click opens the panic source without a prior hover");
+        assert_eq!(
+            target.path().path,
+            Path::new(path!("/fixture/tests/integration.rs"))
+        );
+        assert_eq!(target.path().row, Some(3));
+        assert_eq!(target.path().column, Some(5));
     }
 
     #[gpui::test]
