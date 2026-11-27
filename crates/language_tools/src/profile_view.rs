@@ -2385,7 +2385,6 @@ impl Render for ProfileView {
                 gpui::canvas(
                     move |bounds, window, cx| {
                         if bounds.size.width != pane_width {
-                            let measure = measure.clone();
                             window.defer(cx, move |_, cx| {
                                 measure
                                     .update(cx, |this, cx| {
