@@ -776,60 +776,107 @@ async fn docker_gradle_ordered_operations_run_through_dependencies(cx: &mut Test
 #[gpui::test]
 #[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Gradle companion"]
 async fn docker_gradle_recovers_offline_import_after_java_restart(cx: &mut TestAppContext) {
-    verify_docker_gradle_offline_import_recovery(GradleImportProvider::Java, cx).await;
+    verify_docker_offline_import_recovery(OfflineImportFixture::JavaGradle, cx).await;
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 #[gpui::test]
 #[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Kotlin LSP"]
 async fn docker_gradle_recovers_offline_import_after_kotlin_restart(cx: &mut TestAppContext) {
-    verify_docker_gradle_offline_import_recovery(GradleImportProvider::Kotlin, cx).await;
+    verify_docker_offline_import_recovery(OfflineImportFixture::KotlinGradle, cx).await;
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-enum GradleImportProvider {
-    Java,
-    Kotlin,
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Docker host with the pinned Kotlin LSP"]
+async fn docker_maven_recovers_offline_import_after_kotlin_restart(cx: &mut TestAppContext) {
+    verify_docker_offline_import_recovery(OfflineImportFixture::KotlinMaven, cx).await;
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
-async fn verify_docker_gradle_offline_import_recovery(
-    provider: GradleImportProvider,
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OfflineImportFixture {
+    JavaGradle,
+    KotlinGradle,
+    KotlinMaven,
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn verify_docker_offline_import_recovery(
+    fixture: OfflineImportFixture,
     cx: &mut TestAppContext,
 ) {
-    use jvm_ui::ShowGradle;
+    use jvm_ui::{ShowGradle, ShowMaven};
+    use project::jvm_project::KotlinBuildSystem;
     use project::lsp_store::LspStoreEvent;
     use rpc::proto;
     use std::{cell::RefCell, path::Path, rc::Rc};
 
-    let (server, source_path, source_marker, guidance) = match provider {
-        GradleImportProvider::Java => (
+    let (server, source_path, source_marker, guidance) = match fixture {
+        OfflineImportFixture::JavaGradle => (
             "jdtls",
             "application/src/main/java/evidence/Main.java",
             "class Main",
             "Java Gradle import could not resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Java language server.",
         ),
-        GradleImportProvider::Kotlin => (
+        OfflineImportFixture::KotlinGradle => (
             "kotlin-lsp",
             "library/src/main/kotlin/evidence/Greeting.kt",
             "class Greeting",
             "Kotlin Gradle import cannot resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Kotlin language server.",
         ),
+        OfflineImportFixture::KotlinMaven => (
+            "kotlin-lsp",
+            "library/src/main/kotlin/evidence/Greeting.kt",
+            "class Greeting",
+            "Kotlin Maven import needs cached dependencies. Restore the project host’s Maven cache, then restart the Kotlin language server. Review Maven offline mode if downloads are allowed.",
+        ),
     };
-    let fixture = cached_jvm_fixture_path("GROOVY_GRADLE_ORDERED_DOCKER_ROOT");
-    let gradle_home = cached_jvm_fixture_path("GROOVY_GRADLE_RECOVERY_HOME");
-    assert_eq!(fixture.parent(), gradle_home.parent());
-    let caches = gradle_home.join("caches");
-    let restored = gradle_home.join("restorable-caches");
-    let failed = gradle_home.join("failed-caches");
-    let kotlin_plugin = "modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/2.0.21";
-    assert!(!caches.join(kotlin_plugin).exists());
-    assert!(restored.join(kotlin_plugin).is_dir());
-    assert!(!failed.exists());
+    let is_maven = fixture == OfflineImportFixture::KotlinMaven;
+    let (build_tool, build_name, fixture_dir, cache_home, root) = if is_maven {
+        (
+            JvmTestBuildTool::Maven,
+            "Maven",
+            cached_jvm_fixture_path("GROOVY_MAVEN_RECOVERY_ROOT"),
+            cached_jvm_fixture_path("GROOVY_MAVEN_RECOVERY_HOME"),
+            Path::new("/workspaces/maven"),
+        )
+    } else {
+        (
+            JvmTestBuildTool::Gradle,
+            "Gradle",
+            cached_jvm_fixture_path("GROOVY_GRADLE_ORDERED_DOCKER_ROOT"),
+            cached_jvm_fixture_path("GROOVY_GRADLE_RECOVERY_HOME"),
+            Path::new("/workspaces/gradle"),
+        )
+    };
+    assert_eq!(fixture_dir.parent(), cache_home.parent());
+    let (missing_entry, restorable, failed) = if is_maven {
+        (
+            cache_home.join("repository/org/apache/maven/plugins/maven-install-plugin/3.1.4"),
+            cache_home.join("restorable-plugin"),
+            None,
+        )
+    } else {
+        (
+            cache_home.join("caches"),
+            cache_home.join("restorable-caches"),
+            Some(cache_home.join("failed-caches")),
+        )
+    };
+    let missing_file = if is_maven {
+        Path::new("maven-install-plugin-3.1.4.jar")
+    } else {
+        Path::new("modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/2.0.21")
+    };
+    assert!(!missing_entry.join(missing_file).exists());
+    assert!(restorable.join(missing_file).exists());
+    if let Some(failed) = &failed {
+        assert!(!failed.exists());
+    }
 
-    let container = docker_test_fixture_container(JvmTestBuildTool::Gradle);
-    let (project, worktree_id) =
-        connect_ordered_jvm_task_fixture(Path::new("/workspaces/gradle"), &container, cx).await;
+    let container = docker_test_fixture_container(build_tool);
+    let (project, worktree_id) = connect_ordered_jvm_task_fixture(root, &container, cx).await;
     let store = project.read_with(cx, |project, _| project.lsp_store());
     let health = Rc::new(RefCell::new(Vec::new()));
     let _health_subscription = cx.update(|cx| {
@@ -855,7 +902,7 @@ async fn verify_docker_gradle_offline_import_recovery(
     let source = project::ProjectPath {
         worktree_id,
         path: util::rel_path::RelPath::from_unix_str(source_path)
-            .expect("Gradle fixture source path")
+            .expect("fixture source path")
             .into(),
     };
     let (buffer, _language_server) = project
@@ -863,10 +910,14 @@ async fn verify_docker_gradle_offline_import_recovery(
             project.open_buffer_with_lsp(source.clone(), cx)
         })
         .await
-        .expect("open source on the Gradle project host");
+        .expect("open source on the project host");
     let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
     cx.update(|window, cx| window.draw(cx).clear(cx));
-    cx.dispatch_action(ShowGradle);
+    if is_maven {
+        cx.dispatch_action(ShowMaven);
+    } else {
+        cx.dispatch_action(ShowGradle);
+    }
 
     let deadline = Instant::now() + Duration::from_secs(75);
     let failed_server = loop {
@@ -885,42 +936,48 @@ async fn verify_docker_gradle_offline_import_recovery(
             .timer(Duration::from_millis(100))
             .await;
     };
-    assert!(!caches.join(kotlin_plugin).exists());
+    assert!(!missing_entry.join(missing_file).exists());
     assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains(source_marker)));
-    panel.read_with(cx, |panel, _| {
-        let (_, rows, _) = panel.snapshot_for_test();
-        assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
-    });
-    let recovery_edit = "\n// Unsaved edit during Gradle cache recovery\n";
+    if !is_maven {
+        panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
+        });
+    }
+    let recovery_edit = "\n// Unsaved edit during import recovery\n";
     buffer.update(cx, |buffer, cx| {
         let end = buffer.len();
         buffer.edit([(end..end, recovery_edit)], None, cx);
     });
     eprintln!(
-        "Connected Gradle reported {server}'s sanitized offline plugin failure and let the source be edited"
+        "Connected {build_name} reported {server}'s sanitized offline import failure and let the source be edited"
     );
 
-    let stop = util::command::new_command("docker")
-        .args([
-            "exec",
-            &container,
-            "/qualification/gradle/bin/gradle",
-            "--offline",
-            "--gradle-user-home",
-            "/qualification/gradle-home",
-            "--stop",
-        ])
-        .output()
-        .await
-        .expect("stop the isolated cold-cache daemon");
-    assert!(
-        stop.status.success(),
-        "{}",
-        String::from_utf8_lossy(&stop.stderr)
-    );
-    std::fs::rename(caches, &failed).expect("retain the cold cache under its fixture");
-    std::fs::rename(restored, gradle_home.join("caches"))
-        .expect("restore the primed fixture cache");
+    if let Some(failed) = failed {
+        let stop = util::command::new_command("docker")
+            .args([
+                "exec",
+                &container,
+                "/qualification/gradle/bin/gradle",
+                "--offline",
+                "--gradle-user-home",
+                "/qualification/gradle-home",
+                "--stop",
+            ])
+            .output()
+            .await
+            .expect("stop the isolated cold-cache daemon");
+        assert!(
+            stop.status.success(),
+            "{}",
+            String::from_utf8_lossy(&stop.stderr)
+        );
+        std::fs::rename(&missing_entry, failed).expect("retain the cold cache under its fixture");
+    } else if missing_entry.exists() {
+        std::fs::rename(&missing_entry, cache_home.join("failed-plugin"))
+            .expect("retain Maven's failed-resolution markers under its fixture");
+    }
+    std::fs::rename(restorable, missing_entry).expect("restore the primed fixture cache");
 
     let editor = workspace
         .update_in(cx, |workspace, window, cx| {
@@ -936,8 +993,8 @@ async fn verify_docker_gradle_offline_import_recovery(
     let mut refresh_at = Instant::now() + Duration::from_secs(5);
     loop {
         cx.run_until_parked();
-        let snapshot = store.read_with(cx, |store, _| match provider {
-            GradleImportProvider::Java => {
+        let snapshot = store.read_with(cx, |store, _| match fixture {
+            OfflineImportFixture::JavaGradle => {
                 store
                     .jdtls_project_snapshot(worktree_id)
                     .map(|(snapshot, current)| {
@@ -949,22 +1006,26 @@ async fn verify_docker_gradle_offline_import_recovery(
                         (snapshot.server_id, current, imported)
                     })
             }
-            GradleImportProvider::Kotlin => {
-                store
-                    .kotlin_workspace_snapshot(worktree_id)
-                    .map(|(snapshot, current)| {
-                        let imported = snapshot.projects.iter().any(|module| {
-                            module.module_root.path.as_unix_str() == "library"
-                                && module.build_system
-                                    == project::jvm_project::KotlinBuildSystem::Gradle
-                        }) && health.borrow().iter().any(|(id, level, message)| {
-                            *id == snapshot.server_id
-                                && *level == proto::ServerHealth::Ok as i32
-                                && message == "Kotlin project imported"
-                        });
-                        (snapshot.server_id, current, imported)
-                    })
-            }
+            OfflineImportFixture::KotlinGradle | OfflineImportFixture::KotlinMaven => store
+                .kotlin_workspace_snapshot(worktree_id)
+                .map(|(snapshot, current)| {
+                    let (system, modules): (_, &[_]) = if is_maven {
+                        (KotlinBuildSystem::Maven, &["application", "library"])
+                    } else {
+                        (KotlinBuildSystem::Gradle, &["library"])
+                    };
+                    let imported = modules.iter().all(|expected| {
+                        snapshot.projects.iter().any(|module| {
+                            module.module_root.path.as_unix_str() == *expected
+                                && module.build_system == system
+                        })
+                    }) && health.borrow().iter().any(|(id, level, message)| {
+                        *id == snapshot.server_id
+                            && *level == proto::ServerHealth::Ok as i32
+                            && message == "Kotlin project imported"
+                    });
+                    (snapshot.server_id, current, imported)
+                }),
         });
         if snapshot.is_some_and(|(server, current, imported)| {
             server != failed_server && current && imported
@@ -973,14 +1034,11 @@ async fn verify_docker_gradle_offline_import_recovery(
         }
         assert!(
             Instant::now() < deadline,
-            "{server} restart did not recover the offline Gradle project: {snapshot:?}, health: {:?}",
+            "{server} restart did not recover the offline {build_name} project: {snapshot:?}, health: {:?}",
             health.borrow()
         );
-        if Instant::now() >= refresh_at {
-            store.update(cx, |store, cx| match provider {
-                GradleImportProvider::Java => store.refresh_jdtls_project(worktree_id, cx),
-                GradleImportProvider::Kotlin => store.refresh_kotlin_workspace(worktree_id, cx),
-            });
+        if fixture == OfflineImportFixture::JavaGradle && Instant::now() >= refresh_at {
+            store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             refresh_at = Instant::now() + Duration::from_secs(5);
         }
         cx.background_executor
@@ -992,13 +1050,18 @@ async fn verify_docker_gradle_offline_import_recovery(
         assert!(text.contains(source_marker));
         assert!(text.ends_with(recovery_edit));
     });
+    assert!(
+        !std::fs::read_to_string(fixture_dir.join(source_path))
+            .expect("fixture source on disk")
+            .contains(recovery_edit)
+    );
     assert!(store.read_with(cx, |store, _| {
         store
             .language_server_statuses()
             .all(|(server_id, _)| server_id != failed_server)
     }));
     eprintln!(
-        "Connected Gradle restored the imported module from the offline cache after restarting {server}"
+        "Connected {build_name} restored the imported module from the offline cache after restarting {server}"
     );
 }
 

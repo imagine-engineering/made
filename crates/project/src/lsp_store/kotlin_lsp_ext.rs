@@ -283,8 +283,8 @@ struct ImportHealthState {
     gradle_plugin_artifact_unavailable_seen: bool,
 }
 
-const MAVEN_OFFLINE_CACHE_MESSAGE: &str =
-    "Kotlin Maven import needs cached dependencies; fetch them or disable Maven offline mode";
+pub(super) const IMPORT_SUCCEEDED_MESSAGE: &str = "Kotlin project imported";
+const MAVEN_OFFLINE_CACHE_MESSAGE: &str = "Kotlin Maven import needs cached dependencies. Restore the project host’s Maven cache, then restart the Kotlin language server. Review Maven offline mode if downloads are allowed.";
 const MAVEN_FETCH_MESSAGE: &str = "Kotlin Maven import could not fetch dependencies; check network or repository access, or populate the cache";
 const GRADLE_PLUGIN_MESSAGE: &str = "Kotlin Gradle import cannot resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Kotlin language server.";
 
@@ -357,7 +357,7 @@ fn import_state_health(
             .iter()
             .all(|folder| folder.status == "SUCCESS")
     {
-        return Some((proto::ServerHealth::Ok, "Kotlin project imported"));
+        return Some((proto::ServerHealth::Ok, IMPORT_SUCCEEDED_MESSAGE));
     }
     None
 }

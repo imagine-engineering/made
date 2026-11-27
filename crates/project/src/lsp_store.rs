@@ -14149,6 +14149,18 @@ impl LspStore {
                 non_lsp @ proto::update_language_server::Variant::StatusUpdate(_)
                 | non_lsp @ proto::update_language_server::Variant::RegisteredForBuffer(_)
                 | non_lsp @ proto::update_language_server::Variant::MetadataUpdated(_) => {
+                    #[cfg(feature = "jvm-tools")]
+                    if let proto::update_language_server::Variant::StatusUpdate(status) = &non_lsp
+                        && status.status
+                            == Some(proto::status_update::Status::Health(
+                                proto::ServerHealth::Ok as i32,
+                            ))
+                        && status.message.as_deref()
+                            == Some(kotlin_lsp_ext::IMPORT_SUCCEEDED_MESSAGE)
+                        && envelope.payload.server_name.as_deref() == Some("kotlin-lsp")
+                    {
+                        lsp_store.refresh_imported_remote_kotlin_workspace(language_server_id, cx);
+                    }
                     cx.emit(LspStoreEvent::LanguageServerUpdate {
                         language_server_id,
                         name: envelope
@@ -16046,6 +16058,31 @@ impl LspStore {
             ) {
                 self.schedule_kotlin_workspace_refresh(server_id, worktree_id, cx);
             }
+        }
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn refresh_imported_remote_kotlin_workspace(
+        &mut self,
+        server_id: LanguageServerId,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.as_remote().is_some_and(|remote| {
+            remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
+                && remote
+                    .upstream_client
+                    .as_ref()
+                    .is_some_and(|client| !client.is_via_collab())
+        }) {
+            return;
+        }
+        if let Some(worktree_id) = self
+            .language_server_statuses
+            .get(&server_id)
+            .filter(|status| status.name == LanguageServerName::new_static("kotlin-lsp"))
+            .and_then(|status| status.worktree)
+        {
+            self.schedule_remote_kotlin_workspace_refresh(server_id, worktree_id, cx);
         }
     }
 

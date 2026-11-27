@@ -185,6 +185,11 @@ cache on the project host or turn off Maven offline mode, then reimport. The
 shared language-server status shows a bounded recovery message and keeps the
 provider log available for the specific artifact.
 
+If the preferred Kotlin server reports an incomplete offline Maven cache,
+restore the Maven cache on the project host. With a Kotlin file open, run
+{#action editor::RestartLanguageServer} from the command palette to retry the import.
+For SSH, WSL, and container projects, restore the cache inside that host.
+
 If JDTLS reports that Gradle cannot resolve a build plugin, check the plugin
 repositories and cache on the project host, then reimport. The shared status
 shows a bounded action while the full provider log remains available. This
