@@ -65,36 +65,33 @@ class Eligibility(unittest.TestCase):
             release.eligible_ci([run(run_attempt=1), run(run_attempt=2, conclusion="failure")], DECISION, "owner/repo", "run_tests.yml")
 
     def test_remote_annotated_tag_peels_to_exact_commit(self):
-        with patch.object(release, "api", side_effect=[{"object": {"type": "tag", "sha": "tag-object"}},
-                                                       {"object": {"type": "commit", "sha": DECISION["commit_sha"]}}]):
-            self.assertEqual(release.remote_commit("owner/repo", DECISION["tag"]), DECISION["commit_sha"])
-        with patch.object(release, "api", return_value={"object": {"type": "tree", "sha": "invalid"}}):
-            with self.assertRaises(ValueError):
-                release.remote_commit("owner/repo", DECISION["tag"])
-        with patch.object(release, "api", return_value=None):
-            with self.assertRaisesRegex(ValueError, "tag is missing"):
-                release.remote_commit("owner/repo", DECISION["tag"])
+        reference = {"type": "tag", "sha": "tag-object"}
+        with patch.object(release, "api", return_value={"object": {"type": "commit", "sha": DECISION["commit_sha"]}}):
+            self.assertEqual(release.peel_tag("owner/repo", reference), DECISION["commit_sha"])
+        with self.assertRaises(ValueError):
+            release.peel_tag("owner/repo", {"type": "tree", "sha": "invalid"})
+        with patch.object(release, "tag_reference", return_value=None):
+            with self.assertRaisesRegex(ValueError, "tag was removed"):
+                release.check_tag("owner/repo", DECISION)
 
     def test_copper_requires_tag_main_and_exact_ci_without_enablement(self):
         with patch.object(release, "repository", return_value="owner/repo"), \
                 patch.dict(os.environ, RELEASE_GATES="{}"), \
-                patch.object(release, "remote_commit", return_value=DECISION["commit_sha"]) as remote, \
+                patch.object(release, "check_tag") as check_tag, \
                 patch.object(release, "api", side_effect=[{"sha": "main"}, {"status": "ahead"}]), \
                 patch.object(release, "pages", return_value=[run()]), \
                 patch.object(release, "existing_release", return_value=None):
             self.assertEqual(release.guard(DECISION)[0], "owner/repo")
-            remote.assert_called_once()
-        with patch.object(release, "repository", return_value="owner/repo"), patch.dict(os.environ, RELEASE_GATES="{}"):
+            check_tag.assert_called_once()
+        with patch.dict(os.environ, RELEASE_GATES="{}"):
             with self.assertRaisesRegex(ValueError, "GROOVY_RELEASE_ENABLED"):
-                release.guard(dict(DECISION, product_id="jvm", release_gate_variable="GROOVY_RELEASE_ENABLED"))
-        with patch.object(release, "repository", return_value="owner/repo"), \
-                patch.dict(os.environ, RELEASE_GATES="{}"), \
-                patch.object(release, "remote_commit", return_value="b" * 40):
+                release.check_release_ci("owner/repo", dict(DECISION, product_id="jvm", release_gate_variable="GROOVY_RELEASE_ENABLED"))
+        with patch.object(release, "tag_reference", return_value={"object": {"type": "commit", "sha": "b" * 40}}):
             with self.assertRaisesRegex(ValueError, "tag changed"):
-                release.guard(DECISION)
+                release.check_tag("owner/repo", DECISION)
         with patch.object(release, "repository", return_value="owner/repo"), \
                 patch.dict(os.environ, RELEASE_GATES="{}"), \
-                patch.object(release, "remote_commit", return_value=DECISION["commit_sha"]), \
+                patch.object(release, "check_tag"), \
                 patch.object(release, "api", side_effect=[{"sha": "main"}, {"status": "diverged"}]):
             with self.assertRaisesRegex(ValueError, "main history"):
                 release.guard(DECISION)
@@ -217,6 +214,8 @@ class DraftSafety(unittest.TestCase):
 
 class TagPushAndDraft(unittest.TestCase):
     def setUp(self):
+        products = release.catalog_products()
+        self.enterContext(patch.object(release, "catalog_products", return_value=products))
         self.directory = self.enterContext(tempfile.TemporaryDirectory())
         self.root = Path(self.directory)
         self.addCleanup(os.chdir, Path.cwd())
@@ -246,6 +245,7 @@ class TagPushAndDraft(unittest.TestCase):
         self.runs = [run()]
         self.enterContext(patch.object(release, "pages", side_effect=self.page))
         self.tag_sha = DECISION["commit_sha"]
+        self.changes = []
         self.uploaded = []
         self.real_upload = release.upload_asset
         self.upload = self.enterContext(patch.object(release, "upload_asset", side_effect=self.store_asset))
@@ -257,6 +257,13 @@ class TagPushAndDraft(unittest.TestCase):
         return self.runs
 
     def github(self, path, method="GET", payload=None, **kwargs):
+        if method != "GET":
+            self.changes.append((path, method, payload))
+        if path.endswith("/git/refs") and method == "POST":
+            self.assertIsNone(self.tag_sha)
+            self.assertEqual(payload["ref"], f"refs/tags/{self.decision['tag']}")
+            self.tag_sha = payload["sha"]
+            return {"object": {"type": "commit", "sha": self.tag_sha}}
         if path.endswith("/releases") and method == "POST":
             self.assertTrue(payload["draft"])
             self.live = dict(payload, id=42, assets=[], published_at=None,
@@ -266,13 +273,16 @@ class TagPushAndDraft(unittest.TestCase):
             return self.live.copy() if self.live and not self.live["draft"] else None
         if path.endswith("/releases/42"):
             if method == "PATCH":
-                self.assertNotIn("draft", payload)
+                if payload.get("draft") is False:
+                    self.assertIn(release.ready_marker(self.decision), payload["body"])
+                    self.assertEqual(len(self.live["assets"]), 4)
+                    self.live["published_at"] = "date"
                 self.live.update(payload)
             return self.live.copy()
         if "/git/ref/tags/" in path:
             return {"object": {"type": "commit", "sha": self.tag_sha}} if self.tag_sha else None
         if path.endswith("/commits/main"):
-            return {"sha": self.tag_sha}
+            return {"sha": DECISION["commit_sha"]}
         if "/compare/" in path:
             return {"status": "identical"}
         self.fail(f"unexpected API request: {path}")
@@ -390,6 +400,83 @@ class TagPushAndDraft(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "decision differs"):
                     release.checked_decision()
 
+    def dispatch(self, release_type="prerelease"):
+        self.enterContext(patch.dict(os.environ, GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF="refs/heads/main",
+                                     EXPECTED_RELEASE_TYPE=release_type, GITHUB_STEP_SUMMARY=str(self.root / "summary")))
+        if release_type == "stable":
+            self.decision.update(tag="copper-v0.1.0", version="0.1.0", channel="stable", prerelease=False)
+            self.row["artifact_name"] = "rust-0.1.0-macos-aarch64.dmg"
+            os.environ["EXPECTED_TAG"] = self.decision["tag"]
+        self.enterContext(patch.object(release, "command", side_effect=lambda command, *args:
+                                       DECISION["commit_sha"] if command == "git" else json.dumps(self.decision)))
+
+    def test_dispatch_creates_tag_only_after_validation_and_reuses_same_commit(self):
+        self.dispatch()
+        self.tag_sha = None
+        os.environ["GITHUB_OUTPUT"] = str(self.root / "outputs")
+        release.plan_copper_release(self.decision["tag"], "prerelease")
+        self.assertEqual(self.changes, [])
+        self.assertIsNone(self.tag_sha)
+        release.create_copper_tag()
+        release.create_copper_tag()
+        self.assertEqual(self.tag_sha, self.decision["commit_sha"])
+        self.assertEqual(self.changes, [("repos/owner/repo/git/refs", "POST", {
+            "ref": f"refs/tags/{self.decision['tag']}", "sha": self.decision["commit_sha"]})])
+        self.tag_sha = "b" * 40
+        with self.assertRaisesRegex(ValueError, "different commit"):
+            release.plan_copper_release(self.decision["tag"], "prerelease")
+        with self.assertRaisesRegex(ValueError, "removed or moved"):
+            release.create_copper_tag()
+        self.assertEqual(len(self.changes), 1)
+
+    def test_dispatch_rejects_release_type_wrong_ref_and_unsuccessful_ci(self):
+        self.dispatch()
+        self.tag_sha = None
+        with self.assertRaisesRegex(ValueError, "tag version must match"):
+            release.plan_copper_release(self.decision["tag"], "stable")
+        with patch.dict(os.environ, GITHUB_REF="refs/heads/dev"), self.assertRaisesRegex(ValueError, "from main"):
+            release.plan_copper_release(self.decision["tag"], "prerelease")
+        self.runs = [run(conclusion="failure")]
+        with self.assertRaisesRegex(ValueError, "CI is not successful"):
+            release.plan_copper_release(self.decision["tag"], "prerelease")
+        self.assertEqual(self.changes, [])
+
+    def test_prerelease_dispatch_publishes_verified_assets_and_returns_existing_link(self):
+        self.assert_dispatch_publication("prerelease")
+
+    def test_stable_dispatch_marks_verified_release_latest(self):
+        self.assert_dispatch_publication("stable")
+
+    def assert_dispatch_publication(self, release_type):
+        self.dispatch(release_type)
+        self.decision.update(publish_release_type=release_type, tag_object_sha=self.tag_sha)
+        self.prepare_files()
+        release.draft()
+        prerelease = release_type == "prerelease"
+        self.assertEqual(self.live["prerelease"], prerelease)
+        self.assertEqual(self.live["make_latest"], "false" if prerelease else "true")
+        self.assertFalse(self.live["draft"])
+        self.assertIn(f"/releases/tag/{self.decision['tag']}", (self.root / "summary").read_text())
+        changes = self.changes.copy()
+        release.draft()
+        os.environ["GITHUB_OUTPUT"] = str(self.root / "outputs")
+        release.plan_copper_release(self.decision["tag"], release_type)
+        self.assertIn("already_published=true", (self.root / "outputs").read_text())
+        self.assertEqual(self.changes, changes)
+
+    def test_dispatch_failure_cannot_publish(self):
+        self.dispatch()
+        self.decision.update(publish_release_type="prerelease", tag_object_sha=self.tag_sha)
+        self.prepare_files()
+        with patch.dict(os.environ, EXPECTED_RELEASE_TYPE="stable"), self.assertRaisesRegex(ValueError, "requested release type"):
+            release.draft()
+        self.assertEqual(self.changes, [])
+        self.upload.side_effect = RuntimeError("interrupted asset upload")
+        with self.assertRaisesRegex(RuntimeError, "interrupted asset upload"):
+            release.draft()
+        self.assertTrue(self.live["draft"])
+        self.assertTrue(all(payload.get("draft", True) for _, _, payload in self.changes))
+
     def test_failed_signature_or_unsigned_artifacts_cannot_upload(self):
         self.prepare_files()
         receipt = json.loads(self.receipt_path.read_text())
@@ -495,7 +582,7 @@ class ProductIsolation(unittest.TestCase):
     def test_scope_is_bound_to_draft_ownership_and_cannot_expand_partial_matrix(self):
         partial = dict(DECISION, preparation_scope="macos-only", matrix={"include": [{"platform": "windows"}]})
         with self.assertRaisesRegex(ValueError, "only Copper macOS"):
-            release.guard(partial)
+            release.check_release_ci("owner/repo", partial)
         with self.assertRaisesRegex(ValueError, "different product, commit, version"):
             release.check_draft(draft(), partial)
 

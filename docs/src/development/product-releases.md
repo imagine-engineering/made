@@ -1,10 +1,10 @@
 # Product releases
 
-Copper uses **push tag → automatically prepare draft → review → publish**.
-Pushing a valid Copper tag prepares **Apple Silicon macOS only**. It never
-publishes. Stable and prerelease versions use the same process. Main pushes run
-CI and release-policy contracts; publication events do not build packages.
-Website refresh remains paused, including manual website dispatches.
+Use **Actions → Release Copper** to publish a stable release or prerelease for
+**Apple Silicon macOS**. The workflow creates the tag, builds and signs the
+package, verifies it, and publishes it on GitHub. A standalone tag push still
+prepares a draft for manual publication. Main pushes run CI and release-policy
+contracts. Website refresh remains paused, including manual website dispatches.
 
 ## Eligibility and version selection
 
@@ -70,6 +70,22 @@ no preparation and never changes a published release.
 
 ## Prepare and publish
 
+1. Wait for required CI to pass on the `main` commit you want to release.
+2. On GitHub, open **Actions → Release Copper → Run workflow** and select
+   `main`.
+3. Enter a Copper tag and choose its release type. Use a tag such as
+   `copper-v0.1.2-rc.1` for **prerelease** or `copper-v0.1.2` for **stable**.
+4. Click **Run workflow**. The workflow tags the dispatch commit and publishes
+   after the signed package and uploaded assets pass verification. Open the run
+   summary for the release link. Stable releases are marked **Latest**.
+
+If a run fails after creating the tag, rerun the original workflow to keep its
+commit. Rerun failed jobs after an upload failure to reuse the signed packages.
+If the tag already has a matching verified published release, the workflow
+returns its link.
+
+### Prepare a draft from a standalone tag
+
 These are operator commands, not implementation validation. Choose a reviewed
 main commit with successful required CI and a new version:
 
@@ -95,9 +111,8 @@ or adds packages.
 
 ## Manual qualification, recovery and platform selection
 
-One generated workflow owns all modes; there is no separate signing or
-publication workflow to dispatch. The former release, release-promotion and
-signing-check entry points remain retired. Archives remain unchanged.
+`release_prepare` also supports qualification and draft recovery. The
+**Release Copper** workflow calls the same build and verification pipeline.
 
 For non-publishing production qualification, leave `release_tag` empty, select
 an exact `version`, `preparation_scope=macos-only` or `full`, and set

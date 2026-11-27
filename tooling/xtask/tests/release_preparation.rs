@@ -258,7 +258,7 @@ fn generated_release_workflow_preserves_permission_and_trigger_boundaries() -> R
     for (name, job) in workflow["jobs"].as_object().context("jobs")? {
         assert_eq!(
             job["permissions"]["contents"],
-            if name == "upload_release" {
+            if matches!(name.as_str(), "upload_release" | "create_release_tag") {
                 "write"
             } else {
                 "read"
@@ -275,7 +275,7 @@ fn generated_release_workflow_preserves_permission_and_trigger_boundaries() -> R
 }
 
 #[test]
-fn only_the_release_workflow_has_release_write_permissions() -> Result<()> {
+fn only_release_jobs_have_release_write_permissions() -> Result<()> {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
     for entry in fs::read_dir(directory)? {
         let path = entry?.path();
@@ -295,7 +295,16 @@ fn only_the_release_workflow_has_release_write_permissions() -> Result<()> {
             "{}",
             path.display()
         );
-        for job in workflow["jobs"].as_object().context("jobs")?.values() {
+        for (name, job) in workflow["jobs"].as_object().context("jobs")? {
+            if path
+                .file_name()
+                .is_some_and(|filename| filename == "release_copper.yml")
+                && name == "release"
+            {
+                assert_eq!(job["permissions"]["contents"], "write");
+                assert_eq!(job["uses"], "./.github/workflows/release_prepare.yml");
+                continue;
+            }
             assert_ne!(
                 job["permissions"]["contents"],
                 "write",

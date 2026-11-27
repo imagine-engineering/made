@@ -1,6 +1,6 @@
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, Push, Run, Step, Strategy, Use,
-    Workflow, WorkflowDispatch,
+    Workflow, WorkflowCall, WorkflowDispatch,
 };
 use indoc::formatdoc;
 use serde_json::{Value, json};
@@ -36,10 +36,14 @@ pub(crate) fn release_prepare() -> Workflow {
     );
     let scope = preparation_scope_input();
     let (prepare, prepared) = prepare_release(initial_version);
+    let create_tag = create_release_tag(&prepare, &prepared);
     let mut preflight = signing_preflight(&prepare, &prepared);
-    preflight.job = preflight.job.cond(Expression::new(
-        "(github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'",
-    ));
+    preflight.job = preflight
+        .job
+        .needs([prepare.name.clone(), create_tag.name.clone()])
+        .cond(Expression::new(
+            "${{ !cancelled() && needs.prepare_release.result == 'success' && needs.prepare_release.outputs.already_published != 'true' && ((inputs.publish_release_type != '' && needs.create_release_tag.result == 'success') || (inputs.publish_release_type == '' && ((github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'))) }}",
+        ));
     let licenses = release_licenses(&prepare, &prepared);
     let applications = application_builds(&prepare, &prepared, &licenses);
     let remote_servers = remote_server_builds(&prepare, &prepared);
@@ -55,6 +59,7 @@ pub(crate) fn release_prepare() -> Workflow {
         .add_tag(format!("{}*", copper.release_tag_prefix))
         .add_branch("codex/**")
         .add_branch("main")
+        .add_path(".github/workflows/release_copper.yml")
         .add_path(".github/workflows/release_prepare.yml")
         .add_path("tooling/xtask/src/tasks/workflows/release.rs")
         .add_path("tooling/xtask/src/tasks/release_version.rs")
@@ -79,6 +84,14 @@ pub(crate) fn release_prepare() -> Workflow {
                     .add_input(version.name, version.input())
                     .add_input(sign_artifacts.name, sign_artifacts.input())
                     .add_input(scope.name, scope.input()),
+            )
+            .workflow_call(
+                WorkflowCall::default()
+                    .add_input(tag.name, WorkflowInput::string(tag.name, None).call_input())
+                    .add_input(
+                        "publish_release_type",
+                        WorkflowInput::string("publish_release_type", None).call_input(),
+                    ),
             ))
         .concurrency(
             Concurrency::new(Expression::new("product-release-${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag || 'qualification' }}"))
@@ -88,6 +101,7 @@ pub(crate) fn release_prepare() -> Workflow {
         .add_env(("CARGO_TERM_COLOR", "always"))
         .add_env(("RUST_BACKTRACE", "1"))
         .add_job(prepare.name, prepare.job)
+        .add_job(create_tag.name, create_tag.job)
         .add_job(preflight.name, preflight.job)
         .add_job(licenses.name, licenses.job)
         .add_job(applications.name, applications.job)
@@ -181,6 +195,8 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
     let resolve = named::bash(indoc::indoc! {r#"
         if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF_TYPE" == tag ]]; then
             python3 script/product_release.py resolve-tag-push
+        elif [[ -n "$PUBLISH_RELEASE_TYPE" ]]; then
+            python3 script/product_release.py plan-copper-release --tag "$RELEASE_TAG" --release-type "$PUBLISH_RELEASE_TYPE"
         elif [[ -n "$RELEASE_TAG" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ]]; then
                 echo "Draft preparation must be manually dispatched from main" >&2
@@ -198,6 +214,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
     "#})
     .id("resolve-release")
     .add_env(("RELEASE_TAG", "${{ inputs.release_tag }}"))
+    .add_env(("PUBLISH_RELEASE_TYPE", "${{ inputs.publish_release_type }}"))
     .add_env(("SIGN_ARTIFACTS", "${{ inputs.sign_artifacts }}"))
     .add_env(("PREPARATION_SCOPE", "${{ inputs.preparation_scope || 'full' }}"))
     .add_env(("VERSION", format!("${{{{ inputs.version || '{initial_version}' }}}}")))
@@ -212,6 +229,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
     let preparation_scope = StepOutput::new_unchecked(&resolve, "preparation_scope");
     let controller_sha = StepOutput::new_unchecked(&resolve, "controller_sha");
     let signing = StepOutput::new_unchecked(&resolve, "signing");
+    let already_published = StepOutput::new_unchecked(&resolve, "already_published");
     let job = named::job(
         Job::default()
             .runs_on("ubuntu-22.04")
@@ -236,13 +254,17 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
             ).if_condition(Expression::new("(github.event_name == 'push' && github.ref_type == 'branch') || (github.event_name == 'workflow_dispatch' && inputs.release_tag == '')")))
             .add_step(
                 generate_release_bundle_plans()
+                    .if_condition(Expression::new("steps.resolve-release.outputs.already_published != 'true'"))
                     .add_env(("COMMIT_SHA", commit_sha.to_string()))
                     .add_env(("RELEASE_VERSION", version.to_string()))
                     .add_env(("ZED_RELEASE_CHANNEL", channel.to_string())),
             )
             .add_step(
-                steps::upload_artifact("release-bundle-plans", "release-bundle-plans")
-                    .if_no_files_found(IfNoFilesFound::Error),
+                Step::<Use>::from(
+                    steps::upload_artifact("release-bundle-plans", "release-bundle-plans")
+                        .if_no_files_found(IfNoFilesFound::Error),
+                )
+                .if_condition(Expression::new("steps.resolve-release.outputs.already_published != 'true'")),
             )
             .outputs([
                 (commit_sha.name.to_owned(), commit_sha.to_string()),
@@ -254,6 +276,7 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
                 (preparation_scope.name.to_owned(), preparation_scope.to_string()),
                 (controller_sha.name.to_owned(), controller_sha.to_string()),
                 (signing.name.to_owned(), signing.to_string()),
+                (already_published.name.to_owned(), already_published.to_string()),
             ]),
     );
     let prepared = PreparedRelease {
@@ -265,6 +288,54 @@ fn prepare_release(initial_version: &str) -> (NamedJob, PreparedRelease) {
         controller_sha: controller_sha.as_job_output(&job),
     };
     (job, prepared)
+}
+
+fn verified_release_step(command: &str, prepared: &PreparedRelease) -> Step<Run> {
+    named::bash(command)
+        .add_env(("GH_TOKEN", vars::GITHUB_TOKEN))
+        .add_env(("RELEASE_GATES", "${{ toJSON(vars) }}"))
+        .add_env(("EXPECTED_COMMIT", prepared.commit_sha.to_string()))
+        .add_env(("EXPECTED_PRODUCT", prepared.product.to_string()))
+        .add_env(("EXPECTED_TAG", prepared.tag.to_string()))
+        .add_env((
+            "EXPECTED_SCOPE",
+            "${{ needs.prepare_release.outputs.preparation_scope }}",
+        ))
+        .add_env((
+            "EXPECTED_RELEASE_TYPE",
+            "${{ inputs.publish_release_type }}",
+        ))
+}
+
+fn create_release_tag(prepare: &NamedJob, prepared: &PreparedRelease) -> NamedJob {
+    named::job(
+        Job::default()
+            .needs([prepare.name.clone()])
+            .cond(Expression::new(
+                "inputs.publish_release_type != '' && needs.prepare_release.outputs.already_published != 'true'",
+            ))
+            .runs_on("ubuntu-22.04")
+            .timeout_minutes(5u32)
+            .permissions(
+                Permissions::default()
+                    .contents(Level::Write)
+                    .actions(Level::Read),
+            )
+            .add_step(
+                Step::<Use>::from(steps::checkout_repo().with_ref(prepared.controller_sha.to_string()))
+                    .add_with(("persist-credentials", false)),
+            )
+            .add_step(setup_signing_python())
+            .add_step(
+                steps::download_artifact()
+                    .artifact_name("release-bundle-plans")
+                    .path("release-bundle-plans"),
+            )
+            .add_step(verified_release_step(
+                "python3 script/product_release.py create-copper-tag",
+                prepared,
+            )),
+    )
 }
 
 pub(crate) fn product_matrix(product: &crate::product_manifest::Product) -> Vec<Value> {
@@ -964,16 +1035,7 @@ fn upload_release(prepare: &NamedJob, prepared: &PreparedRelease, build: &NamedJ
                     .add_env(("GH_TOKEN", vars::GITHUB_TOKEN)),
             )
             .add_step(
-                named::bash("python3 script/product_release.py draft")
-                    .add_env(("GH_TOKEN", vars::GITHUB_TOKEN))
-                    .add_env(("RELEASE_GATES", "${{ toJSON(vars) }}"))
-                    .add_env(("EXPECTED_COMMIT", prepared.commit_sha.to_string()))
-                    .add_env(("EXPECTED_PRODUCT", prepared.product.to_string()))
-                    .add_env(("EXPECTED_TAG", prepared.tag.to_string()))
-                    .add_env((
-                        "EXPECTED_SCOPE",
-                        "${{ needs.prepare_release.outputs.preparation_scope }}",
-                    ))
+                verified_release_step("python3 script/product_release.py draft", prepared)
                     .add_env((
                         "LINUX_SIGNING_KEY_FINGERPRINT",
                         "${{ secrets.LINUX_SIGNING_KEY_FINGERPRINT }}",
@@ -990,7 +1052,7 @@ mod release_workflow_tests {
     fn release_modes_share_the_verified_package_pipeline() -> anyhow::Result<()> {
         let workflow = serde_json::to_value(release_prepare())?;
         let events = workflow["on"].as_object().expect("events");
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 3);
         assert!(events.get("release").is_none());
         assert_eq!(events["push"]["tags"], json!(["copper-v*"]));
         assert!(events["push"].is_object());
@@ -1006,8 +1068,12 @@ mod release_workflow_tests {
             events["workflow_dispatch"]["inputs"]["preparation_scope"]["default"],
             "full"
         );
+        assert_eq!(
+            events["workflow_call"]["inputs"]["publish_release_type"]["required"],
+            true
+        );
         let jobs = &workflow["jobs"];
-        assert_eq!(jobs.as_object().expect("jobs").len(), 7);
+        assert_eq!(jobs.as_object().expect("jobs").len(), 8);
         assert_eq!(
             jobs["upload_release"]["needs"],
             json!(["prepare_release", "product_builds"])
@@ -1024,7 +1090,7 @@ mod release_workflow_tests {
         ] {
             assert!(!yaml.contains(forbidden), "{forbidden}");
         }
-        assert_eq!(yaml.matches("contents: write").count(), 1);
+        assert_eq!(yaml.matches("contents: write").count(), 2);
         for phase in ["application", "remote-server", "package"] {
             assert!(yaml.contains(phase));
         }
@@ -1048,8 +1114,14 @@ mod release_workflow_tests {
         let prepare = &jobs["prepare_release"];
         assert!(prepare["if"].is_null());
         assert!(!serde_json::to_string(prepare)?.contains("MACOS_CERTIFICATE"));
+        let create_tag = &jobs["create_release_tag"];
+        assert_eq!(create_tag["needs"], json!(["prepare_release"]));
+        assert_eq!(create_tag["permissions"]["contents"], "write");
         let preflight = &jobs["signing_preflight"];
-        assert_eq!(preflight["needs"], json!(["prepare_release"]));
+        assert_eq!(
+            preflight["needs"],
+            json!(["prepare_release", "create_release_tag"])
+        );
         assert!(
             preflight["if"]
                 .as_str()
@@ -1074,6 +1146,8 @@ mod release_workflow_tests {
         );
         let yaml = release_prepare().to_string().expect("yaml");
         assert!(yaml.contains("product_release.py resolve-tag-push"));
+        assert!(yaml.contains("product_release.py plan-copper-release"));
+        assert!(yaml.contains("product_release.py create-copper-tag"));
         assert!(yaml.contains("product_release.py draft"));
         assert!(!yaml.contains("attach-prerelease"));
         assert!(yaml.contains("UNSIGNED-DEVELOPMENT-"));
@@ -1081,6 +1155,26 @@ mod release_workflow_tests {
         assert!(yaml.contains("product_release.py contract"));
         assert!(yaml.contains("script/test-production-signing"));
         assert!(yaml.contains("persist-credentials: false"));
+        Ok(())
+    }
+
+    #[test]
+    fn release_copper_dispatch_exposes_tag_and_release_type() -> anyhow::Result<()> {
+        let workflow: serde_yaml::Value = serde_yaml::from_str(include_str!(
+            "../../../../../.github/workflows/release_copper.yml"
+        ))?;
+        let events = &workflow["on"];
+        assert_eq!(events.as_mapping().map(|events| events.len()), Some(1));
+        let inputs = &events["workflow_dispatch"]["inputs"];
+        assert_eq!(inputs.as_mapping().map(|inputs| inputs.len()), Some(2));
+        assert_eq!(inputs["tag"]["required"], true);
+        assert_eq!(inputs["release_type"]["type"], "choice");
+        assert_eq!(inputs["release_type"]["default"], "prerelease");
+        assert_eq!(inputs["release_type"]["options"][0], "prerelease");
+        assert_eq!(inputs["release_type"]["options"][1], "stable");
+        let release = &workflow["jobs"]["release"];
+        assert_eq!(release["uses"], "./.github/workflows/release_prepare.yml");
+        assert_eq!(release["with"]["release_tag"], "${{ inputs.tag }}");
         Ok(())
     }
 }

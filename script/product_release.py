@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare verified signed product packages as an owned draft for human publication."""
+"""Prepare verified signed product packages and publish Copper on explicit dispatch."""
 import argparse
 import hashlib
 from http.client import HTTPSConnection, HTTPException
@@ -78,11 +78,11 @@ def repository():
     return name
 
 
-def remote_commit(name, tag):
-    response = api(f"repos/{name}/git/ref/tags/{quote(tag, safe='')}", optional=True)
-    if response is None:
-        raise ValueError("existing release tag is missing")
-    reference = response["object"]
+def tag_reference(name, tag):
+    return api(f"repos/{name}/git/ref/tags/{quote(tag, safe='')}", optional=True)
+
+
+def peel_tag(name, reference):
     for _ in range(10):
         if reference["type"] == "commit":
             return reference["sha"]
@@ -99,10 +99,10 @@ def eligible_ci(runs, decision, name, workflow):
                   and (run.get("head_repository") or {}).get("full_name") == name
                   and (run.get("repository") or {}).get("full_name") == name]
     if not candidates:
-        raise ValueError(f"missing exact-commit main push CI: {workflow}; run required CI on main, then recover with release_tag on main")
+        raise ValueError(f"missing exact-commit main push CI: {workflow}; run required CI on main, then retry")
     latest = max(candidates, key=lambda run: (run["id"], run.get("run_attempt", 1)))
     if latest.get("status") != "completed" or latest.get("conclusion") != "success":
-        raise ValueError(f"latest exact-commit required CI is not successful: {workflow}; wait for or fix CI, then recover with release_tag on main")
+        raise ValueError(f"latest exact-commit required CI is not successful: {workflow}; wait for or fix CI, then retry")
     return {key: latest[key] for key in ("id", "head_sha", "html_url", "conclusion")}
 
 
@@ -145,28 +145,26 @@ def check_draft(release, decision, release_id=None):
 
 
 def check_tag(name, decision):
-    if remote_commit(name, decision["tag"]) != decision["commit_sha"]:
+    reference = tag_reference(name, decision["tag"])
+    if reference is None or (decision.get("tag_object_sha")
+                             and reference["object"]["sha"] != decision["tag_object_sha"]):
+        raise ValueError("release tag was removed or moved")
+    if peel_tag(name, reference["object"]) != decision["commit_sha"]:
         raise ValueError("tag changed while preparing; refusing stale packages")
 
 
-def guard(decision):
+def check_release_ci(name, decision):
     if decision["preparation_scope"] not in ("full", "macos-only"):
         raise ValueError("unknown release preparation scope")
     if decision["preparation_scope"] == "macos-only" and (
             decision["product_id"] != "rust" or not decision["matrix"]["include"]
             or any(row["platform"] != "macos" for row in decision["matrix"]["include"])):
         raise ValueError("macos-only preparation must contain only Copper macOS targets")
-    name = repository()
     if decision["product_id"] != "rust":
         variable = decision.get("release_gate_variable")
         gates = json.loads(os.environ.get("RELEASE_GATES", "{}"))
         if not variable or gates.get(variable) != "true":
             raise ValueError(f"{variable or 'product release gate'} must be configured after release qualification")
-    if decision.get("tag_object_sha"):
-        reference = api(f"repos/{name}/git/ref/tags/{quote(decision['tag'], safe='')}", optional=True)
-        if reference is None or reference["object"]["sha"] != decision["tag_object_sha"]:
-            raise ValueError("pushed tag was removed or moved; refusing stale preparation")
-    check_tag(name, decision)
     # GitHub's compare endpoint also proves both commits exist in this repository.
     main = api(f"repos/{name}/commits/main")["sha"]
     comparison = api(f"repos/{name}/compare/{decision['commit_sha']}...{main}")
@@ -176,6 +174,13 @@ def guard(decision):
     for workflow in decision["required_ci_workflows"]:
         runs = pages(f"repos/{name}/actions/workflows/{workflow}/runs?event=push&branch=main&head_sha={decision['commit_sha']}")
         evidence.append(eligible_ci(runs, decision, name, workflow))
+    return evidence
+
+
+def guard(decision):
+    name = repository()
+    check_tag(name, decision)
+    evidence = check_release_ci(name, decision)
     check_draft(existing_release(name, decision["tag"]), decision)
     return name, evidence
 
@@ -185,7 +190,8 @@ def write_outputs(decision):
     Path("release-bundle-plans").mkdir(exist_ok=True)
     Path("release-bundle-plans/decision.json").write_text(json.dumps(decision, indent=2) + "\n")
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key in ("commit_sha", "product_id", "version", "tag", "channel", "matrix", "preparation_scope", "controller_sha", "signing"):
+        for key in ("commit_sha", "product_id", "version", "tag", "channel", "matrix", "preparation_scope",
+                    "controller_sha", "signing", "already_published"):
             value = decision.get(key, "")
             output.write(f"{key}={json.dumps(value, separators=(',', ':')) if isinstance(value, dict) else value}\n")
 
@@ -193,7 +199,7 @@ def write_outputs(decision):
 def resolve(tag, preparation_scope):
     # Validation and planning are read-only. The Rust owner uses the catalog and exact local tag.
     decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag, "--preparation-scope", preparation_scope))
-    reference = api(f"repos/{repository()}/git/ref/tags/{quote(tag, safe='')}", optional=True)
+    reference = tag_reference(repository(), tag)
     if reference is None:
         raise ValueError("existing release tag is missing")
     decision["tag_object_sha"] = reference["object"]["sha"]
@@ -218,17 +224,90 @@ def resolve_tag_push():
     if not re.fullmatch(r"[0-9a-f]{40}", tag_object):
         raise ValueError("tag push does not identify a valid Git object")
     decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag, "--preparation-scope", "macos-only"))
-    if decision["product_id"] != "rust":
-        raise ValueError("automatic draft preparation is supported only for Copper")
+    check_copper_macos(decision)
     if decision["commit_sha"] != command("git", "rev-parse", "--verify", f"{tag_object}^{{commit}}"):
         raise ValueError("tag commit changed since the push")
-    rows = decision["matrix"]["include"]
-    if len(rows) != 1 or rows[0]["platform"] != "macos" or rows[0]["target"] != APPLE_SILICON_TARGET:
-        raise ValueError("automatic Copper preparation requires the catalog Apple Silicon target")
     decision["tag_object_sha"] = tag_object
     name, evidence = guard(decision)
     decision.update(repository=name, ci=evidence, controller_sha=command("git", "rev-parse", "HEAD"))
     write_outputs(decision)
+
+
+def check_copper_macos(decision):
+    rows = decision["matrix"]["include"]
+    if (decision["product_id"] != "rust" or decision["preparation_scope"] != "macos-only"
+            or len(rows) != 1 or rows[0]["platform"] != "macos" or rows[0]["target"] != APPLE_SILICON_TARGET):
+        raise ValueError("automatic Copper releases require the catalog Apple Silicon target")
+
+
+def dispatch_commit():
+    commit = os.environ.get("GITHUB_SHA", "")
+    if (os.environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or os.environ.get("GITHUB_REF") != "refs/heads/main"
+            or not re.fullmatch(r"[0-9a-f]{40}", commit)
+            or command("git", "rev-parse", "HEAD") != commit):
+        raise ValueError("run Release Copper from main at the dispatch commit")
+    return commit
+
+
+def check_release_type(decision, release_type):
+    if release_type not in ("prerelease", "stable"):
+        raise ValueError("release type must be prerelease or stable")
+    if decision["prerelease"] != (release_type == "prerelease"):
+        raise ValueError("tag version must match the release type (for example, copper-v0.1.2-rc.1 or copper-v0.1.2)")
+
+
+def report_published(name, decision, release):
+    if release is None or release.get("draft") is True:
+        return False
+    product = next(product for product in catalog_products() if product["id"] == decision["product_id"])
+    if (release.get("draft") is not False or not release.get("published_at")
+            or release.get("tag_name") != decision["tag"]
+            or release.get("target_commitish") != decision["commit_sha"]
+            or release.get("prerelease") != decision["prerelease"]
+            or not verified_release(release, product, decision["version"], decision["preparation_scope"])):
+        raise ValueError("tag already has a published release with different identity or verification")
+    url = f"https://github.com/{name}/releases/tag/{quote(decision['tag'], safe='')}"
+    print(f"Published Copper release: {url}")
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(summary, "a") as output:
+            output.write(f"[Published Copper {decision['version']}]({url})\n")
+    return True
+
+
+def plan_copper_release(tag, release_type):
+    commit = dispatch_commit()
+    decision = json.loads(command("target/debug/xtask", "release-version", "--tag", tag,
+                                  "--preparation-scope", "macos-only", "--plan-only"))
+    check_copper_macos(decision)
+    check_release_type(decision, release_type)
+    name = repository()
+    reference = tag_reference(name, tag)
+    if reference and peel_tag(name, reference["object"]) != commit:
+        raise ValueError("tag already points to a different commit; rerun the original workflow or choose a new tag")
+    decision.update(commit_sha=commit, controller_sha=commit, repository=name, publish_release_type=release_type,
+                    tag_object_sha=reference["object"]["sha"] if reference else commit,
+                    create_tag=reference is None)
+    release = existing_release(name, tag)
+    if reference and report_published(name, decision, release):
+        decision["already_published"] = "true"
+    else:
+        check_draft(release, decision)
+        decision["ci"] = check_release_ci(name, decision)
+    write_outputs(decision)
+
+
+def create_copper_tag():
+    decision = checked_decision()
+    if not decision.get("publish_release_type"):
+        raise ValueError("tag creation requires a Release Copper dispatch")
+    name = repository()
+    check_release_ci(name, decision)
+    check_draft(existing_release(name, decision["tag"]), decision)
+    if decision["create_tag"] and tag_reference(name, decision["tag"]) is None:
+        api(f"repos/{name}/git/refs", "POST", {
+            "ref": f"refs/tags/{decision['tag']}", "sha": decision["commit_sha"]})
+    check_tag(name, decision)
 
 
 def load_decision():
@@ -453,6 +532,14 @@ def checked_decision():
             raise ValueError("downloaded decision differs from approved job outputs")
     if decision.get("signing", "required") != "required" or not decision["tag"] or decision["channel"] not in ("stable", "preview"):
         raise ValueError("development artifacts cannot be attached to a release")
+    release_type = os.environ.get("EXPECTED_RELEASE_TYPE", "")
+    if decision.get("publish_release_type", "") != release_type:
+        raise ValueError("downloaded decision differs from the requested release type")
+    if release_type:
+        check_copper_macos(decision)
+        check_release_type(decision, release_type)
+        if decision["commit_sha"] != dispatch_commit():
+            raise ValueError("downloaded decision differs from the dispatch commit")
     if os.environ.get("GITHUB_EVENT_NAME") == "push" and os.environ.get("GITHUB_REF_TYPE") == "tag":
         event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
         if decision.get("tag_object_sha") != event.get("after") or event.get("ref") != f"refs/tags/{decision['tag']}":
@@ -462,6 +549,12 @@ def checked_decision():
 
 def draft():
     decision = checked_decision()
+    publish = bool(decision.get("publish_release_type"))
+    if publish:
+        name = repository()
+        check_tag(name, decision)
+        if report_published(name, decision, existing_release(name, decision["tag"])):
+            return
     name, evidence = guard(decision)
     directory = Path("release-artifacts")
     hashes, records = package_inventory(decision, directory)
@@ -476,8 +569,9 @@ def draft():
             f"Product: `{decision['product_id']}` · Version: `{decision['version']}` · Channel: `{decision['channel']}`\n\n"
             f"Commit: `{decision['commit_sha']}`\n\nPackages passed required signing and platform smoke verification. "
             f"See `{manifest_name}` and `{checksum_name}`.\n\nPreparation: {run_url}\n\n"
-            + "\n".join(f"Required CI: {run['html_url']}" for run in evidence)
-            + "\n\nReview the packages and verification evidence before clicking **Publish release**.\n")
+            + "\n".join(f"Required CI: {run['html_url']}" for run in evidence) + "\n")
+    if not publish:
+        body += "\nReview the packages and verification evidence before clicking **Publish release**.\n"
     label = " (macOS only)" if decision["preparation_scope"] == "macos-only" else ""
     if label:
         body += "\n**macOS-only preparation.** Windows and Linux packages are not included or qualified by this release. This release is excluded from their updater selection and from the default full-platform release feed.\n"
@@ -510,10 +604,17 @@ def draft():
         body = release["body"]
     if ready_marker(decision) not in body:
         body += "\n\n" + ready_marker(decision)
-    # Never send draft=false, even when updating a fully verified draft.
-    api(f"repos/{name}/releases/{release_id}", "PATCH", {
-        "name": f"{decision['display_name']} {decision['version']}{label}", "body": body, "make_latest": "false"})
-    print(f"Verified draft ready for human review: https://github.com/{name}/releases")
+    update = {"name": f"{decision['display_name']} {decision['version']}{label}",
+              "body": body, "make_latest": "false"}
+    if publish:
+        update.update(draft=False, prerelease=decision["prerelease"],
+                      make_latest="false" if decision["prerelease"] else "true")
+    release = api(f"repos/{name}/releases/{release_id}", "PATCH", update)
+    if publish:
+        if verify_remote_assets(release["assets"], hashes) != set(hashes) or not report_published(name, decision, release):
+            raise ValueError("GitHub did not confirm publication with the verified assets")
+    else:
+        print(f"Verified draft ready for human review: https://github.com/{name}/releases")
 
 
 def upload_asset(name, release, path):
@@ -583,7 +684,10 @@ def main():
     latest_parser.add_argument("--product", required=True)
     latest_parser.add_argument("--channel", choices=("stable", "preview"), required=True)
     latest_parser.add_argument("--platform", choices=("macos", "linux", "windows"))
-    for name in ("bundle-plans", "download-packages", "draft", "resolve-tag-push"):
+    copper_parser = commands.add_parser("plan-copper-release")
+    copper_parser.add_argument("--tag", required=True)
+    copper_parser.add_argument("--release-type", choices=("prerelease", "stable"), required=True)
+    for name in ("bundle-plans", "download-packages", "draft", "resolve-tag-push", "create-copper-tag"):
         commands.add_parser(name)
     arguments = parser.parse_args()
     try:
@@ -599,6 +703,10 @@ def main():
             download_packages()
         elif arguments.operation == "resolve-tag-push":
             resolve_tag_push()
+        elif arguments.operation == "plan-copper-release":
+            plan_copper_release(arguments.tag, arguments.release_type)
+        elif arguments.operation == "create-copper-tag":
+            create_copper_tag()
         elif arguments.operation == "draft":
             draft()
     except (RuntimeError, ValueError, KeyError, OSError) as error:
