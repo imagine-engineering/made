@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 use std::io::Read as _;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{
     Arc,
     atomic::{AtomicU8, Ordering},
@@ -13,7 +13,10 @@ use gpui::{App, Context, Entity, Task, WeakEntity};
 use language::{Buffer, PointUtf16, ToOffset as _};
 use lsp::{LanguageServer, LanguageServerId};
 use rpc::proto;
-use util::{ResultExt as _, paths::UrlExt as _};
+use util::{
+    ResultExt as _,
+    paths::{PathStyle, UrlExt as _},
+};
 
 use crate::jvm_project::{
     JdtlsImportedBuildKind, KotlinBuildSystem, KotlinWorkspaceDependency, jdtls_nested_preference,
@@ -333,8 +336,13 @@ impl LspStore {
         buffer: &Entity<Buffer>,
         position: PointUtf16,
         java_server: LanguageServerId,
+        provider_target: Option<&lsp::Uri>,
         cx: &mut Context<Self>,
     ) -> Option<Task<anyhow::Result<Option<lsp::Location>>>> {
+        let cached_classfile = match provider_target {
+            Some(uri) => Some(jdtls_cached_classfile_path(uri, &std::env::temp_dir())?),
+            None => None,
+        };
         let source_buffer = buffer.read(cx);
         let file = File::from_dyn(source_buffer.file())?;
         if !file.is_local || file.is_private {
@@ -348,18 +356,43 @@ impl LspStore {
         let (class_name, package) = java_type_name(source_buffer, position)?;
         let query = format!("{package}.{class_name}");
         let server = self.language_server_for_id(scope.kotlin_server_id)?;
-        let request = server.request::<lsp::request::WorkspaceSymbolRequest>(
-            lsp::WorkspaceSymbolParams {
-                query: query.clone(),
-                ..Default::default()
-            },
-            ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout(),
-        );
+        let timeout = ProjectSettings::get_global(cx)
+            .global_lsp_settings
+            .get_request_timeout();
         let buffer = buffer.clone();
         let source_version = source_buffer.version();
         Some(cx.spawn(async move |store, cx| {
+            let source_name = match cached_classfile {
+                Some(classfile) => {
+                    let Some(name) = cx
+                        .background_executor()
+                        .spawn(async move {
+                            jdtls_cached_kotlin_source_name(&classfile, &std::env::temp_dir())
+                        })
+                        .await?
+                    else {
+                        return Ok(None);
+                    };
+                    if !store.read_with(cx, |store, cx| {
+                        buffer.read(cx).version() == source_version
+                            && store
+                                .maven_kotlin_definition_scope(&source, java_server, cx)
+                                .as_ref()
+                                == Some(&scope)
+                    })? {
+                        return Ok(None);
+                    }
+                    Some(name)
+                }
+                None => None,
+            };
+            let request = server.request::<lsp::request::WorkspaceSymbolRequest>(
+                lsp::WorkspaceSymbolParams {
+                    query: query.clone(),
+                    ..Default::default()
+                },
+                timeout,
+            );
             let Some(response) = request.await.into_response()? else {
                 return Ok(None);
             };
@@ -419,6 +452,10 @@ impl LspStore {
                             (worktree.id() == source.worktree_id
                                 && worktree.is_visible()
                                 && path.extension().is_some_and(|extension| extension == "kt")
+                                && source_name.as_ref().is_none_or(|name| {
+                                    path.file_name()
+                                        .is_some_and(|filename| filename == name.as_str())
+                                })
                                 && entry.is_file()
                                 && !entry.is_external
                                 && !entry.is_private
@@ -435,6 +472,84 @@ impl LspStore {
             })
         }))
     }
+}
+
+fn jdtls_cached_classfile_path(uri: &lsp::Uri, temp_dir: &Path) -> Option<PathBuf> {
+    if uri.scheme() != "file" {
+        return None;
+    }
+    let path = uri.to_file_path_ext(PathStyle::local()).ok()?;
+    let relative = path.strip_prefix(temp_dir).ok()?;
+    let mut components = relative.components();
+    let (
+        Some(Component::Normal(cache)),
+        Some(Component::Normal(session)),
+        Some(Component::Normal(classfile)),
+        Some(Component::Normal(filename)),
+        None,
+    ) = (
+        components.next(),
+        components.next(),
+        components.next(),
+        components.next(),
+        components.next(),
+    )
+    else {
+        return None;
+    };
+    let digest = classfile.to_str()?.strip_prefix("uri_")?;
+    (cache == "jdtls_decompiled"
+        && session.to_str()?.starts_with("session_")
+        && digest.len() == 40
+        && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && Path::new(filename)
+            .extension()
+            .is_some_and(|ext| ext == "java"))
+    .then_some(path)
+}
+
+fn jdtls_cached_kotlin_source_name(
+    classfile: &Path,
+    temp_dir: &Path,
+) -> anyhow::Result<Option<String>> {
+    const MAX_URI_BYTES: u64 = 16 * 1024;
+    // The pinned Java extension caches classfile contents under a Java filename and
+    // stores the original URI in a sidecar so a new proxy can recover the mapping.
+    let sidecar = classfile.with_added_extension("jdt-uri");
+    let metadata = match std::fs::symlink_metadata(&sidecar) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    if !metadata.is_file() || metadata.len() > MAX_URI_BYTES {
+        return Ok(None);
+    }
+    let expected = temp_dir
+        .canonicalize()?
+        .join(sidecar.strip_prefix(temp_dir)?);
+    let canonical = sidecar.canonicalize()?;
+    if canonical != expected {
+        return Ok(None);
+    }
+    let mut original = String::new();
+    std::fs::File::open(canonical)?
+        .take(MAX_URI_BYTES + 1)
+        .read_to_string(&mut original)?;
+    if original.len() as u64 > MAX_URI_BYTES {
+        return Ok(None);
+    }
+    let Ok(original) = url::Url::parse(original.trim()) else {
+        return Ok(None);
+    };
+    let Some(source_path) = original.path().strip_prefix("/classes/") else {
+        return Ok(None);
+    };
+    if original.scheme() != "jdt" || original.host_str() != Some("contents") {
+        return Ok(None);
+    }
+    let filename = source_path.rsplit('/').next().unwrap_or_default();
+    let filename = percent_encoding::percent_decode_str(filename).decode_utf8()?;
+    Ok(filename.ends_with(".kt").then(|| filename.into_owned()))
 }
 
 fn java_type_name(buffer: &Buffer, position: PointUtf16) -> Option<(String, String)> {
@@ -691,6 +806,47 @@ pub(super) fn register_notifications(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn java_proxy_sidecar_identifies_only_workspace_kotlin_classfiles() -> anyhow::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let worktree_source = temporary.path().join("Greeting.java");
+        let relative = Path::new("jdtls_decompiled")
+            .join("session_example")
+            .join("uri_4e4fd25f00791a27668f864374cc4e8771755119")
+            .join("Greeting.java");
+        let classfile = std::env::temp_dir().join(&relative);
+        let classfile_uri = lsp::Uri::from_file_path(&classfile).expect("cached classfile URI");
+        let worktree_uri = lsp::Uri::from_file_path(&worktree_source).expect("Java source URI");
+        assert_eq!(
+            jdtls_cached_classfile_path(&classfile_uri, &std::env::temp_dir()),
+            Some(classfile)
+        );
+        assert_eq!(
+            jdtls_cached_classfile_path(&worktree_uri, &std::env::temp_dir()),
+            None
+        );
+
+        let classfile = temporary.path().join(relative);
+        let sidecar = classfile.with_added_extension("jdt-uri");
+        std::fs::create_dir_all(sidecar.parent().expect("sidecar directory"))?;
+        for (uri, source) in [
+            (
+                "jdt://contents/classes/evidence/Greeting.kt?=application/%5C/library%5C/target%5C/classes%3Cevidence%28Greeting.class",
+                Some("Greeting.kt"),
+            ),
+            ("jdt://contents/classes/evidence/Greeting.java", None),
+            ("jdt://contents/library.jar/evidence/Greeting.kt", None),
+            ("file:///classes/evidence/Greeting.kt", None),
+        ] {
+            std::fs::write(&sidecar, uri)?;
+            assert_eq!(
+                jdtls_cached_kotlin_source_name(&classfile, temporary.path())?.as_deref(),
+                source
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn build_import_startup_preserves_explicit_initialization_settings() {

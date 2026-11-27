@@ -774,6 +774,43 @@ impl LspCommand for GetDefinitions {
         return location_links_from_lsp(message, lsp_store, buffer, server_id, cx).await;
         #[cfg(feature = "jvm-tools")]
         {
+            let mut cx = cx;
+            let single_target = match &message {
+                Some(lsp::GotoDefinitionResponse::Scalar(location)) => Some(&location.uri),
+                Some(lsp::GotoDefinitionResponse::Array(locations)) => match locations.as_slice() {
+                    [location] => Some(&location.uri),
+                    _ => None,
+                },
+                Some(lsp::GotoDefinitionResponse::Link(links)) => match links.as_slice() {
+                    [link] => Some(&link.target_uri),
+                    _ => None,
+                },
+                None => None,
+            };
+            if let Some(target) = single_target {
+                let source = lsp_store.update(&mut cx, |store, cx| {
+                    store.maven_kotlin_definition(
+                        &buffer,
+                        self.position,
+                        server_id,
+                        Some(target),
+                        cx,
+                    )
+                });
+                if let Some(source) = source
+                    && let Some(location) = source.await.log_err().flatten()
+                {
+                    return location_links_from_lsp(
+                        Some(lsp::GotoDefinitionResponse::Scalar(location)),
+                        lsp_store,
+                        buffer,
+                        server_id,
+                        cx,
+                    )
+                    .await;
+                }
+            }
+
             let is_jdt_classfile = |uri: &lsp::Uri| uri.scheme() == "jdt";
             let has_jdt_classfile = match &message {
                 Some(lsp::GotoDefinitionResponse::Scalar(location)) => {
@@ -798,9 +835,8 @@ impl LspCommand for GetDefinitions {
             if definitions.as_ref().is_ok_and(Vec::is_empty)
                 || (has_jdt_classfile && definitions.is_err())
             {
-                let mut cx = cx;
                 let alternative = lsp_store.update(&mut cx, |store, cx| {
-                    store.maven_kotlin_definition(&buffer, self.position, server_id, cx)
+                    store.maven_kotlin_definition(&buffer, self.position, server_id, None, cx)
                 });
                 if let Some(alternative) = alternative
                     && let Some(location) = alternative.await.log_err().flatten()
