@@ -4363,13 +4363,18 @@ fn cargo_target_kind(kind: &CargoTargetKind) -> Option<RustTestTargetKind> {
 }
 
 fn cargo_package_name(package_id: &str) -> &str {
-    package_id
-        .rsplit_once('#')
-        .map(|(_, package)| package)
-        .unwrap_or(package_id)
-        .split('@')
-        .next()
-        .unwrap_or(package_id)
+    let package = match package_id.rsplit_once('#') {
+        // Cargo omits the name from the fragment when it matches the path's last component.
+        Some((source, version)) if semver::Version::parse(version).is_ok() => {
+            let path = source.split_once('?').map_or(source, |(path, _)| path);
+            path.rsplit_once('/')
+                .map_or(path, |(_, name)| name)
+                .trim_end_matches(".git")
+        }
+        Some((_, package)) => package,
+        None => package_id,
+    };
+    package.split('@').next().unwrap_or(package)
 }
 
 fn stable_node_id(prefix: &str, components: &[&str]) -> StructuredNodeId {
@@ -5841,6 +5846,59 @@ esac
         );
         assert_eq!(scoped.workspaces.len(), 1);
         assert_eq!(scoped.workspaces[0].display_name, "visible");
+    }
+
+    #[test]
+    fn rust_test_provider_projects_cases_from_version_only_cargo_package_ids() {
+        let workspace = cargo_workspace(1, "fixture");
+        let workspace_snapshot = cargo_snapshot(vec![workspace.clone()]);
+        let package_id = "path+file:///workspace/rust-fixture#0.1.0";
+        let mut capture = capture();
+        capture.cargo_messages = capture.cargo_messages.replace(PACKAGE_ID, package_id);
+        for listing in &mut capture.listings {
+            if listing.package_id == PACKAGE_ID {
+                listing.package_id = package_id.to_string();
+            }
+        }
+        let hint = RustTestSourceHint {
+            package_id: package_id.to_string(),
+            target_name: "rust_fixture".to_string(),
+            target_kind: RustTestTargetKind::Unit,
+            test_name: "unit::works".to_string(),
+            source: Some(project_path("src/lib.rs")),
+            runnable: None,
+        };
+
+        let projection = project_provider_projection(
+            &workspace_snapshot,
+            vec![(workspace, capture)],
+            &[hint],
+            Vec::new(),
+            DiscoveryGeneration(1),
+        );
+
+        assert_eq!(
+            projection.snapshot.status,
+            StructuredProviderStatus::Current
+        );
+        let case = projection
+            .snapshot
+            .nodes
+            .iter()
+            .find(|node| node.kind == StructuredNodeKind::Case && node.label == "works")
+            .expect("the case should be attached to the workspace package");
+        assert_eq!(case.path, Some(project_path("src/lib.rs")));
+        let action = projection.actions.get(&case.id).expect("a runnable case");
+        assert!(
+            action
+                .cargo_args
+                .iter()
+                .any(|argument| argument == "rust-fixture")
+        );
+        assert_eq!(
+            action.executable_args.first().map(String::as_str),
+            Some("unit::works")
+        );
     }
 
     #[test]
