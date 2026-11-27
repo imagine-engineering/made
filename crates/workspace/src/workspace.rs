@@ -8743,6 +8743,11 @@ impl Workspace {
         window.root::<dock::PanelWindow>().flatten().is_some()
     }
 
+    pub fn tool_window_modal_layer(window: &Window, cx: &App) -> Option<Entity<ModalLayer>> {
+        let panel_window = window.root::<dock::PanelWindow>().flatten()?;
+        Some(panel_window.read(cx).modal_layer.clone())
+    }
+
     pub fn zoomed_item(&self) -> Option<&AnyWeakView> {
         self.zoomed.as_ref()
     }

@@ -322,17 +322,20 @@ pub struct Dock {
 
 pub(crate) struct PanelWindow {
     panel: Arc<dyn PanelHandle>,
+    pub(super) modal_layer: Entity<ModalLayer>,
 }
 
 impl Render for PanelWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .id("workspace-panel-window")
+            .relative()
             .size_full()
             .overflow_hidden()
             .bg(cx.theme().colors().panel_background)
             .on_action(cx.listener(|_, _: &crate::CloseWindow, window, _| window.remove_window()))
             .child(self.panel.to_any())
+            .child(self.modal_layer.clone())
     }
 }
 
@@ -721,8 +724,9 @@ impl Dock {
                 if focus {
                     panel.activation_focus_handle(cx).focus(window, cx);
                 }
-                cx.new(|_| PanelWindow {
+                cx.new(|cx| PanelWindow {
                     panel: panel.clone(),
+                    modal_layer: cx.new(|_| ModalLayer::new()),
                 })
             },
         )?;

@@ -3946,21 +3946,21 @@ impl DependenciesPanel {
         Ok(())
     }
 
-    fn show_dependency_diagram_popup(&mut self, cx: &mut Context<Self>) {
-        match self.canvas_diagram_load(cx.weak_entity(), cx) {
-            Some(open) => {
-                if let Err(error) = self.workspace.update_in(cx, |workspace, window, cx| {
-                    workspace.toggle_modal(window, cx, |_window, cx| {
-                        DependencyDiagramPopup::new(open, cx)
-                    });
-                }) {
-                    self.show_graph_error(error, cx);
-                }
-            }
-            None => {
-                // Collection affordance without a provider query.
-                self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram popup"), cx);
-            }
+    fn show_dependency_diagram_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(open) = self.canvas_diagram_load(cx.weak_entity(), cx) else {
+            self.show_graph_error(anyhow::anyhow!("A current admitted graph is required. Trust the project, refresh and collect graph facts before retrying Show diagram popup"), cx);
+            return;
+        };
+        self.focus_handle.focus(window, cx);
+        let build = |_: &mut Window, cx: &mut Context<DependencyDiagramPopup>| {
+            DependencyDiagramPopup::new(open, cx)
+        };
+        if let Some(modal_layer) = Workspace::tool_window_modal_layer(window, cx) {
+            modal_layer.update(cx, |layer, cx| layer.toggle_modal(window, cx, build));
+        } else if let Err(error) = self.workspace.update(cx, |workspace, cx| {
+            workspace.toggle_modal(window, cx, build);
+        }) {
+            self.show_graph_error(error, cx);
         }
     }
 
@@ -9882,7 +9882,14 @@ impl Render for DependenciesPanel {
                     panel.show_graph_context_menu(id, position, window, cx);
                 }
             }))
-            .on_action(cx.listener(|_, _: &ShowDependencyDiagramPopup, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram_popup, cx)))
+            .on_action(cx.listener(|_, _: &ShowDependencyDiagramPopup, window, cx| {
+                let panel = cx.weak_entity();
+                window.defer(cx, move |window, cx| {
+                    if let Some(panel) = panel.upgrade() {
+                        panel.update(cx, |panel, cx| panel.show_dependency_diagram_popup(window, cx));
+                    }
+                });
+            }))
             .on_action(cx.listener(|_, _: &AnalyzeDependencies, _, cx| Self::defer_graph_presentation(Self::analyze_dependencies, cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
             .on_action(cx.listener(|panel, _: &ToggleDependencyDiagramPreview, _, cx| {
@@ -16869,7 +16876,9 @@ mod tests {
                     assert!(canvas.graph.edges.len() <= MAX_CANVAS_EDGES);
                 });
                 let open_preview = |cx: &mut gpui::VisualTestContext| {
-                    panel.update(cx, |panel, cx| panel.show_dependency_diagram_popup(cx));
+                    panel.update_in(cx, |panel, window, cx| {
+                        panel.show_dependency_diagram_popup(window, cx)
+                    });
                     cx.run_until_parked();
                     workspace
                         .read_with(cx, |workspace, cx| {
@@ -17551,7 +17560,9 @@ mod tests {
             // provider query, and Escape dismisses it. The entry points route
             // through the same handler as the toolbar button and the tree
             // context menu.
-            panel.update(cx, |panel, cx| panel.show_dependency_diagram_popup(cx));
+            panel.update_in(cx, |panel, window, cx| {
+                panel.show_dependency_diagram_popup(window, cx)
+            });
             let popup_notice = panel.read_with(cx, |panel, _| panel.graph_notice.clone());
             assert!(
                 workspace.read_with(cx, |workspace, cx| workspace
@@ -18494,8 +18505,77 @@ mod tests {
             });
             cx.run_until_parked();
             open_queue_from_active_tab(cx);
-            panel.update(cx, |panel, cx| {
-                panel.show_dependency_diagram_popup(cx);
+            let workspace_windows = cx.read(|cx| cx.windows());
+            for mode in ["Float", "Open in Window"] {
+                invoke_panel_menu_command(cx, mode);
+                let detached_window = cx
+                    .read(|cx| cx.windows())
+                    .into_iter()
+                    .find(|window| !workspace_windows.contains(window))
+                    .expect("detached dependency window");
+                let mut detached = gpui::VisualTestContext::from_window(detached_window, cx);
+                detached.update(|window, cx| {
+                    window.activate_a11y_for_test();
+                    window.draw(cx).clear(cx);
+                });
+                panel.update(&mut detached, |panel, cx| {
+                    panel.host.select(inspection_target.clone());
+                    cx.notify();
+                });
+                let before_popup = commands.load(Ordering::SeqCst);
+                let popup_command = "Show Dependency Diagram Popup";
+                if mode == "Float" {
+                    invoke_selected_row_command(&panel, &mut detached, popup_command);
+                } else {
+                    open_selected_row_menu(&panel, &mut detached);
+                    settle_tool_menu(&mut detached);
+                    let bounds = detached
+                        .debug_bounds("MENU_ITEM-Show Dependency Diagram Popup")
+                        .expect("popup command bounds");
+                    detached.simulate_click(bounds.center(), Default::default());
+                    detached.run_until_parked();
+                }
+                assert!(
+                    workspace.read_with(cx, |workspace, cx| {
+                        workspace
+                            .active_modal::<DependencyDiagramPopup>(cx)
+                            .is_none()
+                    }),
+                    "{mode} popup must stay in its detached window"
+                );
+                let preview_visible = |cx: &mut gpui::VisualTestContext| {
+                    cx.update(|window, cx| {
+                        window.draw(cx).clear(cx);
+                        let tree: serde_json::Value = serde_json::from_str(
+                            &window
+                                .debug_a11y_tree_json()
+                                .expect("detached popup accessibility"),
+                        )
+                        .expect("accessibility JSON");
+                        tree["nodes"]
+                            .as_object()
+                            .expect("nodes")
+                            .values()
+                            .any(|node| node["aria"]["label"] == "Search dependency preview nodes")
+                    })
+                };
+                assert!(preview_visible(&mut detached), "{mode} shows the preview");
+                press_button(&mut detached, "escape");
+                assert!(
+                    !preview_visible(&mut detached),
+                    "{mode} dismisses the preview"
+                );
+                detached.update(|window, cx| {
+                    let panel = panel.read(cx);
+                    assert!(panel.focus_handle.contains_focused(window, cx));
+                    assert_eq!(panel.host.selected(), Some(&inspection_target));
+                });
+                assert_eq!(commands.load(Ordering::SeqCst), before_popup);
+                invoke_panel_menu_command(&mut detached, "Return to Dock");
+                assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
+            }
+            panel.update_in(cx, |panel, window, cx| {
+                panel.show_dependency_diagram_popup(window, cx);
             });
             cx.run_until_parked();
             let analyzer_item = workspace
