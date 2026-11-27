@@ -6,7 +6,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use ui::{Disclosure, Icon, IconName, IconSize, prelude::*};
+use ui::{Disclosure, Icon, IconName, IconSize, Tooltip, prelude::*};
 
 actions!(
     language_tool_tree,
@@ -96,6 +96,7 @@ pub struct LanguageToolRow {
 
 pub enum LanguageToolTreeScrollHandle {
     Uniform(UniformListScrollHandle),
+    Compact(UniformListScrollHandle),
     Wrapped(gpui::ListState),
 }
 
@@ -119,6 +120,7 @@ pub fn language_tool_tree(
     let on_context_menu = Arc::new(on_context_menu);
     let handle = scroll_handle.into();
     let wrapped = matches!(handle, LanguageToolTreeScrollHandle::Wrapped(_));
+    let compact = matches!(handle, LanguageToolTreeScrollHandle::Compact(_));
     let render_row = Arc::new(move |row: &VisibleLanguageToolRow, cx: &mut App| {
         let click_id = row.id.clone();
         let toggle_id = row.id.clone();
@@ -127,7 +129,14 @@ pub fn language_tool_tree(
         let on_toggle = on_toggle.clone();
         let on_context_menu = on_context_menu.clone();
         let is_selected = selected.as_ref() == Some(&row.id);
-        let text = if wrapped {
+        let text = if compact {
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(row.label.clone())
+                .into_any_element()
+        } else if wrapped {
             v_flex()
                 .flex_1()
                 .min_w_0()
@@ -170,7 +179,16 @@ pub fn language_tool_tree(
             .min_w_0()
             .cursor_pointer()
             .when(wrapped, |row| row.min_h_7().py_2().items_start())
-            .when(!wrapped, |row| row.h_7().items_center())
+            .when(!wrapped && !compact, |row| row.h_7().items_center())
+            .when(compact, |element| {
+                let id = row.id.0.clone();
+                element
+                    .h_6()
+                    .items_center()
+                    .text_ui_sm(cx)
+                    .debug_selector(move || id)
+                    .tooltip(Tooltip::text(row.accessibility_label.clone()))
+            })
             .when(is_selected, |element| {
                 element
                     .aria_active_descendant()
@@ -202,7 +220,8 @@ pub fn language_tool_tree(
             .into_any_element()
     });
     let tree = match handle {
-        LanguageToolTreeScrollHandle::Uniform(handle) => uniform_list(
+        LanguageToolTreeScrollHandle::Uniform(handle)
+        | LanguageToolTreeScrollHandle::Compact(handle) => uniform_list(
             "language-tool-tree-rows",
             rows.len(),
             move |range, _, cx| {
@@ -243,6 +262,7 @@ pub fn language_tool_tree(
         .child(
             div()
                 .id("language-tool-tree")
+                .debug_selector(|| "language-tool-tree".into())
                 .role(Role::Tree)
                 .flex_1()
                 .min_h_0()

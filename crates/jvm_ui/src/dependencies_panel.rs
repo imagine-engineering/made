@@ -13,12 +13,13 @@ use gpui::{
 };
 use language_tools::language_tool_tree::{
     self, LanguageToolNode, LanguageToolNodeId, LanguageToolProviderStatus, LanguageToolSnapshot,
-    LanguageToolTreeHost, language_tool_tree, status_message,
+    LanguageToolTreeHost, LanguageToolTreeScrollHandle, LanguageToolTreeStatus, language_tool_tree,
+    status_message,
 };
 use project::{
     Project, ProjectPath, WorktreeId,
     jvm_project::{
-        GradleAnnotationProcessorOutput, GradleProject, JdtlsImportedBuildKind,
+        GradleAnnotationProcessorOutput, GradleProject, JdtlsImportedBuildKind, JdtlsProject,
         JdtlsProjectMembership, JdtlsProjectSnapshot, JvmBuildOperation, JvmBuildOperationReceipt,
         KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
@@ -73,12 +74,17 @@ actions!(
         InspectGraphSelectionSet,
         ClearGraphInspection,
         ApplySavedMavenSelection,
+        ReloadAllBuilds,
+        ReloadMavenProjects,
+        SynchronizeGradleMetadata,
+        ConfigureSelectedOperation,
         ImportGradleSelection,
         UnlinkSelectedGradleProject,
         CancelSelectedImport,
         ShowDependencyDiagram,
         ShowDependencyRowMenu,
         CloseDependencyDiagram,
+        ToggleDependencyDiagramPreview,
         CopyDependencyDiagramSource,
         RunSelectedOfflineOperation,
         AddSelectedOrderedOperation,
@@ -709,6 +715,7 @@ pub struct DependenciesPanel {
     // One entry per diagram node: the matching tree fact row identity and
     // label, for legend navigation back into the shared tree.
     graph_diagram_legend: Vec<(LanguageToolNodeId, String)>,
+    show_graph_preview: bool,
     position: DockPosition,
     active: bool,
     zoomed: bool,
@@ -720,7 +727,7 @@ pub struct DependenciesPanel {
     graph_context_menu: Option<(Entity<ui::ContextMenu>, gpui::Point<Pixels>, Subscription)>,
     preferences_write: Option<gpui::Task<()>>,
     preferences_generation: u64,
-    show_options: bool,
+    show_graph_search: bool,
     recent_configurations: VecDeque<SavedConfiguration>,
     configuration_selections: HashMap<LanguageToolNodeId, SavedConfiguration>,
     configuration_notice: Option<String>,
@@ -2589,7 +2596,8 @@ fn graph_selections_for_snapshot(
                 target: GraphQueryTarget::Maven(maven.pom.clone()),
             };
             selections.insert(id.clone(), selection.clone());
-            selections.insert(graph_fact_id(&id, "maven", &[]), selection);
+            selections.insert(graph_fact_id(&id, "maven", &[]), selection.clone());
+            selections.insert(graph_fact_id(&id, "maven-dependencies", &[]), selection);
         }
         if view != BuildToolView::Maven
             && let Some(gradle) = &module.gradle
@@ -2607,12 +2615,10 @@ fn graph_selections_for_snapshot(
                         configuration: configuration.name.clone(),
                     },
                 };
-                if view == BuildToolView::Gradle {
-                    selections.insert(
-                        gradle_configuration_node_id(&id, &configuration.name),
-                        selection.clone(),
-                    );
-                }
+                selections.insert(
+                    gradle_configuration_node_id(&id, &configuration.name),
+                    selection.clone(),
+                );
                 if gradle
                     .dependency_graph
                     .as_ref()
@@ -3153,6 +3159,7 @@ impl DependenciesPanel {
                     graph_diagram: None,
                     graph_diagram_source: None,
                     graph_diagram_legend: Vec::new(),
+                    show_graph_preview: false,
                     graph_context_menu: None,
                     position: preferences.dock_position.into(),
                     active: false,
@@ -3163,7 +3170,7 @@ impl DependenciesPanel {
                     preferences_notice,
                     preferences_write: None,
                     preferences_generation: 0,
-                    show_options: false,
+                    show_graph_search: false,
                     recent_configurations: VecDeque::new(),
                     configuration_selections: HashMap::new(),
                     configuration_notice: None,
@@ -3244,6 +3251,7 @@ impl DependenciesPanel {
         self.graph_diagram = None;
         self.graph_diagram_source = None;
         self.graph_diagram_legend.clear();
+        self.show_graph_preview = false;
         self.view = view;
         self.preferences.view = view;
         self.persist_preferences(cx);
@@ -3288,6 +3296,7 @@ impl DependenciesPanel {
                     for node in &graph.nodes {
                         if *selected
                             == graph_component_row_id(graph_fact_id(&id, "maven-node", &[&node.id]))
+                            || dependency_path_matches(selected, &id, "maven-path", &[&node.id])
                         {
                             return Some((
                                 GraphSelection {
@@ -3311,6 +3320,12 @@ impl DependenciesPanel {
                                 "gradle-component",
                                 &[&graph.resolution.configuration, &component.id],
                             ))
+                            || dependency_path_matches(
+                                selected,
+                                &id,
+                                "gradle-path",
+                                &[&graph.resolution.configuration, &component.id],
+                            )
                         {
                             return Some((
                                 GraphSelection {
@@ -3369,12 +3384,16 @@ impl DependenciesPanel {
                         generation: snapshot.generation,
                         target: GraphQueryTarget::Maven(maven.pom.clone()),
                     };
-                    if *selected == id || *selected == graph_fact_id(&id, "maven", &[]) {
+                    if *selected == id
+                        || *selected == graph_fact_id(&id, "maven", &[])
+                        || *selected == graph_fact_id(&id, "maven-dependencies", &[])
+                    {
                         return Some((selection, graph.root_node.clone()));
                     }
                     for node in &graph.nodes {
                         if *selected
                             == graph_component_row_id(graph_fact_id(&id, "maven-node", &[&node.id]))
+                            || dependency_path_matches(selected, &id, "maven-path", &[&node.id])
                         {
                             return Some((selection, node.id.clone()));
                         }
@@ -3407,6 +3426,12 @@ impl DependenciesPanel {
                                 "gradle-component",
                                 &[&graph.resolution.configuration, &component.id],
                             ))
+                            || dependency_path_matches(
+                                selected,
+                                &id,
+                                "gradle-path",
+                                &[&graph.resolution.configuration, &component.id],
+                            )
                         {
                             return Some((selection, component.id.clone()));
                         }
@@ -4334,11 +4359,53 @@ impl DependenciesPanel {
         cx: &mut Context<Self>,
     ) {
         let is_queue_row = id == ordered_operation_root_id();
-        self.host.select(id);
-        let is_operation_row = self
-            .host
-            .selected()
-            .is_some_and(|selected| self.operation_selections.contains_key(selected));
+        self.host.select(id.clone());
+        let operation = self.operation_selections.get(&id);
+        let is_operation_row = operation.is_some();
+        let can_run_operation =
+            operation.is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
+        let project = self.project.read(cx);
+        let store = project.lsp_store().read(cx);
+        let module = self.selected_jdtls_module(cx);
+        let worktree = module.map(|module| module.module_root.worktree_id);
+        let local_import = !project.is_remote()
+            && self.build_phase_token.is_none()
+            && self.selected_build_worktree(cx).is_ok();
+        let remote_import = project.is_remote()
+            && !self.host_unavailable(cx)
+            && !self.remote_build_reimport_pending;
+        let maven_module = self.view != BuildToolView::Gradle
+            && module.is_some_and(|module| {
+                module.maven.is_some()
+                    || module.imported_build_kind == JdtlsImportedBuildKind::Maven
+            });
+        let gradle_module = self.view != BuildToolView::Maven
+            && module.is_some_and(|module| {
+                module.gradle.is_some()
+                    || module.imported_build_kind == JdtlsImportedBuildKind::Gradle
+            });
+        let reload_maven = maven_module
+            && (local_import
+                || (remote_import
+                    && store.can_reimport_remote_build_projects(
+                        JvmBuildTool::Maven,
+                        worktree,
+                        cx,
+                    )));
+        let import_gradle = gradle_module
+            && (local_import
+                || (remote_import
+                    && store.can_reimport_remote_build_projects(
+                        JvmBuildTool::Gradle,
+                        worktree,
+                        cx,
+                    )));
+        let sync_gradle = gradle_module
+            && (local_import
+                || (remote_import && store.can_synchronize_remote_gradle_metadata(worktree, cx)));
+        let apply_maven = maven_module && local_import;
+        let unlink_gradle = gradle_module && local_import && self.navigation.contains_key(&id);
+        let open_configuration = self.configuration_selections.contains_key(&id);
         let queue = self.ordered_queue_menu(cx);
         let queue_configurations = queue
             .configurations
@@ -4414,7 +4481,8 @@ impl DependenciesPanel {
                 )
             });
         let has_inspection = self.graph_inspection.is_some();
-        if !is_operation_row
+        if !can_run_operation
+            && !queue.add_to_queue
             && !is_queue_row
             && !eligible
             && !can_collect_graph
@@ -4422,6 +4490,12 @@ impl DependenciesPanel {
             && !has_inspection
             && !can_cancel_import
             && maven_settings_files.is_empty()
+            && !reload_maven
+            && !import_gradle
+            && !sync_gradle
+            && !apply_maven
+            && !unlink_gradle
+            && !open_configuration
         {
             cx.notify();
             return;
@@ -4432,11 +4506,18 @@ impl DependenciesPanel {
             menu.context(focus_handle).map(|menu| {
                 let mut menu = menu;
                 if is_operation_row {
-                    return menu.action_disabled_when(
-                        !queue.add_to_queue,
-                        "Add to Queue",
-                        Box::new(AddSelectedOrderedOperation),
-                    );
+                    if can_run_operation {
+                        menu = menu
+                            .action(
+                                "Run offline through Tasks",
+                                Box::new(RunSelectedOfflineOperation),
+                            )
+                            .action("Task options", Box::new(ConfigureSelectedOperation));
+                    }
+                    if queue.add_to_queue {
+                        menu = menu.action("Add to Queue", Box::new(AddSelectedOrderedOperation));
+                    }
+                    return menu;
                 }
                 if is_queue_row {
                     menu = menu
@@ -4474,7 +4555,7 @@ impl DependenciesPanel {
                 }
                 if eligible {
                     menu = menu
-                        .action("Show Dependency Diagram", Box::new(ShowDependencyDiagram))
+                        .action("Show Diagram", Box::new(ShowDependencyDiagram))
                         .action(
                             "Show Dependency Diagram Popup",
                             Box::new(ShowDependencyDiagramPopup),
@@ -4483,6 +4564,40 @@ impl DependenciesPanel {
                 }
                 if can_collect_graph {
                     menu = menu.action("Collect offline graph", Box::new(CollectSelectedGraph));
+                }
+                if reload_maven {
+                    menu = menu.action("Reload Maven projects", Box::new(ReloadMavenProjects));
+                }
+                if apply_maven {
+                    menu = menu.action(
+                        "Apply saved Maven selection",
+                        Box::new(ApplySavedMavenSelection),
+                    );
+                }
+                if import_gradle {
+                    menu = menu.action(
+                        if remote_import {
+                            "Reimport Gradle projects"
+                        } else {
+                            "Import Gradle selection"
+                        },
+                        Box::new(ImportGradleSelection),
+                    );
+                }
+                if sync_gradle {
+                    menu = menu.action(
+                        "Synchronize Gradle metadata",
+                        Box::new(SynchronizeGradleMetadata),
+                    );
+                }
+                if unlink_gradle {
+                    menu = menu.action(
+                        "Unlink Gradle project",
+                        Box::new(UnlinkSelectedGradleProject),
+                    );
+                }
+                if open_configuration {
+                    menu = menu.action("Run configuration", Box::new(RunSelectedConfiguration));
                 }
                 if !maven_settings_files.is_empty() {
                     if eligible || can_collect_graph {
@@ -4586,6 +4701,7 @@ impl DependenciesPanel {
         self.graph_diagram = None;
         self.graph_diagram_source = None;
         self.graph_diagram_legend.clear();
+        self.show_graph_preview = false;
         cx.notify();
     }
 
@@ -4883,7 +4999,7 @@ impl DependenciesPanel {
         let mut local_without_snapshot = 0;
         let mut remote_without_snapshot = 0;
         let mut remote_gradle_needs_metadata = false;
-        let selected_build_worktree_id = self.selected_build_worktree_id();
+        let selected_build_worktree_id = self.selected_build_worktree_id(cx);
         let restricted_worktrees = trusted_worktrees
             .read(cx)
             .restricted_worktrees(&worktree_store, cx)
@@ -5278,7 +5394,28 @@ impl DependenciesPanel {
             });
             let (configuration_root, configuration_selections) =
                 saved_configuration_tree(saved_configurations, project, cx);
-            roots.push(configuration_root);
+            let mut owners = configuration_selections
+                .values()
+                .map(|configuration| configuration.worktree_id);
+            let owner = owners
+                .next()
+                .filter(|owner| owners.all(|other| other == *owner));
+            let project_root = (self.view == BuildToolView::Gradle)
+                .then(|| {
+                    let mut matches = roots.iter_mut().filter(|row| {
+                        self.navigation
+                            .get(&row.id)
+                            .is_some_and(|target| Some(target.path.worktree_id) == owner)
+                    });
+                    let root = matches.next()?;
+                    matches.next().is_none().then_some(root)
+                })
+                .flatten();
+            if let Some(root) = project_root {
+                root.children.push(configuration_root);
+            } else {
+                roots.push(configuration_root);
+            }
             self.configuration_selections = configuration_selections;
         }
         if self.view == BuildToolView::Dependencies
@@ -5359,18 +5496,41 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
-    fn selected_build_worktree_id(&self) -> Option<settings::WorktreeId> {
+    fn selected_jdtls_module<'a>(&self, cx: &'a App) -> Option<&'a JdtlsProject> {
+        let selected = self.host.selected()?;
+        let store = self.project.read(cx).lsp_store().read(cx);
+        self.provider_servers
+            .iter()
+            .find_map(|(server, worktree, provider)| {
+                if *provider != DependencyProvider::Jdtls {
+                    return None;
+                }
+                let (snapshot, current) = store.jdtls_project_snapshot(*worktree)?;
+                if !current || snapshot.server_id != *server {
+                    return None;
+                }
+                snapshot.projects.iter().find(|module| {
+                    jdtls_module_node_id(snapshot, &module.module_root, self.view) == *selected
+                })
+            })
+    }
+
+    fn selected_build_worktree_id(&self, cx: &App) -> Option<settings::WorktreeId> {
         self.host
             .selected()
             .and_then(|id| self.navigation.get(id))
             .map(|navigation| navigation.path.worktree_id)
+            .or_else(|| {
+                self.selected_jdtls_module(cx)
+                    .map(|module| module.module_root.worktree_id)
+            })
     }
 
     fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
         if self.remote_build_reimport_pending {
             return;
         }
-        let selected_worktree = self.selected_build_worktree_id();
+        let selected_worktree = self.selected_build_worktree_id(cx);
         let lsp_store = self.project.read(cx).lsp_store();
         if self.project.read(cx).is_remote() {
             match lsp_store.update(cx, |store, cx| {
@@ -5848,11 +6008,7 @@ impl DependenciesPanel {
             !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
             "Build selection requires a connected local project host"
         );
-        let selected = self
-            .host
-            .selected()
-            .and_then(|id| self.navigation.get(id))
-            .map(|navigation| navigation.path.worktree_id);
+        let selected = self.selected_build_worktree_id(cx);
         let worktrees = self.project.read(cx).worktree_store();
         let candidates = worktrees
             .read(cx)
@@ -5922,7 +6078,7 @@ impl DependenciesPanel {
         if self.remote_build_reimport_pending || self.host_unavailable(cx) {
             return;
         }
-        let worktree_id = self.selected_build_worktree_id();
+        let worktree_id = self.selected_build_worktree_id(cx);
         match self.project.read(cx).lsp_store().update(cx, |store, cx| {
             store.reimport_remote_build_projects(tool, worktree_id, cx)
         }) {
@@ -6504,8 +6660,12 @@ fn project_rows_for_view(
     let mut navigation = HashMap::new();
     let mut module_groups = HashMap::new();
     for module in &snapshot.projects {
-        if (view == BuildToolView::Gradle && module.gradle.is_none())
-            || (view == BuildToolView::Maven && module.maven.is_none())
+        let gradle_module =
+            module.gradle.is_some() || module.imported_build_kind == JdtlsImportedBuildKind::Gradle;
+        let maven_module =
+            module.maven.is_some() || module.imported_build_kind == JdtlsImportedBuildKind::Maven;
+        if (view == BuildToolView::Gradle && !gradle_module)
+            || (view == BuildToolView::Maven && !maven_module)
         {
             continue;
         }
@@ -6655,13 +6815,14 @@ fn project_rows_for_view(
         if let Some(gradle) = &module.gradle
             && view != BuildToolView::Maven
         {
+            children.insert(0, gradle_configurations_node(&module_id, gradle));
             children.push(LanguageToolNode {
                 id: LanguageToolNodeId(format!("{}:gradle-tasks", module_id.0)),
-                label: "Gradle tasks".to_string(),
+                label: "Tasks".to_string(),
                 secondary_label: Some("Discovered tasks and declared options".to_string()),
                 accessibility_label:
                     "Gradle provider tasks; declared options where available".to_string(),
-                icon: None,
+                icon: Some(IconName::ListTodo),
                 children: gradle
                     .tasks
                     .iter()
@@ -6782,7 +6943,6 @@ fn project_rows_for_view(
                 enabled: false,
                 activation_label: None,
             });
-            children.push(gradle_configurations_node(&module_id, gradle));
         }
         if view == BuildToolView::Maven
             && let Some(maven) = &module.maven
@@ -6842,25 +7002,16 @@ fn project_rows_for_view(
         if view != BuildToolView::Gradle
             && let Some(maven) = &module.maven
         {
-            children.push(maven_graph_node_filtered(
-                &module_id,
-                maven.dependency_graph.as_deref(),
-                preferences.graph_fact_filter,
-                preferences.maven_graph_scope,
-                preferences.graph_fact_presentation,
-            ));
-        }
-        if view == BuildToolView::Gradle {
-            children.push(LanguageToolNode {
-                id: LanguageToolNodeId(format!("{}:gradle-saved-configurations", module_id.0)),
-                label: "Saved configurations".into(),
-                secondary_label: Some("Not available in this view; use Tasks for configured commands".into()),
-                accessibility_label: "Saved configurations; not available in this view; use Tasks for configured commands".into(),
-                icon: None,
-                children: Vec::new(),
-                enabled: false,
-                activation_label: None,
-            });
+            children.insert(
+                0,
+                maven_dependencies_node(
+                    &module_id,
+                    maven.dependency_graph.as_deref(),
+                    preferences.graph_fact_filter,
+                    preferences.maven_graph_scope,
+                    preferences.graph_fact_presentation,
+                ),
+            );
         }
         if view == BuildToolView::Gradle && preferences.group_gradle_tasks {
             if let Some(tasks) = children
@@ -6989,7 +7140,11 @@ fn project_rows_for_view(
             secondary_label: Some(format!(
                 "JDTLS module; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown"
             )),
-            icon: None,
+            icon: match (gradle_module, maven_module) {
+                (true, false) => Some(IconName::Gradle),
+                (false, true) => Some(IconName::Maven),
+                _ => Some(IconName::Folder),
+            },
             accessibility_label: format!(
                 "JDTLS module {module_name}; {membership}{source_level}{target_level}{project_vm}{launch_java}; build JDK and test runtime unknown"
             ),
@@ -6998,10 +7153,120 @@ fn project_rows_for_view(
             activation_label: Some("Open module manifest".to_string()),
         });
     }
+    roots = nest_build_module_rows(snapshot, view, roots);
     if preferences.group_modules(view) {
         roots = group_module_rows(roots, module_groups);
     }
     (roots, navigation)
+}
+
+fn nest_build_module_rows(
+    snapshot: &JdtlsProjectSnapshot,
+    view: BuildToolView,
+    roots: Vec<LanguageToolNode>,
+) -> Vec<LanguageToolNode> {
+    let identities = snapshot
+        .projects
+        .iter()
+        .map(|module| {
+            (
+                &module.module_root,
+                jdtls_module_node_id(snapshot, &module.module_root, view),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let gradle_projects = snapshot
+        .projects
+        .iter()
+        .filter_map(|module| {
+            let gradle = module.gradle.as_ref()?;
+            Some((
+                (&gradle.build_root, gradle.project_path.as_str()),
+                &module.module_root,
+            ))
+        })
+        .collect::<HashMap<_, _>>();
+    let visible: HashSet<_> = roots.iter().map(|row| row.id.clone()).collect();
+    let mut parents = HashMap::<LanguageToolNodeId, Option<LanguageToolNodeId>>::new();
+    let mut admit = |child: &ProjectPath, parent: &ProjectPath| {
+        let (Some(child), Some(parent)) = (identities.get(child), identities.get(parent)) else {
+            return;
+        };
+        if child != parent && visible.contains(child) && visible.contains(parent) {
+            parents
+                .entry(child.clone())
+                .and_modify(|previous| {
+                    if previous.as_ref() != Some(parent) {
+                        *previous = None;
+                    }
+                })
+                .or_insert_with(|| Some(parent.clone()));
+        }
+    };
+    for module in &snapshot.projects {
+        if view != BuildToolView::Gradle
+            && let Some(maven) = &module.maven
+        {
+            for child in &maven.modules {
+                admit(child, &module.module_root);
+            }
+        }
+        if view != BuildToolView::Maven
+            && let Some(gradle) = &module.gradle
+            && let Some((parent, _)) = gradle.project_path.rsplit_once(':')
+            && let Some(parent) = gradle_projects.get(&(
+                &gradle.build_root,
+                if parent.is_empty() { ":" } else { parent },
+            ))
+        {
+            admit(&module.module_root, parent);
+        }
+    }
+
+    let mut children = HashMap::<_, Vec<_>>::new();
+    let mut root_ids = Vec::new();
+    for row in &roots {
+        let mut ancestor = &row.id;
+        let mut depth = 0;
+        let mut cyclic_or_deep = false;
+        while let Some(Some(parent)) = parents.get(ancestor) {
+            depth += 1;
+            if parent == &row.id || depth >= MAX_DEPENDENCY_TREE_DEPTH {
+                cyclic_or_deep = true;
+                break;
+            }
+            ancestor = parent;
+        }
+        if !cyclic_or_deep && let Some(Some(parent)) = parents.get(&row.id) {
+            children
+                .entry(parent.clone())
+                .or_default()
+                .push(row.id.clone());
+        } else {
+            root_ids.push(row.id.clone());
+        }
+    }
+
+    fn attach(
+        id: &LanguageToolNodeId,
+        rows: &mut HashMap<LanguageToolNodeId, LanguageToolNode>,
+        children: &HashMap<LanguageToolNodeId, Vec<LanguageToolNodeId>>,
+    ) -> Option<LanguageToolNode> {
+        let mut row = rows.remove(id)?;
+        if let Some(modules) = children.get(id) {
+            row.children.splice(
+                0..0,
+                modules.iter().filter_map(|id| attach(id, rows, children)),
+            );
+        }
+        Some(row)
+    }
+
+    let mut rows = roots.into_iter().map(|row| (row.id.clone(), row)).collect();
+    root_ids
+        .iter()
+        .filter_map(|id| attach(id, &mut rows, &children))
+        .collect()
 }
 
 struct ModuleGroup {
@@ -7115,6 +7380,10 @@ fn search_project_graph_rows(rows: &mut [LanguageToolNode], query: &str) {
             }
             row.accessibility_label.push_str("; ");
             row.accessibility_label.push_str(status);
+        } else if row.id.0.starts_with("gradle-configuration:") {
+            row.children.retain_mut(|child| {
+                !child.id.0.starts_with("graph:") || retain_graph_search_matches(child, query)
+            });
         } else {
             search_project_graph_rows(&mut row.children, query);
         }
@@ -7547,6 +7816,419 @@ fn maven_graph_node_filtered(
     )
 }
 
+fn maven_dependencies_node(
+    module: &LanguageToolNodeId,
+    graph: Option<&project::jvm_project::MavenDependencyGraph>,
+    filter: GraphFactFilter,
+    scope: MavenGraphScope,
+    presentation: GraphFactPresentation,
+) -> LanguageToolNode {
+    let mut facts = maven_graph_node_filtered(module, graph, filter, scope, presentation);
+    let Some(graph) = graph.filter(|graph| {
+        graph.occurrences_known
+            && filter == GraphFactFilter::All
+            && presentation == GraphFactPresentation::Tree
+    }) else {
+        facts.icon = Some(IconName::ListTree);
+        return facts;
+    };
+    let mut children = maven_dependency_path_rows(module, graph, scope);
+    if graph.cycle_count > 0 && scope == MavenGraphScope::All {
+        let components: HashMap<_, _> = graph
+            .components
+            .iter()
+            .map(|component| (component.id.as_str(), component))
+            .collect();
+        let cycles = graph
+            .cycles
+            .iter()
+            .enumerate()
+            .map(|(index, cycle)| {
+                let route = cycle
+                    .cyclic
+                    .iter()
+                    .map(|dependency| {
+                        components
+                            .get(dependency.component.as_str())
+                            .map(|component| maven_dependency_coordinate(component))
+                            .unwrap_or_else(|| "Unavailable dependency".into())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                graph_fact_row(
+                    graph_fact_id(module, "maven-cycle", &[&index.to_string()]),
+                    route,
+                    "Maven provider-reported dependency cycle".into(),
+                    Vec::new(),
+                )
+            })
+            .collect();
+        let mut cycle_group = graph_fact_row(
+            graph_fact_id(module, "maven-cycles", &[]),
+            format!("Dependency cycles ({})", graph.cycle_count),
+            if graph.cycle_occurrences_known {
+                "Provider-reported cycle paths"
+            } else {
+                "The provider reported cycles without exact occurrence paths"
+            }
+            .into(),
+            cycles,
+        );
+        cycle_group.icon = Some(IconName::Warning);
+        children.push(cycle_group);
+    }
+    children.push(facts);
+    LanguageToolNode {
+        id: graph_fact_id(module, "maven-dependencies", &[]),
+        label: "Dependencies".into(),
+        accessibility_label: format!(
+            "Maven dependencies; scope {}; {}",
+            scope.label(),
+            if graph.collection_complete {
+                "admitted occurrences"
+            } else {
+                "partial dependency occurrences"
+            }
+        ),
+        secondary_label: None,
+        icon: Some(IconName::ListTree),
+        children,
+        enabled: false,
+        activation_label: None,
+    }
+}
+
+const MAX_DEPENDENCY_TREE_ROWS: usize = 2_048;
+const MAX_DEPENDENCY_TREE_DEPTH: usize = 32;
+
+fn dependency_path_row(
+    prefix: &LanguageToolNodeId,
+    path: &[usize],
+    label: String,
+    detail: String,
+    children: Vec<LanguageToolNode>,
+) -> LanguageToolNode {
+    let path = path
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(".");
+    LanguageToolNode {
+        id: LanguageToolNodeId(format!("{}:{path}", prefix.0)),
+        accessibility_label: format!("{label}; {detail}"),
+        label,
+        secondary_label: Some(detail),
+        icon: Some(IconName::Box),
+        children,
+        enabled: false,
+        activation_label: None,
+    }
+}
+
+fn dependency_path_matches(
+    selected: &LanguageToolNodeId,
+    module: &LanguageToolNodeId,
+    kind: &str,
+    parts: &[&str],
+) -> bool {
+    selected
+        .0
+        .strip_prefix(&graph_fact_id(module, kind, parts).0)
+        .is_some_and(|suffix| suffix.starts_with(':'))
+}
+
+fn bounded_dependency_paths<'a, Edge: 'a>(
+    root: (&'a str, LanguageToolNodeId),
+    edges: impl IntoIterator<Item = &'a Edge>,
+    source: impl Fn(&'a Edge) -> &'a str,
+    mut row: impl FnMut(
+        &'a Edge,
+        Option<&'a str>,
+        &[usize],
+        bool,
+        bool,
+        Vec<LanguageToolNode>,
+    ) -> LanguageToolNode,
+    target: impl Fn(&'a Edge) -> Option<&'a str>,
+) -> Vec<LanguageToolNode> {
+    struct Tree<'a, Edge, Target, Row> {
+        outgoing: HashMap<&'a str, Vec<&'a Edge>>,
+        ancestors: HashSet<&'a str>,
+        path: Vec<usize>,
+        remaining: usize,
+        target: Target,
+        row: Row,
+    }
+
+    impl<'a, Edge, Target, Row> Tree<'a, Edge, Target, Row>
+    where
+        Target: Fn(&'a Edge) -> Option<&'a str>,
+        Row: FnMut(
+            &'a Edge,
+            Option<&'a str>,
+            &[usize],
+            bool,
+            bool,
+            Vec<LanguageToolNode>,
+        ) -> LanguageToolNode,
+    {
+        fn children(&mut self, source: &'a str) -> Vec<LanguageToolNode> {
+            let count = self.outgoing.get(source).map_or(0, Vec::len);
+            let mut children = Vec::new();
+            for index in 0..count {
+                if self.remaining == 0 {
+                    break;
+                }
+                let Some(&edge) = self.outgoing.get(source).and_then(|edges| edges.get(index))
+                else {
+                    break;
+                };
+                self.remaining -= 1;
+                self.path.push(index);
+                let target = (self.target)(edge);
+                let cycle = target.is_some_and(|node| self.ancestors.contains(node));
+                let depth_limit = self.path.len() == MAX_DEPENDENCY_TREE_DEPTH;
+                let descendants = match target {
+                    Some(node) if !cycle && !depth_limit => {
+                        self.ancestors.insert(node);
+                        let children = self.children(node);
+                        self.ancestors.remove(node);
+                        children
+                    }
+                    _ => Vec::new(),
+                };
+                let truncated = target.is_some_and(|node| {
+                    !cycle
+                        && self
+                            .outgoing
+                            .get(node)
+                            .is_some_and(|edges| edges.len() > descendants.len())
+                });
+                children.push((self.row)(
+                    edge,
+                    target,
+                    &self.path,
+                    cycle,
+                    truncated,
+                    descendants,
+                ));
+                self.path.pop();
+            }
+            children
+        }
+    }
+
+    let mut outgoing = HashMap::<_, Vec<_>>::new();
+    for edge in edges {
+        outgoing.entry(source(edge)).or_default().push(edge);
+    }
+    let (root, limit_row) = root;
+    let root_count = outgoing.get(root).map_or(0, Vec::len);
+    let mut tree = Tree {
+        outgoing,
+        ancestors: HashSet::from([root]),
+        path: Vec::new(),
+        remaining: MAX_DEPENDENCY_TREE_ROWS,
+        target,
+        row: &mut row,
+    };
+    let mut children = tree.children(root);
+    if children.len() < root_count {
+        children.push(graph_fact_row(
+            limit_row,
+            "More dependency paths".into(),
+            "Tree display limit reached; the admitted graph is available in the diagram and analyzer".into(),
+            Vec::new(),
+        ));
+    }
+    children
+}
+
+fn gradle_dependency_path_rows(
+    module: &LanguageToolNodeId,
+    resolution: &project::jvm_project::GradleResolutionGraph,
+) -> Vec<LanguageToolNode> {
+    let components = resolution
+        .components
+        .iter()
+        .map(|component| (component.id.as_str(), component))
+        .collect::<HashMap<_, _>>();
+    let mut occurrences = HashMap::<_, usize>::new();
+    for edge in &resolution.edges {
+        if let Some(node) = edge.selected.as_deref() {
+            *occurrences.entry(node).or_default() += 1;
+        }
+    }
+    let mut edges = resolution.edges.iter().collect::<Vec<_>>();
+    edges.sort_by_cached_key(|&edge| {
+        (
+            &edge.from,
+            format!("{:?}", edge.requested),
+            &edge.selected,
+            &edge.selected_variant,
+            edge.constraint,
+        )
+    });
+    bounded_dependency_paths(
+        (
+            &resolution.root_component,
+            graph_fact_id(module, "gradle-path-limit", &[&resolution.configuration]),
+        ),
+        edges,
+        |edge| edge.from.as_str(),
+        |edge, target, path, cycle, truncated, children| {
+            use project::jvm_project::GradleDependencySelector;
+            let requested = match &edge.requested {
+                GradleDependencySelector::Module {
+                    group,
+                    module,
+                    version,
+                    ..
+                } => format!("{group}:{module}:{version}"),
+                GradleDependencySelector::Project {
+                    build_path,
+                    project_path,
+                } => format!("Project {build_path}{project_path}"),
+            };
+            let selected = target.and_then(|node| components.get(node));
+            let conflict = selected.is_some_and(|node| node.conflict_resolution);
+            let repeated =
+                target.is_some_and(|node| occurrences.get(node).is_some_and(|count| *count > 1));
+            let coordinate =
+                selected.map_or_else(|| requested.clone(), |node| gradle_component_label(node));
+            let prefix = graph_fact_id(
+                module,
+                "gradle-path",
+                &[&resolution.configuration, target.unwrap_or_default()],
+            );
+            dependency_path_row(
+                &prefix,
+                path,
+                dependency_path_label(coordinate, conflict, repeated, cycle, !edge.resolved),
+                format!(
+                    "Gradle dependency; requested {requested}; configuration {}; constraint {}; variant {};{}",
+                    resolution.configuration,
+                    edge.constraint,
+                    edge.selected_variant.as_deref().unwrap_or("unavailable"),
+                    if truncated {
+                        " further paths available in the diagram and analyzer"
+                    } else {
+                        ""
+                    }
+                ),
+                children,
+            )
+        },
+        |edge| edge.selected.as_deref(),
+    )
+}
+
+fn maven_dependency_path_rows(
+    module: &LanguageToolNodeId,
+    graph: &project::jvm_project::MavenDependencyGraph,
+    scope: MavenGraphScope,
+) -> Vec<LanguageToolNode> {
+    let components = graph
+        .components
+        .iter()
+        .map(|component| (component.id.as_str(), component))
+        .collect::<HashMap<_, _>>();
+    let mut occurrences = HashMap::<_, usize>::new();
+    for node in &graph.nodes {
+        *occurrences.entry(node.component.as_str()).or_default() += 1;
+    }
+    let mut edges = graph
+        .edges
+        .iter()
+        .filter(|edge| scope.matches(&edge.scope))
+        .collect::<Vec<_>>();
+    edges.sort_by_key(|&edge| (&edge.from_node, edge.position));
+    bounded_dependency_paths(
+        (
+            &graph.root_node,
+            graph_fact_id(module, "maven-path-limit", &[scope.label()]),
+        ),
+        edges,
+        |edge| edge.from_node.as_str(),
+        |edge, target, path, cycle, truncated, children| {
+            let component = components.get(edge.component.as_str());
+            let coordinate = component.map_or_else(
+                || "Unavailable dependency".to_string(),
+                |component| maven_dependency_coordinate(component),
+            );
+            let repeated = occurrences
+                .get(edge.component.as_str())
+                .is_some_and(|count| *count > 1);
+            let prefix = graph_fact_id(module, "maven-path", &[target.unwrap_or_default()]);
+            dependency_path_row(
+                &prefix,
+                path,
+                dependency_path_label(
+                    coordinate,
+                    edge.omitted,
+                    repeated,
+                    cycle,
+                    component.is_none(),
+                ),
+                format!(
+                    "Maven occurrence {}; scope {}; optional {}; selected occurrence {};{}",
+                    edge.target_node,
+                    edge.scope,
+                    edge.optional,
+                    edge.selected_node,
+                    if truncated {
+                        " further paths available in the diagram and analyzer"
+                    } else {
+                        ""
+                    }
+                ),
+                children,
+            )
+        },
+        |edge| Some(edge.target_node.as_str()),
+    )
+}
+
+fn maven_dependency_coordinate(
+    component: &project::jvm_project::MavenDependencyComponent,
+) -> String {
+    if component.extension == "jar" && component.classifier.is_empty() {
+        format!(
+            "{}:{}:{}",
+            component.group_id, component.artifact_id, component.version
+        )
+    } else {
+        format!(
+            "{}:{}:{}:{}:{}",
+            component.group_id,
+            component.artifact_id,
+            component.extension,
+            component.classifier,
+            component.version
+        )
+    }
+}
+
+fn dependency_path_label(
+    mut label: String,
+    conflict: bool,
+    repeated: bool,
+    cycle: bool,
+    unresolved: bool,
+) -> String {
+    for (visible, suffix) in [
+        (conflict, " · conflict"),
+        (repeated, " · repeated"),
+        (cycle, " · cycle"),
+        (unresolved, " · unresolved"),
+    ] {
+        if visible {
+            label.push_str(suffix);
+        }
+    }
+    label
+}
+
 fn gradle_configurations_node(
     module_id: &LanguageToolNodeId,
     gradle: &GradleProject,
@@ -7561,7 +8243,7 @@ fn gradle_configurations_node(
             "{} declarations; {}",
             gradle.configurations.len(),
             if gradle.dependency_graph.is_some() {
-                "selected graph shown separately"
+                "collected configuration includes dependency paths"
             } else {
                 "resolved dependencies unavailable"
             }
@@ -7569,37 +8251,47 @@ fn gradle_configurations_node(
     };
     LanguageToolNode {
         id: LanguageToolNodeId(format!("{}:gradle-configurations", module_id.0)),
-        label: "Configurations".into(),
+        label: "Dependencies".into(),
         secondary_label: Some(coverage.clone()),
-        accessibility_label: format!("Configurations; {coverage}"),
-        icon: None,
+        accessibility_label: format!("Gradle dependencies; provider configurations; {coverage}"),
+        icon: Some(IconName::ListTree),
         children: gradle.configurations.iter().map(|configuration| {
             let configuration_id = gradle_configuration_node_id(module_id, &configuration.name);
             let roles = format!("{}; {}",
                 if configuration.resolvable { "Resolvable" } else { "Not resolvable" },
                 if configuration.consumable { "consumable" } else { "not consumable" }
             );
+            let resolution = gradle.dependency_graph.as_ref()
+                .map(|graph| &graph.resolution)
+                .filter(|resolution| resolution.configuration == configuration.name);
+            let resolved = if resolution.is_some() { "collected dependency paths" } else { "resolved dependencies unavailable" };
+            let declared_parents = configuration.extends_from.iter().map(|parent| LanguageToolNode {
+                id: LanguageToolNodeId(format!("gradle-configuration-parent:{}:{}:{}:{parent}", configuration_id.0.len(), configuration_id.0, parent.len())),
+                label: parent.clone(),
+                secondary_label: Some("Declared parent; resolved dependencies unavailable".into()),
+                accessibility_label: format!(
+                    "Configuration {} extends declared parent {parent}; resolved dependencies unavailable", configuration.name
+                ),
+                icon: None,
+                children: Vec::new(),
+                enabled: false,
+                activation_label: None,
+            });
+            let children = match resolution {
+                Some(resolution) => gradle_dependency_path_rows(module_id, resolution)
+                    .into_iter().chain(declared_parents).collect(),
+                None => declared_parents.collect(),
+            };
             LanguageToolNode {
                 label: configuration.name.clone(),
                 secondary_label: Some(roles.clone()),
                 accessibility_label: format!(
-                    "Gradle configuration {}; {roles}; {}; {} declared parents; resolved dependencies unavailable",
+                    "Gradle configuration {}; {roles}; {}; {} declared parents; {resolved}",
                     configuration.name, configuration.description.as_deref().unwrap_or("no description"),
                     configuration.extends_from.len()
                 ),
-                icon: None,
-                children: configuration.extends_from.iter().map(|parent| LanguageToolNode {
-                    id: LanguageToolNodeId(format!("gradle-configuration-parent:{}:{}:{}:{parent}", configuration_id.0.len(), configuration_id.0, parent.len())),
-                    label: parent.clone(),
-                    secondary_label: Some("Declared parent; resolved dependencies unavailable".into()),
-                    accessibility_label: format!(
-                        "Configuration {} extends declared parent {parent}; resolved dependencies unavailable", configuration.name
-                    ),
-                    icon: None,
-                    children: Vec::new(),
-                    enabled: false,
-                    activation_label: None,
-                }).collect(),
+                icon: Some(IconName::ListTree),
+                children,
                 id: configuration_id,
                 enabled: false,
                 activation_label: None,
@@ -7942,7 +8634,7 @@ fn saved_configuration_tree(
     HashMap<LanguageToolNodeId, SavedConfiguration>,
 ) {
     let mut selections = HashMap::new();
-    let heading = format!("Saved configurations ({})", ordered.len());
+    let heading = format!("Run Configurations ({})", ordered.len());
     let children = ordered
         .into_iter()
         .map(|target| {
@@ -8625,135 +9317,373 @@ impl Drop for DependenciesPanel {
     }
 }
 
+impl DependenciesPanel {
+    fn panel_menu(&self, cx: &Context<Self>) -> ui::PopoverMenu<ui::ContextMenu> {
+        let focus = self.focus_handle.clone();
+        let panel = cx.weak_entity();
+        let dock_mode = self.preferences.dock_mode;
+        let view = self.view;
+        let preferences = self.preferences.clone();
+        let zoom_label = if self.zoomed {
+            "Restore panel size"
+        } else {
+            "Maximize panel"
+        };
+        let has_diagram = self.graph_diagram.is_some();
+        let show_graph_preview = self.show_graph_preview;
+        let has_diagram_source = self.graph_diagram_source.is_some();
+        let recent_configuration = self.recent_configuration().cloned();
+        let queue_count = self.ordered_operations.len();
+        let reload_all = view == BuildToolView::Dependencies
+            && self.build_phase_token.is_none()
+            && self.selected_build_worktree(cx).is_ok();
+        ui::PopoverMenu::new("groovy-panel-menu-popover")
+            .anchor(gpui::Anchor::TopRight)
+            .trigger(
+                IconButton::new("groovy-panel-menu", IconName::Ellipsis)
+                    .aria_label("Build tools panel menu")
+                    .tooltip(Tooltip::text("Build tools panel menu"))
+                    .tab_index(0_isize),
+            )
+            .menu(move |window, cx| {
+                let focus = focus.clone();
+                let panel = panel.clone();
+                let preferences = preferences.clone();
+                let recent_configuration = recent_configuration.clone();
+                Some(ui::ContextMenu::build(window, cx, move |mut menu, _, _| {
+                    menu = menu.context(focus);
+                    if dock_mode.is_detached() {
+                        let panel = panel.clone();
+                        menu = menu.entry("Return to Dock", None, move |_, cx| {
+                            if let Some(panel) = panel.upgrade() {
+                                panel.update(cx, |panel, cx| {
+                                    panel.present_in_dock_mode(DockMode::Pinned, cx)
+                                });
+                            }
+                        });
+                    } else {
+                        let presentations = [
+                            if dock_mode.is_pinned() {
+                                ("Unpin panel", DockMode::Unpinned)
+                            } else {
+                                ("Pin panel", DockMode::Pinned)
+                            },
+                            if dock_mode == DockMode::Overlay {
+                                ("Dock panel", DockMode::Unpinned)
+                            } else {
+                                ("Undock panel", DockMode::Overlay)
+                            },
+                            ("Float", DockMode::Floating),
+                            ("Open in Window", DockMode::Window),
+                        ];
+                        for (label, mode) in presentations {
+                            let panel = panel.clone();
+                            menu = menu.entry(label, None, move |window, cx| {
+                                if let Some(panel) = panel.upgrade() {
+                                    panel.update(cx, |panel, cx| {
+                                        if mode.is_detached() {
+                                            panel.present_in_dock_mode(mode, cx);
+                                        } else {
+                                            panel.set_dock_mode(mode, window, cx);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                        menu = menu.action(zoom_label, Box::new(workspace::ToggleZoom));
+                    }
+                    menu = menu.separator().action(
+                        format!("Ordered operations ({queue_count})"),
+                        Box::new(ShowOrderedOperations),
+                    );
+                    if reload_all {
+                        menu = menu.action("Reload all builds", Box::new(ReloadAllBuilds));
+                    }
+                    if let Some(configuration) = recent_configuration {
+                        let panel = panel.clone();
+                        menu = menu.entry(
+                            format!("Run {}", configuration.label),
+                            None,
+                            move |window, cx| {
+                                if let Some(panel) = panel.upgrade() {
+                                    panel.update(cx, |panel, cx| {
+                                        panel.run_configuration(configuration.clone(), window, cx)
+                                    });
+                                }
+                            },
+                        );
+                    }
+                    menu = menu.submenu("Tree options", move |mut menu, _, _| {
+                        menu = menu
+                            .action(
+                                format!("Graph facts: {}", preferences.graph_fact_filter.label()),
+                                Box::new(CycleGraphFactFilter),
+                            )
+                            .action(
+                                preferences.graph_fact_presentation.label(),
+                                Box::new(CycleGraphFactPresentation),
+                            );
+                        if view != BuildToolView::Gradle {
+                            menu = menu.action(
+                                format!("Maven scope: {}", preferences.maven_graph_scope.label()),
+                                Box::new(CycleMavenGraphScope),
+                            );
+                        }
+                        let options: &[BuildViewOption] = match view {
+                            BuildToolView::Gradle => &[
+                                BuildViewOption::GroupModules,
+                                BuildViewOption::GroupGradleTasks,
+                                BuildViewOption::ShowToolbar,
+                                BuildViewOption::ShowIgnored,
+                            ],
+                            BuildToolView::Maven => &[
+                                BuildViewOption::GroupModules,
+                                BuildViewOption::ShowBasicMavenPhases,
+                                BuildViewOption::ShowMavenArtifactId,
+                                BuildViewOption::ShowMavenVersion,
+                                BuildViewOption::ShowToolbar,
+                                BuildViewOption::ShowIgnored,
+                            ],
+                            BuildToolView::Dependencies => &[],
+                        };
+                        for &option in options {
+                            let panel = panel.clone();
+                            menu = menu.toggleable_entry(
+                                option.label(),
+                                option.enabled(&preferences, view),
+                                ui::IconPosition::End,
+                                None,
+                                move |_, cx| {
+                                    if let Some(panel) = panel.upgrade() {
+                                        panel.update(cx, |panel, cx| {
+                                            panel.toggle_option(option, cx)
+                                        });
+                                    }
+                                },
+                            );
+                        }
+                        if !preferences.show_toolbar(view) {
+                            menu = menu
+                                .action("Expand All", Box::new(language_tool_tree::ExpandAll))
+                                .action("Collapse All", Box::new(language_tool_tree::CollapseAll));
+                        }
+                        menu
+                    });
+                    if has_diagram {
+                        menu = menu
+                            .action(
+                                if show_graph_preview {
+                                    "Hide diagram preview and legend"
+                                } else {
+                                    "Show diagram preview and legend"
+                                },
+                                Box::new(ToggleDependencyDiagramPreview),
+                            )
+                            .action("Close diagram", Box::new(CloseDependencyDiagram));
+                    }
+                    if has_diagram_source {
+                        menu = menu
+                            .action("Copy diagram source", Box::new(CopyDependencyDiagramSource));
+                    }
+                    menu
+                }))
+            })
+    }
+
+    fn render_tree_status(&self, cx: &Context<Self>) -> Option<impl IntoElement> {
+        let state = self.host.status();
+        let cancel_graph = self.graph_query_is_pending(cx);
+        let cancel_import = self.build_phase_is_pending(cx);
+        let project = self.project.read(cx);
+        let can_recover_gradle = self.view == BuildToolView::Gradle
+            && matches!(
+                state,
+                LanguageToolTreeStatus::Empty(_)
+                    | LanguageToolTreeStatus::Partial(_)
+                    | LanguageToolTreeStatus::Loading
+                    | LanguageToolTreeStatus::Refreshing
+                    | LanguageToolTreeStatus::Stale(_)
+            )
+            && !self.host_unavailable(cx)
+            && !self.remote_build_reimport_pending
+            && if project.is_remote() {
+                project
+                    .lsp_store()
+                    .read(cx)
+                    .can_synchronize_remote_gradle_metadata(self.selected_build_worktree_id(cx), cx)
+            } else {
+                self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok()
+            };
+        let notices: Vec<(&str, String)> = [
+            ("Dependency data", status_message(state)),
+            (
+                "Selected JVM build import status",
+                self.build_phase_notice.clone(),
+            ),
+            (
+                "JVM build operation admission status",
+                self.operation_notice.clone(),
+            ),
+            (
+                "Saved configuration run status",
+                self.configuration_notice.clone(),
+            ),
+            ("Dependency graph status", self.graph_notice.clone()),
+            (
+                "Build view preferences status",
+                self.preferences_notice.clone(),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(label, message)| message.map(|message| (label, message)))
+        .collect();
+        if notices.is_empty() && !cancel_graph && !cancel_import {
+            return None;
+        }
+        let label = match state {
+            _ if cancel_graph => "Collecting dependency graph…",
+            _ if cancel_import => "Importing build…",
+            LanguageToolTreeStatus::Dormant => "Waiting for project data",
+            LanguageToolTreeStatus::Loading => "Loading dependencies…",
+            LanguageToolTreeStatus::Refreshing => "Refreshing dependencies…",
+            LanguageToolTreeStatus::Partial(_) => "Partial dependency data",
+            LanguageToolTreeStatus::Empty(_) => "No dependency data",
+            LanguageToolTreeStatus::Error(_) | LanguageToolTreeStatus::StaleError(_) => {
+                "Dependency load failed"
+            }
+            LanguageToolTreeStatus::Disconnected(_)
+            | LanguageToolTreeStatus::DisconnectedStale(_) => "Project host disconnected",
+            LanguageToolTreeStatus::Restricted(_) => "Dependency data restricted",
+            LanguageToolTreeStatus::Unsupported(_) => "Dependency data unavailable",
+            LanguageToolTreeStatus::Stale(_) | LanguageToolTreeStatus::Mismatch(_) => {
+                "Dependency data out of date"
+            }
+            LanguageToolTreeStatus::Current => notices
+                .first()
+                .map_or("Build activity", |(label, _)| *label),
+        };
+        Some(
+            h_flex()
+                .id("groovy-dependency-tree-status")
+                .debug_selector(|| "groovy-dependency-tree-status".into())
+                .key_context("GroovyDependenciesPanelControls")
+                .h_7()
+                .px_2()
+                .gap_1()
+                .flex_shrink_0()
+                .child(
+                    div()
+                        .id("groovy-dependency-tree-summary")
+                        .role(Role::Status)
+                        .aria_label(label)
+                        .aria_live(gpui::accesskit::Live::Polite)
+                        .min_w_0()
+                        .flex_1()
+                        .truncate()
+                        .child(Label::new(label).size(LabelSize::Small).color(Color::Muted)),
+                )
+                .when(cancel_graph, |row| {
+                    row.child(
+                        Button::new("groovy-cancel-graph-collection", "Cancel")
+                            .aria_label("Cancel graph collection")
+                            .label_size(LabelSize::Small)
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, window, cx| {
+                                panel.focus_handle.focus(window, cx);
+                                panel.cancel_graph_collection(cx);
+                            })),
+                    )
+                })
+                .when(cancel_import && !cancel_graph, |row| {
+                    row.child(
+                        Button::new("groovy-cancel-selected-import", "Cancel")
+                            .aria_label("Cancel selected import")
+                            .label_size(LabelSize::Small)
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, window, cx| {
+                                panel.focus_handle.focus(window, cx);
+                                panel.cancel_selected_import(cx);
+                            })),
+                    )
+                })
+                .child(
+                    ui::PopoverMenu::new("groovy-dependency-status-popover")
+                        .anchor(gpui::Anchor::TopRight)
+                        .trigger(
+                            Button::new("groovy-dependency-status-details", "Details")
+                                .aria_label("Dependency status details")
+                                .label_size(LabelSize::Small)
+                                .tab_index(0_isize),
+                        )
+                        .menu({
+                            let focus = self.focus_handle.clone();
+                            move |window, cx| {
+                                let notices = notices.clone();
+                                let focus = focus.clone();
+                                Some(ui::ContextMenu::build(window, cx, move |mut menu, _, _| {
+                                    menu = menu.context(focus);
+                                    for (label, message) in notices {
+                                        menu = menu.custom_row(move |_, cx| {
+                                            div()
+                                                .id(label)
+                                                .role(Role::Status)
+                                                .aria_label(label)
+                                                .aria_value(message.clone())
+                                                .aria_live(gpui::accesskit::Live::Polite)
+                                                .px_2()
+                                                .py_1()
+                                                .max_w(px(300.))
+                                                .whitespace_normal()
+                                                .text_ui_sm(cx)
+                                                .child(message.clone())
+                                                .into_any_element()
+                                        });
+                                    }
+                                    if cancel_graph && cancel_import {
+                                        menu = menu.action(
+                                            "Cancel selected import",
+                                            Box::new(CancelSelectedImport),
+                                        );
+                                    }
+                                    if can_recover_gradle {
+                                        menu = menu.action(
+                                            "Synchronize Gradle metadata",
+                                            Box::new(SynchronizeGradleMetadata),
+                                        );
+                                    }
+                                    menu.action(
+                                        "Refresh Dependencies",
+                                        Box::new(language_tool_tree::Refresh),
+                                    )
+                                }))
+                            }
+                        }),
+                ),
+        )
+    }
+}
+
 impl Render for DependenciesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rows = self.host.visible_rows_snapshot();
         let selected = self.host.selected().cloned();
-        let status = status_message(self.host.status());
-        let can_expand_all = self.host.can_expand_all();
-        let can_collapse_all = self.host.can_collapse_all();
-        let show_toolbar = self.preferences.show_toolbar(self.view);
-        let icon_toolbar_active = show_toolbar && self.view != BuildToolView::Dependencies;
-        let can_collect_graph = self.selected_graph().is_some()
-            && self.graph_query_token.is_none()
-            && !self.project.read(cx).is_remote();
+        let show_search = self.show_graph_search || !self.graph_search.read(cx).text(cx).is_empty();
         let selected_operation = selected
             .as_ref()
             .and_then(|id| self.operation_selections.get(id));
-        let can_run_operation =
-            selected_operation.is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
-        let run_operation_label = if self.project.read(cx).is_remote() {
-            if can_run_operation {
-                "Run selected offline build operation through Tasks on the project host"
-            } else {
-                "Discovered offline build execution unavailable for remote projects"
-            }
-        } else {
-            "Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts"
-        };
+        let show_operation_options = selected_operation.is_some_and(|receipt| {
+            Some(receipt) == self.operation_option_target.as_ref()
+                && self.operation_host_is_available(receipt, cx)
+        });
         let selected_gradle_task = selected_operation.is_some_and(|receipt| {
             receipt
                 .operations
                 .iter()
                 .any(|operation| operation.gradle_task_path().is_some())
         });
-        let show_operation_options =
-            can_run_operation && selected_operation == self.operation_option_target.as_ref();
-        let can_run_ordered = self.can_run_ordered_operations(cx);
-        let can_cancel_graph = self.graph_query_is_pending(cx);
-        let can_apply_build_selection =
-            self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok();
-        let remote_project = self.project.read(cx).is_remote();
-        let has_remote_gradle_scope = remote_project
-            && !self.host_unavailable(cx)
-            && self
-                .project
-                .read(cx)
-                .lsp_store()
-                .read(cx)
-                .can_synchronize_remote_gradle_metadata(self.selected_build_worktree_id(), cx);
-        let can_use_remote_gradle_actions =
-            has_remote_gradle_scope && !self.remote_build_reimport_pending;
-        let has_remote_maven_scope = remote_project
-            && !self.host_unavailable(cx)
-            && self
-                .project
-                .read(cx)
-                .lsp_store()
-                .read(cx)
-                .can_reimport_remote_build_projects(
-                    JvmBuildTool::Maven,
-                    self.selected_build_worktree_id(),
-                    cx,
-                );
-        let can_reload_maven = if remote_project {
-            has_remote_maven_scope && !self.remote_build_reimport_pending
-        } else {
-            can_apply_build_selection
-        };
-        let reload_maven_label = match (remote_project, has_remote_maven_scope) {
-            (false, _) => "Reload selected or provider-default Maven projects on the local host",
-            (true, true) => "Reload Maven projects offline on the project host",
-            (true, false) => {
-                "Maven reimport requires a trusted direct connection to the project host"
-            }
-        };
-        let can_synchronize_gradle = !remote_project || can_use_remote_gradle_actions;
-        let synchronize_gradle_label = match (remote_project, has_remote_gradle_scope) {
-            (false, _) => {
-                "Synchronize local Gradle metadata; executes trusted build configuration scripts"
-            }
-            (true, true) => {
-                "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts"
-            }
-            (true, false) => {
-                "Gradle metadata synchronization requires a trusted direct connection to the project host"
-            }
-        };
-        let (gradle_import_text, gradle_import_label, can_import_gradle) = if remote_project {
-            let label = if has_remote_gradle_scope {
-                "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts"
-            } else {
-                "Gradle reimport requires a trusted direct connection to the project host"
-            };
-            (
-                "Reimport Gradle projects",
-                label,
-                can_use_remote_gradle_actions,
-            )
-        } else {
-            (
-                "Import Gradle selection",
-                "Import effective Gradle selection for the selected local project folder; executes trusted build configuration",
-                can_apply_build_selection,
-            )
-        };
-        let can_cancel_import = self.build_phase_is_pending(cx);
-        let can_inspect_graph = self
-            .selected_graph_inspection(GraphInspectionMode::Neighbours, cx)
-            .is_some();
-        let can_present_graph = self.resolve_selected_canvas_graph(cx).is_some();
         let click_panel = cx.weak_entity();
         let toggle_panel = cx.weak_entity();
         let menu_panel = cx.weak_entity();
-        let zoom_label = if self.zoomed {
-            "Restore Groovy panel size"
-        } else {
-            "Maximize Groovy panel"
-        };
-        let pinned = self.preferences.dock_mode.is_pinned();
-        let pin_label = if pinned {
-            "Unpin Groovy panel"
-        } else {
-            "Pin Groovy panel"
-        };
-        let overlay = self.preferences.dock_mode == DockMode::Overlay;
-        let windowed = self.preferences.dock_mode.is_detached();
-        let overlay_label = if overlay {
-            "Dock Groovy panel"
-        } else {
-            "Undock Groovy panel"
-        };
         v_flex()
             .id("groovy-dependencies-panel")
             .role(Role::Group)
@@ -8790,6 +9720,10 @@ impl Render for DependenciesPanel {
                     panel.run_ordered_configuration(event, window, cx);
                 },
             ))
+            .on_action(cx.listener(|panel, _: &ReloadAllBuilds, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
+            .on_action(cx.listener(|panel, _: &ReloadMavenProjects, _, cx| panel.reload_maven_projects(cx)))
+            .on_action(cx.listener(|panel, _: &SynchronizeGradleMetadata, _, cx| panel.synchronize_gradle_metadata(cx)))
+            .on_action(cx.listener(|panel, _: &ConfigureSelectedOperation, window, cx| panel.configure_selected_operation(window, cx)))
             .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, _, cx| panel.apply_saved_build_selection(true, cx)))
             .on_action(cx.listener(|panel, _: &ImportGradleSelection, _, cx| panel.apply_saved_build_selection(false, cx)))
             .on_action(cx.listener(|panel, _: &UnlinkSelectedGradleProject, _, cx| panel.unlink_selected_gradle_project(cx)))
@@ -8873,6 +9807,12 @@ impl Render for DependenciesPanel {
             .on_action(cx.listener(|_, _: &ShowDependencyDiagramPopup, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram_popup, cx)))
             .on_action(cx.listener(|_, _: &AnalyzeDependencies, _, cx| Self::defer_graph_presentation(Self::analyze_dependencies, cx)))
             .on_action(cx.listener(|panel, _: &CloseDependencyDiagram, _, cx| panel.close_dependency_diagram(cx)))
+            .on_action(cx.listener(|panel, _: &ToggleDependencyDiagramPreview, _, cx| {
+                if panel.graph_diagram.is_some() {
+                    panel.show_graph_preview = !panel.show_graph_preview;
+                    cx.notify();
+                }
+            }))
             .on_action(cx.listener(|panel, _: &CopyDependencyDiagramSource, _, cx| panel.copy_dependency_diagram_source(cx)))
             .on_action(
                 cx.listener(|panel, _: &language_tool_tree::ToggleExpanded, _, cx| {
@@ -8888,502 +9828,14 @@ impl Render for DependenciesPanel {
                 },
             ))
             .child(
-                div()
-                    .key_context("GroovyDependenciesPanelControls")
-                    .min_h_9()
-                    .px_2()
-                    .py_1()
-                    .flex()
-                    .items_center()
-                    .flex_wrap()
-                    .gap_1()
-                    .justify_between()
-                    .child(self.view.label())
-                    .when(!windowed, |header| header.child(
-                        IconButton::new("groovy-panel-pin", ui::IconName::Pin)
-                            .toggle_state(pinned)
-                            .shape(ui::IconButtonShape::Square)
-                            .tab_index(0_isize)
-                            .aria_label(pin_label)
-                            .tooltip(Tooltip::text(pin_label))
-                            .on_click(cx.listener(move |panel, _, window, cx| {
-                                panel.set_dock_mode(if pinned { DockMode::Unpinned } else { DockMode::Pinned }, window, cx);
-                            })),
-                    ))
-                    .when(!windowed, |header| header.child(
-                        Button::new("groovy-panel-undock", if overlay { "Dock" } else { "Undock" })
-                            .aria_label(overlay_label)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(move |panel, _, window, cx| {
-                                panel.set_dock_mode(if overlay { DockMode::Unpinned } else { DockMode::Overlay }, window, cx);
-                            })),
-                    ))
-                    .when(!windowed, |header| header.child(
-                        IconButton::new("groovy-panel-zoom", ui::IconName::Maximize)
-                            .toggle_state(self.zoomed)
-                            .selected_icon(ui::IconName::Minimize)
-                            .shape(ui::IconButtonShape::Square)
-                            .tab_index(0_isize)
-                            .aria_label(zoom_label)
-                            .tooltip(Tooltip::text(zoom_label))
-                            .on_click(cx.listener(|panel, _, window, cx| panel.toggle_panel_zoom(window, cx))),
-                    ))
-                    .child(
-                        Button::new("groovy-panel-window", if windowed { "Return to Dock" } else { "Open in Window" })
-                            .aria_label(if windowed { "Return Groovy to its dock" } else { "Open Groovy in a separate window" })
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(move |panel, _, _, cx| {
-                                let mode = if windowed { DockMode::Pinned } else { DockMode::Window };
-                                panel.present_in_dock_mode(mode, cx);
-                            })),
-                    )
-                    .when(!windowed, |header| header.child(
-                        Button::new("groovy-panel-float", "Float")
-                            .aria_label("Float Groovy above its workspace")
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| {
-                                panel.present_in_dock_mode(DockMode::Floating, cx);
-                            })),
-                    ))
-                    .when(icon_toolbar_active, |header| {
-                        header.child(
-                            h_flex()
-                                .gap_1()
-                                .when(self.view == BuildToolView::Gradle, |row| {
-                                    row.child(
-                                        IconButton::new(
-                                            "groovy-gradle-synchronize-metadata-icon",
-                                            ui::IconName::RotateCcw,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(synchronize_gradle_label)
-                                        .tooltip(Tooltip::text("Synchronize metadata"))
-                                        .disabled(!can_synchronize_gradle)
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx))),
-                                    )
-                                    .child(
-                                        IconButton::new(
-                                            "groovy-import-gradle-selection-icon",
-                                            ui::IconName::Download,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(gradle_import_label)
-                                        .tooltip(Tooltip::text(gradle_import_text))
-                                        .disabled(!can_import_gradle)
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx))),
-                                    )
-                                })
-                                .when(self.view == BuildToolView::Maven, |row| {
-                                    row.child(
-                                        IconButton::new(
-                                            "groovy-reload-maven-projects-icon",
-                                            ui::IconName::RotateCw,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(reload_maven_label)
-                                        .tooltip(Tooltip::text("Reload Maven projects"))
-                                        .disabled(!can_reload_maven)
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.reload_maven_projects(cx))),
-                                    )
-                                    .child(
-                                        IconButton::new(
-                                            "groovy-apply-saved-maven-selection-icon",
-                                            ui::IconName::Download,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(if self.project.read(cx).is_remote() { "Saved Maven selection unavailable for remote projects" } else { "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration" })
-                                        .tooltip(Tooltip::text("Apply saved Maven selection"))
-                                        .disabled(!can_apply_build_selection)
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(true, cx))),
-                                    )
-                                    .child(
-                                        IconButton::new(
-                                            "groovy-maven-graph-scope-icon",
-                                            ui::IconName::ArrowRightLeft,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(format!("Maven dependency graph scope: {}; activate for {}; filters admitted edge scopes without resolving dependencies", self.preferences.maven_graph_scope.label(), self.preferences.maven_graph_scope.next().label()))
-                                        .aria_value(self.preferences.maven_graph_scope.label())
-                                        .tooltip(Tooltip::text("Maven scope"))
-                                        .on_click(cx.listener(|panel, _, _, cx| panel.cycle_maven_graph_scope(cx))),
-                                    )
-                                })
-                                .child(
-                                    IconButton::new(
-                                        "groovy-build-view-options-icon",
-                                        ui::IconName::Settings,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label(format!("{} view options", self.view.label()))
-                                    .tooltip(Tooltip::text("Options"))
-                                    .toggle_state(self.show_options)
-                                    .on_click(cx.listener(|panel, _, _, cx| {
-                                        panel.show_options = !panel.show_options;
-                                        cx.notify();
-                                    })),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-graph-facts-filter-icon",
-                                        ui::IconName::Filter,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label(format!("Dependency graph fact filter: {}; activate for {}; filters admitted metadata without resolving dependencies", self.preferences.graph_fact_filter.label(), self.preferences.graph_fact_filter.next().label()))
-                                    .aria_value(self.preferences.graph_fact_filter.label())
-                                    .tooltip(Tooltip::text("Graph fact filter"))
-                                    .toggle_state(self.preferences.graph_fact_filter != GraphFactFilter::All)
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_filter(cx))),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-collect-offline-graph-icon",
-                                        ui::IconName::CloudDownload,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label(if self.project.read(cx).is_remote() {
-                                        "Offline dependency graph collection unavailable for remote projects"
-                                    } else {
-                                        "Collect offline dependency graph for selected Maven project or Gradle resolvable configuration; executes trusted build configuration scripts and resolves cached metadata"
-                                    })
-                                    .tooltip(Tooltip::text("Collect offline graph"))
-                                    .disabled(!can_collect_graph)
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.collect_selected_graph(cx))),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-cancel-graph-collection-icon",
-                                        ui::IconName::XCircle,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label("Cancel only this panel's current dependency graph collection")
-                                    .tooltip(Tooltip::text("Cancel graph collection"))
-                                    .disabled(!can_cancel_graph)
-                                    .on_click(cx.listener(|panel, _, _, cx| panel.cancel_graph_collection(cx))),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-show-dependency-diagram-icon",
-                                        ui::IconName::GitGraph,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label("Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies")
-                                    .tooltip(Tooltip::text("Show dependency diagram"))
-                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram, cx))),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-show-dependency-diagram-popup-icon",
-                                        ui::IconName::GenericMaximize,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label("Show the dependency diagram popup over the current admitted dependency graph facts; dismissed by Escape")
-                                    .tooltip(Tooltip::text("Show diagram popup"))
-                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram_popup, cx))),
-                                )
-                                .child(
-                                    IconButton::new(
-                                        "groovy-analyze-dependencies-icon",
-                                        ui::IconName::ListCollapse,
-                                    )
-                                    .shape(ui::IconButtonShape::Square)
-                                    .tab_index(0_isize)
-                                    .aria_label("Analyze Dependencies: open the searchable dependency analyzer over the current admitted dependency graph facts")
-                                    .tooltip(Tooltip::text("Analyze Dependencies"))
-                                    .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::analyze_dependencies, cx))),
-                                )
-                                .when(self.view != BuildToolView::Dependencies, |row| {
-                                    row.child(
-                                        IconButton::new(
-                                            "groovy-run-selected-offline-operation-icon",
-                                            ui::IconName::PlayFilled,
-                                        )
-                                        .shape(ui::IconButtonShape::Square)
-                                        .tab_index(0_isize)
-                                        .aria_label(run_operation_label)
-                                        .tooltip(Tooltip::text("Run selected offline operation"))
-                                        .disabled(!can_run_operation)
-                                        .on_click(cx.listener(|panel, _, window, cx| panel.run_selected_offline_operation(window, cx))),
-                                    )
-                                }),
-                        )
-                    })
-                    .when(self.view != BuildToolView::Dependencies && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-build-view-options", "Options")
-                            .aria_label(format!("{} view options", self.view.label()))
-                            .toggle_state(self.show_options)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| {
-                                panel.show_options = !panel.show_options;
-                                cx.notify();
-                            })),
-                    ))
-                    .when(self.view == BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-gradle-synchronize-metadata", "Synchronize metadata")
-                            .aria_label(synchronize_gradle_label)
-                            .disabled(!can_synchronize_gradle)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.synchronize_gradle_metadata(cx)))
-                    ))
-                    .when(self.view != BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-apply-saved-maven-selection", "Apply saved Maven selection")
-                            .aria_label(if self.project.read(cx).is_remote() { "Saved Maven selection unavailable for remote projects" } else { "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration" })
-                            .disabled(!can_apply_build_selection).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(true, cx)))
-                    ))
-                    .when(self.view == BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-reload-maven-projects", "Reload Maven projects")
-                            .aria_label(reload_maven_label)
-                            .disabled(!can_reload_maven).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.reload_maven_projects(cx)))
-                    ))
-                    .when(self.view == BuildToolView::Dependencies, |header| header.child(
-                        Button::new("groovy-reload-all-builds", "Reload all builds")
-                            .aria_label("Reload effective Maven and Gradle roots in the selected local project folder")
-                            .disabled(!can_apply_build_selection).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
-                    ))
-                    .when(self.view != BuildToolView::Maven && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-import-gradle-selection", gradle_import_text)
-                            .aria_label(gradle_import_label)
-                            .disabled(!can_import_gradle).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.apply_saved_build_selection(false, cx)))
-                    ))
-                    .when(self.view != BuildToolView::Maven, |header| header.child(
-                        Button::new("groovy-unlink-selected-gradle-project", "Unlink selected project")
-                            .aria_label(if self.project.read(cx).is_remote() { "Gradle unlinking unavailable for remote projects" } else { "Unlink the selected Gradle module from the local project folder through the provider; never deletes source files" })
-                            .disabled(!can_apply_build_selection).tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.unlink_selected_gradle_project(cx)))
-                    ))
-                    .when_some(self.recent_configuration().cloned(), |header, target| header.child(
-                        Button::new("groovy-quick-run-configuration", format!("Run {}", target.label))
-                            .aria_label(format!("Quick-run the most recent saved configuration: {}, {}", target.label, target.origin(self.project.read(cx), cx)))
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(move |panel, _, window, cx| {
-                                panel.run_configuration(target.clone(), window, cx)
-                            })),
-                    ))
-                    .when(!icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-graph-facts-filter", format!("Graph: {}", self.preferences.graph_fact_filter.label()))
-                            .aria_label(format!("Dependency graph fact filter: {}; activate for {}; filters admitted metadata without resolving dependencies", self.preferences.graph_fact_filter.label(), self.preferences.graph_fact_filter.next().label()))
-                            .aria_value(self.preferences.graph_fact_filter.label())
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_filter(cx)))
-                    ))
-                    .when(self.view != BuildToolView::Gradle && !icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-maven-graph-scope", format!("Maven scope: {}", self.preferences.maven_graph_scope.label()))
-                            .aria_label(format!("Maven dependency graph scope: {}; activate for {}; filters admitted edge scopes without resolving dependencies", self.preferences.maven_graph_scope.label(), self.preferences.maven_graph_scope.next().label()))
-                            .aria_value(self.preferences.maven_graph_scope.label())
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.cycle_maven_graph_scope(cx)))
-                    ))
-                    .child(
-                        Button::new("groovy-graph-fact-presentation", self.preferences.graph_fact_presentation.label())
-                            .tooltip(Tooltip::text("Dependency fact presentation"))
-                            .aria_label(format!("Dependency graph facts presentation: {}; activate for {}; both presentations report the same admitted provider facts", self.preferences.graph_fact_presentation.label(), self.preferences.graph_fact_presentation.next().label()))
-                            .aria_value(self.preferences.graph_fact_presentation.label())
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.cycle_graph_fact_presentation(cx)))
-                    )
-                    .when(can_inspect_graph, |header| header.child(
-                        h_flex().flex_wrap().gap_1()
-                            .child(Button::new("groovy-inspect-graph-neighbours", "Neighbours")
-                                .aria_label("Inspect selected dependency neighbours in admitted graph facts")
-                                .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours) { "Active" } else { "Inactive" })
-                                .toggle_state(self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::Neighbours))
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx))))
-                            .child(Button::new("groovy-inspect-graph-root-paths", "Shortest root paths")
-                                .aria_label("Inspect all shortest root paths to the selected dependency in admitted graph facts")
-                                .aria_value(if self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths) { "Active" } else { "Inactive" })
-                                .toggle_state(self.graph_inspection.as_ref().is_some_and(|inspection| inspection.mode == GraphInspectionMode::ShortestRootPaths))
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.inspect_selected_graph(GraphInspectionMode::ShortestRootPaths, cx))))
-                            .child(Button::new("groovy-dependency-row-actions", "Dependency actions")
-                                .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall))
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, event: &gpui::ClickEvent, window, cx| {
-                                    if let Some(id) = panel.host.selected().cloned() {
-                                        panel.show_graph_context_menu(id, event.position(), window, cx);
-                                    }
-                                }))),
-                    ))
-                    .when(self.graph_inspection.is_some(), |header| header.child(
-                        Button::new("groovy-clear-graph-inspection", "Clear inspection")
-                            .aria_label("Clear selected dependency graph inspection")
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.clear_graph_inspection(cx))),
-                    ))
-                    .when(!icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-collect-offline-graph", "Collect offline graph")
-                            .aria_label(if self.project.read(cx).is_remote() {
-                                "Offline dependency graph collection unavailable for remote projects"
-                            } else {
-                                "Collect offline dependency graph for selected Maven project or Gradle resolvable configuration; executes trusted build configuration scripts and resolves cached metadata"
-                            })
-                            .disabled(!can_collect_graph)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.collect_selected_graph(cx)))
-                    ))
-                    .when(!icon_toolbar_active, |header| header.child(
-                        Button::new("groovy-cancel-graph-collection", "Cancel graph collection")
-                            .aria_label("Cancel only this panel's current dependency graph collection")
-                            .disabled(!can_cancel_graph)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.cancel_graph_collection(cx)))
-                    ))
-                    .when(self.view!=BuildToolView::Dependencies && !icon_toolbar_active,|header|header.child(
-                        Button::new("groovy-run-selected-offline-operation","Run selected offline operation")
-                            .aria_label(run_operation_label)
-                            .disabled(!can_run_operation).tab_index(0_isize)
-                            .on_click(cx.listener(|panel,_,window,cx|panel.run_selected_offline_operation(window,cx)))))
-                    .when(can_run_operation, |header| header.child(
-                        Button::new("groovy-configure-operation", "Task options")
-                            .aria_label(if selected_gradle_task {
-                                "Configure declared options for the selected Gradle task"
-                            } else {
-                                "Configure profiles, test settings and reactor behavior for the selected Maven operation"
-                            })
-                            .toggle_state(show_operation_options)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, window, cx| panel.configure_selected_operation(window, cx)))))
-                    .when(show_operation_options, |header| header.child(
-                        div().id("groovy-operation-options")
-                            .role(Role::TextInput)
-                            .aria_label(if selected_gradle_task { "Gradle task options" } else { "Maven operation options" })
-                            .aria_value(self.operation_option_editor.read(cx).text(cx))
-                            .aria_description(if selected_gradle_task {
-                                "Enter a JSON array of --option=value or --flag strings. Gradle validates the values."
-                            } else {
-                                "Enter a JSON array with -Pprofile, -P!profile, -DskipTests, --non-recursive, --fail-fast or --fail-at-end, and --threads=2 or --threads=0.5C. Maven options apply to the entire run."
-                            })
-                            .on_a11y_action(gpui::AccessibleAction::SetValue, {
-                                let editor = self.operation_option_editor.downgrade();
-                                move |data, window, cx| {
-                                    let Some(gpui::accesskit::ActionData::Value(text)) = data else { return; };
-                                    if let Some(editor) = editor.upgrade() {
-                                        editor.update(cx, |editor, cx| editor.set_text(text.to_string(), window, cx));
-                                    }
-                                }
-                            })
-                            .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx).tab_stop(true))
-                            .child(self.operation_option_editor.clone())))
-                    .child(
-                        v_flex().gap_1().id("groovy-ordered-operation-controls").role(Role::Group).aria_label("Ordered offline operation controls")
-                            .child(Button::new("groovy-ordered-operations-disclosure", format!("Ordered operations ({})", self.ordered_operations.len()))
-                                .aria_label("Ordered operations")
-                                .aria_expanded(self.preferences.ordered_operations_expanded)
-                                .aria_value(format!("{} selected", self.ordered_operations.len()))
-                                .start_icon(Icon::new(if self.preferences.ordered_operations_expanded { IconName::ChevronDown } else { IconName::ChevronRight }).size(IconSize::XSmall))
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.set_ordered_operations_expanded(!panel.preferences.ordered_operations_expanded, cx))))
-                            .when(self.preferences.ordered_operations_expanded, |section| section.child(h_flex().flex_wrap().gap_1()
-                            .child(Button::new("groovy-add-ordered-operation", "Add selected")
-                                .aria_label("Add selected current operation to the ordered offline run")
-                                .disabled(!can_run_operation || self.ordered_operations.len() >= 32).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.add_selected_ordered_operation(cx))))
-                            .child(Button::new("groovy-remove-last-ordered-operation", "Remove last")
-                                .aria_label("Remove last ordered operation without starting execution")
-                                .disabled(self.ordered_operations.is_empty()).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.remove_last_ordered_operation(cx))))
-                            .child(Button::new("groovy-clear-ordered-operations", "Clear")
-                                .aria_label("Clear ordered operation selection; running Tasks are unchanged")
-                                .disabled(self.ordered_operations.is_empty()).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.clear_ordered_operations(cx))))
-                            .child(Button::new("groovy-run-ordered-offline-operations", "Run offline")
-                                .aria_label(if self.project.read(cx).is_remote() {
-                                    "Run ordered offline operations on the current project host through Tasks"
-                                } else {
-                                    "Run ordered offline operations for the current local module through Tasks"
-                                })
-                                .aria_value(format!("{} selected", self.ordered_operations.len()))
-                                .disabled(!can_run_ordered).tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, window, cx| panel.run_ordered_offline_operations(window, cx)))))),
-                    )
-                    .when(can_present_graph, |header| header.child(
-                        Button::new("groovy-show-dependency-diagram", "Show diagram")
-                            .aria_label("Show a bounded diagram of current admitted dependency graph facts")
-                            .tab_index(0_isize).toggle_state(self.graph_diagram.is_some())
-                            .on_click(cx.listener(|_, _, _, cx| Self::defer_graph_presentation(Self::show_dependency_diagram, cx))),
-                    ))
-                    .when(self.graph_diagram.is_some(), |header| header.child(
-                        Button::new("groovy-close-dependency-diagram", "Close diagram")
-                            .aria_label("Close dependency diagram; retain current tree facts")
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.close_dependency_diagram(cx))),
-                    ))
-                    .when(self.graph_diagram_source.is_some(), |header| header.child(
-                        Button::new("groovy-copy-dependency-diagram-source", "Copy diagram source")
-                            .aria_label("Copy the bounded diagram's Mermaid source to the clipboard as the accepted export equivalent")
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.copy_dependency_diagram_source(cx))),
-                    ))
-                    .when(show_toolbar, |header| header.child(
-                        h_flex()
-                            .gap_1()
-                            .child(
-                                IconButton::new(
-                                    "groovy-dependencies-expand-all",
-                                    IconName::ExpandVertical,
-                                )
-                                .shape(ui::IconButtonShape::Square)
-                                .aria_label("Expand All")
-                                .tab_index(0_isize)
-                                .tooltip(Tooltip::text("Expand All"))
-                                .disabled(!can_expand_all)
-                                .on_click(cx.listener(
-                                    |panel, _, _, cx| {
-                                        panel.set_all_tree_rows_expanded(true, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                IconButton::new(
-                                    "groovy-dependencies-collapse-all",
-                                    IconName::ListCollapse,
-                                )
-                                .shape(ui::IconButtonShape::Square)
-                                .aria_label("Collapse All")
-                                .tab_index(0_isize)
-                                .tooltip(Tooltip::text("Collapse All"))
-                                .disabled(!can_collapse_all)
-                                .on_click(cx.listener(
-                                    |panel, _, _, cx| {
-                                        panel.set_all_tree_rows_expanded(false, cx);
-                                    },
-                                )),
-                            )
-                            .child(
-                                ui::IconButton::new(
-                                    "groovy-dependencies-refresh",
-                                    ui::IconName::RefreshTitle,
-                                )
-                                .shape(ui::IconButtonShape::Square)
-                                .aria_label("Refresh Dependencies")
-                                .tooltip(Tooltip::text("Refresh Dependencies"))
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
-                            ),
-                    )),
-            )
-            .child(
                 h_flex()
                     .id("groovy-build-tool-views")
+                    .debug_selector(|| "groovy-build-tool-views".into())
                     .key_context("GroovyDependenciesPanelControls")
                     .role(Role::Group)
                     .aria_label("Build tool views")
-                    .px_2()
-                    .gap_1()
+                    .px_2().h_8().flex_shrink_0()
+                    .gap_1().justify_between()
                     .children(
                         [
                             BuildToolView::Dependencies,
@@ -9401,12 +9853,63 @@ impl Render for DependenciesPanel {
                                     panel.set_view(view, window, cx)
                                 }))
                         }),
-                    ),
+                    )
+                    .child(self.panel_menu(cx)),
             )
             .child(
                 h_flex()
+                    .id("groovy-dependencies-toolbar")
+                    .debug_selector(|| "groovy-dependencies-toolbar".into())
                     .key_context("GroovyDependenciesPanelControls")
-                    .px_2().py_1().gap_1()
+                    .role(Role::Group)
+                    .aria_label("Dependency tree toolbar")
+                    .h_8().px_2().gap_1().flex_shrink_0()
+                    .child(
+                        IconButton::new("groovy-dependencies-refresh", IconName::RefreshTitle)
+                            .aria_label("Refresh Dependencies")
+                            .tooltip(Tooltip::text("Refresh Dependencies"))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
+                    )
+                    .when(self.preferences.show_toolbar(self.view), |toolbar| toolbar
+                        .child(
+                            IconButton::new("groovy-dependencies-expand-all", IconName::ExpandVertical)
+                                .aria_label("Expand All")
+                                .tooltip(Tooltip::text("Expand All"))
+                                .disabled(!self.host.can_expand_all())
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, _, _, cx| panel.set_all_tree_rows_expanded(true, cx))),
+                        )
+                        .child(
+                            IconButton::new("groovy-dependencies-collapse-all", IconName::ListCollapse)
+                                .aria_label("Collapse All")
+                                .tooltip(Tooltip::text("Collapse All"))
+                                .disabled(!self.host.can_collapse_all())
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(|panel, _, _, cx| panel.set_all_tree_rows_expanded(false, cx))),
+                        ))
+                    .child(
+                        IconButton::new("groovy-toggle-dependency-search", IconName::MagnifyingGlass)
+                            .aria_label("Search dependency tree")
+                            .tooltip(Tooltip::text("Search dependency tree"))
+                            .toggle_state(show_search)
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, window, cx| {
+                                if panel.show_graph_search && panel.graph_search.read(cx).text(cx).is_empty() {
+                                    panel.show_graph_search = false;
+                                    window.focus(&panel.focus_handle, cx);
+                                } else {
+                                    panel.show_graph_search = true;
+                                    window.focus(&panel.graph_search.read(cx).focus_handle(cx), cx);
+                                }
+                                cx.notify();
+                            })),
+                    )
+            )
+            .when(show_search, |panel| panel.child(
+                h_flex()
+                    .key_context("GroovyDependenciesPanelControls")
+                    .px_2().py_1().gap_1().flex_shrink_0()
                     .child(
                         div().id("groovy-graph-fact-search")
                             .role(Role::SearchInput)
@@ -9431,91 +9934,34 @@ impl Render for DependenciesPanel {
                         .disabled(self.graph_search.read(cx).text(cx).is_empty())
                         .tab_index(0_isize)
                         .on_click(cx.listener(|panel, _, window, cx| panel.clear_graph_fact_search(window, cx))))
-            )
-            .when(self.show_options && self.view != BuildToolView::Dependencies, |panel| {
-                let options = match self.view {
-                    BuildToolView::Gradle => vec![BuildViewOption::GroupModules, BuildViewOption::GroupGradleTasks, BuildViewOption::ShowToolbar, BuildViewOption::ShowIgnored],
-                    BuildToolView::Maven => vec![BuildViewOption::GroupModules, BuildViewOption::ShowBasicMavenPhases, BuildViewOption::ShowMavenArtifactId, BuildViewOption::ShowMavenVersion, BuildViewOption::ShowToolbar, BuildViewOption::ShowIgnored],
-                    BuildToolView::Dependencies => Vec::new(),
-                };
-                panel.child(v_flex()
-                    .id("groovy-build-view-options-controls")
-                    .key_context("GroovyDependenciesPanelControls")
-                    .role(Role::Group)
-                    .aria_label(format!("{} view presentation options", self.view.label()))
-                    .px_2().gap_1()
-                    .children(options.into_iter().map(|option| {
-                        Button::new(format!("groovy-build-option-{}", option.label()), option.label())
-                            .aria_label(option.label())
-                            .toggle_state(option.enabled(&self.preferences, self.view))
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(move |panel, _, _, cx| panel.toggle_option(option, cx)))
-                    })))
-            })
-            .when(can_cancel_import, |panel| panel.child(
-                div().key_context("GroovyDependenciesPanelControls").px_2().child(Button::new("groovy-cancel-selected-import", "Cancel selected import")
-                    .aria_label("Cancel only the current build import started by this panel")
-                    .tab_index(0_isize)
-                    .on_click(cx.listener(|panel, _, _, cx| panel.cancel_selected_import(cx)))),
             ))
-            .when_some(self.build_phase_notice.clone(), |panel, notice| panel.child(
-                div().id("groovy-selected-import-status").role(Role::Status)
-                    .aria_label("Selected JVM build import status").aria_value(notice.clone())
-                    .aria_live(gpui::accesskit::Live::Polite).px_2().child(notice)
-            ))
-            .when_some(self.operation_notice.clone(), |panel,notice|panel.child(
-                div().id("groovy-build-operation-status").role(Role::Status)
-                    .aria_label("JVM build operation admission status").aria_value(notice.clone())
-                    .aria_live(gpui::accesskit::Live::Polite).px_2().child(notice)))
-            .when_some(self.configuration_notice.clone(), |panel, notice| panel.child(
-                div().id("groovy-saved-configuration-status").role(Role::Status)
-                    .aria_label("Saved configuration run status").aria_value(notice.clone())
-                    .aria_live(gpui::accesskit::Live::Polite).px_2().child(notice)))
-            .when_some(self.graph_notice.clone(), |panel, notice| panel.child(
-                div().id("groovy-dependency-graph-status").role(Role::Status)
-                    .aria_label("Dependency graph status").aria_value(notice.clone())
-                    .aria_live(gpui::accesskit::Live::Polite).px_2().child(notice)
-            ))
-            .when_some(self.preferences_notice.clone(), |panel, notice| panel.child(
-                div().id("groovy-build-preferences-status").role(Role::Status)
-                    .aria_label("Build view preferences status").aria_value(notice.clone())
-                    .aria_live(gpui::accesskit::Live::Polite).px_2().child(notice)
-            ))
-            .when_some(self.graph_diagram.clone(), |panel, diagram| panel.child(
-                div().id("groovy-current-dependency-diagram").role(Role::Group)
-                    .aria_label("Current dependency diagram")
-                    .aria_description("Read-only full admitted graph; tree facts retain keyboard selection and source navigation. Tree fact/scope/search filters do not change this diagram. Full diagram parity and native interaction remain unverified.")
-                    .max_h(px(240.)).overflow_y_scroll().px_2()
-                    .child(markdown::MarkdownElement::new(diagram, markdown::MarkdownStyle::themed(markdown::MarkdownFont::Preview, window, cx)))
-            ))
-            .when(!self.graph_diagram_legend.is_empty(), |panel| {
-                let legend = self.graph_diagram_legend.clone();
-                panel.child(
-                    div().id("groovy-dependency-diagram-legend").role(Role::Group)
-                        .aria_label("Dependency diagram legend")
-                        .aria_description("One entry per diagram node; activating an entry selects the matching tree fact row in the shared tree. The diagram image stays inert; navigation happens through the tree.")
-                        .px_2()
-                        .children(legend.iter().enumerate().map(|(index, (row_id, label))| {
-                            let row_id = row_id.clone();
-                            Button::new(
-                                SharedString::from(format!("groovy-diagram-legend-{index}")),
-                                format!("{index}. {label}"),
-                            )
-                            .aria_label(format!(
-                                "Select the tree fact row for diagram node {index}: {label}"
-                            ))
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(move |panel, _, window, cx| {
-                                panel.navigate_diagram_legend(row_id.clone(), window, cx);
-                            }))
-                        })),
-                )
-            })
+            .when(show_operation_options, |panel| panel.child(
+                        div().id("groovy-operation-options").px_2().py_1().flex_shrink_0()
+                            .role(Role::TextInput)
+                            .aria_label(if selected_gradle_task { "Gradle task options" } else { "Maven operation options" })
+                            .aria_value(self.operation_option_editor.read(cx).text(cx))
+                            .aria_description(if selected_gradle_task {
+                                "Enter a JSON array of --option=value or --flag strings. Gradle validates the values."
+                            } else {
+                                "Enter a JSON array with -Pprofile, -P!profile, -DskipTests, --non-recursive, --fail-fast or --fail-at-end, and --threads=2 or --threads=0.5C. Maven options apply to the entire run."
+                            })
+                            .on_a11y_action(gpui::AccessibleAction::SetValue, {
+                                let editor = self.operation_option_editor.downgrade();
+                                move |data, window, cx| {
+                                    let Some(gpui::accesskit::ActionData::Value(text)) = data else { return; };
+                                    if let Some(editor) = editor.upgrade() {
+                                        editor.update(cx, |editor, cx| editor.set_text(text.to_string(), window, cx));
+                                    }
+                                }
+                            })
+                            .track_focus(&self.operation_option_editor.read(cx).focus_handle(cx).tab_stop(true))
+                            .child(self.operation_option_editor.clone())))
+            .children(self.render_tree_status(cx))
             .child(language_tool_tree(
                 rows,
                 selected,
-                status,
-                self.host.scroll_handle().clone(),
+                None,
+                LanguageToolTreeScrollHandle::Compact(self.host.scroll_handle().clone()),
                 move |id, click_count, window, cx| {
                     if let Err(error) = click_panel.update(cx, |panel, cx| {
                         window.focus(&panel.focus_handle, cx);
@@ -9543,6 +9989,38 @@ impl Render for DependenciesPanel {
                     }
                 },
             ))
+            .when_some(self.graph_diagram.clone().filter(|_| self.show_graph_preview), |panel, diagram| panel.child(
+                div().id("groovy-current-dependency-diagram").role(Role::Group)
+                    .key_context("GroovyDependenciesPanelControls")
+                    .aria_label("Current dependency diagram")
+                    .aria_description("Read-only full admitted graph; tree facts retain keyboard selection and source navigation. Tree fact/scope/search filters do not change this diagram. Full diagram parity and native interaction remain unverified.")
+                    .max_h(px(240.)).overflow_y_scroll().px_2()
+                    .child(markdown::MarkdownElement::new(diagram, markdown::MarkdownStyle::themed(markdown::MarkdownFont::Preview, window, cx)))
+            ))
+            .when(self.show_graph_preview && !self.graph_diagram_legend.is_empty(), |panel| {
+                let legend = self.graph_diagram_legend.clone();
+                panel.child(
+                    div().id("groovy-dependency-diagram-legend").role(Role::Group)
+                        .key_context("GroovyDependenciesPanelControls")
+                        .aria_label("Dependency diagram legend")
+                        .aria_description("One entry per diagram node; activating an entry selects the matching tree fact row in the shared tree. The diagram image stays inert; navigation happens through the tree.")
+                        .px_2()
+                        .children(legend.iter().enumerate().map(|(index, (row_id, label))| {
+                            let row_id = row_id.clone();
+                            Button::new(
+                                SharedString::from(format!("groovy-diagram-legend-{index}")),
+                                format!("{index}. {label}"),
+                            )
+                            .aria_label(format!(
+                                "Select the tree fact row for diagram node {index}: {label}"
+                            ))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(move |panel, _, window, cx| {
+                                panel.navigate_diagram_legend(row_id.clone(), window, cx);
+                            }))
+                        })),
+                )
+            })
     }
 }
 
@@ -12259,6 +12737,50 @@ mod tests {
     }
 
     #[test]
+    fn dependency_paths_nest_provider_edges_and_keep_repeat_and_cycle_identities() {
+        let module = LanguageToolNodeId("dependency-tree-fixture".into());
+        let (maven, gradle) = captured_graphs();
+        let gradle_rows = gradle_dependency_path_rows(&module, &gradle.resolution);
+        let maven_rows = maven_dependency_path_rows(&module, &maven, MavenGraphScope::All);
+        for roots in [gradle_rows, maven_rows] {
+            let mut host = LanguageToolTreeHost::default();
+            host.replace_snapshot(LanguageToolSnapshot {
+                roots,
+                status: LanguageToolProviderStatus::Current,
+            });
+            host.expand_all();
+            let rows = host.visible_rows();
+            assert!(rows.iter().any(|row| row.level > 1));
+            assert!(rows.iter().any(|row| row.label.contains(" · repeated")));
+            assert_eq!(
+                rows.len(),
+                rows.iter().map(|row| &row.id).collect::<HashSet<_>>().len()
+            );
+        }
+        let mut resolution = gradle.resolution;
+        let mut back_edge = resolution
+            .edges
+            .iter()
+            .find(|edge| edge.from == resolution.root_component && edge.selected.is_some())
+            .expect("captured root edge")
+            .clone();
+        back_edge.from = back_edge.selected.take().expect("resolved component");
+        back_edge.selected = Some(resolution.root_component.clone());
+        resolution.edges.push(back_edge);
+        let rows = gradle_dependency_path_rows(&module, &resolution);
+        assert!(rows.iter().flat_map(|row| &row.children).any(|row| {
+            row.label.contains(" · cycle")
+                && row.children.is_empty()
+                && dependency_path_matches(
+                    &row.id,
+                    &module,
+                    "gradle-path",
+                    &[&resolution.configuration, &resolution.root_component],
+                )
+        }));
+    }
+
+    #[test]
     fn graph_fact_search_is_bounded_and_preserves_ancestors_and_identities() {
         let module = LanguageToolNodeId("graph-search-fixture".into());
         let (maven, gradle) = captured_graphs();
@@ -13999,6 +14521,172 @@ mod tests {
         OtherScope,
     }
 
+    fn focus_tree_control(cx: &mut gpui::VisualTestContext, label: &str) {
+        let found = (0..96).any(|_| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("tree controls"))
+                        .expect("accessibility JSON");
+                if tree["gpui_focus"]
+                    .as_str()
+                    .is_some_and(|id| tree["nodes"][id]["aria"]["label"] == label)
+                {
+                    return true;
+                }
+                window.focus_next(cx);
+                false
+            })
+        });
+        assert!(found, "Tab reaches {label}");
+    }
+
+    fn press_tree_key(cx: &mut gpui::VisualTestContext, key: &str) {
+        let key = gpui::Keystroke::parse(key).expect("keyboard action");
+        cx.update(|window, cx| {
+            window.dispatch_event(
+                gpui::KeyDownEvent {
+                    keystroke: key.clone(),
+                    is_held: false,
+                    prefer_character_input: false,
+                }
+                .to_platform_input(),
+                cx,
+            );
+            window.dispatch_event(gpui::KeyUpEvent { keystroke: key }.to_platform_input(), cx);
+        });
+        cx.run_until_parked();
+    }
+
+    fn open_selected_row_menu(panel: &Entity<DependenciesPanel>, cx: &mut gpui::VisualTestContext) {
+        panel.update_in(cx, |panel, window, cx| {
+            panel.host.reveal_selection(ScrollStrategy::Center);
+            panel.focus_handle.focus(window, cx);
+            cx.notify();
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.simulate_keystrokes("shift-f10");
+        assert!(panel.read_with(cx, |panel, _| panel.graph_context_menu.is_some()));
+    }
+
+    fn invoke_selected_row_command(
+        panel: &Entity<DependenciesPanel>,
+        cx: &mut gpui::VisualTestContext,
+        label: &str,
+    ) {
+        open_selected_row_menu(panel, cx);
+        let index = panel.read_with(cx, |panel, cx| {
+            panel
+                .graph_context_menu
+                .as_ref()
+                .expect("selected row menu")
+                .0
+                .read(cx)
+                .accessibility_contracts()
+                .iter()
+                .filter(|entry| !entry.disabled)
+                .position(|entry| entry.label == label)
+                .unwrap_or_else(|| panic!("missing eligible row command {label}"))
+        });
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            for name in std::iter::once("menu::SelectFirst")
+                .chain(std::iter::repeat_n("menu::SelectNext", index))
+                .chain(std::iter::once("menu::Confirm"))
+            {
+                window.dispatch_action(cx.build_action(name, None).expect("menu action"), cx);
+            }
+        });
+        cx.run_until_parked();
+    }
+
+    fn select_open_menu_item(cx: &mut gpui::VisualTestContext, label: &str) {
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            window.dispatch_action(
+                cx.build_action("menu::SelectFirst", None)
+                    .expect("first menu item"),
+                cx,
+            );
+        });
+        let found = (0..32).any(|_| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("panel menu"))
+                        .expect("menu accessibility JSON");
+                if tree["active_descendant_focus"]
+                    .as_str()
+                    .is_some_and(|id| tree["nodes"][id]["aria"]["label"] == label)
+                {
+                    return true;
+                }
+                window.dispatch_action(
+                    cx.build_action("menu::SelectNext", None)
+                        .expect("next menu item"),
+                    cx,
+                );
+                false
+            })
+        });
+        assert!(found, "keyboard reaches overflow item {label}");
+    }
+
+    fn open_panel_menu(cx: &mut gpui::VisualTestContext) {
+        focus_tree_control(cx, "Build tools panel menu");
+        press_tree_key(cx, "enter");
+        settle_tool_menu(cx);
+    }
+
+    fn settle_tool_menu(cx: &mut gpui::VisualTestContext) {
+        for _ in 0..3 {
+            cx.update(|window, cx| {
+                window.simulate_next_frame(cx);
+                window.draw(cx).clear(cx);
+            });
+        }
+    }
+
+    fn invoke_panel_menu_command(cx: &mut gpui::VisualTestContext, label: &str) {
+        open_panel_menu(cx);
+        select_open_menu_item(cx, label);
+        cx.update(|window, cx| {
+            window.dispatch_action(
+                cx.build_action("menu::Confirm", None)
+                    .expect("confirm menu item"),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+    }
+
+    fn open_tree_options(cx: &mut gpui::VisualTestContext) {
+        open_panel_menu(cx);
+        select_open_menu_item(cx, "Tree options");
+        cx.update(|window, cx| {
+            window.dispatch_action(
+                cx.build_action("menu::SelectChild", None)
+                    .expect("submenu action"),
+                cx,
+            );
+            window.draw(cx).clear(cx);
+        });
+        settle_tool_menu(cx);
+    }
+
+    fn invoke_tree_option(cx: &mut gpui::VisualTestContext, label: &str) {
+        open_tree_options(cx);
+        select_open_menu_item(cx, label);
+        cx.update(|window, cx| {
+            window.dispatch_action(
+                cx.build_action("menu::Confirm", None)
+                    .expect("confirm menu item"),
+                cx,
+            );
+        });
+        cx.run_until_parked();
+    }
+
     #[gpui::test]
     async fn collaborative_graph_controls_reject_client_collection(cx: &mut TestAppContext) {
         cx.update(|cx| {
@@ -14083,52 +14771,30 @@ mod tests {
                         &window.debug_a11y_tree_json().expect("remote controls"),
                     )
                     .expect("a11y JSON");
-                    let collect = tree["nodes"]
-                    .as_object()
-                    .expect("nodes")
-                    .values()
-                    .find(|node| {
-                        node["aria"]["label"]
-                            == "Offline dependency graph collection unavailable for remote projects"
-                    })
-                    .expect("explicit nonlocal boundary");
-                    assert_eq!(collect["aria"]["disabled"], true);
-                    for (label, visible) in [
-                        (
-                            "Discovered offline build execution unavailable for remote projects",
-                            view != BuildToolView::Dependencies,
-                        ),
-                        (
-                            "Saved Maven selection unavailable for remote projects",
-                            view != BuildToolView::Gradle,
-                        ),
-                        (
-                            "Maven reimport requires a trusted direct connection to the project host",
-                            view == BuildToolView::Maven,
-                        ),
-                        (
-                            "Gradle reimport requires a trusted direct connection to the project host",
-                            view != BuildToolView::Maven,
-                        ),
-                        (
-                            "Gradle metadata synchronization requires a trusted direct connection to the project host",
-                            view == BuildToolView::Gradle,
-                        ),
+                    let nodes = tree["nodes"].as_object().expect("nodes");
+                    assert!(nodes.values().any(|node| node["aria"]["label"]
+                        == "Held project selection; Test host-change race"));
+                    for unavailable in [
+                        "Collect offline graph",
+                        "Run offline through Tasks",
+                        "Apply saved Maven selection",
+                        "Reload Maven projects",
+                        "Reimport Gradle projects",
+                        "Synchronize Gradle metadata",
                     ] {
-                        if !visible {
-                            continue;
-                        }
                         assert!(
-                            tree["nodes"]
-                                .as_object()
-                                .expect("nodes")
+                            !nodes
                                 .values()
-                                .any(|node| node["aria"]["label"] == label
-                                    && node["aria"]["disabled"] == true)
+                                .any(|node| node["aria"]["label"] == unavailable)
                         );
                     }
                 });
             }
+            panel.update_in(cx, |panel, window, cx| {
+                let selected = panel.host.selected().cloned().expect("held selection");
+                panel.show_graph_context_menu(selected, gpui::point(px(0.), px(0.)), window, cx);
+                assert!(panel.graph_context_menu.is_none());
+            });
         }
         for (maven, recovery) in [
             (true, "Remote import is not supported"),
@@ -14512,62 +15178,10 @@ mod tests {
             selections
         });
         cx.update(|window, _| window.activate_a11y_for_test());
-        let label = "Run selected offline Maven phase, plugin goal or Gradle task through Tasks; executes trusted local build scripts";
-        let focused_label = |cx: &mut gpui::VisualTestContext| {
-            cx.update(|window, cx| {
-                window.draw(cx).clear(cx);
-                let tree: serde_json::Value =
-                    serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
-                        .expect("AX JSON");
-                let id = tree["gpui_focus"].as_str()?;
-                tree["nodes"][id]["aria"]["label"]
-                    .as_str()
-                    .map(str::to_owned)
-            })
-        };
-        let focus = |cx: &mut gpui::VisualTestContext, label: &str| {
-            cx.update(|window, cx| {
-                let focus_handle = panel.read(cx).focus_handle.clone();
-                window.focus(&focus_handle, cx);
-            });
-            let found = (0..96).any(|_| {
-                cx.simulate_keystrokes("tab");
-                focused_label(cx).as_deref() == Some(label)
-            });
-            assert!(found, "Tab reaches {label}");
-        };
-        let press = |cx: &mut gpui::VisualTestContext| {
-            cx.update(|window, cx| {
-                let key = gpui::Keystroke::parse("enter").expect("Enter");
-                window.dispatch_event(
-                    gpui::KeyDownEvent {
-                        keystroke: key.clone(),
-                        is_held: false,
-                        prefer_character_input: false,
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-                window.dispatch_event(gpui::KeyUpEvent { keystroke: key }.to_platform_input(), cx);
-            });
-            cx.run_until_parked();
-        };
         if ordered_only {
-            let set_toolbar = |cx: &mut gpui::VisualTestContext, shown| {
-                panel.update(cx, |panel, cx| {
-                    if view == BuildToolView::Maven {
-                        panel.preferences.show_maven_toolbar = shown;
-                    } else {
-                        panel.preferences.show_gradle_toolbar = shown;
-                    }
-                    cx.notify();
-                });
-            };
-            set_toolbar(cx, true);
-            focus(cx, "Refresh Dependencies");
-            set_toolbar(cx, false);
-            focus(cx, "Maven view");
-            cx.simulate_keystrokes("tab");
+            focus_tree_control(cx, "Refresh Dependencies");
+            focus_tree_control(cx, "Search dependency tree");
+            press_tree_key(cx, "enter");
             assert!(cx.update(|window, cx| {
                 panel
                     .read(cx)
@@ -14576,30 +15190,26 @@ mod tests {
                     .focus_handle(cx)
                     .is_focused(window)
             }));
-            cx.simulate_keystrokes("shift-tab");
-            assert_eq!(focused_label(cx).as_deref(), Some("Maven view"));
-
-            let disclosure_label = "Ordered operations";
-            let add_label = "Add selected current operation to the ordered offline run";
-            let run_label =
-                "Run ordered offline operations for the current local module through Tasks";
+            focus_tree_control(cx, "Search dependency tree");
+            press_tree_key(cx, "enter");
             cx.update(|window, cx| {
                 window.draw(cx).clear(cx);
-                let tree: serde_json::Value =
-                    serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
-                        .expect("AX JSON");
+                let tree: serde_json::Value = serde_json::from_str(
+                    &window
+                        .debug_a11y_tree_json()
+                        .expect("collapsed search and queue"),
+                )
+                .expect("accessibility JSON");
                 let nodes = tree["nodes"].as_object().expect("nodes");
-                assert!(
-                    nodes
-                        .values()
-                        .any(|node| node["aria"]["label"] == disclosure_label)
-                );
-                assert!(!nodes.values().any(|node| {
-                    node["aria"]["label"] == add_label || node["aria"]["label"] == run_label
-                }));
+                for label in [
+                    "Search admitted dependency graph facts",
+                    "Ordered operations (0)",
+                    "Run Ordered Operations Offline",
+                ] {
+                    assert!(!nodes.values().any(|node| node["aria"]["label"] == label));
+                }
             });
-            focus(cx, disclosure_label);
-            press(cx);
+            invoke_panel_menu_command(cx, "Ordered operations (0)");
             assert!(panel.read_with(cx, |panel, _| panel.preferences.ordered_operations_expanded));
             let add_order = |cx: &mut gpui::VisualTestContext| {
                 for index in [1, 0, 1] {
@@ -14610,8 +15220,7 @@ mod tests {
                         panel.host.select(id.clone());
                         cx.notify();
                     });
-                    focus(cx, add_label);
-                    press(cx);
+                    invoke_selected_row_command(&panel, cx, "Add to Queue");
                 }
             };
             panel.update_in(cx, |panel, window, cx| {
@@ -14620,16 +15229,16 @@ mod tests {
             cx.run_until_parked();
             assert!(events.lock().expect("events").is_empty());
             add_order(cx);
-            focus(cx, disclosure_label);
-            press(cx);
+            panel.update(cx, |panel, cx| {
+                panel.set_ordered_operations_expanded(false, cx)
+            });
             panel.update(cx, |panel, cx| panel.rebuild(cx));
             panel.read_with(cx, |panel, _| {
                 assert!(!panel.preferences.ordered_operations_expanded);
                 assert!(!panel.host.expanded().contains(&ordered_operation_root_id()));
                 assert_eq!(panel.ordered_operations.len(), 3);
             });
-            focus(cx, disclosure_label);
-            press(cx);
+            invoke_panel_menu_command(cx, "Ordered operations (3)");
             panel.read_with(cx, |panel, cx| {
                 assert_eq!(panel.ordered_operations.len(), 3);
                 for (receipt, index) in panel.ordered_operations.iter().zip([1, 0, 1]) {
@@ -14731,29 +15340,23 @@ mod tests {
                             .as_str()
                             .is_some_and(|label| label.contains("Ordered offline operations (3)"))
                     }));
-                    assert!(nodes.values().any(|node| node["aria"]["label"] == run_label
-                        && node["aria"]["role"] == "Button"
-                        && node["aria"]["value"] == "3 selected"));
+                    assert!(
+                        !nodes
+                            .values()
+                            .any(|node| node["aria"]["label"] == "Run Ordered Operations Offline")
+                    );
                 });
             }
             assert!(
                 events.lock().expect("events").is_empty(),
                 "composition is input state, not execution"
             );
-            focus(
-                cx,
-                "Remove last ordered operation without starting execution",
-            );
-            press(cx);
+            invoke_selected_row_command(&panel, cx, "Remove Last Ordered Operation");
             assert_eq!(
                 panel.read_with(cx, |panel, _| panel.ordered_operations.len()),
                 2
             );
-            focus(
-                cx,
-                "Clear ordered operation selection; running Tasks are unchanged",
-            );
-            press(cx);
+            invoke_selected_row_command(&panel, cx, "Clear Ordered Selection");
             assert!(panel.read_with(cx, |panel, _| panel.ordered_operations.is_empty()));
             if provider == GraphFixtureProvider::Gradle {
                 panel.update(cx, |panel, cx| {
@@ -14772,11 +15375,7 @@ mod tests {
                     panel.host.select(id);
                     cx.notify();
                 });
-                focus(
-                    cx,
-                    "Configure declared options for the selected Gradle task",
-                );
-                press(cx);
+                invoke_selected_row_command(&panel, cx, "Task options");
                 panel.update_in(cx, |panel, window, cx| {
                     let input = panel.operation_option_editor.clone();
                     input.update(cx, |editor, cx| {
@@ -14801,11 +15400,7 @@ mod tests {
                         .select(selections.first().expect("Maven operation").0.clone());
                     cx.notify();
                 });
-                focus(
-                    cx,
-                    "Configure profiles, test settings and reactor behavior for the selected Maven operation",
-                );
-                press(cx);
+                invoke_selected_row_command(&panel, cx, "Task options");
                 panel.update_in(cx, |panel, window, cx| {
                     let input = panel.operation_option_editor.clone();
                     input.update(cx, |editor, cx| {
@@ -14900,8 +15495,11 @@ mod tests {
                     assert!(panel.ordered_queue_menu(cx).run_ordered);
                 });
             }
-            focus(cx, run_label);
-            press(cx);
+            panel.update(cx, |panel, cx| {
+                panel.host.select(ordered_operation_root_id());
+                cx.notify();
+            });
+            invoke_selected_row_command(&panel, cx, "Run Ordered Operations Offline");
             {
                 let events = events.lock().expect("events");
                 assert_eq!(events.len(), 1);
@@ -15031,8 +15629,11 @@ mod tests {
                 panel.read_with(cx, |panel, _| panel.ordered_operations.len()),
                 3
             );
-            focus(cx, run_label);
-            press(cx);
+            panel.update(cx, |panel, cx| {
+                panel.host.select(ordered_operation_root_id());
+                cx.notify();
+            });
+            invoke_selected_row_command(&panel, cx, "Run Ordered Operations Offline");
             assert_eq!(
                 events.lock().expect("events").len(),
                 2,
@@ -15070,24 +15671,7 @@ mod tests {
                 assert_eq!(panel.host.selected(), Some(id));
                 cx.notify();
             });
-            for _ in 0..2 {
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value =
-                        serde_json::from_str(&window.debug_a11y_tree_json().expect("AX"))
-                            .expect("AX JSON");
-                    assert!(
-                        tree["nodes"]
-                            .as_object()
-                            .expect("nodes")
-                            .values()
-                            .any(|node| node["aria"]["label"] == label
-                                && node["aria"]["role"] == "Button")
-                    );
-                });
-            }
-            focus(cx, label);
-            press(cx);
+            invoke_selected_row_command(&panel, cx, "Run offline through Tasks");
             let plan = lsp_store.read_with(cx, |store, _| {
                 let (snapshot, current) =
                     store.jdtls_project_snapshot(worktree_id).expect("snapshot");
@@ -15189,8 +15773,7 @@ mod tests {
             panel.host.expand_all();
             panel.host.select(selections[0].0.clone());
         });
-        focus(cx, label);
-        press(cx);
+        invoke_selected_row_command(&panel, cx, "Run offline through Tasks");
         assert_eq!(events.lock().expect("events").len(), 3);
         if provider == GraphFixtureProvider::Maven {
             version.store(2, Ordering::SeqCst);
@@ -15807,48 +16390,20 @@ mod tests {
                 "mounting/selecting never resolves metadata"
             );
             cx.update(|window, _| window.activate_a11y_for_test());
-            for _ in 0..2 {
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value =
-                        serde_json::from_str(&window.debug_a11y_tree_json().expect("panel tree"))
-                            .expect("accessibility JSON");
-                    let nodes = tree["nodes"].as_object().expect("accessible nodes");
-                    assert!(
-                        nodes
-                            .values()
-                            .any(|node| node["aria"]["label"].as_str().is_some_and(
-                                |label| label.starts_with("Collect offline dependency graph")
-                            ))
-                    );
-                    assert!(nodes.values().any(|node| node["aria"]["label"]
-                        == "Cancel only this panel's current dependency graph collection"));
-                });
-            }
-            let mut collect_focused = false;
-            for _ in 0..32 {
-                collect_focused = cx.update(|window, cx| {
-                    window.focus_next(cx);
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value = serde_json::from_str(
-                        &window.debug_a11y_tree_json().expect("focused controls"),
-                    )
-                    .expect("a11y JSON");
-                    let Some(focus) = tree["gpui_focus"].as_str() else {
-                        return false;
-                    };
-                    tree["nodes"][focus]["aria"]["label"]
-                        .as_str()
-                        .is_some_and(|label| label.starts_with("Collect offline dependency graph"))
-                });
-                if collect_focused {
-                    break;
-                }
-            }
-            assert!(
-                collect_focused,
-                "shared tab traversal reaches named Collect control"
-            );
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value =
+                    serde_json::from_str(&window.debug_a11y_tree_json().expect("panel tree"))
+                        .expect("accessibility JSON");
+                assert!(
+                    !tree["nodes"]
+                        .as_object()
+                        .expect("accessible nodes")
+                        .values()
+                        .any(|node| node["aria"]["label"] == "Collect offline graph"
+                            || node["aria"]["label"] == "Cancel graph collection")
+                );
+            });
             let press_button = |cx: &mut gpui::VisualTestContext, key: &str| {
                 let keystroke = gpui::Keystroke::parse(key).expect("activation key");
                 cx.update(|window, cx| {
@@ -15865,7 +16420,7 @@ mod tests {
                 });
                 cx.run_until_parked();
             };
-            press_button(cx, "enter");
+            invoke_selected_row_command(&panel, cx, "Collect offline graph");
             cx.run_until_parked();
             assert_eq!(commands.load(Ordering::SeqCst), 1);
             assert!(panel.read_with(cx, |panel, cx| panel.graph_query_is_pending(cx)));
@@ -15880,8 +16435,7 @@ mod tests {
                     let Some(focus) = tree["gpui_focus"].as_str() else {
                         return false;
                     };
-                    tree["nodes"][focus]["aria"]["label"]
-                        == "Cancel only this panel's current dependency graph collection"
+                    tree["nodes"][focus]["aria"]["label"] == "Cancel graph collection"
                 });
                 if cancel_focused {
                     break;
@@ -15928,6 +16482,9 @@ mod tests {
                         && !notice.contains("provider-cache")
                 );
             });
+            focus_tree_control(cx, "Dependency status details");
+            press_tree_key(cx, "enter");
+            settle_tool_menu(cx);
             for _ in 0..2 {
                 cx.update(|window, cx| {
                     window.draw(cx).clear(cx);
@@ -15948,6 +16505,9 @@ mod tests {
                     }));
                 });
             }
+
+            press_tree_key(cx, "escape");
+            panel.update_in(cx, |panel, window, cx| panel.focus_handle.focus(window, cx));
 
             fail.store(false, Ordering::SeqCst);
             refresh(cx);
@@ -16483,7 +17043,7 @@ mod tests {
                     &window.debug_a11y_tree_json().expect("dependency controls"),
                 ).expect("accessibility JSON");
                 let nodes = tree["nodes"].as_object().expect("accessibility nodes");
-                assert!(nodes.values().any(|node| node["aria"]["label"] == "Dependency actions"));
+                assert!(!nodes.values().any(|node| node["aria"]["label"] == "Dependency actions"));
                 assert!(!nodes.values().any(|node| node["aria"]["label"] == "Inspect every bounded root path to the selected dependency in admitted graph facts"));
             });
             cx.simulate_keystrokes("shift-f10");
@@ -16519,39 +17079,13 @@ mod tests {
                 window.dispatch_action(cancel, cx);
             });
             for (mode, label) in [
-                (
-                    GraphInspectionMode::Neighbours,
-                    "Inspect selected dependency neighbours in admitted graph facts",
-                ),
+                (GraphInspectionMode::Neighbours, "Neighbours"),
                 (
                     GraphInspectionMode::ShortestRootPaths,
-                    "Inspect all shortest root paths to the selected dependency in admitted graph facts",
+                    "Shortest root paths",
                 ),
             ] {
-                let mut focused = false;
-                for _ in 0..64 {
-                    focused = cx.update(|window, cx| {
-                        window.draw(cx).clear(cx);
-                        let tree: serde_json::Value = serde_json::from_str(
-                            &window.debug_a11y_tree_json().expect("inspection controls"),
-                        )
-                        .expect("inspection JSON");
-                        if tree["gpui_focus"]
-                            .as_str()
-                            .is_some_and(|id| tree["nodes"][id]["aria"]["label"] == label)
-                        {
-                            true
-                        } else {
-                            window.focus_next(cx);
-                            false
-                        }
-                    });
-                    if focused {
-                        break;
-                    }
-                }
-                assert!(focused, "named shared inspection Button receives focus");
-                press_button(cx, "enter");
+                invoke_selected_row_command(&panel, cx, label);
                 panel.read_with(cx, |panel, _| {
                     assert_eq!(
                         panel
@@ -16580,20 +17114,6 @@ mod tests {
                         "inspection must not duplicate shared tree row identities"
                     );
                 });
-                for _ in 0..2 {
-                    cx.update(|window, cx| {
-                        window.draw(cx).clear(cx);
-                        let tree: serde_json::Value = serde_json::from_str(
-                            &window.debug_a11y_tree_json().expect("active inspection"),
-                        )
-                        .expect("inspection JSON");
-                        assert!(tree["nodes"].as_object().expect("nodes").values().any(
-                            |node| node["aria"]["label"] == label
-                                && node["aria"]["role"] == "Button"
-                                && node["aria"]["value"] == "Active"
-                        ));
-                    });
-                }
                 assert_eq!(
                     commands.load(Ordering::SeqCst),
                     3,
@@ -16648,11 +17168,28 @@ mod tests {
                 }
                 assert!(focused, "diagram control receives shared keyboard focus");
             };
-            focus_diagram_control(
-                "Show a bounded diagram of current admitted dependency graph facts",
-                cx,
-            );
-            press_button(cx, "enter");
+            panel.update(cx, |panel, cx| {
+                let occurrence = panel
+                    .host
+                    .visible_rows()
+                    .iter()
+                    .find(|row| {
+                        row.id
+                            .0
+                            .contains(if provider == GraphFixtureProvider::Maven {
+                                ":maven-path:"
+                            } else {
+                                ":gradle-path:"
+                            })
+                    })
+                    .expect("provider path in the ordinary dependency tree")
+                    .id
+                    .clone();
+                panel.host.select(occurrence);
+                assert!(panel.resolve_selected_graph(cx).is_some());
+                cx.notify();
+            });
+            invoke_selected_row_command(&panel, cx, "Show Diagram");
             panel.read_with(cx, |panel, cx| {
                 let diagram = panel
                     .graph_diagram
@@ -16666,6 +17203,23 @@ mod tests {
                 }));
                 rendered_diagram(source.as_ref());
             });
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree: serde_json::Value = serde_json::from_str(
+                    &window
+                        .debug_a11y_tree_json()
+                        .expect("tree beside open diagram"),
+                )
+                .expect("accessibility JSON");
+                assert!(
+                    !tree["nodes"]
+                        .as_object()
+                        .expect("nodes")
+                        .values()
+                        .any(|node| node["aria"]["label"] == "Current dependency diagram")
+                );
+            });
+            invoke_panel_menu_command(cx, "Show diagram preview and legend");
             for _ in 0..2 {
                 cx.update(|window, cx| {
                     window.draw(cx).clear(cx);
@@ -16755,8 +17309,7 @@ mod tests {
                     );
                 });
             }
-            focus_diagram_control("Close dependency diagram; retain current tree facts", cx);
-            press_button(cx, "enter");
+            invoke_panel_menu_command(cx, "Close diagram");
             panel.read_with(cx, |panel, _| {
                 assert!(panel.graph_diagram_selection.is_none() && panel.graph_diagram.is_none())
             });
@@ -17518,65 +18071,15 @@ mod tests {
             cx.dispatch_action(ClearGraphInspection);
             panel.read_with(cx, |panel, _| assert!(panel.graph_inspection.is_none()));
             let before_filter = commands.load(Ordering::SeqCst);
-            for _ in 0..32 {
-                let focused = cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value =
-                        serde_json::from_str(&window.debug_a11y_tree_json().expect("filter focus"))
-                            .expect("a11y JSON");
-                    let focused = tree["gpui_focus"]
-                        .as_str()
-                        .and_then(|identity| tree["nodes"][identity]["aria"]["label"].as_str());
-                    if focused
-                        .is_some_and(|label| label.starts_with("Dependency graph fact filter:"))
-                    {
-                        true
-                    } else {
-                        window.focus_next(cx);
-                        false
-                    }
-                });
-                if focused {
-                    break;
-                }
-            }
-            cx.update(|window, cx| {
-                let keystroke = gpui::Keystroke::parse("enter").expect("Enter");
-                window.dispatch_event(
-                    gpui::KeyDownEvent {
-                        keystroke: keystroke.clone(),
-                        is_held: false,
-                        prefer_character_input: false,
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-                window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
-            });
+            invoke_tree_option(cx, "Graph facts: All facts");
             panel.read_with(cx, |panel, _| {
                 assert_eq!(panel.preferences.graph_fact_filter, GraphFactFilter::Direct)
             });
-            for _ in 0..2 {
-                cx.update(|window, cx| {
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value = serde_json::from_str(
-                        &window.debug_a11y_tree_json().expect("filtered controls"),
-                    )
-                    .expect("a11y JSON");
-                    assert!(tree["nodes"].as_object().expect("nodes").values().any(
-                        |node| node["aria"]["role"] == "Button"
-                            && node["aria"]["value"] == "Direct dependencies"
-                            && node["aria"]["label"].as_str().is_some_and(|label| {
-                                label.starts_with(
-                                    "Dependency graph fact filter: Direct dependencies;",
-                                )
-                            })
-                    ));
-                });
-            }
-            for _ in 0..3 {
-                cx.dispatch_action(CycleGraphFactFilter);
-            }
+            panel.update(cx, |panel, cx| {
+                for _ in 0..3 {
+                    panel.cycle_graph_fact_filter(cx);
+                }
+            });
             panel.read_with(cx, |panel, _| {
                 assert_eq!(panel.preferences.graph_fact_filter, GraphFactFilter::All)
             });
@@ -17594,58 +18097,18 @@ mod tests {
                 cx.notify();
             });
             if provider == GraphFixtureProvider::Maven {
-                // The diagram tab's canvas nodes and toolbar are tab stops
-                // too, so the walk may need to cycle through the whole window
-                // before it lands on the panel's scope control.
-                for _ in 0..200 {
-                    let focused = cx.update(|window, cx| {
-                        window.draw(cx).clear(cx);
-                        let tree: serde_json::Value = serde_json::from_str(
-                            &window.debug_a11y_tree_json().expect("scope focus"),
-                        )
-                        .expect("scope tree");
-                        let focused = tree["gpui_focus"]
-                            .as_str()
-                            .and_then(|identity| tree["nodes"][identity]["aria"]["label"].as_str());
-                        if focused
-                            .is_some_and(|label| label.starts_with("Maven dependency graph scope:"))
-                        {
-                            true
-                        } else {
-                            window.focus_next(cx);
-                            false
-                        }
-                    });
-                    if focused {
-                        break;
-                    }
-                }
-                press_button(cx, "enter");
+                invoke_tree_option(cx, "Maven scope: All scopes");
                 panel.read_with(cx, |panel, _| {
                     assert_eq!(
                         panel.preferences.maven_graph_scope,
                         MavenGraphScope::Compile
                     )
                 });
-                for _ in 0..2 {
-                    cx.update(|window, cx| {
-                        window.draw(cx).clear(cx);
-                        let tree: serde_json::Value = serde_json::from_str(
-                            &window.debug_a11y_tree_json().expect("scope metadata"),
-                        )
-                        .expect("scope tree");
-                        assert!(tree["nodes"].as_object().expect("nodes").values().any(
-                            |node| node["aria"]["role"] == "Button"
-                                && node["aria"]["value"] == "compile"
-                                && node["aria"]["label"].as_str().is_some_and(|label| {
-                                    label.starts_with("Maven dependency graph scope: compile;")
-                                })
-                        ));
-                    });
-                }
-                for _ in 0..7 {
-                    cx.dispatch_action(CycleMavenGraphScope);
-                }
+                panel.update(cx, |panel, cx| {
+                    for _ in 0..7 {
+                        panel.cycle_maven_graph_scope(cx);
+                    }
+                });
                 panel.read_with(cx, |panel, _| {
                     assert_eq!(panel.preferences.maven_graph_scope, MavenGraphScope::All)
                 });
@@ -17657,7 +18120,8 @@ mod tests {
             }
             let before_search = commands.load(Ordering::SeqCst);
             let search_editor = panel.read_with(cx, |panel, _| panel.graph_search.clone());
-            cx.update(|window, cx| window.focus(&search_editor.read(cx).focus_handle(cx), cx));
+            focus_tree_control(cx, "Search dependency tree");
+            press_tree_key(cx, "enter");
             cx.simulate_keystrokes("S H A R E D");
             cx.run_until_parked();
             for _ in 0..2 {
@@ -18993,16 +19457,22 @@ mod tests {
             cx.run_until_parked();
         };
         let label = if maven {
-            "Apply saved Maven roots and exclusions for the selected local project folder; executes trusted build configuration"
+            "Apply saved Maven selection"
         } else {
-            "Import effective Gradle selection for the selected local project folder; executes trusted build configuration"
+            "Import Gradle selection"
         };
-        focus_button(label, cx);
-        press_button(cx);
+        panel.update(cx, |panel, cx| {
+            panel.host.select_first();
+            cx.notify();
+        });
+        invoke_selected_row_command(&panel, cx, label);
         let cancelled_receipt = panel.read_with(cx, |panel, cx| {
             assert!(panel.build_phase_is_pending(cx));
             panel.build_phase_token.expect("owned UI receipt")
         });
+        focus_button("Dependency status details", cx);
+        press_button(cx);
+        settle_tool_menu(cx);
         for _ in 0..2 {
             cx.update(|window, cx| {
                 window.draw(cx).clear(cx);
@@ -19024,10 +19494,8 @@ mod tests {
                 );
             });
         }
-        focus_button(
-            "Cancel only the current build import started by this panel",
-            cx,
-        );
+        press_tree_key(cx, "escape");
+        focus_button("Cancel selected import", cx);
         press_button(cx);
         release.cancellation().await;
         assert!(
@@ -26079,8 +26547,8 @@ mod tests {
                     .expect("tool-specific manifest navigation");
                 match view {
                     BuildToolView::Gradle => {
-                        assert!(labels.contains(&"Gradle tasks"));
-                        assert!(labels.contains(&"Configurations"));
+                        assert!(labels.contains(&"Tasks"));
+                        assert!(labels.contains(&"Dependencies"));
                         assert!(labels.contains(&"runtimeClasspath"));
                         assert_eq!(
                             labels
@@ -26109,7 +26577,7 @@ mod tests {
                         ] {
                             assert!(labels.contains(&label), "Maven row {label}");
                         }
-                        assert!(!labels.contains(&"Gradle tasks"));
+                        assert!(!labels.contains(&"Tasks"));
                         assert!(!labels.contains(&"private"));
                         assert_eq!(navigation.path.path.as_unix_str(), "application/pom.xml");
                         let rows = panel.host.visible_rows();
@@ -26508,7 +26976,11 @@ mod tests {
                             tree["active_descendant_focus"].as_str(),
                             Some(identity.as_str())
                         );
-                        assert!(nodes.values().any(|node| node["aria"]["role"] == "Button" && node["aria"]["label"] == "Synchronize local Gradle metadata; executes trusted build configuration scripts"));
+                        assert!(
+                            !nodes
+                                .values()
+                                .any(|node| node["aria"]["label"] == "Synchronize Gradle metadata")
+                        );
                         let focus = tree["gpui_focus"].as_str().expect("panel keyboard focus");
                         assert_eq!(nodes[focus]["aria"]["label"], "Gradle panel");
                         if let Some(previous) = &previous_configuration_node {
@@ -26579,7 +27051,7 @@ mod tests {
                             .host
                             .visible_rows()
                             .iter()
-                            .find(|row| row.label == "Configurations")
+                            .find(|row| row.label == "Dependencies")
                             .expect("configuration coverage");
                         match mode {
                             0 => assert!(
@@ -26914,43 +27386,8 @@ mod tests {
         });
         let dock_size = dock.read_with(cx, |dock, _| dock.active_panel_size());
         assert_eq!(dock_size.expect("active dock size").size, Some(px(324.)));
-        let activate_dock_control = |cx: &mut gpui::VisualTestContext, label: &str| {
-            assert!(
-                (0..64).any(|_| cx.update(|window, cx| {
-                    window.focus_next(cx);
-                    window.draw(cx).clear(cx);
-                    let tree: serde_json::Value = serde_json::from_str(
-                        &window
-                            .debug_a11y_tree_json()
-                            .expect("dock accessibility tree"),
-                    )
-                    .expect("accessibility JSON");
-                    tree["gpui_focus"].as_str().is_some_and(|focus| {
-                        tree["nodes"][focus]["aria"]["label"] == label
-                            && tree["nodes"][focus]["aria"]["role"] == "Button"
-                    })
-                })),
-                "keyboard focus reaches {label}"
-            );
-            cx.update(|window, cx| {
-                let keystroke = gpui::Keystroke::parse("enter").expect("activation key");
-                window.dispatch_event(
-                    gpui::KeyDownEvent {
-                        keystroke: keystroke.clone(),
-                        is_held: false,
-                        prefer_character_input: false,
-                    }
-                    .to_platform_input(),
-                    cx,
-                );
-                window.dispatch_event(gpui::KeyUpEvent { keystroke }.to_platform_input(), cx);
-            });
-            cx.run_until_parked();
-        };
-        for (label, maximized) in [
-            ("Maximize Groovy panel", true),
-            ("Restore Groovy panel size", false),
-        ] {
+        let activate_dock_control = invoke_panel_menu_command;
+        for (label, maximized) in [("Maximize panel", true), ("Restore panel size", false)] {
             activate_dock_control(cx, label);
             workspace.read_with(cx, |workspace, _| {
                 assert_eq!(
@@ -26995,7 +27432,7 @@ mod tests {
         focus_editor(cx);
         assert!(dock.read_with(cx, |dock, _| dock.is_open()));
         focus_groovy(cx);
-        activate_dock_control(cx, "Unpin Groovy panel");
+        activate_dock_control(cx, "Unpin panel");
         assert_eq!(
             panel.read_with(cx, |panel, _| panel.preferences.dock_mode),
             DockMode::Unpinned
@@ -27051,7 +27488,7 @@ mod tests {
         let docked_editor = cx
             .debug_bounds("editor-region")
             .expect("docked editor bounds");
-        activate_dock_control(cx, "Undock Groovy panel");
+        activate_dock_control(cx, "Undock panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         let overlay_editor = cx
             .debug_bounds("editor-region")
@@ -27089,14 +27526,14 @@ mod tests {
         panel.read_with(cx, |panel, _| {
             assert_eq!(panel.host.selected(), Some(&member_id))
         });
-        activate_dock_control(cx, "Dock Groovy panel");
+        activate_dock_control(cx, "Dock panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(docked_editor));
         assert_eq!(
             panel.read_with(cx, |panel, _| panel.preferences.dock_mode),
             DockMode::Unpinned
         );
-        activate_dock_control(cx, "Pin Groovy panel");
+        activate_dock_control(cx, "Pin panel");
         focus_editor(cx);
         assert!(dock.read_with(cx, |dock, _| dock.is_open()));
         focus_groovy(cx);
@@ -27158,6 +27595,38 @@ mod tests {
                 });
             }
         }
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(px(274.)), None, window, cx);
+        });
+        for view in [
+            BuildToolView::Dependencies,
+            BuildToolView::Gradle,
+            BuildToolView::Maven,
+        ] {
+            panel.update_in(cx, |panel, window, cx| panel.set_view(view, window, cx));
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            let selector = cx
+                .debug_bounds("groovy-build-tool-views")
+                .expect("view selector");
+            let toolbar = cx
+                .debug_bounds("groovy-dependencies-toolbar")
+                .expect("toolbar");
+            let tree = cx.debug_bounds("language-tool-tree").expect("project tree");
+            assert!((px(268.)..=px(274.)).contains(&selector.size.width));
+            assert_eq!(selector.bottom(), toolbar.top());
+            assert!(tree.top() - toolbar.bottom() <= px(28.));
+            assert!(tree.size.height > px(200.));
+            if view == BuildToolView::Dependencies {
+                let status = cx
+                    .debug_bounds("groovy-dependency-tree-status")
+                    .expect("partial status line");
+                assert_eq!(status.top(), toolbar.bottom());
+                assert_eq!(status.bottom(), tree.top());
+            }
+        }
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(px(324.)), None, window, cx);
+        });
         let queries_before_options = project_queries.load(Ordering::SeqCst);
         let navigation_before_options = panel.read_with(cx, |panel, _| {
             panel.navigation.keys().cloned().collect::<HashSet<_>>()
@@ -27173,7 +27642,6 @@ mod tests {
             );
         });
         panel.update(cx, |panel, cx| {
-            panel.show_options = true;
             panel.toggle_option(BuildViewOption::ShowBasicMavenPhases, cx);
             panel.toggle_option(BuildViewOption::GroupModules, cx);
             panel.host.expand_all();
@@ -27183,42 +27651,31 @@ mod tests {
             panel.cycle_graph_fact_filter(cx);
             panel.cycle_maven_graph_scope(cx);
         });
-        for _ in 0..2 {
-            cx.update(|window, cx| {
-                window.draw(cx).clear(cx);
-                let tree: serde_json::Value =
-                    serde_json::from_str(&window.debug_a11y_tree_json().expect("options tree"))
-                        .expect("valid options JSON");
-                let nodes = tree["nodes"].as_object().expect("options nodes");
-                for label in [
-                    "Maven view options",
-                    "Group Modules",
-                    "Show Basic Phases Only",
-                    "Always Show ArtifactId",
-                    "Show Version",
-                    "Show Toolbar",
-                    "Maven view",
-                    "Gradle view",
-                ] {
-                    assert!(
-                        nodes.values().any(|node| node["aria"]["label"] == label
-                            && node["aria"]["role"] == "Button"),
-                        "named option {label}"
-                    );
-                }
-                assert!(
-                    !nodes
-                        .values()
-                        .any(|node| node["aria"]["label"] == "Refresh Dependencies")
-                );
-                assert!(
-                    nodes
-                        .values()
-                        .any(|node| node["aria"]["label"] == "Show Toolbar"
-                            && node["aria"]["toggled"] == "False")
-                );
-            });
-        }
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value = serde_json::from_str(
+                &window
+                    .debug_a11y_tree_json()
+                    .expect("toolbar accessibility"),
+            )
+            .expect("accessibility JSON");
+            let nodes = tree["nodes"].as_object().expect("nodes");
+            for label in [
+                "Maven view",
+                "Gradle view",
+                "Refresh Dependencies",
+                "Build tools panel menu",
+                "Search dependency tree",
+            ] {
+                assert!(nodes.values().any(|node| node["aria"]["label"] == label));
+            }
+            assert!(
+                !nodes
+                    .values()
+                    .any(|node| node["aria"]["label"] == "Expand All"
+                        || node["aria"]["label"] == "Show Toolbar")
+            );
+        });
         panel.read_with(cx, |panel, _| {
             assert_eq!(
                 panel.navigation.keys().cloned().collect::<HashSet<_>>(),
@@ -27298,7 +27755,7 @@ mod tests {
         let docked_editor = cx
             .debug_bounds("editor-region")
             .expect("editor above bottom dock");
-        activate_dock_control(cx, "Undock Groovy panel");
+        activate_dock_control(cx, "Undock panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         let overlay_editor = cx
             .debug_bounds("editor-region")
@@ -27309,7 +27766,7 @@ mod tests {
         assert!(overlay_editor.size.height > docked_editor.size.height);
         assert_eq!(bottom_overlay.bottom(), overlay_editor.bottom());
         assert_eq!(bottom_overlay.size.width, overlay_editor.size.width);
-        activate_dock_control(cx, "Pin Groovy panel");
+        activate_dock_control(cx, "Pin panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(docked_editor));
 
@@ -27344,13 +27801,13 @@ mod tests {
             assert!(!captured.bottom.visible);
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
-        activate_dock_control(cx, "Undock Groovy panel");
+        activate_dock_control(cx, "Undock panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(overlay_editor));
         let top_overlay = cx.debug_bounds("top-dock").expect("top overlay bounds");
         assert_eq!(top_overlay.top(), overlay_editor.top());
         assert_eq!(top_overlay.size, top_dock.size);
-        activate_dock_control(cx, "Pin Groovy panel");
+        activate_dock_control(cx, "Pin panel");
         cx.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(cx.debug_bounds("editor-region"), Some(top_docked_editor));
 
@@ -27370,8 +27827,8 @@ mod tests {
             selection
         });
         for (mode, label) in [
-            (DockMode::Window, "Open Groovy in a separate window"),
-            (DockMode::Floating, "Float Groovy above its workspace"),
+            (DockMode::Window, "Open in Window"),
+            (DockMode::Floating, "Float"),
         ] {
             activate_dock_control(cx, label);
             let detached_window = cx
@@ -27428,7 +27885,7 @@ mod tests {
                     .expect("keep actions already dispatched from the workspace in that window");
                 assert_eq!(routed_window, owner_window);
             });
-            activate_dock_control(&mut reopened, "Return Groovy to its dock");
+            activate_dock_control(&mut reopened, "Return to Dock");
             cx.run_until_parked();
             cx.update(|window, cx| window.draw(cx).clear(cx));
             assert_eq!(cx.read(|cx| cx.windows()), workspace_windows);
@@ -27589,7 +28046,6 @@ mod tests {
         );
         panel.update(cx, |panel, cx| {
             panel.toggle_option(BuildViewOption::ShowToolbar, cx);
-            panel.show_options = false;
         });
         panel.update_in(cx, |panel, window, cx| {
             panel.set_view(BuildToolView::Dependencies, window, cx);

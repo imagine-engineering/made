@@ -185,23 +185,30 @@ assumed current.
 
 ## Dependencies panel {#dependencies-panel}
 
-Use **Maximize Groovy panel** to give the Dependencies, Gradle, or Maven
-view the workspace's available space. **Restore Groovy panel size** returns
-to the previous dock size and preserves the current tree selection. The
-workspace's **Toggle Zoom** action also works while the panel has focus.
-The panel is pinned by default. **Unpin Groovy panel** hides it when you
-focus the editor or another tool window. Reopen it using the normal
-Groovy view action, or choose **Pin Groovy panel** to keep it visible.
-The workspace remembers the pin setting.
+Choose **Dependencies**, **Gradle**, or **Maven** at the top of the panel.
+Use the toolbar to refresh, expand or collapse the tree, and open search.
+An active search stays visible until you clear it. The panel menu holds
+presentation and tree options, along with **Ordered operations** and its
+current count. Choose **Details** beside a status such as **Partial dependency
+data** for the cause and available recovery actions. Known modules stay
+visible while dependency facts are incomplete.
+
+In the panel menu, **Maximize panel** uses the workspace's available space.
+**Restore panel size** returns to the previous dock size and retains the tree
+selection. The workspace's **Toggle Zoom** action also works while the panel
+has focus. The panel starts pinned. **Unpin panel** hides it when you focus
+the editor or another tool window. Reopen it with the normal Groovy view
+action, or choose **Pin panel** to keep it visible. The workspace remembers
+the pin setting.
 
 Right-click the Groovy status bar icon and choose **Dock Top** to put the
 panel above the editor. Drag the panel's lower edge to change its height.
 The workspace remembers the dock edge.
 
-Choose **Undock** to open Groovy over the workspace at its current dock edge
+Choose **Undock panel** in the panel menu to open Groovy over the workspace at its current dock edge
 and size. The editor keeps its layout while the overlay is open. It hides
-when focus moves to another work area. **Dock** returns it to unpinned docked
-mode, and **Pin Groovy panel** keeps it docked and visible.
+when focus moves to another work area. **Dock panel** returns it to unpinned docked
+mode, and **Pin panel** keeps it docked and visible.
 
 Choose **Float** to keep Groovy above its project window. Float uses the
 project window’s display to choose its initial bounds. Choose **Open in
@@ -221,8 +228,7 @@ version, and scope attributes, it also shows validated coordinates and scope;
 Gradle entries can show validated source-set use such as `main, test` beside a
 safe `.jar` name. Other entries show a safe file name or an unnamed count.
 JDTLS Gradle source-set use does not establish an artifact coordinate or a
-Maven scope. Neither provider establishes whether an artifact is a direct or
-transitive declaration. Unknown facts are labeled as such. JDTLS module rows also distinguish Java
+Maven scope. These classpath summaries leave direct and transitive relationships unknown. Unknown facts are labeled as such. JDTLS module rows also distinguish Java
 source compatibility, class-file target compatibility, and the provider's
 project VM version. A missing target is explicitly unreported; it is never
 inferred from source level or VM version. **JDTLS launch Java** separately
@@ -306,15 +312,16 @@ Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
 [Maven 3.9.16 project builder](https://maven.apache.org/ref/3.9.16/maven-core/xref/org/apache/maven/project/DefaultProjectBuilder.html#L698)
 
-Build import and Gradle metadata synchronization require the relevant provider
+Open the project or module row menu for import, reload, unlink, and Gradle
+metadata synchronization. These commands require the relevant provider
 capabilities and a trusted project. These actions can execute build configuration
-scripts and write caches. **Cancel selected import** applies to the current
+scripts and write caches. Use **Cancel** beside the running import to cancel the current
 local import started from this panel.
 
-On a trusted direct connection, **Synchronize metadata** reports when cached
+On a trusted direct connection, **Synchronize Gradle metadata** reports when cached
 Gradle topology is unavailable on the project host. Use **Reimport Gradle
 projects** to apply the host's effective Gradle selection in offline mode, then
-use **Synchronize metadata** again to load tasks and configurations. Both
+use **Synchronize Gradle metadata** again to load tasks and configurations. Both
 actions rely on the project host's cached Gradle installation and dependencies.
 
 **Reload Maven projects** is available on trusted direct connections. It
@@ -326,7 +333,7 @@ applies to local **Apply saved Maven selection**. The Maven wrapper's `-o`
 flag configures command-line builds.
 
 The scoped Gradle provider uses a cached Gradle installation for **Synchronize
-metadata**. In your host's `lsp.jdtls.settings`, set
+Gradle metadata**. In your host's `lsp.jdtls.settings`, set
 `java.import.gradle.home` to the absolute installation directory, set
 `java.import.gradle.wrapper.enabled` to `false`, and set
 `java.import.gradle.offline.enabled` to `true`. Clear any explicit
@@ -336,12 +343,15 @@ dependencies already cached. Refresh the imported project after changing
 these settings.
 
 To inspect dependency relationships, select a Maven project or a resolvable
-Gradle configuration and use **Collect offline graph**. This local operation
+Gradle configuration and choose **Collect offline graph** from its row menu. This local operation
 executes trusted configuration and resolves cached metadata; offline does not
 mean read-only. Missing cache entries and unresolved relationships remain
-explicit. **Cancel graph collection** cancels only that operation. Default
+explicit. The accompanying **Cancel** ends that collection. Default
 library summaries do not establish directness; separately collected graphs
 retain the provider's component or occurrence identities and available edges.
+The Gradle tree shows collected coordinates and transitive paths under the
+reported configuration. Maven nests modules from the reported reactor and
+shows admitted dependency occurrences, with scopes in their row details.
 
 Graph search and fact filters read admitted data without resolving it again.
 **Tree groups** switches the fact list between grouped and flat rows. Maven's
@@ -378,25 +388,26 @@ Search ranks exact dependency coordinates ahead of partial matches. In the
 analyzer you can paste a full coordinate even when group IDs are hidden.
 The temporary diagram preview offers the same search. Escape closes the
 search first, then closes the preview and returns to the workspace.
-**Copy Diagram Source** retains the diagram's selected scope and layout in
+Use **Show diagram preview and legend** in the panel menu to view the optional
+Mermaid preview beside the tree. **Copy Diagram Source** retains the diagram's selected scope and layout in
 the Mermaid source. On a larger graph it copies the bounded canvas and
 identifies the limited coverage in the copied text.
 
-| Earlier panel control                                                                             | Where to find it                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cancel selected import                                                                            | Use **Cancel selected import** on the active import row.                                                                                                                                                                                      |
-| Graph facts: Tree groups                                                                          | Switch between grouped and flat fact rows in the Dependencies panel.                                                                                                                                                                          |
-| Show diagram, Close diagram                                                                       | Use **Show Dependency Diagram** from the module or configuration menu and close the tab with the editor's close action. The same menu offers **Show Dependency Diagram Popup** and **Analyze Dependencies**. Use Escape to dismiss the popup. |
-| Neighbours, Shortest root paths                                                                   | Use the diagram toolbar or dependency menu. The fact tree also offers both actions when a dependency row is selected.                                                                                                                         |
-| All root paths, Conflict origins                                                                  | Use **More inspections** in the dependency menu. **Inspect conflict origins** appears when the provider records mediation. A bounded path result reports truncation.                                                                          |
-| All usages                                                                                        | **All usages** in the diagram opens the analyzer on the same dependency and scope. **Usages in the tree** shows reverse relationships in the Dependencies panel.                                                                              |
-| Pin dependency, Paths to pinned                                                                   | Use **Pin dependency** and **Inspect paths between** in the dependency menu's **Compare** submenu. **Inspect paths between** follows paths from the pin to the selected dependency. Pin the same dependency again to clear its pin.           |
-| Add to set, Set relations, Clear set                                                              | Use **Add to selection set**, **Inspect selection set**, and **Clear selection set** in **Compare**. The selection set supports comparison across several dependencies.                                                                       |
-| Clear inspection                                                                                  | Use **Clear inspection** to remove the active result and keep the pin and selection set.                                                                                                                                                      |
-| Copy diagram source                                                                               | **Copy Diagram Source** copies Mermaid. **Copy Diagram Image** copies SVG. **Export Image to File** saves a new SVG.                                                                                                                          |
-| Add selected operation                                                                            | Use **Add to Queue** from an eligible operation's menu.                                                                                                                                                                                       |
-| Run configuration, Remove last operation, Clear ordered selection, Run ordered offline operations | Expand **Ordered operations** for **Remove last**, **Clear**, and **Run offline**. The queue row's menu offers saved configurations when available.                                                                                           |
-| Expand, collapse, and refresh icons                                                               | Use **Expand All**, **Collapse All**, and **Refresh Dependencies** in the Dependencies tree toolbar.                                                                                                                                          |
+| Earlier panel control                                                                             | Where to find it                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cancel selected import                                                                            | Use **Cancel** beside the active import status.                                                                                                                                                                                                     |
+| Graph facts: Tree groups                                                                          | Open **Tree options** from the panel menu to switch between grouped and flat fact rows.                                                                                                                                                             |
+| Show diagram, Close diagram                                                                       | Use **Show Diagram** from the module, configuration, or dependency row menu and close the tab with the editor's close action. The same menu offers **Show Dependency Diagram Popup** and **Analyze Dependencies**. Use Escape to dismiss the popup. |
+| Neighbours, Shortest root paths                                                                   | Use the diagram toolbar or dependency menu. The fact tree also offers both actions when a dependency row is selected.                                                                                                                               |
+| All root paths, Conflict origins                                                                  | Use **More inspections** in the dependency menu. **Inspect conflict origins** appears when the provider records mediation. A bounded path result reports truncation.                                                                                |
+| All usages                                                                                        | **All usages** in the diagram opens the analyzer on the same dependency and scope. **Usages in the tree** shows reverse relationships in the Dependencies panel.                                                                                    |
+| Pin dependency, Paths to pinned                                                                   | Use **Pin dependency** and **Inspect paths between** in the dependency menu's **Compare** submenu. **Inspect paths between** follows paths from the pin to the selected dependency. Pin the same dependency again to clear its pin.                 |
+| Add to set, Set relations, Clear set                                                              | Use **Add to selection set**, **Inspect selection set**, and **Clear selection set** in **Compare**. The selection set supports comparison across several dependencies.                                                                             |
+| Clear inspection                                                                                  | Use **Clear inspection** to remove the active result and keep the pin and selection set.                                                                                                                                                            |
+| Copy diagram source                                                                               | **Copy Diagram Source** copies Mermaid. **Copy Diagram Image** copies SVG. **Export Image to File** saves a new SVG.                                                                                                                                |
+| Add selected operation                                                                            | Use **Add to Queue** from an eligible operation's menu.                                                                                                                                                                                             |
+| Run configuration, Remove last operation, Clear ordered selection, Run ordered offline operations | Open **Ordered operations** from the panel menu, then use the queue row's menu to edit, run, or select a saved configuration.                                                                                                                       |
+| Expand, collapse, and refresh icons                                                               | Use **Expand All**, **Collapse All**, and **Refresh Dependencies** in the Dependencies tree toolbar.                                                                                                                                                |
 
 Open the diagram context menu with {#kb groovy_dependencies_panel::ShowDependencyDiagramContextMenu}.
 In the analyzer and Dependencies tree, use {#kb groovy_dependencies_panel::ShowDependencyRowMenu}
@@ -417,19 +428,19 @@ one of those results opens its Usages pane.
 
 ### Ordered offline operations {#ordered-offline-operations}
 
-For a current task, phase or goal, **Run selected offline operation**
-uses the existing Tasks and terminal path. On an eligible operation, use
-**Add to Queue**. Open **Ordered operations** in Dependencies, or use the
-ordered-operations control in the diagram or analyzer toolbar. Expand the
-section to review the order, remove the last operation, clear the queue, or
-run offline. The queue stays available when you switch between Dependencies,
+For a current task, phase, or goal, choose **Run offline through Tasks** from
+its row menu to run it in the Task terminal. Use **Add to Queue** from the
+same menu. Open **Ordered operations** from the panel menu or use the
+ordered-operations control in the diagram or analyzer toolbar. The queue
+row's menu offers commands to remove the last operation, clear the queue,
+and run the current order offline. The queue stays available when you switch between Dependencies,
 Maven, and Gradle. Groovy clears it when its project data becomes stale.
 Saved run configurations appear in the queue row's context menu when
 available. Cancel a running queue from its Task terminal.
 
 On a direct remote connection, refresh JVM metadata with the matching
 Groovy-enabled host before selecting operations. In the Gradle view, use
-**Synchronize metadata** to populate tasks on a trusted project host. This
+**Synchronize Gradle metadata** to populate tasks on a trusted project host. This
 explicit action executes the host's Gradle build configuration. The host prepares the offline
 command using its own build tools and settings, and checks the plan again before
 the terminal starts. If the connection, selected module, or provider metadata

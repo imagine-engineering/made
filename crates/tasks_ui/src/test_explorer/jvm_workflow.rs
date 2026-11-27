@@ -507,9 +507,111 @@ fn press_enter(cx: &mut VisualTestContext) {
 }
 
 #[cfg(all(test, unix))]
-fn type_fixture_options(cx: &mut VisualTestContext, control: &str, editor: &str, options: &str) {
-    focus_control(cx, control);
+fn select_dependency_menu_command(cx: &mut VisualTestContext, label: &str) {
+    for _ in 0..3 {
+        cx.update(|window, cx| {
+            window.simulate_next_frame(cx);
+            window.draw(cx).clear(cx);
+        });
+    }
+    dispatch_graph_action(cx, "menu::SelectFirst");
+    let mut commands = std::collections::BTreeSet::new();
+    let found = (0..32).any(|_| {
+        let selected = cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree: serde_json::Value = serde_json::from_str(
+                &window
+                    .debug_a11y_tree_json()
+                    .expect("dependency command menu"),
+            )
+            .expect("dependency menu accessibility JSON");
+            if let Some(command) = tree["active_descendant_focus"]
+                .as_str()
+                .and_then(|id| tree["nodes"][id]["aria"]["label"].as_str())
+            {
+                commands.insert(command.to_owned());
+                command == label
+            } else {
+                false
+            }
+        });
+        if !selected {
+            dispatch_graph_action(cx, "menu::SelectNext");
+        }
+        selected
+    });
+    assert!(
+        found,
+        "keyboard reaches dependency command {label}; visited {commands:?}"
+    );
+}
+
+#[cfg(all(test, unix))]
+fn open_dependency_row_command(
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+    label: &str,
+) {
+    cx.update(|window, cx| {
+        panel.read(cx).focus_handle(cx).focus(window, cx);
+        window.draw(cx).clear(cx);
+    });
+    dispatch_graph_action(cx, "groovy_dependencies_panel::ShowDependencyRowMenu");
+    select_dependency_menu_command(cx, label);
+}
+
+#[cfg(all(test, unix))]
+fn invoke_dependency_row_command(
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+    label: &str,
+) {
+    open_dependency_row_command(panel, cx, label);
+    dispatch_graph_action(cx, "menu::Confirm");
+    cx.run_until_parked();
+}
+
+#[cfg(all(test, unix))]
+fn synchronize_fixture_gradle(
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+) {
+    let module = panel.read_with(cx, |panel, _| {
+        let (status, rows, _) = panel.snapshot_for_test();
+        matches!(
+            status,
+            language_tools::language_tool_tree::LanguageToolTreeStatus::Current
+        )
+        .then(|| {
+            rows.iter()
+                .position(|row| row.accessibility_label.starts_with("JDTLS module "))
+        })
+        .flatten()
+    });
+    if let Some(index) = module {
+        cx.update(|window, cx| panel.read(cx).focus_handle(cx).focus(window, cx));
+        dispatch_graph_action(cx, "language_tool_tree::SelectFirst");
+        for _ in 0..index {
+            dispatch_graph_action(cx, "language_tool_tree::SelectNext");
+        }
+        invoke_dependency_row_command(panel, cx, "Synchronize Gradle metadata");
+        return;
+    }
+    focus_control(cx, "Dependency status details");
     press_enter(cx);
+    select_dependency_menu_command(cx, "Synchronize Gradle metadata");
+    dispatch_graph_action(cx, "menu::Confirm");
+    cx.run_until_parked();
+}
+
+#[cfg(all(test, unix))]
+fn type_fixture_options(
+    panel: &Entity<jvm_ui::DependenciesPanel>,
+    cx: &mut VisualTestContext,
+    editor: &str,
+    options: &str,
+) {
+    invoke_dependency_row_command(panel, cx, "Task options");
     for _ in 0..2 {
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
@@ -823,11 +925,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         assert!(rejected.to_string().contains(reason), "{rejected:#}");
     }
     if restart {
-        focus_control(
-            cx,
-            "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts",
-        );
-        press_enter(cx);
+        synchronize_fixture_gradle(&panel, cx);
         let deadline = Instant::now() + Duration::from_secs(90);
         loop {
             cx.run_until_parked();
@@ -860,11 +958,8 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
                 .0
                 .generation
         });
-        focus_control(
-            cx,
-            "Reimport Gradle projects offline on the project host; executes trusted build configuration scripts",
-        );
-        press_enter(cx);
+        dispatch_graph_action(cx, "language_tool_tree::SelectFirst");
+        invoke_dependency_row_command(&panel, cx, "Reimport Gradle projects");
         let deadline = Instant::now() + Duration::from_secs(90);
         loop {
             cx.run_until_parked();
@@ -908,11 +1003,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         }
         assert!(rows.iter().all(|row| !row.id.0.contains(":gradle-task:")));
     });
-    focus_control(
-        cx,
-        "Synchronize Gradle metadata on the project host; executes trusted build configuration scripts",
-    );
-    press_enter(cx);
+    synchronize_fixture_gradle(&panel, cx);
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         cx.run_until_parked();
@@ -978,11 +1069,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         }
         dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
         assert_gradle_queue_rows(&panel, [first_task, SECOND], cx);
-        focus_control(
-            cx,
-            "Run ordered offline operations on the current project host through Tasks",
-        );
-        press_enter(cx);
+        invoke_dependency_row_command(&panel, cx, "Run Ordered Operations Offline");
         if run == DockerGradleRun::Cancel {
             assert_cancelled_gradle_queue(&terminal_panel, &fixture, &report, cx).await;
         } else {
@@ -1035,8 +1122,8 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     select_fixture_gradle_task(&workspace, &panel, FIRST, Some("message"), cx);
     let option = format!("--message={MESSAGE}");
     type_fixture_options(
+        &panel,
         cx,
-        "Configure declared options for the selected Gradle task",
         "Gradle task options",
         &serde_json::to_string(&[&option]).expect("option JSON"),
     );
@@ -1120,11 +1207,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         !report.exists(),
         "queueing operations does not start a Task"
     );
-    focus_control(
-        cx,
-        "Run ordered offline operations on the current project host through Tasks",
-    );
-    press_enter(cx);
+    invoke_dependency_row_command(&panel, cx, "Run Ordered Operations Offline");
     let arguments = [
         "--offline",
         "-Dorg.gradle.java.home=/qualification/jdk17",
@@ -1365,11 +1448,7 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
     cx.run_until_parked();
     cx.update(|window, cx| window.draw(cx).clear(cx));
     cx.dispatch_action(ShowGradle);
-    focus_control(
-        cx,
-        "Synchronize local Gradle metadata; executes trusted build configuration scripts",
-    );
-    press_enter(cx);
+    synchronize_fixture_gradle(&panel, cx);
     workspace.update_in(cx, |workspace, window, cx| {
         workspace.focus_panel::<DependenciesPanel>(window, cx);
     });
@@ -1518,12 +1597,10 @@ async fn run_cached_gradle_fixture(run: GradleFixtureRun, cx: &mut TestAppContex
         .find(|(_, edge)| edge.selected.as_deref() == Some(&leaf.id))
         .expect("actual provider edge to the leaf");
     select_configuration(cx);
-    focus_control(
-        cx,
-        "Show a read-only diagram of current admitted dependency graph facts in a dedicated editor tab; opens or focuses the tab without resolving dependencies",
-    );
+    open_dependency_row_command(&panel, cx, "Show Diagram");
     let started = Instant::now();
-    press_enter(cx);
+    dispatch_graph_action(cx, "menu::Confirm");
+    cx.run_until_parked();
     draw_timed_frame(cx, "open", started);
     let diagram = workspace
         .read_with(cx, |workspace, cx| {
@@ -1846,12 +1923,7 @@ async fn verify_gradle_queue(
     select_fixture_gradle_task(workspace, panel, WRITE, Some("project-dir"), cx);
     let option = format!("--project-dir={MESSAGE}");
     let options = serde_json::to_string(&[&option]).expect("literal Gradle option JSON");
-    type_fixture_options(
-        cx,
-        "Configure declared options for the selected Gradle task",
-        "Gradle task options",
-        &options,
-    );
+    type_fixture_options(panel, cx, "Gradle task options", &options);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     select_fixture_gradle_task(workspace, panel, READ, None, cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
@@ -2602,8 +2674,8 @@ async fn run_maven_goal_fixture(
                 .0
                 .generation
         });
-        focus_control(cx, "Reload Maven projects offline on the project host");
-        press_enter(cx);
+        dispatch_graph_action(cx, "language_tool_tree::SelectFirst");
+        invoke_dependency_row_command(&panel, cx, "Reload Maven projects");
         let deadline = Instant::now() + Duration::from_secs(180);
         loop {
             cx.run_until_parked();
@@ -2760,10 +2832,8 @@ async fn run_maven_goal_fixture(
                     ["1. default: test".to_owned(), format!("2. {help_goal}"),]
                 );
             });
-            const RUN: &str =
-                "Run ordered offline operations on the current project host through Tasks";
-            focus_control(cx, RUN);
-            press_enter(cx);
+            const RUN: &str = "Run Ordered Operations Offline";
+            invoke_dependency_row_command(&panel, cx, RUN);
             if failure {
                 let transcript = assert_fixture_task_outcome(
                     &terminal_panel,
@@ -2813,14 +2883,13 @@ async fn run_maven_goal_fixture(
                 workspace.focus_panel::<DependenciesPanel>(window, cx);
             });
             dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
-            focus_control(cx, RUN);
-            press_enter(cx);
+            invoke_dependency_row_command(&panel, cx, RUN);
         }
         MavenGoalRun::OrderedHelp => {
             select_goal(cx, "active-profiles");
             type_fixture_options(
+                &panel,
                 cx,
-                "Configure profiles, test settings and reactor behavior for the selected Maven operation",
                 "Maven operation options",
                 r#"["-P!evidence-selected"]"#,
             );
@@ -2854,11 +2923,8 @@ async fn run_maven_goal_fixture(
             assert_eq!(queue_labels(cx), expected_queue);
             assert!(!output.exists(), "editing the queue does not start a Task");
             if host_shell.is_some() {
-                focus_control(
-                    cx,
-                    "Run ordered offline operations on the current project host through Tasks",
-                );
-                press_enter(cx);
+                dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
+                invoke_dependency_row_command(&panel, cx, "Run Ordered Operations Offline");
             } else {
                 dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
             }
@@ -2870,18 +2936,14 @@ async fn run_maven_goal_fixture(
             select_goal(cx, goal);
             if matches!(run, MavenGoalRun::ResolveJavadoc) {
                 type_fixture_options(
+                    &panel,
                     cx,
-                    "Configure profiles, test settings and reactor behavior for the selected Maven operation",
                     "Maven operation options",
                     r#"["-Partifact-javadocs"]"#,
                 );
             }
             if host_shell.is_some() {
-                focus_control(
-                    cx,
-                    "Run selected offline build operation through Tasks on the project host",
-                );
-                press_enter(cx);
+                invoke_dependency_row_command(&panel, cx, "Run offline through Tasks");
             } else {
                 dispatch_graph_action(cx, "groovy_dependencies_panel::RunSelectedOfflineOperation");
             }

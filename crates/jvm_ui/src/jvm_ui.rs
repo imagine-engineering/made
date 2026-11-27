@@ -56,7 +56,7 @@ fn init_for_product(product_id: &'static str, cx: &mut App) {
 }
 
 pub fn bind_keys(cx: &mut App) {
-    const DEPENDENCY_TREE: &str = "(GroovyDependenciesPanel && !GroovyDependenciesPanelControls) || (DependencyAnalyzer && !DependencyAnalyzerControls)";
+    const DEPENDENCY_TREE: &str = "((GroovyDependenciesPanel && !GroovyDependenciesPanelControls) || (DependencyAnalyzer && !DependencyAnalyzerControls)) && !menu && !Picker";
     const GROOVY_CONTROLS: &str = "(GroovyDependenciesPanel || DependencyAnalyzer || DependencyDiagram || DependencyDiagramPopup) && !menu && !Picker";
     cx.bind_keys([
         KeyBinding::new("tab", FocusNextGroovyControl, Some(GROOVY_CONTROLS)),
@@ -100,7 +100,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new(
             "enter",
             ActivateSelected,
-            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls"),
+            Some("GroovyDependenciesPanel && !GroovyDependenciesPanelControls && !menu && !Picker"),
         ),
         KeyBinding::new("cmd-shift-e", ExpandAll, Some("GroovyDependenciesPanel")),
         KeyBinding::new("cmd-shift-c", CollapseAll, Some("GroovyDependenciesPanel")),
