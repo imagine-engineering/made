@@ -286,7 +286,7 @@ struct ImportHealthState {
 const MAVEN_OFFLINE_CACHE_MESSAGE: &str =
     "Kotlin Maven import needs cached dependencies; fetch them or disable Maven offline mode";
 const MAVEN_FETCH_MESSAGE: &str = "Kotlin Maven import could not fetch dependencies; check network or repository access, or populate the cache";
-const GRADLE_PLUGIN_MESSAGE: &str = "Kotlin Gradle import cannot resolve a build plugin; check host plugin repository access or restore the cache, then reimport";
+const GRADLE_PLUGIN_MESSAGE: &str = "Kotlin Gradle import cannot resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Kotlin language server.";
 
 #[derive(Clone, Copy)]
 pub(super) enum KotlinImportEvent {
