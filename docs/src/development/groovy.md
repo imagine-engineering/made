@@ -558,29 +558,31 @@ its bounded loopback breakpoint evidence does not establish every topology.
 The installed Java extension exposes a `Java` debug adapter. In a trusted
 local project, select a verified Java case in Tests and choose
 **Debug Selected Test**. A freshly verified source selector is enough to start
-Debug while Tests still shows the previous JUnit result. The debugger waits for
-the selected test JVM to suspend, then attaches through the Java adapter.
-Gradle uses its test Debug
-port 5005. Maven uses a separate loopback port for each launch. Stopping the
-Debug session or restricting project trust cancels its selected test Task,
-including during terminal preparation.
+Debug, even when Tests has no current result. The debugger waits for the
+selected test JVM to suspend, then attaches through the Java adapter. Gradle
+uses its test Debug port 5005. Maven uses a separate loopback port for each
+launch. Stopping the Debug session or restricting project trust cancels its
+selected test Task, including during terminal preparation.
 
 On a compatible direct Groovy connection, **Debug Selected Test** uses the
 project host's Java extension, build wrapper, and loopback port. Refresh Tests
 after upgrading or reconnecting the project host. The host rechecks the selected
 case and trust before the Task starts and confirms when the port is ready.
 
-If the Task ends before the test JVM suspends, the Debug console reports
-its exit status, cancellation, or an interruption without an exit status.
-The Debug terminal retains the build output.
+Open the **Terminal** in the Debug panel to see the selected test Task's build
+output and exit result. Debug leaves the Tests totals unchanged. Use
+**Run Selected Tests** for a current result in Tests. If the Task ends before
+the test JVM suspends, the Debug console reports its exit status, cancellation,
+or an interruption without an exit status.
 
 The debugger supplies the selected module's Java test source directory to the
 adapter. When the pinned adapter fails a whole stack request on a frame
 without source, the debugger retries in bounded pages and logs the number of
 frames it recovered.
 
-Selected-test breakpoint journeys in the installed desktop product and on
-separate hosts remain qualification gates. The extension's built-in run and
+The cached Maven and Gradle fixtures reached their selected-test breakpoints
+and completed in the macOS ARM64 development build. Packaged desktop and
+separate-host qualification remain open. The extension's built-in run and
 test task scripts require `/bin/sh`; Windows needs a
 separately validated route. Structured Kotlin tests, mixed-language refactors,
 coroutine debugging, HotSwap, Spring/Jakarta/JPA depth, and database tooling
