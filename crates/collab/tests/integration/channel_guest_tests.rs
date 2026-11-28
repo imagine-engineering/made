@@ -5195,14 +5195,23 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
     std::fs::create_dir(fixture.path().join(".zed")).expect("fixture project settings directory");
     std::fs::write(
         fixture.path().join(".zed/settings.json"),
-        r#"{"cargo":{"presets":{"host-coverage":{"environment":{"COVERAGE_PRESET_OWNER":"worktree"}}}}}"#,
+        r#"{"cargo":{"presets":{"host-coverage":{
+            "environment":{"COVERAGE_PRESET_OWNER":"worktree"},
+            "pre_launch_task":"Prepare coverage report"
+        }}}}"#,
     )
     .expect("override the preset on the producing worktree");
+    std::fs::write(
+        fixture.path().join(".zed/tasks.json"),
+        r#"[{"label":"Prepare coverage report","command":"mkdir -p target && printf prepared > target/named-prepared"}]"#,
+    )
+    .expect("author a preparation Task on the producing worktree");
     std::fs::write(
         fixture.path().join("src/bin/named.rs"),
         r#"fn main() {
     assert_eq!(std::env::var("COVERAGE_PRESET_OWNER").as_deref(), Ok("worktree"));
     assert_eq!(std::env::args().nth(1).as_deref(), Some("argument with spaces"));
+    assert_eq!(std::fs::read_to_string("target/named-prepared").as_deref().ok(), Some("prepared"));
     std::fs::write("target/named-started", "named").expect("record preset execution");
 }"#,
     )
@@ -5496,6 +5505,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
         "{error:#}"
     );
     let marker = fixture.path().join("target/named-started");
+    assert!(!fixture.path().join("target/named-prepared").exists());
     assert!(!marker.try_exists().expect("inspect named-workload marker"));
     let (_, named) = provider
         .update(cx_member, |provider, cx| {
@@ -5517,7 +5527,7 @@ async fn rust_tools_relay_separate_enabled_host_coverage_task_capture_replaces_p
     assert_eq!(named.files.len(), 1);
     let file = named.files.first().expect("covered named workload");
     assert_eq!(file.path.path.as_unix_str(), "src/bin/named.rs");
-    assert_eq!(file.covered_lines, 5);
+    assert_eq!(file.covered_lines, 6);
     assert_eq!(
         std::fs::read_to_string(marker).expect("host preset workload executed"),
         "named"
