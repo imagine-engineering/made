@@ -647,7 +647,8 @@ fn application_builds(
                 SOURCE="target/products/${PRODUCT_ID}/${TARGET}/release"
                 mkdir -p release-application
                 cp "$SOURCE/zed" "$SOURCE/cli" release-application/
-                if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
+                if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]] ||
+                   [[ "$TARGET" == *-linux-* && ",${FEATURES}," == *,rust-tools,* ]]; then
                     cp "$SOURCE/native-cargo-runtime-observer" release-application/
                 fi
                 jq -n --arg commit_sha "$COMMIT_SHA" --arg target "$TARGET" --arg features "$FEATURES" \
@@ -855,7 +856,8 @@ fn product_builds(
                 mkdir -p "$APPLICATION_DEST" "$REMOTE_DEST"
                 cp release-application/zed release-application/cli "$APPLICATION_DEST/"
                 cp release-remote-server/remote_server "$REMOTE_DEST/"
-                if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]]; then
+                if [[ "$TARGET" == *-apple-darwin && "$PRODUCT_ID" == rust ]] ||
+                   [[ "$TARGET" == *-linux-* && ",${APPLICATION_FEATURES}," == *,rust-tools,* ]]; then
                     cp release-application/native-cargo-runtime-observer "$APPLICATION_DEST/"
                     chmod +x "$APPLICATION_DEST/native-cargo-runtime-observer"
                 fi

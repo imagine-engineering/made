@@ -79,6 +79,9 @@ if [[ "$dry_run" = true ]]; then
     else
         echo "mode=default packages=zed,cli zed_features=${zed_features} remote_features=${remote_features} include_sim_worker=false rust_tools=${rust_tools}"
     fi
+    if [[ "$rust_tools" = true ]]; then
+        echo "native_runtime_helper=native-cargo-runtime-observer helper_path=libexec/native-cargo-runtime-observer helper_linkage=static"
+    fi
     exit 0
 fi
 
@@ -109,6 +112,20 @@ for variable_name in "${required_product_variables[@]}"; do
   fi
 done
 
+if [[ "$rust_tools" = true ]]; then
+    case ",${ZED_PRODUCT_APP_FEATURES}," in
+        *,rust-tools,*) ;;
+        *) ZED_PRODUCT_APP_FEATURES="${ZED_PRODUCT_APP_FEATURES},rust-tools" ;;
+    esac
+    case ",${ZED_PRODUCT_REMOTE_FEATURES}," in
+        *,rust-tools,*) ;;
+        *) ZED_PRODUCT_REMOTE_FEATURES="${ZED_PRODUCT_REMOTE_FEATURES},rust-tools" ;;
+    esac
+fi
+case ",${ZED_PRODUCT_APP_FEATURES}," in
+    *,rust-tools,*) rust_tools=true ;;
+esac
+
 channel="${ZED_RELEASE_CHANNEL:-$(<crates/zed/RELEASE_CHANNEL)}"
 target_dir="${CARGO_TARGET_DIR:-target}"
 bundle_phase="${ZED_BUNDLE_PHASE:-all}"
@@ -129,6 +146,7 @@ commit=$(git rev-parse HEAD | cut -c 1-7)
 version_info=$(rustc --version --verbose)
 host_line=$(echo "$version_info" | grep host)
 target_triple=${host_line#*: }
+native_runtime_helper="${target_dir}/${target_triple}/release/native-cargo-runtime-observer"
 musl_triple=${target_triple%-gnu}-musl
 remote_server_triple=${REMOTE_SERVER_TARGET:-"${musl_triple}"}
 rustup_installed=false
@@ -150,6 +168,13 @@ fi
 
 export CC=${CC:-$(which clang)}
 
+if [[ "$rust_tools" == true && ( "$bundle_phase" == "all" || "$bundle_phase" == "application" ) ]]; then
+    # Giving the static PIE the application's library search path can crash it before main.
+    cargo rustc --locked --release --target "${target_triple}" --package native_task_helper \
+        --bin native-cargo-runtime-observer --no-default-features --features runtime-helper \
+        -- -C target-feature=+crt-static
+fi
+
 # Build binary in release mode
 # We need lld to link libwebrtc.a successfully on aarch64-linux.
 # NOTE: Since RUSTFLAGS env var overrides all .cargo/config.toml rustflags
@@ -161,15 +186,26 @@ else
     export RUSTFLAGS="${RUSTFLAGS:-} -C link-args=-Wl,--disable-new-dtags,-rpath,\$ORIGIN/../lib"
 fi
 if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
+    application_features=$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//')
     if [[ "$sim" = true ]]; then
-        zed_build_features="$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//'),zed/sim,zed/cuda,zed/rocm,zed/mlu,zed/npu,zed/xpu,sim_worker/cuda,sim_worker/rocm,sim_worker/mlu,sim_worker/npu,sim_worker/xpu"
-        if [[ "$rust_tools" = true ]]; then
-            zed_build_features="${zed_build_features},zed/rust-tools"
-        fi
+        zed_build_features="${application_features},zed/sim,zed/cuda,zed/rocm,zed/mlu,zed/npu,zed/xpu,sim_worker/cuda,sim_worker/rocm,sim_worker/mlu,sim_worker/npu,sim_worker/xpu"
         cargo build --release --target "${target_triple}" --package zed --package cli --package sim_worker --no-default-features --features "${zed_build_features}"
     else
-        application_features=$(printf 'zed/%s,' ${ZED_PRODUCT_APP_FEATURES//,/ } | sed 's/,$//')
         cargo build --release --target "${target_triple}" --package zed --package cli --no-default-features --features "${application_features}"
+    fi
+fi
+
+if [[ "$rust_tools" = true && "$bundle_phase" != "remote-server" ]]; then
+    if [[ ! -x "$native_runtime_helper" || -L "$native_runtime_helper" ]]; then
+        echo "Missing Linux native Cargo runtime helper: $native_runtime_helper" >&2
+        exit 1
+    fi
+    helper_headers=$(LC_ALL=C readelf --wide --program-headers --dynamic "$native_runtime_helper")
+    if [[ "$helper_headers" != *" LOAD "* || "$helper_headers" == *" INTERP "* ||
+          "$helper_headers" == *" (NEEDED) "* || "$helper_headers" == *" (RPATH) "* ||
+          "$helper_headers" == *" (RUNPATH) "* ]]; then
+        echo "The Linux native Cargo runtime helper must be a static ELF executable without a library search path" >&2
+        exit 1
     fi
 fi
 # Build remote_server in separate invocation to prevent feature unification from other crates
@@ -233,6 +269,10 @@ zed_dir="${temp_dir}/${ZED_PRODUCT_EXECUTABLE}${suffix}.app"
 # Binary
 mkdir -p "${zed_dir}/bin" "${zed_dir}/libexec"
 cp "${target_dir}/${target_triple}/release/zed" "${zed_dir}/libexec/${ZED_PRODUCT_EXECUTABLE}-editor"
+if [[ "$rust_tools" = true ]]; then
+    llvm-objcopy --strip-debug "$native_runtime_helper" "${zed_dir}/libexec/native-cargo-runtime-observer"
+    test -x "${zed_dir}/libexec/native-cargo-runtime-observer"
+fi
 if [[ "$sim" = true ]]; then
     cp "${target_dir}/${target_triple}/release/sim-worker" "${zed_dir}/libexec/sim-worker"
 fi

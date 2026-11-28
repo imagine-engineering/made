@@ -163,6 +163,12 @@ for plan in \
     [[ "$plan" == *"remote_features=none"* ]]
 done
 
+linux_helper="native_runtime_helper=native-cargo-runtime-observer helper_path=libexec/native-cargo-runtime-observer helper_linkage=static"
+[[ "$(./script/bundle-linux --rust-tools --dry-run)" == *"$linux_helper"* ]]
+[[ "$(./script/bundle-linux --sim --rust-tools --dry-run)" == *"$linux_helper"* ]]
+[[ "$(./script/bundle-linux --dry-run)" != *"native_runtime_helper="* ]]
+[[ "$(./script/bundle-linux --sim --dry-run)" != *"native_runtime_helper="* ]]
+
 python3 -c '
 import pathlib
 root = pathlib.Path.cwd()
