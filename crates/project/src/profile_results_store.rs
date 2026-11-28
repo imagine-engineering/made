@@ -5,14 +5,22 @@ use std::sync::{
 };
 #[cfg(any(
     target_os = "macos",
-    all(target_os = "linux", feature = "rust-coverage")
+    all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    )
 ))]
 use std::time::Duration;
 use std::{collections::VecDeque, path::PathBuf};
 
 #[cfg(any(
     target_os = "macos",
-    all(target_os = "linux", feature = "rust-coverage")
+    all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    )
 ))]
 use anyhow::Context as _;
 use anyhow::Result;
@@ -30,7 +38,11 @@ use rpc::proto::Message as _;
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
 #[cfg(any(
     target_os = "macos",
-    all(target_os = "linux", feature = "rust-coverage")
+    all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    )
 ))]
 use util::ResultExt as _;
 
@@ -49,7 +61,11 @@ const MAX_HOST_PROFILE_IMPORTS: usize = 4;
 static NEXT_PROXY_IMPORT_ID: AtomicU64 = AtomicU64::new(1 << 63);
 #[cfg(any(
     target_os = "macos",
-    all(target_os = "linux", feature = "rust-coverage")
+    all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    )
 ))]
 const MAX_HOST_PROFILE_TASKS: usize = 4;
 type ImportKey = (proto::PeerId, u64);
@@ -73,7 +89,11 @@ struct NativePairTaskRun {
     paths: [ProjectPath; 2],
     versions: Option<[ProfileTaskVersion; 2]>,
     fingerprints: Option<[[u8; 32]; 2]>,
-    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    #[cfg(all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    ))]
     settings_revision: u64,
     #[cfg(all(target_os = "macos", feature = "cargo-workspace"))]
     capture_admission: Option<(NativeCaptureAuthority, ProfileTaskHelper)>,
@@ -82,7 +102,11 @@ struct NativePairTaskRun {
 enum ProfileTaskPayload {
     #[cfg(any(
         target_os = "macos",
-        all(target_os = "linux", feature = "rust-coverage")
+        all(
+            target_os = "linux",
+            feature = "rust-coverage",
+            feature = "cargo-workspace"
+        )
     ))]
     NativePair(NativePairTaskRun),
     #[cfg(target_os = "macos")]
@@ -120,7 +144,11 @@ impl ProfileTaskRun {
         match self.payload {
             #[cfg(any(
                 target_os = "macos",
-                all(target_os = "linux", feature = "rust-coverage")
+                all(
+                    target_os = "linux",
+                    feature = "rust-coverage",
+                    feature = "cargo-workspace"
+                )
             ))]
             ProfileTaskPayload::NativePair(ref native) => Some(native),
             #[cfg(target_os = "macos")]
@@ -4760,7 +4788,11 @@ pub struct ProfileResultsStore {
     revision: u64,
     invalidation: watch::Sender<()>,
     transport_connected: bool,
-    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    #[cfg(all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    ))]
     capture_authority: Arc<()>,
     cancelled: HashSet<ImportKey>,
     _collaboration_session: Option<Task<()>>,
@@ -4911,7 +4943,11 @@ impl ProfileResultsStore {
             revision: 0,
             invalidation: watch::channel(()).0,
             transport_connected: true,
-            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            #[cfg(all(
+                target_os = "linux",
+                feature = "rust-coverage",
+                feature = "cargo-workspace"
+            ))]
             capture_authority: Arc::new(()),
             cancelled: HashSet::default(),
             _collaboration_session: None,
@@ -5125,7 +5161,11 @@ impl ProfileResultsStore {
         {
             self.helper_admission_epoch = Arc::new(());
         }
-        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        #[cfg(all(
+            target_os = "linux",
+            feature = "rust-coverage",
+            feature = "cargo-workspace"
+        ))]
         {
             self.capture_authority = Arc::new(());
         }
@@ -6039,7 +6079,11 @@ impl ProfileResultsStore {
             })
     }
 
-    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    #[cfg(all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    ))]
     pub fn register_linux_task_profile(
         &mut self,
         peer: proto::PeerId,
@@ -6141,7 +6185,11 @@ impl ProfileResultsStore {
         }))
     }
 
-    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    #[cfg(all(
+        target_os = "linux",
+        feature = "rust-coverage",
+        feature = "cargo-workspace"
+    ))]
     fn linux_capture_current(
         &self,
         captured: &crate::cargo_workspace_store::CapturedHostCargoProfile,
@@ -6183,7 +6231,11 @@ impl ProfileResultsStore {
         let Some(native) = run.native() else {
             return false;
         };
-        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        #[cfg(all(
+            target_os = "linux",
+            feature = "rust-coverage",
+            feature = "cargo-workspace"
+        ))]
         if cx.global::<settings::SettingsStore>().observed_revision()
             != Some(native.settings_revision)
         {
@@ -6908,7 +6960,11 @@ impl ProfileResultsStore {
 
     #[cfg(any(
         target_os = "macos",
-        all(target_os = "linux", feature = "rust-coverage")
+        all(
+            target_os = "linux",
+            feature = "rust-coverage",
+            feature = "cargo-workspace"
+        )
     ))]
     fn task_expiry(
         &self,

@@ -1393,6 +1393,7 @@ fn admit_coverage_task_sources(
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 impl TaskStore {
+    #[cfg(feature = "cargo-workspace")]
     pub fn run_host_coverage_prerequisite(
         &self,
         prerequisite: &crate::cargo_workspace_store::HostCoveragePrerequisite,
