@@ -1500,7 +1500,14 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
                 ensure!(status.is_some_and(|status| status.success()), "Samply capture did not match its Terminal exit");
                 ensure!(std::fs::read(&marker)? == b"selected", "Samply did not run the admitted Cargo workload");
                 let samples = cx.background_spawn(async move {
-                    let artifacts = profile.read()?;
+                    let recording = target.join(format!("selected-{}.json", run_id.simple()));
+                    let symbols = recording.with_extension("syms.json");
+                    let destination = terminal::NativeProfileTaskDestination::open([recording.clone(), symbols.clone()])?;
+                    profile.retain(destination)?;
+                    let artifacts = native_task_helper::linux_task_completion::NativeProfileTaskArtifacts {
+                        profile: std::fs::read(recording)?,
+                        symbols: std::fs::read(symbols)?,
+                    };
                     for private in [b"project-only runtime sentinel".as_slice(), b"$PROJECT_CARGO_PROFILE"] {
                         for artifact in [&artifacts.profile, &artifacts.symbols] {
                             ensure!(!artifact.windows(private.len()).any(|bytes| bytes == private), "The Project profile leaked a Cargo runtime value");

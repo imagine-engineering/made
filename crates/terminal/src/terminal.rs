@@ -830,7 +830,8 @@ impl NativeTerminalEnvironment {
 pub use native_task_helper::{
     linux_task_completion::{
         CoverageTaskReportReservation, LinuxCargoProfileInvocation, LinuxCargoRuntimeInvocation,
-        NativeProfileTaskReservation, SealedCoverageTaskReport, SealedNativeProfileTask,
+        NativeProfileTaskDestination, NativeProfileTaskReservation, SealedCoverageTaskReport,
+        SealedNativeProfileTask,
     },
     task_completion::{ObservedTaskBuildInvocation, TaskBuildInvocation},
 };

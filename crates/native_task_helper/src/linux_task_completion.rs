@@ -15,7 +15,7 @@ use smol::net::unix::{UnixListener, UnixStream};
 use std::{
     ffi::OsStr,
     fs::{self, File, Metadata},
-    io,
+    io::{self, Write as _},
     net::Shutdown,
     os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd},
     os::unix::{
@@ -427,6 +427,81 @@ pub struct SealedNativeProfileTask {
     digests: [[u8; 32]; 2],
 }
 
+pub struct NativeProfileTaskDestination {
+    directory: File,
+    parent: PathBuf,
+    names: [PathBuf; 2],
+}
+
+impl NativeProfileTaskDestination {
+    pub fn open(paths: [PathBuf; 2]) -> io::Result<Self> {
+        let [profile, symbols] = paths;
+        let parent = profile.parent().ok_or_else(invalid_completion)?;
+        if !is_normalized_absolute_path(&profile)
+            || !is_normalized_absolute_path(&symbols)
+            || symbols.parent() != Some(parent)
+            || profile == symbols
+            || parent.canonicalize()?.as_os_str() != parent.as_os_str()
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Native Profile Task outputs must be distinct files in one canonical directory",
+            ));
+        }
+        let directory = File::options()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(parent)?;
+        let names = [&profile, &symbols].map(|path| {
+            path.file_name()
+                .map(PathBuf::from)
+                .ok_or_else(invalid_completion)
+        });
+        let [profile_name, symbols_name] = names;
+        let destination = Self {
+            directory,
+            parent: parent.to_path_buf(),
+            names: [profile_name?, symbols_name?],
+        };
+        destination.check_directory()?;
+        for name in &destination.names {
+            match fs::symlink_metadata(destination.descriptor_path().join(name)) {
+                Ok(_) => return Err(io::Error::from(io::ErrorKind::AlreadyExists)),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(destination)
+    }
+
+    fn descriptor_path(&self) -> PathBuf {
+        PathBuf::from(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
+    }
+
+    fn check_directory(&self) -> io::Result<()> {
+        let current = fs::symlink_metadata(&self.parent)?;
+        let opened = self.directory.metadata()?;
+        if !current.is_dir()
+            || current.dev() != opened.dev()
+            || current.ino() != opened.ino()
+            || self.descriptor_path().read_link()? != self.parent
+        {
+            return Err(io::Error::other(
+                "Native Profile Task output directory changed",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn is_normalized_absolute_path(path: &Path) -> bool {
+    path.is_absolute()
+        && !path
+            .components()
+            .any(|component| component == Component::ParentDir)
+        && path.components().collect::<PathBuf>().as_os_str() == path.as_os_str()
+}
+
 impl SealedNativeProfileTask {
     pub fn read(self) -> io::Result<NativeProfileTaskArtifacts> {
         let pair = self.reservation.read_pair()?;
@@ -434,6 +509,48 @@ impl SealedNativeProfileTask {
             return Err(io::Error::other("Sealed Native Profile Task pair changed"));
         }
         Ok(pair)
+    }
+
+    pub fn retain(self, destination: NativeProfileTaskDestination) -> io::Result<()> {
+        destination.check_directory()?;
+        let pair = self.read()?;
+        let directory = destination.descriptor_path();
+        let [profile, symbols] = destination
+            .names
+            .each_ref()
+            .map(|name| directory.join(name));
+        let write = |bytes: &[u8]| -> io::Result<tempfile::NamedTempFile> {
+            let mut file = tempfile::NamedTempFile::new_in(&directory)?;
+            file.write_all(bytes)?;
+            file.as_file().sync_all()?;
+            Ok(file)
+        };
+        let recording = write(&pair.profile)?;
+        let sidecar = write(&pair.symbols)?;
+        let recording_inode = recording.as_file().metadata()?;
+        let sidecar_inode = sidecar.as_file().metadata()?;
+        let remove_own_file = |path: &Path, expected: &Metadata| match fs::symlink_metadata(path) {
+            Ok(current) if current.dev() == expected.dev() && current.ino() == expected.ino() => {
+                fs::remove_file(path)
+            }
+            Ok(_) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
+        };
+        destination.check_directory()?;
+        // Publish the sidecar first so the visible recording never precedes its companion.
+        sidecar.persist_noclobber(&symbols)?;
+        if let Err(error) = recording.persist_noclobber(&profile) {
+            remove_own_file(&symbols, &sidecar_inode)?;
+            return Err(error.into());
+        }
+        if let Err(error) = destination.check_directory() {
+            let profile_cleanup = remove_own_file(&profile, &recording_inode);
+            let sidecar_cleanup = remove_own_file(&symbols, &sidecar_inode);
+            profile_cleanup.and(sidecar_cleanup)?;
+            return Err(error);
+        }
+        Ok(())
     }
 }
 
@@ -1383,6 +1500,58 @@ fn invalid_completion() -> io::Error {
 mod tests {
     use super::*;
     use std::ffi::OsString;
+
+    #[test]
+    fn retain_profile_publishes_only_the_sealed_pair_to_the_reviewed_directory() -> io::Result<()> {
+        let seal = || -> io::Result<SealedNativeProfileTask> {
+            let reservation = NativeProfileTaskReservation::new()?;
+            fs::write(reservation.profile_path(), b"recording")?;
+            fs::write(reservation.symbols_path(), b"symbols")?;
+            reservation.seal()
+        };
+        let root = tempfile::tempdir_in("/tmp")?;
+        let paths = ["capture.json", "capture.syms.json"].map(|name| root.path().join(name));
+        seal()?.retain(NativeProfileTaskDestination::open(paths.clone())?)?;
+        for (path, expected) in paths.iter().zip([b"recording".as_slice(), b"symbols"]) {
+            assert_eq!(fs::read(path)?, expected);
+            assert_eq!(fs::metadata(path)?.mode() & 0o777, 0o600);
+            fs::remove_file(path)?;
+        }
+
+        let destination = NativeProfileTaskDestination::open(paths.clone())?;
+        fs::write(&paths[0], b"existing recording")?;
+        assert_eq!(
+            seal()?
+                .retain(destination)
+                .expect_err("Overwrote a recording")
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read(&paths[0])?, b"existing recording");
+        assert!(!paths[1].exists());
+        fs::remove_file(&paths[0])?;
+
+        let profile = seal()?;
+        fs::write(profile.reservation.symbols_path(), b"changed after seal")?;
+        assert!(
+            profile
+                .retain(NativeProfileTaskDestination::open(paths.clone())?)
+                .is_err()
+        );
+        assert!(paths.iter().all(|path| !path.exists()));
+
+        let output = root.path().join("output");
+        let moved = root.path().join("moved");
+        fs::create_dir(&output)?;
+        let paths = ["capture.json", "capture.syms.json"].map(|name| output.join(name));
+        let destination = NativeProfileTaskDestination::open(paths.clone())?;
+        fs::rename(&output, &moved)?;
+        std::os::unix::fs::symlink(&moved, &output)?;
+        assert!(NativeProfileTaskDestination::open(paths.clone()).is_err());
+        assert!(seal()?.retain(destination).is_err());
+        assert!(paths.iter().all(|path| !path.exists()));
+        Ok(())
+    }
 
     #[test]
     fn cargo_runtime_task_requires_the_native_target_and_exact_workload_arguments() {
