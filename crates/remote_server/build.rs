@@ -1,9 +1,29 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
-use std::{path::Path, process::Command};
+use std::{io, path::Path, process::Command};
 
 const ZED_MANIFEST: &str = include_str!("../zed/Cargo.toml");
 
-fn main() {
+fn main() -> io::Result<()> {
+    println!("cargo:rustc-check-cfg=cfg(embedded_linux_runtime_observer)");
+    println!("cargo:rerun-if-env-changed=ZED_LINUX_RUNTIME_OBSERVER");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux")
+        && std::env::var_os("CARGO_FEATURE_RUST_TOOLS").is_some()
+        && let Some(observer) = std::env::var_os("ZED_LINUX_RUNTIME_OBSERVER")
+    {
+        let observer = std::fs::canonicalize(observer)?;
+        if !observer.is_file() {
+            return Err(io::Error::other(
+                "The packaged Linux Cargo runtime observer is not a file",
+            ));
+        }
+        println!("cargo:rerun-if-changed={}", observer.display());
+        println!(
+            "cargo:rustc-env=ZED_LINUX_RUNTIME_OBSERVER={}",
+            observer.display()
+        );
+        println!("cargo:rustc-cfg=embedded_linux_runtime_observer");
+    }
+
     let zed_cargo_toml: cargo_toml::Manifest =
         toml::from_str(ZED_MANIFEST).expect("failed to parse zed Cargo.toml");
     println!(
@@ -51,6 +71,7 @@ fn main() {
     if let Some(build_identifier) = option_env!("GITHUB_RUN_NUMBER") {
         println!("cargo:rustc-env=ZED_BUILD_ID={build_identifier}");
     }
+    Ok(())
 }
 
 fn git_output(arguments: &[&str]) -> Option<String> {

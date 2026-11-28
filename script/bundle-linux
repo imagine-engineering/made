@@ -125,6 +125,10 @@ fi
 case ",${ZED_PRODUCT_APP_FEATURES}," in
     *,rust-tools,*) rust_tools=true ;;
 esac
+remote_rust_tools=false
+case ",${ZED_PRODUCT_REMOTE_FEATURES}," in
+    *,rust-tools,*) remote_rust_tools=true ;;
+esac
 
 channel="${ZED_RELEASE_CHANNEL:-$(<crates/zed/RELEASE_CHANNEL)}"
 target_dir="${CARGO_TARGET_DIR:-target}"
@@ -168,11 +172,28 @@ fi
 
 export CC=${CC:-$(which clang)}
 
+build_app_runtime=false
 if [[ "$rust_tools" == true && ( "$bundle_phase" == "all" || "$bundle_phase" == "application" ) ]]; then
+    build_app_runtime=true
+fi
+build_remote_runtime=false
+if [[ "$remote_rust_tools" == true && ( "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ) ]]; then
+    build_remote_runtime=true
+fi
+build_static_runtime_helper() {
     # Giving the static PIE the application's library search path can crash it before main.
-    cargo rustc --locked --release --target "${target_triple}" --package native_task_helper \
+    cargo rustc --locked --release --target "$1" --package native_task_helper \
         --bin native-cargo-runtime-observer --no-default-features --features runtime-helper \
         -- -C target-feature=+crt-static
+}
+
+remote_runtime_helper="$native_runtime_helper"
+if "$build_remote_runtime" && [[ "${target_triple%%-*}" != "${remote_server_triple%%-*}" ]]; then
+    build_static_runtime_helper "$remote_server_triple"
+    remote_runtime_helper="${target_dir}/${remote_server_triple}/release/native-cargo-runtime-observer"
+fi
+if "$build_app_runtime" || { "$build_remote_runtime" && [[ "$remote_runtime_helper" == "$native_runtime_helper" ]]; }; then
+    build_static_runtime_helper "$target_triple"
 fi
 
 # Build binary in release mode
@@ -195,22 +216,36 @@ if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
     fi
 fi
 
-if [[ "$rust_tools" = true && "$bundle_phase" != "remote-server" ]]; then
-    if [[ ! -x "$native_runtime_helper" || -L "$native_runtime_helper" ]]; then
-        echo "Missing Linux native Cargo runtime helper: $native_runtime_helper" >&2
+check_static_runtime_helper() {
+    local helper="$1" headers
+    if [[ ! -x "$helper" || -L "$helper" ]]; then
+        echo "Missing Linux native Cargo runtime helper: $helper" >&2
         exit 1
     fi
-    helper_headers=$(LC_ALL=C readelf --wide --program-headers --dynamic "$native_runtime_helper")
-    if [[ "$helper_headers" != *" LOAD "* || "$helper_headers" == *" INTERP "* ||
-          "$helper_headers" == *" (NEEDED) "* || "$helper_headers" == *" (RPATH) "* ||
-          "$helper_headers" == *" (RUNPATH) "* ]]; then
+    headers=$(LC_ALL=C readelf --wide --program-headers --dynamic "$helper")
+    if [[ "$headers" != *" LOAD "* || "$headers" == *" INTERP "* ||
+          "$headers" == *" (NEEDED) "* || "$headers" == *" (RPATH) "* ||
+          "$headers" == *" (RUNPATH) "* ]]; then
         echo "The Linux native Cargo runtime helper must be a static ELF executable without a library search path" >&2
         exit 1
     fi
+}
+
+if "$build_app_runtime" || [[ "$rust_tools" == true && "$bundle_phase" == "package" ]]; then
+    check_static_runtime_helper "$native_runtime_helper"
 fi
 # Build remote_server in separate invocation to prevent feature unification from other crates
 # from influencing dynamic libraries required by it.
 if [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
+    unset ZED_LINUX_RUNTIME_OBSERVER
+    if "$build_remote_runtime"; then
+        check_static_runtime_helper "$remote_runtime_helper"
+        embedded_runtime_helper="${target_dir}/${remote_server_triple}/release/native-cargo-runtime-observer.embedded"
+        mkdir -p "$(dirname "$embedded_runtime_helper")"
+        llvm-objcopy --strip-debug "$remote_runtime_helper" "$embedded_runtime_helper"
+        export ZED_LINUX_RUNTIME_OBSERVER
+        ZED_LINUX_RUNTIME_OBSERVER=$(realpath "$embedded_runtime_helper")
+    fi
     if [[ "$remote_server_triple" == "$musl_triple" ]]; then
         export RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static"
         musl_cc_var="CC_$(echo "$remote_server_triple" | tr '-' '_')"
@@ -220,6 +255,10 @@ if [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
         cargo build --release --target "${remote_server_triple}" --package remote_server --no-default-features --features "${ZED_PRODUCT_REMOTE_FEATURES}"
     else
         cargo build --release --target "${remote_server_triple}" --package remote_server --no-default-features
+    fi
+    unset ZED_LINUX_RUNTIME_OBSERVER
+    if "$build_remote_runtime" && [[ "${target_triple%%-*}" == "${remote_server_triple%%-*}" ]]; then
+        "${target_dir}/${remote_server_triple}/release/remote_server" check-linux-cargo-runtime-observer
     fi
 fi
 

@@ -1956,7 +1956,7 @@ fn verify_headless_coverage(
 enum HeadlessTaskScenario {
     Coverage,
     SelectedCoverage,
-    ProfileBuild,
+    Profile { prepare_runtime: bool },
 }
 
 fn write_headless_profile_build_fixture(directory: &Path) -> Result<String> {
@@ -2029,6 +2029,7 @@ async fn verify_headless_profile_build(
     host: &gpui::Entity<crate::HeadlessProject>,
     worktree_id: project::WorktreeId,
     directory: &Path,
+    prepare_runtime: bool,
     cx: &mut gpui::AsyncApp,
 ) -> Result<()> {
     use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
@@ -2106,6 +2107,20 @@ async fn verify_headless_profile_build(
     println!(
         "Registered headless Cargo store built and verified the exact host-selected profile executable"
     );
+    if prepare_runtime {
+        let _runtime = host
+            .update(cx, |host, cx| {
+                host.prepare_selected_host_cargo_profile_runtime(workload, cx)
+            })?
+            .await?;
+        ensure!(
+            !directory.join("target/profiled-project-workload").exists(),
+            "The runtime observation executed the selected workload"
+        );
+        println!(
+            "Registered headless host observed the real Cargo runtime using its embedded static helper"
+        );
+    }
     Ok(())
 }
 
@@ -2121,7 +2136,7 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
     let directory = std::fs::canonicalize(directory)?;
     let run_id = uuid::Uuid::new_v4();
     let artifact_path = format!("target/zed-coverage-{}.json", run_id.simple());
-    let profile_settings = if matches!(scenario, HeadlessTaskScenario::ProfileBuild) {
+    let profile_settings = if matches!(scenario, HeadlessTaskScenario::Profile { .. }) {
         Some(write_headless_profile_build_fixture(&directory)?)
     } else {
         None
@@ -2271,12 +2286,14 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
                             .map(|tree| tree.scan_complete())
                     })?
                     .await;
-                if profile_settings.is_some() {
+                if let HeadlessTaskScenario::Profile { prepare_runtime } = scenario {
                     index_published.recv().await?;
                     drop(initial_scan);
                     stage.set("building the host-selected profile workload");
                     let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
-                    return verify_headless_profile_build(&host, worktree_id, &directory, cx).await;
+                    return verify_headless_profile_build(
+                        &host, worktree_id, &directory, prepare_runtime, cx,
+                    ).await;
                 }
                 stage.set("running the Cargo LLVM collector");
                 let (snapshot, recovery) = if let Some(launch) = launch {
@@ -2389,6 +2406,7 @@ pub enum Scenario {
     CargoBuildProfilePty,
     CargoBuildProfileHeadless,
     RegisteredHeadlessProfileBuild,
+    RegisteredHeadlessProfileRuntime,
     NativeCargoRuntimeTransition,
     NativeCargoRuntimeProfile,
     HeadlessCollector,
@@ -2443,8 +2461,17 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::SelectedHeadlessCollector => {
             headless_task(directory, HeadlessTaskScenario::SelectedCoverage)
         }
-        Scenario::RegisteredHeadlessProfileBuild => {
-            headless_task(directory, HeadlessTaskScenario::ProfileBuild)
-        }
+        Scenario::RegisteredHeadlessProfileBuild => headless_task(
+            directory,
+            HeadlessTaskScenario::Profile {
+                prepare_runtime: false,
+            },
+        ),
+        Scenario::RegisteredHeadlessProfileRuntime => headless_task(
+            directory,
+            HeadlessTaskScenario::Profile {
+                prepare_runtime: true,
+            },
+        ),
     }
 }

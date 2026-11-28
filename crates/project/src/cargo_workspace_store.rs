@@ -2862,7 +2862,10 @@ impl LinuxNativeCargoRuntime {
 enum NativeCargoBuildOwner {
     Desktop(gpui::WeakEntity<crate::Project>),
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-    Headless(gpui::WeakEntity<crate::buffer_store::BufferStore>),
+    Headless {
+        buffers: gpui::WeakEntity<crate::buffer_store::BufferStore>,
+        settings_revision: u64,
+    },
 }
 
 impl NativeCargoBuildOwner {
@@ -2870,7 +2873,7 @@ impl NativeCargoBuildOwner {
         match self {
             Self::Desktop(project) => project.upgrade(),
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            Self::Headless(_) => None,
+            Self::Headless { .. } => None,
         }
     }
 
@@ -2883,7 +2886,7 @@ impl NativeCargoBuildOwner {
                 .buffer_store()
                 .clone()),
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            Self::Headless(buffers) => buffers
+            Self::Headless { buffers, .. } => buffers
                 .upgrade()
                 .context("Native Build host buffer store disappeared"),
         }
@@ -2893,7 +2896,7 @@ impl NativeCargoBuildOwner {
         match self {
             Self::Desktop(_) => CargoReviewRoute::Desktop,
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            Self::Headless(_) => CargoReviewRoute::HeadlessProfile,
+            Self::Headless { .. } => CargoReviewRoute::HeadlessProfile,
         }
     }
 }
@@ -6568,10 +6571,18 @@ impl CargoWorkspaceStore {
                 );
             }
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            NativeCargoBuildOwner::Headless(buffers) => {
+            NativeCargoBuildOwner::Headless {
+                buffers,
+                settings_revision,
+            } => {
                 ensure!(
                     self.native_profile_host.as_ref() == Some(buffers),
                     "Native Build headless owner changed"
+                );
+                ensure!(
+                    cx.global::<settings::SettingsStore>().observed_revision()
+                        == Some(*settings_revision),
+                    "Native profiling host settings changed"
                 );
             }
         }
@@ -7713,11 +7724,16 @@ impl CargoWorkspaceStore {
         selection: HostCargoProfileSelection,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<LinuxNativeCargoWorkload>>> {
-        let owner = NativeCargoBuildOwner::Headless(
-            self.native_profile_host
+        let owner = NativeCargoBuildOwner::Headless {
+            buffers: self
+                .native_profile_host
                 .clone()
                 .context("Native profiling host is unavailable")?,
-        );
+            settings_revision: cx
+                .global::<settings::SettingsStore>()
+                .observed_revision()
+                .context("Native profiling host settings revision is unavailable")?,
+        };
         self.validate_native_build_owner(&owner, cx)?;
         ensure!(
             !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx),
@@ -7732,7 +7748,6 @@ impl CargoWorkspaceStore {
         );
         let allowed_worktrees = HashSet::from_iter([selection.workspace.root.worktree_id]);
         let preset = headless_profile_preset(&selection.preset_id, cx)?;
-        let settings_revision = cx.global::<settings::SettingsStore>().observed_revision();
         let discovery = (!self
             .metadata_facts_for_current_snapshot(cx)
             .is_some_and(|facts| facts.iter().any(|facts| facts.key == selection.workspace)))
@@ -7744,10 +7759,6 @@ impl CargoWorkspaceStore {
             }
             let (member, target, recipe) = store.update(cx, |store, cx| {
                 store.validate_native_build_owner(&owner, cx)?;
-                ensure!(
-                    settings_revision == cx.global::<settings::SettingsStore>().observed_revision(),
-                    "Native profiling host settings changed during selection"
-                );
                 let (snapshot, true) = store
                     .cached_snapshot(cx)
                     .context("Host Cargo metadata is unavailable")?
@@ -7827,11 +7838,7 @@ impl CargoWorkspaceStore {
             };
             let build = store
                 .update(cx, |store, cx| {
-                    ensure!(
-                        settings_revision
-                            == cx.global::<settings::SettingsStore>().observed_revision(),
-                        "Native profiling host settings changed before admission"
-                    );
+                    store.validate_native_build_owner(&owner, cx)?;
                     let admitted = store.prepare_native_cargo_build_intent_owned(
                         owner,
                         run_id,
@@ -7874,6 +7881,83 @@ impl CargoWorkspaceStore {
                 "Native profiling Build disagreed with the producing Terminal exit"
             );
             Ok(workload)
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn prepare_selected_headless_cargo_profile_runtime(
+        &mut self,
+        workload: LinuxNativeCargoWorkload,
+        installed_runner: PathBuf,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoRuntime>>> {
+        ensure!(
+            matches!(
+                &workload.build.intent.project,
+                NativeCargoBuildOwner::Headless { .. }
+            ),
+            "Native Cargo runtime requires the producing host's Build"
+        );
+        let launch = workload.stage_launch("Prepare the selected Cargo workload");
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Native runtime filesystem is unavailable")?
+            .clone();
+        let renewed = self.renew_linux_native_cargo_workload(workload, cx)?;
+        Ok(cx.spawn(async move |store, cx| {
+            let workload = renewed.await?;
+            let (workload, invocation, runner) = cx
+                .background_spawn({
+                    let filesystem = filesystem.clone();
+                    async move {
+                        let (invocation, runner) = workload
+                            .runtime_invocation(filesystem.as_ref(), installed_runner, Vec::new())
+                            .await?;
+                        Ok::<_, anyhow::Error>((workload, invocation, runner))
+                    }
+                })
+                .await?;
+            let (builder, observation) = store.update(cx, |store, cx| {
+                store.validate_native_build_intent(&workload.build.intent, cx)?;
+                crate::task_store::validate_experimental_task_requirements(&launch, cx)?;
+                terminal::TerminalBuilder::new_with_native_cargo_runtime_task(
+                    launch,
+                    None,
+                    invocation,
+                    cx.entity_id().as_u64(),
+                    cx,
+                )
+            })??;
+            let builder = builder.await?;
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+            let ordinary =
+                terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+            let (observed, status) = futures::future::join(observation.finish(), ordinary).await;
+            let terminal::LinuxNativeTaskOutcome::Completed(observed_status, Some(observed)) =
+                observed?
+            else {
+                anyhow::bail!("The host did not receive the selected Cargo runtime environment");
+            };
+            ensure!(
+                observed_status.success() && status.is_some_and(|status| status.success()),
+                "Native profiling runtime disagreed with the producing Terminal exit"
+            );
+            let workload = store
+                .update(cx, |store, cx| {
+                    store.renew_linux_native_cargo_workload(workload, cx)
+                })??
+                .await?;
+            cx.background_spawn(async move {
+                runner.revalidate(filesystem.as_ref()).await?;
+                Ok::<_, anyhow::Error>(LinuxNativeCargoRuntime {
+                    workload,
+                    runner,
+                    observed,
+                })
+            })
+            .await
         }))
     }
 
@@ -7921,7 +8005,7 @@ impl CargoWorkspaceStore {
                     );
                     LinuxCargoBuildEnvironment::Desktop(recipe)
                 }
-                NativeCargoBuildOwner::Headless(_) => {
+                NativeCargoBuildOwner::Headless { .. } => {
                     let environment = store.update(cx, |store, cx| {
                         store.prepare_headless_profile_environment(&intent, cx)
                     })??.await?;

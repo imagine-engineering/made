@@ -11,7 +11,7 @@ use std::{
     collections::BTreeMap,
     ffi::{CStr, OsStr},
     fs::{File, Permissions},
-    io::{self, Read as _},
+    io::{self, Read as _, Write as _},
     os::{
         fd::{AsRawFd as _, FromRawFd as _, RawFd},
         unix::{
@@ -31,6 +31,41 @@ const MAX_RUNNER_BYTES: u64 = 32 * 1024 * 1024;
 const ACKNOWLEDGED: u8 = 7;
 const IMMUTABLE_FILE_SEALS: libc::c_int =
     libc::F_SEAL_WRITE | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL;
+
+pub struct PackagedLinuxCargoRuntime {
+    _directory: tempfile::TempDir,
+    path: PathBuf,
+}
+
+impl PackagedLinuxCargoRuntime {
+    pub fn unpack(bytes: &[u8]) -> io::Result<Self> {
+        if bytes.is_empty() || bytes.len() as u64 > MAX_RUNNER_BYTES {
+            return Err(invalid_runtime());
+        }
+        let directory = tempfile::Builder::new()
+            .prefix("zed-cargo-helper-")
+            .tempdir_in("/tmp")?;
+        std::fs::set_permissions(directory.path(), Permissions::from_mode(0o700))?;
+        let path = directory.path().join("native-cargo-runtime-observer");
+        let mut image = File::options()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)?;
+        image.write_all(bytes)?;
+        verify_elf_image(&image, true)?;
+        image.set_permissions(Permissions::from_mode(0o500))?;
+        Ok(Self {
+            _directory: directory,
+            path,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
 
 pub struct LinuxCargoRuntimeObserver {
     runner: File,
@@ -244,8 +279,6 @@ pub(crate) fn configure_profile_workload(
     workload: &TaskBuildInvocation,
     expected_digest: Option<[u8; 32]>,
 ) -> io::Result<()> {
-    use std::io::Write as _;
-
     let runner = seal_static_runner(runner_path)?;
     let program = open_profile_image(workload.program(), expected_digest)?;
     let payload = workload.encode_helper_environment()?;

@@ -116,6 +116,12 @@ fn registered_headless_host_builds_the_selected_profile_target() -> io::Result<(
 }
 
 #[test]
+#[ignore = "requires an independently built host with the packaged observer and installed Linux Cargo"]
+fn registered_headless_host_observes_the_selected_cargo_runtime() -> io::Result<()> {
+    run_terminal_fixture("registered-headless-profile-runtime")
+}
+
+#[test]
 #[ignore = "requires an independently built host, the pinned Cargo and a Linux perf environment"]
 fn native_cargo_profile_uses_the_fresh_executable_on_both_terminal_backends() -> io::Result<()> {
     run_terminal_fixture("cargo-build-profile-pty")?;

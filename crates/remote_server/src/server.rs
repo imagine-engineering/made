@@ -71,6 +71,9 @@ mod linux_task_completion_fixture;
 
 #[derive(Subcommand)]
 pub enum Commands {
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    #[command(hide = true)]
+    CheckLinuxCargoRuntimeObserver,
     #[cfg(target_os = "macos")]
     #[command(hide = true)]
     ObserveTask {
@@ -151,11 +154,30 @@ pub enum Commands {
     },
 }
 
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
+fn linux_cargo_runtime_observer_bytes() -> Result<&'static [u8]> {
+    #[cfg(embedded_linux_runtime_observer)]
+    {
+        Ok(include_bytes!(env!("ZED_LINUX_RUNTIME_OBSERVER")))
+    }
+    #[cfg(not(embedded_linux_runtime_observer))]
+    {
+        anyhow::bail!("This Linux host build has no packaged Cargo runtime observer")
+    }
+}
+
 pub fn run(command: Commands) -> anyhow::Result<()> {
     use anyhow::Context;
     use release_channel::{RELEASE_CHANNEL, ReleaseChannel};
 
     match command {
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        Commands::CheckLinuxCargoRuntimeObserver => {
+            native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime::unpack(
+                linux_cargo_runtime_observer_bytes()?,
+            )?;
+            Ok(())
+        }
         #[cfg(target_os = "macos")]
         Commands::ObserveTask {
             socket,

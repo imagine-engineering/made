@@ -106,6 +106,12 @@ struct CoverageTaskTransport {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+pub struct HostCargoProfileRuntime {
+    pub runtime: project::cargo_workspace_store::LinuxNativeCargoRuntime,
+    _runner: native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
 struct CoverageTaskSession {
     token: uuid::Uuid,
     last_operation: u64,
@@ -537,6 +543,39 @@ impl HeadlessProject {
         self.cargo_workspace_store.update(cx, |store, cx| {
             store.build_selected_headless_cargo_profile(selection, cx)
         })
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn prepare_selected_host_cargo_profile_runtime(
+        &self,
+        workload: project::cargo_workspace_store::LinuxNativeCargoWorkload,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<HostCargoProfileRuntime>>> {
+        let bytes = crate::linux_cargo_runtime_observer_bytes()?;
+        let store = self.cargo_workspace_store.clone();
+        Ok(cx.spawn(async move |_, cx| {
+            let runner = cx
+                .background_spawn(async move {
+                    native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime::unpack(
+                        bytes,
+                    )
+                })
+                .await
+                .context("Opening the Linux host's packaged Cargo runtime observer")?;
+            let runtime = store
+                .update(cx, |store, cx| {
+                    store.prepare_selected_headless_cargo_profile_runtime(
+                        workload,
+                        runner.path().to_path_buf(),
+                        cx,
+                    )
+                })?
+                .await?;
+            Ok(HostCargoProfileRuntime {
+                runtime,
+                _runner: runner,
+            })
+        }))
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-tools"))]
