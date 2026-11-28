@@ -2954,6 +2954,10 @@ enum NativeCargoBuildOwner {
 }
 
 impl NativeCargoBuildOwner {
+    #[cfg(any(
+        target_os = "macos",
+        all(target_os = "linux", feature = "rust-coverage")
+    ))]
     fn desktop_project(&self) -> Option<Entity<crate::Project>> {
         match self {
             Self::Desktop(project) => project.upgrade(),

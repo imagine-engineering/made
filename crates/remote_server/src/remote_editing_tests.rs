@@ -20530,6 +20530,226 @@ async fn rust_tools_headless_runtime_cargo_configuration_invalidation(cx: &mut T
 
 #[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
 #[gpui::test]
+async fn rust_tools_headless_runtime_doctest_plan_and_terminal_admission(cx: &mut TestAppContext) {
+    use project::{
+        rust_test_provider::{RustTestAction, RustTestActionPlan},
+        structured_execution::{
+            StructuredDebugCapability, StructuredNodeKind, StructuredProviderStatus,
+        },
+        trusted_worktrees::{PathTrust, TrustedWorktrees},
+    };
+    use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
+
+    let binary = PathBuf::from(
+        std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY").expect("separate enabled host binary"),
+    );
+    let fixture = tempfile::tempdir_in("/tmp").expect("isolated doctest workspace");
+    let host = tempfile::tempdir_in("/tmp").expect("isolated host configuration");
+    std::fs::create_dir(host.path().join("config")).expect("host configuration directory");
+    std::fs::write(
+        host.path().join("config/settings.json"),
+        r#"{"load_direnv":"disabled","feature_flags":{"rust-exact-doctest-actions-experimental":"on"}}"#,
+    )
+    .expect("enable exact doctest actions on the producer");
+    std::fs::create_dir(fixture.path().join("src")).expect("source directory");
+    for (path, content) in [
+        (
+            "Cargo.toml",
+            "[package]\nname = \"remote-docs\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        ),
+        (
+            "Cargo.lock",
+            "version = 4\n\n[[package]]\nname = \"remote-docs\"\nversion = \"0.1.0\"\n",
+        ),
+        (".gitignore", "/target/\n"),
+        (
+            "src/lib.rs",
+            concat!(
+                "/// ```\n/// assert_eq!(remote_docs::selected(), 1);\n/// ```\n",
+                "/// ```\n/// panic!(\"sibling body ran\");\n/// ```\n",
+                "/// ```ignore\n/// panic!(\"ignored body ran\");\n/// ```\n",
+                "pub fn selected() -> u32 { 1 }\n",
+            ),
+        ),
+    ] {
+        std::fs::write(fixture.path().join(path), content).expect("write doctest fixture");
+    }
+
+    cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    cx.update(|cx| project::trusted_worktrees::init(HashMap::default(), cx));
+    cx.executor().allow_parking();
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host.path().join("server_state"))
+            .with_test_data_directory(host.path().to_path_buf())
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel, cancellation) = futures::channel::oneshot::channel();
+    let client = cx
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::Workspace(-i64::from(std::process::id())),
+                connection.clone(),
+                cancellation,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to the independently built host")
+        .expect("remote client");
+    let project = build_project_with_worktree_trust(client.clone(), true, cx);
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(fixture.path(), true, cx)
+        })
+        .await
+        .expect("remote doctest worktree");
+    let scan = worktree.update(cx, |worktree, _| worktree.wait_for_snapshot(1));
+    let scan_deadline = cx
+        .background_executor
+        .timer(std::time::Duration::from_secs(10));
+    match futures::future::select(Box::pin(scan), Box::pin(scan_deadline)).await {
+        futures::future::Either::Left((result, _)) => result.expect("initial worktree scan"),
+        futures::future::Either::Right(_) => panic!("initial worktree scan timed out"),
+    }
+    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+    let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+    cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-exact-doctest-actions-experimental",
+            true,
+            cx,
+        );
+        TrustedWorktrees::try_get_global(cx)
+            .expect("client trust owner")
+            .update(cx, |trust, cx| {
+                trust.trust(
+                    &worktrees,
+                    std::iter::once(PathTrust::Worktree(worktree_id)).collect(),
+                    cx,
+                );
+            });
+    });
+    client
+        .read_with(cx, |client, _| client.proto_client())
+        .request(proto::TrustWorktrees {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            trusted_paths: vec![proto::PathTrust {
+                content: Some(proto::path_trust::Content::WorktreeId(
+                    worktree_id.to_proto(),
+                )),
+            }],
+        })
+        .await
+        .expect("trust the producing worktree");
+    cx.run_until_parked();
+
+    let provider = project.read_with(cx, |project, _| project.rust_test_provider_store().clone());
+    let structured = project.read_with(cx, |project, _| {
+        project.structured_execution_store().clone()
+    });
+    let provider_id = project::rust_test_provider::RustTestProviderStore::provider_id();
+    let discovery_deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let snapshot = loop {
+        let snapshot = structured.read_with(cx, |structured, _| {
+            structured.state().provider(&provider_id).cloned()
+        });
+        if let Some(snapshot) =
+            snapshot.filter(|snapshot| snapshot.status == StructuredProviderStatus::Current)
+        {
+            break snapshot;
+        }
+        assert!(
+            std::time::Instant::now() < discovery_deadline,
+            "producing host did not publish current doctest discovery"
+        );
+        cx.background_executor
+            .timer(std::time::Duration::from_millis(100))
+            .await;
+        cx.run_until_parked();
+    };
+    let cases = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.kind == StructuredNodeKind::Case)
+        .collect::<Vec<_>>();
+    assert_eq!(cases.len(), 3, "{snapshot:?}");
+    let case = |line| {
+        cases
+            .iter()
+            .find(|node| node.label.ends_with(&format!("(line {line})")))
+            .expect("authoritative case identity")
+    };
+    let selected = case(1);
+    assert!(matches!(
+        selected.debug_capability,
+        Some(StructuredDebugCapability::Unsupported(_))
+    ));
+    let plan = |node: &project::structured_execution::StructuredNode, cx: &mut TestAppContext| {
+        provider.update(cx, |provider, cx| {
+            provider.plan_action(
+                &node.id,
+                snapshot.discovery_generation,
+                RustTestAction::Run,
+                cx,
+            )
+        })
+    };
+    let RustTestActionPlan::Task { template, .. } =
+        plan(selected, cx).await.expect("host-selected run plan")
+    else {
+        panic!("selected doctest must yield a Cargo Task");
+    };
+    let filter = template
+        .args
+        .iter()
+        .skip_while(|argument| *argument != "--")
+        .nth(1)
+        .expect("selected doctest filter after Cargo's argument delimiter");
+    assert_eq!(
+        cases
+            .iter()
+            .filter(|node| node.label.contains(filter))
+            .count(),
+        1
+    );
+    assert!(selected.label.contains(filter));
+    assert!(template.args.iter().any(|argument| argument == "--doc"));
+    let ignored = plan(case(7), cx)
+        .await
+        .err()
+        .expect("merged ignored selection is refused");
+    assert!(
+        ignored.to_string().contains("without executing"),
+        "{ignored:#}"
+    );
+
+    let mut context = task::TaskContext::default();
+    context.task_variables.insert(
+        task::VariableName::WorktreeRoot,
+        fixture.path().display().to_string(),
+    );
+    let resolved = template
+        .resolve_task_with_literal_arguments("remote doctest", &context)
+        .expect("resolve the admitted plan for the terminal");
+    let refused = project
+        .update(cx, |project, cx| {
+            project.create_terminal_task(resolved.resolved, cx)
+        })
+        .await
+        .err()
+        .expect("the remote terminal must refuse unnegotiated experimental Task metadata");
+    assert!(
+        refused
+            .to_string()
+            .contains("does not negotiate experimental requirement metadata"),
+        "{refused:#}"
+    );
+    connection.kill().await.expect("stop the owned host");
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+#[gpui::test]
 async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut TestAppContext) {
     use project::{
         cargo_workspace::{CargoTargetKind, CargoWorkspaceKey},
