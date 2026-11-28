@@ -139,7 +139,14 @@ set a heap limit for the fallback, update that option. If analysis still fails,
 check the fallback logs or select the preferred provider. The heap limit covers
 only the fallback JVM heap. The 8 GiB qualification ceiling includes the editor,
 JDTLS and build workers. A cached native Gradle fixture still exceeded that
-ceiling with this setting. The 32 GiB reference-host check remains open.
+ceiling with this setting.
+
+On macOS ARM64 with JDK 17, you can also try setting
+`KOTLIN_LANGUAGE_SERVER_OPTS` to `-Xmx4g -XX:+UseSerialGC` for the alternate
+server. Keep your other required JVM options and remove any existing collector
+selection before adding Serial GC. This experimental setting kept the sampled
+combined peak below 8 GiB in cached Maven and Gradle runs on a 256 GiB Mac.
+The 32 GiB reference-host check remains open.
 
 For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
