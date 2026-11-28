@@ -399,10 +399,13 @@ const PASSIVE_CARGO_PROTECTED_ENVIRONMENT: [&str; 11] = [
     "HOME",
     "USERPROFILE",
 ];
+const CARGO_TOOLCHAIN_SELECTION_ENVIRONMENT: [&str; 3] =
+    ["CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"];
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 struct PassiveRustEnvironment {
     overrides: HashMap<OsString, OsString>,
+    absent: HashSet<&'static str>,
     inherit_process: bool,
 }
 
@@ -410,6 +413,7 @@ impl Default for PassiveRustEnvironment {
     fn default() -> Self {
         Self {
             overrides: HashMap::default(),
+            absent: HashSet::default(),
             inherit_process: true,
         }
     }
@@ -418,12 +422,12 @@ impl Default for PassiveRustEnvironment {
 impl PassiveRustEnvironment {
     fn from_request(environment: Option<&HashMap<String, String>>) -> Self {
         Self {
-            inherit_process: true,
             overrides: environment
                 .into_iter()
                 .flatten()
                 .map(|(name, value)| (name.into(), value.into()))
                 .collect(),
+            ..Self::default()
         }
     }
 
@@ -443,6 +447,7 @@ impl PassiveRustEnvironment {
                 .map(|(name, value)| (name.into(), value.into()))
                 .collect(),
             inherit_process: false,
+            ..Self::default()
         }
     }
 
@@ -458,18 +463,27 @@ impl PassiveRustEnvironment {
                 matches.then(|| value.clone())
             })
             .or_else(|| {
-                self.inherit_process
+                let admitted_absent = self.absent.contains(name)
+                    || (cfg!(windows)
+                        && self.absent.iter().any(|key| key.eq_ignore_ascii_case(name)));
+                (self.inherit_process && !admitted_absent)
                     .then(|| std::env::var_os(name))
                     .flatten()
             })
     }
 
-    fn pin_present_cargo_parent(&mut self) -> Self {
+    fn pin_cargo_parent(&mut self) -> Self {
         let mut pinned = Self::default();
-        for name in PASSIVE_CARGO_PROTECTED_ENVIRONMENT {
+        for name in PASSIVE_CARGO_PROTECTED_ENVIRONMENT
+            .into_iter()
+            .chain(CARGO_TOOLCHAIN_SELECTION_ENVIRONMENT)
+        {
             if let Some(value) = self.value(name) {
                 self.insert(name, value.clone());
                 pinned.insert(name, value);
+            } else {
+                self.absent.insert(name);
+                pinned.absent.insert(name);
             }
         }
         pinned
@@ -479,12 +493,15 @@ impl PassiveRustEnvironment {
         if !self.inherit_process {
             command.env_clear();
         }
+        for name in &self.absent {
+            command.env_remove(name);
+        }
         command.envs(&self.overrides);
     }
 
     fn path_for_executable_lookup(&self) -> Option<OsString> {
         self.value("PATH")
-            .or_else(|| (!self.inherit_process).then(OsString::new))
+            .or_else(|| (!self.inherit_process || self.absent.contains("PATH")).then(OsString::new))
     }
 
     fn insert(&mut self, name: &str, value: OsString) {
@@ -1050,9 +1067,10 @@ async fn prepare_rust_execution_in_environment(
 ) -> Result<PassiveRustExecution> {
     let preparation = async {
         let mut parent_environment = parent_environment;
-        let cargo_parent_environment = if program.is_some_and(|program|
-            Path::new(program).file_stem() == Some(OsStr::new("cargo"))) {
-            parent_environment.pin_present_cargo_parent()
+        let cargo_environment = program.is_none_or(|program|
+            Path::new(program).file_stem() == Some(OsStr::new("cargo")));
+        let cargo_parent_environment = if cargo_environment {
+            parent_environment.pin_cargo_parent()
         } else { PassiveRustEnvironment::default() };
         let installed = if let Some(program) = program {
             check_passive_rustup_executable(program, working_directory, &parent_environment, executor).await?
@@ -1063,7 +1081,7 @@ async fn prepare_rust_execution_in_environment(
         let mut child_environment = parent_environment.clone();
         let mut compiler_chain = Vec::new();
         let mut cargo_options = Vec::new();
-        if program.is_none_or(|program| Path::new(program).file_stem() == Some(OsStr::new("cargo"))) {
+        if cargo_environment {
             let configuration = passive_cargo_configuration(
                 working_directory,
                 &parent_environment,
@@ -1071,7 +1089,7 @@ async fn prepare_rust_execution_in_environment(
             ).await?;
             for (name, value) in &configuration.environment {
                 let is_variable = |expected: &str| name == expected || (cfg!(windows) && name.eq_ignore_ascii_case(expected));
-                if ["CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"].into_iter().any(is_variable) {
+                if CARGO_TOOLCHAIN_SELECTION_ENVIRONMENT.into_iter().any(is_variable) {
                     return Err(anyhow!("Cargo environment configuration cannot select toolchain homes; configure the host environment instead"));
                 }
                 let (value, force) = value.resolve()?;
@@ -1829,13 +1847,13 @@ pub async fn compile_native_profile_test_workload(
         .next()
         .context("Installed workload compiler is unavailable")?;
     let mut command = util::command::new_command(program);
+    execution.child_environment.apply_to_command(&mut command);
     command
         .args(executables)
         .args(["--crate-name", "native_selected_fixture", "--edition=2024"])
         .arg(source)
         .arg("-o")
         .arg(executable)
-        .envs(&execution.child_environment.overrides)
         .current_dir(root);
     let output = bounded_cargo_command_output(
         command,
@@ -2083,10 +2101,10 @@ impl CargoConfigurationProbe for ProcessCargoConfigurationProbe {
                 .next()
                 .context("Cargo compiler selection is unavailable")?;
             let mut command = util::command::new_command(program);
+            execution.child_environment.apply_to_command(&mut command);
             command
                 .args(executables)
                 .arg("-vV")
-                .envs(&execution.child_environment.overrides)
                 .current_dir(&request.working_directory)
                 .kill_on_drop(true);
             bounded_cargo_command_output(
@@ -3977,10 +3995,9 @@ async fn revalidate_native_compiler_facts(
     ensure!(
         current_execution.compiler_chain == facts.execution.compiler_chain
             && current_execution.delegated_executables == facts.execution.delegated_executables
-            && current_execution.child_environment.overrides
-                == facts.execution.child_environment.overrides
-            && current_execution.cargo_parent_environment.overrides
-                == facts.execution.cargo_parent_environment.overrides
+            && current_execution.child_environment == facts.execution.child_environment
+            && current_execution.cargo_parent_environment
+                == facts.execution.cargo_parent_environment
             && current_execution.cargo_options == facts.execution.cargo_options
             && current_execution.toolchain == facts.execution.toolchain,
         "Native runtime compiler execution environment changed"
@@ -11746,6 +11763,7 @@ mod tests {
             let environment = PassiveRustEnvironment {
                 overrides: HashMap::from_iter([(marker.clone(), value.clone())]),
                 inherit_process,
+                ..PassiveRustEnvironment::default()
             };
             let output = cx
                 .background_spawn({
@@ -11848,6 +11866,7 @@ mod tests {
                 OsString::from("/usr/bin:/bin"),
             )]),
             inherit_process: false,
+            ..PassiveRustEnvironment::default()
         };
         let mut configuration = CargoHostExecutionConfiguration::default();
         validate_native_precompiler_loader_environment(&environment, &configuration)
@@ -12660,8 +12679,8 @@ mod tests {
     #[test]
     fn native_runtime_complete_environment_does_not_use_process_fallback() {
         let complete = PassiveRustEnvironment {
-            overrides: HashMap::default(),
             inherit_process: false,
+            ..PassiveRustEnvironment::default()
         };
         assert_eq!(complete.value("PATH"), None);
         assert_eq!(complete.path_for_executable_lookup(), Some(OsString::new()));
@@ -12694,6 +12713,7 @@ mod tests {
                 ),
             ]),
             inherit_process: false,
+            ..PassiveRustEnvironment::default()
         };
         let cwd = Path::new("/native/runtime/workspace/nested");
         let (configuration, seals) =
@@ -14575,8 +14595,9 @@ printf 'metadata\n'
                 (OsString::from("UNRELATED"), OsString::from("untouched")),
             ]),
             inherit_process: false,
+            ..PassiveRustEnvironment::default()
         };
-        let pinned = environment.pin_present_cargo_parent();
+        let pinned = environment.pin_cargo_parent();
         assert!(
             pinned.inherit_process,
             "parent pinning must not clear unrelated inherited values"
@@ -14592,6 +14613,10 @@ printf 'metadata\n'
         );
         assert!(!pinned.overrides.contains_key(OsStr::new("RUSTC")));
         assert!(!pinned.overrides.contains_key(OsStr::new("UNRELATED")));
+        assert!(pinned.absent.contains("RUSTC"));
+        assert!(!pinned.absent.contains("UNRELATED"));
+        assert_eq!(pinned.value("PATH"), None);
+        assert_eq!(pinned.path_for_executable_lookup(), Some(OsString::new()));
         assert!(environment.value("RUSTC").is_none());
         assert!(environment.value("UNRELATED") == Some(OsString::from("untouched")));
         environment.insert("HOME", "later value".into());
@@ -14602,7 +14627,7 @@ printf 'metadata\n'
         let inherited_path =
             std::env::var_os("PATH").expect("qualification provides inherited PATH");
         let mut inherited = PassiveRustEnvironment::default();
-        let pinned = inherited.pin_present_cargo_parent();
+        let pinned = inherited.pin_cargo_parent();
         assert!(
             pinned.overrides.get(OsStr::new("PATH")) == Some(&inherited_path),
             "inherited Some must become an explicit parent override"
@@ -14615,8 +14640,9 @@ printf 'metadata\n'
             let mut environment = PassiveRustEnvironment {
                 overrides: HashMap::from_iter([(OsString::from("HOME"), value.clone())]),
                 inherit_process: false,
+                ..PassiveRustEnvironment::default()
             };
-            let pinned = environment.pin_present_cargo_parent();
+            let pinned = environment.pin_cargo_parent();
             assert!(pinned.overrides.get(OsStr::new("HOME")) == Some(&value));
             assert!(environment.value("HOME") == Some(value));
         }
@@ -14628,14 +14654,63 @@ printf 'metadata\n'
                     OsString::from("fixture mixed-case home"),
                 )]),
                 inherit_process: false,
+                ..PassiveRustEnvironment::default()
             };
-            let pinned = environment.pin_present_cargo_parent();
+            let pinned = environment.pin_cargo_parent();
             assert!(
                 pinned.overrides.get(OsStr::new("HOME"))
                     == Some(&OsString::from("fixture mixed-case home"))
             );
             assert!(!environment.overrides.contains_key(OsStr::new("Home")));
         }
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    fn cargo_workspace_passive_parent_omits_environment_added_after_admission(
+        cx: &mut TestAppContext,
+    ) {
+        cx.executor().allow_parking();
+        let home = "admitted-home";
+        let mut environment = PassiveRustEnvironment {
+            overrides: HashMap::from_iter([("HOME".into(), home.into())]),
+            inherit_process: false,
+            ..PassiveRustEnvironment::default()
+        };
+        let pinned = environment.pin_cargo_parent();
+        let mut task = cx.background_executor.spawn(async move {
+            let observe = async |environment: PassiveRustEnvironment| {
+                let mut command = util::command::new_command("/usr/bin/env");
+                // Model the inherited command environment changing without mutating the test process.
+                command
+                    .env_clear()
+                    .env("RUSTC", "late-compiler")
+                    .env("RUSTUP_HOME", "late-rustup-home")
+                    .env("RUSTUP_TOOLCHAIN", "late-toolchain")
+                    .env("CARGO_HOME", "late-cargo-home")
+                    .env("UNRELATED", "retained");
+                environment.apply_to_command(&mut command);
+                let output = command.output().await?;
+                ensure!(output.status.success(), "environment probe failed");
+                Ok::<_, anyhow::Error>(String::from_utf8(output.stdout)?)
+            };
+            let parent = observe(pinned).await?;
+            environment.insert("RUSTC", "admitted-configured-compiler".into());
+            let child = observe(environment).await?;
+            Ok::<_, anyhow::Error>((parent, child))
+        });
+        let (parent, child) = poll_cargo_process(cx, || (&mut task).now_or_never())
+            .expect("bounded command environment probes");
+        assert!(parent.lines().any(|line| line == "HOME=admitted-home"));
+        assert!(parent.lines().any(|line| line == "UNRELATED=retained"));
+        for key in ["RUSTC=", "RUSTUP_HOME=", "RUSTUP_TOOLCHAIN=", "CARGO_HOME="] {
+            assert!(!parent.lines().any(|line| line.starts_with(key)), "{key}");
+        }
+        assert!(
+            child
+                .lines()
+                .any(|line| line == "RUSTC=admitted-configured-compiler")
+        );
     }
 
     #[cfg(unix)]
