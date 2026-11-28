@@ -3021,6 +3021,41 @@ pub struct GradleTaskOption {
     pub enum_constants: Option<Vec<String>>,
 }
 
+impl GradleTaskOption {
+    fn is_boolean(&self) -> bool {
+        matches!(
+            self.declared_type.as_str(),
+            "boolean" | "java.lang.Boolean" | "org.gradle.api.provider.Property<java.lang.Boolean>"
+        )
+    }
+
+    fn has_boolean_opposite(&self, name: &str) -> bool {
+        self.is_boolean()
+            && match self.name.strip_prefix("no-") {
+                Some(positive_name) => name == positive_name,
+                None => name.strip_prefix("no-") == Some(self.name.as_str()),
+            }
+    }
+}
+
+impl GradleTask {
+    fn option_declaration(&self, name: &str) -> Option<&GradleTaskOption> {
+        if let Some(declaration) = self.options.iter().find(|option| option.name == name) {
+            return Some(declaration);
+        }
+        // An unseen declaration can occupy Gradle's generated opposite spelling.
+        if !self.options_known {
+            return None;
+        }
+        let mut candidates = self
+            .options
+            .iter()
+            .filter(|option| option.has_boolean_opposite(name));
+        let declaration = candidates.next()?;
+        candidates.next().is_none().then_some(declaration)
+    }
+}
+
 fn gradle_enum_constants_are_valid(constants: &[String]) -> bool {
     let mut names = HashSet::new();
     constants.len() <= 128
@@ -3789,16 +3824,23 @@ impl JvmBuildOperationReceipt {
                                         .first()
                                         .is_some_and(u8::is_ascii_alphanumeric)
                                     && option.name.bytes().all(|byte| byte.is_ascii_alphanumeric()
-                                        || matches!(byte, b'-' | b'_'))
-                                    && task.options.iter().any(|declaration| declaration.name
-                                        == option.name
-                                        && (option.value.is_some()
-                                            || matches!(
-                                                declaration.declared_type.as_str(),
-                                                "boolean" | "java.lang.Boolean"
-                                            ))),
-                                "Use a declared option for the selected Gradle task and supply its value if required"
+                                        || matches!(byte, b'-' | b'_')),
+                                "Use a declared option for the selected Gradle task"
                             );
+                            let declaration = task.option_declaration(&option.name).context(
+                                "Use a declared option for the selected Gradle task. Opposite flags require complete task metadata",
+                            )?;
+                            if declaration.is_boolean() {
+                                ensure!(
+                                    option.value.is_none(),
+                                    "Boolean Gradle task options use a flag such as --option or its available opposite --no-option"
+                                );
+                            } else {
+                                ensure!(
+                                    option.value.is_some(),
+                                    "Supply a value for the selected Gradle task option using --option=value"
+                                );
+                            }
                             let mut argument = format!("--{}", option.name);
                             if let Some(value) = &option.value {
                                 ensure!(
@@ -12036,6 +12078,117 @@ mod tests {
             };
             options.push(option);
             assert!(invalid.plan(&snapshot, true, PathStyle::Unix).is_err());
+        }
+    }
+
+    #[test]
+    fn gradle_boolean_task_options_follow_provider_declarations_and_opposites() {
+        let mut snapshot = operation_snapshot(true);
+        let module = snapshot.projects.first_mut().expect("module");
+        let module_root = module.module_root.clone();
+        let task = module
+            .gradle
+            .as_mut()
+            .expect("Gradle")
+            .tasks
+            .first_mut()
+            .expect("verify task");
+        let task_path = task.path.clone();
+        task.options_known = true;
+        task.options = [
+            ("probe", "boolean"),
+            ("boxed", "java.lang.Boolean"),
+            (
+                "property-switch",
+                "org.gradle.api.provider.Property<java.lang.Boolean>",
+            ),
+            ("no-reverse", "boolean"),
+            ("strict", "boolean"),
+            ("no-strict", "java.lang.String"),
+            ("literal", "java.lang.String"),
+        ]
+        .into_iter()
+        .map(|(name, declared_type)| GradleTaskOption {
+            name: name.into(),
+            declared_type: declared_type.into(),
+            description: "Fixture".into(),
+            enum_constants: None,
+        })
+        .collect();
+        let plan = |snapshot: &JdtlsProjectSnapshot, name: &str, value: Option<&str>| {
+            let selected = JvmBuildOperationReceipt::new(
+                snapshot,
+                true,
+                module_root.clone(),
+                vec![JvmBuildOperation::GradleTaskWithOptions {
+                    path: task_path.clone(),
+                    options: vec![GradleOperationOption {
+                        name: name.into(),
+                        value: value.map(str::to_owned),
+                    }],
+                }],
+                PathStyle::Unix,
+            )?;
+            let host = JvmBuildOperationReceipt::from_remote_selection(
+                &proto::ResolveJvmBuildOperation {
+                    worktree_id: selected.worktree_id.to_proto(),
+                    server_id: selected.server_id.to_proto(),
+                    snapshot_generation: selected.generation,
+                    module_path: selected.module_root.path.as_unix_str().to_owned(),
+                    selection_json: selected.remote_selection_json()?,
+                    ..Default::default()
+                },
+            )?;
+            assert_eq!(host, selected);
+            host.plan(snapshot, true, PathStyle::Unix)
+                .map(|plan| plan.template.args)
+        };
+        for option in [
+            "probe",
+            "no-probe",
+            "boxed",
+            "no-boxed",
+            "property-switch",
+            "no-property-switch",
+            "no-reverse",
+            "reverse",
+            "strict",
+        ] {
+            assert_eq!(
+                plan(&snapshot, option, None).expect(option),
+                ["--offline", "--", &task_path, &format!("--{option}")]
+            );
+        }
+        for option in ["no-strict", "literal"] {
+            assert!(plan(&snapshot, option, None).is_err());
+            assert_eq!(
+                plan(&snapshot, option, Some("false")).expect(option),
+                ["--offline", "--", &task_path, &format!("--{option}=false")]
+            );
+        }
+        for option in ["probe", "no-probe", "property-switch", "reverse"] {
+            assert!(plan(&snapshot, option, Some("false")).is_err());
+        }
+        assert!(plan(&snapshot, "no-literal", None).is_err());
+        assert!(plan(&snapshot, "no-offline", None).is_err());
+
+        let mut ambiguous = snapshot.clone();
+        ambiguous.projects[0].gradle.as_mut().expect("Gradle").tasks[0]
+            .options
+            .push(GradleTaskOption {
+                name: "no-no-probe".into(),
+                declared_type: "boolean".into(),
+                description: "Second declaration with --no-probe as its opposite".into(),
+                enum_constants: None,
+            });
+        assert!(plan(&ambiguous, "no-probe", None).is_err());
+        assert!(plan(&ambiguous, "no-no-probe", None).is_ok());
+
+        let mut partial = snapshot.clone();
+        partial.projects[0].gradle.as_mut().expect("Gradle").tasks[0].options_known = false;
+        assert!(plan(&partial, "property-switch", None).is_ok());
+        for option in ["no-probe", "no-property-switch", "reverse"] {
+            assert!(plan(&partial, option, None).is_err());
         }
     }
 

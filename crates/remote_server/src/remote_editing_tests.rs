@@ -3677,12 +3677,19 @@ mod jvm_tools_runtime_tests {
                                 "lifecycles":[{"id":"default","phases":["compile","verify"]}],
                                 "projects":[{"pomUri":format!("{module_uri}pom.xml"),"groupId":"fixture","artifactId":"application","version":"1","packaging":"jar","moduleUris":[],"profiles":{},"inheritedProfileDefinitionsKnown":false,"plugins":[]}]
                             }))),
-                            "groovy.gradle.projectDetails" if !maven => Ok(Some(json!({
-                                "version":1,"rootUri":root_uri,"sourceSetsKnown":false,
-                                "projects":[{"buildRootUri":root_uri,"moduleUri":module_uri,"projectPath":":application","name":"application",
-                                    "tasks":[{"path":":application:check","name":"check","group":null,"description":null,"optionsKnown":false},
-                                             {"path":":application:assemble","name":"assemble","group":null,"description":null,"optionsKnown":false}]}]
-                            }))),
+                            "groovy.gradle.projectDetails" if !maven => {
+                                let details = json!({"javaSourceSetsKnown":false,"sourceSets":[],"tasks":[
+                                    {"path":":application:check","optionsComplete":true,"options":[
+                                        {"name":"probe","description":"Fixture Boolean property","declaredType":"org.gradle.api.provider.Property<java.lang.Boolean>"}]},
+                                    {"path":":application:assemble","optionsComplete":false,"options":[]}]});
+                                Ok(Some(json!({
+                                    "version":2,"rootUri":root_uri,"sourceSetsKnown":false,
+                                    "projects":[{"buildRootUri":root_uri,"moduleUri":module_uri,"projectPath":":application","name":"application",
+                                        "tasks":[{"path":":application:check","name":"check","group":null,"description":null,"optionsKnown":false},
+                                                 {"path":":application:assemble","name":"assemble","group":null,"description":null,"optionsKnown":false}],
+                                        "detailsJson": details.to_string()}]
+                                })))
+                            }
                             _ => anyhow::bail!("Unexpected mounted fixture provider command"),
                         }}
                     });
@@ -4075,7 +4082,9 @@ mod jvm_tools_runtime_tests {
         server_cx: &mut TestAppContext,
     ) {
         use futures::channel::oneshot;
-        use project::jvm_project::{JvmBuildOperation, JvmBuildOperationReceipt};
+        use project::jvm_project::{
+            GradleOperationOption, JvmBuildOperation, JvmBuildOperationReceipt,
+        };
 
         struct TaskTerminal {
             pending: async_channel::Sender<(
@@ -4216,9 +4225,18 @@ mod jvm_tools_runtime_tests {
                     })
                     .to_vec()
             } else {
-                [":application:check", ":application:assemble"]
-                    .map(|path| JvmBuildOperation::GradleTask { path: path.into() })
-                    .to_vec()
+                vec![
+                    JvmBuildOperation::GradleTaskWithOptions {
+                        path: ":application:check".into(),
+                        options: vec![GradleOperationOption {
+                            name: "no-probe".into(),
+                            value: None,
+                        }],
+                    },
+                    JvmBuildOperation::GradleTask {
+                        path: ":application:assemble".into(),
+                    },
+                ]
             };
             let receipt = |store: &project::lsp_store::LspStore| {
                 let (snapshot, current) = store.jdtls_project_snapshot(worktree_id)?;
@@ -4262,13 +4280,21 @@ mod jvm_tools_runtime_tests {
                     .recv()
                     .await
                     .expect("host plan reached the Task terminal");
-                let ordered = if maven {
-                    ["compile", "verify"]
-                } else {
-                    [":application:check", ":application:assemble"]
-                };
                 assert_eq!(task.args.first().map(String::as_str), Some("--offline"));
-                assert!(task.args.ends_with(&ordered.map(str::to_owned)));
+                if maven {
+                    assert!(task.args.ends_with(&["compile".into(), "verify".into()]));
+                } else {
+                    assert_eq!(
+                        task.args,
+                        [
+                            "--offline",
+                            "--",
+                            ":application:check",
+                            "--no-probe",
+                            ":application:assemble"
+                        ]
+                    );
+                }
                 assert!(task.literal_command);
                 assert_eq!(task.literal_prefix_args, task.args.len());
                 let wrapper = if maven { "mvnw" } else { "gradlew" };

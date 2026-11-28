@@ -499,7 +499,11 @@ and limit concurrent workers. The setting also accepts `["--max-workers", "2"]`
 and literal `-Pname=value` project properties. Gradle uses the last of
 `--parallel` and `--no-parallel` if both appear. Set one positive worker
 count. Discovered Tasks remain offline. Use **Task options** for arguments
-declared by the selected task.
+declared by the selected task. In the JSON array, enter a Boolean option as a
+flag such as `"--probe"`. With complete task metadata, Groovy also admits its
+Gradle-generated opposite, such as `"--no-probe"`. If the task declares the
+opposite name directly, that declaration controls the spelling and value.
+Use `"--name=value"` for options that take a value.
 
 **Saved configurations** lists project and user Tasks with their source
 locations. The selected row, quick-run button, and queue menu all target the

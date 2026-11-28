@@ -6008,7 +6008,7 @@ impl DependenciesPanel {
                 editor.set_text("", window, cx);
                 editor.set_placeholder_text(
                     if gradle {
-                        r#"["--option=value", "--flag"]"#
+                        r#"["--option=value", "--no-flag"]"#
                     } else {
                         r#"["-Pprofile", "--non-recursive", "--threads=2"]"#
                     },
@@ -8751,7 +8751,7 @@ fn parse_operation_option_arguments(value: &str, example: &str) -> anyhow::Resul
 fn parse_gradle_task_options(
     value: &str,
 ) -> anyhow::Result<Vec<project::jvm_project::GradleOperationOption>> {
-    let arguments = parse_operation_option_arguments(value, r#"["--option=value", "--flag"]"#)?;
+    let arguments = parse_operation_option_arguments(value, r#"["--option=value", "--no-flag"]"#)?;
     arguments
         .into_iter()
         .map(|argument| {
@@ -10419,7 +10419,7 @@ impl Render for DependenciesPanel {
                             .aria_label(if selected_gradle_task { "Gradle task options" } else { "Maven operation options" })
                             .aria_value(self.operation_option_editor.read(cx).text(cx))
                             .aria_description(if selected_gradle_task {
-                                "Enter a JSON array of --option=value or --flag strings. Gradle validates the values."
+                                "Enter a JSON array such as [\"--option=value\", \"--flag\", \"--no-other-flag\"]. Boolean task options use flags. Opposite spellings require complete task metadata. Gradle validates other option values."
                             } else {
                                 "Enter a JSON array with -Pprofile, -P!profile, -DskipTests, --non-recursive, --fail-fast or --fail-at-end, and --threads=2 or --threads=0.5C. Maven options apply to the entire run."
                             })
@@ -16630,8 +16630,15 @@ mod tests {
                     let error = panel.operation_notice.as_deref().expect("option error");
                     assert!(error.contains("declared option") && !error.contains("private-canary"));
                     input.update(cx, |editor, cx| {
+                        editor.set_text(r#"["--probe=false"]"#, window, cx);
+                    });
+                    panel.run_selected_offline_operation(window, cx);
+                    assert!(panel.operation_notice.as_deref().is_some_and(|notice| {
+                        notice.contains("Boolean Gradle task options")
+                    }));
+                    input.update(cx, |editor, cx| {
                         editor.set_text(
-                            r#"["--project-dir=literal $ZED_FILE value","--probe"]"#,
+                            r#"["--project-dir=literal $ZED_FILE value","--no-probe","--property-switch"]"#,
                             window,
                             cx,
                         )
@@ -16762,11 +16769,12 @@ mod tests {
                         ]
                     );
                     assert_eq!(task.args.get(4..), expected.template.args.get(1..));
-                    assert!(task.args.windows(3).any(|arguments| arguments
+                    assert!(task.args.windows(4).any(|arguments| arguments
                         == [
                             ":application:verify",
                             "--project-dir=literal $ZED_FILE value",
-                            "--probe"
+                            "--no-probe",
+                            "--property-switch"
                         ]));
                 } else {
                     assert_eq!(task.args, expected.template.args);
@@ -17296,7 +17304,8 @@ mod tests {
                                     "groovy.gradle.projectDetails" => {
                                         let details = serde_json::json!({"javaSourceSetsKnown":true,"sourceSets":[],"tasks":if matches!(outcome, MavenGraphOutcome::OperationControls | MavenGraphOutcome::OrderedOperationControls) {vec![serde_json::json!({"path":":application:verify","optionsComplete":true,"options":[
                                             {"name":"project-dir","description":"Fixture option","declaredType":"java.lang.String"},
-                                            {"name":"probe","description":"Fixture switch","declaredType":"boolean"}]}),serde_json::json!({"path":":application:日本語 $ZED_FILE $(printf private-canary)","optionsComplete":false,"options":[]})]}else{vec![]},"configurationsKnown":true,"dependencyGraphKnown":false,
+                                            {"name":"probe","description":"Fixture switch","declaredType":"boolean"},
+                                            {"name":"property-switch","description":"Fixture Boolean property","declaredType":"org.gradle.api.provider.Property<java.lang.Boolean>"}]}),serde_json::json!({"path":":application:日本語 $ZED_FILE $(printf private-canary)","optionsComplete":false,"options":[]})]}else{vec![]},"configurationsKnown":true,"dependencyGraphKnown":false,
                                             "configurations":[{"name":"parityGraph","description":null,"resolvable":true,"consumable":false,"extendsFrom":[]},
                                             {"name":"runtime 📦 α","description":null,"resolvable":true,"consumable":false,"extendsFrom":[]},
                                             {"name":"apiElements","description":null,"resolvable":false,"consumable":true,"extendsFrom":[]}]});
