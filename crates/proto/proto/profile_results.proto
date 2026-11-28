@@ -3,6 +3,48 @@ package zed.messages;
 
 import "worktree.proto";
 
+message GetLinuxCargoProfileSupport {
+  uint64 project_id = 1;
+}
+
+enum LinuxCargoProfileTargetKind {
+  LINUX_CARGO_PROFILE_TARGET_KIND_UNKNOWN = 0;
+  LINUX_CARGO_PROFILE_TARGET_KIND_BINARY = 1;
+  LINUX_CARGO_PROFILE_TARGET_KIND_EXAMPLE = 2;
+}
+
+message PrepareLinuxCargoProfile {
+  uint64 project_id = 1;
+  bytes operation_id = 2;
+  ProjectPath workspace_root = 3;
+  ProjectPath package_manifest = 4;
+  LinuxCargoProfileTargetKind target_kind = 5;
+  string target_name = 6;
+  string preset_id = 7;
+}
+
+message FinishLinuxCargoProfileReview {
+  uint64 project_id = 1;
+  bytes operation_id = 2;
+  bytes review_token = 3;
+  bool approved = 4;
+}
+
+message CancelLinuxCargoProfile {
+  uint64 project_id = 1;
+  bytes operation_id = 2;
+}
+
+message LinuxCargoProfileResponse {
+  ProfileResultStatus status = 1;
+  bytes operation_id = 2;
+  bytes review_token = 3;
+  ProjectPath profile_path = 4;
+  ProjectPath symbols_path = 5;
+  string task_run_id = 6;
+  uint32 native_receiver = 7;
+}
+
 message PrepareProfileTaskBinding {
   uint64 project_id = 1;
   uint32 protocol_version = 2;
@@ -70,6 +112,7 @@ message ProfileResultPage {
   uint32 node_offset = 9;
   repeated ProfileResultNode nodes = 10;
   bool complete = 11;
+  uint32 native_receiver = 12;
 }
 
 message ProfileResultSummary {

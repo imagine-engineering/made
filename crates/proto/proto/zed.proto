@@ -581,7 +581,12 @@ message Envelope {
     RunRustCoverageTask run_rust_coverage_task = 546;
     CancelRustCoverageTask cancel_rust_coverage_task = 547;
     RustCoverageTaskResponse rust_coverage_task_response = 548;
-    GetRustCoverageTaskSession get_rust_coverage_task_session = 549; // current max
+    GetRustCoverageTaskSession get_rust_coverage_task_session = 549;
+    GetLinuxCargoProfileSupport get_linux_cargo_profile_support = 550;
+    PrepareLinuxCargoProfile prepare_linux_cargo_profile = 551;
+    FinishLinuxCargoProfileReview finish_linux_cargo_profile_review = 552;
+    CancelLinuxCargoProfile cancel_linux_cargo_profile = 553;
+    LinuxCargoProfileResponse linux_cargo_profile_response = 554; // current max
   }
 
   reserved 87 to 88;

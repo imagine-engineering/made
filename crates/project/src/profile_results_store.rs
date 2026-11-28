@@ -7791,9 +7791,14 @@ impl ProfileResultsStore {
         if this.read_with(&cx, |store, _| store.remote_proxy.is_some()) {
             return Self::handle_proxy_import(this, peer, envelope.payload, cx).await;
         }
-        Ok(this
+        let native_task = cfg!(target_os = "linux") && envelope.payload.task_run_id.is_some();
+        let mut page = this
             .update(&mut cx, |this, cx| this.import(peer, envelope.payload, cx))
-            .await)
+            .await;
+        if native_task {
+            page.native_receiver = envelope.sender_id.id;
+        }
+        Ok(page)
     }
 
     async fn handle_page(
@@ -7845,12 +7850,17 @@ impl ProfileResultsStore {
             return Self::handle_proxy_page(this, peer, request, cx).await;
         }
         Ok(this.update(&mut cx, |this, cx| {
-            this.page(
-                (peer, request.import_id),
-                request.generation,
-                request.page_index,
-                cx,
-            )
+            let key = (peer, request.import_id);
+            let native_task = cfg!(target_os = "linux")
+                && this
+                    .imports
+                    .get(&key)
+                    .is_some_and(|import| import.task_run_id.is_some());
+            let mut page = this.page(key, request.generation, request.page_index, cx);
+            if native_task {
+                page.native_receiver = envelope.sender_id.id;
+            }
+            page
         }))
     }
 

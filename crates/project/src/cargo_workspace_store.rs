@@ -2704,9 +2704,12 @@ fn headless_profile_preset(identifier: &str, cx: &App) -> Result<crate::cargo_pr
     .presets
     .remove(identifier)
     .context("Native profiling preset is unavailable on the producing host")?;
+    let profiler = preset
+        .native_profiler
+        .as_ref()
+        .context("The producing host's profile preset has no native collector")?;
     ensure!(
-        preset.native_profiler.is_some()
-            && preset.profiler.is_none()
+        preset.profiler.is_none()
             && preset.pre_launch_task.is_none()
             && preset.toolchain.is_none()
             && preset.target_triple.is_none()
@@ -2719,6 +2722,12 @@ fn headless_profile_preset(identifier: &str, cx: &App) -> Result<crate::cargo_pr
             ),
         "The producing host's profile preset needs a native collector, host toolchain and workspace working directory"
     );
+    task::TaskNativeProfileContinuation {
+        collector_path: profiler.collector_path.clone(),
+        profile_path: profiler.profile_path.clone(),
+        workload_arguments: preset.trailing_args.clone(),
+    }
+    .validate()?;
     Ok(preset)
 }
 
@@ -7946,13 +7955,12 @@ impl CargoWorkspaceStore {
         installed_runner: PathBuf,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<LinuxNativeCargoRuntime>>> {
-        ensure!(
-            matches!(
-                &workload.build.intent.project,
-                NativeCargoBuildOwner::Headless { .. }
-            ),
-            "Native Cargo runtime requires the producing host's Build"
-        );
+        let NativeCargoBuildOwner::Headless { preset_id, .. } = &workload.build.intent.project
+        else {
+            anyhow::bail!("Native Cargo runtime requires the producing host's Build");
+        };
+        self.validate_native_build_intent(&workload.build.intent, cx)?;
+        let workload_arguments = headless_profile_preset(preset_id, cx)?.trailing_args;
         let launch = workload.stage_launch("Prepare the selected Cargo workload");
         let filesystem = self
             .worktree_store
@@ -7968,7 +7976,11 @@ impl CargoWorkspaceStore {
                     let filesystem = filesystem.clone();
                     async move {
                         let (invocation, runner) = workload
-                            .runtime_invocation(filesystem.as_ref(), installed_runner, Vec::new())
+                            .runtime_invocation(
+                                filesystem.as_ref(),
+                                installed_runner,
+                                workload_arguments,
+                            )
                             .await?;
                         Ok::<_, anyhow::Error>((workload, invocation, runner))
                     }
@@ -8027,13 +8039,14 @@ impl CargoWorkspaceStore {
         let NativeCargoBuildOwner::Headless { preset_id, .. } = &intent.project else {
             anyhow::bail!("Native capture requires the producing host's Cargo runtime");
         };
-        let profiler = headless_profile_preset(preset_id, cx)?
+        let preset = headless_profile_preset(preset_id, cx)?;
+        let profiler = preset
             .native_profiler
             .context("The producing host has no native collector")?;
         let continuation = task::TaskNativeProfileContinuation {
             collector_path: profiler.collector_path,
             profile_path: profiler.profile_path,
-            workload_arguments: Vec::new(),
+            workload_arguments: preset.trailing_args,
         };
         let group = continuation.bound_artifact_group(&intent.run_id.to_string())?;
         let workspace = &intent.workspace.root;

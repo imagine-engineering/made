@@ -1,5 +1,8 @@
 mod headless_project;
 
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
+mod linux_cargo_profile;
+
 #[cfg(target_os = "linux")]
 mod docker_task;
 
@@ -683,6 +686,22 @@ fn scope_native_coverage_reply(message: &mut Envelope, connection: proto::PeerId
     true
 }
 
+fn scope_native_profile_reply(message: &mut Envelope, connection: proto::PeerId) -> bool {
+    use proto::envelope::Payload;
+    let receiver = match message.payload.as_mut() {
+        Some(Payload::LinuxCargoProfileResponse(response)) => &mut response.native_receiver,
+        Some(Payload::ProfileResultPage(response)) if response.native_receiver != 0 => {
+            &mut response.native_receiver
+        }
+        _ => return true,
+    };
+    if *receiver != connection.id {
+        return false;
+    }
+    *receiver = 0;
+    true
+}
+
 fn start_server(
     listeners: ServerListeners,
     log_rx: Receiver<Vec<u8>>,
@@ -836,7 +855,9 @@ async fn handle_native_connection(
                     log::error!("stdout handler, no message");
                     break;
                 };
-                if !scope_native_coverage_reply(&mut message, connection_id) {
+                if !scope_native_coverage_reply(&mut message, connection_id)
+                    || !scope_native_profile_reply(&mut message, connection_id)
+                {
                     continue;
                 }
 
@@ -1122,6 +1143,7 @@ fn execute_run_with_ownership(
         if !isolated_recipe_test {
             project.update(cx, |project, cx| {
                 project.observe_coverage_transport(&coverage_transport, cx);
+                project.observe_linux_cargo_profile_transport(&coverage_transport, cx);
             });
         }
         #[cfg(feature = "jvm-tools")]

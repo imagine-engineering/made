@@ -1969,6 +1969,19 @@ enum HeadlessProfileStage {
     RevokedCapture,
 }
 
+#[cfg(test)]
+pub(super) fn write_remote_cargo_profile_fixture(directory: &Path) -> Result<String> {
+    std::fs::create_dir_all(directory.join("target"))?;
+    std::fs::write(directory.join(".gitignore"), "/target/\n")?;
+    let mut settings: serde_json::Value = serde_json::from_str(
+        &write_headless_profile_build_fixture(directory, HeadlessProfileStage::Capture)?,
+    )?;
+    let preset = &mut settings["cargo"]["presets"]["host-profile"];
+    preset["trailing_args"] = serde_json::json!(["literal two words", "", "$HOST_ARGUMENT"]);
+    preset["environment"]["COPPER_PROFILE_EXPECT_ARGS"] = serde_json::json!("yes");
+    Ok(settings.to_string())
+}
+
 fn write_headless_profile_build_fixture(
     directory: &Path,
     stage: HeadlessProfileStage,
@@ -1978,6 +1991,9 @@ fn write_headless_profile_build_fixture(
         directory.join("runner/src/main.rs"),
         r#"fn main() {
     assert_eq!(std::env::var("COPPER_PROFILE_BUILD_OWNER").as_deref(), Ok("host"));
+    if std::env::var_os("COPPER_PROFILE_EXPECT_ARGS").is_some() {
+        assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["literal two words", "", "$HOST_ARGUMENT"]);
+    }
     if std::env::var_os("COPPER_PROFILE_TEST_WAIT").is_some() {
         std::fs::write("target/profile-workload-pid", std::process::id().to_string()).expect("profile workload pid");
         std::thread::sleep(std::time::Duration::from_secs(20));

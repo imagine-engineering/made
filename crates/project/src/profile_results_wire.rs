@@ -279,6 +279,7 @@ pub fn profile_result_pages(
             frames: Vec::new(),
             nodes: Vec::new(),
             complete: false,
+            native_receiver: 0,
         };
         let mut bytes = page.encoded_len() + 2;
         ensure!(

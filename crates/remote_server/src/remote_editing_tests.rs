@@ -21542,6 +21542,281 @@ async fn rust_tools_headless_runtime_imports_real_linux_profile_on_host(cx: &mut
     connection.kill().await.expect("stop the owned host");
 }
 
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+#[gpui::test]
+#[ignore = "requires a separately built Linux host with its observer, installed Cargo and perf"]
+async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_capture(
+    cx: &mut TestAppContext,
+) {
+    use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
+    use proto::{LinuxCargoProfileTargetKind, ProfileResultStatus as Status};
+    use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
+    use std::sync::atomic::AtomicBool;
+
+    let binary = PathBuf::from(
+        std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY").expect("separately built host"),
+    );
+    let fixture = tempfile::tempdir_in("/tmp").expect("owned remote profiling fixture");
+    let workspace = fixture.path().join("workspace");
+    let settings =
+        crate::linux_task_completion_fixture::write_remote_cargo_profile_fixture(&workspace)
+            .expect("write the host-local Cargo profiling fixture");
+    let host_data = fixture.path().join("host-data");
+    let host_log_directory = host_data.join("logs");
+    std::fs::create_dir_all(host_data.join("config")).expect("host config directory");
+    std::fs::write(host_data.join("config/settings.json"), settings).expect("host preset");
+    cx.executor().allow_parking();
+    cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    cx.update(|cx| project::trusted_worktrees::init(Default::default(), cx));
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host_data.join("server_state"))
+            .with_test_data_directory(host_data)
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel_sender, cancellation) = futures::channel::oneshot::channel();
+    let client = cx
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::Workspace(-i64::from(std::process::id())),
+                connection.clone(),
+                cancellation,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to the registered host")
+        .expect("remote client");
+    let project = build_project_with_worktree_trust(client.clone(), true, cx);
+    cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-native-profiling-experimental",
+            true,
+            cx,
+        )
+    });
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(&workspace, true, cx)
+        })
+        .await
+        .expect("register the remote worktree");
+    let scan = worktree.update(cx, |tree, _| tree.wait_for_snapshot(1));
+    let deadline = cx
+        .background_executor
+        .timer(std::time::Duration::from_secs(10));
+    match futures::future::select(Box::pin(scan), Box::pin(deadline)).await {
+        futures::future::Either::Left((result, _)) => result.expect("initial scan"),
+        futures::future::Either::Right(_) => panic!("Linux profile fixture scan timed out"),
+    }
+    let worktree_id = worktree.read_with(cx, |tree, _| tree.id());
+    let transport = client.read_with(cx, |client, _| client.proto_client());
+    let capability = proto::GetLinuxCargoProfileSupport {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+    };
+    let supported = transport
+        .request(capability.clone())
+        .await
+        .expect("profiling capability");
+    assert_eq!(supported.status(), Status::Ready);
+    assert_eq!(supported.native_receiver, 0);
+    let forwarded = transport
+        .forward_request(proto::PeerId { owner_id: 0, id: 1 }, capability)
+        .await
+        .expect("forwarded capability refusal");
+    assert_eq!(forwarded.status(), Status::Restricted);
+
+    let path = |path: &str| proto::ProjectPath {
+        worktree_id: worktree_id.to_proto(),
+        path: path.into(),
+    };
+    let prepare = || proto::PrepareLinuxCargoProfile {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        operation_id: uuid::Uuid::new_v4().as_bytes().to_vec(),
+        workspace_root: Some(path("")),
+        package_manifest: Some(path("runner/Cargo.toml")),
+        target_kind: LinuxCargoProfileTargetKind::Binary as i32,
+        target_name: "runner".into(),
+        preset_id: "host-profile".into(),
+    };
+    let denied = transport
+        .request(prepare())
+        .await
+        .expect("untrusted capture refusal");
+    assert_eq!(denied.status(), Status::Restricted);
+    assert!(denied.profile_path.is_none() && denied.review_token.is_empty());
+    let trees = project.read_with(cx, |project, _| project.worktree_store());
+    cx.update(|cx| {
+        TrustedWorktrees::try_get_global(cx)
+            .expect("client trust owner")
+            .update(cx, |trust, cx| {
+                trust.trust(
+                    &trees,
+                    std::iter::once(PathTrust::Worktree(worktree_id)).collect(),
+                    cx,
+                );
+            });
+    });
+    transport
+        .request(proto::TrustWorktrees {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            trusted_paths: vec![proto::PathTrust {
+                content: Some(proto::path_trust::Content::WorktreeId(
+                    worktree_id.to_proto(),
+                )),
+            }],
+        })
+        .await
+        .expect("explicit host trust");
+    let tests = project.read_with(cx, |project, _| project.rust_test_provider_store().clone());
+    tests
+        .update(cx, |tests, cx| tests.refresh(cx))
+        .await
+        .expect("finish initial Rust discovery");
+
+    let present =
+        |review: proto::LinuxCargoProfileResponse, approved| proto::FinishLinuxCargoProfileReview {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            operation_id: review.operation_id,
+            review_token: review.review_token,
+            approved,
+        };
+    let run_marker = workspace.join("target/profiled-project-workload");
+    let review = transport
+        .request(prepare())
+        .await
+        .expect("first capture review");
+    if review.status() != Status::Ready {
+        for entry in std::fs::read_dir(host_log_directory).expect("read owned host logs") {
+            let log = std::fs::read_to_string(entry.expect("log entry").path()).expect("host logs");
+            for line in log
+                .lines()
+                .filter(|line| line.contains("Linux Cargo profiling request failed"))
+            {
+                eprintln!("{line}");
+            }
+        }
+    }
+    assert_eq!(review.status(), Status::Ready);
+    assert!(review.profile_path.is_some() && review.symbols_path.is_some());
+    assert!(!run_marker.exists());
+    let declined = transport
+        .request(present(review, false))
+        .await
+        .expect("decline capture");
+    assert_eq!(declined.status(), Status::Cancelled);
+    assert!(!run_marker.exists());
+
+    let review = transport
+        .request(prepare())
+        .await
+        .expect("cancelled capture review");
+    assert_eq!(review.status(), Status::Ready);
+    let cancelled = transport
+        .request(proto::CancelLinuxCargoProfile {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            operation_id: review.operation_id.clone(),
+        })
+        .await
+        .expect("cancel reviewed capture");
+    assert_eq!(cancelled.status(), Status::Cancelled);
+    let denied = transport
+        .request(present(review, true))
+        .await
+        .expect("cancelled review cannot launch");
+    assert_eq!(denied.status(), Status::Stale);
+    assert!(!run_marker.exists());
+
+    let review = transport
+        .request(prepare())
+        .await
+        .expect("new capture review");
+    assert_eq!(review.status(), Status::Ready);
+    assert!(!run_marker.exists());
+    let mut mismatched = present(review.clone(), true);
+    mismatched.review_token = uuid::Uuid::new_v4().as_bytes().to_vec();
+    let denied = transport
+        .request(mismatched)
+        .await
+        .expect("unknown review token");
+    assert_eq!(denied.status(), Status::Stale);
+    assert!(!run_marker.exists());
+    let captured = transport
+        .request(present(review.clone(), true))
+        .await
+        .expect("consented capture");
+    assert_eq!(captured.status(), Status::Ready);
+    assert_eq!(captured.profile_path, review.profile_path);
+    assert_eq!(captured.symbols_path, review.symbols_path);
+    assert!(run_marker.exists());
+    let paths = [captured.profile_path, captured.symbols_path].map(|path| {
+        project::ProjectPath::from_proto(path.expect("bounded path")).expect("project path")
+    });
+    let result = project
+        .read_with(cx, |project, cx| {
+            project.import_remote_task_profile(
+                paths,
+                captured.task_run_id,
+                Arc::new(AtomicBool::new(false)),
+                cx,
+            )
+        })
+        .expect("import the registered Task pair")
+        .await
+        .expect("normalized capture");
+    assert!(result.total_samples > 0);
+    let (source, _) = result
+        .frames
+        .iter()
+        .find(|frame| frame.label == "stats::weight")
+        .and_then(|frame| frame.source.as_ref())
+        .expect("sampled Rust source");
+    let source = project
+        .update(cx, |project, cx| project.open_buffer(source.clone(), cx))
+        .await
+        .expect("open sampled Rust source on host");
+    assert!(source.read_with(cx, |buffer, _| buffer.text().contains("fn weight(")));
+    println!(
+        "Authenticated Linux review captured and imported {} samples",
+        result.total_samples
+    );
+    connection.kill().await.expect("stop the owned host");
+}
+
+#[test]
+fn linux_remote_cargo_profile_replies_stay_on_the_producing_connection() {
+    use proto::envelope::Payload;
+    let sender = proto::PeerId { owner_id: 0, id: 1 };
+    let new_connection = proto::PeerId { owner_id: 0, id: 2 };
+    for payload in [
+        Payload::LinuxCargoProfileResponse(proto::LinuxCargoProfileResponse {
+            native_receiver: sender.id,
+            ..Default::default()
+        }),
+        Payload::ProfileResultPage(proto::ProfileResultPage {
+            native_receiver: sender.id,
+            ..Default::default()
+        }),
+    ] {
+        let mut message = proto::Envelope {
+            payload: Some(payload),
+            ..Default::default()
+        };
+        assert!(!crate::scope_native_profile_reply(
+            &mut message,
+            new_connection
+        ));
+        assert!(crate::scope_native_profile_reply(&mut message, sender));
+        match message.payload {
+            Some(Payload::LinuxCargoProfileResponse(response)) => {
+                assert_eq!(response.native_receiver, 0)
+            }
+            Some(Payload::ProfileResultPage(response)) => assert_eq!(response.native_receiver, 0),
+            _ => panic!("Expected a scoped native profiling response"),
+        }
+    }
+}
+
 #[cfg(all(feature = "rust-tools-process-test", target_os = "macos"))]
 #[gpui::test]
 async fn rust_tools_headless_runtime_separate_enabled_host_profile_and_coverage(

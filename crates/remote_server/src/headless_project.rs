@@ -92,6 +92,8 @@ pub struct HeadlessProject {
     doctor_restart: Option<(String, bool, remote::RemoteRequestActivity)>,
     #[cfg(all(target_os = "linux", feature = "rust-tools"))]
     coverage_transport: Option<CoverageTaskTransport>,
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub(crate) linux_cargo_profile_transport: Option<crate::linux_cargo_profile::ProfileTransport>,
     #[cfg(feature = "jvm-tools")]
     jvm_transport_subscription: Option<gpui::Subscription>,
 }
@@ -1026,6 +1028,8 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_run_rust_coverage_task);
         session.add_entity_request_handler(Self::handle_cancel_rust_coverage_task);
         session.add_entity_request_handler(Self::handle_get_rust_coverage_task_session);
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        crate::linux_cargo_profile::register_handlers(&session);
 
         session.add_entity_message_handler(Self::handle_find_search_candidates_cancel);
         session.add_entity_request_handler(BufferStore::handle_update_buffer_from_owner);
@@ -1105,6 +1109,8 @@ impl HeadlessProject {
             doctor_restart: None,
             #[cfg(all(target_os = "linux", feature = "rust-tools"))]
             coverage_transport: None,
+            #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+            linux_cargo_profile_transport: None,
             #[cfg(feature = "jvm-tools")]
             jvm_transport_subscription: None,
         }

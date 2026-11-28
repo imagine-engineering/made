@@ -4169,6 +4169,14 @@ impl ChannelClient {
                 | Some(proto::envelope::Payload::GetRustCoverageTaskSession(_))
                 | Some(proto::envelope::Payload::RunRustCoverageTask(_))
                 | Some(proto::envelope::Payload::CancelRustCoverageTask(_))
+                | Some(proto::envelope::Payload::GetLinuxCargoProfileSupport(_))
+                | Some(proto::envelope::Payload::PrepareLinuxCargoProfile(_))
+                | Some(proto::envelope::Payload::FinishLinuxCargoProfileReview(_))
+                | Some(proto::envelope::Payload::CancelLinuxCargoProfile(_))
+                | Some(proto::envelope::Payload::LinuxCargoProfileResponse(_))
+        ) && !matches!(
+            envelope.payload.as_ref(),
+            Some(proto::envelope::Payload::ProfileResultPage(page)) if page.native_receiver != 0
         ) && !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::GitRestoreIndexFiles(_))
