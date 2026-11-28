@@ -828,13 +828,13 @@ impl NativeTerminalEnvironment {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub use native_task_helper::{
-    linux_coverage_completion::{CoverageTaskReportReservation, SealedCoverageTaskReport},
+    linux_task_completion::{CoverageTaskReportReservation, SealedCoverageTaskReport},
     task_completion::TaskBuildInvocation,
 };
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 use native_task_helper::{
-    linux_coverage_completion::CoverageTaskCompletion, task_actor::OriginalTaskActor,
+    linux_task_completion::LinuxTaskCompletion, task_actor::OriginalTaskActor,
 };
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -845,7 +845,7 @@ struct CoverageTaskSpawn {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub struct CoverageTaskObservation {
-    completion: CoverageTaskCompletion,
+    completion: LinuxTaskCompletion,
     invocation: TaskBuildInvocation,
     report: CoverageTaskReportReservation,
     original_actor: futures::channel::oneshot::Receiver<OriginalTaskActor>,
@@ -1530,7 +1530,7 @@ impl TerminalBuilder {
             .to_str()
             .context("Coverage Task helper path is not Unicode")?;
         let expected_image = std::fs::File::open("/proc/self/exe")?;
-        let completion = CoverageTaskCompletion::bind()?;
+        let completion = LinuxTaskCompletion::bind()?;
         let socket = completion.socket();
         let socket = socket
             .to_str()

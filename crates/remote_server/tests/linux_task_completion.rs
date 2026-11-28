@@ -17,7 +17,7 @@ fn run_fixture_with_host(host: &OsStr, scenario: &str) -> io::Result<()> {
         Command::new(host)
             .env_remove("CARGO_TARGET_DIR")
             .env("CARGO_NET_OFFLINE", "true")
-            .arg("coverage-completion-fixture")
+            .arg("task-completion-fixture")
             .arg("--directory")
             .arg(directory.path())
             .arg(scenario)
@@ -57,10 +57,21 @@ fn coverage_helper_refuses_unbound_replaced_and_changed_reports() -> io::Result<
 }
 
 #[test]
-fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
-    use native_task_helper::linux_coverage_completion::CoverageTaskCompletion;
+fn native_profile_receipt_seals_the_pair_and_refuses_invalid_outputs() -> io::Result<()> {
+    run_fixture("profile-pair-replacement")
+}
 
-    let completion = CoverageTaskCompletion::bind()?;
+#[test]
+#[ignore = "requires a Linux perf-enabled host and the pinned Samply and Rust workload binaries"]
+fn native_profile_receipt_accepts_a_real_samply_recording() -> io::Result<()> {
+    run_terminal_fixture("native-profile-collector")
+}
+
+#[test]
+fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
+    use native_task_helper::linux_task_completion::LinuxTaskCompletion;
+
+    let completion = LinuxTaskCompletion::bind()?;
     let output = smol::block_on(
         Command::new(env!("CARGO_BIN_EXE_remote_server"))
             .arg("observe-coverage-task")

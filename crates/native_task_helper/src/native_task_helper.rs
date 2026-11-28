@@ -7,4 +7,4 @@ pub mod macos_task_completion;
 pub mod task_actor;
 
 #[cfg(target_os = "linux")]
-pub mod linux_coverage_completion;
+pub mod linux_task_completion;

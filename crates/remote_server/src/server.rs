@@ -67,7 +67,7 @@ use util::{ResultExt, command::new_command};
     feature = "rust-tools-process-test",
     feature = "test-support"
 ))]
-mod linux_coverage_completion_fixture;
+mod linux_task_completion_fixture;
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -97,11 +97,11 @@ pub enum Commands {
         feature = "test-support"
     ))]
     #[command(hide = true)]
-    CoverageCompletionFixture {
+    TaskCompletionFixture {
         #[arg(long)]
         directory: PathBuf,
         #[arg(value_enum)]
-        scenario: linux_coverage_completion_fixture::Scenario,
+        scenario: linux_task_completion_fixture::Scenario,
     },
     Run {
         #[arg(long, hide = true)]
@@ -204,7 +204,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
         #[cfg(all(target_os = "linux", feature = "rust-tools"))]
         Commands::ObserveCoverageTask { socket } => {
             let status = smol::block_on(
-                native_task_helper::linux_coverage_completion::run_coverage_task(&socket),
+                native_task_helper::linux_task_completion::run_coverage_task(&socket),
             )?;
             native_task_helper::task_completion::exit_with_observed_task_status(status);
         }
@@ -213,11 +213,11 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             feature = "rust-tools-process-test",
             feature = "test-support"
         ))]
-        Commands::CoverageCompletionFixture {
+        Commands::TaskCompletionFixture {
             directory,
             scenario,
         } => {
-            linux_coverage_completion_fixture::run(&directory, scenario)?;
+            linux_task_completion_fixture::run(&directory, scenario)?;
             Ok(())
         }
         Commands::Run {

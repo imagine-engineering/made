@@ -1,7 +1,9 @@
 use anyhow::{Context as _, Result, ensure};
 use futures::io::AsyncReadExt as _;
 use native_task_helper::{
-    linux_coverage_completion::{CoverageTaskCompletion, CoverageTaskReportReservation},
+    linux_task_completion::{
+        CoverageTaskReportReservation, LinuxTaskCompletion, NativeProfileTaskReservation,
+    },
     task_actor::OriginalTaskActor,
     task_completion::TaskBuildInvocation,
 };
@@ -15,7 +17,7 @@ use std::{
     time::Duration,
 };
 
-fn spawn_helper(completion: &CoverageTaskCompletion) -> io::Result<smol::process::Child> {
+fn spawn_helper(completion: &LinuxTaskCompletion) -> io::Result<smol::process::Child> {
     let mut command = smol::process::Command::new(std::env::current_exe()?);
     command
         .arg("observe-coverage-task")
@@ -94,7 +96,7 @@ fn terminal_child_exit(directory: &Path) -> Result<()> {
             ("exit 27", Some(27), None),
             ("kill -TERM $$", None, Some(libc::SIGTERM)),
         ] {
-            let completion = CoverageTaskCompletion::bind()?;
+            let completion = LinuxTaskCompletion::bind()?;
             let socket = completion.socket();
             let mut helper = spawn_helper(&completion)?;
             let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
@@ -135,7 +137,7 @@ fn terminal_child_exit(directory: &Path) -> Result<()> {
 fn observer_drop(directory: &Path) -> Result<()> {
     smol::block_on(async {
         let expected_image = File::open("/proc/self/exe")?;
-        let completion = CoverageTaskCompletion::bind()?;
+        let completion = LinuxTaskCompletion::bind()?;
         let socket = completion.socket();
         let mut helper = spawn_helper(&completion)?;
         let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
@@ -186,8 +188,8 @@ fn observer_drop(directory: &Path) -> Result<()> {
 fn foreign_child(directory: &Path) -> Result<()> {
     smol::block_on(async {
         let expected_image = File::open("/proc/self/exe")?;
-        let unused = CoverageTaskCompletion::bind()?;
-        let completion = CoverageTaskCompletion::bind()?;
+        let unused = LinuxTaskCompletion::bind()?;
+        let completion = LinuxTaskCompletion::bind()?;
         let mut original = spawn_helper(&unused)?;
         let actor = OriginalTaskActor::from_smol_child(&mut original, &expected_image)?;
         let mut other = spawn_helper(&completion)?;
@@ -353,7 +355,7 @@ fn report_replacement(directory: &Path) -> Result<()> {
         ] {
             let report = CoverageTaskReportReservation::new(5)?;
             let path = report.path();
-            let completion = CoverageTaskCompletion::bind()?;
+            let completion = LinuxTaskCompletion::bind()?;
             let mut helper = spawn_helper(&completion)?;
             let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
             let invocation =
@@ -384,6 +386,195 @@ fn report_replacement(directory: &Path) -> Result<()> {
             }
             ensure!(!path.exists(), "Invalid coverage report was retained");
         }
+        Ok(())
+    })
+}
+
+fn profile_pair_replacement(directory: &Path) -> Result<()> {
+    enum ExpectedPair {
+        Refused(&'static str),
+        Unsuccessful,
+        ChangedAfterSealing,
+        Complete,
+    }
+
+    smol::block_on(async {
+        let expected_image = File::open("/proc/self/exe")?;
+        let write_pair = r#"printf 'one' > "$2" && printf 'two' > "${2%.json}.syms.json""#;
+        for (command, output_flag, expected) in [
+            (
+                write_pair,
+                "-i",
+                ExpectedPair::Refused("does not own its empty recording pair"),
+            ),
+            (
+                r#"printf 'one' > "$2""#,
+                "-o",
+                ExpectedPair::Refused("symbols is empty or exceeds"),
+            ),
+            (
+                r#"printf 'one' > "$2" && rm "${2%.json}.syms.json" && printf 'two' > "${2%.json}.syms.json""#,
+                "-o",
+                ExpectedPair::Refused("symbols was replaced"),
+            ),
+            (
+                r#"printf 'one' > "$2" && truncate -s 16777217 "${2%.json}.syms.json""#,
+                "-o",
+                ExpectedPair::Refused("symbols is empty or exceeds"),
+            ),
+            (
+                r#"printf 'one' > "$2" && printf 'two' > "${2%.json}.syms.json" && exit 27"#,
+                "-o",
+                ExpectedPair::Unsuccessful,
+            ),
+            (write_pair, "-o", ExpectedPair::ChangedAfterSealing),
+            (write_pair, "-o", ExpectedPair::Complete),
+        ] {
+            let report = NativeProfileTaskReservation::new()?;
+            let profile_path = report.profile_path();
+            let symbols_path = report.symbols_path();
+            let invocation = TaskBuildInvocation::new(
+                "/bin/sh".into(),
+                vec![
+                    "-c".into(),
+                    command.into(),
+                    "fixture".into(),
+                    output_flag.into(),
+                    profile_path
+                        .to_str()
+                        .context("Profile path is not Unicode")?
+                        .into(),
+                ],
+                directory.to_path_buf(),
+                BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+            )?;
+            let completion = LinuxTaskCompletion::bind()?;
+            let mut helper = spawn_helper(&completion)?;
+            let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
+            let observed = completion.observe_profile(actor, invocation, report).await;
+            let status = wait(&mut helper).await?;
+            if let ExpectedPair::Refused(expected_error) = expected {
+                ensure!(!status.success(), "An invalid pair was acknowledged");
+                let error = observed.err().context("Expected profile pair refusal")?;
+                ensure!(
+                    error.to_string().contains(expected_error),
+                    "Unexpected pair refusal: {error}"
+                );
+            } else {
+                let (status, pair) = observed?.verify_exit(status)?;
+                if matches!(expected, ExpectedPair::Unsuccessful) {
+                    ensure!(
+                        status.code() == Some(27),
+                        "Unexpected profiling workload exit"
+                    );
+                    ensure!(pair.is_none(), "An unsuccessful profile was sealed");
+                } else if matches!(expected, ExpectedPair::ChangedAfterSealing) {
+                    ensure!(status.success(), "Expected a successful profiling workload");
+                    let pair = pair.context("Successful receipt is missing its pair")?;
+                    std::fs::write(&symbols_path, b"new")?;
+                    let error = pair
+                        .read()
+                        .err()
+                        .context("Changed profile pair was accepted")?;
+                    ensure!(
+                        error
+                            .to_string()
+                            .contains("Sealed Native Profile Task pair changed")
+                    );
+                } else {
+                    ensure!(status.success(), "Expected a successful profiling workload");
+                    let pair = pair
+                        .context("Successful receipt is missing its pair")?
+                        .read()?;
+                    ensure!(pair.profile == b"one" && pair.symbols == b"two");
+                }
+            }
+            ensure!(
+                !profile_path.exists() && !symbols_path.exists(),
+                "Profile pair was retained"
+            );
+        }
+        Ok(())
+    })
+}
+
+fn native_profile_collector(directory: &Path) -> Result<()> {
+    use project::profile_results::{ProfileHost, parse_samply_profile};
+
+    smol::block_on(async {
+        let collector = std::env::var("RUST_TOOLS_LINUX_SAMPLY")?;
+        let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
+        let expected_image = File::open("/proc/self/exe")?;
+        let report = NativeProfileTaskReservation::new()?;
+        let profile_path = report.profile_path();
+        let symbols_path = report.symbols_path();
+        let arguments = [
+            "record",
+            "--save-only",
+            "--no-open",
+            "--main-thread-only",
+            "--unstable-presymbolicate",
+            "--include-args=0",
+            "--duration",
+            "30",
+            "-r",
+            "100",
+            "-o",
+            profile_path
+                .to_str()
+                .context("Profile path is not Unicode")?,
+            "--",
+            &workload,
+            "1200000",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let invocation = TaskBuildInvocation::new(
+            collector.into(),
+            arguments,
+            directory.to_path_buf(),
+            BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+        )?;
+        let completion = LinuxTaskCompletion::bind()?;
+        let mut helper = spawn_helper(&completion)?;
+        let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
+        let observed = completion
+            .observe_profile(actor, invocation, report)
+            .await?;
+        let (status, pair) = observed.verify_exit(wait(&mut helper).await?)?;
+        ensure!(status.success(), "Samply exited with {status}");
+        let pair = pair
+            .context("Samply did not produce a sealed profile pair")?
+            .read()?;
+        let result = parse_samply_profile(
+            &pair.profile,
+            &pair.symbols,
+            ProfileHost::Linux,
+            &Default::default(),
+            |path, _| {
+                path.ends_with("stats/src/lib.rs")
+                    .then(|| project::ProjectPath {
+                        worktree_id: project::WorktreeId::from_proto(1),
+                        path: util::rel_path::rel_path("stats/src/lib.rs").into_arc(),
+                    })
+            },
+        )?;
+        ensure!(result.total_samples > 0, "Samply returned no samples");
+        ensure!(
+            result.frames.iter().any(|frame| {
+                frame.label.contains("stats::weight")
+                    && frame.source.as_ref().is_some_and(|(_, line)| *line == 7)
+            }),
+            "The sealed profile did not map the sampled Rust frame"
+        );
+        ensure!(
+            !profile_path.exists() && !symbols_path.exists(),
+            "Profile pair was retained"
+        );
+        println!(
+            "Linux authenticated collector retained {} samples and mapped stats::weight",
+            result.total_samples
+        );
         Ok(())
     })
 }
@@ -923,6 +1114,8 @@ pub enum Scenario {
     HeadlessTerminal,
     CollectorTerminal,
     ReportReplacement,
+    ProfilePairReplacement,
+    NativeProfileCollector,
     HeadlessCollector,
     SelectedHeadlessCollector,
 }
@@ -930,7 +1123,7 @@ pub enum Scenario {
 pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
     ensure!(
         directory.is_dir(),
-        "Coverage fixture requires an existing directory"
+        "Native Task fixture requires an existing directory"
     );
     match scenario {
         Scenario::TerminalChildExit => terminal_child_exit(directory),
@@ -941,6 +1134,8 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::HeadlessTerminal => shell_terminal(directory, true),
         Scenario::CollectorTerminal => collector_terminal(directory),
         Scenario::ReportReplacement => report_replacement(directory),
+        Scenario::ProfilePairReplacement => profile_pair_replacement(directory),
+        Scenario::NativeProfileCollector => native_profile_collector(directory),
         Scenario::HeadlessCollector => headless_collector(directory, false),
         Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
     }
