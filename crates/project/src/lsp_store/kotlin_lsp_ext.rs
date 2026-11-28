@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use gpui::{App, AsyncApp, Context, Entity, Task, WeakEntity};
-use lsp::{IoKind, LanguageServer, LanguageServerId};
+use lsp::{IoKind, LanguageServer, LanguageServerId, LanguageServerName};
 use rpc::{TypedEnvelope, proto};
 use semver::Version;
 
@@ -288,12 +288,6 @@ const MAVEN_OFFLINE_CACHE_MESSAGE: &str = "Kotlin Maven import needs cached depe
 const MAVEN_FETCH_MESSAGE: &str = "Kotlin Maven import could not fetch dependencies; check network or repository access, or populate the cache";
 const GRADLE_PLUGIN_MESSAGE: &str = "Kotlin Gradle import cannot resolve a build plugin. Restore the project host’s Gradle plugin cache or check its plugin repositories, then restart the Kotlin language server.";
 
-#[derive(Clone, Copy)]
-pub(super) enum KotlinImportEvent {
-    Started,
-    Finished { successful: bool },
-}
-
 fn import_state_health(
     params: &WorkspaceImportStateParams,
     state: &mut ImportHealthState,
@@ -564,23 +558,43 @@ pub(super) fn fallback_log_health(
     None
 }
 
-fn update_workspace_snapshot(
+fn emit_import_update(
     lsp_store: &WeakEntity<LspStore>,
     server_id: LanguageServerId,
-    event: KotlinImportEvent,
+    name: &LanguageServerName,
+    phase: Option<proto::KotlinWorkspaceImportPhase>,
+    health: Option<(proto::ServerHealth, &str)>,
     cx: &mut AsyncApp,
 ) {
-    if let Err(error) = lsp_store.update(cx, |store, cx| {
-        store.on_kotlin_workspace_import_event(server_id, event, cx);
-    }) {
+    if let Some(phase) = phase
+        && let Err(error) = lsp_store.update(cx, |store, cx| {
+            store.on_kotlin_workspace_import_event(server_id, phase, cx);
+        })
+    {
         log::debug!("Kotlin workspace update arrived after LSP store teardown: {error:#}");
     }
+    if phase.is_none() && health.is_none() {
+        return;
+    }
+    super::emit_jvm_provider_status(
+        lsp_store,
+        server_id,
+        name,
+        proto::StatusUpdate {
+            message: health.map(|(_, message)| message.to_owned()),
+            status: health.map(|(health, _)| proto::status_update::Status::Health(health as i32)),
+            kotlin_workspace_import: phase.map(|phase| phase as i32),
+        },
+        cx,
+    );
 }
 
 pub(super) fn register_notifications(
     lsp_store: WeakEntity<LspStore>,
     language_server: &LanguageServer,
 ) {
+    use proto::KotlinWorkspaceImportPhase::*;
+
     let server_id = language_server.server_id();
     let name = language_server.name();
     let import_state = Arc::new(Mutex::new(ImportHealthState::default()));
@@ -590,45 +604,29 @@ pub(super) fn register_notifications(
             let name = name.clone();
             let import_state = import_state.clone();
             move |params, cx| {
-                let update = import_state_health(&params, &mut import_state.lock());
-                if let Some((health, message)) = update {
-                    super::emit_jvm_provider_health(
-                        &lsp_store, server_id, &name, health, message, cx,
-                    );
-                }
-                if params.phase == "FINISHED" {
-                    let successful = !params.folders.is_empty()
+                let phase = (params.phase == "FINISHED").then(|| {
+                    if !params.folders.is_empty()
                         && params
                             .folders
                             .iter()
-                            .all(|folder| folder.status == "SUCCESS");
-                    update_workspace_snapshot(
-                        &lsp_store,
-                        server_id,
-                        KotlinImportEvent::Finished { successful },
-                        cx,
-                    );
-                }
+                            .all(|folder| folder.status == "SUCCESS")
+                    {
+                        KotlinWorkspaceImportSucceeded
+                    } else {
+                        KotlinWorkspaceImportFailed
+                    }
+                });
+                let health = import_state_health(&params, &mut import_state.lock());
+                emit_import_update(&lsp_store, server_id, &name, phase, health, cx);
             }
         })
         .detach();
     language_server
         .on_notification::<ImportLog, _>({
             move |params, cx| {
-                if params.started {
-                    update_workspace_snapshot(
-                        &lsp_store,
-                        server_id,
-                        KotlinImportEvent::Started,
-                        cx,
-                    );
-                }
-                let update = import_log_health(&params, &mut import_state.lock());
-                if let Some((health, message)) = update {
-                    super::emit_jvm_provider_health(
-                        &lsp_store, server_id, &name, health, message, cx,
-                    );
-                }
+                let health = import_log_health(&params, &mut import_state.lock());
+                let phase = params.started.then_some(KotlinWorkspaceImportStarted);
+                emit_import_update(&lsp_store, server_id, &name, phase, health, cx);
             }
         })
         .detach();

@@ -3995,6 +3995,7 @@ pub struct ProviderProjectState<Project, Metadata = ()> {
     generation: u64,
     stale: bool,
     failed_import: Option<LanguageServerId>,
+    started_import: Option<LanguageServerId>,
     pending_import_refresh: Option<LanguageServerId>,
     import_operation: Option<ProviderRefreshToken>,
     failed_query: Option<(ProviderRefreshToken, Option<GradleTopologyUnavailable>)>,
@@ -4007,12 +4008,19 @@ pub struct ProviderProjectState<Project, Metadata = ()> {
 pub type JdtlsProjectState = ProviderProjectState<JdtlsProject, Option<MavenSelectionFacts>>;
 pub type KotlinWorkspaceState = ProviderProjectState<KotlinWorkspaceProject>;
 
+impl KotlinWorkspaceState {
+    pub fn can_query(&self, server_id: LanguageServerId) -> bool {
+        self.started_import() != Some(server_id) && self.failed_import() != Some(server_id)
+    }
+}
+
 impl<Project, Metadata: Default> Default for ProviderProjectState<Project, Metadata> {
     fn default() -> Self {
         Self {
             generation: 0,
             stale: false,
             failed_import: None,
+            started_import: None,
             pending_import_refresh: None,
             import_operation: None,
             failed_query: None,
@@ -4077,6 +4085,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         };
         self.stale = true;
         self.failed_import = None;
+        self.started_import = None;
         self.pending_import_refresh = None;
         self.failed_query = None;
         self.pending = Some(token);
@@ -4165,6 +4174,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         self.pending_metadata = Metadata::default();
         self.stale = false;
         self.failed_import = None;
+        self.started_import = None;
         self.pending_import_refresh = None;
         self.failed_query = None;
         self.snapshot = Some(ProviderProjectSnapshot {
@@ -4227,6 +4237,9 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         if self.failed_import == Some(server_id) {
             self.failed_import = None;
         }
+        if self.started_import == Some(server_id) {
+            self.started_import = None;
+        }
         if self.pending_import_refresh == Some(server_id) {
             self.pending_import_refresh = None;
         }
@@ -4260,6 +4273,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
             self.failed_query = None;
         }
         self.failed_import = None;
+        self.started_import = None;
         self.pending_import_refresh = None;
     }
 
@@ -4274,6 +4288,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         self.pending_metadata = Metadata::default();
         self.stale = true;
         self.failed_import = None;
+        self.started_import = None;
         self.pending_import_refresh = None;
         self.generation = self
             .generation
@@ -4282,8 +4297,20 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         Ok(())
     }
 
+    pub fn mark_import_started(&mut self, server_id: LanguageServerId) -> Result<()> {
+        self.mark_stale()?;
+        self.failed_query = None;
+        self.started_import = Some(server_id);
+        Ok(())
+    }
+
+    pub fn started_import(&self) -> Option<LanguageServerId> {
+        self.started_import
+    }
+
     pub fn mark_import_failed(&mut self, server_id: LanguageServerId) -> Result<()> {
         self.mark_stale()?;
+        self.failed_query = None;
         self.failed_import = Some(server_id);
         Ok(())
     }

@@ -938,6 +938,32 @@ async fn verify_docker_offline_import_recovery(
     };
     assert!(!missing_entry.join(missing_file).exists());
     assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains(source_marker)));
+    if fixture != OfflineImportFixture::JavaGradle {
+        while !store.read_with(cx, |store, _| {
+            store.kotlin_workspace_import_failed(worktree_id)
+        }) {
+            cx.run_until_parked();
+            assert!(
+                Instant::now() < deadline,
+                "the connected Dependencies store must report the terminal Kotlin import failure: {:?}",
+                health.borrow()
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        let (status, _, navigation) = panel.read_with(cx, |panel, _| panel.snapshot_for_test());
+        assert!(
+            language_tools::language_tool_tree::status_message(&status)
+                .is_some_and(|message| message.starts_with("Kotlin project import failed.")),
+            "the mounted Dependencies tree must report the Kotlin import failure: {status:?}",
+        );
+        assert!(
+            navigation.is_empty(),
+            "failed Kotlin facts must not be navigable"
+        );
+    }
+
     if !is_maven {
         panel.read_with(cx, |panel, _| {
             let (_, rows, _) = panel.snapshot_for_test();

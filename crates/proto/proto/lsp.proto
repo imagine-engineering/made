@@ -779,6 +779,13 @@ message StatusUpdate {
     ServerBinaryStatus binary = 2;
     ServerHealth health = 3;
   }
+  optional KotlinWorkspaceImportPhase kotlin_workspace_import = 4;
+}
+
+enum KotlinWorkspaceImportPhase {
+  KOTLIN_WORKSPACE_IMPORT_STARTED = 0;
+  KOTLIN_WORKSPACE_IMPORT_FAILED = 1;
+  KOTLIN_WORKSPACE_IMPORT_SUCCEEDED = 2;
 }
 
 enum ServerHealth {

@@ -5282,7 +5282,7 @@ impl DependenciesPanel {
             )
         } else if import_failed {
             LanguageToolProviderStatus::Error(
-                "Kotlin project import failed. Check Language Servers for build or offline-cache errors, then refresh."
+                "Kotlin project import failed. Check Language Servers for the project host’s build or offline-cache error, then restart the Kotlin language server."
                     .to_string(),
             )
         } else if query_pending && roots.is_empty() {

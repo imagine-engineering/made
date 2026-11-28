@@ -6045,7 +6045,7 @@ mod jvm_tools_runtime_tests {
             .expect("open remote Kotlin source");
         cx.run_until_parked();
         server_cx.run_until_parked();
-        let _kotlin_server = fake_servers
+        let kotlin_server = fake_servers
             .next()
             .now_or_never()
             .flatten()
@@ -6135,6 +6135,114 @@ mod jvm_tools_runtime_tests {
                 .values()
                 .any(|path| path.path.as_unix_str() == "application/build.gradle.kts")
         );
+        struct KotlinImportLog;
+        impl lsp::notification::Notification for KotlinImportLog {
+            type Params = serde_json::Value;
+            const METHOD: &'static str = "intellij/importLog";
+        }
+        struct KotlinImportState;
+        impl lsp::notification::Notification for KotlinImportState {
+            type Params = serde_json::Value;
+            const METHOD: &'static str = "intellij/workspaceImportState";
+        }
+
+        let (started, started_receiver) = futures::channel::oneshot::channel();
+        let (release, release_receiver) = futures::channel::oneshot::channel();
+        *query_gate.lock().expect("query gate lock") = Some((started, release_receiver));
+        let held_export = panel_cx.cx.spawn({
+            let client = client.clone();
+            async move |_| {
+                client
+                    .request(proto::GetKotlinWorkspaceSnapshot {
+                        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                        worktree_id: worktree_id.to_proto(),
+                        protocol_version: 1,
+                        request_id: 9,
+                    })
+                    .await
+            }
+        });
+        let deadline = panel_cx
+            .background_executor
+            .timer(std::time::Duration::from_secs(5));
+        assert!(matches!(
+            futures::future::select(started_receiver, deadline).await,
+            futures::future::Either::Left((Ok(()), _))
+        ));
+        kotlin_server.notify::<KotlinImportLog>(json!({"started": true, "tool": "gradle"}));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(lsp_store.read_with(panel_cx, |store, _| {
+            store.kotlin_workspace_query_pending(worktree_id)
+                && store.kotlin_workspace_snapshot(worktree_id).is_none()
+        }));
+        panel.read_with(panel_cx, |panel, _| {
+            let (status, rows, navigation) = panel.snapshot_for_test();
+            assert!(
+                matches!(
+                    status,
+                    language_tools::language_tool_tree::LanguageToolTreeStatus::Loading
+                ),
+                "{status:?}"
+            );
+            assert!(rows.is_empty() && navigation.is_empty());
+        });
+        kotlin_server.notify::<KotlinImportState>(json!({
+            "phase": "FINISHED",
+            "folders": [{"status": "FAILED", "tool": "gradle"}],
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(lsp_store.read_with(panel_cx, |store, _| {
+            store.kotlin_workspace_import_failed(worktree_id)
+                && store.kotlin_workspace_snapshot(worktree_id).is_none()
+        }));
+        panel.read_with(panel_cx, |panel, _| {
+            let (status, rows, navigation) = panel.snapshot_for_test();
+            assert!(
+                language_tools::language_tool_tree::status_message(&status)
+                    .is_some_and(|message| message.starts_with("Kotlin project import failed.")),
+                "{status:?}"
+            );
+            assert!(rows.is_empty() && navigation.is_empty());
+        });
+        let refused = client
+            .request(proto::GetKotlinWorkspaceSnapshot {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                worktree_id: worktree_id.to_proto(),
+                protocol_version: 1,
+                request_id: 10,
+            })
+            .await
+            .expect_err("failed host import must withhold the previous workspace");
+        assert!(format!("{refused:#}").contains("Host Kotlin project import is incomplete"));
+        release.send(()).expect("release the prior host export");
+        let discarded = held_export
+            .await
+            .expect_err("pre-import export must not cross the new generation");
+        assert!(
+            format!("{discarded:#}")
+                .contains("Host Kotlin project changed during the dependency query")
+        );
+
+        kotlin_server.notify::<KotlinImportState>(json!({
+            "phase": "FINISHED",
+            "folders": [{"status": "SUCCESS", "tool": "gradle"}],
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(lsp_store.read_with(panel_cx, |store, _| {
+            !store.kotlin_workspace_import_failed(worktree_id)
+                && store
+                    .kotlin_workspace_snapshot(worktree_id)
+                    .is_some_and(|(_, current)| current)
+        }));
+        panel.read_with(panel_cx, |panel, _| {
+            let (_, rows, navigation) = panel.snapshot_for_test();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(navigation.len(), 1);
+        });
+
         let mut client_cx = panel_cx.cx.clone();
         let (started, started_receiver) = futures::channel::oneshot::channel();
         let (release, release_receiver) = futures::channel::oneshot::channel();

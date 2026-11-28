@@ -5072,6 +5072,27 @@ fn emit_jvm_provider_health(
     message: &str,
     cx: &mut AsyncApp,
 ) {
+    emit_jvm_provider_status(
+        lsp_store,
+        server_id,
+        name,
+        proto::StatusUpdate {
+            message: Some(message.to_string()),
+            status: Some(proto::status_update::Status::Health(health as i32)),
+            ..Default::default()
+        },
+        cx,
+    );
+}
+
+#[cfg(feature = "jvm-tools")]
+fn emit_jvm_provider_status(
+    lsp_store: &WeakEntity<LspStore>,
+    server_id: LanguageServerId,
+    name: &LanguageServerName,
+    status: proto::StatusUpdate,
+    cx: &mut AsyncApp,
+) {
     let result = lsp_store.update(cx, |store, cx| {
         let is_current_server = store.as_local().is_some_and(|local| {
             local
@@ -5085,10 +5106,7 @@ fn emit_jvm_provider_health(
         cx.emit(LspStoreEvent::LanguageServerUpdate {
             language_server_id: server_id,
             name: Some(name.clone()),
-            message: proto::update_language_server::Variant::StatusUpdate(proto::StatusUpdate {
-                message: Some(message.to_string()),
-                status: Some(proto::status_update::Status::Health(health as i32)),
-            }),
+            message: proto::update_language_server::Variant::StatusUpdate(status),
         });
     });
     if let Err(error) = result {
@@ -14151,15 +14169,24 @@ impl LspStore {
                 | non_lsp @ proto::update_language_server::Variant::MetadataUpdated(_) => {
                     #[cfg(feature = "jvm-tools")]
                     if let proto::update_language_server::Variant::StatusUpdate(status) = &non_lsp
-                        && status.status
-                            == Some(proto::status_update::Status::Health(
-                                proto::ServerHealth::Ok as i32,
-                            ))
-                        && status.message.as_deref()
-                            == Some(kotlin_lsp_ext::IMPORT_SUCCEEDED_MESSAGE)
                         && envelope.payload.server_name.as_deref() == Some("kotlin-lsp")
                     {
-                        lsp_store.refresh_imported_remote_kotlin_workspace(language_server_id, cx);
+                        let phase = match status.kotlin_workspace_import {
+                            Some(phase) => proto::KotlinWorkspaceImportPhase::from_i32(phase),
+                            None if status.status
+                                == Some(proto::status_update::Status::Health(
+                                    proto::ServerHealth::Ok as i32,
+                                ))
+                                && status.message.as_deref()
+                                    == Some(kotlin_lsp_ext::IMPORT_SUCCEEDED_MESSAGE) =>
+                            {
+                                Some(proto::KotlinWorkspaceImportPhase::KotlinWorkspaceImportSucceeded)
+                            }
+                            None => None,
+                        };
+                        if let Some(phase) = phase {
+                            lsp_store.on_remote_kotlin_import_event(language_server_id, phase, cx);
+                        }
                     }
                     cx.emit(LspStoreEvent::LanguageServerUpdate {
                         language_server_id,
@@ -15488,8 +15515,8 @@ impl LspStore {
             "Kotlin workspace snapshot protocol mismatch"
         );
         let worktree_id = WorktreeId::from_proto(request.worktree_id);
-        let (server_id, server, worktree, request_timeout, background_executor) =
-            this.update(&mut cx, |store, cx| {
+        let (server_id, server, worktree, request_timeout, background_executor, generation) = this
+            .update(&mut cx, |store, cx| {
                 let (server_id, server, worktree, request_timeout) = store
                     .host_jvm_snapshot_provider(
                         request.project_id,
@@ -15498,12 +15525,18 @@ impl LspStore {
                         "Kotlin project",
                         cx,
                     )?;
+                let state = store.kotlin_workspace_projects.get(&worktree_id);
+                ensure!(
+                    state.is_none_or(|state| state.can_query(server_id)),
+                    "Host Kotlin project import is incomplete"
+                );
                 Ok::<_, anyhow::Error>((
                     server_id,
                     server,
                     worktree,
                     request_timeout,
                     cx.background_executor().clone(),
+                    state.map_or(0, KotlinWorkspaceState::generation),
                 ))
             })?;
         let bytes =
@@ -15526,6 +15559,14 @@ impl LspStore {
                 "Kotlin project",
                 cx,
             )?;
+            ensure!(
+                store
+                    .kotlin_workspace_projects
+                    .get(&worktree_id)
+                    .map_or(0, KotlinWorkspaceState::generation)
+                    == generation,
+                "Host Kotlin project changed during the dependency query"
+            );
             let worktree = worktree.read(cx);
             let snapshot = worktree.snapshot();
             let (projects, partial) = jvm_project::projects_from_kotlin_workspace(
@@ -15986,14 +16027,18 @@ impl LspStore {
     pub fn kotlin_workspace_query_pending(&self, worktree_id: WorktreeId) -> bool {
         self.kotlin_workspace_projects
             .get(&worktree_id)
-            .and_then(|state| state.pending_query())
-            .is_some_and(|token| {
-                token.worktree_id() == worktree_id
-                    && self.provider_project_server_is_live(
-                        token.server_id(),
-                        worktree_id,
-                        LanguageServerName::new_static("kotlin-lsp"),
-                    )
+            .and_then(|state| {
+                state
+                    .pending_query()
+                    .map(|token| token.server_id())
+                    .or(state.started_import())
+            })
+            .is_some_and(|server_id| {
+                self.provider_project_server_is_live(
+                    server_id,
+                    worktree_id,
+                    LanguageServerName::new_static("kotlin-lsp"),
+                )
             })
     }
 
@@ -16020,7 +16065,7 @@ impl LspStore {
     fn on_kotlin_workspace_import_event(
         &mut self,
         server_id: LanguageServerId,
-        event: kotlin_lsp_ext::KotlinImportEvent,
+        phase: proto::KotlinWorkspaceImportPhase,
         cx: &mut Context<Self>,
     ) {
         let worktree_ids = self
@@ -16033,38 +16078,15 @@ impl LspStore {
             .map(|(seed, _)| seed.worktree_id)
             .collect::<Vec<_>>();
         for worktree_id in worktree_ids {
-            let state = self
-                .kotlin_workspace_projects
-                .entry(worktree_id)
-                .or_default();
-            let update = match event {
-                kotlin_lsp_ext::KotlinImportEvent::Finished { successful: false } => {
-                    state.mark_import_failed(server_id)
-                }
-                kotlin_lsp_ext::KotlinImportEvent::Finished { successful: true } => {
-                    state.mark_import_succeeded(server_id)
-                }
-                kotlin_lsp_ext::KotlinImportEvent::Started => state.mark_stale(),
-            };
-            if let Err(error) = update {
-                log::warn!("Could not invalidate Kotlin workspace import: {error:#}");
-                continue;
-            }
-            self.kotlin_workspace_refresh_tasks.remove(&worktree_id);
-            cx.notify();
-            if matches!(
-                event,
-                kotlin_lsp_ext::KotlinImportEvent::Finished { successful: true }
-            ) {
-                self.schedule_kotlin_workspace_refresh(server_id, worktree_id, cx);
-            }
+            self.apply_kotlin_import_event(server_id, worktree_id, phase, cx);
         }
     }
 
     #[cfg(feature = "jvm-tools")]
-    fn refresh_imported_remote_kotlin_workspace(
+    fn on_remote_kotlin_import_event(
         &mut self,
         server_id: LanguageServerId,
+        phase: proto::KotlinWorkspaceImportPhase,
         cx: &mut Context<Self>,
     ) {
         if !self.as_remote().is_some_and(|remote| {
@@ -16076,13 +16098,66 @@ impl LspStore {
         }) {
             return;
         }
-        if let Some(worktree_id) = self
+        let Some(worktree_id) = self
             .language_server_statuses
             .get(&server_id)
             .filter(|status| status.name == LanguageServerName::new_static("kotlin-lsp"))
             .and_then(|status| status.worktree)
+        else {
+            return;
+        };
+        if !self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(worktree_id, cx)
+            .is_some_and(|worktree| worktree.read(cx).is_visible())
+            || TrustedWorktrees::try_get_global(cx).is_none_or(|trusted| {
+                !trusted.update(cx, |trusted, cx| {
+                    trusted.can_trust(&self.worktree_store, worktree_id, cx)
+                })
+            })
         {
-            self.schedule_remote_kotlin_workspace_refresh(server_id, worktree_id, cx);
+            return;
+        }
+        self.apply_kotlin_import_event(server_id, worktree_id, phase, cx);
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn apply_kotlin_import_event(
+        &mut self,
+        server_id: LanguageServerId,
+        worktree_id: WorktreeId,
+        phase: proto::KotlinWorkspaceImportPhase,
+        cx: &mut Context<Self>,
+    ) {
+        use proto::KotlinWorkspaceImportPhase::*;
+
+        let is_remote = self.as_remote().is_some();
+        let state = self
+            .kotlin_workspace_projects
+            .entry(worktree_id)
+            .or_default();
+        if is_remote && phase != KotlinWorkspaceImportSucceeded {
+            state.invalidate_server(server_id);
+        }
+        let update = match phase {
+            KotlinWorkspaceImportStarted => state.mark_import_started(server_id),
+            KotlinWorkspaceImportFailed => state.mark_import_failed(server_id),
+            KotlinWorkspaceImportSucceeded => state.mark_import_succeeded(server_id),
+        };
+        if let Err(error) = update {
+            log::warn!("Could not invalidate Kotlin workspace import: {error:#}");
+            return;
+        }
+        self.kotlin_workspace_refresh_tasks.remove(&worktree_id);
+        cx.notify();
+
+        if phase == KotlinWorkspaceImportSucceeded {
+            if is_remote {
+                self.schedule_remote_kotlin_workspace_refresh(server_id, worktree_id, cx);
+            } else {
+                self.schedule_kotlin_workspace_refresh(server_id, worktree_id, cx);
+            }
         }
     }
 
@@ -16112,12 +16187,14 @@ impl LspStore {
         {
             return;
         }
-        let Ok(token) = self
+        let state = self
             .kotlin_workspace_projects
             .entry(worktree_id)
-            .or_default()
-            .begin(server_id, worktree_id)
-        else {
+            .or_default();
+        if !state.can_query(server_id) {
+            return;
+        }
+        let Ok(token) = state.begin(server_id, worktree_id) else {
             log::warn!("Remote Kotlin workspace generation exhausted");
             return;
         };
@@ -16236,12 +16313,14 @@ impl LspStore {
         {
             return;
         }
-        let Ok(token) = self
+        let state = self
             .kotlin_workspace_projects
             .entry(worktree_id)
-            .or_default()
-            .begin(server_id, worktree_id)
-        else {
+            .or_default();
+        if !state.can_query(server_id) {
+            return;
+        }
+        let Ok(token) = state.begin(server_id, worktree_id) else {
             log::warn!("Kotlin workspace generation exhausted");
             return;
         };
@@ -22910,6 +22989,7 @@ fn subscribe_to_binary_statuses(
                                 status: Some(proto::status_update::Status::Binary(
                                     binary_status as i32,
                                 )),
+                                ..Default::default()
                             },
                         ),
                     });
