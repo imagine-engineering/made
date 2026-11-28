@@ -954,11 +954,16 @@ pub fn parse_samply_profile(
             let function = integer(function)?;
             let fallback = string_at(strings, at(names, function)?)?;
             let resource = at(function_resources, function)?;
-            let address = integer(at(addresses, index)?)?;
+            let address = at(addresses, index)?;
             let mut library_identity = None;
             let resolved = if resource.as_i64().is_some_and(|value| value < 0) {
+                // Samply emits both sentinels for frames without a library address.
+                if (resource.as_i64(), address.as_i64()) != (Some(-1), Some(-1)) {
+                    integer(address)?;
+                }
                 None
             } else {
+                let address = integer(address)?;
                 let library = at(resource_libraries, integer(resource)?)?;
                 if library.is_null() {
                     None
@@ -966,11 +971,16 @@ pub fn parse_samply_profile(
                     let library_index = integer(library)?;
                     library_identity = Some(library_index);
                     let library = at(libraries, library_index)?;
-                    let key = identity(text(field(library, "codeId")?)?);
-                    symbol_maps
-                        .get(&key)
-                        .and_then(|symbols| symbols.get(&address))
-                        .cloned()
+                    let code_id = field(library, "codeId")?;
+                    if code_id.is_null() {
+                        None
+                    } else {
+                        let key = identity(text(code_id)?);
+                        symbol_maps
+                            .get(&key)
+                            .and_then(|symbols| symbols.get(&address))
+                            .cloned()
+                    }
                 }
             };
             let frame = resolved.unwrap_or_else(|| ProfileFrame {
@@ -1817,6 +1827,77 @@ mod tests {
                 "Symbol library identity does not match the profile",
             );
         }
+    }
+
+    #[test]
+    fn profile_results_preserves_frames_without_a_library_address() {
+        let mut profile: Value = serde_json::from_slice(PROFILE).expect("profile fixture");
+        profile["threads"][0]["stringArray"][1] = "0x12345678".into();
+        let parse = |address: i64, resource: i64| {
+            let mut profile = profile.clone();
+            let thread = &mut profile["threads"][0];
+            thread["frameTable"]["address"][0] = address.into();
+            thread["funcTable"]["resource"][0] = resource.into();
+            parse_samply_profile(
+                &serde_json::to_vec(&profile).expect("serialized profile"),
+                SYMBOLS,
+                ProfileHost::MacOs,
+                &AtomicBool::new(false),
+                |_, _| None,
+            )
+        };
+        let result = parse(-1, -1).expect("addressless Samply frame");
+        assert_eq!(result.total_samples, 30);
+        assert_eq!(result.unresolved_frames, 1);
+        let root = &result.nodes[result.roots[0]];
+        assert_eq!(root.inclusive_samples, 30);
+        let unresolved = &result.frames[root.frame];
+        assert_eq!(unresolved.label, "0x12345678");
+        assert!(!unresolved.resolved);
+        assert!(unresolved.source.is_none());
+        assert!(
+            result
+                .frames
+                .iter()
+                .any(|frame| frame.label == "workload::leaf" && frame.resolved)
+        );
+
+        for (address, resource) in [(-2, -1), (-1, 0), (-1, -2)] {
+            assert!(parse(address, resource).is_err());
+        }
+    }
+
+    #[test]
+    fn profile_results_preserves_frames_from_a_library_without_a_code_id() {
+        let mut profile: Value = serde_json::from_slice(PROFILE).expect("profile fixture");
+        let mut symbols: Value = serde_json::from_slice(SYMBOLS).expect("symbols fixture");
+        let code_id = profile["libs"][0]["codeId"].take();
+        symbols["data"]
+            .as_array_mut()
+            .expect("symbol libraries")
+            .retain(|library| library["code_id"] != code_id);
+        let parse = |profile: &Value, symbols: &Value| {
+            parse_samply_profile(
+                &serde_json::to_vec(profile).expect("serialized profile"),
+                &serde_json::to_vec(symbols).expect("serialized symbols"),
+                ProfileHost::MacOs,
+                &AtomicBool::new(false),
+                |_, _| None,
+            )
+        };
+        let result = parse(&profile, &symbols).expect("unidentified sampled library");
+        assert_eq!(result.total_samples, 30);
+        assert_eq!(result.unresolved_frames, 1);
+        assert!(
+            result
+                .frames
+                .iter()
+                .any(|frame| frame.label == "workload::leaf" && frame.resolved)
+        );
+        let original_symbols = serde_json::from_slice(SYMBOLS).expect("symbols fixture");
+        assert!(parse(&profile, &original_symbols).is_err());
+        profile["libs"][0]["codeId"] = 0.into();
+        assert!(parse(&profile, &symbols).is_err());
     }
 
     #[test]
