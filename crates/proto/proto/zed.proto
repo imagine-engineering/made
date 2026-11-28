@@ -586,7 +586,9 @@ message Envelope {
     PrepareLinuxCargoProfile prepare_linux_cargo_profile = 551;
     FinishLinuxCargoProfileReview finish_linux_cargo_profile_review = 552;
     CancelLinuxCargoProfile cancel_linux_cargo_profile = 553;
-    LinuxCargoProfileResponse linux_cargo_profile_response = 554; // current max
+    LinuxCargoProfileResponse linux_cargo_profile_response = 554;
+    CancelRemoteJvmBuildReimport cancel_remote_jvm_build_reimport = 555;
+    CancelRemoteJvmBuildReimportResponse cancel_remote_jvm_build_reimport_response = 556; // current max
   }
 
   reserved 87 to 88;

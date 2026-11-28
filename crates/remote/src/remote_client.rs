@@ -2254,6 +2254,7 @@ mod tests {
                     observed.push((envelope.sender_id, envelope.original_sender_id, request.generation));
                 });
                 Ok(proto::JvmProjectConsumersResponse {
+                    supports_reimport_cancellation: false,
                     protocol_version: request.protocol_version,
                     generation: request.generation,
                     accepted_roots: request.roots,
@@ -2375,6 +2376,7 @@ mod tests {
                         ))
                     });
                     Ok(proto::JvmProjectConsumersResponse {
+                        supports_reimport_cancellation: false,
                         protocol_version: 1,
                         generation: request.generation,
                         accepted_roots: request.roots,
@@ -2629,6 +2631,7 @@ mod tests {
                         observed.push((envelope.sender_id, request.generation));
                     });
                     Ok(proto::JvmProjectConsumersResponse {
+                        supports_reimport_cancellation: false,
                         protocol_version: request.protocol_version,
                         generation: request.generation,
                         accepted_roots: request.roots,
@@ -3070,6 +3073,7 @@ mod tests {
             replacement_input
                 .unbounded_send(
                     proto::JvmProjectConsumersResponse {
+                        supports_reimport_cancellation: false,
                         protocol_version: 1,
                         generation: 1,
                         accepted_roots: Vec::new(),
@@ -3090,6 +3094,7 @@ mod tests {
         replacement_input
             .unbounded_send(
                 proto::JvmProjectConsumersResponse {
+                    supports_reimport_cancellation: false,
                     protocol_version: 1,
                     generation: 3,
                     accepted_roots: jvm_intent_for_channel_test(3, true).roots,
@@ -4166,6 +4171,9 @@ impl ChannelClient {
         !matches!(
             envelope.payload.as_ref(),
             Some(proto::envelope::Payload::SetJvmProjectConsumers(_))
+                | Some(proto::envelope::Payload::ReimportRemoteGradleProjects(_))
+                | Some(proto::envelope::Payload::ReimportRemoteMavenProjects(_))
+                | Some(proto::envelope::Payload::CancelRemoteJvmBuildReimport(_))
                 | Some(proto::envelope::Payload::GetRustCoverageTaskSession(_))
                 | Some(proto::envelope::Payload::RunRustCoverageTask(_))
                 | Some(proto::envelope::Payload::CancelRustCoverageTask(_))

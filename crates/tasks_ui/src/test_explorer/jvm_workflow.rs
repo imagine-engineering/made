@@ -1528,6 +1528,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     for version in [1, 2] {
         let rejected = remote_client
             .request(proto::ReimportRemoteGradleProjects {
+                request_id: None,
                 project_id: proto::REMOTE_SERVER_PROJECT_ID,
                 protocol_version: version,
                 session_generation: 0,
@@ -3343,6 +3344,7 @@ async fn run_maven_goal_fixture(
         ] {
             let error = remote_client
                 .request(proto::ReimportRemoteMavenProjects {
+                    request_id: None,
                     project_id: proto::REMOTE_SERVER_PROJECT_ID,
                     protocol_version: version,
                     session_generation: 0,
@@ -4176,6 +4178,14 @@ async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut T
 
     let fixture = cached_jvm_fixture_path("GROOVY_CONNECTED_WRAPPER_ROOT");
     let order = fixture.join(".groovy-sync-order");
+    let cancellation_gate = std::env::var_os("GROOVY_CONNECTED_REIMPORT_CANCELLATION_GATE")
+        .map(std::path::PathBuf::from);
+    if let Some(gate) = &cancellation_gate {
+        assert!(
+            gate.is_absolute() && !gate.exists(),
+            "use a fresh provider gate"
+        );
+    }
     let fail = fixture.join(".fail-sync-setup");
     assert!(!order.exists());
     std::fs::write(&fail, []).expect("arm the disposable setup failure");
@@ -4241,15 +4251,21 @@ async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut T
         "startup and metadata refresh leave saved sync Tasks idle"
     );
 
-    for (expected, failed) in [
-        (&["before-sync"][..], true),
-        (&["before-sync", "after-sync"][..], false),
-    ] {
+    let failed_setup = "before-sync Task 'sync setup' failed";
+    let cancelled_import = "Selected import cancelled on the project host";
+    let completed_sync = "Selected build import and sync hooks completed";
+    let mut cases = vec![(&["before-sync"][..], failed_setup)];
+    if cancellation_gate.is_some() {
+        cases.push((&["before-sync"][..], cancelled_import));
+    }
+    cases.push((&["before-sync", "after-sync"][..], completed_sync));
+    for (expected, expected_notice) in cases {
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
         });
         cx.update(|window, cx| window.draw(cx).clear(cx));
         dispatch_graph_action(cx, action);
+        let mut cancel_sent = false;
         let deadline = Instant::now() + Duration::from_secs(130);
         loop {
             cx.run_until_parked();
@@ -4262,13 +4278,32 @@ async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut T
             let notice = panel.read_with(cx, |panel, _| {
                 panel.build_phase_notice_for_test().map(str::to_owned)
             });
-            let complete = notice.as_deref().is_some_and(|notice| {
-                if failed {
-                    notice.contains("before-sync Task 'sync setup' failed")
-                } else {
-                    notice.contains("Selected build import and sync hooks completed")
-                }
-            });
+            if expected_notice == cancelled_import
+                && !cancel_sent
+                && cancellation_gate
+                    .as_ref()
+                    .is_some_and(|gate| gate.is_file())
+            {
+                assert_eq!(lines, ["before-sync"], "wait for the owned provider call");
+                workspace.update_in(cx, |workspace, window, cx| {
+                    workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
+                });
+                cx.update(|window, cx| window.draw(cx).clear(cx));
+                dispatch_graph_action(cx, "groovy_dependencies_panel::CancelSelectedImport");
+                let cancelling = panel.read_with(cx, |panel, _| {
+                    panel.build_phase_notice_for_test().is_some_and(|notice| {
+                        notice.contains("Cancelling selected import on the project host")
+                    })
+                });
+                assert!(
+                    cancelling,
+                    "the mounted panel accepted the cancellation action"
+                );
+                cancel_sent = true;
+            }
+            let complete = notice
+                .as_deref()
+                .is_some_and(|notice| notice.contains(expected_notice));
             if complete && lines.len() == expected.len() {
                 break;
             }
@@ -4283,7 +4318,7 @@ async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut T
         assert!(!store.read_with(cx, |store, _| {
             store.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync)
         }));
-        if failed {
+        if expected_notice == failed_setup {
             assert!(
                 store.read_with(cx, |store, _| {
                     store
@@ -4295,6 +4330,31 @@ async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut T
             std::fs::rename(&order, fixture.join(".groovy-failed-sync-order"))
                 .expect("retain the failed setup receipt");
             std::fs::remove_file(&fail).expect("repair the disposable setup Task");
+        }
+        if expected_notice == cancelled_import {
+            assert!(cancel_sent);
+            std::fs::rename(&order, fixture.join(".groovy-cancelled-sync-order"))
+                .expect("retain the cancelled provider receipt");
+            let deadline = Instant::now() + Duration::from_secs(45);
+            let mut refresh_at = Instant::now();
+            while !store.read_with(cx, |store, _| {
+                store
+                    .jdtls_project_snapshot(worktree_id)
+                    .is_some_and(|(_, current)| current)
+            }) {
+                assert!(
+                    Instant::now() < deadline,
+                    "refresh after cancelling reimport"
+                );
+                if Instant::now() >= refresh_at {
+                    store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+                    refresh_at = Instant::now() + Duration::from_secs(2);
+                }
+                cx.background_executor
+                    .timer(Duration::from_millis(100))
+                    .await;
+                cx.run_until_parked();
+            }
         }
     }
     let deadline = Instant::now() + Duration::from_secs(45);

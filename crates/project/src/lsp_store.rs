@@ -366,6 +366,8 @@ pub struct LocalLspStore {
     #[cfg(feature = "jvm-tools")]
     host_jvm_session: Option<HostJvmSession>,
     #[cfg(feature = "jvm-tools")]
+    remote_build_reimports: HashMap<WorktreeId, HostJvmBuildReimport>,
+    #[cfg(feature = "jvm-tools")]
     host_jvm_task_inventory: Option<WeakEntity<crate::Inventory>>,
     #[cfg(feature = "jvm-tools")]
     manual_language_server_action: std::sync::Weak<()>,
@@ -426,7 +428,16 @@ struct HostJvmSession {
     pending_plan: Option<Arc<JvmConsumerPlan>>,
     pending_abort: Option<futures::future::AbortHandle>,
     accepted_generation: Option<u64>,
+    last_reimport_request_id: u64,
     build_operation: Option<proto::JvmBuildOperationAuthorization>,
+}
+
+#[cfg(feature = "jvm-tools")]
+struct HostJvmBuildReimport {
+    stamp: JvmConsumerStamp,
+    request_id: u64,
+    abort: futures::future::AbortHandle,
+    import_token: Option<jvm_project::ProviderRefreshToken>,
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -4940,6 +4951,8 @@ struct RemoteJvmConsumerIntent {
     generation: u64,
     requested_roots: Option<Vec<ProjectPath>>,
     accepted_roots: Vec<ProjectPath>,
+    supports_reimport_cancellation: bool,
+    last_reimport_request_id: u64,
     withdrawal_needed: bool,
     request_task: Option<Task<()>>,
 }
@@ -5505,6 +5518,8 @@ impl LspStore {
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_reimport_remote_maven_projects);
         #[cfg(feature = "jvm-tools")]
+        client.add_entity_request_handler(Self::handle_cancel_remote_jvm_build_reimport);
+        #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_check_kotlin_lsp_release);
         #[cfg(feature = "jvm-tools")]
         client.add_entity_request_handler(Self::handle_resolve_jvm_build_operation);
@@ -5834,6 +5849,8 @@ impl LspStore {
                 default_jvm_language_task: None,
                 #[cfg(feature = "jvm-tools")]
                 host_jvm_session: None,
+                #[cfg(feature = "jvm-tools")]
+                remote_build_reimports: Default::default(),
                 #[cfg(feature = "jvm-tools")]
                 host_jvm_task_inventory: None,
                 #[cfg(feature = "jvm-tools")]
@@ -8249,6 +8266,7 @@ impl LspStore {
                     protocol_version: 1,
                     generation: request.generation,
                     accepted_roots: roots.iter().map(ProjectPath::to_proto).collect(),
+                    supports_reimport_cancellation: true,
                 };
                 ensure!(
                     response.encoded_len() <= 1_048_576,
@@ -8343,6 +8361,7 @@ impl LspStore {
             pending_plan: None,
             pending_abort: None,
             accepted_generation: None,
+            last_reimport_request_id: 0,
             build_operation: None,
         });
         self.refresh_server_tree(cx);
@@ -8498,6 +8517,8 @@ impl LspStore {
                 });
                 if scope_current && valid {
                     remote.jvm_consumers.accepted_roots = roots;
+                    remote.jvm_consumers.supports_reimport_cancellation = result
+                        .is_ok_and(|response| response.supports_reimport_cancellation);
                     if !remote.jvm_consumers.enabled {
                         remote.jvm_consumers.requested_roots = None;
                     }
@@ -8850,10 +8871,10 @@ impl LspStore {
 
     #[cfg(feature = "jvm-tools")]
     pub fn reimport_remote_build_projects(
-        &self,
+        &mut self,
         reimport: RemoteJvmBuildReimport,
         cx: &mut Context<Self>,
-    ) -> Result<Task<Result<()>>> {
+    ) -> Result<(RemoteJvmReimportCancellation, Task<Result<()>>)> {
         let RemoteJvmBuildReimport {
             tool,
             worktree_id,
@@ -8867,37 +8888,82 @@ impl LspStore {
             "The {} project host changed before reimport; refresh and retry",
             tool.name()
         );
-        Ok(cx.spawn(async move |this, cx| {
+        let LspStoreMode::Remote(remote) = &mut self.mode else {
+            anyhow::bail!("A remote reimport requires the current project host");
+        };
+        let request_id = if remote.jvm_consumers.supports_reimport_cancellation {
+            let id = remote
+                .jvm_consumers
+                .last_reimport_request_id
+                .checked_add(1)
+                .context("Reconnect to the project host before reimporting")?;
+            remote.jvm_consumers.last_reimport_request_id = id;
+            Some(id)
+        } else {
+            None
+        };
+        let project_id = proto::REMOTE_SERVER_PROJECT_ID;
+        let protocol_version = 1;
+        let wire_worktree_id = worktree_id.to_proto();
+        let request = match tool {
+            JvmBuildTool::Maven => {
+                Either::Left(client.request(proto::ReimportRemoteMavenProjects {
+                    project_id,
+                    protocol_version,
+                    session_generation,
+                    worktree_id: wire_worktree_id,
+                    request_id,
+                }))
+            }
+            JvmBuildTool::Gradle => {
+                Either::Right(client.request(proto::ReimportRemoteGradleProjects {
+                    project_id,
+                    protocol_version,
+                    session_generation,
+                    worktree_id: wire_worktree_id,
+                    request_id,
+                }))
+            }
+        };
+        let (cancel, cancelled) = oneshot::channel();
+        let cancellation = RemoteJvmReimportCancellation {
+            worktree_id,
+            cancel: request_id.map(|_| cancel),
+        };
+        let task = cx.spawn(async move |this, cx| {
             let name = tool.name();
-            let request = async {
-                let project_id = proto::REMOTE_SERVER_PROJECT_ID;
-                let protocol_version = 1;
-                let worktree_id = worktree_id.to_proto();
-                match tool {
-                    JvmBuildTool::Maven => {
-                        client
-                            .request(proto::ReimportRemoteMavenProjects {
-                                project_id,
-                                protocol_version,
-                                session_generation,
-                                worktree_id,
-                            })
-                            .await
-                    }
-                    JvmBuildTool::Gradle => {
-                        client
-                            .request(proto::ReimportRemoteGradleProjects {
-                                project_id,
-                                protocol_version,
-                                session_generation,
-                                worktree_id,
-                            })
-                            .await
+            let operation = async {
+                let Some(request_id) = request_id else {
+                    return request.await;
+                };
+                match futures::future::select(Box::pin(request), cancelled).await {
+                    Either::Left((result, _)) => result,
+                    Either::Right((signal, mut request)) => {
+                        if signal.is_ok() {
+                            // A cancel sent immediately can reach the handler before the start is admitted.
+                            for _ in 0..3 {
+                                let replied = client.request(proto::CancelRemoteJvmBuildReimport {
+                                    project_id,
+                                    session_generation,
+                                    worktree_id: wire_worktree_id,
+                                    request_id,
+                                }).await.context("The project host did not acknowledge cancellation; refresh before retrying")?;
+                                if replied.cancelled {
+                                    return Err(RemoteJvmReimportCancelled.into());
+                                }
+                                let retry = cx.background_executor().timer(Duration::from_millis(150));
+                                match futures::future::select(request, Box::pin(retry)).await {
+                                    Either::Left((result, _)) => return result,
+                                    Either::Right((_, pending)) => request = pending,
+                                }
+                            }
+                        }
+                        request.await
                     }
                 }
             };
             let deadline = cx.background_executor().timer(Duration::from_secs(245));
-            match futures::future::select(Box::pin(request), Box::pin(deadline)).await {
+            match futures::future::select(Box::pin(operation), Box::pin(deadline)).await {
                 Either::Left((result, _)) => {
                     result?;
                 }
@@ -8916,7 +8982,8 @@ impl LspStore {
                 store.refresh_jdtls_project(worktree_id, cx);
                 Ok(())
             })?
-        }))
+        });
+        Ok((cancellation, task))
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -15237,8 +15304,15 @@ impl LspStore {
                 generation: request.session_generation,
             },
         );
-        Self::reimport_build_projects_on_host(this, JvmBuildTool::Gradle, worktree_id, scope, cx)
-            .await
+        Self::handle_host_build_reimport(
+            this,
+            JvmBuildTool::Gradle,
+            worktree_id,
+            scope,
+            request.request_id,
+            cx,
+        )
+        .await
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -15260,8 +15334,130 @@ impl LspStore {
                 generation: request.session_generation,
             },
         );
-        Self::reimport_build_projects_on_host(this, JvmBuildTool::Maven, worktree_id, scope, cx)
-            .await
+        Self::handle_host_build_reimport(
+            this,
+            JvmBuildTool::Maven,
+            worktree_id,
+            scope,
+            request.request_id,
+            cx,
+        )
+        .await
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn handle_host_build_reimport(
+        this: Entity<Self>,
+        tool: JvmBuildTool,
+        worktree_id: WorktreeId,
+        scope: (u64, JvmConsumerStamp),
+        request_id: Option<u64>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::Ack> {
+        let Some(request_id) = request_id else {
+            return Self::reimport_build_projects_on_host(this, tool, worktree_id, scope, None, cx)
+                .await;
+        };
+        let (abort, registration) = futures::future::AbortHandle::new_pair();
+        this.update(&mut cx, |store, cx| {
+            store.ensure_host_build_action_scope(tool, worktree_id, scope, cx)?;
+            let local = store
+                .as_local_mut()
+                .context("The project host is unavailable")?;
+            ensure!(
+                !local.remote_build_reimports.contains_key(&worktree_id),
+                "A build reimport is already active on the project host"
+            );
+            let session = local
+                .host_jvm_session
+                .as_mut()
+                .context("The project host is unavailable")?;
+            ensure!(
+                request_id > session.last_reimport_request_id,
+                "This build reimport request has already changed; refresh before retrying"
+            );
+            session.last_reimport_request_id = request_id;
+            local.remote_build_reimports.insert(
+                worktree_id,
+                HostJvmBuildReimport {
+                    stamp: scope.1,
+                    request_id,
+                    abort,
+                    import_token: None,
+                },
+            );
+            Ok::<_, anyhow::Error>(())
+        })?;
+        let result = futures::future::Abortable::new(
+            Self::reimport_build_projects_on_host(
+                this.clone(),
+                tool,
+                worktree_id,
+                scope,
+                Some(request_id),
+                cx.clone(),
+            ),
+            registration,
+        )
+        .await;
+        this.update(&mut cx, |store, _| {
+            if let Some(local) = store.as_local_mut()
+                && local
+                    .remote_build_reimports
+                    .get(&worktree_id)
+                    .is_some_and(|active| {
+                        active.stamp == scope.1 && active.request_id == request_id
+                    })
+            {
+                local.remote_build_reimports.remove(&worktree_id);
+            }
+        });
+        result.map_err(|_| RemoteJvmReimportCancelled)?
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn handle_cancel_remote_jvm_build_reimport(
+        this: Entity<Self>,
+        envelope: TypedEnvelope<proto::CancelRemoteJvmBuildReimport>,
+        mut cx: AsyncApp,
+    ) -> Result<proto::CancelRemoteJvmBuildReimportResponse> {
+        ensure!(
+            envelope.original_sender_id.is_none(),
+            "Cancelling a build reimport requires a current direct Groovy connection"
+        );
+        let request = envelope.payload;
+        let worktree_id = WorktreeId::from_proto(request.worktree_id);
+        let stamp = JvmConsumerStamp {
+            peer: envelope.sender_id,
+            generation: request.session_generation,
+        };
+        let cancelled = this.update(&mut cx, |store, cx| {
+            store.ensure_host_jvm_consumer_scope(request.project_id, stamp.peer)?;
+            let local = store
+                .as_local()
+                .context("The project host is unavailable")?;
+            if !local
+                .host_jvm_session
+                .as_ref()
+                .is_some_and(|session| session.admits(stamp))
+            {
+                return Ok(false);
+            }
+            let Some(active) = local
+                .remote_build_reimports
+                .get(&worktree_id)
+                .filter(|active| active.stamp == stamp && active.request_id == request.request_id)
+            else {
+                return Ok(false);
+            };
+            let import_token = active.import_token;
+            active.abort.abort();
+            if let Some(token) = import_token {
+                store.cancel_selected_project_phase_for_token(token, cx)?;
+            }
+            Ok::<_, anyhow::Error>(true)
+        })?;
+        Ok(proto::CancelRemoteJvmBuildReimportResponse { cancelled })
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -15270,11 +15466,21 @@ impl LspStore {
         tool: JvmBuildTool,
         worktree_id: WorktreeId,
         scope: (u64, JvmConsumerStamp),
+        request_id: Option<u64>,
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let name = tool.name();
         let refresh = this.update(&mut cx, |store, cx| {
             store.ensure_host_build_action_scope(tool, worktree_id, scope, cx)?;
+            if let Some(active) = store
+                .as_local()
+                .and_then(|local| local.remote_build_reimports.get(&worktree_id))
+            {
+                ensure!(
+                    active.stamp == scope.1 && Some(active.request_id) == request_id,
+                    "A build reimport is already active on the project host"
+                );
+            }
             ensure!(
                 !store.jdtls_project_query_pending(worktree_id)
                     && store.jdtls_project_import_token(worktree_id).is_none(),
@@ -15331,6 +15537,13 @@ impl LspStore {
             let token = store
                 .jdtls_project_import_token(worktree_id)
                 .with_context(|| format!("{name} reimport did not start on the host"))?;
+            if let Some(active) = store
+                .as_local_mut()
+                .and_then(|local| local.remote_build_reimports.get_mut(&worktree_id))
+                .filter(|active| active.stamp == scope.1 && Some(active.request_id) == request_id)
+            {
+                active.import_token = Some(token);
+            }
             let subscription = cx.observe_self(move |store, cx| {
                 if store.jdtls_project_import_token(worktree_id) == Some(token)
                     && store
@@ -24085,6 +24298,39 @@ pub struct RemoteJvmBuildReimport {
 }
 
 #[cfg(feature = "jvm-tools")]
+pub struct RemoteJvmReimportCancellation {
+    worktree_id: WorktreeId,
+    cancel: Option<oneshot::Sender<()>>,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl RemoteJvmReimportCancellation {
+    pub fn cancellable_worktree(&self) -> Option<WorktreeId> {
+        self.cancel.as_ref().map(|_| self.worktree_id)
+    }
+
+    pub fn cancel(&mut self) -> bool {
+        self.cancel
+            .take()
+            .is_some_and(|cancel| cancel.send(()).is_ok())
+    }
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Debug)]
+pub struct RemoteJvmReimportCancelled;
+
+#[cfg(feature = "jvm-tools")]
+impl std::fmt::Display for RemoteJvmReimportCancelled {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Selected import cancelled on the project host. Refresh provider data and review build selection before retrying.")
+    }
+}
+
+#[cfg(feature = "jvm-tools")]
+impl std::error::Error for RemoteJvmReimportCancelled {}
+
+#[cfg(feature = "jvm-tools")]
 impl RemoteJvmBuildReimport {
     pub fn worktree_id(&self) -> WorktreeId {
         self.worktree_id
@@ -25344,6 +25590,7 @@ mod tests {
                 panic!("intent request");
             };
             let response = proto::JvmProjectConsumersResponse {
+                supports_reimport_cancellation: false,
                 protocol_version: 1,
                 generation: request.generation + u64::from(wrong_generation),
                 accepted_roots: request.roots.clone(),
@@ -26331,6 +26578,7 @@ mod tests {
                 panic!("current bounded intent");
             };
             let mut response = proto::JvmProjectConsumersResponse {
+                supports_reimport_cancellation: false,
                 protocol_version: 1,
                 generation: intent.generation,
                 accepted_roots: intent.roots.clone(),
@@ -27090,6 +27338,122 @@ mod tests {
             })
             .expect("current native host session");
         fixture.trust(cx, true);
+    }
+
+    #[cfg(all(feature = "jvm-tools", feature = "test-support"))]
+    #[gpui::test]
+    async fn remote_reimport_cancellation_matches_only_the_active_direct_request(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let fixture = ProjectLanguageFixture::new(cx).await;
+        fixture
+            .fs
+            .insert_tree(
+                "/project-consumer",
+                serde_json::json!({"pom.xml": "<project/>"}),
+            )
+            .await;
+        fixture.settings(
+            r#"{"languages":{"Kotlin":{"enable_language_server":false}}}"#,
+            cx,
+        );
+        configure_host_jvm_fixture(&fixture, cx);
+        let acceptance = host_jvm_fixture_intent(&fixture, 1, true, cx)
+            .await
+            .expect("admit the current project scope");
+        assert!(acceptance.supports_reimport_cancellation);
+
+        let peer = proto::PeerId { owner_id: 0, id: 1 };
+        let worktree_id = fixture.root.worktree_id;
+        let active_request = 2;
+        let (abort, registration) = futures::future::AbortHandle::new_pair();
+        fixture.store.update(cx, |store, _| {
+            store
+                .as_local_mut()
+                .expect("project host")
+                .remote_build_reimports
+                .insert(
+                    worktree_id,
+                    HostJvmBuildReimport {
+                        stamp: JvmConsumerStamp {
+                            peer,
+                            generation: 1,
+                        },
+                        request_id: active_request,
+                        abort,
+                        import_token: None,
+                    },
+                );
+        });
+        let envelope = |generation, worktree, request, sender, original_sender_id| TypedEnvelope {
+            sender_id: sender,
+            original_sender_id,
+            message_id: 1,
+            received_at: Instant::now(),
+            payload: proto::CancelRemoteJvmBuildReimport {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                session_generation: generation,
+                worktree_id: worktree,
+                request_id: request,
+            },
+        };
+        let wire_worktree = worktree_id.to_proto();
+        for wrong in [
+            envelope(1, wire_worktree, 1, peer, None),
+            envelope(9, wire_worktree, active_request, peer, None),
+            envelope(1, wire_worktree + 1, active_request, peer, None),
+        ] {
+            let reply = LspStore::handle_cancel_remote_jvm_build_reimport(
+                fixture.store.clone(),
+                wrong,
+                cx.to_async(),
+            )
+            .await
+            .expect("superseded or missing requests are a no-op");
+            assert!(!reply.cancelled);
+        }
+        for foreign in [
+            envelope(1, wire_worktree, active_request, peer, Some(peer)),
+            envelope(
+                1,
+                wire_worktree,
+                active_request,
+                proto::PeerId { owner_id: 0, id: 9 },
+                None,
+            ),
+        ] {
+            assert!(
+                LspStore::handle_cancel_remote_jvm_build_reimport(
+                    fixture.store.clone(),
+                    foreign,
+                    cx.to_async(),
+                )
+                .await
+                .is_err()
+            );
+        }
+        let still_running = fixture.store.read_with(cx, |store, _| {
+            !store
+                .as_local()
+                .expect("project host")
+                .remote_build_reimports[&worktree_id]
+                .abort
+                .is_aborted()
+        });
+        assert!(still_running);
+        let reply = LspStore::handle_cancel_remote_jvm_build_reimport(
+            fixture.store.clone(),
+            envelope(1, wire_worktree, active_request, peer, None),
+            cx.to_async(),
+        )
+        .await
+        .expect("matching direct cancellation");
+        assert!(reply.cancelled);
+        assert!(
+            futures::future::Abortable::new(futures::future::ready(()), registration)
+                .await
+                .is_err()
+        );
     }
 
     #[cfg(all(feature = "jvm-tools", feature = "test-support"))]

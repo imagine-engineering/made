@@ -271,6 +271,8 @@ messages!(
     (SynchronizeRemoteGradleMetadata, Foreground),
     (ReimportRemoteGradleProjects, Foreground),
     (ReimportRemoteMavenProjects, Foreground),
+    (CancelRemoteJvmBuildReimport, Foreground),
+    (CancelRemoteJvmBuildReimportResponse, Foreground),
     (CheckKotlinLspRelease, Background),
     (KotlinLspReleaseResponse, Background),
     (JdtlsProjectSnapshotResponse, Background),
@@ -675,6 +677,10 @@ request_messages!(
     (SynchronizeRemoteGradleMetadata, Ack),
     (ReimportRemoteGradleProjects, Ack),
     (ReimportRemoteMavenProjects, Ack),
+    (
+        CancelRemoteJvmBuildReimport,
+        CancelRemoteJvmBuildReimportResponse
+    ),
     (CheckKotlinLspRelease, KotlinLspReleaseResponse),
     (GetKotlinWorkspaceSnapshot, KotlinWorkspaceSnapshotResponse),
     (SetJvmProjectConsumers, JvmProjectConsumersResponse),
@@ -1001,6 +1007,7 @@ entity_messages!(
     SynchronizeRemoteGradleMetadata,
     ReimportRemoteGradleProjects,
     ReimportRemoteMavenProjects,
+    CancelRemoteJvmBuildReimport,
     CheckKotlinLspRelease,
     GetKotlinWorkspaceSnapshot,
     SetJvmProjectConsumers,
@@ -1897,6 +1904,7 @@ mod tests {
         );
 
         let response = JvmProjectConsumersResponse {
+            supports_reimport_cancellation: false,
             protocol_version: 1,
             generation: 19,
             accepted_roots: roots,

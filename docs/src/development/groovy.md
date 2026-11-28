@@ -586,7 +586,9 @@ idle.
 Directly connected projects also support saved sync Tasks for **Reload
 Maven projects** and **Reimport Gradle projects**. The selected worktree's
 Tasks and the offline provider phase run on the project host. After-sync
-Tasks wait for the host's successful reimport receipt.
+Tasks wait for the host's successful reimport receipt. Use **Cancel selected
+import** to request cancellation of the running provider phase on hosts that
+support it. After a confirmed cancellation, refresh provider data before retrying.
 
 The Tasks picker offers **Build Maven project** and **Build Gradle project**
 when the worktree contains the corresponding wrapper and build files.

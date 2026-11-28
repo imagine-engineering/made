@@ -24,7 +24,10 @@ use project::{
         KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
-    lsp_store::{LocalJvmBuildImport, RemoteJvmBuildReimport},
+    lsp_store::{
+        LocalJvmBuildImport, RemoteJvmBuildReimport, RemoteJvmReimportCancellation,
+        RemoteJvmReimportCancelled,
+    },
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
     task_store::{
         JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_before_launch_tasks,
@@ -723,7 +726,7 @@ pub struct DependenciesPanel {
     build_phase_waiter: Option<gpui::Task<()>>,
     build_sync_active: bool,
     build_phase_notice: Option<String>,
-    remote_build_reimport_pending: bool,
+    remote_build_reimport: Option<RemoteJvmReimportCancellation>,
     graph_search: Entity<Editor>,
     graph_search_has_no_matches: bool,
     graph_inspection: Option<GraphInspection>,
@@ -3174,7 +3177,7 @@ impl DependenciesPanel {
                     build_phase_waiter: None,
                     build_sync_active: false,
                     build_phase_notice: None,
-                    remote_build_reimport_pending: false,
+                    remote_build_reimport: None,
                     graph_search,
                     graph_search_has_no_matches: false,
                     graph_inspection: None,
@@ -4494,15 +4497,11 @@ impl DependenciesPanel {
                 Some((kind, label, target))
             })
             .collect();
-        let can_cancel_import = self.build_phase_is_pending(cx)
-            && self
-                .host
-                .selected()
-                .and_then(|id| self.navigation.get(id))
-                .is_some_and(|row| {
-                    self.build_phase_token
-                        .is_some_and(|token| token.worktree_id() == row.path.worktree_id)
-                });
+        let can_cancel_import = self
+            .host
+            .selected()
+            .and_then(|id| self.navigation.get(id))
+            .is_some_and(|row| self.cancellable_import_worktree(cx) == Some(row.path.worktree_id));
         let inspection = self.selected_graph_inspection(GraphInspectionMode::Neighbours, cx);
         let has_conflict_origins = inspection.as_ref().is_some_and(|inspection| {
             current_dependency_graph_receipt(self.project.read(cx), &inspection.selection, cx)
@@ -6221,15 +6220,19 @@ impl DependenciesPanel {
             .ok_or_else(|| anyhow::anyhow!("The selected local project folder is unavailable"))
     }
 
-    fn build_phase_is_pending(&self, cx: &App) -> bool {
-        self.build_phase_token.is_some_and(|token| {
-            self.project
-                .read(cx)
-                .lsp_store()
-                .read(cx)
-                .jdtls_project_import_token(token.worktree_id())
-                == Some(token)
-        })
+    fn cancellable_import_worktree(&self, cx: &App) -> Option<WorktreeId> {
+        if let Some(remote) = &self.remote_build_reimport {
+            return remote.cancellable_worktree();
+        }
+        let token = self.build_phase_token?;
+        (self
+            .project
+            .read(cx)
+            .lsp_store()
+            .read(cx)
+            .jdtls_project_import_token(token.worktree_id())
+            == Some(token))
+        .then_some(token.worktree_id())
     }
 
     fn show_build_phase_error(&mut self, cx: &mut Context<Self>) {
@@ -6298,8 +6301,8 @@ impl DependenciesPanel {
         })();
         match result {
             Ok(None) => return,
-            Ok(Some(import)) => {
-                self.remote_build_reimport_pending = true;
+            Ok(Some((cancellation, import))) => {
+                self.remote_build_reimport = Some(cancellation);
                 self.build_phase_notice = Some(format!(
                     "Reimporting {} projects offline on the project host.",
                     tool.name()
@@ -6307,7 +6310,7 @@ impl DependenciesPanel {
                 cx.spawn(async move |panel, cx| {
                     let result = import.await;
                     panel.update(cx, |panel, cx| {
-                        panel.remote_build_reimport_pending = false;
+                        panel.remote_build_reimport = None;
                         panel.build_phase_notice = Some(match result {
                             Ok(()) => match tool {
                                 JvmBuildTool::Maven => "Maven projects reimported. Refreshing host project facts.".into(),
@@ -6397,7 +6400,7 @@ impl DependenciesPanel {
     fn build_controls_busy(&self) -> bool {
         self.build_phase_token.is_some()
             || self.build_sync_active
-            || self.remote_build_reimport_pending
+            || self.remote_build_reimport.is_some()
     }
 
     fn run_build_import_without_hooks(
@@ -6499,7 +6502,7 @@ impl DependenciesPanel {
                             worktree.entity_id() == worktree_entity && worktree.read(cx).abs_path() == root,
                             "The build project folder changed; select it again"
                         );
-                        let (token, waiter, notice) = store.update(cx, |store, cx| {
+                        let (token, cancellation, waiter, notice) = store.update(cx, |store, cx| {
                             anyhow::ensure!(
                                 store.jvm_trigger_provider_is_current(worktree_id, activation),
                                 "The Java provider changed before sync; refresh and retry"
@@ -6509,16 +6512,17 @@ impl DependenciesPanel {
                                     let waiter = store.import_local_jvm_build(worktree_id, action, cx)?;
                                     let token = store.jdtls_project_import_token(worktree_id)
                                         .context("No build roots remain to sync")?;
-                                    Ok((Some(token), waiter, Self::build_import_started_notice(action).into()))
+                                    Ok((Some(token), None, waiter, Self::build_import_started_notice(action).into()))
                                 }
                                 ExplicitBuildSync::Remote(plan) => {
                                     let notice = format!("Reimporting {} projects offline on the project host.", plan.tool().name());
-                                    let waiter = store.reimport_remote_build_projects(plan, cx)?;
-                                    anyhow::Ok((None, waiter, notice))
+                                    let (cancellation, waiter) = store.reimport_remote_build_projects(plan, cx)?;
+                                    anyhow::Ok((None, Some(cancellation), waiter, notice))
                                 }
                             }
                         })??;
                         panel.build_phase_token = token;
+                        panel.remote_build_reimport = cancellation;
                         panel.build_phase_notice = Some(notice);
                         panel.rebuild(cx);
                         anyhow::Ok((token, waiter))
@@ -6527,11 +6531,17 @@ impl DependenciesPanel {
                     let cancelled = panel.update(cx, |panel, cx| {
                         let cancelled = token.is_some() && panel.build_phase_token != token;
                         panel.build_phase_token = None;
+                        panel.remote_build_reimport = None;
                         cx.notify();
                         cancelled
                     })?;
                     anyhow::ensure!(!cancelled, "Selected import cancelled. Remaining sync Tasks were skipped.");
-                    import_result.context("Selected build import did not complete. Review build selection and Language Servers before retrying")?;
+                    if let Err(error) = import_result {
+                        if error.is::<RemoteJvmReimportCancelled>() {
+                            return Err(error.context("Selected import cancelled on the project host. Remaining sync Tasks were skipped."));
+                        }
+                        return Err(error.context("Selected build import did not complete. Review build selection and Language Servers before retrying"));
+                    }
                     Self::run_sync_hook_steps(&panel, &workspace, after, project_id, activation, cx).await?;
                     Ok::<_, anyhow::Error>(())
                 }.await;
@@ -6549,6 +6559,7 @@ impl DependenciesPanel {
                 panel.update(cx, |panel, cx| {
                     panel.build_sync_active = false;
                     panel.build_phase_token = None;
+                    panel.remote_build_reimport = None;
                     panel.build_phase_notice = Some(match result {
                         Ok(()) => "Selected build import and sync hooks completed. Refresh for current provider data.".into(),
                         Err(error) => error.to_string(),
@@ -6590,6 +6601,14 @@ impl DependenciesPanel {
     }
 
     fn cancel_selected_import(&mut self, cx: &mut Context<Self>) {
+        if let Some(remote) = &mut self.remote_build_reimport {
+            if remote.cancel() {
+                self.build_phase_notice =
+                    Some("Cancelling selected import on the project host.".into());
+                self.rebuild(cx);
+            }
+            return;
+        }
         let Some(token) = self.build_phase_token else {
             return;
         };
@@ -10076,7 +10095,7 @@ impl DependenciesPanel {
     fn render_tree_status(&self, cx: &Context<Self>) -> Option<impl IntoElement> {
         let state = self.host.status();
         let cancel_graph = self.graph_query_is_pending(cx);
-        let cancel_import = self.build_phase_is_pending(cx);
+        let cancel_import = self.cancellable_import_worktree(cx).is_some();
         let project = self.project.read(cx);
         let can_recover_gradle = self.view == BuildToolView::Gradle
             && matches!(
@@ -16274,7 +16293,7 @@ mod tests {
                 panel.build_phase_notice = None;
                 panel.apply_saved_build_selection(maven, window, cx);
                 assert!(panel.build_phase_token.is_none() && panel.build_phase_waiter.is_none());
-                assert!(!panel.remote_build_reimport_pending);
+                assert!(panel.remote_build_reimport.is_none());
                 assert!(
                     panel
                         .build_phase_notice
@@ -21263,7 +21282,7 @@ mod tests {
         });
         invoke_selected_row_command(&panel, cx, label);
         let cancelled_receipt = panel.read_with(cx, |panel, cx| {
-            assert!(panel.build_phase_is_pending(cx));
+            assert!(panel.cancellable_import_worktree(cx).is_some());
             panel.build_phase_token.expect("owned UI receipt")
         });
         focus_button("Dependency status details", cx);
@@ -21299,7 +21318,7 @@ mod tests {
             "UI receipt cancels only its owned provider request"
         );
         panel.read_with(cx, |panel, cx| {
-            assert!(!panel.build_phase_is_pending(cx));
+            assert!(panel.cancellable_import_worktree(cx).is_none());
             assert!(panel.build_phase_token.is_none());
             assert!(
                 panel
