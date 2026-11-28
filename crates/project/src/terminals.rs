@@ -39,9 +39,9 @@ pub type TaskTerminalCheck = Box<dyn FnOnce(&mut gpui::AsyncApp) -> Task<Result<
     feature = "cargo-workspace",
     feature = "rust-coverage"
 ))]
-pub struct LinuxNativeCargoBuildTask {
+pub struct LinuxNativeCargoTask<Output> {
     pub terminal: Entity<Terminal>,
-    pub completion: Task<Result<crate::cargo_workspace_store::LinuxNativeCargoWorkload>>,
+    pub completion: Task<Result<Output>>,
 }
 
 pub struct PreparedNativeTerminalLaunch {
@@ -412,7 +412,9 @@ impl Project {
         structured_task: Option<StructuredTaskHandle>,
         report_limit: usize,
         cx: &mut Context<Self>,
-    ) -> Result<Task<Result<LinuxNativeCargoBuildTask>>> {
+    ) -> Result<
+        Task<Result<LinuxNativeCargoTask<crate::cargo_workspace_store::LinuxNativeCargoWorkload>>>,
+    > {
         let pending = crate::task_store::PendingExperimentalTaskLaunch::new(&spawn_task, cx)?;
         let store = self.cargo_workspace_store().clone();
         Ok(cx.spawn(async move |project, cx| {
@@ -431,25 +433,14 @@ impl Project {
                 .await
                 .map_err(|error| error.context("Preparing the reviewed Linux Cargo build"))?;
             let (builder, observation) = project.update(cx, |project, cx| {
-                anyhow::ensure!(
-                    project.is_local()
-                        && !project.is_shared()
-                        && !project.is_disconnected(cx)
-                        && !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
-                            &project.worktree_store(),
-                            cx,
-                        ),
-                    "Native Cargo build requires a trusted local Project"
-                );
+                project.validate_linux_native_cargo_stage(
+                    &spawn_task,
+                    structured_task.as_ref(),
+                    cx,
+                )?;
                 if let Some(pending) = &pending {
                     pending.check(&spawn_task, cx)?;
                 }
-                anyhow::ensure!(
-                    !structured_task
-                        .as_ref()
-                        .is_some_and(|handle| handle.state().is_terminal()),
-                    "Native Cargo Task was cancelled before launch"
-                );
                 TerminalBuilder::new_with_native_cargo_build_task(
                     spawn_task,
                     structured_task.clone(),
@@ -471,9 +462,204 @@ impl Project {
                     error.context("Attaching the authenticated Linux Cargo completion")
                 })?;
             drop(pending);
-            Ok(LinuxNativeCargoBuildTask {
+            Ok(LinuxNativeCargoTask {
                 terminal,
                 completion,
+            })
+        }))
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        feature = "cargo-workspace",
+        feature = "rust-coverage"
+    ))]
+    fn validate_linux_native_cargo_stage(
+        &self,
+        launch: &SpawnInTerminal,
+        structured_task: Option<&StructuredTaskHandle>,
+        cx: &App,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.is_local()
+                && !self.is_shared()
+                && !self.is_disconnected(cx)
+                && !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
+                    &self.worktree_store(),
+                    cx,
+                ),
+            "Native Cargo profiling requires a trusted local Project"
+        );
+        anyhow::ensure!(
+            !structured_task.is_some_and(|handle| handle.state().is_terminal()),
+            "Native Cargo Task was cancelled before launch"
+        );
+        crate::task_store::validate_experimental_task_requirements(launch, cx)
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        feature = "cargo-workspace",
+        feature = "rust-coverage"
+    ))]
+    pub fn start_selected_linux_native_cargo_runtime_task(
+        &mut self,
+        workload: crate::cargo_workspace_store::LinuxNativeCargoWorkload,
+        installed_runner: PathBuf,
+        workload_arguments: Vec<String>,
+        structured_task: Option<StructuredTaskHandle>,
+        cx: &mut Context<Self>,
+    ) -> Result<
+        Task<Result<LinuxNativeCargoTask<crate::cargo_workspace_store::LinuxNativeCargoRuntime>>>,
+    > {
+        use crate::cargo_workspace_store::LinuxNativeCargoRuntime;
+
+        let launch = workload.stage_launch("Prepare the selected Cargo workload");
+        self.validate_linux_native_cargo_stage(&launch, structured_task.as_ref(), cx)?;
+        let store = self.cargo_workspace_store().clone();
+        let filesystem = self.fs.clone();
+        Ok(cx.spawn(async move |project, cx| {
+            let workload = store
+                .update(cx, |store, cx| {
+                    store.renew_linux_native_cargo_workload(workload, cx)
+                })?
+                .await?;
+            let (workload, invocation, runner) = cx
+                .background_spawn({
+                    let filesystem = filesystem.clone();
+                    async move {
+                        let (invocation, runner) = workload
+                            .runtime_invocation(
+                                filesystem.as_ref(),
+                                installed_runner,
+                                workload_arguments,
+                            )
+                            .await?;
+                        Ok::<_, anyhow::Error>((workload, invocation, runner))
+                    }
+                })
+                .await?;
+            let (builder, observation) = project.update(cx, |project, cx| {
+                project.validate_linux_native_cargo_stage(&launch, structured_task.as_ref(), cx)?;
+                TerminalBuilder::new_with_native_cargo_runtime_task(
+                    launch,
+                    structured_task.clone(),
+                    invocation,
+                    cx.entity_id().as_u64(),
+                    cx,
+                )
+            })??;
+            let builder = builder.await?;
+            project.update(cx, |project, cx| {
+                let terminal = project.register_task_terminal(builder, structured_task, cx);
+                let completion = cx.spawn(async move |_, cx| {
+                    let terminal::LinuxNativeTaskOutcome::Completed(status, Some(observed)) =
+                        observation.finish().await?
+                    else {
+                        anyhow::bail!(
+                            "The selected Cargo preparation did not return its runtime environment"
+                        );
+                    };
+                    anyhow::ensure!(status.success(), "The selected Cargo preparation failed");
+                    let workload = store
+                        .update(cx, |store, cx| {
+                            store.renew_linux_native_cargo_workload(workload, cx)
+                        })?
+                        .await?;
+                    let runner = cx
+                        .background_spawn(async move {
+                            runner.revalidate(filesystem.as_ref()).await?;
+                            Ok::<_, anyhow::Error>(runner)
+                        })
+                        .await?;
+                    Ok(LinuxNativeCargoRuntime {
+                        workload,
+                        runner,
+                        observed,
+                    })
+                });
+                LinuxNativeCargoTask {
+                    terminal,
+                    completion,
+                }
+            })
+        }))
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        feature = "cargo-workspace",
+        feature = "rust-coverage"
+    ))]
+    pub fn start_selected_linux_native_cargo_profile_task(
+        &mut self,
+        mut runtime: crate::cargo_workspace_store::LinuxNativeCargoRuntime,
+        collector: PathBuf,
+        structured_task: Option<StructuredTaskHandle>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoTask<terminal::SealedNativeProfileTask>>>> {
+        let launch = runtime
+            .workload
+            .stage_launch("Capture the selected Cargo profile");
+        self.validate_linux_native_cargo_stage(&launch, structured_task.as_ref(), cx)?;
+        let store = self.cargo_workspace_store().clone();
+        let filesystem = self.fs.clone();
+        let executor = cx.background_executor().clone();
+        Ok(cx.spawn(async move |project, cx| {
+            runtime.workload = store
+                .update(cx, |store, cx| {
+                    store.renew_linux_native_cargo_workload(runtime.workload, cx)
+                })?
+                .await?;
+            let (runtime, invocation, report, collector_image) = cx
+                .background_spawn({
+                    let filesystem = filesystem.clone();
+                    async move {
+                        let report = terminal::NativeProfileTaskReservation::new()?;
+                        let (invocation, collector_image) = runtime
+                            .profile_invocation(filesystem.as_ref(), collector, &report, &executor)
+                            .await?;
+                        Ok::<_, anyhow::Error>((runtime, invocation, report, collector_image))
+                    }
+                })
+                .await?;
+            let (builder, observation) = project.update(cx, |project, cx| {
+                project.validate_linux_native_cargo_stage(&launch, structured_task.as_ref(), cx)?;
+                TerminalBuilder::new_with_native_cargo_profile_task(
+                    launch,
+                    structured_task.clone(),
+                    invocation,
+                    report,
+                    cx.entity_id().as_u64(),
+                    cx,
+                )
+            })??;
+            let builder = builder.await?;
+            project.update(cx, |project, cx| {
+                let terminal = project.register_task_terminal(builder, structured_task, cx);
+                let completion = cx.spawn(async move |_, cx| {
+                    let terminal::LinuxNativeTaskOutcome::Completed(status, Some(profile)) =
+                        observation.finish().await?
+                    else {
+                        anyhow::bail!("Native Linux profiling did not return a sealed recording");
+                    };
+                    anyhow::ensure!(status.success(), "Native Linux profiling failed");
+                    store
+                        .update(cx, |store, cx| {
+                            store.renew_linux_native_cargo_workload(runtime.workload, cx)
+                        })?
+                        .await?;
+                    cx.background_spawn(async move {
+                        collector_image.revalidate(filesystem.as_ref()).await?;
+                        runtime.runner.revalidate(filesystem.as_ref()).await
+                    })
+                    .await?;
+                    Ok(profile)
+                });
+                LinuxNativeCargoTask {
+                    terminal,
+                    completion,
+                }
             })
         }))
     }

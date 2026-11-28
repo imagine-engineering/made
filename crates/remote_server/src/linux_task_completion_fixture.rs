@@ -871,6 +871,13 @@ fn write_native_cargo_fixture(directory: &Path) -> Result<()> {
         (
             "runner/src/main.rs",
             r#"fn main() {
+    if let Some(value) = std::env::var_os("COPPER_PROJECT_PROFILE_FIXTURE") {
+        assert_eq!(value, "project-only runtime sentinel");
+        assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(),
+            ["1200000", "literal two words", "", "$PROJECT_CARGO_PROFILE"]);
+        assert!(std::env::var("LD_LIBRARY_PATH").is_ok_and(|value| value.contains("fixture-loader")));
+        std::fs::write("target/profiled-project-workload", "selected").expect("profile workload marker");
+    }
     let values: Vec<_> = (0..4096).collect();
     let iterations = std::env::args().nth(1).and_then(|value| value.parse().ok()).unwrap_or(1);
     let total: u64 = (0..iterations).map(|_| stats::score(std::hint::black_box(&values))).sum();
@@ -1293,10 +1300,23 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
         worktree_store::WorktreeStoreEvent,
     };
     use std::sync::Arc;
-    use terminal::{HeadlessTerminal, LinuxNativeTaskOutcome, TerminalBuilder};
+    use terminal::HeadlessTerminal;
 
     let directory = directory.canonicalize()?;
     write_native_cargo_fixture(&directory)?;
+    std::fs::write(
+        directory.join("runner/build.rs"),
+        r#"fn main() {
+    let directory = std::path::PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"))
+        .join("fixture-loader");
+    std::fs::create_dir_all(&directory).expect("fixture loader");
+    println!("cargo:rustc-link-search=native={}", directory.display());
+}"#,
+    )?;
+    let runner = std::env::var_os("RUST_TOOLS_LINUX_RUNTIME_OBSERVER")
+        .context("The separately packaged Linux Cargo observer is required")?;
+    let collector = std::env::var_os("RUST_TOOLS_LINUX_SAMPLY")
+        .context("The installed native Samply is required")?;
     let cargo = std::env::var_os("RUST_TOOLS_NATIVE_BUILD_CARGO")
         .context("The independently installed native Cargo is required")?;
     let cargo = std::path::PathBuf::from(cargo).canonicalize()?;
@@ -1316,6 +1336,10 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
         ("PATH".into(), search_path),
         ("CARGO_NET_OFFLINE".into(), "true".into()),
         (
+            "COPPER_PROJECT_PROFILE_FIXTURE".into(),
+            "project-only runtime sentinel".into(),
+        ),
+        (
             "CARGO_HOME".into(),
             cargo_home.to_str().context("Invalid Cargo home")?.into(),
         ),
@@ -1333,10 +1357,6 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
         "Fixture Cargo lock preparation failed"
     );
 
-    let report = NativeProfileTaskReservation::new()?;
-    let profile_path = report.profile_path();
-    let symbols_path = report.symbols_path();
-    let capture_path = profile_path.clone();
     let (send, receive) = std::sync::mpsc::sync_channel(1);
     gpui_platform::headless().run(move |cx| {
         release_channel::init(semver::Version::new(1, 16, 2), cx);
@@ -1456,24 +1476,39 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
                 );
                 let backend = if headless { "headless" } else { "PTY" };
                 println!("{backend} Project admitted the exact fresh Cargo output");
-                let executable = executable.to_str().context("Invalid Cargo executable path")?;
-                let invocation = samply_invocation(&directory, &capture_path, &[executable, "1200000"])?;
-                let (builder, observation) = cx.update(|cx| {
-                    TerminalBuilder::new_with_native_profile_task(
-                        task::SpawnInTerminal { label: "Profile the Cargo executable".into(), ..Default::default() },
-                        None, invocation, report, 1, cx,
+                let marker = target.join("profiled-project-workload");
+                let preparation = project.update(cx, |project, cx| {
+                    project.start_selected_linux_native_cargo_runtime_task(
+                        workload,
+                        runner.into(),
+                        ["1200000", "literal two words", "", "$PROJECT_CARGO_PROFILE"].map(str::to_owned).to_vec(),
+                        None,
+                        cx,
                     )
-                })?;
-                let builder = builder.await?;
-                let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
-                let ordinary = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
-                let (captured, ordinary) = futures::future::join(observation.finish(), ordinary).await;
-                let LinuxNativeTaskOutcome::Completed(status, Some(profile)) = captured? else {
-                    anyhow::bail!("Profiling the built executable did not produce a sealed pair");
-                };
-                ensure!(status.success() && ordinary == Some(status), "Profile and its Terminal did not agree on the capture exit");
-                let samples = cx.background_spawn(async move { verify_samply_profile(profile) }).await?;
-                println!("Selected Cargo build and capture retained {samples} samples and mapped stats::weight");
+                })?.await.context("Starting the Project-owned Cargo runtime preparation")?;
+                let ordinary = preparation.terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (runtime, status) = futures::future::join(preparation.completion, ordinary).await;
+                let runtime = runtime.context("Reading the admitted Cargo runtime")?;
+                ensure!(status.is_some_and(|status| status.success()), "Cargo runtime did not match its Terminal exit");
+                ensure!(!marker.exists(), "Cargo runtime preparation executed the selected workload");
+                let capture = project.update(cx, |project, cx| {
+                    project.start_selected_linux_native_cargo_profile_task(runtime, collector.into(), None, cx)
+                })?.await.context("Starting the Project-owned Samply capture")?;
+                let ordinary = capture.terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (profile, status) = futures::future::join(capture.completion, ordinary).await;
+                let profile = profile.context("Verifying the Project-owned Samply capture")?;
+                ensure!(status.is_some_and(|status| status.success()), "Samply capture did not match its Terminal exit");
+                ensure!(std::fs::read(&marker)? == b"selected", "Samply did not run the admitted Cargo workload");
+                let samples = cx.background_spawn(async move {
+                    let artifacts = profile.read()?;
+                    for private in [b"project-only runtime sentinel".as_slice(), b"$PROJECT_CARGO_PROFILE"] {
+                        for artifact in [&artifacts.profile, &artifacts.symbols] {
+                            ensure!(!artifact.windows(private.len()).any(|bytes| bytes == private), "The Project profile leaked a Cargo runtime value");
+                        }
+                    }
+                    verify_samply_profile_bytes(artifacts)
+                }).await?;
+                println!("Selected Cargo build, runtime and capture retained {samples} samples and mapped stats::weight");
                 Ok(())
             };
             let result = match futures::future::select(Box::pin(run), deadline).await {
@@ -1486,12 +1521,7 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
             cx.update(|cx| cx.quit());
         }).detach();
     });
-    receive.recv()??;
-    ensure!(
-        !profile_path.exists() && !symbols_path.exists(),
-        "Selected Cargo profile retained its reservation"
-    );
-    Ok(())
+    receive.recv()?
 }
 
 #[derive(Clone, Copy)]

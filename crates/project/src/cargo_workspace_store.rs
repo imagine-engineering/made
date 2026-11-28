@@ -2618,6 +2618,145 @@ impl LinuxNativeCargoWorkload {
     pub fn working_directory(&self) -> &Path {
         self.build.intent.working_directory()
     }
+
+    pub(crate) fn stage_launch(&self, label: &str) -> task::SpawnInTerminal {
+        task::SpawnInTerminal {
+            id: self.build.intent.task_id().clone(),
+            label: label.into(),
+            cwd: Some(self.working_directory().to_path_buf()),
+            required_experimental_features: self
+                .build
+                .intent
+                .required_experimental_features
+                .clone(),
+            ..Default::default()
+        }
+    }
+
+    pub(crate) async fn runtime_invocation(
+        &self,
+        filesystem: &dyn fs::Fs,
+        packaged_runner: PathBuf,
+        workload_arguments: Vec<String>,
+    ) -> Result<(terminal::LinuxCargoRuntimeInvocation, LinuxCargoImage)> {
+        let runner = LinuxCargoImage(
+            seal_linux_native_cargo_executable(filesystem, &packaged_runner).await?,
+        );
+        let [subcommand, format, rest @ ..] = self.build.invocation.arguments() else {
+            anyhow::bail!("The admitted Cargo build recipe cannot form a runtime Task");
+        };
+        ensure!(
+            subcommand == "build" && format == "--message-format=json",
+            "The admitted Cargo build recipe cannot form a runtime Task"
+        );
+        let arguments = ["run", "--quiet"]
+            .into_iter()
+            .chain(rest.iter().map(String::as_str))
+            .chain(std::iter::once("--"))
+            .chain(workload_arguments.iter().map(String::as_str))
+            .map(str::to_owned)
+            .collect();
+        let invocation = terminal::TaskBuildInvocation::new(
+            self.build.invocation.program().to_path_buf(),
+            arguments,
+            self.working_directory().to_path_buf(),
+            self.build.invocation.environment().clone(),
+        )?;
+        Ok((
+            terminal::LinuxCargoRuntimeInvocation::new(
+                invocation,
+                self.executable(),
+                workload_arguments,
+                packaged_runner,
+            )?,
+            runner,
+        ))
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub(crate) struct LinuxCargoImage(NativeProbeFileSeal);
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl LinuxCargoImage {
+    pub(crate) async fn revalidate(&self, filesystem: &dyn fs::Fs) -> Result<PathBuf> {
+        let path = self.0.root.join(&self.0.relative);
+        let current = seal_linux_native_cargo_executable(filesystem, &path).await?;
+        ensure!(
+            native_build_file_seals_equal(&self.0, &current),
+            "An admitted Linux native profiling executable changed"
+        );
+        Ok(path)
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct LinuxNativeCargoRuntime {
+    pub(crate) workload: LinuxNativeCargoWorkload,
+    pub(crate) runner: LinuxCargoImage,
+    pub(crate) observed: terminal::ObservedTaskBuildInvocation,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl LinuxNativeCargoRuntime {
+    pub(crate) async fn profile_invocation(
+        &self,
+        filesystem: &dyn fs::Fs,
+        collector: PathBuf,
+        report: &terminal::NativeProfileTaskReservation,
+        executor: &BackgroundExecutor,
+    ) -> Result<(terminal::LinuxCargoProfileInvocation, LinuxCargoImage)> {
+        crate::cargo_workspace::validate_native_cargo_path(&collector)?;
+        let selected = filesystem.canonicalize(&collector).await?;
+        let collector_image =
+            LinuxCargoImage(seal_linux_native_cargo_executable(filesystem, &selected).await?);
+        let environment = [
+            "PATH",
+            "HOME",
+            "USER",
+            "LANG",
+            "LC_ALL",
+            "TMPDIR",
+            "XDG_CACHE_HOME",
+        ]
+        .into_iter()
+        .filter_map(|name| std::env::var_os(name).map(|value| (name, value)))
+        .map(|(name, value)| {
+            let value = value
+                .into_string()
+                .map_err(|_| anyhow!("The Linux collector environment must be UTF-8"))?;
+            Ok((name.to_owned(), value))
+        })
+        .collect::<Result<HashMap<_, _>>>()?;
+        let directory = self.workload.working_directory();
+        run_native_collector_version(&selected, directory, &environment, executor).await?;
+        collector_image.revalidate(filesystem).await?;
+        ensure!(
+            filesystem.canonicalize(&collector).await? == selected,
+            "The configured Linux Samply collector changed"
+        );
+        let reservation = report.profile_path();
+        let arguments = crate::cargo_workspace::native_samply_capture_arguments(
+            reservation
+                .to_str()
+                .context("Native recording path is not UTF-8")?,
+        );
+        let invocation = terminal::TaskBuildInvocation::new(
+            selected,
+            arguments,
+            directory.to_path_buf(),
+            environment.into_iter().collect(),
+        )?;
+        let runner = self.runner.revalidate(filesystem).await?;
+        Ok((
+            terminal::LinuxCargoProfileInvocation::new(invocation, self.observed.clone(), runner)?
+                .with_image_digests(
+                    collector_image.0.fingerprint,
+                    self.workload.executable.fingerprint,
+                ),
+            collector_image,
+        ))
+    }
 }
 
 pub struct CargoNativeBuildIntent {
@@ -7506,6 +7645,76 @@ impl CargoWorkspaceStore {
                         Either::Right(_) => {
                             Err(anyhow!("Native Linux Cargo executable admission timed out"))
                         }
+                    }
+                })
+                .await?;
+            store.update(cx, |store, cx| {
+                store.validate_native_build_intent(&workload.build.intent, cx)
+            })??;
+            Ok(workload)
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub(crate) fn renew_linux_native_cargo_workload(
+        &mut self,
+        workload: LinuxNativeCargoWorkload,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoWorkload>>> {
+        self.validate_native_build_intent(&workload.build.intent, cx)?;
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Native Build filesystem is unavailable")?
+            .clone();
+        let executor = cx.background_executor().clone();
+        Ok(cx.spawn(async move |store, cx| {
+            let project = workload
+                .build
+                .intent
+                .project
+                .upgrade()
+                .context("Native Cargo Project disappeared")?;
+            project
+                .update(cx, |project, cx| {
+                    project.revalidate_native_task_environment(
+                        &workload.build.terminal_environment,
+                        cx,
+                    )
+                })?
+                .await?;
+            let workload = cx
+                .background_spawn(async move {
+                    let check = async {
+                        revalidate_linux_native_cargo_build(
+                            filesystem.as_ref(),
+                            &workload.build,
+                            true,
+                        )
+                        .await?;
+                        let current = seal_native_build_executable(
+                            filesystem.as_ref(),
+                            &workload.executable.root,
+                            &workload.executable(),
+                        )
+                        .await?;
+                        ensure!(
+                            native_build_file_seals_equal(&workload.executable, &current),
+                            "The selected Cargo executable changed after its admitted build"
+                        );
+                        Ok(workload)
+                    };
+                    match futures::future::select(
+                        check.boxed(),
+                        executor.timer(CARGO_METADATA_TIMEOUT).boxed(),
+                    )
+                    .await
+                    {
+                        Either::Left((result, _)) => result,
+                        Either::Right(_) => Err(anyhow!(
+                            "Native Linux Cargo workload revalidation timed out"
+                        )),
                     }
                 })
                 .await?;

@@ -242,12 +242,12 @@ pub(crate) fn configure_profile_workload(
     command: &mut Command,
     runner_path: &Path,
     workload: &TaskBuildInvocation,
+    expected_digest: Option<[u8; 32]>,
 ) -> io::Result<()> {
     use std::io::Write as _;
 
     let runner = seal_static_runner(runner_path)?;
-    let program = open_regular_image(workload.program())?;
-    verify_elf_image(&program, false)?;
+    let program = open_profile_image(workload.program(), expected_digest)?;
     let payload = workload.encode_helper_environment()?;
     let payload = seal_file(c"zed-cargo-workload", 0o400, |file| {
         file.write_all(payload.as_bytes())
@@ -261,6 +261,43 @@ pub(crate) fn configure_profile_workload(
         payload.to_string(),
         program.to_string(),
     ]);
+    Ok(())
+}
+
+pub(crate) fn open_profile_image(path: &Path, digest: Option<[u8; 32]>) -> io::Result<File> {
+    let image = open_regular_image(path)?;
+    verify_elf_image(&image, false)?;
+    if let Some(expected) = digest {
+        verify_profile_image_digest(&image, expected)?;
+    }
+    Ok(image)
+}
+
+fn verify_profile_image_digest(program: &File, expected: [u8; 32]) -> io::Result<()> {
+    use sha2::{Digest as _, Sha256};
+
+    const MAX_PROFILE_IMAGE_BYTES: u64 = 256 * 1024 * 1024;
+    let metadata = program.metadata()?;
+    if metadata.len() > MAX_PROFILE_IMAGE_BYTES {
+        return Err(invalid_runtime());
+    }
+    let mut reader =
+        File::open(descriptor_path(program.as_raw_fd()))?.take(MAX_PROFILE_IMAGE_BYTES + 1);
+    let mut digest = Sha256::new();
+    let bytes = io::copy(&mut reader, &mut digest)?;
+    let current = program.metadata()?;
+    let actual: [u8; 32] = digest.finalize().into();
+    if bytes != metadata.len()
+        || metadata.len() != current.len()
+        || metadata.ctime() != current.ctime()
+        || metadata.ctime_nsec() != current.ctime_nsec()
+        || expected != actual
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "An admitted Linux profiling executable changed before capture",
+        ));
+    }
     Ok(())
 }
 
@@ -466,4 +503,22 @@ fn invalid_runtime() -> io::Error {
         io::ErrorKind::InvalidData,
         "Invalid Linux Cargo runtime observation",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest as _, Sha256};
+
+    #[test]
+    fn selected_workload_digest_checks_the_open_image() -> io::Result<()> {
+        let file = tempfile::NamedTempFile::new()?;
+        std::fs::write(file.path(), b"admitted Cargo executable")?;
+        let program = open_regular_image(file.path())?;
+        let expected = Sha256::digest(b"admitted Cargo executable").into();
+        verify_profile_image_digest(&program, expected)?;
+        std::fs::write(file.path(), b"modified Cargo executable")?;
+        assert!(verify_profile_image_digest(&program, expected).is_err());
+        Ok(())
+    }
 }

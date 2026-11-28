@@ -4435,22 +4435,8 @@ pub fn compile_native_profile_task(
         ]),
     };
     let group = group.with_resolved_files(group.files.clone())?;
-    let mut arguments = vec![
-        "record".to_string(),
-        "--save-only".to_string(),
-        "--no-open".to_string(),
-        "--main-thread-only".to_string(),
-        "--unstable-presymbolicate".to_string(),
-        "--include-args=0".to_string(),
-        "--duration".to_string(),
-        "30".to_string(),
-        "-r".to_string(),
-        "100".to_string(),
-        "-o".to_string(),
-        profile_path.to_string(),
-        "--".to_string(),
-        workload.command,
-    ];
+    let mut arguments = native_samply_capture_arguments(profile_path);
+    arguments.push(workload.command);
     arguments.extend(workload.arguments);
     task_template.env.extend(workload.environment);
     validate_native_profile_command(&NativeProfileCommand {
@@ -4487,6 +4473,24 @@ pub fn compile_native_profile_task(
         }],
     });
     Ok(task_template)
+}
+
+pub(crate) fn native_samply_capture_arguments(profile_path: &str) -> Vec<String> {
+    vec![
+        "record".to_string(),
+        "--save-only".to_string(),
+        "--no-open".to_string(),
+        "--main-thread-only".to_string(),
+        "--unstable-presymbolicate".to_string(),
+        "--include-args=0".to_string(),
+        "--duration".to_string(),
+        "30".to_string(),
+        "-r".to_string(),
+        "100".to_string(),
+        "-o".to_string(),
+        profile_path.to_string(),
+        "--".to_string(),
+    ]
 }
 
 fn validate_native_profile_command(command: &NativeProfileCommand) -> Result<()> {

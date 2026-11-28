@@ -1,6 +1,7 @@
 use crate::{
     linux_cargo_runtime::{
-        LinuxCargoRuntimeObserver, configure_profile_workload, validate_workload_environment,
+        LinuxCargoRuntimeObserver, configure_profile_workload, open_profile_image,
+        validate_workload_environment,
     },
     task_actor::{AuthenticatedTaskActor, CoverageTaskParent, OriginalTaskActor},
     task_completion::{
@@ -527,6 +528,8 @@ struct CargoProfileRequest {
     collector: TaskBuildInvocation,
     workload: TaskBuildInvocation,
     runner: PathBuf,
+    workload_digest: Option<[u8; 32]>,
+    collector_digest: Option<[u8; 32]>,
 }
 
 impl LinuxCargoProfileInvocation {
@@ -539,6 +542,8 @@ impl LinuxCargoProfileInvocation {
             collector,
             workload: (*workload.invocation).clone(),
             runner,
+            workload_digest: None,
+            collector_digest: None,
         };
         invocation.validate()?;
         Ok(Self(invocation))
@@ -546,6 +551,12 @@ impl LinuxCargoProfileInvocation {
 
     pub fn collector(&self) -> &TaskBuildInvocation {
         &self.0.collector
+    }
+
+    pub fn with_image_digests(mut self, collector: [u8; 32], workload: [u8; 32]) -> Self {
+        self.0.collector_digest = Some(collector);
+        self.0.workload_digest = Some(workload);
+        self
     }
 }
 
@@ -555,6 +566,7 @@ impl CargoProfileRequest {
         validate_workload_environment(&self.workload)?;
         let arguments = self.collector.arguments();
         if self.collector.working_directory() != self.workload.working_directory()
+            || self.collector_digest.is_some() != self.workload_digest.is_some()
             || !self.runner.is_absolute()
             || self.runner.as_os_str().as_encoded_bytes().len() > 4096
             || self
@@ -1001,8 +1013,23 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
             let invocation = serde_json::from_slice::<CargoProfileRequest>(&request)
                 .map_err(|_| invalid_completion())?;
             invocation.validate()?;
-            let mut command = task_command(&invocation.collector, invocation.collector.program());
-            configure_profile_workload(&mut command, &invocation.runner, &invocation.workload)?;
+            let collector = invocation
+                .collector_digest
+                .map(|digest| open_profile_image(invocation.collector.program(), Some(digest)))
+                .transpose()?;
+            let mut command = match &collector {
+                Some(image) => task_command(
+                    &invocation.collector,
+                    format!("/proc/self/fd/{}", image.as_raw_fd()),
+                ),
+                None => task_command(&invocation.collector, invocation.collector.program()),
+            };
+            configure_profile_workload(
+                &mut command,
+                &invocation.runner,
+                &invocation.workload,
+                invocation.workload_digest,
+            )?;
             (run_profile_workload(command, &mut connection).await?, None)
         }
         LinuxTaskMode::CargoBuild => {
