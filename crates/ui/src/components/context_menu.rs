@@ -242,11 +242,14 @@ impl From<ContextMenuEntry> for ContextMenuItem {
     }
 }
 
+type MenuEntryGuard = Rc<dyn Fn(&App) -> bool>;
+
 pub struct ContextMenu {
     builder: Option<Rc<dyn Fn(Self, &mut Window, &mut Context<Self>) -> Self>>,
     items: Vec<ContextMenuItem>,
     focus_handle: FocusHandle,
     action_context: Option<FocusHandle>,
+    entry_guard: Option<MenuEntryGuard>,
     selected_index: Option<usize>,
     delayed: bool,
     clicked: bool,
@@ -355,6 +358,7 @@ impl ContextMenu {
                 items: Default::default(),
                 focus_handle,
                 action_context: None,
+                entry_guard: None,
                 selected_index: None,
                 delayed: false,
                 clicked: false,
@@ -444,6 +448,7 @@ impl ContextMenu {
                     items: Default::default(),
                     focus_handle,
                     action_context: None,
+                    entry_guard: None,
                     selected_index: None,
                     delayed: false,
                     clicked: false,
@@ -492,6 +497,7 @@ impl ContextMenu {
                 items: Default::default(),
                 focus_handle: focus_handle.clone(),
                 action_context: None,
+                entry_guard: None,
                 selected_index: None,
                 delayed: false,
                 clicked: false,
@@ -541,6 +547,7 @@ impl ContextMenu {
         );
 
         self.items = new_menu.items;
+        self.entry_guard = new_menu.entry_guard;
         self.ensure_visible_selection();
 
         cx.notify();
@@ -549,6 +556,20 @@ impl ContextMenu {
     pub fn context(mut self, focus: FocusHandle) -> Self {
         self.action_context = Some(focus);
         self
+    }
+
+    pub fn activate_entries_when(mut self, guard: impl Fn(&App) -> bool + 'static) -> Self {
+        self.entry_guard = Some(Rc::new(guard));
+        self
+    }
+
+    fn dismiss_if_entry_inactive(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.entry_guard.as_ref().is_none_or(|guard| guard(cx)) {
+            return false;
+        }
+        self.clicked = true;
+        cx.emit(DismissEvent);
+        true
     }
 
     fn ensure_visible_selection(&mut self) {
@@ -1006,6 +1027,9 @@ impl ContextMenu {
     }
 
     pub fn trigger_end_slot_handler(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.dismiss_if_entry_inactive(cx) {
+            return;
+        }
         let Some(entry) = self.selected_index.and_then(|ix| self.items.get(ix)) else {
             return;
         };
@@ -1038,6 +1062,9 @@ impl ContextMenu {
     }
 
     pub fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
+        if self.dismiss_if_entry_inactive(cx) {
+            return;
+        }
         let Some(ix) = self.selected_index else {
             return;
         };
@@ -1094,6 +1121,9 @@ impl ContextMenu {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.dismiss_if_entry_inactive(cx) {
+            return;
+        }
         let Some(ix) = self.selected_index else {
             return;
         };
@@ -1170,6 +1200,9 @@ impl ContextMenu {
     }
 
     pub fn end_slot(&mut self, _: &dyn Action, window: &mut Window, cx: &mut Context<Self>) {
+        if self.dismiss_if_entry_inactive(cx) {
+            return;
+        }
         let Some(item) = self.selected_index.and_then(|ix| self.items.get(ix)) else {
             return;
         };
@@ -1371,10 +1404,11 @@ impl ContextMenu {
     fn create_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
         parent_entity: Entity<ContextMenu>,
+        entry_guard: Option<MenuEntryGuard>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> (Entity<ContextMenu>, Subscription) {
-        let submenu = Self::build_submenu(builder, parent_entity, window, cx);
+        let submenu = Self::build_submenu(builder, parent_entity, entry_guard, window, cx);
 
         let dismiss_subscription = cx.subscribe(&submenu, |this, submenu, _: &DismissEvent, cx| {
             let should_dismiss_parent = submenu.read(cx).clicked;
@@ -1392,6 +1426,7 @@ impl ContextMenu {
     fn build_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
         parent_entity: Entity<ContextMenu>,
+        entry_guard: Option<MenuEntryGuard>,
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<ContextMenu> {
@@ -1409,6 +1444,7 @@ impl ContextMenu {
                 items: Default::default(),
                 focus_handle,
                 action_context: None,
+                entry_guard,
                 selected_index: None,
                 delayed: false,
                 clicked: false,
@@ -1467,7 +1503,7 @@ impl ContextMenu {
         }
 
         let (submenu, dismiss_subscription) =
-            Self::create_submenu(builder, cx.entity(), window, cx);
+            Self::create_submenu(builder, cx.entity(), self.entry_guard.clone(), window, cx);
 
         let flip_left = self
             .main_menu_observed_bounds
@@ -1543,8 +1579,10 @@ impl ContextMenu {
                     .await;
                 cx.update(|window, cx| {
                     this.update(cx, |this, cx| {
-                        this.cancel(&menu::Cancel, window, cx);
-                        window.dispatch_action(action, cx);
+                        if !this.dismiss_if_entry_inactive(cx) {
+                            this.cancel(&menu::Cancel, window, cx);
+                            window.dispatch_action(action, cx);
+                        }
                     })
                 })
             })
@@ -1658,9 +1696,12 @@ impl ContextMenu {
                             .when(selectable, |item| {
                                 item.on_click({
                                     let context = self.action_context.clone();
+                                    let entry_guard = self.entry_guard.clone();
                                     let keep_open_on_confirm = self.keep_open_on_confirm;
                                     move |_, window, cx| {
-                                        handler(context.as_ref(), window, cx);
+                                        if entry_guard.as_ref().is_none_or(|guard| guard(cx)) {
+                                            handler(context.as_ref(), window, cx);
+                                        }
                                         menu.update(cx, |menu, cx| {
                                             menu.clicked = true;
 
@@ -2244,7 +2285,12 @@ impl ContextMenu {
                                     })
                                     .on_click({
                                         let handler = handler.clone();
+                                        let entry_guard = self.entry_guard.clone();
                                         move |_, window, cx| {
+                                            if entry_guard.as_ref().is_some_and(|guard| !guard(cx))
+                                            {
+                                                return;
+                                            }
                                             handler(None, window, cx);
                                             this.update(cx, |this, cx| {
                                                 this.rebuild(window, cx);
@@ -2267,9 +2313,12 @@ impl ContextMenu {
                     )
                     .on_click({
                         let context = self.action_context.clone();
+                        let entry_guard = self.entry_guard.clone();
                         let keep_open_on_confirm = self.keep_open_on_confirm;
                         move |_, window, cx| {
-                            handler(context.as_ref(), window, cx);
+                            if entry_guard.as_ref().is_none_or(|guard| guard(cx)) {
+                                handler(context.as_ref(), window, cx);
+                            }
                             menu.update(cx, |menu, cx| {
                                 menu.clicked = true;
                                 if keep_open_on_confirm {

@@ -4395,8 +4395,11 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let is_queue_row = id == ordered_operation_root_id();
         self.host.select(id.clone());
+        if self.host.selected() != Some(&id) || self.host.selected_index().is_none() {
+            return;
+        }
+        let is_queue_row = id == ordered_operation_root_id();
         let operation = self.operation_selections.get(&id);
         let is_operation_row = operation.is_some();
         let can_run_operation =
@@ -4539,8 +4542,20 @@ impl DependenciesPanel {
         }
         let focus_handle = self.focus_handle.clone();
         let panel = cx.weak_entity();
+        let menu_panel = panel.clone();
+        let menu_view = self.view;
         let context_menu = ui::ContextMenu::build(window, cx, move |menu, _, _| {
-            menu.context(focus_handle).map(|menu| {
+            let menu = menu.context(focus_handle).activate_entries_when(move |cx| {
+                menu_panel
+                    .read_with(cx, |panel, cx| {
+                        panel.view == menu_view
+                            && panel.host.selected() == Some(&id)
+                            && panel.host.selected_index().is_some()
+                            && !panel.host_unavailable(cx)
+                    })
+                    .unwrap_or(false)
+            });
+            menu.map(|menu| {
                 let mut menu = menu;
                 if is_operation_row {
                     if can_run_operation {
@@ -17843,6 +17858,76 @@ mod tests {
                 });
                 cx.run_until_parked();
             };
+            if provider == GraphFixtureProvider::Gradle {
+                #[derive(Debug)]
+                enum MenuActivation {
+                    Keyboard,
+                    Pointer,
+                    Shortcut,
+                }
+                let replacement = panel.read_with(cx, |panel, _| {
+                    panel
+                        .host
+                        .visible_rows()
+                        .iter()
+                        .find(|row| row.label == "runtime 📦 α")
+                        .expect("a second eligible configuration")
+                        .id
+                        .clone()
+                });
+                for activation in [
+                    MenuActivation::Keyboard,
+                    MenuActivation::Pointer,
+                    MenuActivation::Shortcut,
+                ] {
+                    select(cx);
+                    open_selected_row_menu(&panel, cx);
+                    select_open_menu_item(cx, "Collect offline graph");
+                    let item = cx
+                        .debug_bounds("MENU_ITEM-Collect offline graph")
+                        .expect("collect command bounds");
+                    if matches!(activation, MenuActivation::Shortcut) {
+                        cx.dispatch_action(CollectSelectedGraph);
+                        cx.run_until_parked();
+                        assert_eq!(
+                            commands.load(Ordering::SeqCst),
+                            0,
+                            "the menu delays shortcut dispatch before running the command"
+                        );
+                    }
+                    panel.update(cx, |panel, cx| {
+                        assert!(panel.graph_selections.contains_key(&replacement));
+                        panel.host.select(replacement.clone());
+                        cx.notify();
+                    });
+                    match activation {
+                        MenuActivation::Keyboard => cx.update(|window, cx| {
+                            window.dispatch_action(
+                                cx.build_action("menu::Confirm", None)
+                                    .expect("confirm the previous row command"),
+                                cx,
+                            );
+                        }),
+                        MenuActivation::Pointer => {
+                            cx.simulate_click(item.center(), Default::default());
+                        }
+                        MenuActivation::Shortcut => {}
+                    }
+                    pump(cx);
+                    assert_eq!(
+                        commands.load(Ordering::SeqCst),
+                        0,
+                        "an open row menu must never collect the replacement configuration via {activation:?}"
+                    );
+                    panel.read_with(cx, |panel, _| {
+                        assert!(panel.graph_context_menu.is_none());
+                        assert_eq!(panel.host.selected(), Some(&replacement));
+                    });
+                    let focus = panel.read_with(cx, |panel, _| panel.focus_handle.clone());
+                    assert!(cx.update(|window, _| focus.is_focused(window)));
+                }
+                select(cx);
+            }
             invoke_selected_row_command(&panel, cx, "Collect offline graph");
             cx.run_until_parked();
             assert_eq!(commands.load(Ordering::SeqCst), 1);
