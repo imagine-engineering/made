@@ -127,8 +127,10 @@ SDK probe reads the exact classfile's attached source without starting source
 discovery. It returns the original bytes for a matching cached archive and
 reports absence for missing, wrong-entry, and stale attachments. In the
 stale case the stock content request invokes the source downloader. The probe's
-handler only runs in the test fixture. Editor navigation into cached Maven
-sources and explicit selected-archive acquisition remain open.
+handler only runs in the test fixture. When the pinned Java proxy resolves an
+attached source in a local Maven project, Go to Definition opens the generated
+copy read-only. The project source stays editable. Native and connected
+acceptance, plus explicit selected-archive acquisition, remain open.
 
 ## Accepted decisions and remaining gates
 

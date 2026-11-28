@@ -254,6 +254,28 @@ struct MavenKotlinDefinitionScope {
 }
 
 impl LspStore {
+    pub(super) fn pinned_jdtls_proxy_source(
+        &self,
+        uri: &lsp::Uri,
+        server_id: LanguageServerId,
+    ) -> Option<PathBuf> {
+        let server = self.language_server_for_id(server_id)?;
+        if server.name().0.as_ref() != "jdtls"
+            || server.version().as_deref() != Some(PINNED_COMPANION_JDTLS_VERSION)
+            || !matches!(
+                server
+                    .binary()
+                    .path
+                    .file_name()
+                    .and_then(|name| name.to_str()),
+                Some("java-lsp-proxy" | "java-lsp-proxy.exe")
+            )
+        {
+            return None;
+        }
+        jdtls_cached_classfile_path(uri, &std::env::temp_dir())
+    }
+
     fn maven_kotlin_definition_scope(
         &self,
         source: &ProjectPath,
@@ -508,10 +530,10 @@ fn jdtls_cached_classfile_path(uri: &lsp::Uri, temp_dir: &Path) -> Option<PathBu
     .then_some(path)
 }
 
-fn jdtls_cached_kotlin_source_name(
+pub(super) fn jdtls_cached_classfile_uri(
     classfile: &Path,
     temp_dir: &Path,
-) -> anyhow::Result<Option<String>> {
+) -> anyhow::Result<Option<url::Url>> {
     const MAX_URI_BYTES: u64 = 16 * 1024;
     // The pinned Java extension caches classfile contents under a Java filename and
     // stores the original URI in a sidecar so a new proxy can recover the mapping.
@@ -541,12 +563,22 @@ fn jdtls_cached_kotlin_source_name(
     let Ok(original) = url::Url::parse(original.trim()) else {
         return Ok(None);
     };
-    let Some(source_path) = original.path().strip_prefix("/classes/") else {
-        return Ok(None);
-    };
     if original.scheme() != "jdt" || original.host_str() != Some("contents") {
         return Ok(None);
     }
+    Ok(Some(original))
+}
+
+fn jdtls_cached_kotlin_source_name(
+    classfile: &Path,
+    temp_dir: &Path,
+) -> anyhow::Result<Option<String>> {
+    let Some(original) = jdtls_cached_classfile_uri(classfile, temp_dir)? else {
+        return Ok(None);
+    };
+    let Some(source_path) = original.path().strip_prefix("/classes/") else {
+        return Ok(None);
+    };
     let filename = source_path.rsplit('/').next().unwrap_or_default();
     let filename = percent_encoding::percent_decode_str(filename).decode_utf8()?;
     Ok(filename.ends_with(".kt").then(|| filename.into_owned()))

@@ -13191,6 +13191,8 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) -> Task<Result<Entity<Buffer>>> {
         let path_style = self.worktree_store.read(cx).path_style();
+        #[cfg(feature = "jvm-tools")]
+        let jdtls_proxy_source = self.pinned_jdtls_proxy_source(&abs_path, language_server_id);
         cx.spawn(async move |lsp_store, cx| {
             // Escape percent-encoded string.
             let current_scheme = abs_path.scheme().to_owned();
@@ -13276,6 +13278,22 @@ impl LspStore {
                     })
                 })?
                 .await?;
+            #[cfg(feature = "jvm-tools")]
+            if let Some(classfile) = jdtls_proxy_source
+                && cx
+                    .background_executor()
+                    .spawn(async move {
+                        jdtls_ext::jdtls_cached_classfile_uri(&classfile, &std::env::temp_dir())
+                    })
+                    .await
+                    .log_err()
+                    .flatten()
+                    .is_some()
+            {
+                buffer.update(cx, |buffer, cx| {
+                    buffer.set_capability(Capability::ReadOnly, cx)
+                });
+            }
             // we want to adhere to the read-only settings of the worktree we came from in case we opened an invisible one
             if let Some((source_ws, worktree_root)) = source_ws {
                 buffer.update(cx, |buffer, cx| {

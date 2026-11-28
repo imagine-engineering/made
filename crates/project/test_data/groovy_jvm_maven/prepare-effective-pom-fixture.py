@@ -29,7 +29,16 @@ def main():
     probe = "ArtifactProbe" if args.source_archives else "EffectivePomProbe"
     source = project / "src/main/java/evidence" / f"{probe}.java"
     source.parent.mkdir(parents=True)
-    source.write_text(f"package evidence; public class {probe} {{}}\n")
+    if args.source_archives:
+        source.write_text(
+            "package evidence;\n"
+            "import org.apache.commons.lang3.StringUtils;\n"
+            "public class ArtifactProbe {\n"
+            '    String check() { return StringUtils.trim(" value "); }\n'
+            "}\n"
+        )
+    else:
+        source.write_text(f"package evidence; public class {probe} {{}}\n")
     if args.source_archives:
         pom = """<project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>

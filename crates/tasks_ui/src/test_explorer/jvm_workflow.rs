@@ -62,6 +62,17 @@ async fn start_cached_fixture_jdtls(
     bundles: &[std::path::PathBuf],
     cx: &mut TestAppContext,
 ) -> (Entity<Project>, WorktreeId, tempfile::TempDir) {
+    start_cached_fixture_java_provider(root, options, bundles, None, cx).await
+}
+
+#[cfg(all(test, unix))]
+async fn start_cached_fixture_java_provider(
+    root: &std::path::Path,
+    options: serde_json::Value,
+    bundles: &[std::path::PathBuf],
+    proxy: Option<std::path::PathBuf>,
+    cx: &mut TestAppContext,
+) -> (Entity<Project>, WorktreeId, tempfile::TempDir) {
     use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher};
     use project::trusted_worktrees::{self, PathTrust, TrustedWorktrees};
 
@@ -85,11 +96,32 @@ async fn start_cached_fixture_jdtls(
     let launcher = cached_jvm_fixture_path("GROOVY_JDTLS_LAUNCHER");
     let provider_java = cached_jvm_fixture_path("GROOVY_LSP_JAVA_HOME");
     let provider_data = tempfile::tempdir().expect("fresh JDTLS provider state");
+    let mut arguments = vec![
+        format!("--java-executable={}/bin/java", provider_java.display()),
+        "-data".to_owned(),
+        provider_data.path().display().to_string(),
+    ];
+    let mut initialization_options = serde_json::json!({
+        "settings": {"java": &options},
+        "bundles": bundles,
+    });
+    let executable = if let Some(proxy) = proxy {
+        arguments.splice(
+            ..0,
+            [
+                provider_data.path().display().to_string(),
+                launcher.display().to_string(),
+            ],
+        );
+        initialization_options["extendedClientCapabilities"]["classFileContentsSupport"] =
+            serde_json::Value::Bool(true);
+        proxy
+    } else {
+        launcher
+    };
     let settings = serde_json::json!({"lsp": {"jdtls": {
-        "binary": {"path": launcher, "arguments": [
-            format!("--java-executable={}/bin/java", provider_java.display()),
-            "-data", provider_data.path().display().to_string(),
-        ], "env": {"JAVA_HOME": provider_java, "JAVA_TOOL_OPTIONS": "-Djava.net.preferIPv4Stack=true"}},
+        "binary": {"path": executable, "arguments": arguments,
+            "env": {"JAVA_HOME": provider_java, "JAVA_TOOL_OPTIONS": "-Djava.net.preferIPv4Stack=true"}},
         "settings": {"java": &options},
     }}});
     cx.executor().allow_parking();
@@ -140,14 +172,148 @@ async fn start_cached_fixture_jdtls(
         "Java",
         FakeLspAdapter {
             name: "jdtls",
-            initialization_options: Some(serde_json::json!({
-                "settings": {"java": options},
-                "bundles": bundles,
-            })),
+            initialization_options: Some(initialization_options),
             ..Default::default()
         },
     );
     (project, worktree_id, provider_data)
+}
+
+#[cfg(all(test, unix))]
+#[gpui::test]
+#[ignore = "requires the pinned Java proxy, JDTLS, and a cached Maven Java sources archive"]
+async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut TestAppContext) {
+    use editor::{SelectionEffects, actions::GoToDefinition};
+    use language::{Capability, LocalFile as _, Point};
+    use project::jvm_project::JdtlsImportedBuildKind;
+
+    let root = cached_jvm_fixture_path("GROOVY_MAVEN_SOURCE_ROOT");
+    let settings = cached_jvm_fixture_path("GROOVY_MAVEN_SOURCE_SETTINGS");
+    let expected = std::fs::read_to_string(cached_jvm_fixture_path("GROOVY_MAVEN_ATTACHED_SOURCE"))
+        .expect("exact cached dependency source");
+    let (project, worktree_id, _provider_data) = start_cached_fixture_java_provider(
+        &root,
+        serde_json::json!({
+            "autobuild": {"enabled": false},
+            "configuration": {"maven": {"userSettings": settings}},
+            "import": {"gradle": {"enabled": false}, "maven": {
+                "enabled": true, "offline": {"enabled": true},
+            }},
+            "maven": {"downloadSources": false},
+            "eclipse": {"downloadSources": false},
+        }),
+        &[cached_jvm_fixture_path("GROOVY_MAVEN_MODEL_JAR")],
+        Some(cached_jvm_fixture_path("GROOVY_JAVA_PROXY")),
+        cx,
+    )
+    .await;
+    let path = root.join("src/main/java/evidence/ArtifactProbe.java");
+    let contents = std::fs::read_to_string(&path).expect("fixture source");
+    let (row, column) = contents
+        .lines()
+        .enumerate()
+        .find_map(|(row, line)| {
+            line.find("StringUtils.trim")
+                .map(|column| (row, column + 2))
+        })
+        .expect("Maven dependency reference");
+    let position = Point::new(row as u32, column as u32);
+    let java_project_path = project.read_with(cx, |project, cx| {
+        project
+            .find_project_path(&path, cx)
+            .expect("fixture worktree source")
+    });
+    let (buffer, _open) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path.clone(), cx)
+        })
+        .await
+        .expect("attach the Java language server");
+    assert_ne!(
+        buffer.read_with(cx, |buffer, _| buffer.capability()),
+        Capability::ReadOnly
+    );
+    let store = project.read_with(cx, |project, _| project.lsp_store());
+    let deadline = Instant::now() + Duration::from_secs(75);
+    let mut refresh_at = Instant::now();
+    loop {
+        cx.run_until_parked();
+        if store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current
+                        && snapshot.projects.iter().any(|project| {
+                            project.membership.is_imported()
+                                && project.imported_build_kind == JdtlsImportedBuildKind::Maven
+                        })
+                })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "pinned JDTLS did not import the Maven fixture"
+        );
+        if Instant::now() >= refresh_at {
+            store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(1);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
+    let (container, cx) =
+        cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
+    let workspace = container.read_with(cx, |container, _| container.workspace().clone());
+    let origin = workspace
+        .update_in(cx, |workspace, window, cx| {
+            workspace.open_path(java_project_path, None, true, window, cx)
+        })
+        .await
+        .expect("open Java in the workspace")
+        .downcast::<editor::Editor>()
+        .expect("source editor");
+    let navigation = origin.update_in(cx, |editor, window, cx| {
+        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
+            selections.select_ranges([position..position])
+        });
+        editor.go_to_definition(&GoToDefinition::default(), window, cx)
+    });
+    navigation.await.expect("execute Go to Definition");
+    workspace.read_with(cx, |workspace, cx| {
+        let destination = workspace.active_item(cx).expect("the destination editor");
+        let editor = destination
+            .downcast::<editor::Editor>()
+            .expect("destination editor");
+        let target = editor
+            .read(cx)
+            .buffer()
+            .read(cx)
+            .as_singleton()
+            .expect("dependency source");
+        let target = target.read(cx);
+        assert!(
+            target.text() == expected,
+            "Go to Definition must open the exact attached source"
+        );
+        let file = project::File::from_dyn(target.file()).expect("Java proxy source file");
+        let path = file.abs_path(cx);
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("StringUtils.java")
+        );
+        let relative = path
+            .strip_prefix(std::env::temp_dir())
+            .expect("disposable proxy cache");
+        assert!(relative.starts_with("jdtls_decompiled"));
+        assert_eq!(
+            target.capability(),
+            Capability::ReadOnly,
+            "Java proxy source must be read-only"
+        );
+    });
 }
 
 #[cfg(all(test, unix))]
