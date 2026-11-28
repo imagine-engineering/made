@@ -1103,30 +1103,27 @@ impl Render for SpecificationEditor {
             .id("specification-stages")
             .role(gpui::Role::Group)
             .aria_label("Specification stage")
-            .h_8()
+            .min_h_8()
+            .max_w_full()
             .gap_1()
+            .flex_wrap()
             .flex_shrink_0()
             .children(
                 [
-                    (
-                        View::Requirements,
-                        "Requirements",
-                        IconName::FileTextOutlined,
-                    ),
-                    (View::Design, "Design", IconName::Pencil),
-                    (View::Tasks, "Tasks", IconName::ListTodo),
+                    (View::Requirements, "Requirements"),
+                    (View::Design, "Design"),
+                    (View::Tasks, "Tasks"),
                 ]
                 .into_iter()
-                .map(|(view, label, icon)| {
+                .map(|(view, label)| {
                     h_flex()
                         .gap_1()
                         .when(view != View::Requirements, |group| {
                             group.child(task_icon(IconName::ChevronRight, Color::Muted))
                         })
                         .child(
-                            IconButton::new(label, icon)
-                                .aria_label(label)
-                                .tooltip(Tooltip::text(label))
+                            Button::new(label, label)
+                                .size(ButtonSize::Compact)
                                 .tab_index(0isize)
                                 .toggle_state(active == view)
                                 .selected_style(ButtonStyle::Tinted(TintColor::Accent))
@@ -1207,9 +1204,9 @@ impl Render for SpecificationEditor {
                     .on_click(cx.listener(|this, _, _, cx| this.sync(cx))),
             )
             .child(
-                Button::new("specification-run-remaining", "Run remaining tasks")
-                    .size(ButtonSize::Compact)
-                    .start_icon(task_icon(IconName::PlayOutlined, Color::Default))
+                IconButton::new("specification-run-remaining", IconName::PlayOutlined)
+                    .aria_label("Run remaining tasks")
+                    .tooltip(Tooltip::text("Run remaining tasks"))
                     .tab_index(0isize)
                     .style(if pending {
                         ButtonStyle::Subtle
