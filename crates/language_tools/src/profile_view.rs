@@ -727,21 +727,22 @@ impl ProfileView {
                         return Ok(());
                     }
                 }
-                if paths.len() != 2 {
-                    this.update(cx, |this, cx| {
-                        this.selecting = false;
-                        this.notice = "Select exactly one profile JSON and one symbol sidecar".into();
-                        cx.notify();
-                    })?;
-                    return Ok(());
-                }
+                let paths = match ordered_profile_artifacts(paths) {
+                    Ok(paths) => paths,
+                    Err(error) => {
+                        this.update(cx, |this, cx| {
+                            this.selecting = false;
+                            this.notice = error.to_string();
+                            cx.notify();
+                        })?;
+                        return Ok(());
+                    }
+                };
                 let selected_artifacts = this.read_with(cx, |this, cx| {
                     this.permitted_artifact_paths(&paths, cx)
                 })??;
-                let selected_paths = paths.iter()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let [profile, symbols] = &paths;
+                let selected_paths = format!("Recording: {}\nSymbols: {}", profile.display(), symbols.display());
                 let (message, details, import_button) = if remote {
                     (
                         "Import normalized profile results from this host?",
@@ -751,7 +752,7 @@ impl ProfileView {
                 } else {
                     (
                         "Import these profile artifacts locally?",
-                        format!("Selected artifacts:\n{selected_paths}\n\nThese files may contain sensitive source paths, symbols and process metadata. Zed processes them locally without uploading them or sending profile contents to telemetry. Results remain in memory and are cleared when you clear or close this view. The raw files stay on disk until you delete them through project file deletion; clearing or closing this view does not delete them."),
+                        format!("Selected artifacts:\n{selected_paths}\n\nThese files may contain sensitive source paths, symbols and process metadata. Import processes them locally without uploading them or sending profile contents to telemetry. Results remain in memory and are cleared when you clear or close this view. The raw files stay on disk until you delete them through project file deletion; clearing or closing this view does not delete them."),
                         "Import Profile",
                     )
                 };
@@ -778,9 +779,9 @@ impl ProfileView {
                         ensure!(this.project.read(cx).is_local() != remote, "The profile host changed during selection");
                         ensure!(this.permitted_artifact_paths(&paths, cx)? == selected_artifacts, "The selected artifact worktree changed");
                         if remote {
-                            this.import_paths_with_consent(paths, true, cx)
+                            this.import_paths_with_consent(paths.into(), true, cx)
                         } else {
-                            this.import_paths(paths, cx)
+                            this.import_paths(paths.into(), cx)
                         }
                     })();
                     if let Err(error) = result {
@@ -920,7 +921,7 @@ impl ProfileView {
 
     fn import_artifacts(
         &mut self,
-        mut paths: Vec<PathBuf>,
+        paths: Vec<PathBuf>,
         consent_to_transfer: bool,
         task_group: Option<Rc<CompletedTaskArtifactGroup>>,
         cx: &mut Context<Self>,
@@ -936,25 +937,9 @@ impl ProfileView {
             !self.project.read(cx).is_disconnected(cx),
             "The profile host is disconnected"
         );
-        ensure!(
-            paths.len() == 2,
-            "Select exactly one profile JSON and one symbol sidecar"
-        );
-        let symbol_index = paths
-            .iter()
-            .position(|path| path.to_string_lossy().ends_with(".syms.json"))
-            .context("Select an explicit .syms.json companion")?;
-        let symbols_path = paths.remove(symbol_index);
-        let profile_path = paths.pop().context("Select a profile JSON")?;
-        ensure!(
-            profile_path
-                .extension()
-                .is_some_and(|extension| extension == "json")
-                && !profile_path.to_string_lossy().ends_with(".syms.json"),
-            "Only uncompressed profile JSON is supported"
-        );
         let project = self.project.read(cx);
-        let artifact_paths = self.permitted_artifact_paths(&[profile_path, symbols_path], cx)?;
+        let artifact_paths =
+            self.permitted_artifact_paths(&ordered_profile_artifacts(paths)?, cx)?;
         let title = recording_title(&artifact_paths);
         let cancellation = Arc::new(AtomicBool::new(false));
         let remote_import = if remote {
@@ -1712,6 +1697,28 @@ fn sample_count(samples: u64) -> String {
     } else {
         format!("{samples} samples")
     }
+}
+
+fn ordered_profile_artifacts(paths: Vec<PathBuf>) -> Result<[PathBuf; 2]> {
+    let [mut profile, mut symbols]: [PathBuf; 2] = paths
+        .try_into()
+        .ok()
+        .context("Select exactly one profile JSON and one symbol sidecar")?;
+    if profile.to_string_lossy().ends_with(".syms.json") {
+        std::mem::swap(&mut profile, &mut symbols);
+    }
+    ensure!(
+        symbols.to_string_lossy().ends_with(".syms.json"),
+        "Select an explicit .syms.json companion"
+    );
+    ensure!(
+        profile
+            .extension()
+            .is_some_and(|extension| extension == "json")
+            && !profile.to_string_lossy().ends_with(".syms.json"),
+        "Only uncompressed profile JSON is supported"
+    );
+    Ok([profile, symbols])
 }
 
 fn recording_title(paths: &[ProjectPath]) -> SharedString {
@@ -4715,8 +4722,8 @@ mod tests {
                     vec!["/fixture/replacement.json".into()]
                 } else {
                     vec![
-                        "/fixture/replacement.json".into(),
                         "/fixture/replacement.syms.json".into(),
+                        "/fixture/replacement.json".into(),
                     ]
                 })
             });
@@ -4738,8 +4745,9 @@ mod tests {
             }
             let (message, details) = cx.pending_prompt().expect("actual held local disclosure");
             assert_eq!(message, "Import these profile artifacts locally?");
-            assert!(details.contains("/fixture/replacement.json"));
-            assert!(details.contains("/fixture/replacement.syms.json"));
+            assert!(details.contains(
+                "Recording: /fixture/replacement.json\nSymbols: /fixture/replacement.syms.json"
+            ));
             assert!(details.contains("locally without uploading"));
             assert!(details.contains("profile contents to telemetry"));
             assert!(details.contains("raw files stay on disk"));
@@ -4753,6 +4761,24 @@ mod tests {
                 assert!(!view.importing);
             });
         };
+        if !companion {
+            view.update_in(cx, |view, window, cx| view.prompt(window, cx));
+            cx.simulate_path_prompt_response(|_| {
+                Some(vec![
+                    "/fixture/capture.json".into(),
+                    "/fixture/replacement.json".into(),
+                ])
+            });
+            cx.run_until_parked();
+            assert!(!cx.has_pending_prompt());
+            view.read_with(cx, |view, _| {
+                assert_eq!(view.notice, "Select an explicit .syms.json companion");
+                assert!(Arc::ptr_eq(
+                    view.result.as_ref().expect("preserved result"),
+                    &previous
+                ));
+            });
+        }
         let (processing_sender, mut processing_receiver) = futures::channel::oneshot::channel();
         let (release_sender, release_receiver) = futures::channel::oneshot::channel();
         view.update(cx, |view, _| {
