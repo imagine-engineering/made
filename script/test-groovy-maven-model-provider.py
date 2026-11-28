@@ -3340,6 +3340,133 @@ public class GraphFixtureHandler implements IDelegateCommandHandler {
     return bundle
 
 
+def probe_source_attachment(arguments):
+    provider = arguments.provider.resolve()
+    provider_digest = hashlib.sha256(provider.read_bytes()).hexdigest()
+    if provider_digest != arguments.sha256:
+        raise AssertionError("Provider binary differs from the reviewed build")
+    repository_seed = arguments.maven_repository.resolve()
+    artifact_directory = Path("org/apache/commons/commons-lang3/3.17.0")
+    binary_name = "commons-lang3-3.17.0.jar"
+    sources_name = "commons-lang3-3.17.0-sources.jar"
+    source_seed = repository_seed / artifact_directory / sources_name
+    archive_digest = hashlib.sha256(source_seed.read_bytes()).hexdigest()
+    with zipfile.ZipFile(source_seed) as archive:
+        original_source = archive.read("org/apache/commons/lang3/StringUtils.java").decode()
+    receipt = {"provider_sha256": provider_digest, "source_archive_sha256": archive_digest, "fixtures": []}
+    for cached in (True, False):
+        with tempfile.TemporaryDirectory(prefix="groovy-maven-source-attachment-") as directory:
+            state = Path(directory).resolve()
+            project = state / "project"
+            java_source = project / "src/main/java/evidence/ArtifactProbe.java"
+            java_source.parent.mkdir(parents=True)
+            contents = (
+                "package evidence;\n"
+                "import org.apache.commons.lang3.StringUtils;\n"
+                "public class ArtifactProbe {\n"
+                '    String check() { return StringUtils.trim(" value "); }\n'
+                "}\n"
+            )
+            java_source.write_text(contents)
+            pom = project / "pom.xml"
+            pom.write_text("""<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>evidence</groupId><artifactId>source-attachment</artifactId><version>1</version>
+  <properties><maven.compiler.release>17</maven.compiler.release></properties>
+  <dependencies><dependency>
+    <groupId>org.apache.commons</groupId><artifactId>commons-lang3</artifactId><version>3.17.0</version>
+  </dependency></dependencies>
+</project>
+""")
+            repository = state / "repository"
+            shutil.copytree(repository_seed, repository, ignore=lambda path, names: (
+                [name for name in names if name.endswith(".lock") or
+                 (not cached and Path(path) == source_seed.parent and name == sources_name)]
+            ))
+            binary = repository / artifact_directory / binary_name
+            source = repository / artifact_directory / sources_name
+            assert binary.is_file() and source.is_file() == cached
+            settings = state / "settings.xml"
+            settings.write_text(f"<settings><offline>true</offline><localRepository>"
+                                f"{escape(str(repository))}</localRepository></settings>\n")
+            client = client_class()(arguments.launcher.resolve(), arguments.java_home.resolve(),
+                                    project, state / "jdtls-data", deny_external_network=True)
+            try:
+                initialized = client.request("initialize", {
+                    "processId": os.getpid(), "rootUri": project.as_uri(),
+                    "workspaceFolders": [{"uri": project.as_uri(), "name": project.name}],
+                    "capabilities": {"workspace": {"workspaceFolders": True, "configuration": True}},
+                    "initializationOptions": {
+                        "bundles": [str(provider)],
+                        "extendedClientCapabilities": {"classFileContentsSupport": True},
+                        "settings": {"java": {
+                            "import": {"maven": {"enabled": True, "offline": {"enabled": True}},
+                                       "gradle": {"enabled": False}},
+                            "configuration": {"maven": {"userSettings": str(settings)}},
+                            "maven": {"downloadSources": False}, "eclipse": {"downloadSources": False},
+                        }},
+                    },
+                }, timeout=100)
+                command = "java.project.resolveSourceAttachment"
+                assert command in initialized["capabilities"]["executeCommandProvider"]["commands"]
+                client.notify("initialized", {})
+                deadline = time.monotonic() + 110
+                while time.monotonic() < deadline:
+                    projects = discover(client, project)["projects"]
+                    if [item["pomUri"] for item in projects] == [pom.as_uri()]:
+                        break
+                    time.sleep(0.3)
+                else:
+                    raise AssertionError("JDTLS did not import the disposable Maven project")
+                client.notify("textDocument/didOpen", {"textDocument": {
+                    "uri": java_source.as_uri(), "languageId": "java", "version": 1, "text": contents,
+                }})
+                position = {"line": 3, "character": contents.splitlines()[3].index("StringUtils") + 2}
+                deadline = time.monotonic() + 50
+                while time.monotonic() < deadline:
+                    definitions = client.request("textDocument/definition", {
+                        "textDocument": {"uri": java_source.as_uri()}, "position": position,
+                    }, timeout=10)
+                    matching = [definition["uri"] for definition in definitions or []
+                                if definition.get("uri", "").startswith(f"jdt://contents/{binary_name}/")]
+                    if len(matching) == 1:
+                        class_file_uri, = matching
+                        break
+                    time.sleep(0.3)
+                else:
+                    raise AssertionError("JDTLS did not resolve the fixture's binary Java definition")
+                attachment = client.request("workspace/executeCommand", {
+                    "command": command, "arguments": [json.dumps({"classFileUri": class_file_uri})],
+                }, timeout=20)
+                assert not attachment.get("errorMessage"), "JDTLS failed to inspect the source attachment"
+                attributes = attachment["attributes"]
+                assert Path(attributes["jarPath"]).resolve() == binary
+                if cached:
+                    assert Path(attributes["sourceAttachmentPath"]).resolve() == source
+                    returned_source = client.request("java/classFileContents", {"uri": class_file_uri}, timeout=20)
+                    assert returned_source == original_source, "JDTLS did not return the attached Java source"
+                else:
+                    assert attributes.get("sourceAttachmentPath") is None
+                assert source.is_file() == cached
+                if cached:
+                    assert hashlib.sha256(source.read_bytes()).hexdigest() == archive_digest
+            finally:
+                client.close()
+            assert client.process.poll() is not None
+            receipt["fixtures"].append({
+                "cached_source": cached,
+                "jdtls_version": initialized["serverInfo"]["version"],
+                "binary_definition_and_archive_matched": True,
+                "source_attachment_reported": cached,
+                "original_java_source_returned": cached,
+                "source_cache_preserved": True,
+                "provider_stopped": True,
+            })
+    arguments.receipt.parent.mkdir(parents=True, exist_ok=True)
+    arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
+    print("Passed offline Maven cached and missing Java source attachment checks")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Opt-in cached Maven JDTLS metadata probe; no external network")
     for name in ["launcher", "java-home", "provider", "maven-repository", "receipt"]:
@@ -3375,7 +3502,12 @@ if __name__ == "__main__":
                         help="Exercise live host Maven profile deactivation and restoration during the reactor probe")
     parser.add_argument("--default-roots-only", action="store_true", help="Read-only default Maven root discovery against the pinned SDK scanner")
     parser.add_argument("--dependency-graph-only", action="store_true", help="Qualify explicit offline cached Maven dependency collection")
+    parser.add_argument("--source-attachment-only", action="store_true",
+                        help="Qualify JDTLS read-only attachment inspection with cached commons-lang3 3.17.0 sources")
     arguments = parser.parse_args()
+    if arguments.source_attachment_only and any(value for name, value in vars(arguments).items()
+            if name not in ["source_attachment_only", "launcher", "java_home", "provider", "maven_repository", "receipt", "sha256"]):
+        parser.error("--source-attachment-only is an independent provider qualification mode")
     if arguments.default_roots_only and any(value for name, value in vars(arguments).items()
             if name not in ["default_roots_only", "launcher", "java_home", "provider", "maven_repository", "receipt", "sha256"]):
         parser.error("--default-roots-only is an independent provider qualification mode")
@@ -3414,7 +3546,9 @@ if __name__ == "__main__":
         parser.error("--exclusion-only requires --import-selection-only")
     if arguments.parentless_reactor and not arguments.import_selection_only:
         parser.error("--parentless-reactor requires --import-selection-only")
-    if arguments.default_roots_only:
+    if arguments.source_attachment_only:
+        probe_source_attachment(arguments)
+    elif arguments.default_roots_only:
         probe_default_roots(arguments)
     elif arguments.cached_ancestry_only:
         probe_cached_ancestry(arguments)
