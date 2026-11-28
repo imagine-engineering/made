@@ -78,8 +78,11 @@ For a standalone qualification run, obtain the macOS ARM64 archive from the
 official release. `script/test-groovy-kotlin-provider.py --approved-archive
 <archive> --fixture maven --java-home <jdk>` checks the approved SHA-256,
 extracts a disposable copy, and verifies the language server's reported build.
-Use `--fixture gradle` for the Gradle run. The pin applies to the qualification
-probe. The installed extension still uses its own upstream resolver.
+Use `--fixture gradle` for the Gradle run. Add
+`--require-edited-kotlin-navigation` to check that the first **Go to Definition**
+request after a valid unsaved edit finds the newly referenced declaration.
+The pin applies to the qualification probe. The installed extension still uses
+its own upstream resolver.
 [Official Kotlin LSP 271.2085.0 release](https://github.com/Kotlin/kotlin-lsp/releases/tag/kotlin-lsp/v271.2085.0)
 
 To choose the alternate Kotlin server, use the Settings Editor or add this to

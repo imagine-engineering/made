@@ -496,6 +496,48 @@ def replace_probe_document(client, uri, version, text):
     )
 
 
+def check_edited_kotlin_navigation(client, source, probe, edited_target):
+    document = {"uri": probe.as_uri()}
+    text = probe.read_text()
+    client.notify("textDocument/didOpen", {
+        "textDocument": {**document, "languageId": "kotlin", "version": 1, "text": text},
+    })
+    line_number = 2
+    start = text.splitlines()[line_number].rindex("Greeting")
+    position = {"line": line_number, "character": start + 1}
+    request = {"textDocument": document, "position": position}
+    original_target = source.as_uri()
+    deadline = time.monotonic() + 5
+    while location_uri(client.request("textDocument/definition", request, timeout=5)) != original_target:
+        if time.monotonic() >= deadline:
+            raise AssertionError("Kotlin navigation before the valid edit did not reach Greeting.kt")
+        time.sleep(0.25)
+
+    client.notify(
+        "textDocument/didChange",
+        {
+            "textDocument": {**document, "version": 2},
+            "contentChanges": [{
+                "range": {
+                    "start": {"line": line_number, "character": start},
+                    "end": {"line": line_number, "character": start + len("Greeting")},
+                },
+                "text": edited_target.stem,
+            }],
+        },
+    )
+    response = client.request("textDocument/definition", request)
+    if isinstance(response, list) and len(response) > 1:
+        raise AssertionError("Kotlin navigation after a valid edit returned multiple locations")
+    target = location_uri(response)
+    if target == original_target:
+        raise AssertionError("Kotlin navigation after a valid edit returned the previous declaration")
+    if target != edited_target.as_uri():
+        detail = "no location" if target is None else "an unexpected declaration"
+        raise AssertionError(f"Kotlin navigation after a valid edit returned {detail}")
+    return edited_target.name
+
+
 def check_semantics(client, source, probe, extra_source=None):
     source_uri = source.as_uri()
     probe_uri = probe.as_uri()
@@ -969,8 +1011,13 @@ def probe(
     resource_editor_process_id=None,
     alternate_maven_repository=None,
     alternate_maven_denied_network=False,
+    require_edited_kotlin_navigation=False,
 ):
-    with probe_directory(retain_failed_state or cached_denied_network or expect_gradle_denied_network) as directory:
+    retain_failures = (
+        retain_failed_state or cached_denied_network or expect_gradle_denied_network
+        or require_edited_kotlin_navigation
+    )
+    with probe_directory(retain_failures) as directory:
         root = directory / fixture_name
         shutil.copytree(FIXTURES / f"groovy_jvm_{fixture_name}", root)
         if expect_denied_network:
@@ -989,6 +1036,15 @@ def probe(
             )
         probe_source = source.with_name("UseGreeting.kt")
         probe_source.write_text(PROBE_SOURCE)
+        edited_target = None
+        edit_probe_source = None
+        if require_edited_kotlin_navigation:
+            edited_target = source.with_name("EditedGreetingTarget.kt")
+            edited_target.write_text(
+                'package evidence\n\nclass EditedGreetingTarget { fun message(): String = "Edited destination" }\n'
+            )
+            edit_probe_source = source.with_name("EditedDefinitionProbe.kt")
+            edit_probe_source.write_text(PROBE_SOURCE.replace("useGreeting", "editedDefinitionProbe"))
         results = []
         for launch in range(restarts):
             gradle_home = None
@@ -1111,6 +1167,10 @@ def probe(
                     if require_java_to_kotlin_navigation:
                         check_java_to_kotlin_navigation(client, root, source)
                         semantics["javaToKotlinDefinition"] = "Greeting.kt"
+                if edit_probe_source is not None:
+                    semantics["editedKotlinDefinition"] = check_edited_kotlin_navigation(
+                        client, source, edit_probe_source, edited_target
+                    )
                 result = {
                     "launch": launch + 1,
                     "server": server_info,
@@ -1149,7 +1209,7 @@ def probe(
                     result["offlineWrapperInvocations"] = len(marker.read_text().splitlines())
                 results.append(result)
             except Exception:
-                if retain_failed_state or cached_denied_network or expect_gradle_denied_network:
+                if retain_failures:
                     client.stderr.seek(0, os.SEEK_END)
                     stderr_size = client.stderr.tell()
                     client.stderr.seek(max(0, stderr_size - 1_000_000))
@@ -1176,7 +1236,7 @@ def probe(
                         resources = sampler.finish()
                         if results and results[-1]["launch"] == launch + 1:
                             results[-1]["processResources"] = resources
-                        elif retain_failed_state or cached_denied_network or expect_gradle_denied_network:
+                        elif retain_failures:
                             (directory / "failed-process-resources.json").write_text(json.dumps(resources, indent=2) + "\n")
             if results:
                 peak = child_peak_resident_bytes()
@@ -1231,6 +1291,11 @@ def main():
         "--require-java-to-kotlin-navigation",
         action="store_true",
         help="Fail unless a Java Greeting reference resolves to Kotlin source",
+    )
+    parser.add_argument(
+        "--require-edited-kotlin-navigation",
+        action="store_true",
+        help="Require the first definition request after an unsaved valid edit to reach the new declaration",
     )
     parser.add_argument(
         "--require-workspace-export",
@@ -1291,6 +1356,10 @@ def main():
         arguments.server_kind != "official" or arguments.expect_denied_network or arguments.expect_gradle_denied_network
     ):
         parser.error("workspace export requires a successful official-server import")
+    if arguments.require_edited_kotlin_navigation and (
+        arguments.expect_denied_network or arguments.expect_gradle_denied_network
+    ):
+        parser.error("edited Kotlin navigation requires a successfully imported fixture")
     if arguments.timeout < 1 or arguments.restarts < 1:
         parser.error("timeout and restarts must be positive")
     if not 0 <= arguments.extra_kotlin_sources <= 500:
@@ -1389,6 +1458,7 @@ def print_probe_result(arguments):
                     arguments.resource_editor_pid,
                     arguments.alternate_maven_repository,
                     arguments.alternate_maven_denied_network,
+                    arguments.require_edited_kotlin_navigation,
                 ),
             },
             indent=2,
