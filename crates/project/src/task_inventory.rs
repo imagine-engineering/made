@@ -1418,6 +1418,19 @@ impl Inventory {
             .chain(self.global_templates_from_settings())
     }
 
+    #[cfg(feature = "jvm-tools")]
+    pub fn saved_jvm_task_templates(
+        &self,
+        worktree_id: WorktreeId,
+        include_user_tasks: bool,
+    ) -> impl '_ + Iterator<Item = (TaskSourceKind, TaskTemplate)> {
+        self.saved_task_templates(worktree_id)
+            .filter(move |(source, _)| {
+                include_user_tasks
+                    || matches!(source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id)
+            })
+    }
+
     fn global_templates_from_settings(
         &self,
     ) -> impl '_ + Iterator<Item = (TaskSourceKind, TaskTemplate)> {

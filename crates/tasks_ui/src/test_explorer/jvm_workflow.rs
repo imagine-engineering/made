@@ -3975,6 +3975,187 @@ async fn verify_docker_wrapper_build_hooks(build_tool: JvmTestBuildTool, cx: &mu
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Maven Docker host with saved Run Configuration Tasks"]
+async fn docker_maven_saved_configuration_runs_hooks_and_prerequisites(cx: &mut TestAppContext) {
+    verify_docker_saved_configuration(JvmTestBuildTool::Maven, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Gradle Docker host with saved Run Configuration Tasks"]
+async fn docker_gradle_saved_configuration_runs_hooks_and_prerequisites(cx: &mut TestAppContext) {
+    verify_docker_saved_configuration(JvmTestBuildTool::Gradle, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn verify_docker_saved_configuration(build_tool: JvmTestBuildTool, cx: &mut TestAppContext) {
+    use project::task_store::{JvmTaskTrigger, TaskSettingsLocation};
+    use std::path::Path;
+
+    let fixture = cached_jvm_fixture_path("GROOVY_CONNECTED_WRAPPER_ROOT");
+    let order = fixture.join(".groovy-run-order");
+    let fail = fixture.join(".fail-run-prerequisite");
+    assert!(!order.exists());
+    std::fs::write(&fail, []).expect("arm the disposable prerequisite failure");
+    let container = docker_test_fixture_container(build_tool);
+    let (project, worktree_id) =
+        connect_ordered_jvm_task_fixture(Path::new("/workspaces/tests/project"), &container, cx)
+            .await;
+    let source_path =
+        util::rel_path::RelPath::from_unix_str("application/src/main/java/evidence/Main.java")
+            .expect("Java fixture source");
+    let (_java, _open) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(
+                project::ProjectPath {
+                    worktree_id,
+                    path: source_path.into_arc(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("open Java on the project host");
+    let (store, inventory) = project.read_with(cx, |project, cx| {
+        (
+            project.lsp_store(),
+            project
+                .task_store()
+                .read(cx)
+                .task_inventory()
+                .expect("connected Task inventory")
+                .clone(),
+        )
+    });
+    inventory.update(cx, |inventory, _| {
+        inventory
+            .update_file_based_tasks(
+                TaskSettingsLocation::Global(Path::new("/fixture-client/tasks.json")),
+                Some(
+                    r#"[
+                  {"label":"second prerequisite","command":"/bin/false"},
+                  {"label":"client-only hook","command":"/bin/false","tags":["before-run"]}
+                ]"#,
+                ),
+            )
+            .expect("simulate client-only user Tasks");
+    });
+
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    let _terminal = mount_fixture_terminal(&workspace, cx).await;
+    let label = "Run qualification wrapper";
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let jdtls = lsp::LanguageServerName::new_static("jdtls");
+    loop {
+        cx.run_until_parked();
+        dispatch_graph_action(cx, "language_tool_tree::ExpandAll");
+        let java_ready = store.read_with(cx, |store, _| {
+            store
+                .language_server_statuses()
+                .any(|(_, status)| status.name == jdtls && status.worktree == Some(worktree_id))
+        });
+        let visible = panel.read_with(cx, |panel, _| {
+            let (_, rows, _) = panel.snapshot_for_test();
+            assert!(!rows.iter().any(|row| row.label == "client-only hook"));
+            rows.iter().any(|row| row.label == label)
+        });
+        if java_ready && visible {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the connected Run Configuration row or its Java provider is unavailable"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    let source = inventory.read_with(cx, |inventory, _| {
+        inventory
+            .saved_task_templates(worktree_id)
+            .find(|(_, template)| template.label == label)
+            .expect("exact host configuration")
+            .0
+            .to_id_base()
+    });
+    let wrapper = match build_tool {
+        JvmTestBuildTool::Maven => "wrapper:package",
+        JvmTestBuildTool::Gradle => "wrapper:build",
+    };
+    let failure = ["before-run", "shared", "first", "second"];
+    let success = [
+        "before-run",
+        "shared",
+        "first",
+        "second",
+        wrapper,
+        "after-run",
+    ];
+    for (expected, failed) in [(failure.as_slice(), true), (success.as_slice(), false)] {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| {
+            let action = cx
+                .build_action(
+                    "groovy_dependencies_panel::RunOrderedConfiguration",
+                    Some(serde_json::json!({
+                        "worktree_id": usize::from(worktree_id),
+                        "label": label,
+                        "source": source,
+                    })),
+                )
+                .expect("saved configuration action");
+            window.dispatch_action(action, cx);
+        });
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            cx.run_until_parked();
+            let contents = std::fs::read_to_string(&order).unwrap_or_default();
+            let lines: Vec<_> = contents.lines().collect();
+            assert!(
+                expected.starts_with(&lines),
+                "unexpected run order: {lines:?}"
+            );
+            if lines.len() == expected.len()
+                && !store.read_with(cx, |store, _| {
+                    store.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeRun)
+                })
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "saved run did not complete: {lines:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        let saved_in_history = inventory.read_with(cx, |inventory, _| {
+            inventory
+                .last_scheduled_task(None)
+                .is_some_and(|(task_source, task)| {
+                    task_source.to_id_base() == source && task.original_task().label == label
+                })
+        });
+        assert_eq!(
+            saved_in_history, !failed,
+            "only the selected main Task belongs in history"
+        );
+        if failed {
+            std::fs::rename(&order, fixture.join(".groovy-failed-run-order"))
+                .expect("retain the failed sequence receipt");
+            std::fs::remove_file(&fail).expect("repair the disposable prerequisite");
+        }
+    }
+    println!(
+        "Connected saved Run Configuration verified failure and retry, exact Task order, and host project-only Task scope"
+    );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 async fn connect_ordered_jvm_task_fixture(
     root: &std::path::Path,
     container: &str,

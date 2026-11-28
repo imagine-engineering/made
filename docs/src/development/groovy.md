@@ -554,20 +554,20 @@ to activate a project profile that sets the `javadoc` classifier and `jar`
 type. Review the resolved and unresolved artifacts in the Task terminal. Maven can
 exit successfully when a source archive is absent.
 
-For an explicit run of a local saved configuration from the Groovy tool
-window, a saved Task can opt in with the `before-run` or `after-run` tag.
-Groovy uses the current worktree's project Tasks and your saved user Tasks.
-It runs each phase in saved file order, with project files before user
-files. The selected configuration starts only after all before-run Tasks
+For an explicit run of a saved configuration from the Groovy tool window,
+a saved Task can opt in with the `before-run` or `after-run` tag. Local
+projects use worktree Tasks followed by saved user Tasks. A directly
+connected project uses its selected worktree's Task files and runs the
+entire sequence on the project host. Each phase follows saved file order. The selected configuration starts only after all before-run Tasks
 succeed. After-run Tasks start only after the selected run succeeds.
 If a Task fails or you cancel it in the terminal, Groovy skips the rest of
 the sequence. Run hooks require a trusted project and its live Java provider.
 
-A local saved configuration can also declare its own prerequisites with
+A saved configuration can also declare its own prerequisites with
 `before-launch:` tags in `tasks.json`. For example, a configuration with
 `"tags": ["before-launch:Prepare project", "before-launch:Generate sources"]`
 runs those saved Tasks in the listed order before its command starts. Use
-exact, unique Task labels from the project or user Task files. A prerequisite
+exact, unique Task labels from the eligible Task files. A prerequisite
 can declare its own prerequisites, and each shared Task runs once per launch.
 Groovy rejects missing or ambiguous labels and dependency cycles before
 starting the sequence. Failure or cancellation skips the remaining Tasks.
@@ -602,7 +602,7 @@ naturally and for the selected wrapper to exit successfully. A failed Task,
 Stop, or Detach skips the remaining hooks.
 
 Complete arbitrary-argument handling, Debug hooks for other launch types,
-and connected saved configuration runs and other lifecycle hooks remain open.
+and other connected lifecycle hooks remain open.
 Selected test results appear in the Tests view. Supported debugging uses
 the Debug panel.
 

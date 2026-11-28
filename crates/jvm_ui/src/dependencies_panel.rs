@@ -5413,7 +5413,7 @@ impl DependenciesPanel {
         }
         let project = self.project.read(cx);
         let mut saved_configurations = Vec::new();
-        if !project.is_remote()
+        if (project.is_local() || project.is_via_remote_server())
             && let Some(inventory) = project.task_store().read(cx).task_inventory()
         {
             let inventory = inventory.read(cx);
@@ -5424,7 +5424,7 @@ impl DependenciesPanel {
                     continue;
                 }
                 let mut entries = inventory
-                    .saved_task_templates(worktree_id)
+                    .saved_jvm_task_templates(worktree_id, project.is_local())
                     .map(|(source, template)| SavedConfiguration {
                         worktree_id,
                         source,
@@ -6121,17 +6121,13 @@ impl DependenciesPanel {
             .selected()
             .and_then(|id| self.operation_selections.get(id))
             .is_some_and(|receipt| self.operation_host_is_available(receipt, cx));
-        let mut availability = ordered_queue_menu_availability(
+        ordered_queue_menu_availability(
             operation_row_selected,
             self.ordered_operations.len(),
             self.can_run_ordered_operations(cx),
             !self.host_unavailable(cx),
             &self.configuration_selections,
-        );
-        if self.project.read(cx).is_remote() {
-            availability.configurations.clear();
-        }
-        availability
+        )
     }
 
     fn operation_host_is_available(&self, receipt: &JvmBuildOperationReceipt, cx: &App) -> bool {

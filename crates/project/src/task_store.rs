@@ -623,8 +623,10 @@ impl SavedJvmTask {
         let worktree_id = self.worktree_id;
         let connected = matches!(
             trigger,
-            Some(
-                JvmTaskTrigger::BeforeBuild
+            None | Some(
+                JvmTaskTrigger::BeforeRun
+                    | JvmTaskTrigger::AfterRun
+                    | JvmTaskTrigger::BeforeBuild
                     | JvmTaskTrigger::AfterBuild
                     | JvmTaskTrigger::BeforeRebuild
                     | JvmTaskTrigger::AfterRebuild
@@ -643,7 +645,7 @@ impl SavedJvmTask {
         if connected {
             anyhow::ensure!(
                 matches!(&self.source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id),
-                "A connected Task hook must be saved in the selected project folder"
+                "A connected Task must be saved in the selected project folder"
             );
         }
         let worktree_store = project.worktree_store();
@@ -667,7 +669,7 @@ impl SavedJvmTask {
                     worktree_id,
                     cx
                 ) == Some(true),
-                "Trust the connected project before running its saved Task hooks"
+                "Trust the connected project before running its saved Tasks"
             );
         }
         let inventory = project
@@ -699,7 +701,7 @@ impl SavedJvmTask {
 
         let mut matching = inventory
             .read(cx)
-            .saved_task_templates(worktree_id)
+            .saved_jvm_task_templates(worktree_id, !connected)
             .filter(|(source, template)| *source == self.source && template.label == self.label);
         let (_, template) = matching
             .next()
@@ -748,7 +750,7 @@ pub fn prepare_jvm_before_launch_tasks(
         .context("The build Task inventory is unavailable; reopen the project")?;
     let entries: Vec<_> = inventory
         .read(cx)
-        .saved_task_templates(worktree_id)
+        .saved_jvm_task_templates(worktree_id, project.is_local())
         .collect();
     ordered_before_launch_entries(&template.label, &labels, &entries)?
         .into_iter()
@@ -777,11 +779,7 @@ pub fn prepare_jvm_hook_tasks(
     select_jvm_trigger_tasks(
         inventory
             .read(cx)
-            .saved_task_templates(worktree_id)
-            .filter(|(source, _)| {
-                !project.is_remote()
-                    || matches!(source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id)
-            }),
+            .saved_jvm_task_templates(worktree_id, project.is_local()),
         trigger,
     )?
     .into_iter()
