@@ -1000,9 +1000,20 @@ impl DependencyDiagramItem {
         });
     }
 
-    pub(crate) fn select_analyzer_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn select_linked_node(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        self.refresh_receipt(cx);
         if !self.receipt_is_current(cx) || !self.ensure_node_neighbourhood(id, cx) {
             return false;
+        }
+        if let Some(source) = &mut self.source
+            && self
+                .canvas
+                .read(cx)
+                .graph
+                .node(id)
+                .is_some_and(|node| node.has_provider_identity())
+        {
+            source.node = id.to_owned();
         }
         self.canvas.update(cx, |canvas, cx| {
             let size = *canvas.canvas_size.lock().expect("canvas size");
@@ -1016,6 +1027,7 @@ impl DependencyDiagramItem {
             });
             if is_visible {
                 canvas.select_node(id, false, false);
+                canvas.focus = Some(id.to_owned());
             } else {
                 canvas.reveal_node(id);
             }

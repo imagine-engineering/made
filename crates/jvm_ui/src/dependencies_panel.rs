@@ -3815,13 +3815,21 @@ impl DependenciesPanel {
             self.show_graph_error(anyhow::anyhow!("Select a Maven project or a resolvable Gradle configuration and use Collect offline graph before opening the diagram"), cx);
             return;
         };
+        let node = open.source.node.clone();
         self.graph_notice = None;
         self.graph_diagram_selection = Some(open.source.selection.clone());
         self.graph_diagram = None;
         self.graph_diagram_source = None;
         self.graph_diagram_legend.clear();
         self.rebuild(cx);
-        match self.open_or_focus_diagram_tab(open, cx) {
+        let result = self.open_or_focus_diagram_tab(open, cx).and_then(|item| {
+            anyhow::ensure!(
+                item.update(cx, |item, cx| item.select_linked_node(&node, cx)),
+                "The selected dependency is no longer available in the diagram. Refresh provider graph facts and retry."
+            );
+            Ok(())
+        });
+        match result {
             Ok(_) => {
                 if self.graph_notice.take().is_some() {
                     cx.notify();
@@ -3859,7 +3867,7 @@ impl DependenciesPanel {
                 if item.scope() != scope {
                     item.apply_scope(scope.label(), cx);
                 }
-                item.select_analyzer_node(node, cx)
+                item.select_linked_node(node, cx)
             }),
             "This dependency is no longer available in the diagram. Refresh provider graph facts and retry."
         );
@@ -17545,8 +17553,58 @@ mod tests {
                 });
             };
             open_queue_from_active_tab(cx);
-            panel.update(cx, |panel, cx| {
-                panel.show_dependency_diagram(cx);
+            let diagram = workspace
+                .read_with(cx, |workspace, cx| {
+                    workspace.items_of_type::<DependencyDiagramItem>(cx).next()
+                })
+                .expect("open diagram");
+            let diagram_canvas = diagram.read_with(cx, |item, _| item.canvas().clone());
+            let prior_scale = diagram_canvas.read_with(cx, |canvas, _| canvas.viewport.scale);
+            if provider == GraphFixtureProvider::Maven {
+                diagram.update(cx, |item, cx| {
+                    item.apply_scope(MavenGraphScope::Provided.label().into(), cx)
+                });
+            }
+            for row in [&module_row, &inspection_target] {
+                let requested = panel.update(cx, |panel, cx| {
+                    panel.host.select(row.clone());
+                    cx.notify();
+                    panel
+                        .resolve_selected_canvas_graph(cx)
+                        .expect("diagram target")
+                        .1
+                });
+                invoke_selected_row_command(&panel, cx, "Show Diagram");
+                diagram_canvas.read_with(cx, |canvas, _| {
+                    assert_eq!(canvas.selection, BTreeSet::from([requested.clone()]));
+                    assert_eq!(canvas.focus.as_deref(), Some(requested.as_str()));
+                    assert_eq!(canvas.viewport.scale, prior_scale);
+                });
+                if provider == GraphFixtureProvider::Maven {
+                    diagram.read_with(cx, |item, cx| {
+                        assert_eq!(item.scope().label(), MavenGraphScope::Provided.label());
+                        let graph = &item.canvas().read(cx).graph;
+                        assert!(!graph.edges.is_empty());
+                        assert!(
+                            graph
+                                .edges
+                                .iter()
+                                .all(|edge| edge.label.starts_with("provided"))
+                        );
+                    });
+                }
+            }
+            if provider == GraphFixtureProvider::Maven {
+                diagram.update(cx, |item, cx| {
+                    item.apply_scope(MavenGraphScope::All.label().into(), cx)
+                });
+            }
+            assert_eq!(commands.load(Ordering::SeqCst), 3);
+            workspace.read_with(cx, |workspace, cx| {
+                assert_eq!(
+                    workspace.active_item(cx).map(|item| item.item_id()),
+                    Some(diagram.entity_id())
+                );
             });
             let tab_count_after = workspace.read_with(cx, |workspace, cx| {
                 workspace.items_of_type::<DependencyDiagramItem>(cx).count()
