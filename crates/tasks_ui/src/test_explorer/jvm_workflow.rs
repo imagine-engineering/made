@@ -3209,12 +3209,15 @@ async fn run_maven_goal_fixture(
     .map(str::to_owned)
     .to_vec();
     let profile_option = match run {
-        MavenGoalRun::OrderedHelp => Some("!evidence-selected"),
+        MavenGoalRun::OrderedHelp => Some("!evidence-selected,evidence-alternative"),
         MavenGoalRun::ResolveJavadoc => Some("artifact-javadocs"),
         _ => None,
     };
     if let Some(profile) = profile_option {
         arguments.extend(["--activate-profiles", profile].map(str::to_owned));
+    }
+    if matches!(run, MavenGoalRun::OrderedHelp) {
+        arguments.extend(["--threads", "1C"].map(str::to_owned));
     }
     #[cfg(all(feature = "jvm-test-actions", target_os = "macos"))]
     if matches!(run, MavenGoalRun::OrderedTest { .. }) {
@@ -3328,7 +3331,7 @@ async fn run_maven_goal_fixture(
                 &panel,
                 cx,
                 "Maven operation options",
-                r#"["-P!evidence-selected"]"#,
+                r#"["--activate-profiles","!evidence-selected,+evidence-alternative","--threads","1C"]"#,
             );
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             select_goal(cx, "effective-pom");
@@ -3349,7 +3352,7 @@ async fn run_maven_goal_fixture(
                 panic!("the ordered fixture has two goals");
             };
             let expected_queue = [
-                format!("1. {first} (1 Maven options)"),
+                format!("1. {first} (3 Maven options)"),
                 format!("2. {second}"),
             ];
             assert_eq!(queue_labels(cx), expected_queue);
@@ -3475,7 +3478,8 @@ async fn run_maven_goal_fixture(
                 .split_once("</properties>")
                 .expect("end effective properties");
             if matches!(run, MavenGoalRun::OrderedHelp) {
-                assert!(properties.contains("<effective.fixture>base</effective.fixture>"));
+                assert!(properties.contains("<effective.fixture>alternative</effective.fixture>"));
+                assert!(transcript.contains("Using the MultiThreadedBuilder implementation"));
                 let profile_report = transcript
                     .find("Active profile report written to:")
                     .expect("active profiles ran in Maven");
@@ -3484,7 +3488,7 @@ async fn run_maven_goal_fixture(
                     .expect("effective POM ran in Maven");
                 assert!(profile_report < effective_pom);
                 eprintln!(
-                    "Mounted Maven ran active-profiles before effective-pom in one offline Task and applied the profile override"
+                    "Mounted Maven ran active-profiles before effective-pom in one offline Task with grouped profiles and a thread multiplier"
                 );
             } else {
                 assert!(properties.contains("<effective.fixture>selected</effective.fixture>"));

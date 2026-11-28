@@ -525,12 +525,14 @@ configuration invalidates its old quick-run and queue targets.
 
 For a Maven phase or goal, open **Task options** and enter a JSON array of the
 options you want. Use `-Pci` to activate a declared profile, `-P!legacy` to
-deactivate one, or `-DskipTests` to skip test execution. Use
+deactivate one, or `-DskipTests` to skip test execution. You can group
+declared profiles with `["--activate-profiles", "ci,!legacy"]`. Use
 `--non-recursive` to run against the selected POM without its submodules.
 Choose `--fail-fast` to stop on a reactor failure or `--fail-at-end` to finish
 unaffected modules and report failure at the end. Set a fixed thread count
-with `--threads=2` or a multiplier with `--threads=0.5C`. Maven calculates the
-multiplier against the host JVM's available processors.
+with `--threads=2` or a multiplier with `--threads=0.5C`. You can also enter
+the flag and value separately, such as `["--threads", "0.5C"]`. Maven
+calculates the multiplier against the host JVM's available processors.
 
 These options apply to the entire ordered Maven run. Conflicting options in
 queued entries prevent dispatch. Maven still applies its own precedence for

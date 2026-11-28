@@ -84,6 +84,9 @@ def main():
   <profiles><profile>
     <id>evidence-selected</id>
     <properties><effective.fixture>selected</effective.fixture></properties>
+  </profile><profile>
+    <id>evidence-alternative</id>
+    <properties><effective.fixture>alternative</effective.fixture></properties>
   </profile></profiles>
 </project>
 """

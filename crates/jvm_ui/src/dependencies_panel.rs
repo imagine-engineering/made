@@ -8811,12 +8811,28 @@ fn parse_gradle_task_options(
 }
 
 fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOptions> {
-    let arguments = parse_operation_option_arguments(
+    let mut arguments = parse_operation_option_arguments(
         value,
         r#"["-Pprofile", "--non-recursive", "--threads=2"]"#,
-    )?;
+    )?
+    .into_iter();
     let mut options = MavenOperationOptions::default();
-    for argument in arguments {
+    while let Some(argument) = arguments.next() {
+        let argument = match argument.as_str() {
+            "-P" | "--activate-profiles" => format!(
+                "--activate-profiles={}",
+                arguments
+                    .next()
+                    .context("Supply a Maven profile list after the profile flag")?
+            ),
+            "-T" | "--threads" => format!(
+                "--threads={}",
+                arguments
+                    .next()
+                    .context("Supply a Maven thread count after the threads flag")?
+            ),
+            _ => argument,
+        };
         match argument.as_str() {
             "-DskipTests" => {
                 anyhow::ensure!(!options.skip_tests, "Configure skipping tests only once");
@@ -8840,16 +8856,36 @@ fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOp
                 });
             }
             _ => {
-                if let Some(profile) = argument.strip_prefix("-P") {
-                    let (id, active) = profile
-                        .strip_prefix('!')
-                        .map_or((profile, true), |id| (id, false));
-                    options.profiles.push(MavenOperationProfile {
-                        id: id.into(),
-                        active,
-                    });
+                if let Some(profiles) = argument
+                    .strip_prefix("--activate-profiles=")
+                    .or_else(|| argument.strip_prefix("-P="))
+                    .or_else(|| argument.strip_prefix("-P"))
+                {
+                    anyhow::ensure!(
+                        !profiles.chars().any(char::is_control),
+                        "Use a comma-separated list of declared Maven profiles"
+                    );
+                    for selector in profiles.split(',').map(str::trim) {
+                        let (id, active) = match selector.strip_prefix('!') {
+                            Some(id) => (id, false),
+                            None => (selector.strip_prefix('+').unwrap_or(selector), true),
+                        };
+                        anyhow::ensure!(
+                            id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric),
+                            "Use a comma-separated list of declared Maven profiles"
+                        );
+                        anyhow::ensure!(
+                            options.profiles.len() < 32,
+                            "Configure at most 32 Maven profiles"
+                        );
+                        options.profiles.push(MavenOperationProfile {
+                            id: id.into(),
+                            active,
+                        });
+                    }
                 } else if let Some(threads) = argument
                     .strip_prefix("--threads=")
+                    .or_else(|| argument.strip_prefix("-T="))
                     .or_else(|| argument.strip_prefix("-T"))
                 {
                     anyhow::ensure!(
@@ -8859,7 +8895,7 @@ fn parse_maven_operation_options(value: &str) -> anyhow::Result<MavenOperationOp
                     options.threads = Some(threads.parse()?);
                 } else {
                     anyhow::bail!(
-                        "Use a declared profile (-Pprofile or -P!profile), -DskipTests, --non-recursive, --fail-fast, --fail-at-end, or --threads=2"
+                        "Use a declared profile with -P or --activate-profiles, -DskipTests, --non-recursive, --fail-fast, --fail-at-end, or --threads"
                     );
                 }
             }
@@ -10731,6 +10767,56 @@ mod tests {
             },
             label,
         }
+    }
+
+    #[test]
+    fn maven_operation_options_accept_cli_profile_lists_and_thread_values() {
+        let expected = MavenOperationOptions {
+            profiles: vec![
+                MavenOperationProfile {
+                    id: "ci".into(),
+                    active: true,
+                },
+                MavenOperationProfile {
+                    id: "legacy".into(),
+                    active: false,
+                },
+            ],
+            threads: Some("1C".parse().expect("thread multiplier")),
+            ..Default::default()
+        };
+        for input in [
+            r#"["--activate-profiles","+ci,!legacy","--threads","1C"]"#,
+            r#"["-P","ci,!legacy","-T","1C"]"#,
+            r#"["--activate-profiles=ci,!legacy","--threads=1C"]"#,
+            r#"["-P=ci,!legacy","-T=1C"]"#,
+            r#"["-Pci,!legacy","-T1C"]"#,
+            r#"["-Pci","-P!legacy","--threads=1C"]"#,
+        ] {
+            assert_eq!(
+                parse_maven_operation_options(input).expect("valid Maven CLI option spelling"),
+                expected,
+                "{input}"
+            );
+        }
+        for input in [
+            r#"["--activate-profiles"]"#,
+            r#"["-P","--non-recursive"]"#,
+            r#"["--activate-profiles=ci,,legacy"]"#,
+            r#"["-Pci,!"]"#,
+            r#"["-P="]"#,
+            r#"["--threads"]"#,
+            r#"["-T","--fail-fast"]"#,
+            r#"["--threads","2","-T3"]"#,
+        ] {
+            assert!(parse_maven_operation_options(input).is_err(), "{input}");
+        }
+        let profiles = (0..33)
+            .map(|index| format!("profile{index}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let too_many_profiles = serde_json::to_string(&["-P", &profiles]).expect("profile list");
+        assert!(parse_maven_operation_options(&too_many_profiles).is_err());
     }
 
     #[test]
@@ -16851,8 +16937,12 @@ mod tests {
                             "Choose one Maven failure policy",
                         ),
                         (
-                            r#"["--threads=2","-T3"]"#,
+                            r#"["--threads","2","-T3"]"#,
                             "Configure Maven threads only once",
+                        ),
+                        (
+                            r#"["--activate-profiles","ci,+ci"]"#,
+                            "Configure each Maven profile only once",
                         ),
                         (
                             r#"["--threads=0"]"#,
@@ -16879,7 +16969,7 @@ mod tests {
                     }
                     input.update(cx, |editor, cx| {
                         editor.set_text(
-                            r#"["-Pci","-P!legacy","-DskipTests","-N","-fae","-T2"]"#,
+                            r#"["--activate-profiles","+ci,!legacy","-DskipTests","-N","-fae","-T","2"]"#,
                             window,
                             cx,
                         );
