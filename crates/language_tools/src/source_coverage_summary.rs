@@ -37,6 +37,7 @@ impl From<&SourceCoverageSnapshot> for SourceCoverageReportIdentity {
 
 pub struct SourceCoverageSummaryProjection {
     identity: SourceCoverageReportIdentity,
+    status: SourceCoverageStatus,
     pub roots: Vec<LanguageToolNode>,
     navigation: HashMap<LanguageToolNodeId, ProjectPath>,
 }
@@ -102,7 +103,7 @@ impl SourceCoverageSummaryProjection {
             })
             .collect::<Vec<_>>();
         files.sort_by(|left, right| left.label.cmp(&right.label));
-        let status = status_label(status);
+        let state_label = status_label(status);
         let root = LanguageToolNode {
             id: LanguageToolNodeId(format!(
                 "source-coverage:{}:{}",
@@ -110,7 +111,7 @@ impl SourceCoverageSummaryProjection {
             )),
             label: format!("Coverage — {}", snapshot.provider_id.0),
             secondary_label: Some(format!(
-                "{status} · {} file(s){}",
+                "{state_label} · {} file(s){}",
                 files.len(),
                 if snapshot.truncated {
                     " · truncated"
@@ -120,7 +121,7 @@ impl SourceCoverageSummaryProjection {
             )),
             icon: None,
             accessibility_label: format!(
-                "Source coverage provider {}, {status}, {} files{}",
+                "Source coverage provider {}, {state_label}, {} files{}",
                 snapshot.provider_id.0,
                 files.len(),
                 if snapshot.truncated {
@@ -135,6 +136,7 @@ impl SourceCoverageSummaryProjection {
         };
         Self {
             identity: snapshot.into(),
+            status,
             roots: vec![root],
             navigation,
         }
@@ -391,6 +393,14 @@ impl Render for SourceCoverageToolbar {
         let providers = self.providers.clone();
         let selected = self.provider.clone();
         let filter = self.filter;
+        let show_empty_filter = filter != SourceCoverageFilter::All
+            && self.projection.as_ref().is_some_and(|projection| {
+                projection.navigation.is_empty()
+                    && matches!(
+                        projection.status,
+                        SourceCoverageStatus::Current | SourceCoverageStatus::Partial
+                    )
+            });
         let files = self
             .projection
             .as_ref()
@@ -463,6 +473,17 @@ impl Render for SourceCoverageToolbar {
                         );
                     }
                     menu = menu.separator();
+                    if show_empty_filter {
+                        menu = menu.custom_row(|_, _| {
+                            let message = "No files match this filter";
+                            div()
+                                .id("source-coverage-empty-filter")
+                                .role(gpui::Role::Label)
+                                .aria_label(message)
+                                .child(Label::new(message).color(Color::Muted))
+                                .into_any_element()
+                        });
+                    }
                     for (identity, label, path) in files {
                         let this = this.clone();
                         menu = menu.entry(label, None, move |window, cx| {
@@ -643,6 +664,28 @@ mod tests {
                 );
             });
         }
+
+        summary.update(cx, |summary, cx| {
+            summary.filter = SourceCoverageFilter::Partial;
+            summary.refresh(cx);
+            let projection = summary.projection.as_ref().expect("filtered projection");
+            assert_eq!(projection.status, SourceCoverageStatus::Current);
+            assert!(projection.navigation.is_empty());
+        });
+        cx.update(|window, cx| {
+            window.activate_a11y_for_test();
+            window.draw(cx).clear(cx);
+            let menu = summary.read(cx).menu.clone();
+            menu.show(window, cx);
+            assert!(menu.is_deployed());
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let tree = window.debug_a11y_tree_json().expect("active coverage menu");
+            assert!(tree.contains("No files match this filter"));
+            assert!(!tree.contains("Coverage for src/lib.rs"));
+        });
     }
 
     #[gpui::test]
