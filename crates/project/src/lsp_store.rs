@@ -3660,6 +3660,8 @@ impl LocalLspStore {
             let snapshot = LspBufferSnapshot {
                 version: 0,
                 snapshot: initial_snapshot.clone(),
+                #[cfg(feature = "jvm-tools")]
+                fallback_definition_refreshed: false,
             };
 
             let mut registered = false;
@@ -6999,6 +7001,32 @@ impl LspStore {
         request.check_capabilities(capabilities)
     }
 
+    #[cfg(feature = "jvm-tools")]
+    fn fallback_definition_snapshot(
+        &mut self,
+        buffer: &Buffer,
+        server_id: LanguageServerId,
+        version: &Global,
+        abs_path: &Path,
+        cx: &mut App,
+    ) -> Option<&mut LspBufferSnapshot> {
+        if &buffer.version() != version
+            || File::from_dyn(buffer.file())
+                .and_then(File::as_local)?
+                .abs_path(cx)
+                != abs_path
+        {
+            return None;
+        }
+        self.language_server_for_local_buffer(buffer, server_id, cx)?;
+        self.as_local_mut()?
+            .buffer_snapshots
+            .get_mut(&buffer.remote_id())?
+            .get_mut(&server_id)?
+            .last_mut()
+            .filter(|snapshot| snapshot.snapshot.version() == version)
+    }
+
     pub fn request_lsp<R>(
         &mut self,
         buffer: Entity<Buffer>,
@@ -7170,6 +7198,10 @@ impl LspStore {
         let request_timeout = ProjectSettings::get_global(cx)
             .global_lsp_settings
             .get_request_timeout();
+        #[cfg(feature = "jvm-tools")]
+        let fallback_definition_version = (TypeId::of::<R>() == TypeId::of::<GetDefinitions>()
+            && kotlin_lsp_ext::supports_pinned_fallback_definition_refresh(&language_server))
+        .then(|| buffer.read(cx).version());
 
         cx.spawn(async move |this, cx| {
             if (is_on_type_formatting || is_rename)
@@ -7196,6 +7228,44 @@ impl LspStore {
                 })?
             {
                 return Ok(Default::default());
+            }
+            #[cfg(feature = "jvm-tools")]
+            if let Some(version) = fallback_definition_version.as_ref() {
+                let server_id = language_server.server_id();
+                let needs_refresh = this.update(cx, |store, cx| {
+                    buffer.update(cx, |buffer, cx| {
+                        store
+                            .fallback_definition_snapshot(buffer, server_id, version, &abs_path, cx)
+                            .map(|snapshot| {
+                                snapshot.version > 0 && !snapshot.fallback_definition_refreshed
+                            })
+                    })
+                })?;
+                let Some(needs_refresh) = needs_refresh else {
+                    return Ok(Default::default());
+                };
+                if needs_refresh {
+                    kotlin_lsp_ext::refresh_fallback_definition(
+                        &language_server,
+                        &abs_path,
+                        request_timeout,
+                    )
+                    .await?;
+                    let refreshed = this.update(cx, |store, cx| {
+                        buffer.update(cx, |buffer, cx| {
+                            let Some(snapshot) = store.fallback_definition_snapshot(
+                                buffer, server_id, version, &abs_path, cx,
+                            ) else {
+                                return false;
+                            };
+                            snapshot.fallback_definition_refreshed = true;
+                            true
+                        })
+                    })?;
+                    if !refreshed {
+                        return Ok(Default::default());
+                    }
+                }
             }
             let lsp_request = language_server.request::<R::LspRequest>(lsp_params, request_timeout);
 
@@ -7237,6 +7307,24 @@ impl LspStore {
             };
 
             let result = lsp_request.await.into_response();
+            #[cfg(feature = "jvm-tools")]
+            if let Some(version) = fallback_definition_version.as_ref()
+                && !this.update(&mut cx.clone(), |store, cx| {
+                    buffer.update(cx, |buffer, cx| {
+                        store
+                            .fallback_definition_snapshot(
+                                buffer,
+                                language_server.server_id(),
+                                version,
+                                &abs_path,
+                                cx,
+                            )
+                            .is_some()
+                    })
+                })?
+            {
+                return Ok(Default::default());
+            }
 
             let response = result.map_err(|err| {
                 let message = format!(
@@ -12272,6 +12360,8 @@ impl LspStore {
             buffer_snapshots.push(LspBufferSnapshot {
                 version: next_version,
                 snapshot: next_snapshot.clone(),
+                #[cfg(feature = "jvm-tools")]
+                fallback_definition_refreshed: false,
             });
 
             language_server
@@ -17637,7 +17727,11 @@ impl LspStore {
                             ),
                         },
                     )?;
-                    versions.push(LspBufferSnapshot { version, snapshot });
+                    versions.push(LspBufferSnapshot {
+                        version,
+                        snapshot,
+                        fallback_definition_refreshed: false,
+                    });
                     Ok::<_, anyhow::Error>(())
                 })??;
             }
@@ -21817,6 +21911,8 @@ impl LspStore {
                             vec![LspBufferSnapshot {
                                 version: 0,
                                 snapshot: buffer.text_snapshot(),
+                                #[cfg(feature = "jvm-tools")]
+                                fallback_definition_refreshed: false,
                             }]
                         });
 
@@ -23603,6 +23699,8 @@ impl LanguageServerWatchedPaths {
 struct LspBufferSnapshot {
     version: i32,
     snapshot: TextBufferSnapshot,
+    #[cfg(feature = "jvm-tools")]
+    fallback_definition_refreshed: bool,
 }
 
 #[cfg(feature = "jvm-tools")]

@@ -29,6 +29,192 @@ use crate::init_test;
 
 #[cfg(feature = "jvm-tools")]
 #[gpui::test]
+async fn pinned_kotlin_definition_refreshes_only_the_current_edited_document(
+    cx: &mut TestAppContext,
+) {
+    use language::{Language, LanguageConfig, LanguageMatcher};
+
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/kotlin-definition"),
+        json!({"UseGreeting.kt": "fun useGreeting() = Greeting()\n", "Greeting.kt": "class Greeting\n"}),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/kotlin-definition").as_ref()], cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(Arc::new(Language::new(
+        LanguageConfig {
+            name: "Kotlin".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["kt".into()],
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        },
+        None,
+    )));
+    let capabilities = lsp::ServerCapabilities {
+        definition_provider: Some(lsp::OneOf::Left(true)),
+        semantic_tokens_provider: Some(
+            lsp::SemanticTokensServerCapabilities::SemanticTokensOptions(
+                lsp::SemanticTokensOptions {
+                    range: Some(true),
+                    legend: lsp::SemanticTokensLegend {
+                        token_types: Vec::new(),
+                        token_modifiers: Vec::new(),
+                    },
+                    work_done_progress_options: Default::default(),
+                    full: None,
+                },
+            ),
+        ),
+        ..Default::default()
+    };
+    let mut servers = languages.register_fake_lsp(
+        "Kotlin",
+        FakeLspAdapter {
+            name: "kotlin-language-server",
+            capabilities: capabilities.clone(),
+            initializer: Some(Box::new(move |server| {
+                let capabilities = capabilities.clone();
+                server.set_request_handler::<lsp::request::Initialize, _, _>(move |_, _| {
+                    let capabilities = capabilities.clone();
+                    async move {
+                        Ok(lsp::InitializeResult {
+                            capabilities,
+                            server_info: Some(lsp::ServerInfo {
+                                name: "Kotlin Language Server".into(),
+                                version: Some("1.3.13".into()),
+                            }),
+                        })
+                    }
+                });
+            })),
+            ..Default::default()
+        },
+    );
+    let (buffer, _handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(path!("/kotlin-definition/UseGreeting.kt"), cx)
+        })
+        .await
+        .expect("open Kotlin fixture");
+    let server = servers.next().await.expect("pinned Kotlin server");
+    cx.run_until_parked();
+    let messages = Arc::new(Mutex::new(Vec::new()));
+    let held_refresh = Arc::new(Mutex::new(
+        None::<futures::channel::oneshot::Receiver<bool>>,
+    ));
+    let _refresh_requests = server
+        .set_request_handler::<lsp::request::SemanticTokensRangeRequest, _, _>({
+            let messages = messages.clone();
+            let held_refresh = held_refresh.clone();
+            move |params, _| {
+                assert!(
+                    params
+                        .text_document
+                        .uri
+                        .as_str()
+                        .ends_with("/UseGreeting.kt"),
+                    "refresh should address the edited Kotlin document"
+                );
+                messages.lock().push("refresh");
+                let held_refresh = held_refresh.lock().take();
+                async move {
+                    if let Some(held_refresh) = held_refresh
+                        && !held_refresh.await?
+                    {
+                        return Ok(None);
+                    }
+                    Ok(Some(lsp::SemanticTokensRangeResult::Tokens(
+                        lsp::SemanticTokens {
+                            result_id: None,
+                            data: Vec::new(),
+                        },
+                    )))
+                }
+            }
+        });
+    let _definition_requests = server.set_request_handler::<lsp::request::GotoDefinition, _, _>({
+        let messages = messages.clone();
+        move |_, _| {
+            messages.lock().push("definition");
+            async move { Ok(None) }
+        }
+    });
+    let define = |cx: &mut TestAppContext| {
+        project.update(cx, |project, cx| project.definitions(&buffer, 21, cx))
+    };
+    define(cx).await.expect("unedited navigation");
+    assert_eq!(*messages.lock(), ["definition"]);
+
+    buffer.update(cx, |buffer, cx| buffer.edit([(0..0, " ")], None, cx));
+    define(cx).await.expect("edited navigation");
+    define(cx).await.expect("repeated navigation");
+    assert_eq!(
+        *messages.lock(),
+        ["definition", "refresh", "definition", "definition"]
+    );
+
+    buffer.update(cx, |buffer, cx| buffer.edit([(0..0, " ")], None, cx));
+    let (release, pending) = futures::channel::oneshot::channel();
+    *held_refresh.lock() = Some(pending);
+    let superseded = define(cx);
+    cx.run_until_parked();
+    assert_eq!(messages.lock().last(), Some(&"refresh"));
+    buffer.update(cx, |buffer, cx| buffer.edit([(0..0, " ")], None, cx));
+    release.send(true).expect("release superseded refresh");
+    assert!(
+        superseded
+            .await
+            .expect("superseded navigation")
+            .expect("response")
+            .is_empty()
+    );
+    assert_eq!(messages.lock().last(), Some(&"refresh"));
+
+    define(cx)
+        .await
+        .expect("current navigation after another edit");
+    assert_eq!(
+        *messages.lock(),
+        [
+            "definition",
+            "refresh",
+            "definition",
+            "definition",
+            "refresh",
+            "refresh",
+            "definition"
+        ]
+    );
+
+    buffer.update(cx, |buffer, cx| buffer.edit([(0..0, " ")], None, cx));
+    let (release, pending) = futures::channel::oneshot::channel();
+    *held_refresh.lock() = Some(pending);
+    let rejected = define(cx);
+    cx.run_until_parked();
+    release.send(false).expect("release failed refresh");
+    assert!(
+        rejected
+            .await
+            .expect("navigation with unconfirmed analysis")
+            .expect("response")
+            .is_empty()
+    );
+    assert_eq!(messages.lock().last(), Some(&"refresh"));
+    define(cx).await.expect("retry on the same edited version");
+    assert!(
+        messages
+            .lock()
+            .ends_with(&["refresh", "refresh", "definition"])
+    );
+}
+
+#[cfg(feature = "jvm-tools")]
+#[gpui::test]
 #[ignore = "requires the installed Kotlin grammar at GROOVY_KOTLIN_GRAMMAR"]
 async fn pinned_kotlin_fallback_keeps_symbol_highlights_at_class_boundaries(
     cx: &mut TestAppContext,

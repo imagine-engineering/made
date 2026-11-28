@@ -24,6 +24,53 @@ const LATEST_RELEASE_API: &str = "https://api.github.com/repos/Kotlin/kotlin-lsp
 const MAX_RELEASE_METADATA: u64 = 128 * 1024;
 const RELEASE_TIMEOUT: Duration = Duration::from_secs(10);
 
+pub(super) fn supports_pinned_fallback_definition_refresh(server: &LanguageServer) -> bool {
+    if server.name() != LanguageServerName::new_static("kotlin-language-server")
+        || server.version().as_deref() != Some("1.3.13")
+    {
+        return false;
+    }
+    let capabilities = server.capabilities();
+    let options = match capabilities.semantic_tokens_provider.as_ref() {
+        Some(lsp::SemanticTokensServerCapabilities::SemanticTokensOptions(options)) => options,
+        Some(lsp::SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(options)) => {
+            &options.semantic_tokens_options
+        }
+        None => return false,
+    };
+    options.range == Some(true)
+}
+
+pub(super) async fn refresh_fallback_definition(
+    server: &LanguageServer,
+    path: &Path,
+    request_timeout: Duration,
+) -> Result<()> {
+    let origin = lsp::Position::new(0, 0);
+    // The 1.3.13 definition handler reads the last compiled file. Its range-token handler
+    // compiles the current document before building the response, even for an empty range.
+    let reply = server
+        .request::<lsp::request::SemanticTokensRangeRequest>(
+            lsp::SemanticTokensRangeParams {
+                text_document: lsp::TextDocumentIdentifier {
+                    uri: super::file_path_to_lsp_url(path)?,
+                },
+                range: lsp::Range::new(origin, origin),
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+            },
+            request_timeout.min(Duration::from_secs(3)),
+        )
+        .await
+        .into_response()
+        .context("Could not refresh Kotlin fallback before navigating to the definition")?;
+    ensure!(
+        reply.is_some(),
+        "Kotlin fallback did not confirm the analysis refresh before definition navigation"
+    );
+    Ok(())
+}
+
 pub(super) fn standalone_binary_version(binary: &Path) -> Option<Version> {
     if !matches!(
         binary.file_name()?.to_str()?,
