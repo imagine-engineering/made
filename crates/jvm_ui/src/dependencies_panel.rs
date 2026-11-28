@@ -25,6 +25,7 @@ use project::{
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
+    task_store::{JvmTaskTrigger, select_jvm_trigger_tasks},
     trusted_worktrees::TrustedWorktrees,
 };
 use task::{TaskContext, VariableName};
@@ -34,6 +35,7 @@ use workspace::{
     Panel, Workspace,
     dock::{DockMode, DockPosition, PanelEvent},
     notifications::DetachAndPromptErr as _,
+    tasks::ScheduledTaskResult,
     workspace_scoped_state_key,
 };
 
@@ -5766,35 +5768,19 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let project_id = self.project.entity_id();
-        let result = Self::prepare_configuration_dispatch(self.project.read(cx), &target, cx).and_then(|prepared| {
-            self.with_workspace_window(window, cx, |workspace, window, cx| {
-                    let target = target.clone();
-                    let source = target.source.clone();
-                    let task = prepared.task.clone();
-                    let owner = cx.weak_entity();
-                    workspace.schedule_resolved_task_with_terminal_check(
-                        source, task, Box::new(move |cx| {
-                            let result = owner.read_with(cx, |workspace, cx| {
-                                let project = workspace.project();
-                                anyhow::ensure!(
-                                    project.entity_id() == project_id,
-                                    "The saved configuration's project changed; select it again"
-                                );
-                                let current = Self::prepare_configuration_dispatch(project.read(cx), &target, cx)?;
-                                anyhow::ensure!(
-                                    current == prepared,
-                                    "Named configuration '{}' changed before launch; select it again",
-                                    target.label
-                                );
-                                Ok(())
-                            }).and_then(|result| result);
-                            gpui::Task::ready(result)
-                        }), window, cx,
-                    );
-                })
-                .context("The workspace is unavailable; reopen the project before running configurations")
-        });
+        if self
+            .project
+            .read(cx)
+            .lsp_store()
+            .read(cx)
+            .jvm_trigger_is_armed(target.worktree_id, JvmTaskTrigger::BeforeRun)
+        {
+            self.configuration_notice =
+                Some("A saved configuration sequence is already active for this project".into());
+            cx.notify();
+            return;
+        }
+        let result = self.start_configuration(&target, window, cx);
         self.configuration_notice = Some(match result {
             Ok(()) => {
                 let label = target.label.clone();
@@ -5810,6 +5796,177 @@ impl DependenciesPanel {
             }
         });
         self.rebuild(cx);
+    }
+
+    fn start_configuration(
+        &self,
+        target: &SavedConfiguration,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let project = self.project.read(cx);
+        let prepared = Self::prepare_configuration_dispatch(project, target, cx)?;
+        let worktree_id = target.worktree_id;
+        let store = project.lsp_store();
+        let activation = JvmTaskTrigger::BeforeRun;
+        let tasks = project
+            .task_store()
+            .read(cx)
+            .task_inventory()
+            .context("The build Task inventory is unavailable; reopen the project")?
+            .read(cx);
+        let hook_steps = |trigger| -> anyhow::Result<Vec<_>> {
+            select_jvm_trigger_tasks(tasks.saved_task_templates(worktree_id), trigger)?
+                .into_iter()
+                .map(|(source, template)| {
+                    let hook = SavedConfiguration {
+                        worktree_id,
+                        source,
+                        label: template.label,
+                    };
+                    anyhow::ensure!(
+                        &hook != target,
+                        "A saved configuration cannot also be its own {} Task",
+                        trigger.label()
+                    );
+                    let prepared = Self::prepare_configuration_dispatch(project, &hook, cx)?;
+                    Ok(SavedConfigurationStep {
+                        target: hook,
+                        prepared,
+                        trigger: Some(trigger),
+                    })
+                })
+                .collect()
+        };
+        let mut steps = hook_steps(JvmTaskTrigger::BeforeRun)?;
+        steps.push(SavedConfigurationStep {
+            target: target.clone(),
+            prepared,
+            trigger: None,
+        });
+        steps.extend(hook_steps(JvmTaskTrigger::AfterRun)?);
+        let runs_hooks = steps.len() > 1;
+        let project_id = self.project.entity_id();
+        let panel = cx.weak_entity();
+
+        self.with_workspace_window(window, cx, |workspace, window, cx| {
+            anyhow::ensure!(
+                workspace.project().entity_id() == project_id,
+                "The saved configuration's project changed; select it again"
+            );
+            if !runs_hooks {
+                if let Some(step) = steps.pop() {
+                    drop(Self::schedule_configuration_step(step, project_id, None, workspace, window, cx));
+                }
+                return Ok(());
+            }
+            store.update(cx, |store, cx| store.arm_jvm_trigger(worktree_id, activation, cx))?;
+            let workspace = cx.weak_entity();
+            let store = store.downgrade();
+            window.spawn(cx, async move |cx| {
+                let mut result = async {
+                    for step in steps {
+                        let phase = step.trigger.map_or("run", JvmTaskTrigger::label);
+                        let label = step.target.label.clone();
+                        panel.update(cx, |panel, cx| {
+                            panel.configuration_notice = Some(format!("Running {phase} Task '{label}'"));
+                            cx.notify();
+                        }).log_err();
+                        let scheduled = workspace.update_in(cx, |workspace, window, cx| {
+                            Self::schedule_configuration_step(
+                                step, project_id, Some(activation), workspace, window, cx,
+                            )
+                        })?;
+                        let outcome = scheduled.await?;
+                        anyhow::ensure!(
+                            outcome == ScheduledTaskResult::Success,
+                            "{phase} Task '{label}' {}. Remaining Tasks were skipped.",
+                            match outcome {
+                                ScheduledTaskResult::Cancelled => "was cancelled",
+                                ScheduledTaskResult::Failure => "failed",
+                                _ => "could not start",
+                            }
+                        );
+                    }
+                    Ok::<_, anyhow::Error>(())
+                }.await;
+                if result.is_ok() {
+                    result = store.update(cx, |store, cx| {
+                        anyhow::ensure!(
+                            store.complete_jvm_trigger(worktree_id, activation, cx),
+                            "The project or Java provider changed during the saved configuration sequence"
+                        );
+                        Ok(())
+                    }).and_then(|completed| completed);
+                } else {
+                    store.update(cx, |store, _| store.cancel_jvm_trigger(worktree_id, activation)).log_err();
+                }
+                panel.update(cx, |panel, cx| {
+                    panel.configuration_notice = Some(match result {
+                        Ok(()) => "Saved configuration and its run hooks completed".into(),
+                        Err(error) => error.to_string(),
+                    });
+                    cx.notify();
+                }).log_err();
+            }).detach();
+            Ok(())
+        })
+        .context("The workspace is unavailable; reopen the project before running configurations")?
+    }
+
+    fn schedule_configuration_step(
+        step: SavedConfigurationStep,
+        project_id: gpui::EntityId,
+        activation: Option<JvmTaskTrigger>,
+        workspace: &mut Workspace,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) -> gpui::Task<anyhow::Result<ScheduledTaskResult>> {
+        let SavedConfigurationStep {
+            target,
+            prepared,
+            trigger,
+        } = step;
+        let source = target.source.clone();
+        let task = prepared.task.clone();
+        let owner = cx.weak_entity();
+        let check = Box::new(move |cx: &mut gpui::AsyncApp| {
+            let result = owner
+                .read_with(cx, |workspace, cx| {
+                    let project = workspace.project();
+                    anyhow::ensure!(
+                        project.entity_id() == project_id,
+                        "The saved configuration's project changed; select it again"
+                    );
+                    let project = project.read(cx);
+                    if let Some(activation) = activation {
+                        anyhow::ensure!(
+                            project
+                                .lsp_store()
+                                .read(cx)
+                                .jvm_trigger_provider_is_current(target.worktree_id, activation),
+                            "The Java provider changed during the saved configuration sequence"
+                        );
+                    }
+                    let current = Self::prepare_configuration_dispatch(project, &target, cx)?;
+                    anyhow::ensure!(
+                        current == prepared,
+                        "Named configuration '{}' changed before launch; select it again",
+                        target.label
+                    );
+                    Ok(())
+                })
+                .and_then(|result| result);
+            gpui::Task::ready(result)
+        });
+        workspace.schedule_resolved_task_with_terminal_check(
+            source,
+            task,
+            trigger.is_some(),
+            check,
+            window,
+            cx,
+        )
     }
 
     fn add_selected_ordered_operation(&mut self, cx: &mut Context<Self>) {
@@ -8694,6 +8851,12 @@ struct PreparedSavedConfiguration {
     task: task::ResolvedTask,
 }
 
+struct SavedConfigurationStep {
+    target: SavedConfiguration,
+    prepared: PreparedSavedConfiguration,
+    trigger: Option<JvmTaskTrigger>,
+}
+
 impl SavedConfiguration {
     fn queue_action(&self) -> RunOrderedConfiguration {
         RunOrderedConfiguration {
@@ -10359,7 +10522,7 @@ mod tests {
         let fs = project::FakeFs::new(cx.executor());
         fs.insert_tree(
             "/groovy-config",
-            serde_json::json!({"pom.xml": "<project/>", "mvnw": "fixture", "mvnw.cmd": "fixture"}),
+            serde_json::json!({"pom.xml": "<project/>", "mvnw": "fixture", "mvnw.cmd": "fixture", "Main.java": "class Main {}"}),
         )
         .await;
         let project = Project::test(fs, ["/groovy-config".as_ref()], cx).await;
@@ -10386,10 +10549,12 @@ mod tests {
         });
         let events = Arc::new(std::sync::Mutex::new(Vec::new()));
         let launch_gate = Arc::new(std::sync::Mutex::new(None));
+        let terminal_outcomes = Arc::new(std::sync::Mutex::new(VecDeque::new()));
         workspace.update(cx, |workspace, _| {
             workspace.set_terminal_provider(SavedConfigurationTerminal {
                 terminal: OperationTerminal(events.clone()),
                 launch_gate: launch_gate.clone(),
+                outcomes: terminal_outcomes.clone(),
             })
         });
         let async_cx = cx.update(|window, cx| window.to_async(cx));
@@ -10706,6 +10871,150 @@ mod tests {
                 "re-activation moves the entry to the front"
             );
         });
+
+        let languages = project.read_with(cx, |project, _| project.languages().clone());
+        languages.add(Arc::new(Language::new(
+            LanguageConfig {
+                name: "Java".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["java".into()],
+                    ..Default::default()
+                }
+                .into(),
+                ..Default::default()
+            },
+            None,
+        )));
+        let mut servers = languages.register_fake_lsp(
+            "Java",
+            FakeLspAdapter {
+                name: "jdtls",
+                ..Default::default()
+            },
+        );
+        let (_buffer, _open_handle) = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp("/groovy-config/Main.java", cx)
+            })
+            .await
+            .expect("open Java source");
+        let _java_server = servers.next().await.expect("live JDTLS");
+        cx.run_until_parked();
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project_tasks(),
+                    Some(
+                        r#"[
+                    {"label":"setup-z","command":"prepare","tags":["before-run"]},
+                    {"label":"setup-a","command":"verify","tags":["before-run"]},
+                    {"label":"cleanup","command":"finish","tags":["after-run"]},
+                    {"label":"unrelated","command":"skip","tags":["after-build"]}
+                ]"#,
+                    ),
+                )
+                .expect("saved run hooks");
+        });
+        events.lock().expect("Task events").clear();
+        panel.update_in(cx, |panel, window, cx| {
+            panel.rebuild(cx);
+            let hook = panel
+                .configuration_selections
+                .values()
+                .find(|target| target.label == "setup-z")
+                .expect("saved hook")
+                .clone();
+            panel.run_configuration(hook, window, cx);
+            assert!(panel.configuration_notice.as_deref()
+                .is_some_and(|notice| notice.contains("cannot also be its own before-run Task")));
+        });
+        cx.run_until_parked();
+        assert!(events.lock().expect("Task events").is_empty());
+        let (reached, mut reached_terminal) = oneshot::channel();
+        let (release, wait) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((reached, wait));
+        let run = |cx: &mut gpui::VisualTestContext| {
+            panel.update_in(cx, |panel, window, cx| {
+                panel.run_configuration(user_target.clone(), window, cx)
+            });
+            cx.run_until_parked();
+        };
+        run(cx);
+        assert_eq!(
+            reached_terminal.try_recv().expect("first hook preparing"),
+            Some(())
+        );
+        assert!(panel.read_with(cx, |panel, _| {
+            panel
+                .configuration_notice
+                .as_deref()
+                .is_some_and(|notice| notice == "Running before-run Task 'setup-z'")
+        }));
+        run(cx);
+        assert!(panel.read_with(cx, |panel, _| {
+            panel
+                .configuration_notice
+                .as_deref()
+                .is_some_and(|notice| notice.contains("already active"))
+        }));
+        release.send(()).expect("release first hook");
+        cx.run_until_parked();
+        let commands = || {
+            events
+                .lock()
+                .expect("Task events")
+                .iter()
+                .filter_map(|task| task.command.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(commands(), ["prepare", "verify", "gradle", "finish"]);
+        assert!(
+            inventory.read_with(cx, |inventory, _| {
+                inventory
+                    .last_scheduled_task(None)
+                    .is_some_and(|(source, task)| {
+                        source == user_target.source
+                            && task.original_task().label == user_target.label
+                    })
+            }),
+            "run hooks must not replace the user's selected Task in history"
+        );
+
+        #[cfg(unix)]
+        let failed = std::os::unix::process::ExitStatusExt::from_raw(256);
+        #[cfg(windows)]
+        let failed = std::os::windows::process::ExitStatusExt::from_raw(1);
+        terminal_outcomes
+            .lock()
+            .expect("terminal outcomes")
+            .push_back(Some(failed));
+        events.lock().expect("Task events").clear();
+        run(cx);
+        assert_eq!(commands(), ["prepare"]);
+        assert!(panel.read_with(cx, |panel, _| {
+            panel
+                .configuration_notice
+                .as_deref()
+                .is_some_and(|notice| notice.contains("before-run Task 'setup-z' failed"))
+        }));
+
+        terminal_outcomes.lock().expect("terminal outcomes").extend(
+            [Some(std::process::ExitStatus::default()); 2]
+                .into_iter()
+                .chain([None]),
+        );
+        events.lock().expect("Task events").clear();
+        run(cx);
+        assert_eq!(commands(), ["prepare", "verify", "gradle"]);
+        assert!(panel.read_with(cx, |panel, _| {
+            panel
+                .configuration_notice
+                .as_deref()
+                .is_some_and(|notice| notice.contains("run Task 'provider-build' was cancelled"))
+        }));
+        events.lock().expect("Task events").clear();
+        run(cx);
+        assert_eq!(commands(), ["prepare", "verify", "gradle", "finish"]);
     }
 
     #[test]
@@ -15292,6 +15601,7 @@ mod tests {
     struct SavedConfigurationTerminal {
         terminal: OperationTerminal,
         launch_gate: Arc<std::sync::Mutex<Option<TerminalLaunchGate>>>,
+        outcomes: Arc<std::sync::Mutex<VecDeque<Option<std::process::ExitStatus>>>>,
     }
 
     impl workspace::TerminalProvider for SavedConfigurationTerminal {
@@ -15313,25 +15623,29 @@ mod tests {
             cx: &mut App,
         ) -> gpui::Task<Option<anyhow::Result<std::process::ExitStatus>>> {
             let events = self.terminal.0.clone();
+            let outcomes = self.outcomes.clone();
             let gate = self.launch_gate.lock().expect("terminal gate").take();
             window.spawn(cx, async move |cx| {
-                Some(
-                    async {
-                        let prepared = prepare(task.clone(), cx).await?;
-                        prepared.validate_task_identity(&task)?;
-                        if let Some((ready, release)) = gate {
-                            ready.send(()).expect("test awaits terminal readiness");
-                            release.await?;
-                        }
-                        let check = prepared
-                            .check_before_spawn
-                            .context("saved Task terminal check")?;
-                        check(cx).await?;
-                        events.lock().expect("Task events").push(prepared.launch);
-                        Ok(std::process::ExitStatus::default())
+                let completed = async {
+                    let prepared = prepare(task.clone(), cx).await?;
+                    prepared.validate_task_identity(&task)?;
+                    if let Some((ready, release)) = gate {
+                        ready.send(()).expect("test awaits terminal readiness");
+                        release.await?;
                     }
-                    .await,
-                )
+                    let check = prepared
+                        .check_before_spawn
+                        .context("saved Task terminal check")?;
+                    check(cx).await?;
+                    events.lock().expect("Task events").push(prepared.launch);
+                    Ok(outcomes
+                        .lock()
+                        .expect("terminal outcomes")
+                        .pop_front()
+                        .unwrap_or(Some(std::process::ExitStatus::default())))
+                }
+                .await;
+                completed.transpose()
             })
         }
     }

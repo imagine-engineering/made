@@ -1056,22 +1056,33 @@ impl Workspace {
         &mut self,
         source: TaskSourceKind,
         task: ResolvedTask,
+        omit_history: bool,
         check: project::terminals::TaskTerminalCheck,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Task<Result<ScheduledTaskResult>> {
+        let (sender, receiver) = futures::channel::oneshot::channel();
         self.schedule_resolved_task_internal(
             source,
             task,
-            false,
+            omit_history,
             None,
-            None,
+            Some(Box::new(move |outcome, _| {
+                if sender.send(outcome).is_err() {
+                    log::debug!("The caller no longer awaits its checked Task");
+                }
+            })),
             Some(Box::new(move |_, _, _| Ok(Some(check)))),
             None,
             None,
             window,
             cx,
         );
+        cx.background_spawn(async move {
+            receiver
+                .await
+                .context("The checked Task terminal is unavailable")
+        })
     }
 
     pub fn schedule_resolved_task_with_structured_handle(

@@ -452,35 +452,35 @@ pub fn plan_trigger_sequence(
     cx: &mut App,
 ) -> Task<anyhow::Result<Vec<(TaskSourceKind, TaskTemplate)>>> {
     let entries = inventory.read(cx).list_tasks(None, None, worktree_id, cx);
-    cx.spawn(async move |_| {
-        let entries = entries.await;
-        let mut sequence = Vec::new();
-        for (kind, template) in entries {
-            if !template
-                .tags
-                .iter()
-                .any(|tag| JvmTaskTrigger::from_tag(tag) == Some(trigger))
-            {
-                continue;
-            }
-            anyhow::ensure!(
-                sequence.len() < MAX_TRIGGER_SEQUENCE_DEPENDENCIES,
-                "The {} trigger sequence exceeds the {MAX_TRIGGER_SEQUENCE_DEPENDENCIES}-configuration limit",
-                trigger.label(),
-            );
-            anyhow::ensure!(
-                sequence
-                    .iter()
-                    .all(|(_, saved): &(TaskSourceKind, TaskTemplate)| saved.label
-                        != template.label),
-                "The {} trigger sequence lists configuration '{}' more than once",
-                trigger.label(),
-                template.label,
-            );
-            sequence.push((kind, template));
+    cx.spawn(async move |_| select_jvm_trigger_tasks(entries.await, trigger))
+}
+
+pub fn select_jvm_trigger_tasks(
+    entries: impl IntoIterator<Item = (TaskSourceKind, TaskTemplate)>,
+    trigger: JvmTaskTrigger,
+) -> anyhow::Result<Vec<(TaskSourceKind, TaskTemplate)>> {
+    let mut sequence = Vec::new();
+    for (source, template) in entries {
+        if !template.tags.iter().any(|tag| tag == trigger.label()) {
+            continue;
         }
-        Ok(sequence)
-    })
+        anyhow::ensure!(
+            sequence.len() < MAX_TRIGGER_SEQUENCE_DEPENDENCIES,
+            "The {} trigger sequence exceeds the {MAX_TRIGGER_SEQUENCE_DEPENDENCIES}-configuration limit",
+            trigger.label(),
+        );
+        anyhow::ensure!(
+            sequence
+                .iter()
+                .all(|(_, saved): &(TaskSourceKind, TaskTemplate)| saved.label != template.label),
+            "The {} trigger sequence lists configuration '{}' more than once",
+            trigger.label(),
+            template.label,
+        );
+        sequence.push((source, template));
+    }
+    sequence.sort_by(|(left, _), (right, _)| left.cmp(right));
+    Ok(sequence)
 }
 
 fn local_task_context_for_location(

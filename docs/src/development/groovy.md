@@ -535,9 +535,19 @@ to activate a project profile that sets the `javadoc` classifier and `jar`
 type. Review the resolved and unresolved artifacts in the Task terminal. Maven can
 exit successfully when a source archive is absent.
 
-Complete arbitrary-argument handling, before-launch hooks, and remote queue
-execution remain open. Selected test results appear in the Tests view.
-Supported debugging uses the Debug panel.
+For an explicit run of a local saved configuration from the Groovy tool
+window, a saved Task can opt in with the `before-run` or `after-run` tag.
+Groovy uses the current worktree's project Tasks and your saved user Tasks.
+It runs each phase in saved file order, with project files before user
+files. The selected configuration starts only after all before-run Tasks
+succeed. After-run Tasks start only after the selected run succeeds.
+If a Task fails or you cancel it in the terminal, Groovy skips the rest of
+the sequence. Run hooks require a trusted project and its live Java provider.
+
+Complete arbitrary-argument handling, configured dependency lists, other
+activation hooks, and connected saved configuration runs remain open.
+Selected test results appear in the Tests view. Supported debugging uses
+the Debug panel.
 
 The complete required scope and remaining gaps are in the
 [tool-window parity inventory](./groovy-tool-window-parity.md#capability-matrix).

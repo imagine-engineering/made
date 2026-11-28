@@ -18238,6 +18238,29 @@ impl LspStore {
         Ok(())
     }
 
+    #[cfg(feature = "jvm-tools")]
+    pub fn jvm_trigger_is_armed(
+        &self,
+        worktree_id: WorktreeId,
+        trigger: crate::task_store::JvmTaskTrigger,
+    ) -> bool {
+        self.pending_jvm_triggers
+            .contains_key(&(worktree_id, trigger))
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn jvm_trigger_provider_is_current(
+        &self,
+        worktree_id: WorktreeId,
+        trigger: crate::task_store::JvmTaskTrigger,
+    ) -> bool {
+        self.pending_jvm_triggers
+            .get(&(worktree_id, trigger))
+            .is_some_and(|activation| {
+                self.live_jdtls_server_id(worktree_id) == Some(activation.server_id)
+            })
+    }
+
     /// Releases an armed trigger activation when its operation completes. A
     /// replaced or vanished Java provider drops the activation instead of
     /// firing it, as does trust revoked between arming and completion.
