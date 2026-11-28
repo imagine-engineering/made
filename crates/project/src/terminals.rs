@@ -19,9 +19,12 @@ use task::{
     Shell, ShellBuilder, ShellKind, SpawnInTerminal, StructuredTaskHandle, StructuredTerminalId,
 };
 use terminal::{
-    TaskState, TaskStatus, Terminal, TerminalBuilder, insert_zed_terminal_env,
+    TaskState, TaskStatus, TerminalBuilder, insert_zed_terminal_env,
     terminal_settings::TerminalSettings,
 };
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub use terminal::NativeProfileTaskDestination;
+pub use terminal::Terminal;
 use util::{
     command::new_std_command, get_default_system_shell, get_system_shell, maybe, rel_path::RelPath,
 };

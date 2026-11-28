@@ -1170,38 +1170,45 @@ impl TerminalPanel {
             })?;
             pending_creation.panel = None;
             let terminal = created?;
-            let result = workspace.update_in(cx, |workspace, window, cx| {
-                let terminal_view = Box::new(cx.new(|cx| {
-                    TerminalView::new(
-                        terminal.clone(),
-                        workspace.weak_handle(),
-                        workspace.database_id(),
-                        workspace.project().downgrade(),
-                        window,
-                        cx,
-                    )
-                }));
-
-                match reveal_strategy {
-                    RevealStrategy::Always => {
-                        workspace.focus_panel::<Self>(window, cx);
-                    }
-                    RevealStrategy::NoFocus => {
-                        workspace.open_panel::<Self>(window, cx);
-                    }
-                    RevealStrategy::Never => {}
-                }
-
-                pane.update(cx, |pane, cx| {
-                    let focus = matches!(reveal_strategy, RevealStrategy::Always);
-                    pane.add_item(terminal_view, true, focus, None, window, cx);
-                });
-
-                Ok(terminal.downgrade())
+            workspace.update_in(cx, |workspace, window, cx| {
+                Self::attach_dock_task_terminal(
+                    workspace, &pane, terminal.clone(), reveal_strategy, window, cx,
+                );
             })?;
             terminal_panel.update(cx, |terminal_panel, cx| terminal_panel.serialize(cx))?;
-            result
+            Ok(terminal.downgrade())
         })
+    }
+
+    fn attach_dock_task_terminal(
+        workspace: &mut Workspace,
+        pane: &Entity<Pane>,
+        terminal: Entity<Terminal>,
+        reveal: RevealStrategy,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let terminal_view = Box::new(cx.new(|cx| {
+            TerminalView::new(
+                terminal,
+                workspace.weak_handle(),
+                workspace.database_id(),
+                workspace.project().downgrade(),
+                window,
+                cx,
+            )
+        }));
+        match reveal {
+            RevealStrategy::Always => {
+                workspace.focus_panel::<Self>(window, cx);
+            }
+            RevealStrategy::NoFocus => workspace.open_panel::<Self>(window, cx),
+            RevealStrategy::Never => {}
+        }
+        pane.update(cx, |pane, cx| {
+            let focus = matches!(reveal, RevealStrategy::Always);
+            pane.add_item(terminal_view, true, focus, None, window, cx);
+        });
     }
 
     fn add_terminal_shell(
@@ -2163,6 +2170,42 @@ impl workspace::TerminalProvider for TerminalProvider {
         cx: &mut App,
     ) -> Task<Option<Result<ExitStatus>>> {
         self.spawn_internal(task, None, None, window, cx)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn attach_task_terminal(
+        &self,
+        terminal: Entity<Terminal>,
+        reveal: RevealStrategy,
+        target: RevealTarget,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Task<Result<()>> {
+        let panel = self.0.clone();
+        let workspace = panel.read(cx).workspace.clone();
+        let pane = panel.read(cx).active_pane.clone();
+        window.spawn(cx, async move |cx| {
+            match target {
+                RevealTarget::Center => {
+                    workspace
+                        .update_in(cx, |workspace, window, cx| {
+                            TerminalPanel::add_center_terminal(workspace, window, cx, |_, _| {
+                                Task::ready(Ok(terminal))
+                            })
+                        })?
+                        .await?;
+                }
+                RevealTarget::Dock => {
+                    workspace.update_in(cx, |workspace, window, cx| {
+                        TerminalPanel::attach_dock_task_terminal(
+                            workspace, &pane, terminal, reveal, window, cx,
+                        );
+                    })?;
+                    panel.update(cx, |panel, cx| panel.serialize(cx));
+                }
+            }
+            Ok(())
+        })
     }
 
     fn spawn_structured(

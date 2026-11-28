@@ -89,11 +89,6 @@ impl TaskNativeProfileContinuation {
                 && !self.profile_path.starts_with('-'),
             "Native profile output must be a resolved primary profile base"
         );
-        let stem = self
-            .profile_path
-            .strip_suffix(".json")
-            .filter(|stem| !stem.is_empty())
-            .context("Native profile output must use the .json extension")?;
         anyhow::ensure!(
             self.workload_arguments.len() <= 128,
             "Native profile workload has too many literal arguments"
@@ -112,13 +107,29 @@ impl TaskNativeProfileContinuation {
                 "Native profile workload arguments exceed their total byte limit"
             );
         }
+        Self::artifact_group(self.profile_path.clone())?;
+        Ok(())
+    }
+
+    pub fn bound_artifact_group(&self, invocation_id: &str) -> anyhow::Result<TaskArtifactGroup> {
+        self.validate()?;
+        let invocation_id = normalized_artifact_invocation_id(invocation_id)?;
+        Self::artifact_group(bound_artifact_path(&self.profile_path, &invocation_id)?)
+    }
+
+    fn artifact_group(profile_path: String) -> anyhow::Result<TaskArtifactGroup> {
+        let stem = profile_path
+            .strip_suffix(".json")
+            .filter(|stem| !stem.is_empty())
+            .context("Native profile output must use the .json extension")?;
+        let symbols_path = format!("{stem}.syms.json");
         let group = TaskArtifactGroup {
             format: "samply-0.13.1".into(),
             files: BTreeMap::from_iter([
                 (
                     "profile".into(),
                     TaskArtifact {
-                        path: self.profile_path.clone(),
+                        path: profile_path,
                         kind: TaskArtifactKind::Data,
                         max_bytes: MAX_TASK_ARTIFACT_BYTES,
                     },
@@ -126,15 +137,14 @@ impl TaskNativeProfileContinuation {
                 (
                     "symbols".into(),
                     TaskArtifact {
-                        path: format!("{stem}.syms.json"),
+                        path: symbols_path,
                         kind: TaskArtifactKind::Data,
                         max_bytes: 16 * 1024 * 1024,
                     },
                 ),
             ]),
         };
-        group.with_resolved_files(group.files.clone())?;
-        Ok(())
+        group.with_resolved_files(group.files.clone())
     }
 }
 

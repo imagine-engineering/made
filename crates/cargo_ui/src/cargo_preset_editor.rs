@@ -538,7 +538,7 @@ impl Render for CargoPresetEditor {
                         Section::new()
                             .child(self.editor.clone())
                             .child(div().mt_2().text_sm().child(
-                                "For macOS native profiling, set native_profiler to an object with collector_path for user-installed Samply 0.13.1 and a project-relative profile_path ending in .json. Set profiler to null. Binary and example targets currently use the host default dev Build; other native selections and custom Build options remain incomplete."
+                                "For native profiling on macOS or Linux, set native_profiler with the path to your Samply 0.13.1 executable and a project-relative profile_path ending in .json. Select a binary or example target and leave profiler unset."
                             ))
                             .child(div().mt_2().text_sm().child(format!("Preview: {preview}")))
                             .when_some(self.last_error.clone(), |section, error| {
@@ -923,7 +923,7 @@ mod tests {
                 .draft(cx)
                 .expect("current editable JSON declaration")
                 .profile_action_label()),
-            "Native Profile (macOS)"
+            crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL
         );
         cx.dispatch_action(ProfileDraft);
         cx.run_until_parked();
@@ -965,11 +965,11 @@ mod tests {
         let content = preset_settings_content(&preset, CargoPresetSaveScope::User);
         let parsed = parse_preset_content(&preset.id, &content)
             .expect("existing editor JSON accepts native mode");
-        assert_eq!(parsed.profile_action_label(), "Native Profile (macOS)");
+        assert_eq!(parsed.profile_action_label(), crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL);
         let preview = redacted_preset_preview(&parsed)
             .expect("native preview")
             .display();
-        assert!(preview.contains("Native Profile (macOS)"));
+        assert!(preview.contains(crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL));
         assert!(preview.contains("Cargo Build then Samply 0.13.1"));
         assert!(preview.contains("TOKEN"));
         assert!(!preview.contains("sensitive-value"));

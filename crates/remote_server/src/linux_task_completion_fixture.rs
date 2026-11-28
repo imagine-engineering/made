@@ -1503,7 +1503,7 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
                     let recording = target.join(format!("selected-{}.json", run_id.simple()));
                     let symbols = recording.with_extension("syms.json");
                     let destination = terminal::NativeProfileTaskDestination::open([recording.clone(), symbols.clone()])?;
-                    profile.retain(destination)?;
+                    profile.retain(destination, || true)?;
                     let artifacts = native_task_helper::linux_task_completion::NativeProfileTaskArtifacts {
                         profile: std::fs::read(recording)?,
                         symbols: std::fs::read(symbols)?,

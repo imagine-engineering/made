@@ -255,6 +255,18 @@ pub trait TerminalProvider {
         cx: &mut App,
     ) -> Task<Option<Result<ExitStatus>>>;
 
+    #[cfg(target_os = "linux")]
+    fn attach_task_terminal(
+        &self,
+        _terminal: Entity<project::terminals::Terminal>,
+        _reveal: task::RevealStrategy,
+        _target: task::RevealTarget,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Task<Result<()>> {
+        Task::ready(Err(anyhow::anyhow!("Task terminal presentation is unavailable")))
+    }
+
     fn spawn_prepared(
         &self,
         _task: SpawnInTerminal,

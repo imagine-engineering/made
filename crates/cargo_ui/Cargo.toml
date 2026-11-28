@@ -37,6 +37,9 @@ ui.workspace = true
 util.workspace = true
 workspace.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+workspace = { workspace = true, features = ["rust-native-profiling"] }
+
 [dev-dependencies]
 paths.workspace = true
 async-trait.workspace = true

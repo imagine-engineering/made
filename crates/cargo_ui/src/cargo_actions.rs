@@ -845,12 +845,15 @@ impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
                     })?;
                     crate::cargo_profile::validate_native_profile_selection(&selection, &preset)?;
                     let store = project.read_with(cx, |project, cx| {
-                    anyhow::ensure!(
-                        project.is_local() && !project.is_shared() && !project.is_disconnected(cx),
-                        "Selected native profiling requires an unshared connected local macOS host"
-                    );
-                    Ok(project.cargo_workspace_store().clone())
-                })?;
+                        anyhow::ensure!(
+                            cfg!(any(target_os = "macos", target_os = "linux"))
+                                && project.is_local()
+                                && !project.is_shared()
+                                && !project.is_disconnected(cx),
+                            "Selected native profiling requires an unshared connected local macOS or Linux host"
+                        );
+                        Ok(project.cargo_workspace_store().clone())
+                    })?;
                     let recipe = store.update(cx, |store, cx| {
                         let (snapshot, current) = store.cached_snapshot(cx).ok_or_else(|| {
                             anyhow!("Refresh Cargo metadata before native profiling")
@@ -863,7 +866,17 @@ impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
                             crate::cargo_profile::native_profile_selected_target(
                                 &selection, snapshot,
                             )?;
-                        store.prepare_native_cargo_runtime_recipe(
+                        #[cfg(target_os = "linux")]
+                        let recipe = store.prepare_native_cargo_build_recipe(
+                            workspace,
+                            member,
+                            target,
+                            preset.profile.clone(),
+                            preset.environment.clone(),
+                            cx,
+                        );
+                        #[cfg(not(target_os = "linux"))]
+                        let recipe = store.prepare_native_cargo_runtime_recipe(
                             workspace,
                             member,
                             target,
@@ -871,7 +884,8 @@ impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
                             preset.environment.clone(),
                             preset.trailing_args.clone(),
                             cx,
-                        )
+                        );
+                        recipe
                     })?;
                     let recipe = recipe.await?;
                     let mut template =
@@ -5059,7 +5073,10 @@ mod tests {
         assert!(action.enabled);
         assert_eq!(
             action.accessibility_label,
-            "Native Profile (macOS) selected Cargo item"
+            format!(
+                "{} selected Cargo item",
+                crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL
+            )
         );
         for unsupported in [CargoActionTargetKind::Test, CargoActionTargetKind::Bench] {
             selected.node_kind = CargoActionNodeKind::Target(unsupported);
@@ -5077,7 +5094,10 @@ mod tests {
             assert!(
                 action
                     .accessibility_label
-                    .contains("Native Profile (macOS) unavailable")
+                    .starts_with(&format!(
+                        "{} unavailable",
+                        crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL
+                    ))
             );
             assert!(
                 action

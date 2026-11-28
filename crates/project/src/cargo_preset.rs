@@ -337,6 +337,12 @@ pub struct CargoPreset {
 }
 
 impl CargoPreset {
+    pub const NATIVE_PROFILE_ACTION_LABEL: &'static str = if cfg!(target_os = "linux") {
+        "Native Profile (Linux)"
+    } else {
+        "Native Profile (macOS)"
+    };
+
     pub fn ephemeral_default(subcommand: CargoSubcommand) -> Self {
         Self {
             id: "cargo-default".to_string(),
@@ -363,7 +369,7 @@ impl CargoPreset {
 
     pub fn profile_action_label(&self) -> &'static str {
         if self.native_profiler.is_some() {
-            "Native Profile (macOS)"
+            Self::NATIVE_PROFILE_ACTION_LABEL
         } else {
             "Profile"
         }

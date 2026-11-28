@@ -381,7 +381,7 @@ fn configuration_node(
             &active_id,
             "profiling-mode",
             "Profiling mode",
-            "macOS native",
+            "Native",
             None,
             navigation,
         ));
@@ -410,7 +410,7 @@ fn configuration_node(
     ]
     .join(" · ");
     if active.native_profiling {
-        active_summary.push_str(" · macOS native profiling");
+        active_summary.push_str(" · Native profiling");
     }
     let mut children = vec![LanguageToolNode {
         id: active_id,
@@ -6736,15 +6736,15 @@ fn main() {
         let (snapshot, _) = CargoTreeProvider::project_with_configuration(&snapshot(), &active);
         let mode =
             find_node(&snapshot.roots, "Profiling mode").expect("visible native configuration");
-        assert_eq!(mode.secondary_label.as_deref(), Some("macOS native"));
-        assert!(mode.accessibility_label.contains("macOS native"));
+        assert_eq!(mode.secondary_label.as_deref(), Some("Native"));
+        assert!(mode.accessibility_label.contains("Native"));
         assert_eq!(
             settings
                 .presets
                 .get("native")
                 .expect("current preset")
                 .profile_action_label(),
-            "Native Profile (macOS)"
+            CargoPreset::NATIVE_PROFILE_ACTION_LABEL
         );
         assert_eq!(
             CargoPreset::ephemeral_default(crate::CargoSubcommand::Run).profile_action_label(),

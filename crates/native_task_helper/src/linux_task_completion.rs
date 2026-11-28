@@ -511,8 +511,18 @@ impl SealedNativeProfileTask {
         Ok(pair)
     }
 
-    pub fn retain(self, destination: NativeProfileTaskDestination) -> io::Result<()> {
-        destination.check_directory()?;
+    pub fn retain(
+        self,
+        destination: NativeProfileTaskDestination,
+        is_current: impl Fn() -> bool,
+    ) -> io::Result<[Metadata; 2]> {
+        let check_destination = || {
+            if !is_current() {
+                return Err(io::Error::from(io::ErrorKind::Interrupted));
+            }
+            destination.check_directory()
+        };
+        check_destination()?;
         let pair = self.read()?;
         let directory = destination.descriptor_path();
         let [profile, symbols] = destination
@@ -537,20 +547,35 @@ impl SealedNativeProfileTask {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(error),
         };
-        destination.check_directory()?;
+        check_destination()?;
         // Publish the sidecar first so the visible recording never precedes its companion.
-        sidecar.persist_noclobber(&symbols)?;
-        if let Err(error) = recording.persist_noclobber(&profile) {
-            remove_own_file(&symbols, &sidecar_inode)?;
-            return Err(error.into());
-        }
-        if let Err(error) = destination.check_directory() {
+        let sidecar = sidecar.persist_noclobber(&symbols)?;
+        let recording = match recording.persist_noclobber(&profile) {
+            Ok(recording) => recording,
+            Err(error) => {
+                remove_own_file(&symbols, &sidecar_inode)?;
+                return Err(error.into());
+            }
+        };
+        let retained = (|| {
+            check_destination()?;
+            let recording = recording.metadata()?;
+            let sidecar = sidecar.metadata()?;
+            if !same_artifact_version(&recording, &fs::symlink_metadata(&profile)?)
+                || !same_artifact_version(&sidecar, &fs::symlink_metadata(&symbols)?)
+            {
+                return Err(io::Error::other(
+                    "Retained Native Profile Task files changed",
+                ));
+            }
+            Ok([recording, sidecar])
+        })();
+        if retained.is_err() {
             let profile_cleanup = remove_own_file(&profile, &recording_inode);
             let sidecar_cleanup = remove_own_file(&symbols, &sidecar_inode);
             profile_cleanup.and(sidecar_cleanup)?;
-            return Err(error);
         }
-        Ok(())
+        retained
     }
 }
 
@@ -1511,7 +1536,7 @@ mod tests {
         };
         let root = tempfile::tempdir_in("/tmp")?;
         let paths = ["capture.json", "capture.syms.json"].map(|name| root.path().join(name));
-        seal()?.retain(NativeProfileTaskDestination::open(paths.clone())?)?;
+        seal()?.retain(NativeProfileTaskDestination::open(paths.clone())?, || true)?;
         for (path, expected) in paths.iter().zip([b"recording".as_slice(), b"symbols"]) {
             assert_eq!(fs::read(path)?, expected);
             assert_eq!(fs::metadata(path)?.mode() & 0o777, 0o600);
@@ -1522,7 +1547,7 @@ mod tests {
         fs::write(&paths[0], b"existing recording")?;
         assert_eq!(
             seal()?
-                .retain(destination)
+                .retain(destination, || true)
                 .expect_err("Overwrote a recording")
                 .kind(),
             io::ErrorKind::AlreadyExists
@@ -1535,8 +1560,18 @@ mod tests {
         fs::write(profile.reservation.symbols_path(), b"changed after seal")?;
         assert!(
             profile
-                .retain(NativeProfileTaskDestination::open(paths.clone())?)
+                .retain(NativeProfileTaskDestination::open(paths.clone())?, || true)
                 .is_err()
+        );
+        assert!(paths.iter().all(|path| !path.exists()));
+
+        let destination = NativeProfileTaskDestination::open(paths.clone())?;
+        assert_eq!(
+            seal()?
+                .retain(destination, || !paths[0].exists())
+                .expect_err("Retained a recording after cancellation")
+                .kind(),
+            io::ErrorKind::Interrupted
         );
         assert!(paths.iter().all(|path| !path.exists()));
 
@@ -1548,7 +1583,7 @@ mod tests {
         fs::rename(&output, &moved)?;
         std::os::unix::fs::symlink(&moved, &output)?;
         assert!(NativeProfileTaskDestination::open(paths.clone()).is_err());
-        assert!(seal()?.retain(destination).is_err());
+        assert!(seal()?.retain(destination, || true).is_err());
         assert!(paths.iter().all(|path| !path.exists()));
         Ok(())
     }

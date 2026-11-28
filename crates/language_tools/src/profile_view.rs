@@ -188,9 +188,14 @@ fn offer_task_profile(
     cx: &mut Context<Workspace>,
 ) {
     if !cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>()
-        || !cfg!(target_os = "macos")
+        || ProfileHost::local_import_host().is_none()
         || !native_task_group_supported(&group)
         || !group.is_current(workspace.project(), cx)
+    {
+        return;
+    }
+    if cfg!(target_os = "linux")
+        && (!workspace.project().read(cx).is_local() || !group.host_verified())
     {
         return;
     }

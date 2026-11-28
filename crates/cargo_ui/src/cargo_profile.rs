@@ -122,7 +122,11 @@ pub(crate) fn native_profile_build_template(
         workload_arguments: preset.trailing_args.clone(),
     };
     let stdout_report = task::TaskStdoutReport {
-        format: task::TaskStdoutReportFormat::CargoRuntimePreparationJson,
+        format: if cfg!(target_os = "linux") {
+            task::TaskStdoutReportFormat::CargoBuildJson
+        } else {
+            task::TaskStdoutReportFormat::CargoRuntimePreparationJson
+        },
         max_bytes: project::cargo_workspace::MAX_CARGO_BUILD_MESSAGE_BYTES,
         native_profile: Some(continuation),
     };
@@ -132,7 +136,7 @@ pub(crate) fn native_profile_build_template(
     }
     Ok(task::TaskTemplate {
         experimental_policy_version: task::EXPERIMENTAL_TASK_POLICY_VERSION,
-        label: format!("Native Profile (macOS): {}", preset.label),
+        label: format!("{}: {}", preset.profile_action_label(), preset.label),
         command: recipe
             .program
             .to_str()
@@ -978,7 +982,11 @@ mod tests {
             .expect("existing bounded report request");
         assert_eq!(
             report.format,
-            task::TaskStdoutReportFormat::CargoRuntimePreparationJson
+            if cfg!(target_os = "linux") {
+                task::TaskStdoutReportFormat::CargoBuildJson
+            } else {
+                task::TaskStdoutReportFormat::CargoRuntimePreparationJson
+            }
         );
         let continuation = report
             .native_profile
@@ -1093,7 +1101,11 @@ mod tests {
                         let report = replay.stdout_report().expect("finite runtime descriptor");
                         assert_eq!(
                             report.format,
-                            task::TaskStdoutReportFormat::CargoRuntimePreparationJson
+                            if cfg!(target_os = "linux") {
+                                task::TaskStdoutReportFormat::CargoBuildJson
+                            } else {
+                                task::TaskStdoutReportFormat::CargoRuntimePreparationJson
+                            }
                         );
                         assert_eq!(
                             report

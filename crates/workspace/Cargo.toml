@@ -16,6 +16,7 @@ doctest = false
 default = []
 agentic = ["dep:agent_settings", "zed_actions/agentic"]
 jvm-tools = ["project/jvm-tools"]
+rust-native-profiling = ["project/cargo-workspace", "project/rust-coverage"]
 test-support = [
     "client/test-support",
     "http_client/test-support",

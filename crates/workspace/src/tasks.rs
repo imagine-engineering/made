@@ -29,6 +29,9 @@ use util::TryFutureExt;
 
 use crate::{SaveIntent, Toast, Workspace, notifications::NotificationId};
 
+#[cfg(all(target_os = "linux", feature = "rust-native-profiling"))]
+mod linux_native_profile;
+
 #[cfg(any(test, feature = "test-support"))]
 fn native_capture_diagnostic_category(error: &anyhow::Error) -> &'static str {
     if error.is::<crate::TaskLaunchCancelled>() {
@@ -705,13 +708,7 @@ impl Workspace {
         handle: &StructuredTaskHandle,
         cx: &mut gpui::App,
     ) {
-        if let Some(pending) = self
-            .pending_native_profile_reviews
-            .get_mut(&review.task_id)
-            .filter(|pending| {
-                pending.run_id == review.run_id && Arc::ptr_eq(&pending.current, &review.current)
-            })
-        {
+        if let Some(pending) = self.pending_native_profile_review_mut(review) {
             pending.supersession_handle = Some(handle.clone());
         }
         let current = review.current.clone();
@@ -726,6 +723,17 @@ impl Workspace {
                 revoke_native_profile_review(&current, &revocation);
             }
         });
+    }
+
+    fn pending_native_profile_review_mut(
+        &mut self,
+        review: &NativeProfileReviewLease,
+    ) -> Option<&mut PendingNativeProfileReview> {
+        self.pending_native_profile_reviews
+            .get_mut(&review.task_id)
+            .filter(|pending| {
+                pending.run_id == review.run_id && Arc::ptr_eq(&pending.current, &review.current)
+            })
     }
 
     fn native_profile_review_is_current(
@@ -1381,6 +1389,19 @@ impl Workspace {
         let mut experimental_admission =
             || -> Result<Option<project::task_store::PendingExperimentalTaskLaunch>> {
                 ensure_generated_task_policy(&task_source_kind, resolved_task.original_task())?;
+                #[cfg(all(target_os = "linux", feature = "rust-native-profiling"))]
+                if native_build.as_ref().is_some_and(|report| {
+                    report.format == task::TaskStdoutReportFormat::CargoBuildJson
+                        && report.native_profile.is_some()
+                }) {
+                    anyhow::ensure!(
+                        matches!(&task_source_kind, TaskSourceKind::Language { name } if name.as_ref() == "Cargo")
+                            && admit.is_none()
+                            && admission_preflight.is_none()
+                            && selected_native_capture.is_none(),
+                        "Linux native Cargo Profile requires a selected Cargo Task"
+                    );
+                }
                 project::task_store::validate_experimental_task_requirements(
                     &resolved_task.resolved,
                     cx,
@@ -1605,6 +1626,27 @@ impl Workspace {
                         }
                     }));
                 }
+            }
+            #[cfg(all(target_os = "linux", feature = "rust-native-profiling"))]
+            if let Some(report) = native_build
+                .as_ref()
+                .filter(|report| report.format == task::TaskStdoutReportFormat::CargoBuildJson)
+            {
+                self.schedule_linux_native_cargo_profile(
+                    linux_native_profile::LinuxNativeCargoProfileLaunch {
+                        run_id: task_run_id,
+                        build: spawn_in_terminal,
+                        report: report.clone(),
+                        pending: pending_launch,
+                        artifact_current,
+                        artifact_subscriptions,
+                    },
+                    structured_handle,
+                    on_complete,
+                    window,
+                    cx,
+                );
+                return;
             }
             let mut native_review = match task_artifact_group
                 .as_ref()
