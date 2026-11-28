@@ -3996,6 +3996,7 @@ pub struct ProviderProjectState<Project, Metadata = ()> {
     stale: bool,
     failed_import: Option<LanguageServerId>,
     started_import: Option<LanguageServerId>,
+    blocked_provider_import: Option<LanguageServerId>,
     pending_import_refresh: Option<LanguageServerId>,
     import_operation: Option<ProviderRefreshToken>,
     failed_query: Option<(ProviderRefreshToken, Option<GradleTopologyUnavailable>)>,
@@ -4021,6 +4022,7 @@ impl<Project, Metadata: Default> Default for ProviderProjectState<Project, Metad
             stale: false,
             failed_import: None,
             started_import: None,
+            blocked_provider_import: None,
             pending_import_refresh: None,
             import_operation: None,
             failed_query: None,
@@ -4033,6 +4035,27 @@ impl<Project, Metadata: Default> Default for ProviderProjectState<Project, Metad
 }
 
 impl JdtlsProjectState {
+    pub(crate) fn blocked_provider_import(&self) -> Option<LanguageServerId> {
+        self.blocked_provider_import
+    }
+
+    pub(crate) fn update_provider_import_blocked(
+        &mut self,
+        server_id: LanguageServerId,
+        blocked: bool,
+    ) -> Result<bool> {
+        if self.import_operation.is_some()
+            || self.failed_import == Some(server_id)
+            || blocked == (self.blocked_provider_import == Some(server_id))
+        {
+            return Ok(false);
+        }
+        self.mark_stale()?;
+        self.failed_query = None;
+        self.blocked_provider_import = blocked.then_some(server_id);
+        Ok(true)
+    }
+
     pub(crate) fn finish_remote(
         &mut self,
         token: ProviderRefreshToken,
@@ -4240,6 +4263,9 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         if self.started_import == Some(server_id) {
             self.started_import = None;
         }
+        if self.blocked_provider_import == Some(server_id) {
+            self.blocked_provider_import = None;
+        }
         if self.pending_import_refresh == Some(server_id) {
             self.pending_import_refresh = None;
         }
@@ -4274,6 +4300,7 @@ impl<Project, Metadata: Default> ProviderProjectState<Project, Metadata> {
         }
         self.failed_import = None;
         self.started_import = None;
+        self.blocked_provider_import = None;
         self.pending_import_refresh = None;
     }
 

@@ -794,8 +794,16 @@ async fn docker_maven_recovers_offline_import_after_kotlin_restart(cx: &mut Test
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a fresh offline Linux ARM64 Maven host with pinned JDTLS"]
+async fn docker_maven_recovers_offline_import_after_java_restart(cx: &mut TestAppContext) {
+    verify_docker_offline_import_recovery(OfflineImportFixture::JavaMaven, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OfflineImportFixture {
+    JavaMaven,
     JavaGradle,
     KotlinGradle,
     KotlinMaven,
@@ -813,6 +821,12 @@ async fn verify_docker_offline_import_recovery(
     use std::{cell::RefCell, path::Path, rc::Rc};
 
     let (server, source_path, source_marker, guidance) = match fixture {
+        OfflineImportFixture::JavaMaven => (
+            "jdtls",
+            "application/src/main/java/evidence/Main.java",
+            "class Main",
+            "Java Maven import needs cached dependencies; populate the host Maven cache or disable Maven offline mode, then reimport",
+        ),
         OfflineImportFixture::JavaGradle => (
             "jdtls",
             "application/src/main/java/evidence/Main.java",
@@ -832,7 +846,14 @@ async fn verify_docker_offline_import_recovery(
             "Kotlin Maven import needs cached dependencies. Restore the project host’s Maven cache, then restart the Kotlin language server. Review Maven offline mode if downloads are allowed.",
         ),
     };
-    let is_maven = fixture == OfflineImportFixture::KotlinMaven;
+    let is_maven = matches!(
+        fixture,
+        OfflineImportFixture::JavaMaven | OfflineImportFixture::KotlinMaven
+    );
+    let is_java = matches!(
+        fixture,
+        OfflineImportFixture::JavaMaven | OfflineImportFixture::JavaGradle
+    );
     let (build_tool, build_name, fixture_dir, cache_home, root) = if is_maven {
         (
             JvmTestBuildTool::Maven,
@@ -852,8 +873,15 @@ async fn verify_docker_offline_import_recovery(
     };
     assert_eq!(fixture_dir.parent(), cache_home.parent());
     let (missing_entry, restorable, failed) = if is_maven {
+        let candidate = if is_java {
+            "maven-resources-plugin/3.4.0"
+        } else {
+            "maven-install-plugin/3.1.4"
+        };
         (
-            cache_home.join("repository/org/apache/maven/plugins/maven-install-plugin/3.1.4"),
+            cache_home
+                .join("repository/org/apache/maven/plugins")
+                .join(candidate),
             cache_home.join("restorable-plugin"),
             None,
         )
@@ -864,11 +892,11 @@ async fn verify_docker_offline_import_recovery(
             Some(cache_home.join("failed-caches")),
         )
     };
-    let missing_file = if is_maven {
-        Path::new("maven-install-plugin-3.1.4.jar")
-    } else {
-        Path::new("modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/2.0.21")
-    };
+    let missing_file = Path::new(match fixture {
+        OfflineImportFixture::JavaMaven => "maven-resources-plugin-3.4.0.jar",
+        OfflineImportFixture::KotlinMaven => "maven-install-plugin-3.1.4.jar",
+        _ => "modules-2/files-2.1/org.jetbrains.kotlin/kotlin-gradle-plugin/2.0.21",
+    });
     assert!(!missing_entry.join(missing_file).exists());
     assert!(restorable.join(missing_file).exists());
     if let Some(failed) = &failed {
@@ -938,14 +966,18 @@ async fn verify_docker_offline_import_recovery(
     };
     assert!(!missing_entry.join(missing_file).exists());
     assert!(buffer.read_with(cx, |buffer, _| buffer.text().contains(source_marker)));
-    if fixture != OfflineImportFixture::JavaGradle {
+    {
         while !store.read_with(cx, |store, _| {
-            store.kotlin_workspace_import_failed(worktree_id)
+            if is_java {
+                store.jdtls_project_import_failed(worktree_id)
+            } else {
+                store.kotlin_workspace_import_failed(worktree_id)
+            }
         }) {
             cx.run_until_parked();
             assert!(
                 Instant::now() < deadline,
-                "the connected Dependencies store must report the terminal Kotlin import failure: {:?}",
+                "the connected Dependencies store must report the terminal {server} import failure: {:?}",
                 health.borrow()
             );
             cx.background_executor
@@ -953,14 +985,19 @@ async fn verify_docker_offline_import_recovery(
                 .await;
         }
         let (status, _, navigation) = panel.read_with(cx, |panel, _| panel.snapshot_for_test());
+        let failure = if is_java {
+            "JVM build import failed"
+        } else {
+            "Kotlin project import failed."
+        };
         assert!(
             language_tools::language_tool_tree::status_message(&status)
-                .is_some_and(|message| message.starts_with("Kotlin project import failed.")),
-            "the mounted Dependencies tree must report the Kotlin import failure: {status:?}",
+                .is_some_and(|message| message.starts_with(failure)),
+            "the mounted Dependencies tree must report the {server} import failure: {status:?}",
         );
         assert!(
             navigation.is_empty(),
-            "failed Kotlin facts must not be navigable"
+            "failed {server} facts must not be navigable"
         );
     }
 
@@ -1020,18 +1057,23 @@ async fn verify_docker_offline_import_recovery(
     loop {
         cx.run_until_parked();
         let snapshot = store.read_with(cx, |store, _| match fixture {
-            OfflineImportFixture::JavaGradle => {
-                store
-                    .jdtls_project_snapshot(worktree_id)
-                    .map(|(snapshot, current)| {
-                        let imported = snapshot.projects.iter().any(|module| {
-                            module.module_root.path.as_unix_str() == "application"
-                                && module.imported_build_kind
-                                    == project::jvm_project::JdtlsImportedBuildKind::Gradle
-                        });
-                        (snapshot.server_id, current, imported)
-                    })
-            }
+            OfflineImportFixture::JavaGradle | OfflineImportFixture::JavaMaven => store
+                .jdtls_project_snapshot(worktree_id)
+                .map(|(snapshot, current)| {
+                    use project::jvm_project::JdtlsImportedBuildKind;
+                    let (kind, modules): (_, &[_]) = if is_maven {
+                        (JdtlsImportedBuildKind::Maven, &["application", "library"])
+                    } else {
+                        (JdtlsImportedBuildKind::Gradle, &["application"])
+                    };
+                    let imported = modules.iter().all(|expected| {
+                        snapshot.projects.iter().any(|module| {
+                            module.module_root.path.as_unix_str() == *expected
+                                && module.imported_build_kind == kind
+                        })
+                    });
+                    (snapshot.server_id, current, imported)
+                }),
             OfflineImportFixture::KotlinGradle | OfflineImportFixture::KotlinMaven => store
                 .kotlin_workspace_snapshot(worktree_id)
                 .map(|(snapshot, current)| {
@@ -1063,7 +1105,7 @@ async fn verify_docker_offline_import_recovery(
             "{server} restart did not recover the offline {build_name} project: {snapshot:?}, health: {:?}",
             health.borrow()
         );
-        if fixture == OfflineImportFixture::JavaGradle && Instant::now() >= refresh_at {
+        if is_java && Instant::now() >= refresh_at {
             store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
             refresh_at = Instant::now() + Duration::from_secs(5);
         }

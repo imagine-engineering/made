@@ -14187,6 +14187,16 @@ impl LspStore {
                         if let Some(phase) = phase {
                             lsp_store.on_remote_kotlin_import_event(language_server_id, phase, cx);
                         }
+                    } else if let proto::update_language_server::Variant::StatusUpdate(status) =
+                        &non_lsp
+                        && envelope.payload.server_name.as_deref() == Some("jdtls")
+                        && let Some(blocked) = status.jdtls_build_import_blocked
+                        && let Some(worktree_id) =
+                            lsp_store.remote_jvm_import_worktree(language_server_id, "jdtls", cx)
+                    {
+                        lsp_store.apply_jdtls_import_blocked(
+                            language_server_id, worktree_id, blocked, cx,
+                        );
                     }
                     cx.emit(LspStoreEvent::LanguageServerUpdate {
                         language_server_id,
@@ -15269,6 +15279,10 @@ impl LspStore {
                 return Ok(None);
             }
             if let Some(state) = store.jdtls_projects.get(&worktree_id) {
+                ensure!(
+                    state.blocked_provider_import() != Some(server_id),
+                    "Host Java project import is blocked"
+                );
                 if state.import_operation().is_some()
                     || state.failed_import() == Some(server_id)
                     || (state.snapshot_is_current()
@@ -15321,6 +15335,10 @@ impl LspStore {
         }
         let (cached_snapshot, host_generation) = this.update(&mut cx, |store, _| {
             let state = store.jdtls_projects.entry(worktree_id).or_default();
+            ensure!(
+                state.blocked_provider_import() != Some(server_id),
+                "Host Java project import is blocked"
+            );
             ensure!(
                 state.import_operation().is_none(),
                 "Java project import is in progress; retry after it completes"
@@ -15864,6 +15882,7 @@ impl LspStore {
         let state = self.jdtls_projects.get(&worktree_id)?;
         let snapshot = state.snapshot()?;
         (snapshot.worktree_id == worktree_id
+            && state.blocked_provider_import() != Some(snapshot.server_id)
             && self.provider_project_server_is_live(
                 snapshot.server_id,
                 worktree_id,
@@ -15909,7 +15928,7 @@ impl LspStore {
     pub fn jdtls_project_import_failed(&self, worktree_id: WorktreeId) -> bool {
         self.jdtls_projects
             .get(&worktree_id)
-            .and_then(|state| state.failed_import())
+            .and_then(|state| state.blocked_provider_import().or(state.failed_import()))
             .is_some_and(|server_id| {
                 self.provider_project_server_is_live(
                     server_id,
@@ -16089,6 +16108,18 @@ impl LspStore {
         phase: proto::KotlinWorkspaceImportPhase,
         cx: &mut Context<Self>,
     ) {
+        if let Some(worktree_id) = self.remote_jvm_import_worktree(server_id, "kotlin-lsp", cx) {
+            self.apply_kotlin_import_event(server_id, worktree_id, phase, cx);
+        }
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn remote_jvm_import_worktree(
+        &self,
+        server_id: LanguageServerId,
+        provider: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Option<WorktreeId> {
         if !self.as_remote().is_some_and(|remote| {
             remote.upstream_project_id == proto::REMOTE_SERVER_PROJECT_ID
                 && remote
@@ -16096,16 +16127,13 @@ impl LspStore {
                     .as_ref()
                     .is_some_and(|client| !client.is_via_collab())
         }) {
-            return;
+            return None;
         }
-        let Some(worktree_id) = self
+        let worktree_id = self
             .language_server_statuses
             .get(&server_id)
-            .filter(|status| status.name == LanguageServerName::new_static("kotlin-lsp"))
-            .and_then(|status| status.worktree)
-        else {
-            return;
-        };
+            .filter(|status| status.name == LanguageServerName::new_static(provider))
+            .and_then(|status| status.worktree)?;
         if !self
             .worktree_store
             .read(cx)
@@ -16117,9 +16145,54 @@ impl LspStore {
                 })
             })
         {
-            return;
+            return None;
         }
-        self.apply_kotlin_import_event(server_id, worktree_id, phase, cx);
+        Some(worktree_id)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn on_jdtls_import_blocked(
+        &mut self,
+        server_id: LanguageServerId,
+        blocked: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let worktree_ids = self
+            .as_local()
+            .into_iter()
+            .flat_map(|local| local.language_server_ids.iter())
+            .filter(|(seed, server)| {
+                seed.name == LanguageServerName::new_static("jdtls") && server.id == server_id
+            })
+            .map(|(seed, _)| seed.worktree_id)
+            .collect::<Vec<_>>();
+        for worktree_id in worktree_ids {
+            self.apply_jdtls_import_blocked(server_id, worktree_id, blocked, cx);
+        }
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn apply_jdtls_import_blocked(
+        &mut self,
+        server_id: LanguageServerId,
+        worktree_id: WorktreeId,
+        blocked: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let state = self.jdtls_projects.entry(worktree_id).or_default();
+        match state.update_provider_import_blocked(server_id, blocked) {
+            Ok(false) => return,
+            Ok(true) => {}
+            Err(error) => {
+                log::warn!("Could not update blocked JDTLS import: {error:#}");
+                return;
+            }
+        }
+        self.jdtls_refresh_tasks.remove(&worktree_id);
+        cx.notify();
+        if !blocked {
+            self.schedule_jdtls_project_refresh(server_id, worktree_id, cx);
+        }
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -19384,6 +19457,7 @@ impl LspStore {
         if self.jdtls_projects.get(&worktree_id).is_some_and(|state| {
             state.import_operation().is_some()
                 || state.failed_import() == Some(server_id)
+                || state.blocked_provider_import() == Some(server_id)
                 || state
                     .pending_query()
                     .is_some_and(|token| token.server_id() == server_id)

@@ -584,6 +584,7 @@ fn emit_import_update(
             message: health.map(|(_, message)| message.to_owned()),
             status: health.map(|(health, _)| proto::status_update::Status::Health(health as i32)),
             kotlin_workspace_import: phase.map(|phase| phase as i32),
+            ..Default::default()
         },
         cx,
     );

@@ -721,47 +721,80 @@ pub(super) fn register_notifications(
     let server_id: LanguageServerId = language_server.server_id();
     let name = language_server.name();
     let project_events_store = lsp_store.clone();
+    let mut starting = false;
     language_server
         .on_notification::<StatusReport, _>(move |params, cx| {
-            let import_failure = if params.kind == "ProjectStatus" {
-                match params.message.as_deref() {
-                    Some("WARNING") => {
-                        ImportFailure::from_status(pending_import_failure.swap(0, Ordering::AcqRel))
-                    }
-                    Some("OK") => {
-                        pending_import_failure.store(0, Ordering::Release);
-                        lsp_store
-                            .update(cx, |store, cx| {
-                                let worktree_id = store
-                                    .language_server_statuses
-                                    .get(&server_id)
-                                    .and_then(|status| status.worktree);
-                                if let Some(worktree_id) = worktree_id
-                                    && store.jdtls_project_snapshot(worktree_id).is_some_and(
-                                        |(snapshot, current)| {
-                                            snapshot.server_id == server_id && !current
-                                        },
-                                    )
-                                {
-                                    store.schedule_jdtls_project_refresh(
-                                        server_id,
-                                        worktree_id,
-                                        cx,
-                                    );
-                                }
-                            })
-                            .log_err();
-                        None
-                    }
-                    _ => None,
+            let status = (params.kind.as_str(), params.message.as_deref());
+            let import_failure = match status {
+                ("Starting", _) => {
+                    starting = true;
+                    None
                 }
+                ("ServiceReady", _) => {
+                    starting = false;
+                    ImportFailure::from_status(pending_import_failure.swap(0, Ordering::AcqRel))
+                }
+                ("ProjectStatus", Some("WARNING")) => {
+                    ImportFailure::from_status(pending_import_failure.swap(0, Ordering::AcqRel))
+                }
+                // JDTLS can report an OK project while Maven startup still has a failed module.
+                ("ProjectStatus", Some("OK")) if !starting => {
+                    pending_import_failure.store(0, Ordering::Release);
+                    lsp_store
+                        .update(cx, |store, cx| {
+                            let worktree_id = store
+                                .language_server_statuses
+                                .get(&server_id)
+                                .and_then(|status| status.worktree);
+                            if let Some(worktree_id) = worktree_id
+                                && store.jdtls_project_snapshot(worktree_id).is_some_and(
+                                    |(snapshot, current)| {
+                                        snapshot.server_id == server_id && !current
+                                    },
+                                )
+                            {
+                                store.schedule_jdtls_project_refresh(server_id, worktree_id, cx);
+                            }
+                        })
+                        .log_err();
+                    None
+                }
+                _ => None,
+            };
+            let blocked = if import_failure.is_some() {
+                Some(true)
+            } else if status == ("ProjectStatus", Some("OK")) && !starting {
+                Some(false)
             } else {
                 None
             };
-            let Some((health, message)) = status_health(&params, import_failure) else {
-                return;
+            if let Some(blocked) = blocked {
+                lsp_store
+                    .update(cx, |store, cx| {
+                        store.on_jdtls_import_blocked(server_id, blocked, cx);
+                    })
+                    .log_err();
+            }
+            let health = if params.kind == "ServiceReady" {
+                import_failure.map(|failure| (proto::ServerHealth::Error, failure.message()))
+            } else {
+                status_health(&params, import_failure)
             };
-            super::emit_jvm_provider_health(&lsp_store, server_id, &name, health, message, cx);
+            if health.is_some() || blocked.is_some() {
+                super::emit_jvm_provider_status(
+                    &lsp_store,
+                    server_id,
+                    &name,
+                    proto::StatusUpdate {
+                        message: health.map(|(_, message)| message.to_owned()),
+                        status: health
+                            .map(|(health, _)| proto::status_update::Status::Health(health as i32)),
+                        jdtls_build_import_blocked: blocked,
+                        ..Default::default()
+                    },
+                    cx,
+                );
+            }
         })
         .detach();
 

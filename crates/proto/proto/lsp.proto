@@ -780,6 +780,7 @@ message StatusUpdate {
     ServerHealth health = 3;
   }
   optional KotlinWorkspaceImportPhase kotlin_workspace_import = 4;
+  optional bool jdtls_build_import_blocked = 5;
 }
 
 enum KotlinWorkspaceImportPhase {

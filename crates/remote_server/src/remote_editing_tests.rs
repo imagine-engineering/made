@@ -5794,6 +5794,115 @@ mod jvm_tools_runtime_tests {
                 .generation
         });
         assert!(restored_generation > previous_generation);
+
+        struct JavaProjectStatus;
+        impl lsp::notification::Notification for JavaProjectStatus {
+            type Params = serde_json::Value;
+            const METHOD: &'static str = "language/status";
+        }
+
+        restored_server.notify::<JavaProjectStatus>(json!({
+            "type": "ProjectStatus",
+            "message": "WARNING",
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(
+            lsp_store.read_with(panel_cx, |store, _| {
+                !store.jdtls_project_import_failed(worktree_id)
+                    && store
+                        .jdtls_project_snapshot(worktree_id)
+                        .is_some_and(|(_, current)| current)
+            }),
+            "ordinary Java diagnostics must keep the current dependency snapshot"
+        );
+
+        restored_server.notify::<JavaProjectStatus>(json!({
+            "type": "Starting",
+            "message": "Updating Maven configuration",
+        }));
+        restored_server.notify::<lsp::notification::LogMessage>(lsp::LogMessageParams {
+            typ: lsp::MessageType::ERROR,
+            message: "Cannot access central in offline mode and maven-resources-plugin has not been downloaded at /private/host/repository".into(),
+        });
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(
+            lsp_store.read_with(panel_cx, |store, _| {
+                !store.jdtls_project_import_failed(worktree_id)
+            }),
+            "the provider must confirm terminal status before withdrawing the snapshot"
+        );
+        restored_server.notify::<JavaProjectStatus>(json!({
+            "type": "ProjectStatus",
+            "message": "OK",
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(
+            lsp_store.read_with(panel_cx, |store, _| {
+                !store.jdtls_project_import_failed(worktree_id)
+            }),
+            "interim ProjectStatus OK must not consume the startup failure"
+        );
+        restored_server.notify::<JavaProjectStatus>(json!({
+            "type": "ServiceReady",
+            "message": "ServiceReady",
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(lsp_store.read_with(panel_cx, |store, _| {
+            store.jdtls_project_import_failed(worktree_id)
+                && store.jdtls_project_snapshot(worktree_id).is_none()
+        }));
+        panel.read_with(panel_cx, |panel, _| {
+            let (status, rows, navigation) = panel.snapshot_for_test();
+            assert!(
+                language_tools::language_tool_tree::status_message(&status)
+                    .is_some_and(|message| message.starts_with("JVM build import failed")),
+                "{status:?}"
+            );
+            assert!(rows.is_empty() && navigation.is_empty());
+        });
+        let refused = client
+            .request(proto::GetJdtlsProjectSnapshot {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                worktree_id: worktree_id.to_proto(),
+                protocol_version: 1,
+                request_id: 12,
+            })
+            .await
+            .expect_err("blocked Java import must withhold the previous workspace");
+        assert!(format!("{refused:#}").contains("Host Java project import is blocked"));
+
+        restored_server.notify::<JavaProjectStatus>(json!({
+            "type": "ProjectStatus",
+            "message": "OK",
+        }));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        server_cx
+            .executor()
+            .advance_clock(std::time::Duration::from_millis(300));
+        server_cx.run_until_parked();
+        panel_cx.run_until_parked();
+        assert!(
+            lsp_store.read_with(panel_cx, |store, _| {
+                !store.jdtls_project_import_failed(worktree_id)
+                    && store.jdtls_project_snapshot(worktree_id).is_some_and(
+                        |(snapshot, current)| {
+                            current
+                                && snapshot.generation > restored_generation
+                                && snapshot.projects.iter().any(|project| {
+                                    project.module_root.path.as_unix_str() == "application"
+                                })
+                        },
+                    )
+            }),
+            "provider recovery must refresh the connected model automatically"
+        );
+        assert_eq!(configuring_queries.load(Ordering::SeqCst), 2);
+
         remote.update(&mut client_cx, |remote, cx| {
             remote.force_server_not_running(cx)
         });
