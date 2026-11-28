@@ -1,8 +1,9 @@
 use crate::{
+    linux_cargo_runtime::{configure_profile_workload, validate_workload_environment},
     task_actor::{AuthenticatedTaskActor, CoverageTaskParent, OriginalTaskActor},
     task_completion::{
-        MAX_TASK_BUILD_INVOCATION_BYTES, TASK_STDOUT_FRAME_BYTES, TaskBuildInvocation,
-        validate_stdout_report_limit,
+        MAX_TASK_BUILD_INVOCATION_BYTES, ObservedTaskBuildInvocation, TASK_STDOUT_FRAME_BYTES,
+        TaskBuildInvocation, validate_stdout_report_limit,
     },
 };
 use futures_lite::{AsyncReadExt as _, AsyncWriteExt as _, future};
@@ -145,6 +146,7 @@ pub enum LinuxTaskMode {
     Coverage = 1,
     NativeProfile = 2,
     CargoBuild = 3,
+    CargoProfile = 4,
 }
 
 impl LinuxTaskMode {
@@ -153,6 +155,7 @@ impl LinuxTaskMode {
             Self::Coverage => "--observe-coverage-task",
             Self::NativeProfile => "--observe-native-profile-task",
             Self::CargoBuild => "--observe-cargo-build-task",
+            Self::CargoProfile => "--observe-cargo-profile-task",
         }
     }
 }
@@ -167,6 +170,7 @@ fn parse_task_helper(
         LinuxTaskMode::Coverage,
         LinuxTaskMode::NativeProfile,
         LinuxTaskMode::CargoBuild,
+        LinuxTaskMode::CargoProfile,
     ]
     .into_iter()
     .find(|mode| command == mode.command()) else {
@@ -431,6 +435,73 @@ pub struct LinuxTaskCompletion {
     directory: tempfile::TempDir,
 }
 
+pub struct LinuxCargoProfileInvocation(CargoProfileRequest);
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CargoProfileRequest {
+    collector: TaskBuildInvocation,
+    workload: TaskBuildInvocation,
+    runner: PathBuf,
+}
+
+impl LinuxCargoProfileInvocation {
+    pub fn new(
+        collector: TaskBuildInvocation,
+        workload: ObservedTaskBuildInvocation,
+        runner: PathBuf,
+    ) -> io::Result<Self> {
+        let invocation = CargoProfileRequest {
+            collector,
+            workload: (*workload.invocation).clone(),
+            runner,
+        };
+        invocation.validate()?;
+        Ok(Self(invocation))
+    }
+
+    pub fn collector(&self) -> &TaskBuildInvocation {
+        &self.0.collector
+    }
+}
+
+impl CargoProfileRequest {
+    fn validate(&self) -> io::Result<()> {
+        self.collector.validate()?;
+        validate_workload_environment(&self.workload)?;
+        let arguments = self.collector.arguments();
+        if self.collector.working_directory() != self.workload.working_directory()
+            || !self.runner.is_absolute()
+            || self.runner.as_os_str().as_encoded_bytes().len() > 4096
+            || self
+                .collector
+                .environment()
+                .keys()
+                .any(|key| key.starts_with("LD_") || key.starts_with("ZED_PROFILE_"))
+            || arguments
+                .first()
+                .is_none_or(|argument| argument != "record")
+            || arguments.last().is_none_or(|argument| argument != "--")
+            || arguments
+                .iter()
+                .filter(|argument| *argument == "--")
+                .count()
+                != 1
+            || !arguments
+                .iter()
+                .filter(|argument| argument.starts_with("--include-args"))
+                .map(String::as_str)
+                .eq(["--include-args=0"])
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid Linux Cargo profile invocation",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl LinuxTaskCompletion {
     pub fn bind() -> io::Result<Self> {
         let directory = tempfile::Builder::new()
@@ -492,7 +563,7 @@ impl LinuxTaskCompletion {
         let (mut actor, mut connection, challenge) = self
             .register_task(
                 actor,
-                invocation,
+                &invocation.encode_helper_environment()?,
                 LinuxTaskMode::CargoBuild,
                 Some(report_limit),
             )
@@ -514,6 +585,26 @@ impl LinuxTaskCompletion {
         .await
     }
 
+    pub async fn observe_cargo_profile(
+        self,
+        actor: OriginalTaskActor,
+        invocation: LinuxCargoProfileInvocation,
+        profile: NativeProfileTaskReservation,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<SealedNativeProfileTask>> {
+        invocation.0.validate()?;
+        profile.validate_invocation(invocation.collector())?;
+        let request = serde_json::to_string(&invocation.0).map_err(|_| invalid_completion())?;
+        self.observe_encoded_output(
+            actor,
+            &request,
+            LinuxTaskMode::CargoProfile,
+            Some(profile),
+            cancel,
+        )
+        .await
+    }
+
     async fn observe_output<Output: TaskOutputReservation>(
         self,
         actor: OriginalTaskActor,
@@ -524,9 +615,21 @@ impl LinuxTaskCompletion {
         if let Some(output) = output.as_ref() {
             output.validate_invocation(&invocation)?;
         }
-        let (mut actor, mut connection, challenge) = self
-            .register_task(actor, invocation, Output::KIND, None)
-            .await?;
+        let request = invocation.encode_helper_environment()?;
+        self.observe_encoded_output(actor, &request, Output::KIND, output, cancel)
+            .await
+    }
+
+    async fn observe_encoded_output<Output: TaskOutputReservation>(
+        self,
+        actor: OriginalTaskActor,
+        request: &str,
+        mode: LinuxTaskMode,
+        output: Option<Output>,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<Output::Sealed>> {
+        let (mut actor, mut connection, challenge) =
+            self.register_task(actor, request, mode, None).await?;
         until_deadline(COMPLETION_TIMEOUT, async {
             let (response, cancelled) =
                 receive_task_response(&mut connection, challenge, None, cancel).await?;
@@ -551,11 +654,13 @@ impl LinuxTaskCompletion {
     async fn register_task(
         &self,
         actor: OriginalTaskActor,
-        invocation: TaskBuildInvocation,
+        request: &str,
         kind: LinuxTaskMode,
         stdout_limit: Option<usize>,
     ) -> io::Result<(AuthenticatedTaskActor, UnixStream, [u8; 32])> {
-        let request = invocation.encode_helper_environment()?;
+        if request.len() > MAX_TASK_BUILD_INVOCATION_BYTES {
+            return Err(invalid_completion());
+        }
         let mut challenge = [0; 32];
         getrandom::fill(&mut challenge)
             .map_err(|_| io::Error::other("Cannot issue Native Task challenge"))?;
@@ -703,7 +808,7 @@ impl<Output> LinuxTaskReceipt<Output> {
 }
 
 async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> {
-    let (mut connection, invocation, challenge, parent, stdout_limit) =
+    let (mut connection, request, challenge, parent, stdout_limit) =
         until_deadline(REGISTRATION_TIMEOUT, async {
             let mut connection = UnixStream::connect(socket).await?;
             let parent = CoverageTaskParent::authenticate(&connection)?;
@@ -731,20 +836,24 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
             }
             let mut request = vec![0; length];
             connection.read_exact(&mut request).await?;
-            let invocation = serde_json::from_slice::<TaskBuildInvocation>(&request)
-                .map_err(|_| invalid_completion())?;
-            invocation.validate()?;
             parent.revalidate()?;
-            Ok((connection, invocation, challenge, parent, stdout_limit))
+            Ok((connection, request, challenge, parent, stdout_limit))
         })
         .await?;
 
-    let mut command = Command::new(invocation.program());
-    command
-        .args(invocation.arguments())
-        .current_dir(invocation.working_directory())
-        .env_clear()
-        .envs(invocation.environment());
+    let mut command = if matches!(kind, LinuxTaskMode::CargoProfile) {
+        let invocation = serde_json::from_slice::<CargoProfileRequest>(&request)
+            .map_err(|_| invalid_completion())?;
+        invocation.validate()?;
+        let mut command = task_command(&invocation.collector);
+        configure_profile_workload(&mut command, &invocation.runner, &invocation.workload)?;
+        command
+    } else {
+        let invocation = serde_json::from_slice::<TaskBuildInvocation>(&request)
+            .map_err(|_| invalid_completion())?;
+        invocation.validate()?;
+        task_command(&invocation)
+    };
     let helper_process = std::process::id();
     // The terminal may kill the helper before it can handle socket closure.
     unsafe {
@@ -760,7 +869,7 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
     }
     let (status, stdout) = match kind {
         LinuxTaskMode::Coverage => (run_coverage_workload(command, &mut connection).await?, None),
-        LinuxTaskMode::NativeProfile => {
+        LinuxTaskMode::NativeProfile | LinuxTaskMode::CargoProfile => {
             (run_profile_workload(command, &mut connection).await?, None)
         }
         LinuxTaskMode::CargoBuild => {
@@ -796,6 +905,15 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
     .await
 }
 
+fn task_command(invocation: &TaskBuildInvocation) -> Command {
+    let mut command = Command::new(invocation.program());
+    command
+        .args(invocation.arguments())
+        .current_dir(invocation.working_directory())
+        .env_clear()
+        .envs(invocation.environment());
+    command
+}
 async fn observer_interruption(connection: &mut UnixStream) -> io::Error {
     let mut command = [0; 1];
     match connection.read(&mut command).await {
@@ -1029,6 +1147,7 @@ mod tests {
             LinuxTaskMode::Coverage,
             LinuxTaskMode::NativeProfile,
             LinuxTaskMode::CargoBuild,
+            LinuxTaskMode::CargoProfile,
         ] {
             let address = "/tmp/task path/completion";
             assert_eq!(

@@ -829,8 +829,8 @@ impl NativeTerminalEnvironment {
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub use native_task_helper::{
     linux_task_completion::{
-        CoverageTaskReportReservation, NativeProfileTaskReservation, SealedCoverageTaskReport,
-        SealedNativeProfileTask,
+        CoverageTaskReportReservation, LinuxCargoProfileInvocation, NativeProfileTaskReservation,
+        SealedCoverageTaskReport, SealedNativeProfileTask,
     },
     task_completion::TaskBuildInvocation,
 };
@@ -1662,6 +1662,31 @@ impl TerminalBuilder {
             LinuxTaskMode::NativeProfile,
             move |completion, actor, invocation, cancel| {
                 completion.observe_cancellable_profile(actor, invocation, report, cancel)
+            },
+            window_id,
+            cx,
+        )
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn new_with_native_cargo_profile_task(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: LinuxCargoProfileInvocation,
+        report: NativeProfileTaskReservation,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(
+        Task<Result<Self>>,
+        LinuxNativeTaskObservation<SealedNativeProfileTask>,
+    )> {
+        Self::new_with_cancellable_linux_task(
+            launch,
+            structured_task,
+            invocation.collector().clone(),
+            LinuxTaskMode::CargoProfile,
+            move |completion, actor, _, cancel| {
+                completion.observe_cargo_profile(actor, invocation, report, cancel)
             },
             window_id,
             cx,

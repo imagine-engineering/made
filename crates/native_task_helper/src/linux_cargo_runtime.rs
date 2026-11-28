@@ -1,17 +1,19 @@
 use crate::{
     task_actor::{OriginalTaskActor, require_task_parent},
     task_completion::{
-        ObservedTaskBuildInvocation, TASK_CARGO_RUNTIME_ENDPOINT_ENV, TaskBuildInvocation,
+        MAX_TASK_BUILD_INVOCATION_BYTES, ObservedTaskBuildInvocation,
+        TASK_CARGO_RUNTIME_ENDPOINT_ENV, TaskBuildInvocation,
     },
 };
 use futures_lite::{AsyncWriteExt as _, future};
 use smol::net::unix::UnixListener;
 use std::{
     collections::BTreeMap,
+    ffi::{CStr, OsStr},
     fs::{File, Permissions},
     io::{self, Read as _},
     os::{
-        fd::{AsRawFd as _, FromRawFd as _},
+        fd::{AsRawFd as _, FromRawFd as _, RawFd},
         unix::{
             fs::{FileExt as _, MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
             process::CommandExt as _,
@@ -24,8 +26,11 @@ use std::{
 };
 
 const RUNNER_MODE: &str = "--observe-cargo-runtime";
+const WORKLOAD_MODE: &str = "--exec-cargo-workload";
 const MAX_RUNNER_BYTES: u64 = 32 * 1024 * 1024;
 const ACKNOWLEDGED: u8 = 7;
+const IMMUTABLE_FILE_SEALS: libc::c_int =
+    libc::F_SEAL_WRITE | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL;
 
 pub struct LinuxCargoRuntimeObserver {
     runner: File,
@@ -92,26 +97,12 @@ impl LinuxCargoRuntimeObserver {
         {
             return Err(invalid_runtime());
         }
-        let descriptor = unsafe { libc::fcntl(self.runner.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 3) };
-        if descriptor < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let runner = unsafe { File::from_raw_fd(descriptor) };
-        let runner_path = format!("/proc/self/fd/{}", runner.as_raw_fd());
+        let runner = inherit_descriptor(command, &self.runner)?;
+        let runner_path = descriptor_path(runner);
         let runner_value = format!("{runner_path} {RUNNER_MODE} --");
         command
             .env(runner_key, &runner_value)
             .env(TASK_CARGO_RUNTIME_ENDPOINT_ENV, self.socket());
-        // Only the Cargo child needs this descriptor to survive exec. The closure
-        // retains the exact descriptor until spawn instead of trusting a filesystem path.
-        unsafe {
-            command.pre_exec(move || {
-                if libc::fcntl(runner.as_raw_fd(), libc::F_SETFD, 0) == -1 {
-                    return Err(io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
         Ok(PendingLinuxCargoRuntime {
             observer: self,
             runner_path,
@@ -211,9 +202,16 @@ impl PendingLinuxCargoRuntime {
 }
 
 pub fn run_linux_cargo_runtime_helper() -> ! {
+    let mut arguments = std::env::args_os();
+    let executable = arguments.next();
+    let mode = arguments.next();
+    if mode.as_deref() == Some(OsStr::new(WORKLOAD_MODE)) {
+        let error = exec_cargo_workload(executable.as_deref(), arguments);
+        eprintln!("Linux Cargo workload launch failed: {error}");
+        std::process::exit(2);
+    }
     let outcome = (|| {
-        let mut arguments = std::env::args_os().skip(1);
-        if arguments.next().is_none_or(|arg| arg != RUNNER_MODE)
+        if mode.is_none_or(|arg| arg != RUNNER_MODE)
             || arguments.next().is_none_or(|arg| arg != "--")
             || arguments.next().is_none()
         {
@@ -240,6 +238,134 @@ pub fn run_linux_cargo_runtime_helper() -> ! {
     std::process::exit(0)
 }
 
+pub(crate) fn configure_profile_workload(
+    command: &mut Command,
+    runner_path: &Path,
+    workload: &TaskBuildInvocation,
+) -> io::Result<()> {
+    use std::io::Write as _;
+
+    let runner = seal_static_runner(runner_path)?;
+    let program = open_regular_image(workload.program())?;
+    verify_elf_image(&program, false)?;
+    let payload = workload.encode_helper_environment()?;
+    let payload = seal_file(c"zed-cargo-workload", 0o400, |file| {
+        file.write_all(payload.as_bytes())
+    })?;
+    let runner = inherit_descriptor(command, &runner)?;
+    let program = inherit_descriptor(command, &program)?;
+    let payload = inherit_descriptor(command, &payload)?;
+    command.args([
+        descriptor_path(runner),
+        WORKLOAD_MODE.to_owned(),
+        payload.to_string(),
+        program.to_string(),
+    ]);
+    Ok(())
+}
+
+fn exec_cargo_workload(
+    executable: Option<&OsStr>,
+    mut arguments: impl Iterator<Item = std::ffi::OsString>,
+) -> io::Error {
+    let mut run = || -> io::Result<()> {
+        let runner = executable
+            .and_then(OsStr::to_str)
+            .and_then(|value| value.strip_prefix("/proc/self/fd/"))
+            .and_then(parse_descriptor)
+            .ok_or_else(invalid_runtime)?;
+        let payload = arguments
+            .next()
+            .as_deref()
+            .and_then(OsStr::to_str)
+            .and_then(parse_descriptor)
+            .ok_or_else(invalid_runtime)?;
+        let program = arguments
+            .next()
+            .as_deref()
+            .and_then(OsStr::to_str)
+            .and_then(parse_descriptor)
+            .ok_or_else(invalid_runtime)?;
+        if arguments.next().is_some()
+            || runner == payload
+            || runner == program
+            || payload == program
+        {
+            return Err(invalid_runtime());
+        }
+        for descriptor in [runner, payload, program] {
+            if unsafe { libc::fcntl(descriptor, libc::F_SETFD, libc::FD_CLOEXEC) } == -1 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        let seals = unsafe { libc::fcntl(payload, libc::F_GET_SEALS) };
+        if seals == -1 || seals & IMMUTABLE_FILE_SEALS != IMMUTABLE_FILE_SEALS {
+            return Err(invalid_runtime());
+        }
+        let mut request = Vec::new();
+        File::open(descriptor_path(payload))?
+            .take((MAX_TASK_BUILD_INVOCATION_BYTES + 1) as u64)
+            .read_to_end(&mut request)?;
+        if request.len() > MAX_TASK_BUILD_INVOCATION_BYTES {
+            return Err(invalid_runtime());
+        }
+        let invocation = serde_json::from_slice::<TaskBuildInvocation>(&request)
+            .map_err(|_| invalid_runtime())?;
+        validate_workload_environment(&invocation)?;
+        Err(Command::new(descriptor_path(program))
+            .arg0(invocation.program())
+            .args(invocation.arguments())
+            .current_dir(invocation.working_directory())
+            .env_clear()
+            .envs(invocation.environment())
+            .exec())
+    };
+    match run() {
+        Err(error) => error,
+        Ok(()) => invalid_runtime(),
+    }
+}
+
+pub(crate) fn validate_workload_environment(invocation: &TaskBuildInvocation) -> io::Result<()> {
+    invocation.validate()?;
+    if invocation.environment().iter().any(|(key, value)| {
+        key.starts_with("ZED_PROFILE_")
+            || key.starts_with("LD_") && key != "LD_LIBRARY_PATH" && !value.is_empty()
+    }) {
+        return Err(invalid_runtime());
+    }
+    Ok(())
+}
+
+fn parse_descriptor(value: &str) -> Option<RawFd> {
+    value
+        .parse::<RawFd>()
+        .ok()
+        .filter(|descriptor| *descriptor >= 3)
+}
+
+fn descriptor_path(descriptor: RawFd) -> String {
+    format!("/proc/self/fd/{descriptor}")
+}
+
+fn inherit_descriptor(command: &mut Command, file: &File) -> io::Result<RawFd> {
+    let descriptor = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 3) };
+    if descriptor < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let file = unsafe { File::from_raw_fd(descriptor) };
+    // Keep the borrowed file live until the child can inherit it.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::fcntl(file.as_raw_fd(), libc::F_SETFD, 0) == -1 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    Ok(descriptor)
+}
+
 fn nul_fields(bytes: &[u8]) -> io::Result<impl Iterator<Item = &str>> {
     if !bytes.is_empty() && bytes.last() != Some(&0) {
         return Err(invalid_runtime());
@@ -250,42 +376,48 @@ fn nul_fields(bytes: &[u8]) -> io::Result<impl Iterator<Item = &str>> {
 }
 
 fn seal_static_runner(path: &Path) -> io::Result<File> {
-    let source = File::options()
+    let source = open_regular_image(path)?;
+    let image = seal_file(c"zed-cargo-runtime", 0o500, |file| {
+        if io::copy(&mut source.take(MAX_RUNNER_BYTES + 1), file)? > MAX_RUNNER_BYTES {
+            return Err(invalid_runtime());
+        }
+        Ok(())
+    })?;
+    verify_elf_image(&image, true)?;
+    Ok(image)
+}
+
+fn open_regular_image(path: &Path) -> io::Result<File> {
+    let file = File::options()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)?;
-    if !source.metadata()?.is_file() {
+    if !file.metadata()?.is_file() {
         return Err(invalid_runtime());
     }
-    let descriptor = unsafe {
-        libc::memfd_create(
-            c"zed-cargo-runtime".as_ptr(),
-            libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING,
-        )
-    };
+    Ok(file)
+}
+
+fn seal_file(
+    name: &CStr,
+    permissions: u32,
+    write: impl FnOnce(&mut File) -> io::Result<()>,
+) -> io::Result<File> {
+    let descriptor =
+        unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING) };
     if descriptor < 0 {
         return Err(io::Error::last_os_error());
     }
     let mut image = unsafe { File::from_raw_fd(descriptor) };
-    if io::copy(&mut source.take(MAX_RUNNER_BYTES + 1), &mut image)? > MAX_RUNNER_BYTES {
-        return Err(invalid_runtime());
-    }
-    image.set_permissions(Permissions::from_mode(0o500))?;
-    if unsafe {
-        libc::fcntl(
-            image.as_raw_fd(),
-            libc::F_ADD_SEALS,
-            libc::F_SEAL_WRITE | libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL,
-        )
-    } == -1
-    {
+    write(&mut image)?;
+    image.set_permissions(Permissions::from_mode(permissions))?;
+    if unsafe { libc::fcntl(image.as_raw_fd(), libc::F_ADD_SEALS, IMMUTABLE_FILE_SEALS) } == -1 {
         return Err(io::Error::last_os_error());
     }
-    verify_static_elf(&image)?;
-    File::open(format!("/proc/self/fd/{}", image.as_raw_fd()))
+    File::open(descriptor_path(image.as_raw_fd()))
 }
 
-fn verify_static_elf(image: &File) -> io::Result<()> {
+fn verify_elf_image(image: &File, require_static: bool) -> io::Result<()> {
     let mut header = [0; 64];
     image.read_exact_at(&mut header, 0)?;
     let architecture = match std::env::consts::ARCH {
@@ -315,7 +447,7 @@ fn verify_static_elf(image: &File) -> io::Result<()> {
         let mut segment = [0; 56];
         image.read_exact_at(&mut segment, offset + 56 * index)?;
         let kind = u32::from_le_bytes(segment[..4].try_into().map_err(|_| invalid_runtime())?);
-        if kind == 3 {
+        if require_static && kind == 3 {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
                 "The Linux Cargo runner requires a static executable",

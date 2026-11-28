@@ -123,6 +123,12 @@ fn native_cargo_runtime_transition_preserves_the_actual_cargo_environment() -> i
 }
 
 #[test]
+#[ignore = "requires an independently built host, pinned Cargo, a static runner and Linux perf"]
+fn native_cargo_runtime_profile_keeps_private_values_with_the_workload() -> io::Result<()> {
+    run_terminal_fixture("native-cargo-runtime-profile")
+}
+
+#[test]
 fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_task_completion::LinuxTaskCompletion;
 
