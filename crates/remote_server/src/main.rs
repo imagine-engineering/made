@@ -27,6 +27,9 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    native_task_helper::linux_task_completion::run_linux_task_helper_if_invoked();
+
     let cli = Cli::parse();
     #[cfg(feature = "test-support")]
     if let Some(directory) = &cli.test_data_dir {

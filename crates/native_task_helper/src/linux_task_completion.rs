@@ -17,7 +17,7 @@ use std::{
         fs::{FileExt as _, MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
         process::{CommandExt as _, ExitStatusExt as _},
     },
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     time::Duration,
 };
@@ -140,15 +140,85 @@ fn same_artifact_version(left: &Metadata, right: &Metadata) -> bool {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy)]
-enum TaskKind {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinuxTaskMode {
     Coverage = 1,
     NativeProfile = 2,
     CargoBuild = 3,
 }
 
+impl LinuxTaskMode {
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::Coverage => "--observe-coverage-task",
+            Self::NativeProfile => "--observe-native-profile-task",
+            Self::CargoBuild => "--observe-cargo-build-task",
+        }
+    }
+}
+
+fn parse_task_helper(
+    mut arguments: impl Iterator<Item = std::ffi::OsString>,
+) -> io::Result<Option<(LinuxTaskMode, PathBuf)>> {
+    let Some(command) = arguments.next() else {
+        return Ok(None);
+    };
+    let Some(mode) = [
+        LinuxTaskMode::Coverage,
+        LinuxTaskMode::NativeProfile,
+        LinuxTaskMode::CargoBuild,
+    ]
+    .into_iter()
+    .find(|mode| command == mode.command()) else {
+        return Ok(None);
+    };
+    let invalid = || {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid Linux Task helper arguments",
+        )
+    };
+    if arguments
+        .next()
+        .is_none_or(|argument| argument != "--socket")
+    {
+        return Err(invalid());
+    }
+    let socket = PathBuf::from(arguments.next().ok_or_else(invalid)?);
+    if arguments.next().is_some()
+        || !socket.is_absolute()
+        || socket.file_name().is_none()
+        || socket.as_os_str().as_encoded_bytes().len() > 107
+        || socket.as_os_str().as_encoded_bytes().contains(&0)
+        || socket
+            .components()
+            .any(|component| component == Component::ParentDir)
+    {
+        return Err(invalid());
+    }
+    Ok(Some((mode, socket)))
+}
+
+pub fn run_linux_task_helper_if_invoked() {
+    let (mode, socket) = match parse_task_helper(std::env::args_os().skip(1)) {
+        Ok(Some(invocation)) => invocation,
+        Ok(None) => return,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+    };
+    match smol::block_on(run_task(&socket, mode)) {
+        Ok(status) => crate::task_completion::exit_with_observed_task_status(status),
+        Err(error) => {
+            eprintln!("Linux Task helper failed: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
 trait TaskOutputReservation: Send + 'static {
-    const KIND: TaskKind;
+    const KIND: LinuxTaskMode;
     type Sealed: Send;
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()>;
     fn seal(self) -> io::Result<Self::Sealed>;
@@ -188,7 +258,7 @@ impl CoverageTaskReportReservation {
 }
 
 impl TaskOutputReservation for CoverageTaskReportReservation {
-    const KIND: TaskKind = TaskKind::Coverage;
+    const KIND: LinuxTaskMode = LinuxTaskMode::Coverage;
     type Sealed = SealedCoverageTaskReport;
 
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()> {
@@ -298,7 +368,7 @@ impl NativeProfileTaskReservation {
 }
 
 impl TaskOutputReservation for NativeProfileTaskReservation {
-    const KIND: TaskKind = TaskKind::NativeProfile;
+    const KIND: LinuxTaskMode = LinuxTaskMode::NativeProfile;
     type Sealed = SealedNativeProfileTask;
 
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()> {
@@ -420,7 +490,12 @@ impl LinuxTaskCompletion {
     ) -> io::Result<LinuxTaskReceipt<Vec<u8>>> {
         validate_stdout_report_limit(report_limit)?;
         let (mut actor, mut connection, challenge) = self
-            .register_task(actor, invocation, TaskKind::CargoBuild, Some(report_limit))
+            .register_task(
+                actor,
+                invocation,
+                LinuxTaskMode::CargoBuild,
+                Some(report_limit),
+            )
             .await?;
         until_deadline(COMPLETION_TIMEOUT, async {
             let (response, cancelled) =
@@ -477,7 +552,7 @@ impl LinuxTaskCompletion {
         &self,
         actor: OriginalTaskActor,
         invocation: TaskBuildInvocation,
-        kind: TaskKind,
+        kind: LinuxTaskMode,
         stdout_limit: Option<usize>,
     ) -> io::Result<(AuthenticatedTaskActor, UnixStream, [u8; 32])> {
         let request = invocation.encode_helper_environment()?;
@@ -627,19 +702,7 @@ impl<Output> LinuxTaskReceipt<Output> {
     }
 }
 
-pub async fn run_coverage_task(socket: &Path) -> io::Result<ExitStatus> {
-    run_task(socket, TaskKind::Coverage).await
-}
-
-pub async fn run_native_profile_task(socket: &Path) -> io::Result<ExitStatus> {
-    run_task(socket, TaskKind::NativeProfile).await
-}
-
-pub async fn run_cargo_build_task(socket: &Path) -> io::Result<ExitStatus> {
-    run_task(socket, TaskKind::CargoBuild).await
-}
-
-async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
+async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> {
     let (mut connection, invocation, challenge, parent, stdout_limit) =
         until_deadline(REGISTRATION_TIMEOUT, async {
             let mut connection = UnixStream::connect(socket).await?;
@@ -651,7 +714,7 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
             }
             let mut challenge = [0; 32];
             connection.read_exact(&mut challenge).await?;
-            let stdout_limit = if matches!(kind, TaskKind::CargoBuild) {
+            let stdout_limit = if matches!(kind, LinuxTaskMode::CargoBuild) {
                 let mut limit = [0; 4];
                 connection.read_exact(&mut limit).await?;
                 let limit = u32::from_be_bytes(limit) as usize;
@@ -696,9 +759,11 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
         });
     }
     let (status, stdout) = match kind {
-        TaskKind::Coverage => (run_coverage_workload(command, &mut connection).await?, None),
-        TaskKind::NativeProfile => (run_profile_workload(command, &mut connection).await?, None),
-        TaskKind::CargoBuild => {
+        LinuxTaskMode::Coverage => (run_coverage_workload(command, &mut connection).await?, None),
+        LinuxTaskMode::NativeProfile => {
+            (run_profile_workload(command, &mut connection).await?, None)
+        }
+        LinuxTaskMode::CargoBuild => {
             let limit = stdout_limit.ok_or_else(invalid_completion)?;
             let (status, stdout) =
                 run_cargo_build_workload(command, &mut connection, limit).await?;
@@ -720,7 +785,7 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
         connection.shutdown(Shutdown::Write)?;
         let mut acknowledged = [0; 1];
         connection.read_exact(&mut acknowledged).await?;
-        if !matches!(kind, TaskKind::Coverage) && acknowledged == [CANCEL_NATIVE_TASK] {
+        if !matches!(kind, LinuxTaskMode::Coverage) && acknowledged == [CANCEL_NATIVE_TASK] {
             connection.read_exact(&mut acknowledged).await?;
         }
         if acknowledged != [COMPLETION_ACKNOWLEDGED] {
@@ -951,4 +1016,71 @@ fn invalid_completion() -> io::Error {
         io::ErrorKind::InvalidData,
         "Invalid Coverage Task completion",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsString;
+
+    #[test]
+    fn linux_task_helper_accepts_only_the_exact_mode_and_socket() -> io::Result<()> {
+        for mode in [
+            LinuxTaskMode::Coverage,
+            LinuxTaskMode::NativeProfile,
+            LinuxTaskMode::CargoBuild,
+        ] {
+            let address = "/tmp/task path/completion";
+            assert_eq!(
+                parse_task_helper(
+                    [mode.command(), "--socket", address]
+                        .into_iter()
+                        .map(OsString::from)
+                )?,
+                Some((mode, PathBuf::from(address))),
+            );
+            for args in [
+                vec![mode.command()],
+                vec![mode.command(), "--socket"],
+                vec![mode.command(), "--wrong", address],
+                vec![mode.command(), "--socket", "relative"],
+                vec![mode.command(), "--socket", "/tmp/../completion"],
+                vec![mode.command(), "--socket", "/"],
+                vec![
+                    mode.command(),
+                    "--socket",
+                    address,
+                    "private-extra-argument",
+                ],
+            ] {
+                let error = parse_task_helper(args.into_iter().map(OsString::from))
+                    .expect_err("Malformed helper arguments were admitted");
+                assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+                assert!(!error.to_string().contains("private-extra-argument"));
+            }
+            let long_address = format!("/tmp/{}", "x".repeat(108));
+            assert!(
+                parse_task_helper(
+                    [mode.command(), "--socket", &long_address]
+                        .into_iter()
+                        .map(OsString::from)
+                )
+                .is_err()
+            );
+        }
+        assert_eq!(parse_task_helper(std::iter::empty())?, None);
+        assert_eq!(
+            parse_task_helper([OsString::from("observe-cargo-build-task")].into_iter())?,
+            None,
+        );
+        assert_eq!(
+            parse_task_helper(
+                ["--foreground", "--observe-cargo-build-task"]
+                    .into_iter()
+                    .map(OsString::from)
+            )?,
+            None
+        );
+        Ok(())
+    }
 }

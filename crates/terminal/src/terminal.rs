@@ -837,7 +837,7 @@ pub use native_task_helper::{
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 use native_task_helper::{
-    linux_task_completion::{LinuxTaskCompletion, LinuxTaskReceipt},
+    linux_task_completion::{LinuxTaskCompletion, LinuxTaskMode, LinuxTaskReceipt},
     task_actor::OriginalTaskActor,
 };
 
@@ -945,7 +945,7 @@ impl NativeTaskControl {
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 enum LinuxTerminalTask {
     Coverage(Sender<Option<ExitStatus>>),
-    Cancellable(&'static str, NativeTaskControl, Sender<Option<ExitStatus>>),
+    Cancellable(LinuxTaskMode, NativeTaskControl, Sender<Option<ExitStatus>>),
 }
 
 enum TerminalEnvironmentMode {
@@ -1659,7 +1659,7 @@ impl TerminalBuilder {
             launch,
             structured_task,
             invocation,
-            "observe-native-profile-task",
+            LinuxTaskMode::NativeProfile,
             move |completion, actor, invocation, cancel| {
                 completion.observe_cancellable_profile(actor, invocation, report, cancel)
             },
@@ -1681,7 +1681,7 @@ impl TerminalBuilder {
             launch,
             structured_task,
             invocation,
-            "observe-cargo-build-task",
+            LinuxTaskMode::CargoBuild,
             move |completion, actor, invocation, cancel| {
                 completion.observe_cargo_build(actor, invocation, report_limit, cancel)
             },
@@ -1695,7 +1695,7 @@ impl TerminalBuilder {
         launch: SpawnInTerminal,
         structured_task: Option<task::StructuredTaskHandle>,
         invocation: TaskBuildInvocation,
-        helper_command: &'static str,
+        helper_mode: LinuxTaskMode,
         observe: impl FnOnce(
             LinuxTaskCompletion,
             OriginalTaskActor,
@@ -1728,7 +1728,7 @@ impl TerminalBuilder {
             structured_task,
             &invocation,
             &completion,
-            LinuxTerminalTask::Cancellable(helper_command, control, terminal_exit_sender),
+            LinuxTerminalTask::Cancellable(helper_mode, control, terminal_exit_sender),
             window_id,
             cx,
         )?;
@@ -1794,9 +1794,9 @@ impl TerminalBuilder {
         Task<Result<Self>>,
         futures::channel::oneshot::Receiver<OriginalTaskActor>,
     )> {
-        let helper_command = match &observer {
-            LinuxTerminalTask::Coverage(_) => "observe-coverage-task",
-            LinuxTerminalTask::Cancellable(command, ..) => command,
+        let helper_mode = match &observer {
+            LinuxTerminalTask::Coverage(_) => LinuxTaskMode::Coverage,
+            LinuxTerminalTask::Cancellable(mode, ..) => *mode,
         };
         let helper = std::env::current_exe()?;
         let helper = helper
@@ -1807,6 +1807,10 @@ impl TerminalBuilder {
         let socket = socket
             .to_str()
             .context("Native Task socket path is not Unicode")?;
+        let mut helper_environment = HashMap::default();
+        if std::env::var("ZED_ALLOW_ROOT").as_deref() == Ok("true") {
+            helper_environment.insert("ZED_ALLOW_ROOT".into(), "true".into());
+        }
         let (completion_sender, completion_rx) = bounded(1);
         let (actor_sender, original_actor) = futures::channel::oneshot::channel();
         let builder = Self::new_with_environment_mode(
@@ -1819,10 +1823,14 @@ impl TerminalBuilder {
             }),
             Shell::WithArguments {
                 program: helper.to_owned(),
-                args: vec![helper_command.into(), "--socket".into(), socket.into()],
+                args: vec![
+                    helper_mode.command().into(),
+                    "--socket".into(),
+                    socket.into(),
+                ],
                 title_override: None,
             },
-            HashMap::default(),
+            helper_environment,
             SettingsCursorShape::default(),
             AlternateScroll::On,
             None,

@@ -211,6 +211,9 @@ fn main() {
     #[cfg(all(target_os = "macos", feature = "rust-tools"))]
     run_local_task_helper_if_invoked();
 
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    native_task_helper::linux_task_completion::run_linux_task_helper_if_invoked();
+
     #[cfg(all(not(debug_assertions), target_os = "windows"))]
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};

@@ -2,7 +2,8 @@ use anyhow::{Context as _, Result, ensure};
 use futures::io::AsyncReadExt as _;
 use native_task_helper::{
     linux_task_completion::{
-        CoverageTaskReportReservation, LinuxTaskCompletion, NativeProfileTaskReservation,
+        CoverageTaskReportReservation, LinuxTaskCompletion, LinuxTaskMode,
+        NativeProfileTaskReservation,
     },
     task_actor::OriginalTaskActor,
     task_completion::TaskBuildInvocation,
@@ -18,15 +19,15 @@ use std::{
 };
 
 fn spawn_helper(completion: &LinuxTaskCompletion) -> io::Result<smol::process::Child> {
-    spawn_completion_helper(completion, "observe-coverage-task")
+    spawn_completion_helper(completion, LinuxTaskMode::Coverage)
 }
 
 fn spawn_completion_helper(
     completion: &LinuxTaskCompletion,
-    command: &str,
+    mode: LinuxTaskMode,
 ) -> io::Result<smol::process::Child> {
     smol::process::Command::new(std::env::current_exe()?)
-        .arg(command)
+        .arg(mode.command())
         .arg("--socket")
         .arg(completion.socket())
         .env("COPPER_UNADMITTED_TEST_VALUE", "must not be inherited")
@@ -228,7 +229,7 @@ fn oversized_invocation(directory: &Path) -> Result<()> {
         let listener = smol::net::unix::UnixListener::bind(directory.join("malformed"))?;
         let mut command = smol::process::Command::new(std::env::current_exe()?);
         let mut helper = command
-            .arg("observe-coverage-task")
+            .arg(LinuxTaskMode::Coverage.command())
             .arg("--socket")
             .arg(
                 listener
@@ -445,8 +446,8 @@ fn profile_pair_replacement(directory: &Path) -> Result<()> {
                 profile_shell_invocation(directory, command, output_flag, &profile_path)?;
             let completion = LinuxTaskCompletion::bind()?;
             let helper_command = match expected {
-                ExpectedPair::WrongMode => "observe-coverage-task",
-                _ => "observe-native-profile-task",
+                ExpectedPair::WrongMode => LinuxTaskMode::Coverage,
+                _ => LinuxTaskMode::NativeProfile,
             };
             let mut helper = spawn_completion_helper(&completion, helper_command)?;
             let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
@@ -572,7 +573,7 @@ fn assert_profile_cancellation(
         let symbols_path = report.symbols_path();
         let completion = LinuxTaskCompletion::bind()?;
         let socket = completion.socket();
-        let mut helper = spawn_completion_helper(&completion, "observe-native-profile-task")?;
+        let mut helper = spawn_completion_helper(&completion, LinuxTaskMode::NativeProfile)?;
         let actor =
             OriginalTaskActor::from_smol_child(&mut helper, &File::open("/proc/self/exe")?)?;
         let (collector, workload) = smol::future::race(
@@ -694,7 +695,7 @@ fn native_profile_collector(directory: &Path) -> Result<()> {
         let symbols_path = report.symbols_path();
         let invocation = samply_invocation(directory, &profile_path, &[&workload, "1200000"])?;
         let completion = LinuxTaskCompletion::bind()?;
-        let mut helper = spawn_completion_helper(&completion, "observe-native-profile-task")?;
+        let mut helper = spawn_completion_helper(&completion, LinuxTaskMode::NativeProfile)?;
         let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
         let observed = completion
             .observe_profile(actor, invocation, report)
@@ -749,18 +750,18 @@ fn cargo_build_report_controls(directory: &Path) -> Result<()> {
             (
                 r#"printf 'report'; printf 'diagnostic' >&2"#,
                 6,
-                "observe-cargo-build-task",
+                LinuxTaskMode::CargoBuild,
                 Some(0),
             ),
             (
                 "printf 'report'; exit 27",
                 6,
-                "observe-cargo-build-task",
+                LinuxTaskMode::CargoBuild,
                 Some(27),
             ),
-            ("printf 'report'", 5, "observe-cargo-build-task", None),
-            ("printf 'report'", 0, "observe-cargo-build-task", None),
-            ("printf 'report'", 6, "observe-native-profile-task", None),
+            ("printf 'report'", 5, LinuxTaskMode::CargoBuild, None),
+            ("printf 'report'", 0, LinuxTaskMode::CargoBuild, None),
+            ("printf 'report'", 6, LinuxTaskMode::NativeProfile, None),
         ] {
             let completion = LinuxTaskCompletion::bind()?;
             let mut helper = spawn_completion_helper(&completion, helper)?;
@@ -805,7 +806,7 @@ fn cargo_build_report_controls(directory: &Path) -> Result<()> {
 fn cancel_cargo_build_report(directory: &Path) -> Result<()> {
     smol::block_on(async {
         let completion = LinuxTaskCompletion::bind()?;
-        let mut helper = spawn_completion_helper(&completion, "observe-cargo-build-task")?;
+        let mut helper = spawn_completion_helper(&completion, LinuxTaskMode::CargoBuild)?;
         let actor =
             OriginalTaskActor::from_smol_child(&mut helper, &File::open("/proc/self/exe")?)?;
         let build = invocation(

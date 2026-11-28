@@ -85,24 +85,6 @@ pub enum Commands {
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<std::ffi::OsString>,
     },
-    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-    #[command(hide = true)]
-    ObserveCoverageTask {
-        #[arg(long)]
-        socket: PathBuf,
-    },
-    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-    #[command(hide = true)]
-    ObserveNativeProfileTask {
-        #[arg(long)]
-        socket: PathBuf,
-    },
-    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-    #[command(hide = true)]
-    ObserveCargoBuildTask {
-        #[arg(long)]
-        socket: PathBuf,
-    },
     #[cfg(all(
         target_os = "linux",
         feature = "rust-tools-process-test",
@@ -212,27 +194,6 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
                 util::macos_task_completion::register_and_exec(&socket, &mut command)
             };
             Err(error.into())
-        }
-        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-        Commands::ObserveCoverageTask { socket } => {
-            let status = smol::block_on(
-                native_task_helper::linux_task_completion::run_coverage_task(&socket),
-            )?;
-            native_task_helper::task_completion::exit_with_observed_task_status(status);
-        }
-        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-        Commands::ObserveNativeProfileTask { socket } => {
-            let status = smol::block_on(
-                native_task_helper::linux_task_completion::run_native_profile_task(&socket),
-            )?;
-            native_task_helper::task_completion::exit_with_observed_task_status(status);
-        }
-        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
-        Commands::ObserveCargoBuildTask { socket } => {
-            let status = smol::block_on(
-                native_task_helper::linux_task_completion::run_cargo_build_task(&socket),
-            )?;
-            native_task_helper::task_completion::exit_with_observed_task_status(status);
         }
         #[cfg(all(
             target_os = "linux",

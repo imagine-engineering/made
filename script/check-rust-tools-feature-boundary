@@ -26,8 +26,10 @@ assert "rust-tools" not in zed["features"]["default"], (
     "rust-tools must remain outside zed default features"
 )
 assert zed["features"]["rust-tools"] == [
-    "dep:cargo_ui", "tasks_ui/rust-test-actions", "diagnostics/rust-tools"
+    "dep:cargo_ui", "tasks_ui/rust-test-actions", "diagnostics/rust-tools", "dep:native_task_helper"
 ]
+assert zed["target"]["cfg(target_os = \"linux\")"]["dependencies"]["native_task_helper"]["optional"]
+assert all("dep:native_task_helper" not in zed["features"][feature] for feature in ["default", "sim", "jvm-tools"])
 assert diagnostics["features"]["default"] == []
 assert "project/rust-tests" in diagnostics["features"]["rust-tools"]
 assert agent_ui["dev-dependencies"]["diagnostics"]["features"] == ["test-support", "agentic"], (

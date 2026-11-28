@@ -123,7 +123,7 @@ fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     let completion = LinuxTaskCompletion::bind()?;
     let output = smol::block_on(
         Command::new(env!("CARGO_BIN_EXE_remote_server"))
-            .arg("observe-coverage-task")
+            .arg("--observe-coverage-task")
             .arg("--socket")
             .arg(completion.socket())
             .output(),
