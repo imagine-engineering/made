@@ -837,7 +837,8 @@ pub use native_task_helper::{
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 use native_task_helper::{
-    linux_task_completion::LinuxTaskCompletion, task_actor::OriginalTaskActor,
+    linux_task_completion::{LinuxTaskCompletion, LinuxTaskReceipt},
+    task_actor::OriginalTaskActor,
 };
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -897,43 +898,43 @@ impl LinuxTaskSpawn {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-pub enum NativeProfileTaskOutcome {
-    Completed(ExitStatus, Option<SealedNativeProfileTask>),
+pub enum LinuxNativeTaskOutcome<Output> {
+    Completed(ExitStatus, Option<Output>),
     Cancelled,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-pub struct NativeProfileTaskObservation {
-    result: Receiver<Result<NativeProfileTaskOutcome>>,
+pub struct LinuxNativeTaskObservation<Output> {
+    result: Receiver<Result<LinuxNativeTaskOutcome<Output>>>,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-impl NativeProfileTaskObservation {
-    pub async fn finish(self) -> Result<NativeProfileTaskOutcome> {
+impl<Output> LinuxNativeTaskObservation<Output> {
+    pub async fn finish(self) -> Result<LinuxNativeTaskOutcome<Output>> {
         self.result
             .recv()
             .await
-            .context("Native Profile Task observer stopped")?
+            .context("Native Task observer stopped")?
     }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum NativeProfileTermination {
+enum NativeTaskTermination {
     Completed,
     Cancelled,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-struct NativeProfileControl {
+struct NativeTaskControl {
     cancel: Sender<()>,
     finished: Sender<()>,
-    termination: Arc<parking_lot::Mutex<Option<NativeProfileTermination>>>,
+    termination: Arc<parking_lot::Mutex<Option<NativeTaskTermination>>>,
     cancellation_requested: bool,
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-impl NativeProfileControl {
+impl NativeTaskControl {
     fn cancel(&mut self) {
         if !self.cancellation_requested && !self.finished.is_closed() {
             self.cancellation_requested = self.cancel.try_send(()).is_ok();
@@ -944,7 +945,7 @@ impl NativeProfileControl {
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 enum LinuxTerminalTask {
     Coverage(Sender<Option<ExitStatus>>),
-    NativeProfile(NativeProfileControl, Sender<Option<ExitStatus>>),
+    Cancellable(&'static str, NativeTaskControl, Sender<Option<ExitStatus>>),
 }
 
 enum TerminalEnvironmentMode {
@@ -1176,7 +1177,7 @@ enum PtyEvent {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-fn native_profile_terminal_events(
+fn native_task_terminal_events(
     events: futures::channel::mpsc::UnboundedSender<PtyEvent>,
     terminal_exit: Sender<Option<ExitStatus>>,
     finished: Sender<()>,
@@ -1433,7 +1434,7 @@ impl TerminalBuilder {
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
             coverage_exit: None,
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            native_profile: None,
+            native_task: None,
             task_completion: OnceLock::new(),
             term,
             term_config: config,
@@ -1650,14 +1651,73 @@ impl TerminalBuilder {
         report: NativeProfileTaskReservation,
         window_id: u64,
         cx: &App,
-    ) -> Result<(Task<Result<Self>>, NativeProfileTaskObservation)> {
+    ) -> Result<(
+        Task<Result<Self>>,
+        LinuxNativeTaskObservation<SealedNativeProfileTask>,
+    )> {
+        Self::new_with_cancellable_linux_task(
+            launch,
+            structured_task,
+            invocation,
+            "observe-native-profile-task",
+            move |completion, actor, invocation, cancel| {
+                completion.observe_cancellable_profile(actor, invocation, report, cancel)
+            },
+            window_id,
+            cx,
+        )
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn new_with_native_cargo_build_task(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: TaskBuildInvocation,
+        report_limit: usize,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(Task<Result<Self>>, LinuxNativeTaskObservation<Vec<u8>>)> {
+        Self::new_with_cancellable_linux_task(
+            launch,
+            structured_task,
+            invocation,
+            "observe-cargo-build-task",
+            move |completion, actor, invocation, cancel| {
+                completion.observe_cargo_build(actor, invocation, report_limit, cancel)
+            },
+            window_id,
+            cx,
+        )
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn new_with_cancellable_linux_task<Output, Observation>(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: TaskBuildInvocation,
+        helper_command: &'static str,
+        observe: impl FnOnce(
+            LinuxTaskCompletion,
+            OriginalTaskActor,
+            TaskBuildInvocation,
+            futures::future::BoxFuture<'static, ()>,
+        ) -> Observation
+        + Send
+        + 'static,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(Task<Result<Self>>, LinuxNativeTaskObservation<Output>)>
+    where
+        Output: Send + 'static,
+        Observation: Future<Output = std::io::Result<LinuxTaskReceipt<Output>>> + Send + 'static,
+    {
         let completion = LinuxTaskCompletion::bind()?;
         let (terminal_exit_sender, terminal_exit) = bounded(1);
         let (cancel_sender, cancel) = bounded(1);
         let (finished, finish_guard) = bounded(1);
         let (result_sender, result) = bounded(1);
         let termination = Arc::new(parking_lot::Mutex::new(None));
-        let control = NativeProfileControl {
+        let control = NativeTaskControl {
             cancel: cancel_sender,
             finished,
             termination: termination.clone(),
@@ -1668,7 +1728,7 @@ impl TerminalBuilder {
             structured_task,
             &invocation,
             &completion,
-            LinuxTerminalTask::NativeProfile(control, terminal_exit_sender),
+            LinuxTerminalTask::Cancellable(helper_command, control, terminal_exit_sender),
             window_id,
             cx,
         )?;
@@ -1677,17 +1737,16 @@ impl TerminalBuilder {
             let observed = async {
                 let actor = original_actor
                     .await
-                    .context("Native Profile Task was not launched")?;
-                let cancellation = async {
+                    .context("Native Task was not launched")?;
+                let result_owner = result_sender.clone();
+                let cancellation = async move {
                     futures::future::select(
                         Box::pin(cancel.recv()),
-                        Box::pin(result_sender.closed()),
+                        Box::pin(result_owner.closed()),
                     )
                     .await;
                 };
-                let receipt = completion
-                    .observe_cancellable_profile(actor, invocation, report, cancellation)
-                    .await;
+                let receipt = observe(completion, actor, invocation, cancellation.boxed()).await;
                 let status = futures::future::select(
                     Box::pin(terminal_exit.recv()),
                     executor.timer(Duration::from_secs(10)),
@@ -1695,30 +1754,31 @@ impl TerminalBuilder {
                 .await;
                 let receipt = receipt?;
                 let status = match status {
-                    futures::future::Either::Left((status, _)) => status?
-                        .context("Native Profile Task closed before Terminal observed its exit")?,
+                    futures::future::Either::Left((status, _)) => {
+                        status?.context("Native Task closed before Terminal observed its exit")?
+                    }
                     futures::future::Either::Right(_) => {
-                        bail!("Terminal did not observe the Native Profile Task exit")
+                        bail!("Terminal did not observe the Native Task exit")
                     }
                 };
                 let cancelled = receipt.was_cancelled();
-                let (status, profile) = receipt.verify_exit(status)?;
+                let (status, output) = receipt.verify_exit(status)?;
                 if cancelled {
-                    *termination.lock() = Some(NativeProfileTermination::Cancelled);
-                    Ok(NativeProfileTaskOutcome::Cancelled)
+                    *termination.lock() = Some(NativeTaskTermination::Cancelled);
+                    Ok(LinuxNativeTaskOutcome::Cancelled)
                 } else {
-                    *termination.lock() = Some(NativeProfileTermination::Completed);
-                    Ok(NativeProfileTaskOutcome::Completed(status, profile))
+                    *termination.lock() = Some(NativeTaskTermination::Completed);
+                    Ok(LinuxNativeTaskOutcome::Completed(status, output))
                 }
             }
             .await;
             if let Err(error) = result_sender.try_send(observed) {
-                log::debug!("Native Profile Task result owner closed: {error}");
+                log::debug!("Native Task result owner closed: {error}");
             }
             drop(finish_guard);
         })
         .detach();
-        Ok((builder, NativeProfileTaskObservation { result }))
+        Ok((builder, LinuxNativeTaskObservation { result }))
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -1736,7 +1796,7 @@ impl TerminalBuilder {
     )> {
         let helper_command = match &observer {
             LinuxTerminalTask::Coverage(_) => "observe-coverage-task",
-            LinuxTerminalTask::NativeProfile(..) => "observe-native-profile-task",
+            LinuxTerminalTask::Cancellable(command, ..) => command,
         };
         let helper = std::env::current_exe()?;
         let helper = helper
@@ -1949,15 +2009,15 @@ impl TerminalBuilder {
             //TODO: Remove with a bounded sender which can be dispatched on &self
             let (events_tx, events_rx) = unbounded();
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            let (linux_spawn, coverage_exit, native_profile, events_tx) = match environment_mode {
+            let (linux_spawn, coverage_exit, native_task, events_tx) = match environment_mode {
                 TerminalEnvironmentMode::LinuxTask(spawn, LinuxTerminalTask::Coverage(exit)) => {
                     (Some(spawn), Some(exit), None, events_tx)
                 }
                 TerminalEnvironmentMode::LinuxTask(
                     spawn,
-                    LinuxTerminalTask::NativeProfile(control, exit),
+                    LinuxTerminalTask::Cancellable(_, control, exit),
                 ) => {
-                    let events_tx = native_profile_terminal_events(
+                    let events_tx = native_task_terminal_events(
                         events_tx,
                         exit,
                         control.finished.clone(),
@@ -2121,7 +2181,7 @@ impl TerminalBuilder {
                 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
                 coverage_exit,
                 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-                native_profile,
+                native_task,
                 task_completion: OnceLock::new(),
                 term,
                 term_config: config,
@@ -2237,7 +2297,7 @@ impl TerminalBuilder {
 
     pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
         #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-        if let Some(profile) = &self.terminal.native_profile
+        if let Some(profile) = &self.terminal.native_task
             && let Some(handle) = self
                 .terminal
                 .task
@@ -2249,7 +2309,7 @@ impl TerminalBuilder {
             let terminal_id = task::StructuredTerminalId(cx.entity_id().as_u64());
             cx.spawn(async move |_, cx| {
                 finished.closed().await;
-                if *termination.lock() == Some(NativeProfileTermination::Cancelled) {
+                if *termination.lock() == Some(NativeTaskTermination::Cancelled) {
                     cx.update(|cx| handle.mark_cancelled(Some(terminal_id), true, cx));
                 }
             })
@@ -2477,7 +2537,7 @@ pub struct Terminal {
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
     coverage_exit: Option<Sender<Option<ExitStatus>>>,
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-    native_profile: Option<NativeProfileControl>,
+    native_task: Option<NativeTaskControl>,
     task_completion:
         OnceLock<futures::future::Shared<futures::future::BoxFuture<'static, Option<ExitStatus>>>>,
     term: Arc<AlacrittyTermLock>,
@@ -4059,7 +4119,7 @@ impl Terminal {
             && task.status == TaskStatus::Running
         {
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            if let Some(profile) = &mut self.native_profile {
+            if let Some(profile) = &mut self.native_task {
                 profile.cancel();
                 return;
             }
@@ -4240,11 +4300,11 @@ impl Terminal {
             .as_ref()
             .is_none_or(|cancellation| cancellation.confirmed);
         #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-        let (cancellation_requested, termination_confirmed) = self.native_profile.as_ref().map_or(
+        let (cancellation_requested, termination_confirmed) = self.native_task.as_ref().map_or(
             (cancellation_requested, termination_confirmed),
             |profile| {
                 let termination = *profile.termination.lock();
-                let cancelled = termination == Some(NativeProfileTermination::Cancelled);
+                let cancelled = termination == Some(NativeTaskTermination::Cancelled);
                 (
                     cancelled || termination.is_none() && profile.cancellation_requested,
                     cancelled,
@@ -4570,7 +4630,7 @@ async fn spawn_task_subprocess(
 impl Drop for Terminal {
     fn drop(&mut self) {
         #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-        if let Some(mut profile) = self.native_profile.take() {
+        if let Some(mut profile) = self.native_task.take() {
             profile.cancel();
             let terminal_type =
                 std::mem::replace(&mut self.terminal_type, TerminalType::DisplayOnly);

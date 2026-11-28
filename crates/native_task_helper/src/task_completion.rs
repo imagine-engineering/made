@@ -12,7 +12,7 @@ pub const TASK_NATIVE_INVOCATION_ENV: &str = "ZED_PROFILE_NATIVE_INVOCATION_ENV"
 pub const TASK_CARGO_RUNTIME_ENDPOINT_ENV: &str = "ZED_PROFILE_CARGO_RUNTIME_ENDPOINT";
 pub const TASK_CARGO_RUNTIME_TOKEN_ENV: &str = "ZED_PROFILE_CARGO_RUNTIME_TOKEN";
 pub const MAX_TASK_STDOUT_REPORT_BYTES: usize = 4 * 1024 * 1024;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
 pub(crate) const TASK_STDOUT_FRAME_BYTES: usize = 64 * 1024;
 pub const MAX_TASK_BUILD_INVOCATION_BYTES: usize = 256 * 1024;
 pub const TASK_BUILD_INVOCATION_RESERVED_BYTES: usize = 2 * 1024 * 1024;
@@ -241,7 +241,7 @@ impl ObservedTaskBuildInvocation {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
 pub(crate) fn validate_stdout_report_limit(limit: usize) -> io::Result<()> {
     if limit == 0 || limit > MAX_TASK_STDOUT_REPORT_BYTES {
         return Err(io::Error::new(

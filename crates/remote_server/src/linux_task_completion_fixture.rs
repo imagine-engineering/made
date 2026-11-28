@@ -742,6 +742,311 @@ fn verify_samply_profile(profile: terminal::SealedNativeProfileTask) -> Result<u
     Ok(result.total_samples)
 }
 
+fn cargo_build_report_controls(directory: &Path) -> Result<()> {
+    smol::block_on(async {
+        let expected_image = File::open("/proc/self/exe")?;
+        for (script, limit, helper, expected_status) in [
+            (
+                r#"printf 'report'; printf 'diagnostic' >&2"#,
+                6,
+                "observe-cargo-build-task",
+                Some(0),
+            ),
+            (
+                "printf 'report'; exit 27",
+                6,
+                "observe-cargo-build-task",
+                Some(27),
+            ),
+            ("printf 'report'", 5, "observe-cargo-build-task", None),
+            ("printf 'report'", 0, "observe-cargo-build-task", None),
+            ("printf 'report'", 6, "observe-native-profile-task", None),
+        ] {
+            let completion = LinuxTaskCompletion::bind()?;
+            let mut helper = spawn_completion_helper(&completion, helper)?;
+            let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
+            let receipt = completion
+                .observe_cargo_build(
+                    actor,
+                    invocation(directory, script)?,
+                    limit,
+                    std::future::pending(),
+                )
+                .await;
+            let exit = wait(&mut helper).await?;
+            if let Some(expected_status) = expected_status {
+                let (status, report) = receipt?.verify_exit(exit)?;
+                ensure!(
+                    status.code() == Some(expected_status),
+                    "Cargo Task did not preserve its original child exit"
+                );
+                if status.success() {
+                    ensure!(
+                        report.as_deref() == Some(b"report"),
+                        "Cargo Task stdout report mixed stdout with stderr"
+                    );
+                } else {
+                    ensure!(
+                        report.is_none(),
+                        "A failed Cargo Task exposed a selectable report"
+                    );
+                }
+            } else {
+                ensure!(
+                    receipt.is_err() && !exit.success(),
+                    "Invalid Cargo report was accepted"
+                );
+            }
+        }
+        Ok(())
+    })
+}
+
+fn cancel_cargo_build_report(directory: &Path) -> Result<()> {
+    smol::block_on(async {
+        let completion = LinuxTaskCompletion::bind()?;
+        let mut helper = spawn_completion_helper(&completion, "observe-cargo-build-task")?;
+        let actor =
+            OriginalTaskActor::from_smol_child(&mut helper, &File::open("/proc/self/exe")?)?;
+        let build = invocation(
+            directory,
+            r#"printf 'partial report'
+            sleep 60 &
+            printf '%s %s\n' "$$" "$!" > profiled-processes
+            wait"#,
+        )?;
+        let (ready, processes) = futures::channel::oneshot::channel();
+        let cancel = async {
+            let report = async {
+                for _ in 0..200 {
+                    if let Some(processes) = running_profile_processes(directory, None)? {
+                        return Ok(processes);
+                    }
+                    fixture_delay(Duration::from_millis(5)).await;
+                }
+                anyhow::bail!("The Cargo Task did not start its child");
+            }
+            .await;
+            if ready.send(report).is_err() {
+                log::debug!("Cargo cancellation fixture released its process observer");
+            }
+        };
+        let receipt = completion
+            .observe_cargo_build(actor, build, 1024, cancel)
+            .await?;
+        let (cargo, compiler) = processes.await??;
+        ensure!(
+            receipt.was_cancelled(),
+            "The Cargo Task did not acknowledge cancellation"
+        );
+        let (status, report) = receipt.verify_exit(wait(&mut helper).await?)?;
+        ensure!(
+            status.signal() == Some(libc::SIGKILL) && report.is_none(),
+            "Cancelled Cargo output was admitted"
+        );
+        ensure_profile_processes_exited(cargo, compiler)
+    })
+}
+
+fn write_native_cargo_fixture(directory: &Path) -> Result<()> {
+    for (path, contents) in [
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"runner\", \"stats\"]\nresolver = \"3\"\n[profile.release]\ndebug = 2\n",
+        ),
+        (
+            "runner/Cargo.toml",
+            "[package]\nname = \"runner\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[dependencies]\nstats = { path = \"../stats\" }\n",
+        ),
+        (
+            "stats/Cargo.toml",
+            "[package]\nname = \"stats\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+        ),
+        (
+            "runner/src/main.rs",
+            r#"fn main() {
+    let values: Vec<_> = (0..4096).collect();
+    let iterations = std::env::args().nth(1).and_then(|value| value.parse().ok()).unwrap_or(1);
+    let total: u64 = (0..iterations).map(|_| stats::score(std::hint::black_box(&values))).sum();
+    println!("Score: {total}");
+}"#,
+        ),
+        (
+            "runner/src/bin/decoy.rs",
+            r#"compile_error!("The unselected binary must never be compiled");"#,
+        ),
+        (
+            "stats/src/lib.rs",
+            r#"pub fn score(values: &[u64]) -> u64 {
+    values.iter().copied().map(weight).sum()
+}
+
+#[inline(never)]
+fn weight(value: u64) -> u64 {
+    if value > 1 { value * 2 } else { value }
+}"#,
+        ),
+    ] {
+        let path = directory.join(path);
+        std::fs::create_dir_all(path.parent().context("Invalid Cargo fixture path")?)?;
+        std::fs::write(path, contents)?;
+    }
+    Ok(())
+}
+
+fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()> {
+    use gpui::AppContext as _;
+    use project::cargo_workspace::{
+        CargoExecutableSelection, CargoNativeExecutionPolicy, CargoTargetKind,
+        resolve_native_cargo_executable,
+    };
+    use terminal::{HeadlessTerminal, LinuxNativeTaskOutcome, TerminalBuilder};
+
+    let directory = directory.canonicalize()?;
+    write_native_cargo_fixture(&directory)?;
+    let cargo = std::env::var_os("RUST_TOOLS_NATIVE_BUILD_CARGO")
+        .context("The independently installed native Cargo is required")?;
+    let cargo = std::path::PathBuf::from(cargo).canonicalize()?;
+    let toolchain_bins = cargo
+        .parent()
+        .context("Native Cargo toolchain has no directory")?;
+    let search_path =
+        std::env::join_paths([toolchain_bins, Path::new("/usr/bin"), Path::new("/bin")])?
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("Native Cargo toolchain path is not UTF-8"))?;
+    let target = directory.join("cargo-target");
+    let environment = BTreeMap::from([
+        ("PATH".into(), search_path),
+        ("CARGO_NET_OFFLINE".into(), "true".into()),
+        (
+            "CARGO_TARGET_DIR".into(),
+            target.to_str().context("Invalid Cargo target path")?.into(),
+        ),
+        (
+            "CARGO_HOME".into(),
+            directory
+                .join("cargo-home")
+                .to_str()
+                .context("Invalid Cargo home")?
+                .into(),
+        ),
+    ]);
+    let metadata = smol::block_on(
+        smol::process::Command::new(&cargo)
+            .args(["metadata", "--format-version=1", "--no-deps", "--offline"])
+            .current_dir(&directory)
+            .env_clear()
+            .envs(&environment)
+            .output(),
+    )?;
+    ensure!(
+        metadata.status.success(),
+        "Fixture Cargo metadata failed: {}",
+        String::from_utf8_lossy(&metadata.stderr)
+    );
+    let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout)?;
+    let package_id = metadata["packages"]
+        .as_array()
+        .and_then(|packages| {
+            packages
+                .iter()
+                .find(|package| package["name"].as_str() == Some("runner"))
+        })
+        .and_then(|package| package["id"].as_str())
+        .context("Fixture Cargo metadata is missing the runner identity")?
+        .to_owned();
+    let selection = CargoExecutableSelection {
+        package_id,
+        target_kind: CargoTargetKind::Binary,
+        target_name: "runner".into(),
+        source_path: directory.join("runner/src/main.rs"),
+        execution_policy: CargoNativeExecutionPolicy::Program,
+    };
+    let build = TaskBuildInvocation::new(
+        cargo,
+        [
+            "build",
+            "--message-format=json",
+            "--package",
+            "runner",
+            "--bin",
+            "runner",
+            "--release",
+        ]
+        .map(str::to_owned)
+        .to_vec(),
+        directory.clone(),
+        environment,
+    )?;
+    let report = NativeProfileTaskReservation::new()?;
+    let profile_path = report.profile_path();
+    let symbols_path = report.symbols_path();
+    let capture_path = profile_path.clone();
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    gpui_platform::headless().run(move |cx| {
+        release_channel::init(semver::Version::new(1, 16, 2), cx);
+        cx.set_global(HeadlessTerminal(headless));
+        let prepared = TerminalBuilder::new_with_native_cargo_build_task(
+            task::SpawnInTerminal { label: "Selected Cargo build".into(), ..Default::default() },
+            None, build, task::MAX_TASK_STDOUT_REPORT_BYTES, 1, cx,
+        );
+        cx.spawn(async move |cx| {
+            let deadline = cx.background_executor().timer(Duration::from_secs(45));
+            let run = async {
+                let (builder, observation) = prepared?;
+                let builder = builder.await?;
+                let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
+                let ordinary = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (build, ordinary) = futures::future::join(observation.finish(), ordinary).await;
+                let LinuxNativeTaskOutcome::Completed(status, Some(stdout)) = build? else {
+                    anyhow::bail!("The Cargo build did not produce a verified stdout report");
+                };
+                ensure!(status.success() && ordinary == Some(status), "Cargo and its Terminal did not agree on the build exit");
+                let executable = resolve_native_cargo_executable(&stdout, &selection, status.success())?;
+                ensure!(executable == target.join("release/runner") && executable.is_file(), "Cargo report selected the wrong executable");
+                let mut decoy = selection;
+                decoy.target_name = "decoy".into();
+                decoy.source_path = directory.join("runner/src/bin/decoy.rs");
+                ensure!(resolve_native_cargo_executable(&stdout, &decoy, true).is_err(), "An unselected target was admitted");
+
+                let executable = executable.to_str().context("Invalid Cargo executable path")?;
+                let invocation = samply_invocation(&directory, &capture_path, &[executable, "1200000"])?;
+                let (builder, observation) = cx.update(|cx| {
+                    TerminalBuilder::new_with_native_profile_task(
+                        task::SpawnInTerminal { label: "Profile the Cargo executable".into(), ..Default::default() },
+                        None, invocation, report, 1, cx,
+                    )
+                })?;
+                let builder = builder.await?;
+                let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
+                let ordinary = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (captured, ordinary) = futures::future::join(observation.finish(), ordinary).await;
+                let LinuxNativeTaskOutcome::Completed(status, Some(profile)) = captured? else {
+                    anyhow::bail!("Profiling the built executable did not produce a sealed pair");
+                };
+                ensure!(status.success() && ordinary == Some(status), "Profile and its Terminal did not agree on the capture exit");
+                let samples = cx.background_spawn(async move { verify_samply_profile(profile) }).await?;
+                println!("Selected Cargo build and capture retained {samples} samples and mapped stats::weight");
+                Ok(())
+            };
+            let result = match futures::future::select(Box::pin(run), deadline).await {
+                futures::future::Either::Left((result, _)) => result,
+                futures::future::Either::Right(_) => Err(anyhow::anyhow!("Selected Cargo build and capture timed out")),
+            };
+            if let Err(error) = send.send(result) {
+                log::error!("Selected Cargo build fixture lost its caller: {error}");
+            }
+            cx.update(|cx| cx.quit());
+        }).detach();
+    });
+    receive.recv()??;
+    ensure!(
+        !profile_path.exists() && !symbols_path.exists(),
+        "Selected Cargo profile retained its reservation"
+    );
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum ProfileTerminalAction {
     Complete,
@@ -755,7 +1060,7 @@ fn native_profile_terminal(
     action: ProfileTerminalAction,
 ) -> Result<()> {
     use gpui::AppContext as _;
-    use terminal::{HeadlessTerminal, NativeProfileTaskOutcome, TerminalBuilder};
+    use terminal::{HeadlessTerminal, LinuxNativeTaskOutcome, TerminalBuilder};
 
     let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
     let report = NativeProfileTaskReservation::new()?;
@@ -808,7 +1113,7 @@ fn native_profile_terminal(
                 match action {
                     ProfileTerminalAction::Complete => {
                         let (observed, ordinary) = futures::future::join(observation.finish(), ordinary_completion).await;
-                        let NativeProfileTaskOutcome::Completed(status, Some(profile)) = observed? else {
+                        let LinuxNativeTaskOutcome::Completed(status, Some(profile)) = observed? else {
                             anyhow::bail!("The Terminal did not produce a sealed profile");
                         };
                         ensure!(status.success() && ordinary == Some(status), "The native receipt and Terminal disagreed on exit");
@@ -829,7 +1134,7 @@ fn native_profile_terminal(
                             terminal.update(cx, |terminal, _| terminal.kill_active_task());
                             Some(terminal)
                         };
-                        ensure!(matches!(observation.finish().await?, NativeProfileTaskOutcome::Cancelled), "The Terminal did not acknowledge cancellation");
+                        ensure!(matches!(observation.finish().await?, LinuxNativeTaskOutcome::Cancelled), "The Terminal did not acknowledge cancellation");
                         confirmed.recv().await?;
                         ensure_profile_processes_exited(collector, workload_pid)?;
                         if terminal.is_some() {
@@ -1403,6 +1708,10 @@ pub enum Scenario {
     NativeProfileStopHeadless,
     NativeProfileClosePty,
     NativeProfileCloseHeadless,
+    CargoBuildReportControls,
+    CargoBuildCancellation,
+    CargoBuildProfilePty,
+    CargoBuildProfileHeadless,
     HeadlessCollector,
     SelectedHeadlessCollector,
 }
@@ -1445,6 +1754,10 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::NativeProfileCloseHeadless => {
             native_profile_terminal(directory, true, ProfileTerminalAction::Close)
         }
+        Scenario::CargoBuildReportControls => cargo_build_report_controls(directory),
+        Scenario::CargoBuildCancellation => cancel_cargo_build_report(directory),
+        Scenario::CargoBuildProfilePty => native_cargo_profile_terminal(directory, false),
+        Scenario::CargoBuildProfileHeadless => native_cargo_profile_terminal(directory, true),
         Scenario::HeadlessCollector => headless_collector(directory, false),
         Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
     }

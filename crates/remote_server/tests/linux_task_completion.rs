@@ -100,6 +100,23 @@ fn native_profile_terminal_close_reaps_pty_and_headless_workloads() -> io::Resul
 }
 
 #[test]
+fn cargo_build_report_is_bounded_and_requires_a_successful_owned_exit() -> io::Result<()> {
+    run_fixture("cargo-build-report-controls")
+}
+
+#[test]
+fn cargo_build_cancellation_reaps_children_and_discards_stdout() -> io::Result<()> {
+    run_fixture("cargo-build-cancellation")
+}
+
+#[test]
+#[ignore = "requires an independently built host, the pinned Cargo and a Linux perf environment"]
+fn native_cargo_profile_uses_the_fresh_executable_on_both_terminal_backends() -> io::Result<()> {
+    run_terminal_fixture("cargo-build-profile-pty")?;
+    run_terminal_fixture("cargo-build-profile-headless")
+}
+
+#[test]
 fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_task_completion::LinuxTaskCompletion;
 

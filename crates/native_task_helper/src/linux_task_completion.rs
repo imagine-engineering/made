@@ -1,6 +1,9 @@
 use crate::{
-    task_actor::{CoverageTaskParent, OriginalTaskActor},
-    task_completion::{MAX_TASK_BUILD_INVOCATION_BYTES, TaskBuildInvocation},
+    task_actor::{AuthenticatedTaskActor, CoverageTaskParent, OriginalTaskActor},
+    task_completion::{
+        MAX_TASK_BUILD_INVOCATION_BYTES, TASK_STDOUT_FRAME_BYTES, TaskBuildInvocation,
+        validate_stdout_report_limit,
+    },
 };
 use futures_lite::{AsyncReadExt as _, AsyncWriteExt as _, future};
 use sha2::{Digest as _, Sha256};
@@ -23,7 +26,7 @@ const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const CANCELLATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_ACKNOWLEDGED: u8 = 1;
-const CANCEL_NATIVE_PROFILE: u8 = 2;
+const CANCEL_NATIVE_TASK: u8 = 2;
 const MAX_COVERAGE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_PROFILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SYMBOL_BYTES: usize = 16 * 1024 * 1024;
@@ -141,6 +144,7 @@ fn same_artifact_version(left: &Metadata, right: &Metadata) -> bool {
 enum TaskKind {
     Coverage = 1,
     NativeProfile = 2,
+    CargoBuild = 3,
 }
 
 trait TaskOutputReservation: Send + 'static {
@@ -407,6 +411,34 @@ impl LinuxTaskCompletion {
             .await
     }
 
+    pub async fn observe_cargo_build(
+        self,
+        actor: OriginalTaskActor,
+        invocation: TaskBuildInvocation,
+        report_limit: usize,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<Vec<u8>>> {
+        validate_stdout_report_limit(report_limit)?;
+        let (mut actor, mut connection, challenge) = self
+            .register_task(actor, invocation, TaskKind::CargoBuild, Some(report_limit))
+            .await?;
+        until_deadline(COMPLETION_TIMEOUT, async {
+            let (response, cancelled) =
+                receive_task_response(&mut connection, challenge, Some(report_limit), cancel)
+                    .await?;
+            actor.revalidate()?;
+            connection.write_all(&[COMPLETION_ACKNOWLEDGED]).await?;
+            Ok(LinuxTaskReceipt {
+                termination: response.termination,
+                output: response.stdout.filter(|_| {
+                    !cancelled && response.termination == LinuxTaskTermination::Exited(0)
+                }),
+                cancelled,
+            })
+        })
+        .await
+    }
+
     async fn observe_output<Output: TaskOutputReservation>(
         self,
         actor: OriginalTaskActor,
@@ -417,49 +449,14 @@ impl LinuxTaskCompletion {
         if let Some(output) = output.as_ref() {
             output.validate_invocation(&invocation)?;
         }
-        let request = invocation.encode_helper_environment()?;
-        let mut challenge = [0; 32];
-        getrandom::fill(&mut challenge)
-            .map_err(|_| io::Error::other("Cannot issue Coverage Task challenge"))?;
-
-        let (mut actor, mut connection) = until_deadline(REGISTRATION_TIMEOUT, async {
-            let (mut connection, _) = self.listener.accept().await?;
-            let mut actor = actor.authenticate_peer(&connection)?;
-            actor.revalidate()?;
-            connection.write_all(&[Output::KIND as u8]).await?;
-            connection.write_all(&challenge).await?;
-            connection
-                .write_all(&(request.len() as u32).to_be_bytes())
-                .await?;
-            connection.write_all(request.as_bytes()).await?;
-            Ok((actor, connection))
-        })
-        .await?;
-
+        let (mut actor, mut connection, challenge) = self
+            .register_task(actor, invocation, Output::KIND, None)
+            .await?;
         until_deadline(COMPLETION_TIMEOUT, async {
-            let response = read_task_termination(connection.clone(), challenge);
-            let mut response = std::pin::pin!(response);
-            let (termination, cancelled) = match future::or(
-                async {
-                    cancel.await;
-                    Ok(None)
-                },
-                async { response.as_mut().await.map(Some) },
-            )
-            .await?
-            {
-                Some(termination) => (termination, false),
-                None => {
-                    let termination = until_deadline(CANCELLATION_TIMEOUT, async {
-                        connection.write_all(&[CANCEL_NATIVE_PROFILE]).await?;
-                        response.await
-                    })
-                    .await?;
-                    (termination, true)
-                }
-            };
+            let (response, cancelled) =
+                receive_task_response(&mut connection, challenge, None, cancel).await?;
             actor.revalidate()?;
-            let output = match (cancelled, termination, output) {
+            let output = match (cancelled, response.termination, output) {
                 (false, LinuxTaskTermination::Exited(0), Some(output)) => {
                     Some(smol::unblock(move || output.seal()).await?)
                 }
@@ -468,38 +465,120 @@ impl LinuxTaskCompletion {
             actor.revalidate()?;
             connection.write_all(&[COMPLETION_ACKNOWLEDGED]).await?;
             Ok(LinuxTaskReceipt {
-                termination,
+                termination: response.termination,
                 output,
                 cancelled,
             })
         })
         .await
     }
+
+    async fn register_task(
+        &self,
+        actor: OriginalTaskActor,
+        invocation: TaskBuildInvocation,
+        kind: TaskKind,
+        stdout_limit: Option<usize>,
+    ) -> io::Result<(AuthenticatedTaskActor, UnixStream, [u8; 32])> {
+        let request = invocation.encode_helper_environment()?;
+        let mut challenge = [0; 32];
+        getrandom::fill(&mut challenge)
+            .map_err(|_| io::Error::other("Cannot issue Native Task challenge"))?;
+
+        until_deadline(REGISTRATION_TIMEOUT, async {
+            let (mut connection, _) = self.listener.accept().await?;
+            let mut actor = actor.authenticate_peer(&connection)?;
+            actor.revalidate()?;
+            connection.write_all(&[kind as u8]).await?;
+            connection.write_all(&challenge).await?;
+            if let Some(limit) = stdout_limit {
+                connection.write_all(&(limit as u32).to_be_bytes()).await?;
+            }
+            connection
+                .write_all(&(request.len() as u32).to_be_bytes())
+                .await?;
+            connection.write_all(request.as_bytes()).await?;
+            Ok((actor, connection, challenge))
+        })
+        .await
+    }
 }
 
-async fn read_task_termination(
+struct LinuxTaskResponse {
+    termination: LinuxTaskTermination,
+    stdout: Option<Vec<u8>>,
+}
+
+async fn receive_task_response(
+    connection: &mut UnixStream,
+    challenge: [u8; 32],
+    stdout_limit: Option<usize>,
+    cancel: impl Future<Output = ()>,
+) -> io::Result<(LinuxTaskResponse, bool)> {
+    let response = read_task_response(connection.clone(), challenge, stdout_limit);
+    let mut response = std::pin::pin!(response);
+    match future::or(
+        async {
+            cancel.await;
+            Ok(None)
+        },
+        async { response.as_mut().await.map(Some) },
+    )
+    .await?
+    {
+        Some(response) => Ok((response, false)),
+        None => {
+            let response = until_deadline(CANCELLATION_TIMEOUT, async {
+                connection.write_all(&[CANCEL_NATIVE_TASK]).await?;
+                response.await
+            })
+            .await?;
+            Ok((response, true))
+        }
+    }
+}
+
+async fn read_task_response(
     mut connection: UnixStream,
     challenge: [u8; 32],
-) -> io::Result<LinuxTaskTermination> {
+    stdout_limit: Option<usize>,
+) -> io::Result<LinuxTaskResponse> {
     let mut response_challenge = [0; 32];
     connection.read_exact(&mut response_challenge).await?;
     if response_challenge != challenge {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
-            "Coverage Task receipt did not match its invocation",
+            "Native Task receipt did not match its invocation",
         ));
     }
     let mut response = [0; 2];
     connection.read_exact(&mut response).await?;
+    let termination = match response {
+        [0, code] => LinuxTaskTermination::Exited(code),
+        [1, signal @ 1..=64] => LinuxTaskTermination::Signalled(signal),
+        _ => return Err(invalid_completion()),
+    };
+    let stdout = if let Some(limit) = stdout_limit {
+        let mut length = [0; 4];
+        connection.read_exact(&mut length).await?;
+        let length = u32::from_be_bytes(length) as usize;
+        if length > limit {
+            return Err(invalid_completion());
+        }
+        let mut bytes = vec![0; length];
+        connection.read_exact(&mut bytes).await?;
+        Some(bytes)
+    } else {
+        None
+    };
     let mut trailing = [0; 1];
     if connection.read(&mut trailing).await? != 0 {
         return Err(invalid_completion());
     }
-    match response {
-        [0, code] => Ok(LinuxTaskTermination::Exited(code)),
-        [1, signal @ 1..=64] => Ok(LinuxTaskTermination::Signalled(signal)),
-        _ => Err(invalid_completion()),
-    }
+    Ok(LinuxTaskResponse {
+        termination,
+        stdout,
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -556,8 +635,12 @@ pub async fn run_native_profile_task(socket: &Path) -> io::Result<ExitStatus> {
     run_task(socket, TaskKind::NativeProfile).await
 }
 
+pub async fn run_cargo_build_task(socket: &Path) -> io::Result<ExitStatus> {
+    run_task(socket, TaskKind::CargoBuild).await
+}
+
 async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
-    let (mut connection, invocation, challenge, parent) =
+    let (mut connection, invocation, challenge, parent, stdout_limit) =
         until_deadline(REGISTRATION_TIMEOUT, async {
             let mut connection = UnixStream::connect(socket).await?;
             let parent = CoverageTaskParent::authenticate(&connection)?;
@@ -568,6 +651,15 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
             }
             let mut challenge = [0; 32];
             connection.read_exact(&mut challenge).await?;
+            let stdout_limit = if matches!(kind, TaskKind::CargoBuild) {
+                let mut limit = [0; 4];
+                connection.read_exact(&mut limit).await?;
+                let limit = u32::from_be_bytes(limit) as usize;
+                validate_stdout_report_limit(limit)?;
+                Some(limit)
+            } else {
+                None
+            };
             let mut length = [0; 4];
             connection.read_exact(&mut length).await?;
             let length = u32::from_be_bytes(length) as usize;
@@ -580,7 +672,7 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
                 .map_err(|_| invalid_completion())?;
             invocation.validate()?;
             parent.revalidate()?;
-            Ok((connection, invocation, challenge, parent))
+            Ok((connection, invocation, challenge, parent, stdout_limit))
         })
         .await?;
 
@@ -603,9 +695,15 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
             Ok(())
         });
     }
-    let status = match kind {
-        TaskKind::Coverage => run_coverage_workload(command, &mut connection).await?,
-        TaskKind::NativeProfile => run_profile_workload(command, &mut connection).await?,
+    let (status, stdout) = match kind {
+        TaskKind::Coverage => (run_coverage_workload(command, &mut connection).await?, None),
+        TaskKind::NativeProfile => (run_profile_workload(command, &mut connection).await?, None),
+        TaskKind::CargoBuild => {
+            let limit = stdout_limit.ok_or_else(invalid_completion)?;
+            let (status, stdout) =
+                run_cargo_build_workload(command, &mut connection, limit).await?;
+            (status, Some(stdout))
+        }
     };
 
     let termination = LinuxTaskTermination::from_status(status)?;
@@ -613,10 +711,16 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
     until_deadline(REGISTRATION_TIMEOUT, async {
         connection.write_all(&challenge).await?;
         connection.write_all(&termination.encode()).await?;
+        if let Some(stdout) = stdout {
+            connection
+                .write_all(&(stdout.len() as u32).to_be_bytes())
+                .await?;
+            connection.write_all(&stdout).await?;
+        }
         connection.shutdown(Shutdown::Write)?;
         let mut acknowledged = [0; 1];
         connection.read_exact(&mut acknowledged).await?;
-        if matches!(kind, TaskKind::NativeProfile) && acknowledged == [CANCEL_NATIVE_PROFILE] {
+        if !matches!(kind, TaskKind::Coverage) && acknowledged == [CANCEL_NATIVE_TASK] {
             connection.read_exact(&mut acknowledged).await?;
         }
         if acknowledged != [COMPLETION_ACKNOWLEDGED] {
@@ -636,14 +740,14 @@ async fn observer_interruption(connection: &mut UnixStream) -> io::Error {
     }
 }
 
-async fn wait_for_profile_cancellation(connection: &mut UnixStream) -> io::Result<()> {
+async fn wait_for_task_cancellation(connection: &mut UnixStream) -> io::Result<()> {
     let mut command = [0; 1];
     match connection.read(&mut command).await? {
         0 => Err(io::Error::new(
             io::ErrorKind::Interrupted,
             "Task observer disconnected",
         )),
-        _ if command == [CANCEL_NATIVE_PROFILE] => Ok(()),
+        _ if command == [CANCEL_NATIVE_TASK] => Ok(()),
         _ => Err(invalid_completion()),
     }
 }
@@ -681,11 +785,8 @@ async fn run_coverage_workload(
     clippy::disallowed_methods,
     reason = "The standalone helper owns the unreaped child and must keep its spawning thread alive for PR_SET_PDEATHSIG"
 )]
-async fn run_profile_workload(
-    mut command: Command,
-    connection: &mut UnixStream,
-) -> io::Result<ExitStatus> {
-    // When the collector dies before its workload, this helper must reap the orphaned group.
+fn spawn_task_group(mut command: Command) -> io::Result<Child> {
+    // If the group leader exits first, the helper must reap the orphaned members.
     if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } != 0 {
         return Err(io::Error::last_os_error());
     }
@@ -708,18 +809,90 @@ async fn run_profile_workload(
             if result == 0 { Ok(()) } else { Err(error) }
         });
     }
-    let child = command.spawn()?;
+    command.spawn()
+}
+
+async fn run_profile_workload(
+    command: Command,
+    connection: &mut UnixStream,
+) -> io::Result<ExitStatus> {
+    let child = spawn_task_group(command)?;
     let group = child.id() as libc::pid_t;
     let result = future::or(
-        wait_for_profile_cancellation(connection),
-        wait_for_profile_exit(group),
+        wait_for_task_cancellation(connection),
+        wait_for_task_exit(group),
     )
     .await;
-    let status = smol::unblock(move || finish_profile_group(child, group)).await?;
+    let status = smol::unblock(move || finish_task_group(child, group)).await?;
     result.map(|()| status)
 }
 
-async fn wait_for_profile_exit(group: libc::pid_t) -> io::Result<()> {
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The native Cargo helper takes stdout from the original std child and holds the process group until cleanup"
+)]
+async fn run_cargo_build_workload(
+    mut command: Command,
+    connection: &mut UnixStream,
+    limit: usize,
+) -> io::Result<(ExitStatus, Vec<u8>)> {
+    command.stdout(Stdio::piped());
+    let mut child = spawn_task_group(command)?;
+    let group = child.id() as libc::pid_t;
+    let stdout = child.stdout.take();
+    let read_and_wait = async {
+        let stdout =
+            stdout.ok_or_else(|| io::Error::other("Cargo Task stdout pipe is unavailable"))?;
+        let (report, ()) = future::try_zip(collect_cargo_stdout(stdout, limit), async {
+            wait_for_task_exit(group).await?;
+            // Detached writers in Cargo's group must not keep the report pipe open.
+            stop_task_group(group)
+        })
+        .await?;
+        Ok(report)
+    };
+    let result = future::or(
+        async {
+            wait_for_task_cancellation(connection).await?;
+            Ok(Vec::new())
+        },
+        read_and_wait,
+    )
+    .await;
+    let status = smol::unblock(move || finish_task_group(child, group)).await?;
+    result.map(|stdout| (status, stdout))
+}
+
+async fn collect_cargo_stdout(
+    stdout: std::process::ChildStdout,
+    limit: usize,
+) -> io::Result<Vec<u8>> {
+    let mut stdout = smol::Async::new(stdout)?;
+    let mut terminal = smol::Unblock::with_capacity(TASK_STDOUT_FRAME_BYTES, std::io::stdout());
+    let mut report = Vec::new();
+    report
+        .try_reserve_exact(limit)
+        .map_err(|_| io::Error::other("Cannot allocate the bounded Cargo report"))?;
+    let mut buffer = [0; TASK_STDOUT_FRAME_BYTES];
+    loop {
+        let remaining = (limit.saturating_sub(report.len()) + 1).min(buffer.len());
+        let count = stdout.read(&mut buffer[..remaining]).await?;
+        if count == 0 {
+            return Ok(report);
+        }
+        if count > limit.saturating_sub(report.len()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Cargo Task stdout report exceeds its limit",
+            ));
+        }
+        report.extend_from_slice(&buffer[..count]);
+        terminal.write_all(&buffer[..count]).await?;
+        terminal.flush().await?;
+    }
+}
+
+async fn wait_for_task_exit(group: libc::pid_t) -> io::Result<()> {
     // A readable pidfd observes exit without releasing the leader's process group ID.
     let descriptor = unsafe { libc::syscall(libc::SYS_pidfd_open, group, 0) };
     if descriptor < 0 {
@@ -730,13 +903,18 @@ async fn wait_for_profile_exit(group: libc::pid_t) -> io::Result<()> {
         .await
 }
 
-fn finish_profile_group(mut child: Child, group: libc::pid_t) -> io::Result<ExitStatus> {
+fn stop_task_group(group: libc::pid_t) -> io::Result<()> {
     if unsafe { libc::killpg(group, libc::SIGKILL) } != 0 {
         let error = io::Error::last_os_error();
         if error.raw_os_error() != Some(libc::ESRCH) {
             return Err(error);
         }
     }
+    Ok(())
+}
+
+fn finish_task_group(mut child: Child, group: libc::pid_t) -> io::Result<ExitStatus> {
+    stop_task_group(group)?;
     let status = child.wait()?;
     loop {
         if unsafe { libc::waitpid(-group, std::ptr::null_mut(), 0) } < 0 {
