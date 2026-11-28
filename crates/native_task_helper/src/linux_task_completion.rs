@@ -9,18 +9,18 @@ use std::{
     fs::{self, File, Metadata},
     io,
     net::Shutdown,
+    os::fd::{FromRawFd as _, OwnedFd},
     os::unix::{
         fs::{FileExt as _, MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
         process::{CommandExt as _, ExitStatusExt as _},
     },
     path::{Path, PathBuf},
-    process::{Command, ExitStatus, Stdio},
+    process::{Child, Command, ExitStatus, Stdio},
     time::Duration,
 };
 
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
-const PROTOCOL_VERSION: u8 = 1;
 const COMPLETION_ACKNOWLEDGED: u8 = 1;
 const MAX_COVERAGE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_PROFILE_BYTES: usize = 32 * 1024 * 1024;
@@ -134,7 +134,15 @@ fn same_artifact_version(left: &Metadata, right: &Metadata) -> bool {
         && left.mtime_nsec() == right.mtime_nsec()
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy)]
+enum TaskKind {
+    Coverage = 1,
+    NativeProfile = 2,
+}
+
 trait TaskOutputReservation: Send + 'static {
+    const KIND: TaskKind;
     type Sealed: Send;
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()>;
     fn seal(self) -> io::Result<Self::Sealed>;
@@ -174,6 +182,7 @@ impl CoverageTaskReportReservation {
 }
 
 impl TaskOutputReservation for CoverageTaskReportReservation {
+    const KIND: TaskKind = TaskKind::Coverage;
     type Sealed = SealedCoverageTaskReport;
 
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()> {
@@ -283,6 +292,7 @@ impl NativeProfileTaskReservation {
 }
 
 impl TaskOutputReservation for NativeProfileTaskReservation {
+    const KIND: TaskKind = TaskKind::NativeProfile;
     type Sealed = SealedNativeProfileTask;
 
     fn validate_invocation(&self, invocation: &TaskBuildInvocation) -> io::Result<()> {
@@ -400,7 +410,7 @@ impl LinuxTaskCompletion {
             let (mut connection, _) = self.listener.accept().await?;
             let mut actor = actor.authenticate_peer(&connection)?;
             actor.revalidate()?;
-            connection.write_all(&[PROTOCOL_VERSION]).await?;
+            connection.write_all(&[Output::KIND as u8]).await?;
             connection.write_all(&challenge).await?;
             connection
                 .write_all(&(request.len() as u32).to_be_bytes())
@@ -490,13 +500,21 @@ impl<Output> LinuxTaskReceipt<Output> {
 }
 
 pub async fn run_coverage_task(socket: &Path) -> io::Result<ExitStatus> {
+    run_task(socket, TaskKind::Coverage).await
+}
+
+pub async fn run_native_profile_task(socket: &Path) -> io::Result<ExitStatus> {
+    run_task(socket, TaskKind::NativeProfile).await
+}
+
+async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
     let (mut connection, invocation, challenge, parent) =
         until_deadline(REGISTRATION_TIMEOUT, async {
             let mut connection = UnixStream::connect(socket).await?;
             let parent = CoverageTaskParent::authenticate(&connection)?;
             let mut version = [0; 1];
             connection.read_exact(&mut version).await?;
-            if version != [PROTOCOL_VERSION] {
+            if version != [kind as u8] {
                 return Err(invalid_completion());
             }
             let mut challenge = [0; 32];
@@ -536,35 +554,9 @@ pub async fn run_coverage_task(socket: &Path) -> io::Result<ExitStatus> {
             Ok(())
         });
     }
-    let mut child = smol::process::Command::from(command)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()?;
-    let status = match future::race(child.status(), async {
-        let mut command = [0; 1];
-        match connection.read(&mut command).await? {
-            0 => Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "Coverage Task observer disconnected",
-            )),
-            _ => Err(invalid_completion()),
-        }
-    })
-    .await
-    {
-        Ok(status) => status,
-        Err(error) => {
-            let termination = child.kill();
-            child.status().await?;
-            if let Err(termination) = termination
-                && termination.raw_os_error() != Some(libc::ESRCH)
-            {
-                return Err(termination);
-            }
-            return Err(error);
-        }
+    let status = match kind {
+        TaskKind::Coverage => run_coverage_workload(command, &mut connection).await?,
+        TaskKind::NativeProfile => run_profile_workload(command, &mut connection).await?,
     };
 
     let termination = LinuxTaskTermination::from_status(status)?;
@@ -581,6 +573,116 @@ pub async fn run_coverage_task(socket: &Path) -> io::Result<ExitStatus> {
         Ok(status)
     })
     .await
+}
+
+async fn observer_interruption(connection: &mut UnixStream) -> io::Error {
+    let mut command = [0; 1];
+    match connection.read(&mut command).await {
+        Ok(0) => io::Error::new(io::ErrorKind::Interrupted, "Task observer disconnected"),
+        Ok(_) => invalid_completion(),
+        Err(error) => error,
+    }
+}
+
+async fn run_coverage_workload(
+    command: Command,
+    connection: &mut UnixStream,
+) -> io::Result<ExitStatus> {
+    let mut child = smol::process::Command::from(command)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()?;
+    match future::race(child.status(), async {
+        Err(observer_interruption(connection).await)
+    })
+    .await
+    {
+        Ok(status) => Ok(status),
+        Err(error) => {
+            let termination = child.kill();
+            child.status().await?;
+            if let Err(termination) = termination
+                && termination.raw_os_error() != Some(libc::ESRCH)
+            {
+                return Err(termination);
+            }
+            Err(error)
+        }
+    }
+}
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "The standalone helper owns the unreaped child and must keep its spawning thread alive for PR_SET_PDEATHSIG"
+)]
+async fn run_profile_workload(
+    mut command: Command,
+    connection: &mut UnixStream,
+) -> io::Result<ExitStatus> {
+    // When the collector dies before its workload, this helper must reap the orphaned group.
+    if unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    command.process_group(0);
+    unsafe {
+        command.pre_exec(|| {
+            if libc::isatty(libc::STDIN_FILENO) != 1 {
+                return Ok(());
+            }
+            // The workload group must be foreground for normal PTY input.
+            let previous = libc::signal(libc::SIGTTOU, libc::SIG_IGN);
+            if previous == libc::SIG_ERR {
+                return Err(io::Error::last_os_error());
+            }
+            let result = libc::tcsetpgrp(libc::STDIN_FILENO, libc::getpid());
+            let error = io::Error::last_os_error();
+            if libc::signal(libc::SIGTTOU, previous) == libc::SIG_ERR {
+                return Err(io::Error::last_os_error());
+            }
+            if result == 0 { Ok(()) } else { Err(error) }
+        });
+    }
+    let child = command.spawn()?;
+    let group = child.id() as libc::pid_t;
+    let result = future::race(wait_for_profile_exit(group), async {
+        Err(observer_interruption(connection).await)
+    })
+    .await;
+    let status = smol::unblock(move || finish_profile_group(child, group)).await?;
+    result.map(|()| status)
+}
+
+async fn wait_for_profile_exit(group: libc::pid_t) -> io::Result<()> {
+    // A readable pidfd observes exit without releasing the leader's process group ID.
+    let descriptor = unsafe { libc::syscall(libc::SYS_pidfd_open, group, 0) };
+    if descriptor < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    smol::Async::new_nonblocking(unsafe { OwnedFd::from_raw_fd(descriptor as libc::c_int) })?
+        .readable()
+        .await
+}
+
+fn finish_profile_group(mut child: Child, group: libc::pid_t) -> io::Result<ExitStatus> {
+    if unsafe { libc::killpg(group, libc::SIGKILL) } != 0 {
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::ESRCH) {
+            return Err(error);
+        }
+    }
+    let status = child.wait()?;
+    loop {
+        if unsafe { libc::waitpid(-group, std::ptr::null_mut(), 0) } < 0 {
+            let error = io::Error::last_os_error();
+            match error.raw_os_error() {
+                Some(libc::ECHILD) => return Ok(status),
+                Some(libc::EINTR) => continue,
+                _ => return Err(error),
+            }
+        }
+    }
 }
 
 #[expect(

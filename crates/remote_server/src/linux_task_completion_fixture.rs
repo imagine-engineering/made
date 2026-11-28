@@ -18,9 +18,15 @@ use std::{
 };
 
 fn spawn_helper(completion: &LinuxTaskCompletion) -> io::Result<smol::process::Child> {
-    let mut command = smol::process::Command::new(std::env::current_exe()?);
-    command
-        .arg("observe-coverage-task")
+    spawn_completion_helper(completion, "observe-coverage-task")
+}
+
+fn spawn_completion_helper(
+    completion: &LinuxTaskCompletion,
+    command: &str,
+) -> io::Result<smol::process::Child> {
+    smol::process::Command::new(std::env::current_exe()?)
+        .arg(command)
         .arg("--socket")
         .arg(completion.socket())
         .env("COPPER_UNADMITTED_TEST_VALUE", "must not be inherited")
@@ -75,7 +81,7 @@ async fn wait(helper: &mut smol::process::Child) -> io::Result<ExitStatus> {
         fixture_delay(Duration::from_secs(5)).await;
         Err(io::Error::new(
             io::ErrorKind::TimedOut,
-            "Coverage helper did not exit",
+            "Task helper did not exit",
         ))
     })
     .await
@@ -396,6 +402,7 @@ fn profile_pair_replacement(directory: &Path) -> Result<()> {
         Unsuccessful,
         ChangedAfterSealing,
         Complete,
+        WrongMode,
     }
 
     smol::block_on(async {
@@ -429,27 +436,19 @@ fn profile_pair_replacement(directory: &Path) -> Result<()> {
             ),
             (write_pair, "-o", ExpectedPair::ChangedAfterSealing),
             (write_pair, "-o", ExpectedPair::Complete),
+            (write_pair, "-o", ExpectedPair::WrongMode),
         ] {
             let report = NativeProfileTaskReservation::new()?;
             let profile_path = report.profile_path();
             let symbols_path = report.symbols_path();
-            let invocation = TaskBuildInvocation::new(
-                "/bin/sh".into(),
-                vec![
-                    "-c".into(),
-                    command.into(),
-                    "fixture".into(),
-                    output_flag.into(),
-                    profile_path
-                        .to_str()
-                        .context("Profile path is not Unicode")?
-                        .into(),
-                ],
-                directory.to_path_buf(),
-                BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
-            )?;
+            let invocation =
+                profile_shell_invocation(directory, command, output_flag, &profile_path)?;
             let completion = LinuxTaskCompletion::bind()?;
-            let mut helper = spawn_helper(&completion)?;
+            let helper_command = match expected {
+                ExpectedPair::WrongMode => "observe-coverage-task",
+                _ => "observe-native-profile-task",
+            };
+            let mut helper = spawn_completion_helper(&completion, helper_command)?;
             let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
             let observed = completion.observe_profile(actor, invocation, report).await;
             let status = wait(&mut helper).await?;
@@ -459,6 +458,15 @@ fn profile_pair_replacement(directory: &Path) -> Result<()> {
                 ensure!(
                     error.to_string().contains(expected_error),
                     "Unexpected pair refusal: {error}"
+                );
+            } else if matches!(expected, ExpectedPair::WrongMode) {
+                ensure!(
+                    observed.is_err(),
+                    "A Coverage helper admitted a native profile"
+                );
+                ensure!(
+                    !status.success(),
+                    "A Coverage helper ran the native invocation"
                 );
             } else {
                 let (status, pair) = observed?.verify_exit(status)?;
@@ -498,45 +506,182 @@ fn profile_pair_replacement(directory: &Path) -> Result<()> {
     })
 }
 
+fn profile_shell_invocation(
+    directory: &Path,
+    script: &str,
+    output_flag: &str,
+    profile_path: &Path,
+) -> Result<TaskBuildInvocation> {
+    Ok(TaskBuildInvocation::new(
+        "/bin/sh".into(),
+        vec![
+            "-c".into(),
+            script.into(),
+            "fixture".into(),
+            output_flag.into(),
+            profile_path
+                .to_str()
+                .context("Profile path is not Unicode")?
+                .into(),
+        ],
+        directory.to_path_buf(),
+        BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+    )?)
+}
+
+fn profile_group_cancellation(directory: &Path) -> Result<()> {
+    let report = NativeProfileTaskReservation::new()?;
+    let invocation = profile_shell_invocation(
+        directory,
+        r#"printf 'partial' > "$2"
+           printf 'symbols' > "${2%.json}.syms.json"
+           sleep 60 &
+           printf '%s %s\n' "$$" "$!" > profiled-processes
+           wait"#,
+        "-o",
+        &report.profile_path(),
+    )?;
+    assert_profile_cancellation(directory, invocation, report, None)
+}
+
+fn native_profile_collector_cancellation(directory: &Path) -> Result<()> {
+    let report = NativeProfileTaskReservation::new()?;
+    let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
+    let invocation = samply_invocation(
+        directory,
+        &report.profile_path(),
+        &[
+            "/bin/bash",
+            "-c",
+            r#"printf '%s %s\n' "$PPID" "$$" > profiled-processes; exec "$1" 1200000"#,
+            "fixture",
+            &workload,
+        ],
+    )?;
+    assert_profile_cancellation(directory, invocation, report, Some(Path::new(&workload)))
+}
+
+fn assert_profile_cancellation(
+    directory: &Path,
+    invocation: TaskBuildInvocation,
+    report: NativeProfileTaskReservation,
+    expected_workload: Option<&Path>,
+) -> Result<()> {
+    smol::block_on(async {
+        let marker = directory.join("profiled-processes");
+        let profile_path = report.profile_path();
+        let symbols_path = report.symbols_path();
+        let completion = LinuxTaskCompletion::bind()?;
+        let socket = completion.socket();
+        let mut helper = spawn_completion_helper(&completion, "observe-native-profile-task")?;
+        let actor =
+            OriginalTaskActor::from_smol_child(&mut helper, &File::open("/proc/self/exe")?)?;
+        let (collector, workload) = smol::future::race(
+            async {
+                completion.observe_profile(actor, invocation, report).await?;
+                anyhow::bail!("The profile completed before cancellation");
+            },
+            async {
+                for _ in 0..200 {
+                    match std::fs::read_to_string(&marker) {
+                        Ok(ids) if ids.ends_with('\n') => {
+                            let (collector, workload) = ids
+                                .trim_end()
+                                .split_once(' ')
+                                .context("Malformed profiling fixture process IDs")?;
+                            let collector = collector.parse::<libc::pid_t>()?;
+                            let workload = workload.parse::<libc::pid_t>()?;
+                            ensure!(
+                                collector > 0 && workload > 0 && collector != workload,
+                                "Expected separately identified fixture processes",
+                            );
+                            if let Some(expected) = expected_workload
+                                && std::fs::read_link(format!("/proc/{workload}/exe"))? != expected
+                            {
+                                fixture_delay(Duration::from_millis(5)).await;
+                                continue;
+                            }
+                            ensure!(
+                                unsafe { libc::getpgid(workload) } == collector,
+                                "The Rust workload was not in the original collector's process group",
+                            );
+                            return Ok((collector, workload));
+                        }
+                        Ok(_) => {}
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                        Err(error) => return Err(error.into()),
+                    }
+                    fixture_delay(Duration::from_millis(5)).await;
+                }
+                anyhow::bail!("The profiled workload never started");
+            },
+        )
+        .await?;
+        ensure!(
+            !wait(&mut helper).await?.success(),
+            "A cancelled profiling helper acknowledged completion",
+        );
+        for process_id in [collector, workload] {
+            ensure!(
+                !Path::new("/proc").join(process_id.to_string()).exists(),
+                "The cancelled profiling process {process_id} was not reaped",
+            );
+        }
+        ensure!(
+            !profile_path.exists() && !symbols_path.exists() && !socket.exists(),
+            "Cancelled profiling outputs were retained",
+        );
+        Ok(())
+    })
+}
+
+fn samply_invocation(
+    directory: &Path,
+    profile_path: &Path,
+    workload: &[&str],
+) -> Result<TaskBuildInvocation> {
+    let collector = std::env::var("RUST_TOOLS_LINUX_SAMPLY")?;
+    let arguments = [
+        "record",
+        "--save-only",
+        "--no-open",
+        "--main-thread-only",
+        "--unstable-presymbolicate",
+        "--include-args=0",
+        "--duration",
+        "30",
+        "-r",
+        "100",
+        "-o",
+        profile_path
+            .to_str()
+            .context("Profile path is not Unicode")?,
+        "--",
+    ]
+    .into_iter()
+    .chain(workload.iter().copied())
+    .map(str::to_owned)
+    .collect();
+    Ok(TaskBuildInvocation::new(
+        collector.into(),
+        arguments,
+        directory.to_path_buf(),
+        BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+    )?)
+}
+
 fn native_profile_collector(directory: &Path) -> Result<()> {
     use project::profile_results::{ProfileHost, parse_samply_profile};
 
     smol::block_on(async {
-        let collector = std::env::var("RUST_TOOLS_LINUX_SAMPLY")?;
         let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
         let expected_image = File::open("/proc/self/exe")?;
         let report = NativeProfileTaskReservation::new()?;
         let profile_path = report.profile_path();
         let symbols_path = report.symbols_path();
-        let arguments = [
-            "record",
-            "--save-only",
-            "--no-open",
-            "--main-thread-only",
-            "--unstable-presymbolicate",
-            "--include-args=0",
-            "--duration",
-            "30",
-            "-r",
-            "100",
-            "-o",
-            profile_path
-                .to_str()
-                .context("Profile path is not Unicode")?,
-            "--",
-            &workload,
-            "1200000",
-        ]
-        .map(str::to_owned)
-        .to_vec();
-        let invocation = TaskBuildInvocation::new(
-            collector.into(),
-            arguments,
-            directory.to_path_buf(),
-            BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
-        )?;
+        let invocation = samply_invocation(directory, &profile_path, &[&workload, "1200000"])?;
         let completion = LinuxTaskCompletion::bind()?;
-        let mut helper = spawn_helper(&completion)?;
+        let mut helper = spawn_completion_helper(&completion, "observe-native-profile-task")?;
         let actor = OriginalTaskActor::from_smol_child(&mut helper, &expected_image)?;
         let observed = completion
             .observe_profile(actor, invocation, report)
@@ -1115,7 +1260,9 @@ pub enum Scenario {
     CollectorTerminal,
     ReportReplacement,
     ProfilePairReplacement,
+    ProfileGroupCancellation,
     NativeProfileCollector,
+    NativeProfileCollectorCancellation,
     HeadlessCollector,
     SelectedHeadlessCollector,
 }
@@ -1135,7 +1282,11 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::CollectorTerminal => collector_terminal(directory),
         Scenario::ReportReplacement => report_replacement(directory),
         Scenario::ProfilePairReplacement => profile_pair_replacement(directory),
+        Scenario::ProfileGroupCancellation => profile_group_cancellation(directory),
         Scenario::NativeProfileCollector => native_profile_collector(directory),
+        Scenario::NativeProfileCollectorCancellation => {
+            native_profile_collector_cancellation(directory)
+        }
         Scenario::HeadlessCollector => headless_collector(directory, false),
         Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
     }

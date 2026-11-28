@@ -62,9 +62,20 @@ fn native_profile_receipt_seals_the_pair_and_refuses_invalid_outputs() -> io::Re
 }
 
 #[test]
+fn native_profile_observer_drop_reaps_the_collector_and_workload() -> io::Result<()> {
+    run_fixture("profile-group-cancellation")
+}
+
+#[test]
 #[ignore = "requires a Linux perf-enabled host and the pinned Samply and Rust workload binaries"]
 fn native_profile_receipt_accepts_a_real_samply_recording() -> io::Result<()> {
     run_terminal_fixture("native-profile-collector")
+}
+
+#[test]
+#[ignore = "requires a Linux perf-enabled host and the pinned Samply and Rust workload binaries"]
+fn native_profile_observer_drop_reaps_the_real_samply_and_rust_workload() -> io::Result<()> {
+    run_terminal_fixture("native-profile-collector-cancellation")
 }
 
 #[test]
