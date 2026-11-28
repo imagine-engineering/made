@@ -3,11 +3,17 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
-#[cfg(target_os = "macos")]
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage")
+))]
 use std::time::Duration;
 use std::{collections::VecDeque, path::PathBuf};
 
-#[cfg(target_os = "macos")]
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage")
+))]
 use anyhow::Context as _;
 use anyhow::Result;
 use collections::{HashMap, HashSet};
@@ -22,7 +28,10 @@ use parking_lot::Mutex;
 use remote::{ConnectionState, RemoteClient, RemoteClientEvent};
 use rpc::proto::Message as _;
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
-#[cfg(target_os = "macos")]
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage")
+))]
 use util::ResultExt as _;
 
 use crate::{
@@ -38,7 +47,10 @@ use crate::{
 
 const MAX_HOST_PROFILE_IMPORTS: usize = 4;
 static NEXT_PROXY_IMPORT_ID: AtomicU64 = AtomicU64::new(1 << 63);
-#[cfg(target_os = "macos")]
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage")
+))]
 const MAX_HOST_PROFILE_TASKS: usize = 4;
 type ImportKey = (proto::PeerId, u64);
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -61,12 +73,17 @@ struct NativePairTaskRun {
     paths: [ProjectPath; 2],
     versions: Option<[ProfileTaskVersion; 2]>,
     fingerprints: Option<[[u8; 32]; 2]>,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    settings_revision: u64,
     #[cfg(all(target_os = "macos", feature = "cargo-workspace"))]
     capture_admission: Option<(NativeCaptureAuthority, ProfileTaskHelper)>,
 }
 
 enum ProfileTaskPayload {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(
+        target_os = "macos",
+        all(target_os = "linux", feature = "rust-coverage")
+    ))]
     NativePair(NativePairTaskRun),
     #[cfg(target_os = "macos")]
     BuildReport(BuildReportTaskRun),
@@ -101,7 +118,10 @@ impl ProfileTaskRun {
     fn native(&self) -> Option<&NativePairTaskRun> {
         // Matching the place also exhausts the uninhabited payload on other platforms.
         match self.payload {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(
+                target_os = "macos",
+                all(target_os = "linux", feature = "rust-coverage")
+            ))]
             ProfileTaskPayload::NativePair(ref native) => Some(native),
             #[cfg(target_os = "macos")]
             ProfileTaskPayload::BuildReport(_) => None,
@@ -4740,6 +4760,8 @@ pub struct ProfileResultsStore {
     revision: u64,
     invalidation: watch::Sender<()>,
     transport_connected: bool,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    capture_authority: Arc<()>,
     cancelled: HashSet<ImportKey>,
     _collaboration_session: Option<Task<()>>,
     #[cfg(any(test, feature = "test-support"))]
@@ -4889,6 +4911,8 @@ impl ProfileResultsStore {
             revision: 0,
             invalidation: watch::channel(()).0,
             transport_connected: true,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            capture_authority: Arc::new(()),
             cancelled: HashSet::default(),
             _collaboration_session: None,
             #[cfg(any(test, feature = "test-support"))]
@@ -5100,6 +5124,10 @@ impl ProfileResultsStore {
         #[cfg(target_os = "macos")]
         {
             self.helper_admission_epoch = Arc::new(());
+        }
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        {
+            self.capture_authority = Arc::new(());
         }
         self.task_runs.clear();
         self.revision = self.revision.wrapping_add(1);
@@ -6011,6 +6039,123 @@ impl ProfileResultsStore {
             })
     }
 
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn register_linux_task_profile(
+        &mut self,
+        peer: proto::PeerId,
+        captured: crate::cargo_workspace_store::CapturedHostCargoProfile,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        use std::os::unix::fs::MetadataExt as _;
+
+        anyhow::ensure!(
+            peer.owner_id == 0 && peer.id != 0 && self.linux_capture_current(&captured, cx),
+            "The Linux profile capture does not belong to the current producing host"
+        );
+        let tree = self
+            .worktree_store
+            .read(cx)
+            .visible_worktrees(cx)
+            .find(|tree| tree.read(cx).id() == captured.paths[0].worktree_id)
+            .context("The Linux profile capture worktree is unavailable")?;
+        let mut refresh = tree
+            .read(cx)
+            .as_local()
+            .context("The Linux profile capture worktree is not local")?
+            .refresh_entries_for_paths(
+                captured
+                    .paths
+                    .iter()
+                    .map(|path| path.path.clone())
+                    .collect(),
+            );
+        let authority = self.capture_authority.clone();
+        Ok(cx.spawn(async move |store, cx| {
+            refresh
+                .next()
+                .await
+                .context("The Linux profile capture worktree stopped indexing")?;
+            store.update(cx, |store, cx| {
+                anyhow::ensure!(
+                    Arc::ptr_eq(&authority, &store.capture_authority)
+                        && store.linux_capture_current(&captured, cx),
+                    "The Linux profile capture session changed before publication"
+                );
+                let versions = store
+                    .task_versions(&captured.paths, cx)
+                    .context("The sealed Linux profile pair is not visible in the worktree")?;
+                for (version, retained) in versions.iter().zip(&captured.versions) {
+                    let modified = retained.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+                    anyhow::ensure!(
+                        version.entry.inode == retained.ino()
+                            && version.entry.size == retained.len()
+                            && version.entry.mtime
+                                == Some(fs::MTime::from_seconds_and_nanos(
+                                    modified.as_secs(),
+                                    modified.subsec_nanos(),
+                                )),
+                        "A Linux profile artifact changed before publication"
+                    );
+                }
+                let stale = store
+                    .task_runs
+                    .iter()
+                    .filter(|(_, run)| !store.task_run_current(run, cx))
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>();
+                for key in stale {
+                    store.remove_task_run(&key);
+                }
+                let key = (ProfileTaskActor::Peer(peer), captured.run_id.to_string());
+                anyhow::ensure!(
+                    !store.task_runs.contains_key(&key)
+                        && store.task_runs.len() < MAX_HOST_PROFILE_TASKS,
+                    "Too many retained Linux profile captures"
+                );
+                let generation = store
+                    .generation
+                    .checked_add(1)
+                    .context("Linux profile capture generation exhausted")?;
+                store.generation = generation;
+                let expiry =
+                    store.task_expiry(key.clone(), generation, Duration::from_secs(300), cx);
+                store.task_runs.insert(
+                    key,
+                    ProfileTaskRun {
+                        completion: watch::channel(()).0,
+                        generation,
+                        payload: ProfileTaskPayload::NativePair(NativePairTaskRun {
+                            paths: captured.paths,
+                            versions: Some(versions),
+                            fingerprints: Some(captured.fingerprints),
+                            settings_revision: captured.settings_revision,
+                        }),
+                        failed: false,
+                        cancellation: Arc::new(AtomicBool::new(false)),
+                        stop: async_channel::bounded(1).0,
+                        _expiry: expiry,
+                    },
+                );
+                Ok(())
+            })?
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn linux_capture_current(
+        &self,
+        captured: &crate::cargo_workspace_store::CapturedHostCargoProfile,
+        cx: &App,
+    ) -> bool {
+        self.remote_proxy.is_none()
+            && self.transport_connected
+            && cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>()
+            && self.worktree_store.entity_id() == captured.worktree_store
+            && cx.global::<settings::SettingsStore>().observed_revision()
+                == Some(captured.settings_revision)
+            && !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx)
+    }
+
     fn task_versions(&self, paths: &[ProjectPath; 2], cx: &App) -> Option<[ProfileTaskVersion; 2]> {
         paths
             .iter()
@@ -6038,6 +6183,12 @@ impl ProfileResultsStore {
         let Some(native) = run.native() else {
             return false;
         };
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        if cx.global::<settings::SettingsStore>().observed_revision()
+            != Some(native.settings_revision)
+        {
+            return false;
+        }
         cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>()
             && self.transport_connected
             && !run.cancellation.load(Ordering::Relaxed)
@@ -6045,6 +6196,15 @@ impl ProfileResultsStore {
             && native.fingerprints.is_some()
             && native.versions.as_ref().is_some_and(|versions| {
                 self.task_versions(&native.paths, cx).as_ref() == Some(versions)
+            })
+    }
+
+    fn is_forwarded_linux_task_owner(&self, original_sender: Option<proto::PeerId>) -> bool {
+        cfg!(target_os = "linux")
+            && original_sender.is_some_and(|peer| {
+                self.task_runs
+                    .keys()
+                    .any(|(owner, _)| *owner == ProfileTaskActor::Peer(peer))
             })
     }
 
@@ -6071,6 +6231,13 @@ impl ProfileResultsStore {
         envelope: TypedEnvelope<proto::GetProfileTaskBinding>,
         mut cx: AsyncApp,
     ) -> Result<proto::ProfileTaskBindingResponse> {
+        if cfg!(target_os = "linux") && envelope.original_sender_id.is_some() {
+            return Ok(Self::task_status(
+                envelope.payload.task_run_id,
+                proto::ProfileResultStatus::Restricted,
+                true,
+            ));
+        }
         let peer = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         let request = envelope.payload;
         if this.read_with(&cx, |store, _| store.remote_proxy.is_some()) {
@@ -6144,6 +6311,9 @@ impl ProfileResultsStore {
         envelope: TypedEnvelope<proto::CancelProfileTaskBinding>,
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
+        if cfg!(target_os = "linux") && envelope.original_sender_id.is_some() {
+            return Ok(proto::Ack {});
+        }
         let peer = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         if valid_profile_task_run_id(&envelope.payload.task_run_id) {
             this.update(&mut cx, |this, _| {
@@ -6736,7 +6906,10 @@ impl ProfileResultsStore {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(
+        target_os = "macos",
+        all(target_os = "linux", feature = "rust-coverage")
+    ))]
     fn task_expiry(
         &self,
         key: ProfileTaskKey,
@@ -7601,6 +7774,19 @@ impl ProfileResultsStore {
         envelope: TypedEnvelope<proto::ImportProfileResults>,
         mut cx: AsyncApp,
     ) -> Result<proto::ProfileResultPage> {
+        if cfg!(target_os = "linux")
+            && envelope.original_sender_id.is_some()
+            && (envelope.payload.task_run_id.is_some()
+                || this.read_with(&cx, |store, _| {
+                    store.is_forwarded_linux_task_owner(envelope.original_sender_id)
+                }))
+        {
+            return Ok(Self::status(
+                envelope.payload.import_id,
+                0,
+                proto::ProfileResultStatus::Restricted,
+            ));
+        }
         let peer = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         if this.read_with(&cx, |store, _| store.remote_proxy.is_some()) {
             return Self::handle_proxy_import(this, peer, envelope.payload, cx).await;
@@ -7617,6 +7803,15 @@ impl ProfileResultsStore {
     ) -> Result<proto::ProfileResultPage> {
         let peer = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         let request = envelope.payload;
+        if this.read_with(&cx, |store, _| {
+            store.is_forwarded_linux_task_owner(envelope.original_sender_id)
+        }) {
+            return Ok(Self::status(
+                request.import_id,
+                request.generation,
+                proto::ProfileResultStatus::Restricted,
+            ));
+        }
         if request.protocol_version != PROFILE_PROTOCOL_VERSION {
             return Ok(Self::status(
                 request.import_id,
@@ -7746,6 +7941,9 @@ impl ProfileResultsStore {
         let peer = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         let request = envelope.payload;
         this.update(&mut cx, |this, _| {
+            if this.is_forwarded_linux_task_owner(envelope.original_sender_id) {
+                return anyhow::Ok(());
+            }
             let key = (peer, request.import_id);
             if this.remote_proxy.is_some() {
                 if this.proxied_imports.get(&key).is_some_and(|import| {
@@ -7791,9 +7989,7 @@ pub enum RemoteProfileError {
 impl std::fmt::Display for RemoteProfileError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(match self {
-            Self::Unsupported => {
-                "The authoritative host does not support native macOS profile import"
-            }
+            Self::Unsupported => "The authoritative host does not support native profile import",
             Self::Restricted => {
                 "Profile import requires consent and trusted, visible project files"
             }

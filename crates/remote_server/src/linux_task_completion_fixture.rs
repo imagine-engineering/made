@@ -15,6 +15,7 @@ use std::{
     os::unix::process::ExitStatusExt as _,
     path::Path,
     process::{ExitStatus, Stdio},
+    sync::atomic::{AtomicU32, Ordering},
     time::Duration,
 };
 
@@ -2068,6 +2069,7 @@ async fn verify_headless_profile_build(
     worktree_id: project::WorktreeId,
     directory: &Path,
     stage: HeadlessProfileStage,
+    profile_client: (&rpc::AnyProtoClient, &AtomicU32),
     cx: &mut gpui::AsyncApp,
 ) -> Result<()> {
     use gpui::{AppContext as _, UpdateGlobal as _};
@@ -2258,14 +2260,15 @@ async fn verify_headless_profile_build(
     }
     let capture = capture.await?;
     ensure!(
-        capture.paths == paths
-            && absolute[0] == target_root.join(format!("capture-{}.json", capture.run_id.simple()))
+        capture.paths() == &paths
+            && absolute[0]
+                == target_root.join(format!("capture-{}.json", capture.run_id().simple()))
             && absolute[1] == absolute[0].with_extension("syms.json")
             && std::fs::read(target_root.join("profiled-project-workload"))? == b"selected",
         "The producing host did not run the selected workload and retain its reviewed pair"
     );
     use std::os::unix::fs::MetadataExt as _;
-    for (absolute, version) in absolute.iter().zip(capture.versions) {
+    for (absolute, version) in absolute.iter().zip(capture.versions()) {
         let current = std::fs::symlink_metadata(absolute)?;
         ensure!(
             current.is_file()
@@ -2275,7 +2278,7 @@ async fn verify_headless_profile_build(
             "A retained native recording file is unbound or not owner-only"
         );
     }
-    let [profile, symbols] = absolute;
+    let [profile, symbols] = absolute.clone();
     let samples = cx
         .background_spawn(async move {
             verify_samply_profile_bytes(
@@ -2289,10 +2292,133 @@ async fn verify_headless_profile_build(
     println!(
         "Registered headless host retained the reviewed pair with {samples} samples and mapped stats::weight"
     );
+    let store = host.read_with(cx, |host, _| host.profile_results_store.clone());
+    verify_bound_headless_profile(&store, profile_client, capture, absolute, samples, cx).await?;
+    Ok(())
+}
+
+async fn verify_bound_headless_profile(
+    store: &gpui::Entity<project::profile_results_store::ProfileResultsStore>,
+    (client, sender): (&rpc::AnyProtoClient, &AtomicU32),
+    capture: project::cargo_workspace_store::CapturedHostCargoProfile,
+    absolute: [std::path::PathBuf; 2],
+    samples: u64,
+    cx: &mut gpui::AsyncApp,
+) -> Result<()> {
+    use project::profile_results_wire::{PROFILE_PROTOCOL_VERSION, ProfilePageAssembler};
+    use rpc::proto::{self, ProfileResultStatus};
+    let peer = proto::PeerId { owner_id: 0, id: 1 };
+    let run_id = capture.run_id().to_string();
+    let paths = capture.paths().clone();
+    store
+        .update(cx, |store, cx| {
+            store.register_linux_task_profile(peer, capture, cx)
+        })?
+        .await?;
+    let status = client
+        .request(proto::GetProfileTaskBinding {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            protocol_version: PROFILE_PROTOCOL_VERSION,
+            task_run_id: run_id.clone(),
+        })
+        .await?;
+    ensure!(
+        status.complete && status.status == ProfileResultStatus::Ready as i32,
+        "The host did not register its completed Task"
+    );
+    let request = proto::ImportProfileResults {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        import_id: 10,
+        protocol_version: PROFILE_PROTOCOL_VERSION,
+        profile_path: Some(paths[0].to_proto()),
+        symbols_path: Some(paths[1].to_proto()),
+        consent_to_transfer: true,
+        artifact_format: "samply-0.13.1".into(),
+        task_run_id: Some(run_id),
+    };
+    let deny = |page: proto::ProfileResultPage, status: ProfileResultStatus| -> Result<()> {
+        ensure!(
+            page.status == status as i32
+                && page.frames.is_empty()
+                && page.nodes.is_empty()
+                && page.summary.is_none(),
+            "A denied Linux Task import returned the wrong status or a profile payload: {:?}",
+            page.status()
+        );
+        Ok(())
+    };
+    deny(
+        client
+            .request(proto::ImportProfileResults {
+                consent_to_transfer: false,
+                ..request.clone()
+            })
+            .await?,
+        ProfileResultStatus::Restricted,
+    )?;
+    deny(
+        client
+            .request(proto::ImportProfileResults {
+                profile_path: Some(paths[1].to_proto()),
+                symbols_path: Some(paths[0].to_proto()),
+                ..request.clone()
+            })
+            .await?,
+        ProfileResultStatus::Stale,
+    )?;
+    sender.store(2, Ordering::Release);
+    let foreign = client.request(request.clone()).await;
+    sender.store(peer.id, Ordering::Release);
+    deny(foreign?, ProfileResultStatus::Stale)?;
+    deny(
+        client.forward_request(peer, request.clone()).await?,
+        ProfileResultStatus::Restricted,
+    )?;
+
+    let page = client.request(request.clone()).await?;
+    let cancellation = Default::default();
+    let mut assembler = ProfilePageAssembler::new(page.import_id, page.generation)?;
+    let permits = |path: &project::ProjectPath| path.worktree_id == paths[0].worktree_id;
+    assembler.push(page, &cancellation, permits)?;
+    let result = assembler.finish(&cancellation, permits)?;
+    ensure!(
+        result.total_samples == samples
+            && result
+                .frames
+                .iter()
+                .any(|frame| frame.label == "stats::weight"
+                    && frame
+                        .source
+                        .as_ref()
+                        .is_some_and(|(path, line)| path.path.as_unix_str() == "stats/src/lib.rs"
+                            && *line == 7)),
+        "The verified Task import did not map the sampled Rust source"
+    );
+
+    std::fs::write(&absolute[1], b"replacement symbols")?;
+    let changed = client
+        .request(proto::ImportProfileResults {
+            import_id: 11,
+            ..request
+        })
+        .await?;
+    ensure!(
+        matches!(
+            changed.status(),
+            ProfileResultStatus::Stale | ProfileResultStatus::Error
+        ) && changed.frames.is_empty()
+            && changed.nodes.is_empty()
+            && changed.summary.is_none(),
+        "A replaced Task artifact returned a profile payload"
+    );
+    println!(
+        "Registered Linux Task import returned only normalized source-mapped results to its consented native peer"
+    );
     Ok(())
 }
 
 fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()> {
+    use futures::StreamExt as _;
     use gpui::{AppContext as _, UpdateGlobal as _};
     use project::ProjectPath;
     use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
@@ -2374,8 +2500,20 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
         cx.set_global(terminal::HeadlessTerminal(true));
         let (incoming, incoming_receiver) = futures::channel::mpsc::unbounded();
         let (outgoing, outgoing_receiver) = futures::channel::mpsc::unbounded();
-        let session = remote::RemoteClient::proto_client_from_channels(
-            incoming_receiver,
+        let (scoped, scoped_receiver) = futures::channel::mpsc::unbounded();
+        let profile_sender = Arc::new(AtomicU32::new(1));
+        let bridge = cx.background_spawn({
+            let profile_sender = profile_sender.clone();
+            async move {
+                let mut incoming = incoming_receiver;
+                while let Some(message) = incoming.next().await {
+                    let sender = proto::PeerId { owner_id: 0, id: profile_sender.load(Ordering::Acquire) };
+                    if scoped.unbounded_send((sender, message)).is_err() { break; }
+                }
+            }
+        });
+        let session = remote::RemoteClient::proto_client_from_scoped_channels(
+            scoped_receiver,
             outgoing,
             cx,
             "coverage fixture host",
@@ -2433,6 +2571,7 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
             })
         });
         cx.spawn(async move |cx| {
+            let _bridge = bridge;
             let deadline = cx.background_executor().timer(Duration::from_secs(
                 if profile_settings.is_some() { 60 } else { 20 },
             ));
@@ -2460,7 +2599,7 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
                     stage.set("building the host-selected profile workload");
                     let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
                     return verify_headless_profile_build(
-                        &host, worktree_id, &directory, profile_stage, cx,
+                        &host, worktree_id, &directory, profile_stage, (&client, &profile_sender), cx,
                     ).await;
                 }
                 stage.set("running the Cargo LLVM collector");

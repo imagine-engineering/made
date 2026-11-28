@@ -26,8 +26,7 @@ pub fn profile_import_paths(
     {
         return Err(ProfileResultStatus::Mismatch);
     }
-    if host == ProfileHost::Windows || (host == ProfileHost::Linux && request.task_run_id.is_some())
-    {
+    if host == ProfileHost::Windows {
         return Err(ProfileResultStatus::Unsupported);
     }
     if !request.consent_to_transfer {
@@ -573,8 +572,8 @@ mod tests {
             ..request.clone()
         };
         assert_eq!(
-            profile_import_paths(&linux_task, ProfileHost::Linux),
-            Err(ProfileResultStatus::Unsupported)
+            profile_import_paths(&linux_task, ProfileHost::Linux).as_ref(),
+            Ok(&paths)
         );
         let mut invalid = request.clone();
         invalid.consent_to_transfer = false;

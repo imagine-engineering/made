@@ -21485,7 +21485,7 @@ async fn rust_tools_headless_runtime_imports_real_linux_profile_on_host(cx: &mut
         },
     ] {
         let expected = if request.task_run_id.is_some() {
-            proto::ProfileResultStatus::Unsupported
+            proto::ProfileResultStatus::Stale
         } else {
             proto::ProfileResultStatus::Restricted
         };

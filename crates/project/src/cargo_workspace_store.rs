@@ -139,9 +139,27 @@ impl PreparedHostCargoProfileCapture {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub struct CapturedHostCargoProfile {
-    pub run_id: uuid::Uuid,
-    pub paths: [ProjectPath; 2],
-    pub versions: [std::fs::Metadata; 2],
+    pub(crate) run_id: uuid::Uuid,
+    pub(crate) paths: [ProjectPath; 2],
+    pub(crate) versions: [std::fs::Metadata; 2],
+    pub(crate) fingerprints: [[u8; 32]; 2],
+    pub(crate) worktree_store: gpui::EntityId,
+    pub(crate) settings_revision: u64,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl CapturedHostCargoProfile {
+    pub fn run_id(&self) -> uuid::Uuid {
+        self.run_id
+    }
+
+    pub fn paths(&self) -> &[ProjectPath; 2] {
+        &self.paths
+    }
+
+    pub fn versions(&self) -> &[std::fs::Metadata; 2] {
+        &self.versions
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -8103,6 +8121,7 @@ impl CargoWorkspaceStore {
             anyhow::bail!("Native capture requires the producing host's Cargo runtime");
         };
         let settings_revision = *settings_revision;
+        let worktree_store = self.worktree_store.entity_id();
         self.headless_profile_capture_paths(&paths, cx)?;
         let run_id = intent.run_id;
         let launch = runtime
@@ -8217,6 +8236,7 @@ impl CargoWorkspaceStore {
                     store.validate_native_build_intent(&workload.build.intent, cx)?;
                     store.headless_profile_capture_paths(&paths, cx)
                 })??;
+                let fingerprints = profile.fingerprints();
                 let versions = cx
                     .background_spawn(async move {
                         collector_image.revalidate(filesystem.as_ref()).await?;
@@ -8230,6 +8250,9 @@ impl CargoWorkspaceStore {
                     run_id,
                     paths,
                     versions,
+                    fingerprints,
+                    worktree_store,
+                    settings_revision,
                 })
             };
             match futures::future::select(capture.boxed_local(), revoked.recv().boxed_local()).await

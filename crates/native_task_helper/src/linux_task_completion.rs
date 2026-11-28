@@ -508,6 +508,10 @@ fn is_normalized_absolute_path(path: &Path) -> bool {
 }
 
 impl SealedNativeProfileTask {
+    pub fn fingerprints(&self) -> [[u8; 32]; 2] {
+        self.digests
+    }
+
     pub fn read(self) -> io::Result<NativeProfileTaskArtifacts> {
         let pair = self.reservation.read_pair()?;
         if pair.digests() != self.digests {
