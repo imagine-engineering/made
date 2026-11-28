@@ -3340,6 +3340,90 @@ public class GraphFixtureHandler implements IDelegateCommandHandler {
     return bundle
 
 
+def cached_source_fixture_bundle(arguments, directory):
+    directory = Path(directory)
+    source = directory / "CachedSourceFixtureHandler.java"
+    source.write_text('''package dev.made.groovy.fixture;
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IPackageFragmentRoot;
+import org.eclipse.jdt.ls.core.internal.IDelegateCommandHandler;
+import org.eclipse.jdt.ls.core.internal.JDTUtils;
+import org.eclipse.jdt.ls.core.internal.JavaLanguageServerPlugin;
+import org.eclipse.jdt.ls.core.internal.managers.ISourceDownloader;
+
+public class CachedSourceFixtureHandler implements IDelegateCommandHandler {
+    public Object executeCommand(String command, List<Object> arguments,
+                                 IProgressMonitor monitor) throws Exception {
+        if (!command.equals("groovy.fixture.maven.cachedClassfileSource")
+            || arguments.size() != 1
+            || !(arguments.get(0) instanceof String target)
+            || target.length() > 4096
+            || monitor.isCanceled()) {
+            throw new IllegalArgumentException("Invalid cached Java source fixture request");
+        }
+        var uri = URI.create(target);
+        if (!"jdt".equals(uri.getScheme()) || !"contents".equals(uri.getHost())) {
+            throw new IllegalArgumentException("Expected a Java classfile URI");
+        }
+        var classFile = JDTUtils.resolveClassFile(uri);
+        if (classFile == null || !(classFile.getAncestor(IJavaElement.PACKAGE_FRAGMENT_ROOT)
+                instanceof IPackageFragmentRoot root) || !root.isArchive()) {
+            throw new IllegalArgumentException("Expected an archived Java classfile");
+        }
+        var downloader = JavaLanguageServerPlugin.getDefaultSourceDownloader();
+        String before = downloadState(downloader.getDownloadStatus(root));
+        String source = classFile.getSource();
+        String after = downloadState(downloader.getDownloadStatus(root));
+        if (source == null) {
+            return Map.of("available", false, "downloadBefore", before, "downloadAfter", after);
+        }
+        if (source.length() > 1_048_576) {
+            throw new IllegalStateException("Cached Java fixture source exceeds its limit");
+        }
+        return Map.of("available", true, "source", source,
+                      "downloadBefore", before, "downloadAfter", after);
+    }
+
+    private static String downloadState(int status) {
+        return switch (status) {
+            case ISourceDownloader.DOWNLOAD_NONE -> "idle";
+            case ISourceDownloader.DOWNLOAD_REQUESTED -> "requested";
+            case ISourceDownloader.DOWNLOAD_WAIT_JOB_DONE -> "wait-finished";
+            default -> throw new IllegalStateException("Unexpected source download state");
+        };
+    }
+}
+''')
+    plugins = arguments.launcher.resolve().parent.parent / "plugins"
+    classes = directory / "classes"
+    classes.mkdir()
+    classpath = os.pathsep.join(str(plugin) for plugin in sorted(plugins.glob("*.jar")))
+    subprocess.run([
+        str(arguments.java_home / "bin/javac"), "--release", "17", "-Xlint:all", "-Werror",
+        "-classpath", classpath, "-d", str(classes), str(source),
+    ], check=True, timeout=60)
+    bundle = directory / "cached-source-fixture.jar"
+    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("META-INF/MANIFEST.MF", """Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-SymbolicName: dev.made.groovy.fixture.cachedsource;singleton:=true
+Bundle-Version: 1.0.0
+Require-Bundle: org.eclipse.jdt.ls.core,org.eclipse.jdt.core,org.eclipse.core.runtime
+
+""")
+        archive.writestr("plugin.xml", '<plugin><extension point="org.eclipse.jdt.ls.core.delegateCommandHandler">'
+                         '<delegateCommandHandler class="dev.made.groovy.fixture.CachedSourceFixtureHandler">'
+                         '<command id="groovy.fixture.maven.cachedClassfileSource"/>'
+                         '</delegateCommandHandler></extension></plugin>')
+        for compiled in sorted(classes.rglob("*.class")):
+            archive.writestr(compiled.relative_to(classes).as_posix(), compiled.read_bytes())
+    return bundle
+
+
 def probe_source_attachment(arguments):
     provider = arguments.provider.resolve()
     provider_digest = hashlib.sha256(provider.read_bytes()).hexdigest()
@@ -3354,7 +3438,7 @@ def probe_source_attachment(arguments):
     with zipfile.ZipFile(source_seed) as archive:
         original_source = archive.read("org/apache/commons/lang3/StringUtils.java").decode()
     receipt = {"provider_sha256": provider_digest, "source_archive_sha256": archive_digest, "fixtures": []}
-    for cached in (True, False):
+    for scenario in ("cached", "missing", "wrong-entry", "stale-attachment"):
         with tempfile.TemporaryDirectory(prefix="groovy-maven-source-attachment-") as directory:
             state = Path(directory).resolve()
             project = state / "project"
@@ -3381,11 +3465,16 @@ def probe_source_attachment(arguments):
             repository = state / "repository"
             shutil.copytree(repository_seed, repository, ignore=lambda path, names: (
                 [name for name in names if name.endswith(".lock") or
-                 (not cached and Path(path) == source_seed.parent and name == sources_name)]
+                 (scenario == "missing" and Path(path) == source_seed.parent and name == sources_name)]
             ))
             binary = repository / artifact_directory / binary_name
             source = repository / artifact_directory / sources_name
-            assert binary.is_file() and source.is_file() == cached
+            assert binary.is_file() and source.is_file() == (scenario != "missing")
+            if scenario in ("wrong-entry", "stale-attachment"):
+                with zipfile.ZipFile(source, "w") as archive:
+                    archive.writestr("evidence/Different.java", "package evidence; class Different {}")
+            expected_archive = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+            fixture = cached_source_fixture_bundle(arguments, state)
             settings = state / "settings.xml"
             settings.write_text(f"<settings><offline>true</offline><localRepository>"
                                 f"{escape(str(repository))}</localRepository></settings>\n")
@@ -3397,7 +3486,7 @@ def probe_source_attachment(arguments):
                     "workspaceFolders": [{"uri": project.as_uri(), "name": project.name}],
                     "capabilities": {"workspace": {"workspaceFolders": True, "configuration": True}},
                     "initializationOptions": {
-                        "bundles": [str(provider)],
+                        "bundles": [str(provider), str(fixture)],
                         "extendedClientCapabilities": {"classFileContentsSupport": True},
                         "settings": {"java": {
                             "import": {"maven": {"enabled": True, "offline": {"enabled": True}},
@@ -3408,7 +3497,10 @@ def probe_source_attachment(arguments):
                     },
                 }, timeout=100)
                 command = "java.project.resolveSourceAttachment"
-                assert command in initialized["capabilities"]["executeCommandProvider"]["commands"]
+                cached_source_command = "groovy.fixture.maven.cachedClassfileSource"
+                commands = initialized["capabilities"]["executeCommandProvider"]["commands"]
+                assert command in commands and cached_source_command in commands
+                assert initialized["serverInfo"]["version"] == "1.61.0-SNAPSHOT"
                 client.notify("initialized", {})
                 deadline = time.monotonic() + 110
                 while time.monotonic() < deadline:
@@ -3441,30 +3533,63 @@ def probe_source_attachment(arguments):
                 assert not attachment.get("errorMessage"), "JDTLS failed to inspect the source attachment"
                 attributes = attachment["attributes"]
                 assert Path(attributes["jarPath"]).resolve() == binary
-                if cached:
-                    assert Path(attributes["sourceAttachmentPath"]).resolve() == source
-                    returned_source = client.request("java/classFileContents", {"uri": class_file_uri}, timeout=20)
-                    assert returned_source == original_source, "JDTLS did not return the attached Java source"
-                else:
+                if scenario == "missing":
                     assert attributes.get("sourceAttachmentPath") is None
-                assert source.is_file() == cached
-                if cached:
-                    assert hashlib.sha256(source.read_bytes()).hexdigest() == archive_digest
+                else:
+                    assert Path(attributes["sourceAttachmentPath"]).resolve() == source
+                if scenario == "stale-attachment":
+                    source.unlink()
+                    expected_archive = None
+
+                def read_cached_source():
+                    return client.request("workspace/executeCommand", {
+                        "command": cached_source_command, "arguments": [class_file_uri],
+                    }, timeout=20)
+
+                before = read_cached_source()
+                # On a cache miss the preceding definition request has already run source discovery.
+                initial_download = "wait-finished" if scenario == "missing" else "idle"
+                assert before["downloadBefore"] == before["downloadAfter"] == initial_download, (
+                    scenario, before["downloadBefore"], before["downloadAfter"],
+                )
+                assert before["available"] == (scenario == "cached")
+                assert before.get("source") == (original_source if scenario == "cached" else None)
+                after_read = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+                assert after_read == expected_archive
+
+                returned_source = client.request("java/classFileContents", {"uri": class_file_uri}, timeout=30)
+                after = read_cached_source()
+                assert after["downloadBefore"] == after["downloadAfter"]
+                assert (returned_source == original_source) == (scenario == "cached")
+                stock_download = "wait-finished" if scenario == "stale-attachment" else initial_download
+                assert after["downloadBefore"] == stock_download, (scenario, after["downloadBefore"])
+                print(
+                    f"{scenario}: cached source {'available' if before['available'] else 'absent'}, "
+                    f"download state after definition {initial_download}, cached read unchanged, "
+                    f"stock contents {stock_download}",
+                    flush=True,
+                )
+                after_stock = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+                assert after_stock == expected_archive
             finally:
                 client.close()
             assert client.process.poll() is not None
             receipt["fixtures"].append({
-                "cached_source": cached,
+                "scenario": scenario,
+                "cached_source": scenario == "cached",
                 "jdtls_version": initialized["serverInfo"]["version"],
                 "binary_definition_and_archive_matched": True,
-                "source_attachment_reported": cached,
-                "original_java_source_returned": cached,
+                "source_attachment_reported": scenario != "missing",
+                "original_java_source_returned": before["available"],
+                "download_status_after_definition": before["downloadBefore"],
+                "download_status_after_read_only": before["downloadAfter"],
+                "download_status_after_stock_contents": after["downloadBefore"],
                 "source_cache_preserved": True,
                 "provider_stopped": True,
             })
     arguments.receipt.parent.mkdir(parents=True, exist_ok=True)
     arguments.receipt.write_text(json.dumps(receipt, indent=2) + "\n")
-    print("Passed offline Maven cached and missing Java source attachment checks")
+    print("Passed offline Maven cached, missing, wrong-entry and stale Java source attachment checks")
 
 
 if __name__ == "__main__":
@@ -3503,7 +3628,7 @@ if __name__ == "__main__":
     parser.add_argument("--default-roots-only", action="store_true", help="Read-only default Maven root discovery against the pinned SDK scanner")
     parser.add_argument("--dependency-graph-only", action="store_true", help="Qualify explicit offline cached Maven dependency collection")
     parser.add_argument("--source-attachment-only", action="store_true",
-                        help="Qualify JDTLS read-only attachment inspection with cached commons-lang3 3.17.0 sources")
+                        help="Qualify JDTLS cached-source inspection and stock content lookup on four offline attachment states")
     arguments = parser.parse_args()
     if arguments.source_attachment_only and any(value for name, value in vars(arguments).items()
             if name not in ["source_attachment_only", "launcher", "java_home", "provider", "maven_repository", "receipt", "sha256"]):

@@ -119,6 +119,17 @@ platform qualification remain open. The product remains planned.
 - [Effective POM with active profiles](https://github.com/imagine-engineering/made/commit/9940c7bee8a840c2d407edd810cb9393f8d5f5ba)
 - [Offline Maven artifact readiness](https://github.com/imagine-engineering/made/commit/a4e9581fd256fc9e1303a7f106bf4259b5d8d8ad)
 
+### Cached Java sources for Maven dependencies
+
+Pinned JDTLS 1.61.0 can report a source attachment whose archive lacks the
+requested Java file or has disappeared since classpath resolution. The offline
+SDK probe reads the exact classfile's attached source without starting source
+discovery. It returns the original bytes for a matching cached archive and
+reports absence for missing, wrong-entry, and stale attachments. In the
+stale case the stock content request invokes the source downloader. The probe's
+handler only runs in the test fixture. Editor navigation into cached Maven
+sources and explicit selected-archive acquisition remain open.
+
 ## Accepted decisions and remaining gates
 
 On 2026-10-03 the owner approved all four presented recommendations: delegated
