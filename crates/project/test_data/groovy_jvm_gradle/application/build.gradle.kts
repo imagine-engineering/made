@@ -27,18 +27,31 @@ tasks.test {
 }
 
 abstract class ParityArguments : DefaultTask() {
+    private var markerEnabled = true
+
     @get:Input
     @get:org.gradle.api.tasks.options.Option(option = "message", description = "Fixture message")
     abstract val message: Property<String>
 
+    @org.gradle.api.tasks.options.Option(option = "emit-marker", description = "Record a primitive Boolean")
+    fun setEmitMarker(value: Boolean) {
+        markerEnabled = value
+    }
+
+    @get:Input
+    @get:org.gradle.api.tasks.options.Option(option = "record-receipt", description = "Record a Gradle Boolean property")
+    abstract val recordReceipt: Property<Boolean>
+
     init {
         group = "groovy parity"
         message.convention("default")
+        recordReceipt.convention(false)
     }
 
     @TaskAction
     fun report() {
         println("GROOVY_PARITY_MESSAGE=" + message.get())
+        println("GROOVY_PARITY_OPTIONS=marker=$markerEnabled, receipt=${recordReceipt.get()}")
     }
 }
 

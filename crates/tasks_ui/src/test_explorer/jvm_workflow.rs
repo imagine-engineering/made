@@ -1483,13 +1483,23 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         });
         dispatch_graph_action(cx, "groovy_dependencies_panel::ClearOrderedOperations");
     }
-    select_fixture_gradle_task(&workspace, &panel, FIRST, &["message"], cx);
-    let option = format!("--message={MESSAGE}");
+    select_fixture_gradle_task(
+        &workspace,
+        &panel,
+        FIRST,
+        &["message", "emit-marker", "record-receipt"],
+        cx,
+    );
+    let options = [
+        format!("--message={MESSAGE}"),
+        "--no-emit-marker".to_owned(),
+        "--record-receipt".to_owned(),
+    ];
     type_fixture_options(
         &panel,
         cx,
         "Gradle task options",
-        &serde_json::to_string(&[&option]).expect("option JSON"),
+        &serde_json::to_string(&options).expect("option JSON"),
     );
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     panel.read_with(cx, |panel, _| {
@@ -1566,23 +1576,24 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     select_fixture_gradle_task(&workspace, &panel, SECOND, &[], cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
-    assert_gradle_queue_rows(&panel, [&format!("{FIRST} (1 options)"), SECOND], cx);
+    assert_gradle_queue_rows(&panel, [&format!("{FIRST} (3 options)"), SECOND], cx);
     assert!(
         !report.exists(),
         "queueing operations does not start a Task"
     );
     invoke_dependency_row_command(&panel, cx, "Run Ordered Operations Offline");
-    let arguments = [
+    let mut arguments = [
         "--offline",
         "-Dorg.gradle.java.home=/qualification/jdk17",
         "--gradle-user-home",
         "/qualification/gradle-home",
         "--",
         FIRST,
-        option.as_str(),
-        SECOND,
     ]
-    .map(str::to_owned);
+    .map(str::to_owned)
+    .to_vec();
+    arguments.extend(options);
+    arguments.push(SECOND.to_owned());
     let transcript = assert_fixture_task(
         &terminal_panel,
         root,
@@ -1596,10 +1607,16 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     let first = transcript
         .find(&format!("GROOVY_PARITY_MESSAGE={MESSAGE}"))
         .expect("Gradle received the exact declared option");
+    let boolean_result = transcript
+        .find("GROOVY_PARITY_OPTIONS=marker=false, receipt=true")
+        .expect("Gradle received the primitive and property Boolean flags");
     let second = transcript
         .find("> Task :application:check")
         .expect("the later task ran");
-    assert!(first < second, "{transcript}");
+    assert!(
+        first < boolean_result && boolean_result < second,
+        "{transcript}"
+    );
     let hostname = util::command::new_command("docker")
         .args(["exec", &container, "hostname"])
         .output()
