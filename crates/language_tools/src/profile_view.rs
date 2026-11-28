@@ -194,9 +194,7 @@ fn offer_task_profile(
     {
         return;
     }
-    if cfg!(target_os = "linux")
-        && (!workspace.project().read(cx).is_local() || !group.host_verified())
-    {
+    if cfg!(target_os = "linux") && !group.host_verified() {
         return;
     }
     if !workspace.project().read(cx).is_local() && !group.host_verified() {

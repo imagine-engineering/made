@@ -21780,7 +21780,201 @@ async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_captu
         "Authenticated Linux review captured and imported {} samples",
         result.total_samples
     );
+    std::fs::remove_file(&run_marker).expect("reset the fixture workload marker");
+    exercise_native_cargo_panel_profile(&project, &workspace, &run_marker, cx).await;
     connection.kill().await.expect("stop the owned host");
+}
+
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+async fn exercise_native_cargo_panel_profile(
+    project: &Entity<Project>,
+    root: &Path,
+    run_marker: &Path,
+    cx: &mut TestAppContext,
+) {
+    use language_tools::{
+        language_tool_tree::{ExpandAll, SelectFirst, SelectFirstChild, SelectNext},
+        profile_view::ProfileView,
+    };
+    use std::time::Duration;
+    use workspace::{notifications::NotificationId, tasks::CompletedTaskArtifactGroup};
+
+    cx.update(|cx| {
+        theme_settings::init(theme::LoadThemes::JustBase, cx);
+        editor::init(cx);
+        cargo_ui::init(cx);
+        language_tools::init(cx);
+        SettingsStore::update_global(cx, |settings, cx| {
+            settings
+                .set_user_settings(
+                    r#"{
+                        "feature_flags": {
+                            "rust-native-profiling-experimental": "on",
+                            "rust-named-cargo-presets-experimental": "on"
+                        },
+                        "cargo": {"schema_version": 2, "presets": {"host-profile": {
+                            "subcommand": "run",
+                            "native_profiler": {
+                                "collector_path": "/not-a-client-collector",
+                                "profile_path": "target/client.json"
+                            }
+                        }}}
+                    }"#,
+                    cx,
+                )
+                .result()
+                .expect("configure the client's selected preset");
+        });
+        for flag in [
+            "rust-native-profiling-experimental",
+            "rust-named-cargo-presets-experimental",
+        ] {
+            project::task_store::set_experimental_feature_for_test(flag, true, cx);
+        }
+    });
+    let (workspace, visual) = cx
+        .add_window_view(|window, cx| workspace::Workspace::test_new(project.clone(), window, cx));
+    let async_window = visual.update(|window, cx| window.to_async(cx));
+    let panel = cargo_ui::CargoPanel::load(workspace.downgrade(), async_window)
+        .await
+        .expect("load the native Cargo panel");
+    panel.update(visual, |panel, cx| {
+        panel.set_active_preset(Some("host-profile".into()), Default::default(), cx);
+    });
+    workspace.update_in(visual, |workspace, window, cx| {
+        window.activate_a11y_for_test();
+        workspace.add_panel(panel, window, cx);
+        workspace.toggle_panel_focus::<cargo_ui::CargoPanel>(window, cx);
+    });
+
+    let deadline = visual.background_executor.timer(Duration::from_secs(90));
+    let exercise = async {
+        loop {
+            visual.dispatch_action(ExpandAll);
+            let visible = visual.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                window
+                    .debug_a11y_tree_json()
+                    .is_some_and(|tree| tree.contains("Cargo target bin runner"))
+            });
+            if visible {
+                break;
+            }
+            visual
+                .background_executor
+                .timer(Duration::from_millis(25))
+                .await;
+        }
+        visual.dispatch_action(SelectFirst);
+        visual.dispatch_action(SelectFirstChild);
+        visual.dispatch_action(SelectFirstChild);
+        visual.dispatch_action(SelectFirstChild);
+        let mut selected = None;
+        for _ in 0..8 {
+            selected = visual.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                let tree = window
+                    .debug_a11y_tree_json()
+                    .expect("Cargo accessibility tree");
+                let tree: serde_json::Value =
+                    serde_json::from_str(&tree).expect("Cargo accessibility JSON");
+                tree["nodes"]
+                    .as_object()
+                    .expect("Cargo accessibility nodes")
+                    .values()
+                    .find(|node| node["aria"]["selected"] == true)
+                    .and_then(|node| node["aria"]["label"].as_str().map(str::to_owned))
+            });
+            if selected.as_deref() == Some("Cargo target bin runner") {
+                break;
+            }
+            visual.dispatch_action(SelectNext);
+        }
+        assert_eq!(selected.as_deref(), Some("Cargo target bin runner"));
+        println!("Selected runner in the Cargo panel");
+
+        visual.dispatch_action(cargo_ui::ProfileSelected);
+        while !visual.has_pending_prompt() {
+            visual
+                .background_executor
+                .timer(Duration::from_millis(25))
+                .await;
+        }
+        let (message, detail) = visual.pending_prompt().expect("host capture review");
+        assert_eq!(message, "Capture a native profile on the project host?");
+        let mut lines = detail.lines();
+        let profile = Path::new(
+            lines
+                .next()
+                .and_then(|line| line.strip_prefix("Profile: "))
+                .expect("reviewed recording"),
+        );
+        let symbols = Path::new(
+            lines
+                .next()
+                .and_then(|line| line.strip_prefix("Symbols: "))
+                .expect("reviewed symbols"),
+        );
+        assert_eq!(profile.parent(), Some(root.join("target").as_path()));
+        assert_eq!(
+            profile.extension().and_then(|extension| extension.to_str()),
+            Some("json")
+        );
+        assert_eq!(profile.with_extension("syms.json"), symbols);
+        let capture_id = profile
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_prefix("capture-"))
+            .expect("host preset output name and capture ID");
+        uuid::Uuid::parse_str(capture_id).expect("host capture ID");
+        assert!(detail.contains("raw files remain on that host"));
+        assert!(!run_marker.exists());
+        visual.simulate_prompt_answer("Capture");
+        println!("Approved the reviewed Cargo panel capture");
+
+        let notice_id = NotificationId::unique::<CompletedTaskArtifactGroup>();
+        loop {
+            let notice = workspace.read_with(visual, |workspace, _| {
+                workspace.message_notification_for_test(&notice_id)
+            });
+            if let Some(notice) = notice {
+                assert!(run_marker.exists());
+                assert!(profile.is_file() && symbols.is_file());
+                assert!(notice.update_in(visual, |notice, window, cx| {
+                    notice.click_primary_for_test(window, cx)
+                }));
+                break;
+            }
+            visual
+                .background_executor
+                .timer(Duration::from_millis(25))
+                .await;
+        }
+        println!("Accepted the normalized profile import");
+        let view = workspace
+            .read_with(visual, |workspace, cx| {
+                workspace.item_of_type::<ProfileView>(cx)
+            })
+            .expect("import notification opens the profiler report");
+        loop {
+            if let Some(total) = view.read_with(visual, |view, _| view.sample_count_for_test()) {
+                assert!(total > 0);
+                println!("The Cargo panel capture populated {total} samples in the report");
+                break;
+            }
+            visual
+                .background_executor
+                .timer(Duration::from_millis(25))
+                .await;
+        }
+    };
+    assert!(
+        matches!(
+            futures::future::select(Box::pin(exercise), deadline).await,
+            futures::future::Either::Left(_)
+        ),
+        "the Cargo panel profile capture or import timed out"
+    );
 }
 
 #[test]

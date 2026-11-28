@@ -1571,6 +1571,7 @@ impl CargoPanel {
             }),
             host_capable: self.execution_host_available && project.supports_terminal(cx),
             coverage_via_relay: self.execution_host_available && project.is_via_collab(),
+            native_profile_on_remote_linux: project.is_direct_linux_profile_host(cx),
         }
     }
 

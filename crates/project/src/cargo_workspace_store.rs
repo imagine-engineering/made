@@ -113,7 +113,6 @@ pub struct CargoCoverageSelection {
     pub preset_id: Option<String>,
 }
 
-#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub struct HostCargoProfileSelection {
     pub workspace: crate::cargo_workspace::CargoWorkspaceKey,
     pub package_manifest: ProjectPath,

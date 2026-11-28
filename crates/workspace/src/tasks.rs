@@ -36,6 +36,11 @@ use crate::{SaveIntent, Toast, Workspace, notifications::NotificationId};
 
 #[cfg(all(target_os = "linux", feature = "rust-native-profiling"))]
 mod linux_native_profile;
+#[cfg(all(
+    any(target_os = "macos", target_os = "linux"),
+    feature = "rust-native-profiling"
+))]
+mod remote_linux_cargo_profile;
 
 #[cfg(any(test, feature = "test-support"))]
 fn native_capture_diagnostic_category(error: &anyhow::Error) -> &'static str {

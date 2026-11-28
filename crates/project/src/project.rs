@@ -28,6 +28,8 @@ pub mod profile_results_store;
 pub mod profile_results_wire;
 pub mod project_search;
 pub mod project_settings;
+#[cfg(feature = "cargo-workspace")]
+pub mod remote_linux_cargo_profile;
 #[cfg(feature = "rust-coverage")]
 pub mod rust_coverage_provider;
 #[cfg(feature = "rust-tests")]

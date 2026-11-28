@@ -3,7 +3,7 @@ use feature_flags::{
     RustNamedCargoPresetsExperimentalFeatureFlag, RustNativeProfilingExperimentalFeatureFlag,
 };
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail};
 use gpui::{Context, TaskExt as _, Window, actions};
 use project::{
     ProjectPath, TaskSourceKind, WorktreeId,
@@ -174,6 +174,7 @@ pub struct CargoActionRuntime {
     pub cargo_available: bool,
     pub host_capable: bool,
     pub coverage_via_relay: bool,
+    pub native_profile_on_remote_linux: bool,
 }
 
 impl Default for CargoActionRuntime {
@@ -185,6 +186,7 @@ impl Default for CargoActionRuntime {
             cargo_available: true,
             host_capable: true,
             coverage_via_relay: false,
+            native_profile_on_remote_linux: false,
         }
     }
 }
@@ -230,7 +232,18 @@ pub fn cargo_action_availability_with_preset(
     if let Some(preset) = preset.filter(|preset| preset.native_profiler.is_some()) {
         for entry in &mut entries {
             if entry.action == CargoAction::Profile {
+                let label = if runtime.native_profile_on_remote_linux {
+                    "Native Profile (Linux)"
+                } else {
+                    preset.profile_action_label()
+                };
                 entry.reason = entry.reason.take().or_else(|| {
+                    if runtime.native_profile_on_remote_linux && preset.pre_launch_task.is_some() {
+                        return Some(
+                            "Remote native profiling presets cannot run a client pre-launch Task"
+                                .into(),
+                        );
+                    }
                     crate::cargo_profile::validate_native_profile_selection(selection, preset)
                         .err()
                         .map(|error| error.to_string())
@@ -239,12 +252,8 @@ pub fn cargo_action_availability_with_preset(
                 entry.accessibility_label = entry
                     .reason
                     .as_ref()
-                    .map(|reason| {
-                        format!("{} unavailable: {reason}", preset.profile_action_label())
-                    })
-                    .unwrap_or_else(|| {
-                        format!("{} selected Cargo item", preset.profile_action_label())
-                    });
+                    .map(|reason| format!("{label} unavailable: {reason}"))
+                    .unwrap_or_else(|| format!("{label} selected Cargo item"));
             }
         }
     }
@@ -813,7 +822,24 @@ impl<'a, 'cx> WorkspaceCargoActionDispatcher<'a, 'cx> {
 
 impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
     fn validate_plan(&mut self, plan: &CargoActionPlan) -> Result<()> {
-        plan.validate_experimental_access(self.cx)
+        plan.validate_experimental_access(self.cx)?;
+        if let CargoActionPlan::NativeProfile {
+            pre_launch_task, ..
+        } = plan
+        {
+            let project = self.workspace.project().read(self.cx);
+            if !project.is_local() {
+                anyhow::ensure!(
+                    project.is_direct_linux_profile_host(self.cx),
+                    "Remote native profiling requires a direct Linux project connection"
+                );
+                anyhow::ensure!(
+                    pre_launch_task.is_none(),
+                    "Remote native profiling presets cannot run a client pre-launch Task"
+                );
+            }
+        }
+        Ok(())
     }
     fn report_plan_error(&mut self, error: anyhow::Error) {
         self.workspace.show_toast(
@@ -844,6 +870,32 @@ impl CargoActionDispatcher for WorkspaceCargoActionDispatcher<'_, '_> {
                         )
                     })?;
                     crate::cargo_profile::validate_native_profile_selection(&selection, &preset)?;
+                    #[cfg(any(target_os = "macos", target_os = "linux"))]
+                    if project.read_with(cx, |project, cx| project.is_direct_linux_profile_host(cx)) {
+                        let request = project.read_with(cx, |project, cx| {
+                            let store = project.cargo_workspace_store().read(cx);
+                            let (snapshot, true) = store.cached_snapshot(cx)
+                                .context("Refresh Cargo metadata before native profiling")?
+                            else { anyhow::bail!("Refresh stale Cargo metadata before native profiling") };
+                            let (workspace, _, target) =
+                                crate::cargo_profile::native_profile_selected_target(&selection, snapshot)?;
+                            Ok::<_, anyhow::Error>(project::cargo_workspace_store::HostCargoProfileSelection {
+                                workspace,
+                                package_manifest: selection.package_manifest.clone()
+                                    .context("The selected Cargo package has no manifest")?,
+                                target_kind: target.kind,
+                                target_name: target.name,
+                                preset_id: preset.id.clone(),
+                            })
+                        })?;
+                        return workspace.update_in(cx, |workspace, window, cx| {
+                            anyhow::ensure!(
+                                workspace.project().entity_id() == project.entity_id(),
+                                "The native profiling Project changed while preparing the action"
+                            );
+                            workspace.schedule_remote_linux_cargo_profile(request, preset.presentation.save, window, cx)
+                        })?;
+                    }
                     let store = project.read_with(cx, |project, cx| {
                         anyhow::ensure!(
                             cfg!(any(target_os = "macos", target_os = "linux"))
@@ -5091,14 +5143,10 @@ mod tests {
                 .find(|entry| entry.action == CargoAction::Profile)
                 .expect("Profile denial");
             assert!(!action.enabled);
-            assert!(
-                action
-                    .accessibility_label
-                    .starts_with(&format!(
-                        "{} unavailable",
-                        crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL
-                    ))
-            );
+            assert!(action.accessibility_label.starts_with(&format!(
+                "{} unavailable",
+                crate::CargoPreset::NATIVE_PROFILE_ACTION_LABEL
+            )));
             assert!(
                 action
                     .reason
