@@ -974,8 +974,11 @@ pub fn complete_native_terminal_environment(
     cx: &App,
 ) -> Result<HashMap<String, String>> {
     anyhow::ensure!(
-        cfg!(target_os = "macos"),
-        "Checked native Task environments currently require macOS"
+        cfg!(any(
+            target_os = "macos",
+            all(target_os = "linux", feature = "rust-coverage")
+        )),
+        "Checked native Task environments require supported local Terminal support"
     );
     validate_native_terminal_environment(overrides)?;
     let mut inherited = HashMap::default();

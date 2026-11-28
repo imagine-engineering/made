@@ -34,6 +34,16 @@ pub struct Terminals {
 
 pub type TaskTerminalCheck = Box<dyn FnOnce(&mut gpui::AsyncApp) -> Task<Result<()>>>;
 
+#[cfg(all(
+    target_os = "linux",
+    feature = "cargo-workspace",
+    feature = "rust-coverage"
+))]
+pub struct LinuxNativeCargoBuildTask {
+    pub terminal: Entity<Terminal>,
+    pub completion: Task<Result<crate::cargo_workspace_store::LinuxNativeCargoWorkload>>,
+}
+
 pub struct PreparedNativeTerminalLaunch {
     _private: (),
     #[cfg(all(target_os = "macos", feature = "cargo-workspace"))]
@@ -207,11 +217,17 @@ impl Project {
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<NativeTaskEnvironmentRecipe>>> {
         anyhow::ensure!(
-            cfg!(target_os = "macos")
-                && self.is_local()
+            cfg!(any(
+                target_os = "macos",
+                all(
+                    target_os = "linux",
+                    feature = "cargo-workspace",
+                    feature = "rust-coverage"
+                )
+            )) && self.is_local()
                 && !self.is_shared()
                 && !self.isolated_recipe_test,
-            "Checked native Task environments require a local macOS project"
+            "Checked native Task environments require a supported local project"
         );
         anyhow::ensure!(
             directory.is_absolute()
@@ -382,6 +398,84 @@ impl Project {
             None,
             cx,
         )
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        feature = "cargo-workspace",
+        feature = "rust-coverage"
+    ))]
+    pub fn start_selected_linux_native_cargo_build_task(
+        &mut self,
+        run_id: uuid::Uuid,
+        spawn_task: SpawnInTerminal,
+        structured_task: Option<StructuredTaskHandle>,
+        report_limit: usize,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoBuildTask>>> {
+        let pending = crate::task_store::PendingExperimentalTaskLaunch::new(&spawn_task, cx)?;
+        let store = self.cargo_workspace_store().clone();
+        Ok(cx.spawn(async move |project, cx| {
+            let project = project.upgrade().ok_or_else(|| {
+                anyhow::anyhow!("Native Cargo Project disappeared before admission")
+            })?;
+            let build = store
+                .update(cx, |store, cx| {
+                    store.prepare_linux_native_cargo_build(
+                        project.clone(),
+                        run_id,
+                        spawn_task.clone(),
+                        cx,
+                    )
+                })?
+                .await
+                .map_err(|error| error.context("Preparing the reviewed Linux Cargo build"))?;
+            let (builder, observation) = project.update(cx, |project, cx| {
+                anyhow::ensure!(
+                    project.is_local()
+                        && !project.is_shared()
+                        && !project.is_disconnected(cx)
+                        && !crate::trusted_worktrees::TrustedWorktrees::has_restricted_worktrees(
+                            &project.worktree_store(),
+                            cx,
+                        ),
+                    "Native Cargo build requires a trusted local Project"
+                );
+                if let Some(pending) = &pending {
+                    pending.check(&spawn_task, cx)?;
+                }
+                anyhow::ensure!(
+                    !structured_task
+                        .as_ref()
+                        .is_some_and(|handle| handle.state().is_terminal()),
+                    "Native Cargo Task was cancelled before launch"
+                );
+                TerminalBuilder::new_with_native_cargo_build_task(
+                    spawn_task,
+                    structured_task.clone(),
+                    build.invocation().clone(),
+                    report_limit,
+                    cx.entity_id().as_u64(),
+                    cx,
+                )
+            })?;
+            let builder = builder.await?;
+            let terminal = project.update(cx, |project, cx| {
+                project.register_task_terminal(builder, structured_task, cx)
+            });
+            let completion = store
+                .update(cx, |store, cx| {
+                    store.finish_linux_native_cargo_build(build, observation, cx)
+                })
+                .map_err(|error| {
+                    error.context("Attaching the authenticated Linux Cargo completion")
+                })?;
+            drop(pending);
+            Ok(LinuxNativeCargoBuildTask {
+                terminal,
+                completion,
+            })
+        }))
     }
 
     pub fn create_terminal_task_with_preflight(

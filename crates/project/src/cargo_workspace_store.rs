@@ -343,7 +343,10 @@ impl PassiveRustEnvironment {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(
+        target_os = "macos",
+        all(target_os = "linux", feature = "rust-coverage")
+    ))]
     fn from_native_recipe(recipe: &crate::terminals::NativeTaskEnvironmentRecipe) -> Self {
         Self {
             overrides: recipe
@@ -2577,6 +2580,46 @@ pub struct NativeCargoBuildRecipe {
     pub task_environment: HashMap<String, String>,
 }
 
+fn native_cargo_build_supported() -> bool {
+    cfg!(any(
+        target_os = "macos",
+        all(target_os = "linux", feature = "rust-coverage")
+    ))
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub(crate) struct LinuxNativeCargoBuild {
+    intent: CargoNativeBuildIntent,
+    terminal_environment: crate::terminals::NativeTaskEnvironmentRecipe,
+    configuration: Vec<NativeCargoConfigurationSeal>,
+    cargo: NativeProbeFileSeal,
+    invocation: terminal::TaskBuildInvocation,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl LinuxNativeCargoBuild {
+    pub(crate) fn invocation(&self) -> &terminal::TaskBuildInvocation {
+        &self.invocation
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct LinuxNativeCargoWorkload {
+    build: LinuxNativeCargoBuild,
+    executable: NativeProbeFileSeal,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl LinuxNativeCargoWorkload {
+    pub fn executable(&self) -> PathBuf {
+        self.executable.root.join(&self.executable.relative)
+    }
+
+    pub fn working_directory(&self) -> &Path {
+        self.build.intent.working_directory()
+    }
+}
+
 pub struct CargoNativeBuildIntent {
     required_experimental_features: Vec<String>,
     project: gpui::WeakEntity<crate::Project>,
@@ -2863,7 +2906,11 @@ fn native_build_run_arguments(
     Ok((root, arguments))
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage"),
+    test
+))]
 fn validate_native_build_run_executable(path: &Path, root: &Path) -> Result<()> {
     crate::cargo_workspace::validate_native_cargo_path(path)?;
     ensure!(
@@ -4508,6 +4555,97 @@ async fn revalidate_native_build_filesystem(
     Ok(())
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(target_os = "linux", feature = "rust-coverage")
+))]
+async fn seal_native_build_executable(
+    filesystem: &dyn fs::Fs,
+    root: &Path,
+    path: &Path,
+) -> Result<NativeProbeFileSeal> {
+    validate_native_build_run_executable(path, root)?;
+    ensure!(
+        filesystem.canonicalize(root).await? == root
+            && filesystem.canonicalize(path).await? == path,
+        "Native Build run output or executable has aliases"
+    );
+    let root_metadata = filesystem
+        .metadata(root)
+        .await?
+        .context("Native Build run output disappeared")?;
+    ensure!(
+        root_metadata.is_dir && !root_metadata.is_symlink && !root_metadata.is_fifo,
+        "Native Build run output is not ordinary"
+    );
+    let relative = path.strip_prefix(root)?.to_path_buf();
+    let metadata = filesystem
+        .metadata(path)
+        .await?
+        .context("Native Build executable disappeared")?;
+    ensure!(
+        metadata.is_executable && metadata.len > 0,
+        "Native Build selected output is not executable"
+    );
+    let fingerprint = fingerprint_native_probe_file(
+        filesystem,
+        root,
+        root_metadata.inode,
+        &relative,
+        metadata,
+        256 * 1024 * 1024,
+    )
+    .await?;
+    Ok(NativeProbeFileSeal {
+        root: root.to_path_buf(),
+        root_inode: root_metadata.inode,
+        relative,
+        metadata,
+        fingerprint,
+    })
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+async fn seal_linux_native_cargo_executable(
+    filesystem: &dyn fs::Fs,
+    path: &Path,
+) -> Result<NativeProbeFileSeal> {
+    let root = path
+        .parent()
+        .context("Native Linux Cargo executable has no parent")?;
+    let seal = seal_native_build_executable(filesystem, root, path).await?;
+    ensure!(
+        seal.metadata.len <= MAX_NATIVE_COLLECTOR_EXECUTABLE_BYTES,
+        "Native Linux Cargo executable exceeds its admission limit"
+    );
+    Ok(seal)
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+async fn revalidate_linux_native_cargo_build(
+    filesystem: &dyn fs::Fs,
+    build: &LinuxNativeCargoBuild,
+    after_launch: bool,
+) -> Result<()> {
+    revalidate_native_build_filesystem(filesystem, &build.intent).await?;
+    revalidate_native_cargo_configuration(filesystem, &build.configuration).await?;
+    let cargo = seal_linux_native_cargo_executable(filesystem, build.invocation.program()).await?;
+    ensure!(
+        native_build_file_seals_equal(&cargo, &build.cargo),
+        "Native Linux Cargo executable changed after admission"
+    );
+    if !after_launch {
+        ensure!(
+            filesystem
+                .metadata(&build.intent.invocation_output_root)
+                .await?
+                .is_none(),
+            "Native Build run output already exists before launch"
+        );
+    }
+    Ok(())
+}
+
 async fn native_probe_directory_children(
     filesystem: &dyn fs::Fs,
     path: &Path,
@@ -6026,7 +6164,7 @@ impl CargoWorkspaceStore {
         );
 
         ensure!(
-            cfg!(target_os = "macos") && cx.entity_id() == intent.owner,
+            native_cargo_build_supported() && cx.entity_id() == intent.owner,
             "Native Build intent belongs to another host owner"
         );
         ensure!(
@@ -6134,8 +6272,8 @@ impl CargoWorkspaceStore {
         );
 
         ensure!(
-            cfg!(target_os = "macos"),
-            "Native Build recipe requires the selected macOS host"
+            native_cargo_build_supported(),
+            "Native Build recipe requires a supported local host"
         );
         validate_native_build_environment(&task_environment)?;
         let facts = self
@@ -6373,6 +6511,10 @@ impl CargoWorkspaceStore {
         ensure!(
             cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>(),
             "Native Rust profiling requires local experimental opt-in"
+        );
+        ensure!(
+            cfg!(target_os = "macos"),
+            "Native Cargo runtime recipe requires the selected macOS host"
         );
 
         let selected = self.prepare_native_cargo_build_recipe(
@@ -6749,12 +6891,12 @@ impl CargoWorkspaceStore {
         );
 
         ensure!(
-            cfg!(target_os = "macos")
+            native_cargo_build_supported()
                 && matches!(
                     self.mode,
                     CargoWorkspaceStoreMode::Local { shared: None, .. }
                 ),
-            "Native Build requires an unshared local macOS host"
+            "Native Build requires an unshared supported local host"
         );
         ensure!(
             !run_id.is_nil()
@@ -7185,6 +7327,195 @@ impl CargoWorkspaceStore {
         }))
     }
 
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub(crate) fn prepare_linux_native_cargo_build(
+        &mut self,
+        project: Entity<crate::Project>,
+        run_id: uuid::Uuid,
+        launch: task::SpawnInTerminal,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoBuild>>> {
+        let prepared = self.prepare_native_cargo_build_intent_for_launch(
+            project.clone(),
+            run_id,
+            &launch,
+            cx,
+        )?;
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Native Build filesystem is unavailable")?
+            .clone();
+        let executor = cx.background_executor().clone();
+        Ok(cx.spawn(async move |store, cx| {
+            let intent = prepared.await?;
+            intent.verify_eligible_launch(&launch)?;
+            let terminal_environment = project
+                .update(cx, |project, cx| project.prepare_native_task_environment(&launch, cx))?
+                .await?;
+            ensure!(
+                terminal_environment.working_directory() == intent.working_directory()
+                    && terminal_environment.logical_environment() == intent.task_environment(),
+                "Native Build Task environment changed during admission"
+            );
+            let build = cx
+                .background_spawn(async move {
+                    let prepare = async {
+                        let environment = PassiveRustEnvironment::from_native_recipe(&terminal_environment);
+                        let (configuration, seals) = load_passive_cargo_configuration(
+                            &intent.cwd,
+                            &environment,
+                            Some(filesystem.clone()),
+                            None,
+                        ).await?;
+                        ensure!(
+                            !configuration.native_runtime_target_or_runner_configured,
+                            "Native Linux profiling requires the host target and no configured runner"
+                        );
+                        let installed = check_passive_rustup_executable(
+                            intent.program().as_os_str(), &intent.cwd, &environment, &executor,
+                        ).await?;
+                        let (actual_cargo, toolchain) = match installed {
+                            Some(installed) => (installed.root.join("bin/cargo"), Some(installed.root)),
+                            None => (filesystem.canonicalize(intent.program()).await?, None),
+                        };
+                        let cargo = seal_linux_native_cargo_executable(
+                            filesystem.as_ref(), &actual_cargo,
+                        ).await?;
+                        let host = match std::env::consts::ARCH {
+                            "x86_64" => "x86_64-unknown-linux-gnu",
+                            "aarch64" => "aarch64-unknown-linux-gnu",
+                            _ => anyhow::bail!("This Linux architecture cannot launch native Cargo profiling"),
+                        };
+                        let mut variables = terminal_environment
+                            .environment()
+                            .iter()
+                            .map(|(key, value)| (key.clone(), value.clone()))
+                            .collect::<std::collections::BTreeMap<_, _>>();
+                        ensure!(
+                            !variables.keys().any(|key| {
+                                key == "CARGO_BUILD_TARGET"
+                                    || key.starts_with("CARGO_UNSTABLE_")
+                                    || (key.starts_with("CARGO_TARGET_") && key.ends_with("_RUNNER"))
+                                    || key.starts_with("ZED_PROFILE_")
+                                    || key.starts_with("LD_") && key != "LD_LIBRARY_PATH"
+                            }),
+                            "The Linux Cargo Task environment contains an unsupported runner, target or loader override"
+                        );
+                        variables.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+                        if let Some(toolchain) = toolchain {
+                            variables.insert(
+                                "RUSTUP_TOOLCHAIN".into(),
+                                toolchain.to_str().context("The selected installed Rust toolchain path is invalid")?.into(),
+                            );
+                        }
+                        let mut arguments = intent.arguments().to_vec();
+                        arguments.extend(["--target".into(), host.into()]);
+                        let invocation = terminal::TaskBuildInvocation::new(
+                            actual_cargo, arguments, intent.cwd.clone(), variables,
+                        )?;
+                        let build = LinuxNativeCargoBuild {
+                            intent,
+                            terminal_environment,
+                            configuration: seals,
+                            cargo,
+                            invocation,
+                        };
+                        revalidate_linux_native_cargo_build(filesystem.as_ref(), &build, false).await?;
+                        Ok::<_, anyhow::Error>(build)
+                    };
+                    match futures::future::select(prepare.boxed(), executor.timer(CARGO_METADATA_TIMEOUT).boxed()).await {
+                        Either::Left((result, _)) => result,
+                        Either::Right(_) => Err(anyhow!("Native Linux Cargo build admission timed out")),
+                    }
+                })
+                .await?;
+            project
+                .update(cx, |project, cx| {
+                    project.revalidate_native_task_environment(&build.terminal_environment, cx)
+                })?
+                .await?;
+            store.update(cx, |store, cx| {
+                store.validate_native_build_intent(&build.intent, cx)
+            })??;
+            Ok(build)
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub(crate) fn finish_linux_native_cargo_build(
+        &mut self,
+        build: LinuxNativeCargoBuild,
+        observation: terminal::LinuxNativeTaskObservation<Vec<u8>>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoWorkload>>> {
+        self.validate_native_build_intent(&build.intent, cx)?;
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Native Build filesystem is unavailable")?
+            .clone();
+        let executor = cx.background_executor().clone();
+        Ok(cx.spawn(async move |store, cx| {
+            let terminal::LinuxNativeTaskOutcome::Completed(status, Some(report)) =
+                observation.finish().await?
+            else {
+                anyhow::bail!("Native Linux Cargo build did not yield an authenticated report");
+            };
+            ensure!(
+                status.success(),
+                "Native Linux Cargo build did not complete successfully"
+            );
+            let project = build
+                .intent
+                .project
+                .upgrade()
+                .context("Native Build Project disappeared")?;
+            project
+                .update(cx, |project, cx| {
+                    project.revalidate_native_task_environment(&build.terminal_environment, cx)
+                })?
+                .await?;
+            let workload = cx
+                .background_spawn(async move {
+                    let seal = async {
+                        revalidate_linux_native_cargo_build(filesystem.as_ref(), &build, true)
+                            .await?;
+                        let path = crate::cargo_workspace::resolve_native_cargo_executable(
+                            &report,
+                            &build.intent.selection,
+                            true,
+                        )?;
+                        let executable = seal_native_build_executable(
+                            filesystem.as_ref(),
+                            &build.intent.invocation_output_root,
+                            &path,
+                        )
+                        .await?;
+                        Ok::<_, anyhow::Error>(LinuxNativeCargoWorkload { build, executable })
+                    };
+                    match futures::future::select(
+                        seal.boxed(),
+                        executor.timer(CARGO_METADATA_TIMEOUT).boxed(),
+                    )
+                    .await
+                    {
+                        Either::Left((result, _)) => result,
+                        Either::Right(_) => {
+                            Err(anyhow!("Native Linux Cargo executable admission timed out"))
+                        }
+                    }
+                })
+                .await?;
+            store.update(cx, |store, cx| {
+                store.validate_native_build_intent(&workload.build.intent, cx)
+            })??;
+            Ok(workload)
+        }))
+    }
+
     #[cfg(target_os = "macos")]
     pub fn prepare_native_cargo_runtime_binding(
         &mut self,
@@ -7521,54 +7852,12 @@ impl CargoWorkspaceStore {
                     true,
                     intent.runtime_packages.as_ref(),
                 )?;
-                let path = decoded.executable;
-                validate_native_build_run_executable(&path, &intent.invocation_output_root)?;
-                ensure!(
-                    filesystem
-                        .canonicalize(&intent.invocation_output_root)
-                        .await?
-                        == intent.invocation_output_root,
-                    "Native Build run output has aliases"
-                );
-                let root_metadata = filesystem
-                    .metadata(&intent.invocation_output_root)
-                    .await?
-                    .context("Native Build run output disappeared")?;
-                ensure!(
-                    root_metadata.is_dir && !root_metadata.is_symlink && !root_metadata.is_fifo,
-                    "Native Build run output is not ordinary"
-                );
-                ensure!(
-                    filesystem.canonicalize(&path).await? == path,
-                    "Native Build executable has aliases"
-                );
-                let relative = path
-                    .strip_prefix(&intent.invocation_output_root)?
-                    .to_path_buf();
-                let metadata = filesystem
-                    .metadata(&path)
-                    .await?
-                    .context("Native Build executable disappeared")?;
-                ensure!(
-                    metadata.is_executable && metadata.len > 0,
-                    "Native Build selected output is not executable"
-                );
-                let fingerprint = fingerprint_native_probe_file(
+                let executable = seal_native_build_executable(
                     filesystem.as_ref(),
                     &intent.invocation_output_root,
-                    root_metadata.inode,
-                    &relative,
-                    metadata,
-                    256 * 1024 * 1024,
+                    &decoded.executable,
                 )
                 .await?;
-                let executable = NativeProbeFileSeal {
-                    root: intent.invocation_output_root.clone(),
-                    root_inode: root_metadata.inode,
-                    relative,
-                    metadata,
-                    fingerprint,
-                };
                 revalidate_native_build_filesystem(filesystem.as_ref(), &intent).await?;
                 Ok(NativeCargoWorkload {
                     intent,

@@ -1287,11 +1287,12 @@ exec "$COPPER_FIXTURE_SAMPLY" "$@"
 }
 
 fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()> {
-    use gpui::AppContext as _;
-    use project::cargo_workspace::{
-        CargoExecutableSelection, CargoNativeExecutionPolicy, CargoTargetKind,
-        resolve_native_cargo_executable,
+    use gpui::{AppContext as _, UpdateGlobal as _};
+    use project::{
+        LocalProjectFlags, Project, cargo_workspace::CargoTargetKind,
+        worktree_store::WorktreeStoreEvent,
     };
+    use std::sync::Arc;
     use terminal::{HeadlessTerminal, LinuxNativeTaskOutcome, TerminalBuilder};
 
     let directory = directory.canonicalize()?;
@@ -1306,70 +1307,32 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
         std::env::join_paths([toolchain_bins, Path::new("/usr/bin"), Path::new("/bin")])?
             .into_string()
             .map_err(|_| anyhow::anyhow!("Native Cargo toolchain path is not UTF-8"))?;
-    let target = directory.join("cargo-target");
-    let environment = BTreeMap::from([
+    let target = directory.join("target");
+    std::fs::create_dir_all(&target)?;
+    let cargo_home = directory.with_extension("cargo-home");
+    std::fs::create_dir_all(&cargo_home)?;
+    std::fs::write(directory.join(".gitignore"), "/target/\n")?;
+    let environment = collections::HashMap::from_iter([
         ("PATH".into(), search_path),
         ("CARGO_NET_OFFLINE".into(), "true".into()),
         (
-            "CARGO_TARGET_DIR".into(),
-            target.to_str().context("Invalid Cargo target path")?.into(),
-        ),
-        (
             "CARGO_HOME".into(),
-            directory
-                .join("cargo-home")
-                .to_str()
-                .context("Invalid Cargo home")?
-                .into(),
+            cargo_home.to_str().context("Invalid Cargo home")?.into(),
         ),
     ]);
-    let metadata = smol::block_on(
+    let lock = smol::block_on(
         smol::process::Command::new(&cargo)
-            .args(["metadata", "--format-version=1", "--no-deps", "--offline"])
+            .args(["generate-lockfile", "--offline"])
             .current_dir(&directory)
             .env_clear()
             .envs(&environment)
             .output(),
     )?;
     ensure!(
-        metadata.status.success(),
-        "Fixture Cargo metadata failed: {}",
-        String::from_utf8_lossy(&metadata.stderr)
+        lock.status.success(),
+        "Fixture Cargo lock preparation failed"
     );
-    let metadata: serde_json::Value = serde_json::from_slice(&metadata.stdout)?;
-    let package_id = metadata["packages"]
-        .as_array()
-        .and_then(|packages| {
-            packages
-                .iter()
-                .find(|package| package["name"].as_str() == Some("runner"))
-        })
-        .and_then(|package| package["id"].as_str())
-        .context("Fixture Cargo metadata is missing the runner identity")?
-        .to_owned();
-    let selection = CargoExecutableSelection {
-        package_id,
-        target_kind: CargoTargetKind::Binary,
-        target_name: "runner".into(),
-        source_path: directory.join("runner/src/main.rs"),
-        execution_policy: CargoNativeExecutionPolicy::Program,
-    };
-    let build = TaskBuildInvocation::new(
-        cargo,
-        [
-            "build",
-            "--message-format=json",
-            "--package",
-            "runner",
-            "--bin",
-            "runner",
-            "--release",
-        ]
-        .map(str::to_owned)
-        .to_vec(),
-        directory.clone(),
-        environment,
-    )?;
+
     let report = NativeProfileTaskReservation::new()?;
     let profile_path = report.profile_path();
     let symbols_path = report.symbols_path();
@@ -1377,30 +1340,122 @@ fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()>
     let (send, receive) = std::sync::mpsc::sync_channel(1);
     gpui_platform::headless().run(move |cx| {
         release_channel::init(semver::Version::new(1, 16, 2), cx);
+        gpui_tokio::init(cx);
+        crate::HeadlessProject::init(cx);
+        cx.set_http_client(Arc::new(http_client::BlockedHttpClient));
+        let opt_in = settings::SettingsStore::update_global(cx, |store, cx| {
+            store.register_setting::<feature_flags::FeatureFlagsSettings>();
+            store
+                .set_user_settings(
+                    r#"{"load_direnv":"disabled","feature_flags":{"rust-native-profiling-experimental":"on"}}"#,
+                    cx,
+                )
+                .result()
+        });
+        project::trusted_worktrees::init(
+            [(None, [directory.clone()].into_iter().collect())]
+                .into_iter()
+                .collect(),
+            cx,
+        );
+        git::GitHostingProviderRegistry::set_global(
+            Arc::new(git::GitHostingProviderRegistry::new()),
+            cx,
+        );
+        git_hosting_providers::init(cx);
+        dap_adapters::init(cx);
         cx.set_global(HeadlessTerminal(headless));
-        let prepared = TerminalBuilder::new_with_native_cargo_build_task(
-            task::SpawnInTerminal { label: "Selected Cargo build".into(), ..Default::default() },
-            None, build, task::MAX_TASK_STDOUT_REPORT_BYTES, 1, cx,
+        let client = client::Client::production(cx);
+        client::init(&client, cx);
+        Project::init(&client, cx);
+        let user_store = cx.new(|cx| client::UserStore::new(client.clone(), cx));
+        let project = Project::local(
+            client,
+            node_runtime::NodeRuntime::unavailable(),
+            user_store,
+            Arc::new(language::LanguageRegistry::new(cx.background_executor().clone())),
+            Arc::new(fs::RealFs::new(None, cx.background_executor().clone())),
+            Some(environment),
+            LocalProjectFlags { watch_global_configs: false, ..Default::default() },
+            cx,
+        );
+        let (indexed, index_published) = async_channel::bounded(1);
+        let initial_scan = cx.subscribe(
+            &project.read(cx).worktree_store(),
+            move |_, event, _| {
+                if let WorktreeStoreEvent::WorktreeUpdatedEntries(_, entries) = event
+                    && entries.iter().any(|(path, _, _)| path.as_std_path() == Path::new("Cargo.toml"))
+                    && let Err(error) = indexed.try_send(())
+                {
+                    log::debug!("Cargo fixture finished observing its initial index: {error}");
+                }
+            },
         );
         cx.spawn(async move |cx| {
-            let deadline = cx.background_executor().timer(Duration::from_secs(45));
+            let deadline = cx.background_executor().timer(Duration::from_secs(60));
             let run = async {
-                let (builder, observation) = prepared?;
-                let builder = builder.await?;
-                let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
-                let ordinary = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
-                let (build, ordinary) = futures::future::join(observation.finish(), ordinary).await;
-                let LinuxNativeTaskOutcome::Completed(status, Some(stdout)) = build? else {
-                    anyhow::bail!("The Cargo build did not produce a verified stdout report");
+                opt_in?;
+                let (tree, _) = project.update(cx, |project, cx| {
+                    project.find_or_create_worktree(&directory, true, cx)
+                }).await.context("Opening the local Cargo Project")?;
+                tree.read_with(cx, |tree, _| tree.as_local().context("Expected a local Cargo worktree").map(|tree| tree.scan_complete()))?.await;
+                // The scan future can resolve before Cargo receives the initial index event.
+                index_published.recv().await?;
+                drop(initial_scan);
+                // The first Tests discovery also refreshes the shared Cargo selection.
+                let tests = project.read_with(cx, |project, _| project.rust_test_provider_store().clone());
+                tests.update(cx, |tests, cx| tests.refresh(cx)).await.context("Finishing initial Rust test discovery")?;
+                let store = project.read_with(cx, |project, _| project.cargo_workspace_store().clone());
+                let snapshot = store.update(cx, |store, cx| store.refresh(cx)).await.context("Refreshing the Cargo Project")?;
+                let workspace = snapshot.workspaces.first().context("Fixture Cargo workspace is absent")?;
+                let member = workspace.members.iter().find(|member| member.name == "runner").context("Fixture runner package is absent")?;
+                let selected = member.targets.iter().find(|target| target.name == "runner" && target.kind == CargoTargetKind::Binary).context("Fixture selected target is absent")?;
+                let recipe = store.update(cx, |store, cx| {
+                    store.prepare_native_cargo_build_recipe(
+                        workspace.key.clone(), member.id.clone(), selected.clone(),
+                        Some("release".into()), Default::default(), cx,
+                    )
+                })?.await.context("Preparing the selected Cargo recipe")?;
+                let launch = task::SpawnInTerminal {
+                    label: "Selected Cargo build".into(),
+                    command: Some(recipe.program.to_str().context("Invalid Cargo program")?.to_owned()),
+                    literal_command: true,
+                    literal_prefix_args: recipe.arguments.len(),
+                    args: recipe.arguments,
+                    cwd: Some(recipe.working_directory),
+                    env: recipe.task_environment,
+                    required_experimental_features: vec!["rust-native-profiling-experimental".into()],
+                    ..Default::default()
                 };
-                ensure!(status.success() && ordinary == Some(status), "Cargo and its Terminal did not agree on the build exit");
-                let executable = resolve_native_cargo_executable(&stdout, &selection, status.success())?;
-                ensure!(executable == target.join("release/runner") && executable.is_file(), "Cargo report selected the wrong executable");
-                let mut decoy = selection;
-                decoy.target_name = "decoy".into();
-                decoy.source_path = directory.join("runner/src/bin/decoy.rs");
-                ensure!(resolve_native_cargo_executable(&stdout, &decoy, true).is_err(), "An unselected target was admitted");
-
+                let run_id = uuid::Uuid::new_v4();
+                let mut redirected = launch.clone();
+                *redirected.args.get_mut(7).context("Cargo recipe is missing its target directory")? =
+                    target.join("other-output").to_str().context("Invalid output path")?.into();
+                let rejected = project.update(cx, |project, cx| {
+                    project.start_selected_linux_native_cargo_build_task(
+                        uuid::Uuid::new_v4(), redirected, None, task::MAX_TASK_STDOUT_REPORT_BYTES, cx,
+                    )
+                })?;
+                ensure!(rejected.await.is_err(), "Project accepted a redirected Cargo build recipe");
+                let build = project.update(cx, |project, cx| {
+                    project.start_selected_linux_native_cargo_build_task(
+                        run_id, launch, None, task::MAX_TASK_STDOUT_REPORT_BYTES, cx,
+                    )
+                })?.await.context("Launching the confirmed Linux Cargo build")?;
+                let ordinary = build.terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (workload, status) = futures::future::join(build.completion, ordinary).await;
+                let workload = workload.context("Admitting the Cargo build output")?;
+                ensure!(status.is_some_and(|status| status.success()), "The authenticated Cargo Task disagreed with the Terminal exit");
+                let executable = workload.executable();
+                let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+                let expected = target.join(format!("zed-native-profile-build-{}", run_id.simple()))
+                    .join(host).join("release/runner");
+                ensure!(
+                    executable == expected && executable.is_file() && workload.working_directory() == directory,
+                    "Project admitted the wrong Cargo output"
+                );
+                let backend = if headless { "headless" } else { "PTY" };
+                println!("{backend} Project admitted the exact fresh Cargo output");
                 let executable = executable.to_str().context("Invalid Cargo executable path")?;
                 let invocation = samply_invocation(&directory, &capture_path, &[executable, "1200000"])?;
                 let (builder, observation) = cx.update(|cx| {
