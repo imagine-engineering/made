@@ -48,6 +48,15 @@ impl OriginalTaskActor {
         Ok(actor)
     }
 
+    #[cfg(target_os = "linux")]
+    pub(crate) fn from_owned_unreaped_child(
+        child: &Child,
+        expected_image: &File,
+    ) -> io::Result<Self> {
+        // The spawn owner must keep the process group ID reserved through cleanup.
+        Self::pin_unwaited_child(child.id(), expected_image)
+    }
+
     /// Call before creating a status future or reader that can wait this child.
     /// A smol status future can retain a shared child independently of this borrow.
     pub fn from_smol_child(

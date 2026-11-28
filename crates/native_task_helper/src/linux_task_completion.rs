@@ -1,5 +1,7 @@
 use crate::{
-    linux_cargo_runtime::{configure_profile_workload, validate_workload_environment},
+    linux_cargo_runtime::{
+        LinuxCargoRuntimeObserver, configure_profile_workload, validate_workload_environment,
+    },
     task_actor::{AuthenticatedTaskActor, CoverageTaskParent, OriginalTaskActor},
     task_completion::{
         MAX_TASK_BUILD_INVOCATION_BYTES, ObservedTaskBuildInvocation, TASK_STDOUT_FRAME_BYTES,
@@ -10,10 +12,11 @@ use futures_lite::{AsyncReadExt as _, AsyncWriteExt as _, future};
 use sha2::{Digest as _, Sha256};
 use smol::net::unix::{UnixListener, UnixStream};
 use std::{
+    ffi::OsStr,
     fs::{self, File, Metadata},
     io,
     net::Shutdown,
-    os::fd::{FromRawFd as _, OwnedFd},
+    os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd},
     os::unix::{
         fs::{FileExt as _, MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _},
         process::{CommandExt as _, ExitStatusExt as _},
@@ -147,6 +150,7 @@ pub enum LinuxTaskMode {
     NativeProfile = 2,
     CargoBuild = 3,
     CargoProfile = 4,
+    CargoRuntime = 5,
 }
 
 impl LinuxTaskMode {
@@ -156,6 +160,7 @@ impl LinuxTaskMode {
             Self::NativeProfile => "--observe-native-profile-task",
             Self::CargoBuild => "--observe-cargo-build-task",
             Self::CargoProfile => "--observe-cargo-profile-task",
+            Self::CargoRuntime => "--observe-cargo-runtime-task",
         }
     }
 }
@@ -171,6 +176,7 @@ fn parse_task_helper(
         LinuxTaskMode::NativeProfile,
         LinuxTaskMode::CargoBuild,
         LinuxTaskMode::CargoProfile,
+        LinuxTaskMode::CargoRuntime,
     ]
     .into_iter()
     .find(|mode| command == mode.command()) else {
@@ -437,6 +443,84 @@ pub struct LinuxTaskCompletion {
 
 pub struct LinuxCargoProfileInvocation(CargoProfileRequest);
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LinuxCargoRuntimeInvocation {
+    cargo: TaskBuildInvocation,
+    workload: TaskBuildInvocation,
+    runner: PathBuf,
+}
+
+impl LinuxCargoRuntimeInvocation {
+    pub fn new(
+        cargo: TaskBuildInvocation,
+        workload_program: PathBuf,
+        workload_arguments: Vec<String>,
+        runner: PathBuf,
+    ) -> io::Result<Self> {
+        let workload = TaskBuildInvocation::new(
+            workload_program,
+            workload_arguments,
+            cargo.working_directory().to_path_buf(),
+            Default::default(),
+        )?;
+        let invocation = Self {
+            cargo,
+            workload,
+            runner,
+        };
+        invocation.validate()?;
+        Ok(invocation)
+    }
+
+    pub fn cargo(&self) -> &TaskBuildInvocation {
+        &self.cargo
+    }
+
+    fn validate(&self) -> io::Result<()> {
+        self.cargo.validate()?;
+        self.workload.validate()?;
+        validate_workload_environment(&self.cargo)?;
+        let arguments = self.cargo.arguments();
+        let (cargo, workload) = arguments
+            .iter()
+            .position(|argument| argument == "--")
+            .and_then(|separator| {
+                Some((arguments.get(..separator)?, arguments.get(separator + 1..)?))
+            })
+            .ok_or_else(invalid_completion)?;
+        let host = match std::env::consts::ARCH {
+            "aarch64" => "aarch64-unknown-linux-gnu",
+            "x86_64" => "x86_64-unknown-linux-gnu",
+            _ => return Err(invalid_completion()),
+        };
+        let targets = cargo
+            .iter()
+            .enumerate()
+            .filter(|(_, argument)| *argument == "--target")
+            .map(|(index, _)| cargo.get(index + 1).map(String::as_str));
+        if self.cargo.working_directory() != self.workload.working_directory()
+            || !self.workload.environment().is_empty()
+            || !self.runner.is_absolute()
+            || self.runner.as_os_str().as_encoded_bytes().len() > 4096
+            || cargo.first().is_none_or(|argument| argument != "run")
+            || !targets.eq([Some(host)])
+            || cargo
+                .iter()
+                .any(|argument| argument.starts_with("--target="))
+            || workload != self.workload.arguments()
+            || self.cargo.environment().keys().any(|key| {
+                key == "CARGO_BUILD_TARGET"
+                    || key.starts_with("CARGO_UNSTABLE_")
+                    || key.starts_with("CARGO_TARGET_") && key.ends_with("_RUNNER")
+            })
+        {
+            return Err(invalid_completion());
+        }
+        Ok(())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CargoProfileRequest {
@@ -560,23 +644,74 @@ impl LinuxTaskCompletion {
         cancel: impl Future<Output = ()>,
     ) -> io::Result<LinuxTaskReceipt<Vec<u8>>> {
         validate_stdout_report_limit(report_limit)?;
-        let (mut actor, mut connection, challenge) = self
-            .register_task(
+        self.observe_payload(
+            actor,
+            &invocation.encode_helper_environment()?,
+            LinuxTaskMode::CargoBuild,
+            report_limit,
+            cancel,
+        )
+        .await
+    }
+
+    pub async fn observe_cargo_runtime(
+        self,
+        actor: OriginalTaskActor,
+        invocation: LinuxCargoRuntimeInvocation,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<ObservedTaskBuildInvocation>> {
+        invocation.validate()?;
+        let request = serde_json::to_string(&invocation).map_err(|_| invalid_completion())?;
+        let receipt = self
+            .observe_payload(
                 actor,
-                &invocation.encode_helper_environment()?,
-                LinuxTaskMode::CargoBuild,
-                Some(report_limit),
+                &request,
+                LinuxTaskMode::CargoRuntime,
+                MAX_TASK_BUILD_INVOCATION_BYTES,
+                cancel,
             )
+            .await?;
+        let output = receipt
+            .output
+            .map(|bytes| {
+                let workload = serde_json::from_slice::<TaskBuildInvocation>(&bytes)
+                    .map_err(|_| invalid_completion())?;
+                validate_workload_environment(&workload)?;
+                let observed = ObservedTaskBuildInvocation {
+                    invocation: std::sync::Arc::new(workload),
+                };
+                if !invocation.workload.matches_observed(&observed) {
+                    return Err(invalid_completion());
+                }
+                Ok(observed)
+            })
+            .transpose()?;
+        Ok(LinuxTaskReceipt {
+            termination: receipt.termination,
+            output,
+            cancelled: receipt.cancelled,
+        })
+    }
+
+    async fn observe_payload(
+        self,
+        actor: OriginalTaskActor,
+        request: &str,
+        mode: LinuxTaskMode,
+        limit: usize,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<Vec<u8>>> {
+        let (mut actor, mut connection, challenge) = self
+            .register_task(actor, request, mode, Some(limit))
             .await?;
         until_deadline(COMPLETION_TIMEOUT, async {
             let (response, cancelled) =
-                receive_task_response(&mut connection, challenge, Some(report_limit), cancel)
-                    .await?;
+                receive_task_response(&mut connection, challenge, Some(limit), cancel).await?;
             actor.revalidate()?;
             connection.write_all(&[COMPLETION_ACKNOWLEDGED]).await?;
             Ok(LinuxTaskReceipt {
                 termination: response.termination,
-                output: response.stdout.filter(|_| {
+                output: response.payload.filter(|_| {
                     !cancelled && response.termination == LinuxTaskTermination::Exited(0)
                 }),
                 cancelled,
@@ -686,7 +821,7 @@ impl LinuxTaskCompletion {
 
 struct LinuxTaskResponse {
     termination: LinuxTaskTermination,
-    stdout: Option<Vec<u8>>,
+    payload: Option<Vec<u8>>,
 }
 
 async fn receive_task_response(
@@ -738,7 +873,7 @@ async fn read_task_response(
         [1, signal @ 1..=64] => LinuxTaskTermination::Signalled(signal),
         _ => return Err(invalid_completion()),
     };
-    let stdout = if let Some(limit) = stdout_limit {
+    let payload = if let Some(limit) = stdout_limit {
         let mut length = [0; 4];
         connection.read_exact(&mut length).await?;
         let length = u32::from_be_bytes(length) as usize;
@@ -757,7 +892,7 @@ async fn read_task_response(
     }
     Ok(LinuxTaskResponse {
         termination,
-        stdout,
+        payload,
     })
 }
 
@@ -819,11 +954,17 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
             }
             let mut challenge = [0; 32];
             connection.read_exact(&mut challenge).await?;
-            let stdout_limit = if matches!(kind, LinuxTaskMode::CargoBuild) {
+            let stdout_limit = if matches!(
+                kind,
+                LinuxTaskMode::CargoBuild | LinuxTaskMode::CargoRuntime
+            ) {
                 let mut limit = [0; 4];
                 connection.read_exact(&mut limit).await?;
                 let limit = u32::from_be_bytes(limit) as usize;
                 validate_stdout_report_limit(limit)?;
+                if kind == LinuxTaskMode::CargoRuntime && limit != MAX_TASK_BUILD_INVOCATION_BYTES {
+                    return Err(invalid_completion());
+                }
                 Some(limit)
             } else {
                 None
@@ -841,42 +982,41 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
         })
         .await?;
 
-    let mut command = if matches!(kind, LinuxTaskMode::CargoProfile) {
-        let invocation = serde_json::from_slice::<CargoProfileRequest>(&request)
-            .map_err(|_| invalid_completion())?;
-        invocation.validate()?;
-        let mut command = task_command(&invocation.collector);
-        configure_profile_workload(&mut command, &invocation.runner, &invocation.workload)?;
-        command
-    } else {
+    let command = || {
         let invocation = serde_json::from_slice::<TaskBuildInvocation>(&request)
             .map_err(|_| invalid_completion())?;
         invocation.validate()?;
-        task_command(&invocation)
+        Ok::<_, io::Error>(task_command(&invocation, invocation.program()))
     };
-    let helper_process = std::process::id();
-    // The terminal may kill the helper before it can handle socket closure.
-    unsafe {
-        command.pre_exec(move || {
-            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
-                return Err(io::Error::last_os_error());
-            }
-            if libc::getppid() as u32 != helper_process {
-                return Err(io::Error::from_raw_os_error(libc::ESRCH));
-            }
-            Ok(())
-        });
-    }
-    let (status, stdout) = match kind {
-        LinuxTaskMode::Coverage => (run_coverage_workload(command, &mut connection).await?, None),
-        LinuxTaskMode::NativeProfile | LinuxTaskMode::CargoProfile => {
+    let (status, payload) = match kind {
+        LinuxTaskMode::Coverage => (
+            run_coverage_workload(command()?, &mut connection).await?,
+            None,
+        ),
+        LinuxTaskMode::NativeProfile => (
+            run_profile_workload(command()?, &mut connection).await?,
+            None,
+        ),
+        LinuxTaskMode::CargoProfile => {
+            let invocation = serde_json::from_slice::<CargoProfileRequest>(&request)
+                .map_err(|_| invalid_completion())?;
+            invocation.validate()?;
+            let mut command = task_command(&invocation.collector, invocation.collector.program());
+            configure_profile_workload(&mut command, &invocation.runner, &invocation.workload)?;
             (run_profile_workload(command, &mut connection).await?, None)
         }
         LinuxTaskMode::CargoBuild => {
             let limit = stdout_limit.ok_or_else(invalid_completion)?;
             let (status, stdout) =
-                run_cargo_build_workload(command, &mut connection, limit).await?;
+                run_cargo_build_workload(command()?, &mut connection, limit).await?;
             (status, Some(stdout))
+        }
+        LinuxTaskMode::CargoRuntime => {
+            let invocation = serde_json::from_slice::<LinuxCargoRuntimeInvocation>(&request)
+                .map_err(|_| invalid_completion())?;
+            invocation.validate()?;
+            let (status, runtime) = run_cargo_runtime_workload(invocation, &mut connection).await?;
+            (status, Some(runtime))
         }
     };
 
@@ -885,11 +1025,11 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
     until_deadline(REGISTRATION_TIMEOUT, async {
         connection.write_all(&challenge).await?;
         connection.write_all(&termination.encode()).await?;
-        if let Some(stdout) = stdout {
+        if let Some(payload) = payload {
             connection
-                .write_all(&(stdout.len() as u32).to_be_bytes())
+                .write_all(&(payload.len() as u32).to_be_bytes())
                 .await?;
-            connection.write_all(&stdout).await?;
+            connection.write_all(&payload).await?;
         }
         connection.shutdown(Shutdown::Write)?;
         let mut acknowledged = [0; 1];
@@ -905,13 +1045,27 @@ async fn run_task(socket: &Path, kind: LinuxTaskMode) -> io::Result<ExitStatus> 
     .await
 }
 
-fn task_command(invocation: &TaskBuildInvocation) -> Command {
-    let mut command = Command::new(invocation.program());
+fn task_command(invocation: &TaskBuildInvocation, executable: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(executable);
     command
+        .arg0(invocation.program())
         .args(invocation.arguments())
         .current_dir(invocation.working_directory())
         .env_clear()
         .envs(invocation.environment());
+    let helper_process = std::process::id();
+    // The terminal may kill the helper before it can handle socket closure.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if libc::getppid() as u32 != helper_process {
+                return Err(io::Error::from_raw_os_error(libc::ESRCH));
+            }
+            Ok(())
+        });
+    }
     command
 }
 async fn observer_interruption(connection: &mut UnixStream) -> io::Error {
@@ -1008,6 +1162,68 @@ async fn run_profile_workload(
     .await;
     let status = smol::unblock(move || finish_task_group(child, group)).await?;
     result.map(|()| status)
+}
+
+async fn run_cargo_runtime_workload(
+    invocation: LinuxCargoRuntimeInvocation,
+    connection: &mut UnixStream,
+) -> io::Result<(ExitStatus, Vec<u8>)> {
+    let cargo_image = File::options()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(invocation.cargo.program())?;
+    if !cargo_image.metadata()?.is_file() {
+        return Err(invalid_completion());
+    }
+    let mut command = task_command(
+        &invocation.cargo,
+        format!("/proc/self/fd/{}", cargo_image.as_raw_fd()),
+    );
+    let pending = LinuxCargoRuntimeObserver::bind(&invocation.runner)?.configure(&mut command)?;
+    let child = spawn_task_group(command)?;
+    let group = child.id() as libc::pid_t;
+    let observe = async {
+        let actor = OriginalTaskActor::from_owned_unreaped_child(&child, &cargo_image)?;
+        let receipt = future::or(
+            async {
+                pending
+                    .observe(
+                        actor,
+                        invocation.workload.program(),
+                        invocation.workload.arguments(),
+                        invocation.workload.working_directory(),
+                    )
+                    .await
+                    .map(Some)
+            },
+            async { wait_for_task_exit(group).await.map(|()| None) },
+        )
+        .await?;
+        if receipt.is_some() {
+            wait_for_task_exit(group).await?;
+        }
+        Ok::<_, io::Error>((false, receipt))
+    };
+    let result = future::or(
+        async {
+            wait_for_task_cancellation(connection).await?;
+            Ok((true, None))
+        },
+        observe,
+    )
+    .await;
+    let status = smol::unblock(move || finish_task_group(child, group)).await?;
+    let (cancelled, receipt) = result?;
+    if cancelled || !status.success() {
+        return Ok((status, Vec::new()));
+    }
+    let runtime = receipt
+        .ok_or_else(invalid_completion)?
+        .verify_exit(status)?;
+    Ok((
+        status,
+        runtime.invocation.encode_helper_environment()?.into_bytes(),
+    ))
 }
 
 #[expect(
@@ -1142,12 +1358,53 @@ mod tests {
     use std::ffi::OsString;
 
     #[test]
+    fn cargo_runtime_task_requires_the_native_target_and_exact_workload_arguments() {
+        let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+        let literal = ["two words", "", "$FOO"].map(str::to_owned).to_vec();
+        let invoke = |target: &str, workload: Vec<String>, configured_runner: bool| {
+            let environment = if configured_runner {
+                [(
+                    format!(
+                        "CARGO_TARGET_{}_RUNNER",
+                        host.replace('-', "_").to_uppercase()
+                    ),
+                    "other-runner".to_owned(),
+                )]
+                .into()
+            } else {
+                Default::default()
+            };
+            let cargo = TaskBuildInvocation::new(
+                "/toolchain/bin/cargo".into(),
+                ["run", "--target", target, "--"]
+                    .map(str::to_owned)
+                    .into_iter()
+                    .chain(literal.clone())
+                    .collect(),
+                "/project".into(),
+                environment,
+            )?;
+            LinuxCargoRuntimeInvocation::new(
+                cargo,
+                "/project/runner".into(),
+                workload,
+                "/application/helper".into(),
+            )
+        };
+        assert!(invoke(&host, literal.clone(), false).is_ok());
+        assert!(invoke("wasm32-unknown-unknown", literal.clone(), false).is_err());
+        assert!(invoke(&host, vec!["changed".into()], false).is_err());
+        assert!(invoke(&host, literal.clone(), true).is_err());
+    }
+
+    #[test]
     fn linux_task_helper_accepts_only_the_exact_mode_and_socket() -> io::Result<()> {
         for mode in [
             LinuxTaskMode::Coverage,
             LinuxTaskMode::NativeProfile,
             LinuxTaskMode::CargoBuild,
             LinuxTaskMode::CargoProfile,
+            LinuxTaskMode::CargoRuntime,
         ] {
             let address = "/tmp/task path/completion";
             assert_eq!(

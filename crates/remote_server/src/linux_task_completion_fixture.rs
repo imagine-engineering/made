@@ -965,18 +965,65 @@ fn main() {
         "debug/runner"
     });
     let literal = ["literal two words", "", "$FOO"].map(str::to_owned);
-    let captured = smol::block_on(async {
-        let cases: &[_] = if record {
-            &["replaced-path"]
-        } else {
-            &[
-                "replaced-path",
-                "changed-arguments",
-                "wrong-image",
-                "foreign-peer",
-            ]
-        };
-        for &case in cases {
+    if record {
+        let arguments = [
+            "run",
+            "--offline",
+            "--quiet",
+            "--target",
+            &host,
+            "--package",
+            "runner",
+            "--bin",
+            "runner",
+            "--profile",
+            "release",
+            "--",
+        ]
+        .map(str::to_owned)
+        .into_iter()
+        .chain(literal.iter().cloned())
+        .collect();
+        let environment = BTreeMap::from([
+            (
+                "PATH".into(),
+                std::env::join_paths([cargo_path, Path::new("/usr/bin"), Path::new("/bin")])?
+                    .into_string()
+                    .map_err(|_| anyhow::anyhow!("Invalid fixture PATH"))?,
+            ),
+            (
+                "CARGO_HOME".into(),
+                cargo_home
+                    .to_str()
+                    .context("Invalid fixture Cargo home")?
+                    .into(),
+            ),
+            (
+                "CARGO_TARGET_DIR".into(),
+                build_root
+                    .to_str()
+                    .context("Invalid fixture build directory")?
+                    .into(),
+            ),
+            ("COPPER_RUNTIME_FIXTURE".into(), "runtime sentinel".into()),
+            ("COPPER_RUNTIME_PROFILE".into(), "1".into()),
+        ]);
+        let cargo = TaskBuildInvocation::new(cargo, arguments, directory.clone(), environment)?;
+        let runtime = terminal::LinuxCargoRuntimeInvocation::new(
+            cargo,
+            target,
+            literal.into(),
+            runner.clone().into(),
+        )?;
+        return profile_observed_cargo_runtime(&directory, runtime, runner.into());
+    }
+    smol::block_on(async {
+        for case in [
+            "replaced-path",
+            "changed-arguments",
+            "wrong-image",
+            "foreign-peer",
+        ] {
             let mut command = std::process::Command::new(&cargo);
             command
                 .args([
@@ -990,7 +1037,7 @@ fn main() {
                     "--bin",
                     "runner",
                     "--profile",
-                    if record { "release" } else { "dev" },
+                    "dev",
                     "--",
                 ])
                 .args(&literal)
@@ -1003,9 +1050,6 @@ fn main() {
                 .env("CARGO_HOME", &cargo_home)
                 .env("CARGO_TARGET_DIR", &build_root)
                 .env("COPPER_RUNTIME_FIXTURE", "runtime sentinel");
-            if record {
-                command.env("COPPER_RUNTIME_PROFILE", "1");
-            }
             let observer = LinuxCargoRuntimeObserver::bind(&source_image)?;
             let pending = observer.configure(&mut command)?;
             let endpoint = command
@@ -1068,9 +1112,6 @@ fn main() {
                     invocation.program() == target && invocation.arguments() == literal,
                     "Wrong observed workload"
                 );
-                if record {
-                    return Ok(Some(invocation));
-                }
                 let output = smol::process::Command::new(invocation.program())
                     .args(invocation.arguments())
                     .env_clear()
@@ -1120,17 +1161,13 @@ fn main() {
         println!(
             "Real Cargo transitioned to the sealed Linux runner and preserved its selected runtime environment"
         );
-        Ok::<_, anyhow::Error>(None)
-    })?;
-    if let Some(captured) = captured {
-        profile_observed_cargo_runtime(&directory, captured, runner.into())?;
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 fn profile_observed_cargo_runtime(
     directory: &Path,
-    workload: native_task_helper::task_completion::ObservedTaskBuildInvocation,
+    runtime: terminal::LinuxCargoRuntimeInvocation,
     runner: std::path::PathBuf,
 ) -> Result<()> {
     use gpui::AppContext as _;
@@ -1163,6 +1200,28 @@ exec "$COPPER_FIXTURE_SAMPLY" "$@"
             let deadline = cx.background_executor().timer(Duration::from_secs(35));
             let run = async {
                 for headless in [false, true] {
+                    let (builder, observation) = cx.update(|cx| {
+                        cx.set_global(HeadlessTerminal(headless));
+                        TerminalBuilder::new_with_native_cargo_runtime_task(
+                            task::SpawnInTerminal { label: "Observe the selected Cargo runtime".into(), ..Default::default() },
+                            None, runtime.clone(), 1, cx,
+                        )
+                    })?;
+                    let builder = builder.await?;
+                    let terminal = cx.update(|cx| cx.new(|cx| builder.subscribe(cx)));
+                    let ordinary = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                    let (observed, ordinary) = futures::future::join(observation.finish(), ordinary).await;
+                    let LinuxNativeTaskOutcome::Completed(status, Some(workload)) = observed? else {
+                        anyhow::bail!("Cargo Task did not yield a checked runtime");
+                    };
+                    ensure!(status.success() && ordinary == Some(status), "Cargo runtime observation disagreed with its Terminal exit");
+                    ensure!(
+                        workload.environment().get("COPPER_RUNTIME_FIXTURE").is_some_and(|value| value == "runtime sentinel")
+                            && workload.environment().get("LD_LIBRARY_PATH").is_some_and(|value| value.contains("fixture-loader")),
+                        "Cargo Task did not transfer the observed user and loader environment"
+                    );
+                    ensure!(!directory.join("profiled-runtime-workload").exists(), "Observing the Cargo Task ran the selected workload");
+
                     let report = NativeProfileTaskReservation::new()?;
                     let profile_path = report.profile_path();
                     let symbols_path = report.symbols_path();
@@ -1185,7 +1244,6 @@ exec "$COPPER_FIXTURE_SAMPLY" "$@"
                     )?;
                     let invocation = LinuxCargoProfileInvocation::new(command, workload.clone(), runner.clone())?;
                     let (builder, observation) = cx.update(|cx| {
-                        cx.set_global(HeadlessTerminal(headless));
                         TerminalBuilder::new_with_native_cargo_profile_task(
                             task::SpawnInTerminal { label: "Profile the observed Cargo runtime".into(), ..Default::default() },
                             None, invocation, report, 1, cx,
