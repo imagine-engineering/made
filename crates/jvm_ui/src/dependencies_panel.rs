@@ -11172,6 +11172,39 @@ mod tests {
                 .is_some_and(|(_, task)| task.original_task().label == "generate")
         }));
 
+        let mut parallel_prerequisites = prerequisites.clone();
+        for task in parallel_prerequisites
+            .as_array_mut()
+            .expect("saved Task list")
+        {
+            task["allow_concurrent_runs"] = true.into();
+        }
+        set_prerequisites(&parallel_prerequisites, cx);
+        events.lock().expect("Task events").clear();
+        let (reached, mut reached_terminal) = oneshot::channel();
+        let (release, wait) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((reached, wait));
+        run_with_prerequisites("generate", cx);
+        assert_eq!(
+            reached_terminal
+                .try_recv()
+                .expect("first parallel prerequisite preparing"),
+            Some(())
+        );
+        run_with_prerequisites("generate", cx);
+        assert_eq!(
+            prerequisite_commands(),
+            ["common", "first", "second", "primary"]
+        );
+        release.send(()).expect("release the first parallel launch");
+        cx.run_until_parked();
+        assert_eq!(
+            prerequisite_commands(),
+            [
+                "common", "first", "second", "primary", "common", "first", "second", "primary"
+            ]
+        );
+
         let languages = project.read_with(cx, |project, _| project.languages().clone());
         languages.add(Arc::new(Language::new(
             LanguageConfig {
