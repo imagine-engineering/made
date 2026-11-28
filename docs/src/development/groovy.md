@@ -544,8 +544,18 @@ succeed. After-run Tasks start only after the selected run succeeds.
 If a Task fails or you cancel it in the terminal, Groovy skips the rest of
 the sequence. Run hooks require a trusted project and its live Java provider.
 
-Complete arbitrary-argument handling, configured dependency lists, other
-activation hooks, and connected saved configuration runs remain open.
+For an explicit local **Reload Maven projects**, **Apply saved Maven
+selection**, **Import Gradle selection**, or **Reload all builds**, saved
+Tasks can also opt in with the `before-sync` or `after-sync` tag. The same
+ordering and failure rules apply. After-sync Tasks wait for the selected
+provider import phase to succeed. Cancel the active Task in its terminal,
+or use **Cancel selected import** during the provider phase. Automatic
+reload, dependency refresh, and **Synchronize metadata** leave sync Tasks
+idle.
+
+Complete arbitrary-argument handling, configured dependency lists, build,
+rebuild and debug activation hooks, and connected saved configuration runs
+remain open.
 Selected test results appear in the Tests view. Supported debugging uses
 the Debug panel.
 

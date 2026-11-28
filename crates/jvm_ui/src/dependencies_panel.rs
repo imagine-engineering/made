@@ -24,6 +24,7 @@ use project::{
         KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
+    lsp_store::LocalJvmBuildImport,
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
     task_store::{JvmTaskTrigger, select_jvm_trigger_tasks},
     trusted_worktrees::TrustedWorktrees,
@@ -116,14 +117,6 @@ pub enum BuildToolView {
     Dependencies,
     Gradle,
     Maven,
-}
-
-#[derive(Clone, Copy)]
-enum BuildImport {
-    SavedMaven,
-    GradleSelection,
-    ReloadMaven,
-    ReloadAll,
 }
 
 impl BuildToolView {
@@ -704,6 +697,7 @@ pub struct DependenciesPanel {
     graph_notice: Option<String>,
     build_phase_token: Option<project::jvm_project::ProviderRefreshToken>,
     build_phase_waiter: Option<gpui::Task<()>>,
+    build_sync_active: bool,
     build_phase_notice: Option<String>,
     remote_build_reimport_pending: bool,
     graph_search: Entity<Editor>,
@@ -3152,6 +3146,7 @@ impl DependenciesPanel {
                     graph_notice: None,
                     build_phase_token: None,
                     build_phase_waiter: None,
+                    build_sync_active: false,
                     build_phase_notice: None,
                     remote_build_reimport_pending: false,
                     graph_search,
@@ -4383,7 +4378,7 @@ impl DependenciesPanel {
         let module = self.selected_jdtls_module(cx);
         let worktree = module.map(|module| module.module_root.worktree_id);
         let local_import = !project.is_remote()
-            && self.build_phase_token.is_none()
+            && !self.build_controls_busy()
             && self.selected_build_worktree(cx).is_ok();
         let remote_import = project.is_remote()
             && !self.host_unavailable(cx)
@@ -5809,42 +5804,22 @@ impl DependenciesPanel {
         let worktree_id = target.worktree_id;
         let store = project.lsp_store();
         let activation = JvmTaskTrigger::BeforeRun;
-        let tasks = project
-            .task_store()
-            .read(cx)
-            .task_inventory()
-            .context("The build Task inventory is unavailable; reopen the project")?
-            .read(cx);
-        let hook_steps = |trigger| -> anyhow::Result<Vec<_>> {
-            select_jvm_trigger_tasks(tasks.saved_task_templates(worktree_id), trigger)?
-                .into_iter()
-                .map(|(source, template)| {
-                    let hook = SavedConfiguration {
-                        worktree_id,
-                        source,
-                        label: template.label,
-                    };
-                    anyhow::ensure!(
-                        &hook != target,
-                        "A saved configuration cannot also be its own {} Task",
-                        trigger.label()
-                    );
-                    let prepared = Self::prepare_configuration_dispatch(project, &hook, cx)?;
-                    Ok(SavedConfigurationStep {
-                        target: hook,
-                        prepared,
-                        trigger: Some(trigger),
-                    })
-                })
-                .collect()
-        };
-        let mut steps = hook_steps(JvmTaskTrigger::BeforeRun)?;
+        let mut steps = Self::prepare_configuration_hooks(project, worktree_id, activation, cx)?;
+        let after =
+            Self::prepare_configuration_hooks(project, worktree_id, JvmTaskTrigger::AfterRun, cx)?;
+        for hook in steps.iter().chain(&after) {
+            anyhow::ensure!(
+                &hook.target != target,
+                "A saved configuration cannot also be its own {} Task",
+                hook.trigger.map_or("run", JvmTaskTrigger::label)
+            );
+        }
         steps.push(SavedConfigurationStep {
             target: target.clone(),
             prepared,
             trigger: None,
         });
-        steps.extend(hook_steps(JvmTaskTrigger::AfterRun)?);
+        steps.extend(after);
         let runs_hooks = steps.len() > 1;
         let project_id = self.project.entity_id();
         let panel = cx.weak_entity();
@@ -5872,21 +5847,9 @@ impl DependenciesPanel {
                             panel.configuration_notice = Some(format!("Running {phase} Task '{label}'"));
                             cx.notify();
                         }).log_err();
-                        let scheduled = workspace.update_in(cx, |workspace, window, cx| {
-                            Self::schedule_configuration_step(
-                                step, project_id, Some(activation), workspace, window, cx,
-                            )
-                        })?;
-                        let outcome = scheduled.await?;
-                        anyhow::ensure!(
-                            outcome == ScheduledTaskResult::Success,
-                            "{phase} Task '{label}' {}. Remaining Tasks were skipped.",
-                            match outcome {
-                                ScheduledTaskResult::Cancelled => "was cancelled",
-                                ScheduledTaskResult::Failure => "failed",
-                                _ => "could not start",
-                            }
-                        );
+                        Self::await_saved_configuration_step(
+                            &workspace, step, project_id, activation, cx,
+                        ).await?;
                     }
                     Ok::<_, anyhow::Error>(())
                 }.await;
@@ -5912,6 +5875,68 @@ impl DependenciesPanel {
             Ok(())
         })
         .context("The workspace is unavailable; reopen the project before running configurations")?
+    }
+
+    fn prepare_configuration_hooks(
+        project: &Project,
+        worktree_id: WorktreeId,
+        trigger: JvmTaskTrigger,
+        cx: &App,
+    ) -> anyhow::Result<Vec<SavedConfigurationStep>> {
+        let Some(inventory) = project.task_store().read(cx).task_inventory() else {
+            return Ok(Vec::new());
+        };
+        select_jvm_trigger_tasks(
+            inventory.read(cx).saved_task_templates(worktree_id),
+            trigger,
+        )?
+        .into_iter()
+        .map(|(source, template)| {
+            let target = SavedConfiguration {
+                worktree_id,
+                source,
+                label: template.label,
+            };
+            let prepared = Self::prepare_configuration_dispatch(project, &target, cx)?;
+            Ok(SavedConfigurationStep {
+                target,
+                prepared,
+                trigger: Some(trigger),
+            })
+        })
+        .collect()
+    }
+
+    async fn await_saved_configuration_step(
+        workspace: &WeakEntity<Workspace>,
+        step: SavedConfigurationStep,
+        project_id: gpui::EntityId,
+        activation: JvmTaskTrigger,
+        cx: &mut AsyncWindowContext,
+    ) -> anyhow::Result<()> {
+        let phase = step.trigger.map_or("run", JvmTaskTrigger::label);
+        let label = step.target.label.clone();
+        let scheduled = workspace.update_in(cx, |workspace, window, cx| {
+            Self::schedule_configuration_step(
+                step,
+                project_id,
+                Some(activation),
+                workspace,
+                window,
+                cx,
+            )
+        })?;
+        let outcome = scheduled.await?;
+        anyhow::ensure!(
+            outcome == ScheduledTaskResult::Success,
+            "{phase} Task '{label}' {}. Remaining Tasks were skipped.",
+            match outcome {
+                ScheduledTaskResult::Cancelled => "was cancelled",
+                ScheduledTaskResult::Failure => "failed",
+                _ => "could not start",
+            }
+        );
+        Ok(())
     }
 
     fn schedule_configuration_step(
@@ -6256,24 +6281,29 @@ impl DependenciesPanel {
         cx.notify();
     }
 
-    fn apply_saved_build_selection(&mut self, maven: bool, cx: &mut Context<Self>) {
+    fn apply_saved_build_selection(
+        &mut self,
+        maven: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if !maven && self.project.read(cx).is_remote() {
             self.reimport_remote_build_projects(JvmBuildTool::Gradle, cx);
             return;
         }
         let action = if maven {
-            BuildImport::SavedMaven
+            LocalJvmBuildImport::SavedMaven
         } else {
-            BuildImport::GradleSelection
+            LocalJvmBuildImport::GradleSelection
         };
-        self.run_build_import(action, cx);
+        self.run_build_import(action, window, cx);
     }
 
-    fn reload_maven_projects(&mut self, cx: &mut Context<Self>) {
+    fn reload_maven_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.project.read(cx).is_remote() {
             self.reimport_remote_build_projects(JvmBuildTool::Maven, cx);
         } else {
-            self.run_build_import(BuildImport::ReloadMaven, cx);
+            self.run_build_import(LocalJvmBuildImport::ReloadMaven, window, cx);
         }
     }
 
@@ -6311,9 +6341,16 @@ impl DependenciesPanel {
         cx.notify();
     }
 
-    fn run_build_import(&mut self, action: BuildImport, cx: &mut Context<Self>) {
-        if self.build_phase_token.is_some() {
-            self.build_phase_notice = Some("This panel is waiting for its selected import. Cancel that import or wait before applying another selection.".into());
+    fn run_build_import(
+        &mut self,
+        action: LocalJvmBuildImport,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.build_controls_busy() {
+            if !self.build_sync_active {
+                self.build_phase_notice = Some("This panel is waiting for its selected import. Cancel that import or wait before applying another selection.".into());
+            }
             cx.notify();
             return;
         }
@@ -6324,29 +6361,67 @@ impl DependenciesPanel {
                 return;
             }
         };
+        let result = (|| -> anyhow::Result<_> {
+            let project = self.project.read(cx);
+            anyhow::ensure!(
+                !project
+                    .lsp_store()
+                    .read(cx)
+                    .jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync),
+                "A saved sync sequence is already active for this project",
+            );
+            Ok((
+                Self::prepare_configuration_hooks(
+                    project,
+                    worktree_id,
+                    JvmTaskTrigger::BeforeSync,
+                    cx,
+                )?,
+                Self::prepare_configuration_hooks(
+                    project,
+                    worktree_id,
+                    JvmTaskTrigger::AfterSync,
+                    cx,
+                )?,
+            ))
+        })();
+        match result {
+            Ok((before, after)) if before.is_empty() && after.is_empty() => {
+                self.run_build_import_without_hooks(action, worktree_id, cx);
+            }
+            Ok((before, after)) => {
+                if let Err(error) =
+                    self.start_build_sync(action, worktree_id, before, after, window, cx)
+                {
+                    self.build_phase_notice = Some(error.to_string());
+                    cx.notify();
+                }
+            }
+            Err(error) => {
+                self.build_phase_notice = Some(error.to_string());
+                cx.notify();
+            }
+        }
+    }
+
+    fn build_controls_busy(&self) -> bool {
+        self.build_phase_token.is_some() || self.build_sync_active
+    }
+
+    fn run_build_import_without_hooks(
+        &mut self,
+        action: LocalJvmBuildImport,
+        worktree_id: WorktreeId,
+        cx: &mut Context<Self>,
+    ) {
         let result = self.project.read(cx).lsp_store().update(cx, |store, cx| {
-            let waiter = match action {
-                BuildImport::ReloadMaven => store.reload_local_maven_projects(worktree_id, cx)?,
-                BuildImport::SavedMaven => {
-                    store.apply_saved_local_maven_selection(worktree_id, cx)?
-                }
-                BuildImport::GradleSelection => {
-                    store.import_selected_local_gradle_project(worktree_id, cx)?
-                }
-                BuildImport::ReloadAll => store.reload_local_jvm_builds(worktree_id, cx)?,
-            };
-            let token = store.jdtls_project_import_token(worktree_id);
-            anyhow::Ok((token, waiter))
+            let waiter = store.import_local_jvm_build(worktree_id, action, cx)?;
+            anyhow::Ok((store.jdtls_project_import_token(worktree_id), waiter))
         });
         match result {
             Ok((Some(token), waiter)) => {
                 self.build_phase_token = Some(token);
-                self.build_phase_notice = Some(match action {
-                    BuildImport::ReloadMaven => "Reloading the effective Maven roots.",
-                    BuildImport::SavedMaven => "Applying saved Maven roots and exclusions; full synchronization remains unverified.",
-                    BuildImport::GradleSelection => "Importing the effective Gradle selection; full synchronization remains unverified.",
-                    BuildImport::ReloadAll => "Reloading the effective Maven and Gradle roots in this project folder.",
-                }.into());
+                self.build_phase_notice = Some(Self::build_import_started_notice(action).into());
                 self.build_phase_waiter = Some(cx.spawn(async move |panel, cx| {
                     let result = waiter.await;
                     if let Err(error) = panel.update(cx, |panel, cx| {
@@ -6370,6 +6445,147 @@ impl DependenciesPanel {
         self.rebuild(cx);
     }
 
+    fn build_import_started_notice(action: LocalJvmBuildImport) -> &'static str {
+        match action {
+            LocalJvmBuildImport::ReloadMaven => "Reloading the effective Maven roots.",
+            LocalJvmBuildImport::SavedMaven => {
+                "Applying saved Maven roots and exclusions; full synchronization remains unverified."
+            }
+            LocalJvmBuildImport::GradleSelection => {
+                "Importing the effective Gradle selection; full synchronization remains unverified."
+            }
+            LocalJvmBuildImport::ReloadAll => {
+                "Reloading the effective Maven and Gradle roots in this project folder."
+            }
+        }
+    }
+
+    fn start_build_sync(
+        &mut self,
+        action: LocalJvmBuildImport,
+        worktree_id: WorktreeId,
+        before: Vec<SavedConfigurationStep>,
+        after: Vec<SavedConfigurationStep>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let first = before
+            .first()
+            .or_else(|| after.first())
+            .context("No saved sync Tasks")?;
+        let worktree_entity = first.prepared.worktree;
+        let root = first.prepared.root.clone();
+        let store = self.project.read(cx).lsp_store();
+        let activation = JvmTaskTrigger::BeforeSync;
+        let project_id = self.project.entity_id();
+        let panel = cx.weak_entity();
+        let started = self.with_workspace_window(window, cx, |workspace, window, cx| -> anyhow::Result<bool> {
+            anyhow::ensure!(workspace.project().entity_id() == project_id, "The build project changed; select it again");
+            if !store.update(cx, |store, cx| store.check_local_jvm_build_import(worktree_id, action, cx))? {
+                return Ok(false);
+            }
+            store.update(cx, |store, cx| store.arm_jvm_trigger(worktree_id, activation, cx))?;
+            let workspace = cx.weak_entity();
+            let store = store.downgrade();
+            window.spawn(cx, async move |cx| {
+                let mut result = async {
+                    Self::run_sync_hook_steps(&panel, &workspace, before, project_id, activation, cx).await?;
+                    anyhow::ensure!(
+                        workspace.read_with(cx, |workspace, _| workspace.project().entity_id())? == project_id,
+                        "The build project changed before sync; select it again"
+                    );
+                    let (token, waiter) = panel.update(cx, |panel, cx| {
+                        let project = panel.project.read(cx);
+                        let worktree = project.worktree_for_id(worktree_id, cx)
+                            .context("The build project folder closed; reopen it before syncing")?;
+                        anyhow::ensure!(
+                            worktree.entity_id() == worktree_entity && worktree.read(cx).abs_path() == root,
+                            "The build project folder changed; select it again"
+                        );
+                        let (token, waiter) = store.update(cx, |store, cx| {
+                            anyhow::ensure!(
+                                store.jvm_trigger_provider_is_current(worktree_id, activation),
+                                "The Java provider changed before sync; refresh and retry"
+                            );
+                            let waiter = store.import_local_jvm_build(worktree_id, action, cx)?;
+                            let token = store.jdtls_project_import_token(worktree_id)
+                                .context("No build roots remain to sync")?;
+                            anyhow::Ok((token, waiter))
+                        })??;
+                        panel.build_phase_token = Some(token);
+                        panel.build_phase_notice = Some(Self::build_import_started_notice(action).into());
+                        panel.rebuild(cx);
+                        anyhow::Ok((token, waiter))
+                    })??;
+                    let import_result = waiter.await;
+                    let cancelled = panel.update(cx, |panel, cx| {
+                        let cancelled = panel.build_phase_token != Some(token);
+                        panel.build_phase_token = None;
+                        cx.notify();
+                        cancelled
+                    })?;
+                    anyhow::ensure!(!cancelled, "Selected import cancelled. Remaining sync Tasks were skipped.");
+                    import_result.context("Selected build import did not complete. Review build selection and Language Servers before retrying")?;
+                    Self::run_sync_hook_steps(&panel, &workspace, after, project_id, activation, cx).await?;
+                    Ok::<_, anyhow::Error>(())
+                }.await;
+                if result.is_ok() {
+                    result = store.update(cx, |store, cx| {
+                        anyhow::ensure!(
+                            store.complete_jvm_trigger(worktree_id, activation, cx),
+                            "The project or Java provider changed during the saved sync sequence"
+                        );
+                        Ok(())
+                    }).and_then(|completed| completed);
+                } else {
+                    store.update(cx, |store, _| store.cancel_jvm_trigger(worktree_id, activation)).log_err();
+                }
+                panel.update(cx, |panel, cx| {
+                    panel.build_sync_active = false;
+                    panel.build_phase_token = None;
+                    panel.build_phase_notice = Some(match result {
+                        Ok(()) => "Selected build import and sync hooks completed. Refresh for current provider data.".into(),
+                        Err(error) => error.to_string(),
+                    });
+                    panel.rebuild(cx);
+                }).log_err();
+            }).detach();
+            Ok(true)
+        })??;
+        if started {
+            self.build_sync_active = true;
+            self.build_phase_notice = Some("Preparing saved sync Tasks.".into());
+        } else {
+            self.build_phase_notice = Some("No build roots are selected for import.".into());
+        }
+        self.rebuild(cx);
+        Ok(())
+    }
+
+    async fn run_sync_hook_steps(
+        panel: &WeakEntity<Self>,
+        workspace: &WeakEntity<Workspace>,
+        steps: Vec<SavedConfigurationStep>,
+        project_id: gpui::EntityId,
+        activation: JvmTaskTrigger,
+        cx: &mut AsyncWindowContext,
+    ) -> anyhow::Result<()> {
+        for step in steps {
+            let phase = step
+                .trigger
+                .context("Missing saved sync Task activation")?
+                .label();
+            panel.update(cx, |panel, cx| {
+                panel.build_phase_notice =
+                    Some(format!("Running {phase} Task '{}'", step.target.label));
+                cx.notify();
+            })?;
+            Self::await_saved_configuration_step(workspace, step, project_id, activation, cx)
+                .await?;
+        }
+        Ok(())
+    }
+
     fn cancel_selected_import(&mut self, cx: &mut Context<Self>) {
         let Some(token) = self.build_phase_token else {
             return;
@@ -6379,8 +6595,10 @@ impl DependenciesPanel {
         });
         match result {
             Ok(cancelled) => {
-                self.build_phase_token = None;
-                drop(self.build_phase_waiter.take());
+                if cancelled || !self.build_sync_active {
+                    self.build_phase_token = None;
+                    drop(self.build_phase_waiter.take());
+                }
                 self.build_phase_notice = Some(if cancelled { "Selected import cancelled. Refresh provider data and review build selection before retrying." } else { "The selected import already completed or changed; no other phase was cancelled. Refresh before retrying." }.into());
             }
             Err(_) => self.show_build_phase_error(cx),
@@ -6410,7 +6628,7 @@ impl DependenciesPanel {
     }
 
     fn unlink_selected_gradle_project(&mut self, cx: &mut Context<Self>) {
-        if self.build_phase_token.is_some() {
+        if self.build_controls_busy() {
             self.build_phase_notice = Some(
                 "This panel is waiting for its selected import. Cancel that import or wait before unlinking a project."
                     .into(),
@@ -9611,7 +9829,7 @@ impl DependenciesPanel {
         let recent_configuration = self.recent_configuration().cloned();
         let queue_count = self.ordered_operations.len();
         let reload_all = view == BuildToolView::Dependencies
-            && self.build_phase_token.is_none()
+            && !self.build_controls_busy()
             && self.selected_build_worktree(cx).is_ok();
         ui::PopoverMenu::new("groovy-panel-menu-popover")
             .anchor(gpui::Anchor::TopRight)
@@ -9788,7 +10006,7 @@ impl DependenciesPanel {
                     .read(cx)
                     .can_synchronize_remote_gradle_metadata(self.selected_build_worktree_id(cx), cx)
             } else {
-                self.build_phase_token.is_none() && self.selected_build_worktree(cx).is_ok()
+                !self.build_controls_busy() && self.selected_build_worktree(cx).is_ok()
             };
         let notices: Vec<(&str, String)> = [
             ("Dependency data", status_message(state)),
@@ -10006,12 +10224,12 @@ impl Render for DependenciesPanel {
                     panel.run_ordered_configuration(event, window, cx);
                 },
             ))
-            .on_action(cx.listener(|panel, _: &ReloadAllBuilds, _, cx| panel.run_build_import(BuildImport::ReloadAll, cx)))
-            .on_action(cx.listener(|panel, _: &ReloadMavenProjects, _, cx| panel.reload_maven_projects(cx)))
+            .on_action(cx.listener(|panel, _: &ReloadAllBuilds, window, cx| panel.run_build_import(LocalJvmBuildImport::ReloadAll, window, cx)))
+            .on_action(cx.listener(|panel, _: &ReloadMavenProjects, window, cx| panel.reload_maven_projects(window, cx)))
             .on_action(cx.listener(|panel, _: &SynchronizeGradleMetadata, _, cx| panel.synchronize_gradle_metadata(cx)))
             .on_action(cx.listener(|panel, _: &ConfigureSelectedOperation, window, cx| panel.configure_selected_operation(window, cx)))
-            .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, _, cx| panel.apply_saved_build_selection(true, cx)))
-            .on_action(cx.listener(|panel, _: &ImportGradleSelection, _, cx| panel.apply_saved_build_selection(false, cx)))
+            .on_action(cx.listener(|panel, _: &ApplySavedMavenSelection, window, cx| panel.apply_saved_build_selection(true, window, cx)))
+            .on_action(cx.listener(|panel, _: &ImportGradleSelection, window, cx| panel.apply_saved_build_selection(false, window, cx)))
             .on_action(cx.listener(|panel, _: &UnlinkSelectedGradleProject, _, cx| panel.unlink_selected_gradle_project(cx)))
             .on_action(cx.listener(|panel, _: &CancelSelectedImport, _, cx| panel.cancel_selected_import(cx)))
             .on_action(cx.listener(|panel, _: &InspectGraphNeighbours, _, cx| panel.inspect_selected_graph(GraphInspectionMode::Neighbours, cx)))
@@ -10486,8 +10704,8 @@ mod tests {
             panel.refresh(cx);
         });
         for maven in [true, false] {
-            panel.update(cx, |panel, cx| {
-                panel.apply_saved_build_selection(maven, cx);
+            panel.update_in(cx, |panel, window, cx| {
+                panel.apply_saved_build_selection(maven, window, cx);
                 assert!(panel.build_phase_token.is_none() && panel.build_phase_waiter.is_none());
                 assert!(
                     panel
@@ -15400,10 +15618,10 @@ mod tests {
                 "Connect directly to the Groovy project host to work with Gradle projects",
             ),
         ] {
-            panel.update(cx, |panel, cx| {
+            panel.update_in(cx, |panel, window, cx| {
                 assert!(panel.selected_build_worktree(cx).is_err());
                 panel.build_phase_notice = None;
-                panel.apply_saved_build_selection(maven, cx);
+                panel.apply_saved_build_selection(maven, window, cx);
                 assert!(panel.build_phase_token.is_none() && panel.build_phase_waiter.is_none());
                 assert!(!panel.remote_build_reimport_pending);
                 assert!(
@@ -20365,7 +20583,9 @@ mod tests {
             cx.run_until_parked();
         };
         refresh(cx);
-        panel.update(cx, |panel, cx| panel.apply_saved_build_selection(maven, cx));
+        panel.update_in(cx, |panel, window, cx| {
+            panel.apply_saved_build_selection(maven, window, cx)
+        });
         cx.run_until_parked();
         refresh(cx);
         panel.read_with(cx, |panel, _| {
@@ -20412,7 +20632,9 @@ mod tests {
             .expect("replacement survives late UI cancellation");
         refresh(cx);
         failure.store(true, Ordering::SeqCst);
-        panel.update(cx, |panel, cx| panel.apply_saved_build_selection(maven, cx));
+        panel.update_in(cx, |panel, window, cx| {
+            panel.apply_saved_build_selection(maven, window, cx)
+        });
         cx.run_until_parked();
         refresh(cx);
         panel.read_with(cx, |panel, _| {
@@ -20425,7 +20647,9 @@ mod tests {
             );
         });
         failure.store(false, Ordering::SeqCst);
-        panel.update(cx, |panel, cx| panel.apply_saved_build_selection(maven, cx));
+        panel.update_in(cx, |panel, window, cx| {
+            panel.apply_saved_build_selection(maven, window, cx)
+        });
         cx.run_until_parked();
         refresh(cx);
         panel.read_with(cx, |panel, _| {
@@ -20436,6 +20660,148 @@ mod tests {
                     .is_some_and(|notice| notice.contains("completed"))
             )
         });
+        let inventory = project.read_with(cx, |project, cx| {
+            project
+                .task_store()
+                .read(cx)
+                .task_inventory()
+                .cloned()
+                .expect("saved Task inventory")
+        });
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project::task_store::TaskSettingsLocation::Worktree(
+                        settings::SettingsLocation {
+                            worktree_id,
+                            path: RelPath::from_unix_str(".zed").expect("saved Task folder"),
+                        },
+                    ),
+                    Some(
+                        r#"[
+                    {"label":"prepare-sync","command":"prepare-sync","tags":["before-sync"]},
+                    {"label":"finish-sync","command":"finish-sync","tags":["after-sync"]},
+                    {"label":"unrelated","command":"unrelated","tags":["before-build"]}
+                ]"#,
+                    ),
+                )
+                .expect("sync Task definitions");
+        });
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (before_ready, ready) = oneshot::channel();
+        let (release_before, before_released) = oneshot::channel();
+        let launch_gate = Arc::new(std::sync::Mutex::new(Some((before_ready, before_released))));
+        let outcomes = Arc::new(std::sync::Mutex::new(VecDeque::new()));
+        workspace.update(cx, |workspace, _| {
+            workspace.set_terminal_provider(SavedConfigurationTerminal {
+                terminal: OperationTerminal(events.clone()),
+                launch_gate: launch_gate.clone(),
+                outcomes: outcomes.clone(),
+            });
+        });
+        let invoke_sync = |cx: &mut gpui::VisualTestContext| {
+            panel.update_in(cx, |panel, window, cx| {
+                if maven {
+                    panel.reload_maven_projects(window, cx);
+                } else {
+                    panel.apply_saved_build_selection(false, window, cx);
+                }
+            });
+        };
+        let task_labels = || {
+            events
+                .lock()
+                .expect("terminal events")
+                .iter()
+                .map(|event| event.full_label.clone())
+                .collect::<Vec<_>>()
+        };
+        invoke_sync(cx);
+        ready
+            .await
+            .expect("before-sync Task parked before terminal spawn");
+        assert!(lsp_store.read_with(cx, |store, _| {
+            store.jdtls_project_import_token(worktree_id).is_none()
+        }));
+        assert!(task_labels().is_empty());
+        invoke_sync(cx);
+        release_before.send(()).expect("release before-sync Task");
+        cx.run_until_parked();
+        refresh(cx);
+        assert_eq!(task_labels(), ["prepare-sync", "finish-sync"]);
+        panel.read_with(cx, |panel, _| {
+            assert!(!panel.build_controls_busy());
+            assert!(
+                panel
+                    .build_phase_notice
+                    .as_deref()
+                    .is_some_and(|notice| notice.contains("sync hooks completed"))
+            );
+        });
+        events.lock().expect("terminal events").clear();
+        lsp_store
+            .update(cx, |store, cx| {
+                if maven {
+                    store.reload_local_maven_projects(worktree_id, cx)
+                } else {
+                    store.import_selected_local_gradle_project(worktree_id, cx)
+                }
+            })
+            .expect("provider-only import")
+            .await
+            .expect("reload completed");
+        refresh(cx);
+        assert!(
+            task_labels().is_empty(),
+            "provider-only reload cannot run saved hooks"
+        );
+
+        outcomes.lock().expect("terminal outcomes").push_back(None);
+        invoke_sync(cx);
+        cx.run_until_parked();
+        assert_eq!(task_labels(), ["prepare-sync"]);
+        panel.read_with(cx, |panel, _| {
+            assert!(!panel.build_controls_busy());
+            assert!(panel.build_phase_notice.as_deref().is_some_and(|notice| {
+                notice.contains("before-sync") && notice.contains("cancelled")
+            }));
+        });
+
+        events.lock().expect("terminal events").clear();
+        failure.store(true, Ordering::SeqCst);
+        invoke_sync(cx);
+        cx.run_until_parked();
+        refresh(cx);
+        assert_eq!(
+            task_labels(),
+            ["prepare-sync"],
+            "provider failure skips the after-sync Task"
+        );
+        panel.read_with(cx, |panel, _| {
+            assert!(!panel.build_controls_busy());
+            let notice = panel
+                .build_phase_notice
+                .as_deref()
+                .expect("import failure notice");
+            assert!(notice.contains("did not complete") && !notice.contains("secret"));
+        });
+        failure.store(false, Ordering::SeqCst);
+        events.lock().expect("terminal events").clear();
+        invoke_sync(cx);
+        cx.run_until_parked();
+        refresh(cx);
+        assert_eq!(task_labels(), ["prepare-sync", "finish-sync"]);
+        assert!(!lsp_store.read_with(cx, |store, _| {
+            store.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync)
+        }));
+        events.lock().expect("terminal events").clear();
+        let (late_ready, ready) = oneshot::channel();
+        let (release_late, late_released) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((late_ready, late_released));
+        invoke_sync(cx);
+        ready
+            .await
+            .expect("before-sync Task awaiting final trust check");
         let worktrees = project.read_with(cx, |project, _| project.worktree_store());
         cx.update(|_, cx| TrustedWorktrees::try_get_global(cx).expect("trust owner"))
             .update(cx, |trusted, cx| {
@@ -20446,8 +20812,32 @@ mod tests {
                 )
             });
         cx.run_until_parked();
-        panel.update(cx, |panel, cx| {
-            panel.apply_saved_build_selection(maven, cx);
+        release_late
+            .send(())
+            .expect("release Task after trust changes");
+        cx.run_until_parked();
+        assert!(
+            task_labels().is_empty(),
+            "revoked trust prevents terminal dispatch"
+        );
+        assert!(!lsp_store.read_with(cx, |store, _| {
+            store.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync)
+        }));
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project::task_store::TaskSettingsLocation::Worktree(
+                        settings::SettingsLocation {
+                            worktree_id,
+                            path: RelPath::from_unix_str(".zed").expect("saved Task folder"),
+                        },
+                    ),
+                    None,
+                )
+                .expect("remove sync Task definitions");
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.apply_saved_build_selection(maven, window, cx);
             assert!(panel.build_phase_token.is_none());
             assert!(
                 panel

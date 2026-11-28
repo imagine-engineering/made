@@ -17926,16 +17926,7 @@ impl LspStore {
         worktree_id: WorktreeId,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
-        let intent = self.effective_saved_maven_selection(worktree_id, cx)?;
-        self.execute_selected_local_jdtls_phase(
-            worktree_id,
-            SelectedJdtlsPhaseTarget::SavedMaven {
-                intent: Some(intent),
-                reload_defaults: false,
-                remote_scope: None,
-            },
-            cx,
-        )
+        self.import_local_jvm_build(worktree_id, LocalJvmBuildImport::SavedMaven, cx)
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -17944,16 +17935,7 @@ impl LspStore {
         worktree_id: WorktreeId,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
-        let intent = self.effective_maven_selection(worktree_id, cx)?;
-        self.execute_selected_local_jdtls_phase(
-            worktree_id,
-            SelectedJdtlsPhaseTarget::SavedMaven {
-                intent,
-                reload_defaults: true,
-                remote_scope: None,
-            },
-            cx,
-        )
+        self.import_local_jvm_build(worktree_id, LocalJvmBuildImport::ReloadMaven, cx)
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -17963,6 +17945,65 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
         self.reload_jvm_builds(worktree_id, false, cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn import_local_jvm_build(
+        &mut self,
+        worktree_id: WorktreeId,
+        action: LocalJvmBuildImport,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        if matches!(action, LocalJvmBuildImport::ReloadAll) {
+            return self.reload_local_jvm_builds(worktree_id, cx);
+        }
+        let target = self.local_jvm_build_import_target(worktree_id, action, cx)?;
+        self.execute_selected_local_jdtls_phase(worktree_id, target, cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn check_local_jvm_build_import(
+        &self,
+        worktree_id: WorktreeId,
+        action: LocalJvmBuildImport,
+        cx: &mut Context<Self>,
+    ) -> Result<bool> {
+        ensure!(
+            self.jdtls_projects
+                .get(&worktree_id)
+                .is_none_or(|state| state.import_operation().is_none()),
+            "Java project import is in progress; wait or cancel before importing"
+        );
+        let target = self.local_jvm_build_import_target(worktree_id, action, cx)?;
+        let (_, _, _, prepared) =
+            self.selected_jdtls_phase_provider(worktree_id, &target, None, cx)?;
+        Ok(!prepared.is_empty_import())
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn local_jvm_build_import_target(
+        &self,
+        worktree_id: WorktreeId,
+        action: LocalJvmBuildImport,
+        cx: &App,
+    ) -> Result<SelectedJdtlsPhaseTarget> {
+        Ok(match action {
+            LocalJvmBuildImport::SavedMaven => SelectedJdtlsPhaseTarget::SavedMaven {
+                intent: Some(self.effective_saved_maven_selection(worktree_id, cx)?),
+                reload_defaults: false,
+                remote_scope: None,
+            },
+            LocalJvmBuildImport::ReloadMaven => SelectedJdtlsPhaseTarget::SavedMaven {
+                intent: self.effective_maven_selection(worktree_id, cx)?,
+                reload_defaults: true,
+                remote_scope: None,
+            },
+            LocalJvmBuildImport::GradleSelection => SelectedJdtlsPhaseTarget::GradleModules {
+                intent: self.effective_saved_gradle_selection(worktree_id, cx)?,
+                remote_scope: None,
+            },
+            LocalJvmBuildImport::ReloadAll => self.jvm_reload_target(worktree_id, false, cx)?,
+        })
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -18162,6 +18203,17 @@ impl LspStore {
         after_build_change: bool,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
+        let target = self.jvm_reload_target(worktree_id, after_build_change, cx)?;
+        self.execute_selected_local_jdtls_phase(worktree_id, target, cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn jvm_reload_target(
+        &self,
+        worktree_id: WorktreeId,
+        after_build_change: bool,
+        cx: &App,
+    ) -> Result<SelectedJdtlsPhaseTarget> {
         let worktree = self
             .worktree_store
             .read(cx)
@@ -18178,27 +18230,22 @@ impl LspStore {
             has_maven || has_gradle,
             "No Maven or Gradle build inputs are available for reload"
         );
-        let task = self.execute_selected_local_jdtls_phase(
-            worktree_id,
-            SelectedJdtlsPhaseTarget::ReloadBuilds {
-                after_build_change,
-                maven: has_maven.then(|| {
-                    Box::new(SelectedJdtlsPhaseTarget::SavedMaven {
-                        intent: maven,
-                        reload_defaults: true,
-                        remote_scope: None,
-                    })
-                }),
-                gradle: has_gradle.then(|| {
-                    Box::new(SelectedJdtlsPhaseTarget::GradleModules {
-                        intent: gradle,
-                        remote_scope: None,
-                    })
-                }),
-            },
-            cx,
-        )?;
-        Ok(task)
+        Ok(SelectedJdtlsPhaseTarget::ReloadBuilds {
+            after_build_change,
+            maven: has_maven.then(|| {
+                Box::new(SelectedJdtlsPhaseTarget::SavedMaven {
+                    intent: maven,
+                    reload_defaults: true,
+                    remote_scope: None,
+                })
+            }),
+            gradle: has_gradle.then(|| {
+                Box::new(SelectedJdtlsPhaseTarget::GradleModules {
+                    intent: gradle,
+                    remote_scope: None,
+                })
+            }),
+        })
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -18565,15 +18612,7 @@ impl LspStore {
         worktree_id: WorktreeId,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<()>>> {
-        let intent = self.effective_saved_gradle_selection(worktree_id, cx)?;
-        self.execute_selected_local_jdtls_phase(
-            worktree_id,
-            SelectedJdtlsPhaseTarget::GradleModules {
-                intent,
-                remote_scope: None,
-            },
-            cx,
-        )
+        self.import_local_jvm_build(worktree_id, LocalJvmBuildImport::GradleSelection, cx)
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -23984,6 +24023,15 @@ pub struct LanguageServerProgress {
     pub percentage: Option<usize>,
     #[serde(skip_serializing)]
     pub last_update_at: Instant,
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Copy)]
+pub enum LocalJvmBuildImport {
+    SavedMaven,
+    GradleSelection,
+    ReloadMaven,
+    ReloadAll,
 }
 
 #[cfg(feature = "jvm-tools")]
