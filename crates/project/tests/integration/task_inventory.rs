@@ -220,21 +220,33 @@ async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppCo
         .await;
     let builds = tasks
         .into_iter()
-        .filter(|(_, task)| task.label.starts_with("Build "))
+        .filter(|(source, _)| source.groovy_jvm_build_worktree() == Some(jvm_worktree))
         .collect::<Vec<_>>();
-    assert_eq!(builds.len(), 2);
-    assert!(builds.iter().any(|(_, task)| {
-        task.label == "Build Maven project"
-            && task.command == maven_command
-            && task.args == ["package"]
-            && task.cwd.as_deref() == Some("$ZED_WORKTREE_ROOT")
-    }));
-    assert!(builds.iter().any(|(_, task)| {
-        task.label == "Build Gradle project"
-            && task.command == gradle_command
-            && task.args == ["build"]
-            && task.cwd.as_deref() == Some("$ZED_WORKTREE_ROOT")
-    }));
+    assert_eq!(builds.len(), 4);
+    for (label, command, args) in [
+        ("Build Maven project", maven_command, &["package"][..]),
+        ("Build Gradle project", gradle_command, &["build"][..]),
+        (
+            "Rebuild Maven project",
+            maven_command,
+            &["clean", "package"][..],
+        ),
+        (
+            "Rebuild Gradle project",
+            gradle_command,
+            &["clean", "build"][..],
+        ),
+    ] {
+        assert!(
+            builds.iter().any(|(_, task)| {
+                task.label == label
+                    && task.command == command
+                    && task.args == args
+                    && task.cwd.as_deref() == Some("$ZED_WORKTREE_ROOT")
+            }),
+            "missing generated Task {label}"
+        );
+    }
     let mut task_variables = TaskVariables::default();
     task_variables.insert(VariableName::WorktreeRoot, path!("/jvm").to_string());
     let task_context = TaskContext {
@@ -258,7 +270,7 @@ async fn groovy_build_tasks_require_detected_project_wrappers(cx: &mut TestAppCo
     assert!(
         !unwrapped_tasks
             .iter()
-            .any(|(_, task)| task.label.starts_with("Build "))
+            .any(|(source, _)| source.groovy_jvm_build_worktree() == Some(unwrapped_worktree))
     );
 
     let ignored_worktree = worktrees["ignored-wrapper"];

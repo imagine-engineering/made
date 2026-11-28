@@ -55,6 +55,13 @@ pub enum JvmBuildTool {
     Gradle,
 }
 
+#[cfg(feature = "jvm-tools")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JvmProjectBuildAction {
+    Build,
+    Rebuild,
+}
+
 impl JvmBuildTool {
     pub fn name(self) -> &'static str {
         match self {
@@ -1443,6 +1450,18 @@ impl Inventory {
         worktree_id: WorktreeId,
         cx: &App,
     ) -> Vec<(TaskSourceKind, TaskTemplate)> {
+        self.jvm_build_templates(worktree_id, cx)
+            .into_iter()
+            .map(|(_, template)| (TaskSourceKind::groovy_jvm_build(worktree_id), template))
+            .collect()
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn jvm_build_templates(
+        &self,
+        worktree_id: WorktreeId,
+        cx: &App,
+    ) -> Vec<(JvmProjectBuildAction, TaskTemplate)> {
         let Some(worktree_store) = self.worktree_store.as_ref().and_then(WeakEntity::upgrade)
         else {
             return Vec::new();
@@ -1452,25 +1471,41 @@ impl Inventory {
         };
         let worktree = worktree.read(cx);
         let path_style = worktree.path_style();
-        [
-            (JvmBuildTool::Maven, "Build Maven project", "package"),
-            (JvmBuildTool::Gradle, "Build Gradle project", "build"),
-        ]
-        .into_iter()
-        .filter(|(tool, _, _)| tool.wrapper_detected(worktree) == Some(true))
-        .map(|(tool, label, argument)| {
-            (
-                TaskSourceKind::groovy_jvm_build(worktree_id),
-                TaskTemplate {
-                    label: label.to_string(),
-                    command: tool.wrapper(path_style).1.to_string(),
-                    args: vec![argument.to_string()],
-                    cwd: Some("$ZED_WORKTREE_ROOT".to_string()),
-                    ..TaskTemplate::default()
-                },
-            )
-        })
-        .collect()
+        [JvmBuildTool::Maven, JvmBuildTool::Gradle]
+            .into_iter()
+            .filter(|tool| tool.wrapper_detected(worktree) == Some(true))
+            .flat_map(|tool| {
+                [JvmProjectBuildAction::Build, JvmProjectBuildAction::Rebuild]
+                    .into_iter()
+                    .filter(|action| *action == JvmProjectBuildAction::Build || worktree.is_local())
+                    .map(move |action| {
+                        let (label, args) = match (tool, action) {
+                            (JvmBuildTool::Maven, JvmProjectBuildAction::Build) => {
+                                ("Build Maven project", &["package"][..])
+                            }
+                            (JvmBuildTool::Gradle, JvmProjectBuildAction::Build) => {
+                                ("Build Gradle project", &["build"][..])
+                            }
+                            (JvmBuildTool::Maven, JvmProjectBuildAction::Rebuild) => {
+                                ("Rebuild Maven project", &["clean", "package"][..])
+                            }
+                            (JvmBuildTool::Gradle, JvmProjectBuildAction::Rebuild) => {
+                                ("Rebuild Gradle project", &["clean", "build"][..])
+                            }
+                        };
+                        (
+                            action,
+                            TaskTemplate {
+                                label: label.to_string(),
+                                command: tool.wrapper(path_style).1.to_string(),
+                                args: args.iter().map(|argument| argument.to_string()).collect(),
+                                cwd: Some("$ZED_WORKTREE_ROOT".to_string()),
+                                ..TaskTemplate::default()
+                            },
+                        )
+                    })
+            })
+            .collect()
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -1480,22 +1515,29 @@ impl Inventory {
         resolved_task: &ResolvedTask,
         cx: &App,
     ) -> bool {
-        let Some(worktree_store) = self.worktree_store.as_ref().and_then(WeakEntity::upgrade)
-        else {
-            return false;
-        };
-        let Some(worktree) = worktree_store.read(cx).worktree_for_id(worktree_id, cx) else {
-            return false;
-        };
+        self.groovy_jvm_build_action(worktree_id, resolved_task, cx)
+            .is_some()
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn groovy_jvm_build_action(
+        &self,
+        worktree_id: WorktreeId,
+        resolved_task: &ResolvedTask,
+        cx: &App,
+    ) -> Option<JvmProjectBuildAction> {
+        let worktree_store = self.worktree_store.as_ref()?.upgrade()?;
+        let worktree = worktree_store.read(cx).worktree_for_id(worktree_id, cx)?;
         let worktree_root = worktree.read(cx).abs_path();
-        self.jvm_build_tasks(worktree_id, cx)
-            .iter()
-            .any(|(_, task)| {
-                task == resolved_task.original_task()
+        self.jvm_build_templates(worktree_id, cx)
+            .into_iter()
+            .find_map(|(action, task)| {
+                (task == *resolved_task.original_task()
                     && resolved_task.resolved.command.as_deref() == Some(task.command.as_str())
                     && resolved_task.resolved.args == task.args
                     && resolved_task.resolved.cwd.as_deref() == Some(worktree_root.as_ref())
-                    && resolved_task.resolved.shell == task.shell
+                    && resolved_task.resolved.shell == task.shell)
+                    .then_some(action)
             })
     }
 

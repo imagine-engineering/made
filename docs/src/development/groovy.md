@@ -553,9 +553,18 @@ or use **Cancel selected import** during the provider phase. Automatic
 reload, dependency refresh, and **Synchronize metadata** leave sync Tasks
 idle.
 
-Complete arbitrary-argument handling, configured dependency lists, build,
-rebuild and debug activation hooks, and connected saved configuration runs
-remain open.
+The Tasks picker offers **Build Maven project** and **Build Gradle project**
+when the worktree contains the corresponding wrapper and build files. For
+local worktrees, **Rebuild Maven project** runs the wrapper with
+`clean package` and **Rebuild Gradle project** runs it with `clean build`.
+Saved Tasks can opt in to these explicit local actions with `before-build`
+and `after-build`, or `before-rebuild` and `after-rebuild`. Selecting Rebuild
+uses the rebuild tags. After Tasks wait for the wrapper to exit successfully,
+and the hook sequence requires project trust and its live Java provider.
+
+Complete arbitrary-argument handling, configured dependency lists, debug
+activation hooks, and connected Build and Rebuild hooks and saved
+configuration runs remain open.
 Selected test results appear in the Tests view. Supported debugging uses
 the Debug panel.
 

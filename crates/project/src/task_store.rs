@@ -483,6 +483,133 @@ pub fn select_jvm_trigger_tasks(
     Ok(sequence)
 }
 
+#[cfg(feature = "jvm-tools")]
+pub struct SavedJvmTask {
+    pub worktree_id: WorktreeId,
+    pub source: TaskSourceKind,
+    pub label: String,
+}
+
+#[cfg(feature = "jvm-tools")]
+#[derive(PartialEq, Eq)]
+pub struct PreparedSavedJvmTask {
+    pub worktree: gpui::EntityId,
+    pub root: Arc<Path>,
+    pub task: task::ResolvedTask,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl SavedJvmTask {
+    pub fn prepare(
+        &self,
+        project: &crate::Project,
+        cx: &App,
+    ) -> anyhow::Result<PreparedSavedJvmTask> {
+        let worktree_id = self.worktree_id;
+        anyhow::ensure!(
+            !project.is_remote()
+                && !project.is_disconnected(cx)
+                && project.remote_connection_state(cx).is_none(),
+            "The project host is unavailable; reconnect and refresh before running configurations"
+        );
+        let worktree_store = project.worktree_store();
+        let Some(trusted_worktrees) =
+            crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx)
+        else {
+            anyhow::bail!("Trust the project before running a named configuration");
+        };
+        anyhow::ensure!(
+            !trusted_worktrees
+                .read(cx)
+                .restricted_worktrees(&worktree_store, cx)
+                .into_iter()
+                .any(|(restricted_id, _)| restricted_id == worktree_id),
+            "Trust the project before running a named configuration"
+        );
+        let inventory = project
+            .task_store()
+            .read(cx)
+            .task_inventory()
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!("The build Task inventory is unavailable; reopen the project")
+            })?;
+        let worktree = project.worktree_for_id(worktree_id, cx).context(
+            "The saved configuration's project folder is unavailable; refresh the panel",
+        )?;
+        let worktree_entity = worktree.entity_id();
+        let worktree = worktree.read(cx);
+        anyhow::ensure!(
+            worktree.is_local() && worktree.is_visible(),
+            "The saved configuration's project folder is unavailable; refresh the panel"
+        );
+        let root = worktree.abs_path();
+        let mut context = TaskContext {
+            cwd: Some(root.to_path_buf()),
+            ..TaskContext::default()
+        };
+        context.task_variables.insert(
+            VariableName::WorktreeRoot,
+            root.to_string_lossy().into_owned(),
+        );
+
+        let mut matching = inventory
+            .read(cx)
+            .saved_task_templates(worktree_id)
+            .filter(|(source, template)| *source == self.source && template.label == self.label);
+        let (_, template) = matching
+            .next()
+            .with_context(|| format!("Named configuration '{}' is no longer saved", self.label))?;
+        anyhow::ensure!(
+            matching.next().is_none(),
+            "Named configuration '{}' is ambiguous in its saved task file; use a unique label",
+            self.label
+        );
+        let id_base = self.source.to_id_base();
+        let resolved = if template.literal_arguments {
+            template.resolve_task_with_literal_arguments(&id_base, &context)
+        } else {
+            template.resolve_task(&id_base, &context)
+        }
+        .with_context(|| format!(
+            "Named configuration '{}' did not resolve in the current project context; run it from the task list",
+            self.label
+        ))?;
+        Ok(PreparedSavedJvmTask {
+            worktree: worktree_entity,
+            root,
+            task: resolved,
+        })
+    }
+}
+
+#[cfg(feature = "jvm-tools")]
+pub fn prepare_jvm_hook_tasks(
+    project: &crate::Project,
+    worktree_id: WorktreeId,
+    trigger: JvmTaskTrigger,
+    cx: &App,
+) -> anyhow::Result<Vec<(SavedJvmTask, PreparedSavedJvmTask)>> {
+    let Some(inventory) = project.task_store().read(cx).task_inventory() else {
+        return Ok(Vec::new());
+    };
+    select_jvm_trigger_tasks(
+        inventory.read(cx).saved_task_templates(worktree_id),
+        trigger,
+    )?
+    .into_iter()
+    .map(|(source, template)| {
+        let target = SavedJvmTask {
+            worktree_id,
+            source,
+            label: template.label,
+        };
+        let prepared = target.prepare(project, cx)?;
+        Ok((target, prepared))
+    })
+    .collect()
+}
+
 fn local_task_context_for_location(
     worktree_store: Entity<WorktreeStore>,
     git_store: Entity<GitStore>,

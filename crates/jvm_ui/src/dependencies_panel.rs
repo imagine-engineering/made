@@ -26,10 +26,9 @@ use project::{
     },
     lsp_store::LocalJvmBuildImport,
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
-    task_store::{JvmTaskTrigger, select_jvm_trigger_tasks},
+    task_store::{JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_hook_tasks},
     trusted_worktrees::TrustedWorktrees,
 };
-use task::{TaskContext, VariableName};
 use ui::{Tooltip, prelude::*};
 use util::{ResultExt as _, rel_path::RelPath};
 use workspace::{
@@ -5678,83 +5677,8 @@ impl DependenciesPanel {
         project: &Project,
         target: &SavedConfiguration,
         cx: &App,
-    ) -> anyhow::Result<PreparedSavedConfiguration> {
-        let worktree_id = target.worktree_id;
-        anyhow::ensure!(
-            !project.is_remote()
-                && !project.is_disconnected(cx)
-                && project.remote_connection_state(cx).is_none(),
-            "The project host is unavailable; reconnect and refresh before running configurations"
-        );
-        let worktree_store = project.worktree_store();
-        let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
-            anyhow::bail!("Trust the project before running a named configuration");
-        };
-        anyhow::ensure!(
-            !trusted_worktrees
-                .read(cx)
-                .restricted_worktrees(&worktree_store, cx)
-                .into_iter()
-                .any(|(restricted_id, _)| restricted_id == worktree_id),
-            "Trust the project before running a named configuration"
-        );
-        let inventory = project
-            .task_store()
-            .read(cx)
-            .task_inventory()
-            .cloned()
-            .ok_or_else(|| {
-                anyhow::anyhow!("The build Task inventory is unavailable; reopen the project")
-            })?;
-        let worktree = project.worktree_for_id(worktree_id, cx).context(
-            "The saved configuration's project folder is unavailable; refresh the panel",
-        )?;
-        let worktree_entity = worktree.entity_id();
-        let worktree = worktree.read(cx);
-        anyhow::ensure!(
-            worktree.is_local() && worktree.is_visible(),
-            "The saved configuration's project folder is unavailable; refresh the panel"
-        );
-        let root = worktree.abs_path();
-        let mut context = TaskContext {
-            cwd: Some(root.to_path_buf()),
-            ..TaskContext::default()
-        };
-        context.task_variables.insert(
-            VariableName::WorktreeRoot,
-            root.to_string_lossy().into_owned(),
-        );
-
-        let mut matching =
-            inventory
-                .read(cx)
-                .saved_task_templates(worktree_id)
-                .filter(|(source, template)| {
-                    *source == target.source && template.label == target.label
-                });
-        let (_, template) = matching.next().with_context(|| {
-            format!("Named configuration '{}' is no longer saved", target.label)
-        })?;
-        anyhow::ensure!(
-            matching.next().is_none(),
-            "Named configuration '{}' is ambiguous in its saved task file; use a unique label",
-            target.label
-        );
-        let id_base = target.source.to_id_base();
-        let resolved = if template.literal_arguments {
-            template.resolve_task_with_literal_arguments(&id_base, &context)
-        } else {
-            template.resolve_task(&id_base, &context)
-        }
-        .with_context(|| format!(
-            "Named configuration '{}' did not resolve in the current project context; run it from the task list",
-            target.label
-        ))?;
-        Ok(PreparedSavedConfiguration {
-            worktree: worktree_entity,
-            root,
-            task: resolved,
-        })
+    ) -> anyhow::Result<PreparedSavedJvmTask> {
+        target.for_launch().prepare(project, cx)
     }
 
     fn run_configuration(
@@ -5883,28 +5807,18 @@ impl DependenciesPanel {
         trigger: JvmTaskTrigger,
         cx: &App,
     ) -> anyhow::Result<Vec<SavedConfigurationStep>> {
-        let Some(inventory) = project.task_store().read(cx).task_inventory() else {
-            return Ok(Vec::new());
-        };
-        select_jvm_trigger_tasks(
-            inventory.read(cx).saved_task_templates(worktree_id),
-            trigger,
-        )?
-        .into_iter()
-        .map(|(source, template)| {
-            let target = SavedConfiguration {
-                worktree_id,
-                source,
-                label: template.label,
-            };
-            let prepared = Self::prepare_configuration_dispatch(project, &target, cx)?;
-            Ok(SavedConfigurationStep {
-                target,
+        Ok(prepare_jvm_hook_tasks(project, worktree_id, trigger, cx)?
+            .into_iter()
+            .map(|(target, prepared)| SavedConfigurationStep {
+                target: SavedConfiguration {
+                    worktree_id: target.worktree_id,
+                    source: target.source,
+                    label: target.label,
+                },
                 prepared,
                 trigger: Some(trigger),
             })
-        })
-        .collect()
+            .collect())
     }
 
     async fn await_saved_configuration_step(
@@ -5952,43 +5866,11 @@ impl DependenciesPanel {
             prepared,
             trigger,
         } = step;
-        let source = target.source.clone();
-        let task = prepared.task.clone();
-        let owner = cx.weak_entity();
-        let check = Box::new(move |cx: &mut gpui::AsyncApp| {
-            let result = owner
-                .read_with(cx, |workspace, cx| {
-                    let project = workspace.project();
-                    anyhow::ensure!(
-                        project.entity_id() == project_id,
-                        "The saved configuration's project changed; select it again"
-                    );
-                    let project = project.read(cx);
-                    if let Some(activation) = activation {
-                        anyhow::ensure!(
-                            project
-                                .lsp_store()
-                                .read(cx)
-                                .jvm_trigger_provider_is_current(target.worktree_id, activation),
-                            "The Java provider changed during the saved configuration sequence"
-                        );
-                    }
-                    let current = Self::prepare_configuration_dispatch(project, &target, cx)?;
-                    anyhow::ensure!(
-                        current == prepared,
-                        "Named configuration '{}' changed before launch; select it again",
-                        target.label
-                    );
-                    Ok(())
-                })
-                .and_then(|result| result);
-            gpui::Task::ready(result)
-        });
-        workspace.schedule_resolved_task_with_terminal_check(
-            source,
-            task,
+        workspace.schedule_saved_jvm_task(
+            project_id,
+            (target.for_launch(), prepared),
+            activation,
             trigger.is_some(),
-            check,
             window,
             cx,
         )
@@ -9062,20 +8944,21 @@ struct SavedConfiguration {
     label: String,
 }
 
-#[derive(PartialEq, Eq)]
-struct PreparedSavedConfiguration {
-    worktree: gpui::EntityId,
-    root: Arc<std::path::Path>,
-    task: task::ResolvedTask,
-}
-
 struct SavedConfigurationStep {
     target: SavedConfiguration,
-    prepared: PreparedSavedConfiguration,
+    prepared: PreparedSavedJvmTask,
     trigger: Option<JvmTaskTrigger>,
 }
 
 impl SavedConfiguration {
+    fn for_launch(&self) -> SavedJvmTask {
+        SavedJvmTask {
+            worktree_id: self.worktree_id,
+            source: self.source.clone(),
+            label: self.label.clone(),
+        }
+    }
+
     fn queue_action(&self) -> RunOrderedConfiguration {
         RunOrderedConfiguration {
             worktree_id: usize::from(self.worktree_id),
@@ -10740,7 +10623,7 @@ mod tests {
         let fs = project::FakeFs::new(cx.executor());
         fs.insert_tree(
             "/groovy-config",
-            serde_json::json!({"pom.xml": "<project/>", "mvnw": "fixture", "mvnw.cmd": "fixture", "Main.java": "class Main {}"}),
+            serde_json::json!({"pom.xml": "<project/>", "mvnw": "fixture", "mvnw.cmd": "fixture", "build.gradle": "", "gradlew": "fixture", "gradlew.bat": "fixture", "Main.java": "class Main {}"}),
         )
         .await;
         let project = Project::test(fs, ["/groovy-config".as_ref()], cx).await;
@@ -11233,6 +11116,225 @@ mod tests {
         events.lock().expect("Task events").clear();
         run(cx);
         assert_eq!(commands(), ["prepare", "verify", "gradle", "finish"]);
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project_tasks(),
+                    Some(
+                        r#"[
+                    {"label":"before-built","command":"before-built","tags":["before-build"]},
+                    {"label":"after-built","command":"after-built","tags":["after-build"]},
+                    {"label":"before-rebuilt","command":"before-rebuilt","tags":["before-rebuild"]},
+                    {"label":"after-rebuilt","command":"after-rebuilt","tags":["after-rebuild"]},
+                    {"label":"unrelated","command":"skip","tags":["before-sync"]}
+                ]"#,
+                    ),
+                )
+                .expect("saved Build and Rebuild hooks");
+        });
+        let generated = inventory
+            .read_with(cx, |inventory, cx| {
+                inventory.list_tasks(None, None, Some(worktree_id), cx)
+            })
+            .await;
+        let root = project.read_with(cx, |project, cx| {
+            project
+                .worktree_for_id(worktree_id, cx)
+                .expect("worktree")
+                .read(cx)
+                .abs_path()
+        });
+        let mut task_cx = task::TaskContext {
+            cwd: Some(root.to_path_buf()),
+            ..Default::default()
+        };
+        task_cx.task_variables.insert(
+            task::VariableName::WorktreeRoot,
+            root.to_string_lossy().into_owned(),
+        );
+        let selected = |label: &str| {
+            let (source, template) = generated
+                .iter()
+                .find(|(source, task)| {
+                    source.groovy_jvm_build_worktree() == Some(worktree_id) && task.label == label
+                })
+                .expect("typed generated wrapper Task");
+            (
+                source.clone(),
+                template
+                    .resolve_task(&source.to_id_base(), &task_cx)
+                    .expect("resolve generated Task"),
+            )
+        };
+        let schedule = |label: &str, cx: &mut gpui::VisualTestContext| {
+            let (source, task) = selected(label);
+            workspace.update_in(cx, |workspace, window, cx| {
+                workspace.schedule_resolved_task(source, task, false, window, cx)
+            });
+            cx.run_until_parked();
+        };
+        let (before_ready, ready) = oneshot::channel();
+        let (release_before, before_released) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((before_ready, before_released));
+        events.lock().expect("Task events").clear();
+        schedule("Build Maven project", cx);
+        ready.await.expect("before-build Task is preparing");
+        assert!(
+            commands().is_empty(),
+            "the main build waits for its before-build Task"
+        );
+        schedule("Rebuild Gradle project", cx);
+        assert!(
+            commands().is_empty(),
+            "reentry cannot start a second build sequence"
+        );
+        release_before.send(()).expect("release before-build Task");
+        cx.run_until_parked();
+        let labels_and_args = || {
+            events
+                .lock()
+                .expect("Task events")
+                .iter()
+                .map(|task| (task.full_label.clone(), task.args.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            labels_and_args(),
+            [
+                ("before-built".to_owned(), vec![]),
+                ("Build Maven project".to_owned(), vec!["package".to_owned()]),
+                ("after-built".to_owned(), vec![]),
+            ]
+        );
+        assert!(inventory.read_with(cx, |inventory, _| {
+            inventory
+                .last_scheduled_task(None)
+                .is_some_and(|(source, task)| {
+                    source == selected("Build Maven project").0
+                        && task.original_task().label == "Build Maven project"
+                })
+        }));
+
+        for (action, before, after, args) in [
+            (
+                "Build Gradle project",
+                "before-built",
+                "after-built",
+                vec!["build"],
+            ),
+            (
+                "Rebuild Maven project",
+                "before-rebuilt",
+                "after-rebuilt",
+                vec!["clean", "package"],
+            ),
+            (
+                "Rebuild Gradle project",
+                "before-rebuilt",
+                "after-rebuilt",
+                vec!["clean", "build"],
+            ),
+        ] {
+            events.lock().expect("Task events").clear();
+            schedule(action, cx);
+            assert_eq!(
+                labels_and_args(),
+                [
+                    (before.to_owned(), vec![]),
+                    (
+                        action.to_owned(),
+                        args.into_iter().map(str::to_owned).collect()
+                    ),
+                    (after.to_owned(), vec![]),
+                ]
+            );
+        }
+        for outcome in [Some(failed), None] {
+            events.lock().expect("Task events").clear();
+            terminal_outcomes
+                .lock()
+                .expect("terminal outcomes")
+                .extend([Some(std::process::ExitStatus::default()), outcome]);
+            schedule("Rebuild Maven project", cx);
+            assert_eq!(
+                labels_and_args()
+                    .into_iter()
+                    .map(|(label, _)| label)
+                    .collect::<Vec<_>>(),
+                ["before-rebuilt", "Rebuild Maven project"],
+                "a failed or cancelled main Task skips after-rebuild"
+            );
+        }
+        events.lock().expect("Task events").clear();
+        terminal_outcomes
+            .lock()
+            .expect("terminal outcomes")
+            .push_back(Some(failed));
+        schedule("Build Gradle project", cx);
+        assert_eq!(
+            commands(),
+            ["before-built"],
+            "a failed before-build Task skips the wrapper"
+        );
+        assert!(!project.read_with(cx, |project, cx| {
+            project
+                .lsp_store()
+                .read(cx)
+                .jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeBuild)
+        }));
+        events.lock().expect("Task events").clear();
+        let (_, same_label) = selected("Build Maven project");
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.schedule_resolved_task(
+                TaskSourceKind::UserInput,
+                same_label,
+                true,
+                window,
+                cx,
+            )
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            labels_and_args()
+                .into_iter()
+                .map(|(label, _)| label)
+                .collect::<Vec<_>>(),
+            ["Build Maven project"],
+            "saved hooks are scoped to the generated Task source"
+        );
+        inventory.update(cx, |inventory, _| {
+            inventory.update_file_based_tasks(
+                project_tasks(),
+                Some(r#"[{"label":"after-built","command":"after-built","tags":["after-build"]}]"#),
+            ).expect("after-build hook");
+        });
+        let (main_ready, ready) = oneshot::channel();
+        let (release_main, main_released) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((main_ready, main_released));
+        events.lock().expect("Task events").clear();
+        schedule("Build Maven project", cx);
+        ready.await.expect("main wrapper Task is preparing");
+        trusted.update(cx, |trusted, cx| {
+            trusted.restrict(
+                worktree_store.downgrade(),
+                HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            );
+        });
+        release_main
+            .send(())
+            .expect("release wrapper after trust revocation");
+        cx.run_until_parked();
+        assert!(
+            commands().is_empty(),
+            "revoked trust blocks the main build and its after-build Task"
+        );
+        assert!(!project.read_with(cx, |project, cx| {
+            project
+                .lsp_store()
+                .read(cx)
+                .jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeBuild)
+        }));
     }
 
     #[test]

@@ -18,6 +18,11 @@ use futures::{FutureExt as _, StreamExt as _};
 use gpui::{AppContext, AsyncWindowContext, Context, Entity, Task, TaskExt, WeakEntity};
 use language::Buffer;
 use project::{TaskSourceKind, WorktreeId};
+#[cfg(feature = "jvm-tools")]
+use project::{
+    task_inventory::JvmProjectBuildAction,
+    task_store::{JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_hook_tasks},
+};
 use remote::ConnectionState;
 use task::{
     DebugScenario, ResolvedTask, SaveStrategy, SharedTaskContext, SpawnInTerminal,
@@ -122,6 +127,46 @@ impl TaskInvocationContext {
     pub fn artifact_group(&self) -> Option<&TaskArtifactGroup> {
         self.artifact_group.as_ref()
     }
+}
+
+#[cfg(feature = "jvm-tools")]
+fn jvm_task_activation_project<'a>(
+    workspace: &'a Workspace,
+    project_id: gpui::EntityId,
+    worktree_id: WorktreeId,
+    activation: Option<JvmTaskTrigger>,
+    cx: &'a gpui::App,
+) -> Result<&'a project::Project> {
+    let project = workspace.project();
+    anyhow::ensure!(
+        project.entity_id() == project_id,
+        "The saved configuration's project changed; select it again"
+    );
+    let project = project.read(cx);
+    if let Some(activation) = activation {
+        anyhow::ensure!(
+            project
+                .lsp_store()
+                .read(cx)
+                .jvm_trigger_provider_is_current(worktree_id, activation),
+            "The Java provider changed during the saved configuration sequence"
+        );
+    }
+    Ok(project)
+}
+
+#[cfg(feature = "jvm-tools")]
+fn check_jvm_task_outcome(outcome: ScheduledTaskResult, phase: &str, label: &str) -> Result<()> {
+    anyhow::ensure!(
+        outcome == ScheduledTaskResult::Success,
+        "{phase} Task '{label}' {}. Remaining Tasks were skipped.",
+        match outcome {
+            ScheduledTaskResult::Cancelled => "was cancelled",
+            ScheduledTaskResult::Failure => "failed",
+            _ => "could not start",
+        }
+    );
+    Ok(())
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -1038,6 +1083,27 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
+        #[cfg(feature = "jvm-tools")]
+        match self.try_schedule_jvm_build_with_hooks(
+            &task_source_kind,
+            &resolved_task,
+            omit_history,
+            window,
+            cx,
+        ) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                self.show_toast(
+                    Toast::new(
+                        NotificationId::unique::<JvmProjectBuildAction>(),
+                        error.to_string(),
+                    ),
+                    cx,
+                );
+                return;
+            }
+        }
         self.schedule_resolved_task_internal(
             task_source_kind,
             resolved_task,
@@ -1050,6 +1116,237 @@ impl Workspace {
             window,
             cx,
         );
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn schedule_saved_jvm_task(
+        &mut self,
+        project_id: gpui::EntityId,
+        (target, prepared): (SavedJvmTask, PreparedSavedJvmTask),
+        activation: Option<JvmTaskTrigger>,
+        omit_history: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<ScheduledTaskResult>> {
+        let source = target.source.clone();
+        let task = prepared.task.clone();
+        let owner = cx.weak_entity();
+        let check = Box::new(move |cx: &mut gpui::AsyncApp| {
+            let result = owner
+                .read_with(cx, |workspace, cx| {
+                    let project = jvm_task_activation_project(
+                        workspace,
+                        project_id,
+                        target.worktree_id,
+                        activation,
+                        cx,
+                    )?;
+                    let current = target.prepare(project, cx)?;
+                    anyhow::ensure!(
+                        current == prepared,
+                        "Named configuration '{}' changed before launch; select it again",
+                        target.label
+                    );
+                    Ok(())
+                })
+                .and_then(|result| result);
+            Task::ready(result)
+        });
+        self.schedule_resolved_task_with_terminal_check(
+            source,
+            task,
+            omit_history,
+            check,
+            window,
+            cx,
+        )
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn try_schedule_jvm_build_with_hooks(
+        &mut self,
+        source: &TaskSourceKind,
+        task: &ResolvedTask,
+        omit_history: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<bool> {
+        let Some(worktree_id) = source.groovy_jvm_build_worktree() else {
+            return Ok(false);
+        };
+        let project = self.project.read(cx);
+        if project.is_remote()
+            || project.is_via_collab()
+            || project.remote_connection_state(cx).is_some()
+        {
+            return Ok(false);
+        }
+        let Some(inventory) = project.task_store().read(cx).task_inventory() else {
+            return Ok(false);
+        };
+        let Some(action) = inventory
+            .read(cx)
+            .groovy_jvm_build_action(worktree_id, task, cx)
+        else {
+            return Ok(false);
+        };
+        let store = project.lsp_store();
+        anyhow::ensure!(
+            [JvmTaskTrigger::BeforeBuild, JvmTaskTrigger::BeforeRebuild]
+                .into_iter()
+                .all(|phase| !store.read(cx).jvm_trigger_is_armed(worktree_id, phase)),
+            "A Groovy build sequence is already active for this project"
+        );
+        let (phase, before, after) = match action {
+            JvmProjectBuildAction::Build => (
+                "Build",
+                JvmTaskTrigger::BeforeBuild,
+                JvmTaskTrigger::AfterBuild,
+            ),
+            JvmProjectBuildAction::Rebuild => (
+                "Rebuild",
+                JvmTaskTrigger::BeforeRebuild,
+                JvmTaskTrigger::AfterRebuild,
+            ),
+        };
+        let before_tasks = prepare_jvm_hook_tasks(project, worktree_id, before, cx)?;
+        let after_tasks = prepare_jvm_hook_tasks(project, worktree_id, after, cx)?;
+        if before_tasks.is_empty() && after_tasks.is_empty() {
+            return Ok(false);
+        }
+        anyhow::ensure!(
+            *source == TaskSourceKind::groovy_jvm_build(worktree_id),
+            "The build Task source changed; select it again"
+        );
+        if let Some(message) =
+            groovy_jvm_task_block_reason(&self.project, worktree_id, Some(task), cx)
+        {
+            bail!("{message}");
+        }
+        anyhow::ensure!(
+            self.terminal_provider.is_some(),
+            "The Task terminal is unavailable"
+        );
+        store.update(cx, |store, cx| {
+            store.arm_jvm_trigger(worktree_id, before, cx)
+        })?;
+        let project_id = self.project.entity_id();
+        let source = source.clone();
+        let task = task.clone();
+        let label = task.resolved.full_label.clone();
+        let store = store.downgrade();
+        let workspace = cx.weak_entity();
+        self.scheduled_tasks.push(window.spawn(cx, async move |cx| {
+            let result = async {
+                Self::run_jvm_build_hooks(&workspace, before_tasks, project_id, before, before, cx)
+                    .await?;
+                let owner = workspace.clone();
+                let main = workspace
+                    .update_in(cx, |workspace, window, cx| {
+                        let check = Box::new(move |cx: &mut gpui::AsyncApp| {
+                            Task::ready(
+                                owner
+                                    .read_with(cx, |workspace, cx| {
+                                        jvm_task_activation_project(
+                                            workspace,
+                                            project_id,
+                                            worktree_id,
+                                            Some(before),
+                                            cx,
+                                        )
+                                        .map(|_| ())
+                                    })
+                                    .and_then(|result| result),
+                            )
+                        });
+                        workspace.schedule_resolved_task_with_terminal_check(
+                            source,
+                            task,
+                            omit_history,
+                            check,
+                            window,
+                            cx,
+                        )
+                    })?
+                    .await?;
+                check_jvm_task_outcome(main, phase, &label)?;
+                Self::run_jvm_build_hooks(&workspace, after_tasks, project_id, before, after, cx)
+                    .await
+            }
+            .await;
+            let result =
+                if result.is_ok() {
+                    store.update(cx, |store, cx| {
+                    anyhow::ensure!(
+                        store.complete_jvm_trigger(worktree_id, before, cx),
+                        "The project or Java provider changed during the Groovy build sequence"
+                    );
+                    Ok(())
+                }).and_then(|completed| completed)
+                } else {
+                    if let Err(error) =
+                        store.update(cx, |store, _| store.cancel_jvm_trigger(worktree_id, before))
+                    {
+                        log::debug!("Groovy build activation owner expired: {error:#}");
+                    }
+                    result
+                };
+            if let Err(error) = workspace.update(cx, |workspace, cx| {
+                let notice = match result {
+                    Ok(()) => format!("{label} and its saved Tasks completed"),
+                    Err(error) => error.to_string(),
+                };
+                workspace.show_toast(
+                    Toast::new(
+                        NotificationId::composite::<JvmProjectBuildAction>(usize::from(
+                            worktree_id,
+                        )),
+                        notice,
+                    ),
+                    cx,
+                );
+            }) {
+                log::debug!("Groovy build notice owner expired: {error:#}");
+            }
+        }));
+        Ok(true)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn run_jvm_build_hooks(
+        workspace: &WeakEntity<Self>,
+        hooks: Vec<(SavedJvmTask, PreparedSavedJvmTask)>,
+        project_id: gpui::EntityId,
+        activation: JvmTaskTrigger,
+        phase: JvmTaskTrigger,
+        cx: &mut AsyncWindowContext,
+    ) -> Result<()> {
+        for (target, prepared) in hooks {
+            let label = target.label.clone();
+            let outcome = workspace
+                .update_in(cx, |workspace, window, cx| {
+                    workspace.show_toast(
+                        Toast::new(
+                            NotificationId::composite::<JvmProjectBuildAction>(usize::from(
+                                target.worktree_id,
+                            )),
+                            format!("Running {} Task '{label}'", phase.label()),
+                        ),
+                        cx,
+                    );
+                    workspace.schedule_saved_jvm_task(
+                        project_id,
+                        (target, prepared),
+                        Some(activation),
+                        true,
+                        window,
+                        cx,
+                    )
+                })?
+                .await?;
+            check_jvm_task_outcome(outcome, phase.label(), &label)?;
+        }
+        Ok(())
     }
 
     pub fn schedule_resolved_task_with_terminal_check(
