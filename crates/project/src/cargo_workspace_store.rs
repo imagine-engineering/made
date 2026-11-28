@@ -112,6 +112,15 @@ pub struct CargoCoverageSelection {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct HostCargoProfileSelection {
+    pub workspace: crate::cargo_workspace::CargoWorkspaceKey,
+    pub package_manifest: ProjectPath,
+    pub target_kind: crate::cargo_workspace::CargoTargetKind,
+    pub target_name: String,
+    pub preset_id: String,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub struct PreparedHostCoverageTask {
     run_id: String,
     resolved: task::ResolvedTask,
@@ -343,14 +352,18 @@ impl PassiveRustEnvironment {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    fn from_native_recipe(recipe: &crate::terminals::NativeTaskEnvironmentRecipe) -> Self {
+        Self::from_complete_environment(recipe.environment())
+    }
+
     #[cfg(any(
         target_os = "macos",
         all(target_os = "linux", feature = "rust-coverage")
     ))]
-    fn from_native_recipe(recipe: &crate::terminals::NativeTaskEnvironmentRecipe) -> Self {
+    fn from_complete_environment(environment: &HashMap<String, String>) -> Self {
         Self {
-            overrides: recipe
-                .environment()
+            overrides: environment
                 .iter()
                 .map(|(name, value)| (name.into(), value.into()))
                 .collect(),
@@ -2051,6 +2064,8 @@ impl EventEmitter<CargoWorkspaceStoreEvent> for CargoWorkspaceStore {}
 pub struct CargoWorkspaceStore {
     mode: CargoWorkspaceStoreMode,
     worktree_store: Entity<WorktreeStore>,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    native_profile_host: Option<gpui::WeakEntity<crate::buffer_store::BufferStore>>,
     revision: u64,
     cached_snapshot: Option<CargoWorkspaceSnapshot>,
     cached_metadata_facts: Vec<CargoWorkspaceMetadataFacts>,
@@ -2490,6 +2505,7 @@ fn validate_metadata_facts_bounds(workspaces: &[CargoWorkspaceMetadataFacts]) ->
 
 #[derive(Clone)]
 pub struct CargoReviewedMetadataImport {
+    route: CargoReviewRoute,
     revision: u64,
     input_fingerprint: u64,
     settings_revision: u64,
@@ -2498,6 +2514,13 @@ pub struct CargoReviewedMetadataImport {
     root_inode: u64,
     source_snapshot: worktree::Snapshot,
     files: Vec<(ProjectPath, u64, Option<fs::MTime>, u64)>,
+}
+
+#[derive(Clone, Copy)]
+enum CargoReviewRoute {
+    Desktop,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    HeadlessProfile,
 }
 
 impl CargoReviewedMetadataImport {
@@ -2588,12 +2611,88 @@ fn native_cargo_build_supported() -> bool {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+fn headless_profile_preset(identifier: &str, cx: &App) -> Result<crate::cargo_preset::CargoPreset> {
+    use crate::cargo_preset::{CargoWorkingDirectoryPolicy, parse_settings_content};
+    use feature_flags::{FeatureFlag as _, RustNamedCargoPresetsExperimentalFeatureFlag};
+    use settings::{ServerSettingsOrigin, ServerSettingsParseOutcome, SettingsFile, SettingsStore};
+
+    let settings = cx.global::<SettingsStore>();
+    let source = settings.server_settings_source();
+    let content = settings
+        .get_content_for_file(SettingsFile::Server)
+        .context("The producing host has no Cargo profile settings")?;
+    ensure!(
+        source.attempted_origin() == Some(ServerSettingsOrigin::HostLocal)
+            && source.parse_outcome() == ServerSettingsParseOutcome::Succeeded
+            && cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>()
+            && cx.has_flag::<RustNamedCargoPresetsExperimentalFeatureFlag>()
+            && [
+                RustNativeProfilingExperimentalFeatureFlag::NAME,
+                RustNamedCargoPresetsExperimentalFeatureFlag::NAME,
+            ]
+            .into_iter()
+            .all(|flag| content
+                .feature_flags
+                .as_ref()
+                .and_then(|flags| flags.get(flag))
+                .is_some_and(|value| value == "on")),
+        "The producing host must explicitly enable native profiling and named Cargo presets"
+    );
+    ensure!(
+        (1..=128).contains(&identifier.len()) && !identifier.chars().any(char::is_control),
+        "Native profiling requires a bounded host preset identifier"
+    );
+    let preset = parse_settings_content(
+        content
+            .project
+            .cargo
+            .as_ref()
+            .context("The producing host has no Cargo presets")?,
+    )
+    .presets
+    .remove(identifier)
+    .context("Native profiling preset is unavailable on the producing host")?;
+    ensure!(
+        preset.native_profiler.is_some()
+            && preset.profiler.is_none()
+            && preset.pre_launch_task.is_none()
+            && preset.toolchain.is_none()
+            && preset.target_triple.is_none()
+            && preset.features.is_empty()
+            && preset.default_features.is_none()
+            && preset.args.is_empty()
+            && matches!(
+                preset.working_directory,
+                CargoWorkingDirectoryPolicy::Context | CargoWorkingDirectoryPolicy::Workspace,
+            ),
+        "The producing host's profile preset needs a native collector, host toolchain and workspace working directory"
+    );
+    Ok(preset)
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub(crate) struct LinuxNativeCargoBuild {
     intent: CargoNativeBuildIntent,
-    terminal_environment: crate::terminals::NativeTaskEnvironmentRecipe,
+    environment: LinuxCargoBuildEnvironment,
     configuration: Vec<NativeCargoConfigurationSeal>,
     cargo: NativeProbeFileSeal,
     invocation: terminal::TaskBuildInvocation,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+enum LinuxCargoBuildEnvironment {
+    Desktop(crate::terminals::NativeTaskEnvironmentRecipe),
+    Headless(HashMap<String, String>),
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl LinuxCargoBuildEnvironment {
+    fn complete(&self) -> &HashMap<String, String> {
+        match self {
+            Self::Desktop(recipe) => recipe.environment(),
+            Self::Headless(environment) => environment,
+        }
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -2759,9 +2858,49 @@ impl LinuxNativeCargoRuntime {
     }
 }
 
+#[derive(Clone)]
+enum NativeCargoBuildOwner {
+    Desktop(gpui::WeakEntity<crate::Project>),
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    Headless(gpui::WeakEntity<crate::buffer_store::BufferStore>),
+}
+
+impl NativeCargoBuildOwner {
+    fn desktop_project(&self) -> Option<Entity<crate::Project>> {
+        match self {
+            Self::Desktop(project) => project.upgrade(),
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            Self::Headless(_) => None,
+        }
+    }
+
+    fn buffers(&self, cx: &App) -> Result<Entity<crate::buffer_store::BufferStore>> {
+        match self {
+            Self::Desktop(project) => Ok(project
+                .upgrade()
+                .context("Native Build Project disappeared")?
+                .read(cx)
+                .buffer_store()
+                .clone()),
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            Self::Headless(buffers) => buffers
+                .upgrade()
+                .context("Native Build host buffer store disappeared"),
+        }
+    }
+
+    fn review_route(&self) -> CargoReviewRoute {
+        match self {
+            Self::Desktop(_) => CargoReviewRoute::Desktop,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            Self::Headless(_) => CargoReviewRoute::HeadlessProfile,
+        }
+    }
+}
+
 pub struct CargoNativeBuildIntent {
     required_experimental_features: Vec<String>,
-    project: gpui::WeakEntity<crate::Project>,
+    project: NativeCargoBuildOwner,
     run_id: uuid::Uuid,
     task_id: task::TaskId,
     invocation_output_root: PathBuf,
@@ -2846,7 +2985,7 @@ impl CargoNativeBuildIntent {
             .context("Native Build complete host environment is unavailable")?;
         let project = self
             .project
-            .upgrade()
+            .desktop_project()
             .context("Native Build environment Project disappeared")?;
         project.update(cx, |project, cx| {
             project.revalidate_native_task_environment(recipe, cx)
@@ -2868,12 +3007,12 @@ impl CargoNativeBuildIntent {
 }
 
 fn native_build_open_buffer_versions(
-    project: &crate::Project,
+    buffers: &Entity<crate::buffer_store::BufferStore>,
     worktree_id: worktree::WorktreeId,
     cx: &App,
 ) -> Result<Vec<(gpui::WeakEntity<language::Buffer>, clock::Global)>> {
     let mut versions = Vec::new();
-    for buffer in project.buffer_store().read(cx).buffers() {
+    for buffer in buffers.read(cx).buffers() {
         let current = buffer.read(cx);
         if !current
             .file()
@@ -2894,26 +3033,13 @@ fn native_build_open_buffer_versions(
     Ok(versions)
 }
 
-fn revalidate_native_build_open_buffers(
-    project: &crate::Project,
-    intent: &CargoNativeBuildIntent,
-    cx: &App,
-) -> Result<()> {
-    revalidate_native_build_buffer_versions(
-        project,
-        intent.workspace.root.worktree_id,
-        &intent.buffer_versions,
-        cx,
-    )
-}
-
 fn revalidate_native_build_buffer_versions(
-    project: &crate::Project,
+    buffers: &Entity<crate::buffer_store::BufferStore>,
     worktree_id: worktree::WorktreeId,
     versions: &[(gpui::WeakEntity<language::Buffer>, clock::Global)],
     cx: &App,
 ) -> Result<()> {
-    native_build_open_buffer_versions(project, worktree_id, cx)?;
+    native_build_open_buffer_versions(buffers, worktree_id, cx)?;
     for (buffer, version) in versions {
         let buffer = buffer
             .upgrade()
@@ -4480,7 +4606,7 @@ impl NativeCargoCapturePlan {
         self.workload
             .intent
             .project
-            .upgrade()
+            .desktop_project()
             .context("Native capture Project disappeared")
     }
 }
@@ -5076,6 +5202,8 @@ impl CargoWorkspaceStore {
                 shared: None,
             },
             worktree_store,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            native_profile_host: None,
             revision: 0,
             cached_snapshot: None,
             cached_metadata_facts: Vec::new(),
@@ -5129,6 +5257,8 @@ impl CargoWorkspaceStore {
                 shared: None,
             },
             worktree_store,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            native_profile_host: None,
             revision: 0,
             cached_snapshot: None,
             cached_metadata_facts: Vec::new(),
@@ -5162,6 +5292,8 @@ impl CargoWorkspaceStore {
                 shared: None,
             },
             worktree_store,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            native_profile_host: None,
             revision: 0,
             cached_snapshot: None,
             cached_metadata_facts: Vec::new(),
@@ -5200,6 +5332,8 @@ impl CargoWorkspaceStore {
                 shared: None,
             },
             worktree_store,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            native_profile_host: None,
             revision: 0,
             cached_snapshot: None,
             cached_metadata_facts: Vec::new(),
@@ -6306,13 +6440,7 @@ impl CargoWorkspaceStore {
             native_cargo_build_supported() && cx.entity_id() == intent.owner,
             "Native Build intent belongs to another host owner"
         );
-        ensure!(
-            matches!(
-                self.mode,
-                CargoWorkspaceStoreMode::Local { shared: None, .. }
-            ),
-            "Native Build host route changed"
-        );
+        self.validate_native_build_owner(&intent.project, cx)?;
         ensure!(
             self.native_probe_source_entries(&intent.reviewed, cx)? == intent.source_entries,
             "Native Build source admission changed"
@@ -6368,17 +6496,12 @@ impl CargoWorkspaceStore {
             )?;
         let (invocation_output_root, arguments) =
             native_build_run_arguments(&logical_arguments, &output_root, intent.run_id)?;
-        let project = intent
-            .project
-            .upgrade()
-            .context("Native Build Project disappeared")?;
-        ensure!(
-            project.read(cx).is_local()
-                && !project.read(cx).is_shared()
-                && project.read(cx).cargo_workspace_store().entity_id() == cx.entity_id(),
-            "Native Build Project owner or route changed"
-        );
-        revalidate_native_build_open_buffers(project.read(cx), intent, cx)?;
+        revalidate_native_build_buffer_versions(
+            &intent.project.buffers(cx)?,
+            intent.workspace.root.worktree_id,
+            &intent.buffer_versions,
+            cx,
+        )?;
         ensure!(
             selection == intent.selection
                 && package_source_directory == intent.package_source_directory
@@ -6396,6 +6519,65 @@ impl CargoWorkspaceStore {
         Ok(())
     }
 
+    fn permits_native_review_route(&self, route: CargoReviewRoute) -> bool {
+        if self.disconnected {
+            return false;
+        }
+        match route {
+            CargoReviewRoute::Desktop => matches!(
+                self.mode,
+                CargoWorkspaceStoreMode::Local { shared: None, .. }
+            ),
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            CargoReviewRoute::HeadlessProfile => {
+                matches!(
+                    &self.mode,
+                    CargoWorkspaceStoreMode::Local {
+                        shared: Some((proto::REMOTE_SERVER_PROJECT_ID, _)),
+                        ..
+                    }
+                ) && self
+                    .native_profile_host
+                    .as_ref()
+                    .and_then(gpui::WeakEntity::upgrade)
+                    .is_some()
+            }
+        }
+    }
+
+    fn validate_native_build_owner(
+        &self,
+        owner: &NativeCargoBuildOwner,
+        cx: &Context<Self>,
+    ) -> Result<()> {
+        ensure!(
+            self.permits_native_review_route(owner.review_route()),
+            "Native Build host route changed"
+        );
+        match owner {
+            NativeCargoBuildOwner::Desktop(project) => {
+                let project = project
+                    .upgrade()
+                    .context("Native Build Project disappeared")?;
+                let project = project.read(cx);
+                ensure!(
+                    project.is_local()
+                        && !project.is_shared()
+                        && project.cargo_workspace_store().entity_id() == cx.entity_id(),
+                    "Native Build Project owner changed"
+                );
+            }
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            NativeCargoBuildOwner::Headless(buffers) => {
+                ensure!(
+                    self.native_profile_host.as_ref() == Some(buffers),
+                    "Native Build headless owner changed"
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub fn prepare_native_cargo_build_recipe(
         &mut self,
         workspace_key: crate::cargo_workspace::CargoWorkspaceKey,
@@ -6403,6 +6585,27 @@ impl CargoWorkspaceStore {
         target: crate::cargo_workspace::CargoTargetModel,
         profile: Option<String>,
         task_environment: HashMap<String, String>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<NativeCargoBuildRecipe>>> {
+        self.prepare_native_cargo_build_recipe_for_route(
+            workspace_key,
+            member_id,
+            target,
+            profile,
+            task_environment,
+            CargoReviewRoute::Desktop,
+            cx,
+        )
+    }
+
+    fn prepare_native_cargo_build_recipe_for_route(
+        &mut self,
+        workspace_key: crate::cargo_workspace::CargoWorkspaceKey,
+        member_id: String,
+        target: crate::cargo_workspace::CargoTargetModel,
+        profile: Option<String>,
+        task_environment: HashMap<String, String>,
+        route: CargoReviewRoute,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<NativeCargoBuildRecipe>>> {
         ensure!(
@@ -6446,13 +6649,12 @@ impl CargoWorkspaceStore {
             .abs_path()
             .join(workspace_key.root.path.as_std_path());
         crate::cargo_workspace::validate_native_cargo_path(&working_directory)?;
-        let CargoWorkspaceStoreMode::Local {
-            environment,
-            shared: None,
-            ..
-        } = &self.mode
-        else {
-            anyhow::bail!("Native Build recipe requires an unshared local host")
+        ensure!(
+            self.permits_native_review_route(route),
+            "Native Build recipe requires the producing host"
+        );
+        let CargoWorkspaceStoreMode::Local { environment, .. } = &self.mode else {
+            anyhow::bail!("Native Build recipe requires the producing host")
         };
         let environment = environment.update(cx, |environment, cx| {
             environment.directory_environment(Arc::from(working_directory.as_path()), cx)
@@ -6498,10 +6700,7 @@ impl CargoWorkspaceStore {
             let recipe = work.await?;
             this.read_with(cx, |store, cx| {
                 ensure!(
-                    matches!(
-                        store.mode,
-                        CargoWorkspaceStoreMode::Local { shared: None, .. }
-                    ),
+                    store.permits_native_review_route(route),
                     "Native Build host route changed"
                 );
                 let facts = store
@@ -6571,7 +6770,7 @@ impl CargoWorkspaceStore {
         let executor = cx.background_executor().clone();
         Ok(cx.spawn(async move |this, cx| {
             let mut intent = checked.await?;
-            let project = intent.project.upgrade().context("Native runtime Project disappeared")?;
+            let project = intent.project.desktop_project().context("Native runtime Project disappeared")?;
             let prepared = project.update(cx, |project, cx| project.prepare_native_task_environment(&launch, cx))?;
             let recipe = prepared.await?;
             ensure!(recipe.working_directory() == intent.working_directory()
@@ -6836,7 +7035,7 @@ impl CargoWorkspaceStore {
                 .compiler
                 .intent
                 .project
-                .upgrade()
+                .desktop_project()
                 .context("Native runtime Project disappeared")?;
             project
                 .update(cx, |project, cx| {
@@ -7024,26 +7223,43 @@ impl CargoWorkspaceStore {
         task_environment: HashMap<String, String>,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<CargoNativeBuildIntent>>> {
+        self.prepare_native_cargo_build_intent_owned(
+            NativeCargoBuildOwner::Desktop(project.downgrade()),
+            run_id,
+            task_id,
+            workspace_key,
+            member_id,
+            target,
+            profile,
+            requested_program,
+            task_environment,
+            cx,
+        )
+    }
+
+    fn prepare_native_cargo_build_intent_owned(
+        &mut self,
+        project: NativeCargoBuildOwner,
+        run_id: uuid::Uuid,
+        task_id: task::TaskId,
+        workspace_key: crate::cargo_workspace::CargoWorkspaceKey,
+        member_id: String,
+        target: crate::cargo_workspace::CargoTargetModel,
+        profile: Option<String>,
+        requested_program: PathBuf,
+        task_environment: HashMap<String, String>,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<CargoNativeBuildIntent>>> {
         ensure!(
             cx.has_flag::<RustNativeProfilingExperimentalFeatureFlag>(),
             "Native Rust profiling requires local experimental opt-in"
         );
 
         ensure!(
-            native_cargo_build_supported()
-                && matches!(
-                    self.mode,
-                    CargoWorkspaceStoreMode::Local { shared: None, .. }
-                ),
-            "Native Build requires an unshared supported local host"
+            native_cargo_build_supported() && !run_id.is_nil(),
+            "Native Build host or run identity is unavailable"
         );
-        ensure!(
-            !run_id.is_nil()
-                && project.read(cx).cargo_workspace_store().entity_id() == cx.entity_id()
-                && project.read(cx).is_local()
-                && !project.read(cx).is_shared(),
-            "Native Build Project or run identity is invalid"
-        );
+        self.validate_native_build_owner(&project, cx)?;
         crate::cargo_workspace::validate_native_cargo_path(&requested_program)?;
         validate_native_build_environment(&task_environment)?;
         let facts = self
@@ -7076,7 +7292,8 @@ impl CargoWorkspaceStore {
             .root_manifest
             .clone()
             .context("Native Build workspace manifest is unavailable")?;
-        let reviewed = self.prepare_reviewed_metadata_import(manifest, cx)?;
+        let reviewed =
+            self.prepare_reviewed_metadata_import_for_route(manifest, project.review_route(), cx)?;
         let source_entries = self.native_probe_source_entries(&reviewed, cx)?;
         let (package_source_directory, package_source_directory_inode) =
             native_selected_package_directory(
@@ -7087,7 +7304,7 @@ impl CargoWorkspaceStore {
                 &source_entries,
             )?;
         let buffer_versions = native_build_open_buffer_versions(
-            project.read(cx),
+            &project.buffers(cx)?,
             workspace_key.root.worktree_id,
             cx,
         )?;
@@ -7180,7 +7397,7 @@ impl CargoWorkspaceStore {
                         "Native clean-first source admission changed before creation"
                     );
                     revalidate_native_build_buffer_versions(
-                        project.read(cx),
+                        &project.buffers(cx)?,
                         workspace_key.root.worktree_id,
                         &buffer_versions,
                         cx,
@@ -7195,7 +7412,7 @@ impl CargoWorkspaceStore {
                 let prepared = this.update(cx, |store, cx| {
                     store.revalidate_reviewed_metadata_import(&reviewed, cx)?;
                     revalidate_native_build_buffer_versions(
-                        project.read(cx),
+                        &project.buffers(cx)?,
                         workspace_key.root.worktree_id,
                         &buffer_versions,
                         cx,
@@ -7207,7 +7424,7 @@ impl CargoWorkspaceStore {
                         &output_root,
                         &reviewed.root,
                     )?;
-                    store.prepare_native_cargo_build_intent(
+                    store.prepare_native_cargo_build_intent_owned(
                         project.clone(),
                         run_id,
                         task_id,
@@ -7234,7 +7451,7 @@ impl CargoWorkspaceStore {
                 );
                 this.update(cx, |store, cx| {
                     revalidate_native_build_buffer_versions(
-                        project.read(cx),
+                        &project.buffers(cx)?,
                         intent.workspace.root.worktree_id,
                         &buffer_versions,
                         cx,
@@ -7355,7 +7572,7 @@ impl CargoWorkspaceStore {
                 );
                 let intent = CargoNativeBuildIntent {
                     required_experimental_features: Vec::new(),
-                    project: project.downgrade(),
+                    project,
                     run_id,
                     task_id,
                     invocation_output_root,
@@ -7467,6 +7684,200 @@ impl CargoWorkspaceStore {
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn register_headless_profile_host(
+        &mut self,
+        buffers: &Entity<crate::buffer_store::BufferStore>,
+        cx: &App,
+    ) -> Result<()> {
+        ensure!(
+            self.native_profile_host.is_none()
+                && matches!(
+                    &self.mode,
+                    CargoWorkspaceStoreMode::Local {
+                        shared: Some((proto::REMOTE_SERVER_PROJECT_ID, _)),
+                        ..
+                    }
+                )
+                && buffers
+                    .read(cx)
+                    .owns_native_task_worktrees(&self.worktree_store),
+            "Native profiling requires the producing host's Cargo and buffer stores"
+        );
+        self.native_profile_host = Some(buffers.downgrade());
+        Ok(())
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn build_selected_headless_cargo_profile(
+        &mut self,
+        selection: HostCargoProfileSelection,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoWorkload>>> {
+        let owner = NativeCargoBuildOwner::Headless(
+            self.native_profile_host
+                .clone()
+                .context("Native profiling host is unavailable")?,
+        );
+        self.validate_native_build_owner(&owner, cx)?;
+        ensure!(
+            !TrustedWorktrees::has_restricted_worktrees(&self.worktree_store, cx),
+            "Native profiling requires a trusted producing Cargo workspace"
+        );
+        ensure!(
+            selection.workspace.root.worktree_id == selection.package_manifest.worktree_id
+                && selection.package_manifest.path.file_name() == Some("Cargo.toml")
+                && (1..=256).contains(&selection.target_name.len())
+                && !selection.target_name.chars().any(char::is_control),
+            "Native profiling requires an exact target in the selected host worktree"
+        );
+        let allowed_worktrees = HashSet::from_iter([selection.workspace.root.worktree_id]);
+        let preset = headless_profile_preset(&selection.preset_id, cx)?;
+        let settings_revision = cx.global::<settings::SettingsStore>().observed_revision();
+        let discovery = (!self
+            .metadata_facts_for_current_snapshot(cx)
+            .is_some_and(|facts| facts.iter().any(|facts| facts.key == selection.workspace)))
+        .then(|| self.refresh_scoped(Some(allowed_worktrees), cx));
+        let run_id = uuid::Uuid::new_v4();
+        Ok(cx.spawn(async move |store, cx| {
+            if let Some(discovery) = discovery {
+                discovery.await?;
+            }
+            let (member, target, recipe) = store.update(cx, |store, cx| {
+                store.validate_native_build_owner(&owner, cx)?;
+                ensure!(
+                    settings_revision == cx.global::<settings::SettingsStore>().observed_revision(),
+                    "Native profiling host settings changed during selection"
+                );
+                let (snapshot, true) = store
+                    .cached_snapshot(cx)
+                    .context("Host Cargo metadata is unavailable")?
+                else {
+                    anyhow::bail!("Host Cargo metadata changed during selection");
+                };
+                let workspace = snapshot
+                    .workspaces
+                    .iter()
+                    .find(|workspace| workspace.key == selection.workspace)
+                    .context("Native profiling workspace is unavailable on the host")?;
+                let member = workspace
+                    .members
+                    .iter()
+                    .find(|member| member.manifest_path == selection.package_manifest)
+                    .context("Native profiling package is unavailable on the host")?;
+                let target = member
+                    .targets
+                    .iter()
+                    .find(|target| {
+                        target.kind == selection.target_kind && target.name == selection.target_name
+                    })
+                    .context("Native profiling target is unavailable on the host")?;
+                let member_id = member.id.clone();
+                let selector = match target.kind {
+                    crate::cargo_workspace::CargoTargetKind::Binary => {
+                        crate::cargo_preset::CargoTargetSelector::Binary(target.name.clone())
+                    }
+                    crate::cargo_workspace::CargoTargetKind::Example => {
+                        crate::cargo_preset::CargoTargetSelector::Example(target.name.clone())
+                    }
+                    _ => anyhow::bail!("Native profiling requires a binary or example"),
+                };
+                ensure!(
+                    preset
+                        .package
+                        .as_ref()
+                        .is_none_or(|package| package == &member.name)
+                        && preset
+                            .target
+                            .as_ref()
+                            .is_none_or(|target| target == &selector),
+                    "Native profiling target does not match the producing host's preset"
+                );
+                let target = target.clone();
+                let recipe = store.prepare_native_cargo_build_recipe_for_route(
+                    selection.workspace.clone(),
+                    member_id.clone(),
+                    target.clone(),
+                    preset.profile.clone(),
+                    preset.environment.clone(),
+                    CargoReviewRoute::HeadlessProfile,
+                    cx,
+                )?;
+                Ok::<_, anyhow::Error>((member_id, target, recipe))
+            })??;
+            let recipe = recipe.await?;
+            let launch = task::SpawnInTerminal {
+                id: task::TaskId(run_id.to_string()),
+                label: "Build the selected Cargo profile target".into(),
+                command: Some(
+                    recipe
+                        .program
+                        .to_str()
+                        .context("Host Cargo path is not UTF-8")?
+                        .to_owned(),
+                ),
+                literal_prefix_args: recipe.arguments.len(),
+                args: recipe.arguments,
+                cwd: Some(recipe.working_directory),
+                env: recipe.task_environment,
+                required_experimental_features: vec![
+                    "rust-native-profiling-experimental".into(),
+                    "rust-named-cargo-presets-experimental".into(),
+                ],
+                ..Default::default()
+            };
+            let build = store
+                .update(cx, |store, cx| {
+                    ensure!(
+                        settings_revision
+                            == cx.global::<settings::SettingsStore>().observed_revision(),
+                        "Native profiling host settings changed before admission"
+                    );
+                    let admitted = store.prepare_native_cargo_build_intent_owned(
+                        owner,
+                        run_id,
+                        launch.id.clone(),
+                        selection.workspace,
+                        member,
+                        target,
+                        preset.profile,
+                        recipe.program,
+                        launch.env.clone(),
+                        cx,
+                    )?;
+                    store.prepare_linux_native_cargo_build_from_intent(admitted, launch.clone(), cx)
+                })??
+                .await
+                .context("Admitting the host's selected Cargo Build")?;
+            let (builder, observation) = store.update(cx, |store, cx| {
+                store.validate_native_build_intent(&build.intent, cx)?;
+                crate::task_store::validate_experimental_task_requirements(&launch, cx)?;
+                terminal::TerminalBuilder::new_with_native_cargo_build_task(
+                    launch,
+                    None,
+                    build.invocation().clone(),
+                    crate::cargo_workspace::MAX_CARGO_BUILD_MESSAGE_BYTES,
+                    cx.entity_id().as_u64(),
+                    cx,
+                )
+            })??;
+            let builder = builder.await?;
+            let terminal = cx.new(|cx| builder.subscribe(cx));
+            let ordinary =
+                terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+            let verified = store.update(cx, |store, cx| {
+                store.finish_linux_native_cargo_build(build, observation, cx)
+            })??;
+            let (workload, status) = futures::future::join(verified, ordinary).await;
+            let workload = workload.context("Verifying the host's Cargo Build output")?;
+            ensure!(
+                status.is_some_and(|status| status.success()),
+                "Native profiling Build disagreed with the producing Terminal exit"
+            );
+            Ok(workload)
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
     pub(crate) fn prepare_linux_native_cargo_build(
         &mut self,
         project: Entity<crate::Project>,
@@ -7474,12 +7885,18 @@ impl CargoWorkspaceStore {
         launch: task::SpawnInTerminal,
         cx: &mut Context<Self>,
     ) -> Result<Task<Result<LinuxNativeCargoBuild>>> {
-        let prepared = self.prepare_native_cargo_build_intent_for_launch(
-            project.clone(),
-            run_id,
-            &launch,
-            cx,
-        )?;
+        let prepared =
+            self.prepare_native_cargo_build_intent_for_launch(project, run_id, &launch, cx)?;
+        self.prepare_linux_native_cargo_build_from_intent(prepared, launch, cx)
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn prepare_linux_native_cargo_build_from_intent(
+        &mut self,
+        prepared: Task<Result<CargoNativeBuildIntent>>,
+        launch: task::SpawnInTerminal,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<LinuxNativeCargoBuild>>> {
         let filesystem = self
             .worktree_store
             .read(cx)
@@ -7488,23 +7905,36 @@ impl CargoWorkspaceStore {
             .clone();
         let executor = cx.background_executor().clone();
         Ok(cx.spawn(async move |store, cx| {
-            let intent = prepared.await?;
+            let mut intent = prepared.await?;
             intent.verify_eligible_launch(&launch)?;
-            let terminal_environment = project
-                .update(cx, |project, cx| project.prepare_native_task_environment(&launch, cx))?
-                .await?;
-            ensure!(
-                terminal_environment.working_directory() == intent.working_directory()
-                    && terminal_environment.logical_environment() == intent.task_environment(),
-                "Native Build Task environment changed during admission"
-            );
+            intent.required_experimental_features = launch.required_experimental_features.clone();
+            let environment = match &intent.project {
+                NativeCargoBuildOwner::Desktop(_) => {
+                    let project = intent.project.desktop_project().context("Native Build Project disappeared")?;
+                    let recipe = project
+                        .update(cx, |project, cx| project.prepare_native_task_environment(&launch, cx))?
+                        .await?;
+                    ensure!(
+                        recipe.working_directory() == intent.working_directory()
+                            && recipe.logical_environment() == intent.task_environment(),
+                        "Native Build Task environment changed during admission"
+                    );
+                    LinuxCargoBuildEnvironment::Desktop(recipe)
+                }
+                NativeCargoBuildOwner::Headless(_) => {
+                    let environment = store.update(cx, |store, cx| {
+                        store.prepare_headless_profile_environment(&intent, cx)
+                    })??.await?;
+                    LinuxCargoBuildEnvironment::Headless(environment)
+                }
+            };
             let build = cx
                 .background_spawn(async move {
                     let prepare = async {
-                        let environment = PassiveRustEnvironment::from_native_recipe(&terminal_environment);
+                        let passive = PassiveRustEnvironment::from_complete_environment(environment.complete());
                         let (configuration, seals) = load_passive_cargo_configuration(
                             &intent.cwd,
-                            &environment,
+                            &passive,
                             Some(filesystem.clone()),
                             None,
                         ).await?;
@@ -7513,7 +7943,7 @@ impl CargoWorkspaceStore {
                             "Native Linux profiling requires the host target and no configured runner"
                         );
                         let installed = check_passive_rustup_executable(
-                            intent.program().as_os_str(), &intent.cwd, &environment, &executor,
+                            intent.program().as_os_str(), &intent.cwd, &passive, &executor,
                         ).await?;
                         let (actual_cargo, toolchain) = match installed {
                             Some(installed) => (installed.root.join("bin/cargo"), Some(installed.root)),
@@ -7527,8 +7957,8 @@ impl CargoWorkspaceStore {
                             "aarch64" => "aarch64-unknown-linux-gnu",
                             _ => anyhow::bail!("This Linux architecture cannot launch native Cargo profiling"),
                         };
-                        let mut variables = terminal_environment
-                            .environment()
+                        let mut variables = environment
+                            .complete()
                             .iter()
                             .map(|(key, value)| (key.clone(), value.clone()))
                             .collect::<std::collections::BTreeMap<_, _>>();
@@ -7556,7 +7986,7 @@ impl CargoWorkspaceStore {
                         )?;
                         let build = LinuxNativeCargoBuild {
                             intent,
-                            terminal_environment,
+                            environment,
                             configuration: seals,
                             cargo,
                             invocation,
@@ -7570,16 +8000,95 @@ impl CargoWorkspaceStore {
                     }
                 })
                 .await?;
-            project
-                .update(cx, |project, cx| {
-                    project.revalidate_native_task_environment(&build.terminal_environment, cx)
-                })?
-                .await?;
             store.update(cx, |store, cx| {
-                store.validate_native_build_intent(&build.intent, cx)
-            })??;
+                store.revalidate_linux_cargo_build_environment(&build, cx)
+            })??.await?;
             Ok(build)
         }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn prepare_headless_profile_environment(
+        &self,
+        intent: &CargoNativeBuildIntent,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<HashMap<String, String>>>> {
+        use settings::{Settings as _, SettingsLocation};
+
+        self.validate_native_build_intent(intent, cx)?;
+        let CargoWorkspaceStoreMode::Local { environment, .. } = &self.mode else {
+            anyhow::bail!("Native profiling environment requires the producing host");
+        };
+        let (worktree, path) = self
+            .worktree_store
+            .read(cx)
+            .find_worktree(intent.working_directory(), cx)
+            .context("Native profiling environment has no worktree")?;
+        let worktree_id = worktree.read(cx).id();
+        ensure!(
+            worktree_id == intent.workspace.root.worktree_id,
+            "Native profiling environment worktree changed"
+        );
+        let terminal_environment = terminal::terminal_settings::TerminalSettings::get(
+            Some(SettingsLocation {
+                worktree_id,
+                path: &path,
+            }),
+            cx,
+        )
+        .env
+        .clone();
+        let overrides = intent.task_environment.clone();
+        let directory = Arc::from(intent.working_directory());
+        let environment = environment.update(cx, |environment, cx| {
+            environment.directory_environment(directory, cx)
+        });
+        Ok(cx.spawn(async move |store, cx| {
+            let environment = crate::terminals::merge_native_task_environment(
+                environment
+                    .await
+                    .context("Native profiling host directory environment is unavailable")?,
+                &terminal_environment,
+                &overrides,
+            )?;
+            store.read_with(cx, |_, cx| {
+                terminal::complete_native_terminal_environment(
+                    &environment,
+                    store.entity_id().as_u64(),
+                    cx,
+                )
+            })?
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn revalidate_linux_cargo_build_environment(
+        &self,
+        build: &LinuxNativeCargoBuild,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        self.validate_native_build_intent(&build.intent, cx)?;
+        match &build.environment {
+            LinuxCargoBuildEnvironment::Desktop(recipe) => build
+                .intent
+                .project
+                .desktop_project()
+                .context("Native Build Project disappeared")?
+                .update(cx, |project, cx| {
+                    project.revalidate_native_task_environment(recipe, cx)
+                }),
+            LinuxCargoBuildEnvironment::Headless(expected) => {
+                let current = self.prepare_headless_profile_environment(&build.intent, cx)?;
+                let expected = expected.clone();
+                Ok(cx.spawn(async move |_, _| {
+                    ensure!(
+                        current.await? == expected,
+                        "Native profiling host environment changed"
+                    );
+                    Ok(())
+                }))
+            }
+        }
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -7607,15 +8116,10 @@ impl CargoWorkspaceStore {
                 status.success(),
                 "Native Linux Cargo build did not complete successfully"
             );
-            let project = build
-                .intent
-                .project
-                .upgrade()
-                .context("Native Build Project disappeared")?;
-            project
-                .update(cx, |project, cx| {
-                    project.revalidate_native_task_environment(&build.terminal_environment, cx)
-                })?
+            store
+                .update(cx, |store, cx| {
+                    store.revalidate_linux_cargo_build_environment(&build, cx)
+                })??
                 .await?;
             let workload = cx
                 .background_spawn(async move {
@@ -7670,19 +8174,10 @@ impl CargoWorkspaceStore {
             .clone();
         let executor = cx.background_executor().clone();
         Ok(cx.spawn(async move |store, cx| {
-            let project = workload
-                .build
-                .intent
-                .project
-                .upgrade()
-                .context("Native Cargo Project disappeared")?;
-            project
-                .update(cx, |project, cx| {
-                    project.revalidate_native_task_environment(
-                        &workload.build.terminal_environment,
-                        cx,
-                    )
-                })?
+            store
+                .update(cx, |store, cx| {
+                    store.revalidate_linux_cargo_build_environment(&workload.build, cx)
+                })??
                 .await?;
             let workload = cx
                 .background_spawn(async move {
@@ -7765,7 +8260,7 @@ impl CargoWorkspaceStore {
                         .compiler
                         .intent
                         .project
-                        .upgrade()
+                        .desktop_project()
                         .context("Native runtime Project disappeared")?,
                     admission.helper.clone(),
                 )
@@ -7826,7 +8321,7 @@ impl CargoWorkspaceStore {
             let mut intent = checked.await?;
             let project = intent
                 .project
-                .upgrade()
+                .desktop_project()
                 .context("Native Build Project disappeared")?;
             let prepared = project.update(cx, |project, cx| {
                 project.prepare_native_task_environment(&launch, cx)
@@ -8039,7 +8534,7 @@ impl CargoWorkspaceStore {
         );
         let project = intent
             .project
-            .upgrade()
+            .desktop_project()
             .context("Native Build Project disappeared")?;
         let report_check = project.update(cx, |project, cx| {
             project.revalidate_local_cargo_build_report(&report, cx)
@@ -8094,7 +8589,7 @@ impl CargoWorkspaceStore {
             let project = workload
                 .intent
                 .project
-                .upgrade()
+                .desktop_project()
                 .context("Native Build Project disappeared")?;
             let check = project.update(cx, |project, cx| {
                 project.revalidate_local_cargo_build_report(&workload.report, cx)
@@ -8123,7 +8618,7 @@ impl CargoWorkspaceStore {
         let project = workload
             .intent
             .project
-            .upgrade()
+            .desktop_project()
             .context("Native Build Project disappeared")?;
         let checked = project.update(cx, |project, cx| {
             project.revalidate_local_cargo_build_report(&workload.report, cx)
@@ -8205,7 +8700,7 @@ impl CargoWorkspaceStore {
             let project = workload
                 .intent
                 .project
-                .upgrade()
+                .desktop_project()
                 .context("Native Build Project disappeared")?;
             let checked = project.update(cx, |project, cx| {
                 project.revalidate_local_cargo_build_report(&workload.report, cx)
@@ -8238,7 +8733,7 @@ impl CargoWorkspaceStore {
             let project = workload
                 .intent
                 .project
-                .upgrade()
+                .desktop_project()
                 .context("Native capture Project disappeared")?;
             let logical_launch = task::SpawnInTerminal {
                 cwd: Some(workload.execution_directory()?.to_path_buf()),
@@ -8781,11 +9276,21 @@ impl CargoWorkspaceStore {
         manifest_path: ProjectPath,
         cx: &App,
     ) -> Result<CargoReviewedMetadataImport> {
+        self.prepare_reviewed_metadata_import_for_route(
+            manifest_path,
+            CargoReviewRoute::Desktop,
+            cx,
+        )
+    }
+
+    fn prepare_reviewed_metadata_import_for_route(
+        &self,
+        manifest_path: ProjectPath,
+        route: CargoReviewRoute,
+        cx: &App,
+    ) -> Result<CargoReviewedMetadataImport> {
         ensure!(
-            matches!(
-                &self.mode,
-                CargoWorkspaceStoreMode::Local { shared: None, .. }
-            ) && !self.disconnected,
+            self.permits_native_review_route(route),
             "Reviewed Cargo import requires a local owned host"
         );
         let trusted = TrustedWorktrees::try_get_global(cx).and_then(|owner| {
@@ -8852,6 +9357,7 @@ impl CargoWorkspaceStore {
             .context("Cargo root disappeared")?
             .inode;
         Ok(CargoReviewedMetadataImport {
+            route,
             revision: self.revision,
             input_fingerprint: self.current_input_fingerprint(cx),
             settings_revision: cx
@@ -8884,7 +9390,11 @@ impl CargoWorkspaceStore {
                 == cx.global::<settings::SettingsStore>().observed_revision(),
             "Reviewed Cargo settings authority changed"
         );
-        let current = self.prepare_reviewed_metadata_import(reviewed.manifest_path.clone(), cx)?;
+        let current = self.prepare_reviewed_metadata_import_for_route(
+            reviewed.manifest_path.clone(),
+            reviewed.route,
+            cx,
+        )?;
         ensure!(
             current.root == reviewed.root
                 && current.root_inode == reviewed.root_inode

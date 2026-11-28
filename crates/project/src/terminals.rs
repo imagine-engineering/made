@@ -1685,7 +1685,7 @@ impl Project {
     }
 }
 
-fn merge_native_task_environment(
+pub(crate) fn merge_native_task_environment(
     mut directory_environment: HashMap<String, String>,
     terminal_environment: &HashMap<String, String>,
     task_environment: &HashMap<String, String>,

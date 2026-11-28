@@ -1952,21 +1952,185 @@ fn verify_headless_coverage(
     Ok(())
 }
 
-fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()> {
+#[derive(Clone, Copy)]
+enum HeadlessTaskScenario {
+    Coverage,
+    SelectedCoverage,
+    ProfileBuild,
+}
+
+fn write_headless_profile_build_fixture(directory: &Path) -> Result<String> {
+    write_native_cargo_fixture(directory)?;
+    let cargo = std::env::var_os("RUST_TOOLS_NATIVE_BUILD_CARGO")
+        .map(std::path::PathBuf::from)
+        .context("The installed Linux Cargo fixture toolchain is required")?
+        .canonicalize()?;
+    let bins = cargo.parent().context("Cargo has no toolchain directory")?;
+    let search = std::env::join_paths([bins, Path::new("/usr/bin"), Path::new("/bin")])?;
+    let cargo_home = directory.with_extension("cargo-home");
+    std::fs::create_dir_all(&cargo_home)?;
+    let output = smol::block_on(
+        smol::process::Command::new(&cargo)
+            .args(["generate-lockfile", "--offline"])
+            .current_dir(directory)
+            .env("PATH", &search)
+            .env("CARGO_HOME", &cargo_home)
+            .output(),
+    )?;
+    ensure!(
+        output.status.success(),
+        "Could not generate the fixture's offline Cargo.lock"
+    );
+    std::fs::write(
+        directory.join("runner/build.rs"),
+        r#"fn main() {
+    println!("cargo:rerun-if-env-changed=COPPER_PROFILE_BUILD_OWNER");
+    assert_eq!(std::env::var("COPPER_PROFILE_BUILD_OWNER").as_deref(), Ok("host"));
+    let marker = std::path::Path::new(&std::env::var_os("OUT_DIR").expect("build output"))
+        .join("verified-host-preset");
+    std::fs::write(marker, "host").expect("record the profile build environment");
+}"#,
+    )?;
+    let settings = serde_json::json!({
+        "load_direnv": "disabled",
+        "feature_flags": {
+            "rust-native-profiling-experimental": "on",
+            "rust-named-cargo-presets-experimental": "on"
+        },
+        "cargo": {
+            "schema_version": 2,
+            "presets": {
+                "host-profile": {
+                    "subcommand": "run",
+                    "package": "runner",
+                    "target_kind": "bin",
+                    "target_name": "runner",
+                    "profile": "release",
+                    "working_directory": "workspace",
+                    "environment": {
+                        "PATH": search.to_str().context("Fixture PATH is not UTF-8")?,
+                        "CARGO_HOME": cargo_home,
+                        "CARGO_NET_OFFLINE": "true",
+                        "COPPER_PROFILE_BUILD_OWNER": "host"
+                    },
+                    "native_profiler": {
+                        "collector_path": "/usr/bin/samply",
+                        "profile_path": "target/capture.json"
+                    }
+                }
+            }
+        }
+    })
+    .to_string();
+    Ok(settings)
+}
+
+async fn verify_headless_profile_build(
+    host: &gpui::Entity<crate::HeadlessProject>,
+    worktree_id: project::WorktreeId,
+    directory: &Path,
+    cx: &mut gpui::AsyncApp,
+) -> Result<()> {
+    use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
+    use project::cargo_workspace_store::HostCargoProfileSelection;
+    use util::rel_path::RelPath;
+
+    let tests = host.read_with(cx, |host, _| host.rust_test_provider_store.clone());
+    tests
+        .update(cx, |tests, cx| tests.refresh(cx))
+        .await
+        .context("Finishing the host's initial test discovery")?;
+    let manifest = RelPath::from_unix_str("runner/Cargo.toml")?.into_arc();
+    let select = |preset_id: &str, target_name: &str| HostCargoProfileSelection {
+        workspace: CargoWorkspaceKey {
+            root: project::ProjectPath {
+                worktree_id,
+                path: RelPath::empty_arc(),
+            },
+        },
+        package_manifest: project::ProjectPath {
+            worktree_id,
+            path: manifest.clone(),
+        },
+        target_kind: CargoTargetKind::Binary,
+        target_name: target_name.into(),
+        preset_id: preset_id.into(),
+    };
+    ensure!(
+        host.update(cx, |host, cx| host.build_selected_host_cargo_profile(
+            select("client-only", "runner"),
+            cx
+        ))
+        .is_err(),
+        "The host accepted a preset that does not exist in its settings"
+    );
+    let rejected = host
+        .update(cx, |host, cx| {
+            host.build_selected_host_cargo_profile(select("host-profile", "decoy"), cx)
+        })?
+        .await;
+    let error = rejected
+        .err()
+        .context("Host accepted a different target from its preset")?;
+    ensure!(
+        format!("{error:#}").contains("does not match the producing host's preset"),
+        "Unexpected target refusal: {error:#}"
+    );
+    let workload = host
+        .update(cx, |host, cx| {
+            host.build_selected_host_cargo_profile(select("host-profile", "runner"), cx)
+        })?
+        .await?;
+    let executable = workload.executable();
+    let target_root = directory.join("target");
+    let output = executable.strip_prefix(&target_root)?;
+    let host_triple = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+    let run_directory = output
+        .components()
+        .next()
+        .context("Host Build output has no run directory")?;
+    ensure!(
+        executable.is_file()
+            && output.ends_with(Path::new(&host_triple).join("release/runner"))
+            && run_directory
+                .as_os_str()
+                .to_string_lossy()
+                .starts_with("zed-native-profile-build-")
+            && workload.working_directory() == directory,
+        "The producing host admitted an unexpected Cargo executable"
+    );
+    ensure!(
+        !directory.join("target/profiled-project-workload").exists(),
+        "The host Build executed the workload"
+    );
+    println!(
+        "Registered headless Cargo store built and verified the exact host-selected profile executable"
+    );
+    Ok(())
+}
+
+fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()> {
     use gpui::{AppContext as _, UpdateGlobal as _};
     use project::ProjectPath;
     use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
     use project::cargo_workspace_store::CargoCoverageSelection;
-    use project::worktree_store::{WorktreeIdCounter, WorktreeStore};
+    use project::worktree_store::{WorktreeIdCounter, WorktreeStore, WorktreeStoreEvent};
     use std::sync::Arc;
     use util::rel_path::RelPath;
 
     let directory = std::fs::canonicalize(directory)?;
     let run_id = uuid::Uuid::new_v4();
     let artifact_path = format!("target/zed-coverage-{}.json", run_id.simple());
-    let launch = if select_cargo_target {
+    let profile_settings = if matches!(scenario, HeadlessTaskScenario::ProfileBuild) {
+        Some(write_headless_profile_build_fixture(&directory)?)
+    } else {
+        None
+    };
+    let launch = if matches!(scenario, HeadlessTaskScenario::SelectedCoverage) {
         write_collector_fixture(&directory)?;
         std::fs::write(directory.join("src/bin/second.rs"), "fn main() {}\n")?;
+        None
+    } else if profile_settings.is_some() {
         None
     } else {
         let invocation = collector_invocation(&directory, Path::new(&artifact_path))?;
@@ -1983,14 +2147,16 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
     let logical_report = directory.join(&artifact_path);
     std::fs::create_dir_all(directory.join("target"))?;
     std::fs::write(directory.join(".gitignore"), "/target/\n")?;
-    std::fs::write(&logical_report, b"unrelated stale report")?;
-    std::fs::write(
-        directory.join("expected-coverage.json"),
-        include_str!("../../project/test_data/source_coverage/llvm3-run.json").replace(
-            "/workspace",
-            directory.to_str().context("Non-Unicode fixture root")?,
-        ),
-    )?;
+    if profile_settings.is_none() {
+        std::fs::write(&logical_report, b"unrelated stale report")?;
+        std::fs::write(
+            directory.join("expected-coverage.json"),
+            include_str!("../../project/test_data/source_coverage/llvm3-run.json").replace(
+                "/workspace",
+                directory.to_str().context("Non-Unicode fixture root")?,
+            ),
+        )?;
+    }
     let group = headless_report_group(artifact_path);
 
     let (send, receive) = std::sync::mpsc::sync_channel(1);
@@ -2000,12 +2166,15 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
         crate::HeadlessProject::init(cx);
         let opt_in = settings::SettingsStore::update_global(cx, |store, cx| {
             store.register_setting::<feature_flags::FeatureFlagsSettings>();
-            store
-                .set_user_settings(
+            if let Some(settings) = profile_settings.as_ref() {
+                store.set_local_server_settings(settings, cx)
+            } else {
+                store.set_user_settings(
                     r#"{"load_direnv":"disabled","feature_flags":{"rust-coverage-experimental":"on"}}"#,
                     cx,
                 )
-                .result()
+                .result().map(|_| ())
+            }
         });
         project::trusted_worktrees::init(
             [(None, [directory.clone()].into_iter().collect())]
@@ -2066,8 +2235,24 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
                 cx,
             )
         });
+        let (indexed, index_published) = async_channel::bounded(1);
+        let initial_scan = profile_settings.is_some().then(|| {
+            let worktrees = host.read(cx).worktree_store.clone();
+            cx.subscribe(&worktrees, move |_, event, _| {
+                if let WorktreeStoreEvent::WorktreeUpdatedEntries(_, entries) = event
+                    && entries
+                        .iter()
+                        .any(|(path, _, _)| path.as_std_path() == Path::new("Cargo.toml"))
+                    && let Err(error) = indexed.try_send(())
+                {
+                    log::debug!("Cargo fixture finished observing its initial index: {error}");
+                }
+            })
+        });
         cx.spawn(async move |cx| {
-            let deadline = cx.background_executor().timer(Duration::from_secs(20));
+            let deadline = cx.background_executor().timer(Duration::from_secs(
+                if profile_settings.is_some() { 60 } else { 20 },
+            ));
             let stage = std::cell::Cell::new("registering the worktree");
             let run = async {
                 opt_in?;
@@ -2086,6 +2271,13 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
                             .map(|tree| tree.scan_complete())
                     })?
                     .await;
+                if profile_settings.is_some() {
+                    index_published.recv().await?;
+                    drop(initial_scan);
+                    stage.set("building the host-selected profile workload");
+                    let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+                    return verify_headless_profile_build(&host, worktree_id, &directory, cx).await;
+                }
                 stage.set("running the Cargo LLVM collector");
                 let (snapshot, recovery) = if let Some(launch) = launch {
                     let snapshot = host.update(cx, |host, cx| {
@@ -2150,15 +2342,15 @@ fn headless_collector(directory: &Path, select_cargo_target: bool) -> Result<()>
             let result = match futures::future::select(Box::pin(run), deadline).await {
                 futures::future::Either::Left((result, _)) => result,
                 futures::future::Either::Right(_) => Err(anyhow::anyhow!(
-                    "Headless Coverage Task fixture timed out while {}",
+                    "Headless Task fixture timed out while {}",
                     stage.get()
                 )),
             };
             if let Err(error) = &result {
-                eprintln!("Headless coverage fixture failed: {error:#}");
+                eprintln!("Headless Task fixture failed: {error:#}");
             }
             if let Err(error) = send.send(result) {
-                log::error!("Headless Coverage Task fixture lost its caller: {error}");
+                log::error!("Headless Task fixture lost its caller: {error}");
             }
             drop(host);
             drop(client_worktrees);
@@ -2196,6 +2388,7 @@ pub enum Scenario {
     CargoBuildCancellation,
     CargoBuildProfilePty,
     CargoBuildProfileHeadless,
+    RegisteredHeadlessProfileBuild,
     NativeCargoRuntimeTransition,
     NativeCargoRuntimeProfile,
     HeadlessCollector,
@@ -2246,7 +2439,12 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::CargoBuildProfileHeadless => native_cargo_profile_terminal(directory, true),
         Scenario::NativeCargoRuntimeTransition => native_cargo_runtime_transition(directory, false),
         Scenario::NativeCargoRuntimeProfile => native_cargo_runtime_transition(directory, true),
-        Scenario::HeadlessCollector => headless_collector(directory, false),
-        Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
+        Scenario::HeadlessCollector => headless_task(directory, HeadlessTaskScenario::Coverage),
+        Scenario::SelectedHeadlessCollector => {
+            headless_task(directory, HeadlessTaskScenario::SelectedCoverage)
+        }
+        Scenario::RegisteredHeadlessProfileBuild => {
+            headless_task(directory, HeadlessTaskScenario::ProfileBuild)
+        }
     }
 }

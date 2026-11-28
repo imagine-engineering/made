@@ -110,6 +110,12 @@ fn cargo_build_cancellation_reaps_children_and_discards_stdout() -> io::Result<(
 }
 
 #[test]
+#[ignore = "requires a separately built Rust-tools host and installed Linux Cargo"]
+fn registered_headless_host_builds_the_selected_profile_target() -> io::Result<()> {
+    run_terminal_fixture("registered-headless-profile-build")
+}
+
+#[test]
 #[ignore = "requires an independently built host, the pinned Cargo and a Linux perf environment"]
 fn native_cargo_profile_uses_the_fresh_executable_on_both_terminal_backends() -> io::Result<()> {
     run_terminal_fixture("cargo-build-profile-pty")?;

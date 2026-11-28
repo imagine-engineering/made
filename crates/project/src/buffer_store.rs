@@ -169,6 +169,13 @@ impl PartialEq for ProjectTransaction {
 
 impl EventEmitter<BufferStoreEvent> for BufferStore {}
 
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl BufferStore {
+    pub(crate) fn owns_native_task_worktrees(&self, worktrees: &Entity<WorktreeStore>) -> bool {
+        self.worktree_store == *worktrees && matches!(self.state, BufferStoreState::Local(_))
+    }
+}
+
 impl RemoteBufferStore {
     pub fn wait_for_remote_buffer(
         &mut self,

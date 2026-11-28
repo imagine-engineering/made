@@ -529,6 +529,17 @@ impl HeadlessProject {
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn build_selected_host_cargo_profile(
+        &self,
+        selection: project::cargo_workspace_store::HostCargoProfileSelection,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<project::cargo_workspace_store::LinuxNativeCargoWorkload>>> {
+        self.cargo_workspace_store.update(cx, |store, cx| {
+            store.build_selected_headless_cargo_profile(selection, cx)
+        })
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
     pub fn run_host_coverage_task(
         &self,
         run_id: String,
@@ -701,6 +712,14 @@ impl HeadlessProject {
             buffer_store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
             buffer_store
         });
+        #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+        if !isolated_recipe_test {
+            cargo_workspace_store
+                .update(cx, |store, cx| {
+                    store.register_headless_profile_host(&buffer_store, cx)
+                })
+                .log_err();
+        }
         #[cfg(feature = "jvm-tools")]
         let jvm_test_provider_store = cx.new(|cx| {
             project::jvm_test_provider::JvmTestProviderStore::local(
