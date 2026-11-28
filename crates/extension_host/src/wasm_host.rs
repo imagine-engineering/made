@@ -78,6 +78,75 @@ fn apply_jdtls_workspace_default(
     Ok(())
 }
 
+const KOTLIN_FALLBACK_CACHE: &str = "kotlin-language-server-1.3.13/server";
+
+async fn verified_kotlin_fallback_launcher(fs: &dyn Fs, work_dir: &Path) -> Result<PathBuf> {
+    use sha2::{Digest as _, Sha256};
+
+    // Derived from the independently verified upstream 1.3.13 server.zip.
+    const CACHED_TREE_SHA256: &str =
+        "5dc1869647446454ae6f256e53e0ea8fe6a575c6c2e0ca9ad9293ee91ef3056b";
+    const FILE_COUNT: usize = 41;
+    const TOTAL_BYTES: usize = 93_627_705;
+    let root = fs.capture_confined_root(work_dir).await?;
+    let cache = Path::new(KOTLIN_FALLBACK_CACHE);
+    let mut files = Vec::with_capacity(FILE_COUNT);
+    let mut total_bytes = 0;
+    for (directory, limit) in [("", 3), ("bin", 2), ("lib", 38)] {
+        let entries = fs
+            .list_confined_directory(&root, work_dir, &cache.join(directory), limit)
+            .await?;
+        for entry in entries {
+            let name = entry
+                .name
+                .to_str()
+                .context("Invalid Kotlin cache filename")?;
+            if entry.is_dir {
+                anyhow::ensure!(
+                    directory.is_empty() && matches!(name, "bin" | "lib"),
+                    "Unexpected directory in the Kotlin cache"
+                );
+                continue;
+            }
+            let size = usize::try_from(entry.len).context("Invalid Kotlin cache size")?;
+            total_bytes = usize::checked_add(total_bytes, size)
+                .filter(|total| *total <= TOTAL_BYTES)
+                .context("The Kotlin cache exceeds its verified size")?;
+            let relative = if directory.is_empty() {
+                name.to_owned()
+            } else {
+                format!("{directory}/{name}")
+            };
+            files.push((relative, size));
+        }
+    }
+    anyhow::ensure!(
+        files.len() == FILE_COUNT && total_bytes == TOTAL_BYTES,
+        "The pinned Kotlin cache is incomplete"
+    );
+    files.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+    let launcher = "bin/kotlin-language-server";
+    let mut fingerprint = Sha256::new();
+    for (relative, size) in files {
+        let contents = fs
+            .read_confined_file(&root, work_dir, &cache.join(&relative), size)
+            .await?;
+        anyhow::ensure!(
+            contents.bytes.len() == size
+                && (relative != launcher || contents.metadata.is_executable),
+            "Unusable file in the pinned Kotlin cache"
+        );
+        fingerprint.update(relative.as_bytes());
+        fingerprint.update([0]);
+        fingerprint.update(Sha256::digest(contents.bytes));
+    }
+    anyhow::ensure!(
+        format!("{:x}", fingerprint.finalize()) == CACHED_TREE_SHA256,
+        "The pinned Kotlin cache does not match the verified distribution"
+    );
+    Ok(cache.join(launcher))
+}
+
 pub struct WasmHost {
     engine: Engine,
     release_channel: ReleaseChannel,
@@ -178,10 +247,16 @@ impl extension::Extension for WasmExtension {
         language_name: LanguageName,
         worktree: Arc<dyn WorktreeDelegate>,
     ) -> Result<Command> {
-        self.call(|extension, store| {
+        let recover_pinned_fallback = cfg!(unix)
+            && product_flavor::ID == "jvm"
+            && self.manifest.id.as_ref() == "kotlin"
+            && self.manifest.version.as_ref() == "0.3.5"
+            && language_server_id == LanguageServerName::new_static("kotlin-language-server");
+        let work_dir = self.work_dir.clone();
+        self.call(move |extension, store| {
             async move {
                 let resource = store.data_mut().table.push(worktree)?;
-                let command = extension
+                match extension
                     .call_language_server_command(
                         store,
                         &language_server_id,
@@ -189,9 +264,29 @@ impl extension::Extension for WasmExtension {
                         resource,
                     )
                     .await?
-                    .map_err(|err| store.data().extension_error(err))?;
-
-                Ok(command.into())
+                {
+                    Ok(command) => Ok(command.into()),
+                    Err(error) => {
+                        if recover_pinned_fallback
+                            && error.lines().next() == Some("error fetching latest release")
+                        {
+                            match verified_kotlin_fallback_launcher(
+                                store.data().host.fs.as_ref(),
+                                &work_dir,
+                            ).await {
+                                Ok(command) => return Ok(Command {
+                                    command,
+                                    args: Vec::new(),
+                                    env: Vec::new(),
+                                }),
+                                Err(cache_error) => log::debug!(
+                                    "Could not use the pinned Kotlin fallback cache: {cache_error:#}"
+                                ),
+                            }
+                        }
+                        Err(store.data().extension_error(error))
+                    }
+                }
             }
             .boxed()
         })
@@ -1184,6 +1279,63 @@ mod tests {
             extension::init(cx);
             gpui_tokio::init(cx);
         });
+    }
+
+    #[cfg(unix)]
+    #[gpui::test]
+    #[ignore = "requires GROOVY_KOTLIN_FALLBACK_CACHE pointing to the verified 1.3.13 server directory"]
+    async fn pinned_kotlin_fallback_cache_rejects_missing_modified_and_aliased_files(
+        cx: &mut TestAppContext,
+    ) {
+        let distribution = PathBuf::from(
+            std::env::var_os("GROOVY_KOTLIN_FALLBACK_CACHE").expect("verified fallback fixture"),
+        );
+        let directory = tempfile::tempdir().expect("disposable extension cache");
+        let work_dir = std::fs::canonicalize(directory.path()).expect("canonical extension cache");
+        let mut fixture = work_dir.join(KOTLIN_FALLBACK_CACHE);
+        std::fs::create_dir_all(fixture.parent().expect("version directory"))
+            .expect("prepare empty cache parent");
+        let filesystem = fs::RealFs::new(None, cx.executor());
+        cx.executor().allow_parking();
+        assert!(
+            verified_kotlin_fallback_launcher(&filesystem, &work_dir)
+                .await
+                .is_err()
+        );
+        fs::copy_recursive(
+            &filesystem,
+            &distribution,
+            &fixture,
+            fs::CopyOptions::default(),
+        )
+        .await
+        .expect("copy the pinned distribution into the disposable cache");
+        let launcher = Path::new(KOTLIN_FALLBACK_CACHE).join("bin/kotlin-language-server");
+        assert_eq!(
+            verified_kotlin_fallback_launcher(&filesystem, &work_dir)
+                .await
+                .expect("accept the verified distribution"),
+            launcher
+        );
+
+        fixture.push("lib/server-1.3.13.jar");
+        let mut bytes = std::fs::read(&fixture).expect("read the disposable server jar");
+        *bytes.first_mut().expect("modify the server jar") ^= 1;
+        std::fs::write(&fixture, bytes).expect("replace one byte without changing the cache size");
+        assert!(
+            verified_kotlin_fallback_launcher(&filesystem, &work_dir)
+                .await
+                .is_err()
+        );
+
+        std::fs::remove_file(&fixture).expect("remove the modified fixture jar");
+        std::os::unix::fs::symlink(distribution.join("lib/server-1.3.13.jar"), &fixture)
+            .expect("alias the original archive file");
+        assert!(
+            verified_kotlin_fallback_launcher(&filesystem, &work_dir)
+                .await
+                .is_err()
+        );
     }
 
     #[gpui::test]

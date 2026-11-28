@@ -148,6 +148,13 @@ selection before adding Serial GC. This experimental setting kept the sampled
 combined peak below 8 GiB in cached Maven and Gradle runs on a 256 GiB Mac.
 The 32 GiB reference-host check remains open.
 
+On macOS and Linux project hosts, Groovy can start the cached alternate
+server when the Kotlin extension cannot reach its release metadata. The
+cache must contain the complete verified 1.3.13 distribution. Explicit binary
+overrides still take precedence. If the cache is missing or damaged, select
+a compatible installed binary or restore the extension-managed installation
+on the project host and restart the fallback.
+
 For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
 repository. Cache the Maven Dependency Plugin used by `dependency:list` and
