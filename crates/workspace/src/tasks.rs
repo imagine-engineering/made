@@ -17,6 +17,7 @@ use collections::{BTreeMap, HashSet};
 use futures::{FutureExt as _, StreamExt as _};
 use gpui::{AppContext, AsyncWindowContext, Context, Entity, Task, TaskExt, WeakEntity};
 use language::Buffer;
+pub use project::task_store::resolve_task_reference;
 use project::{TaskSourceKind, WorktreeId};
 #[cfg(feature = "jvm-tools")]
 use project::{
@@ -631,26 +632,6 @@ type TaskAdmissionHandler = Box<
     ) -> Result<Option<project::terminals::TaskTerminalCheck>>,
 >;
 type TaskAdmissionPreflight = Box<dyn FnOnce(&Workspace, &gpui::App) -> bool>;
-
-pub fn resolve_task_reference(
-    tasks: Vec<(TaskSourceKind, TaskTemplate)>,
-    label: &str,
-    task_context: &TaskContext,
-) -> Result<(TaskSourceKind, ResolvedTask)> {
-    let mut matches = tasks
-        .into_iter()
-        .filter(|(_, template)| template.label == label);
-    let (source, template) = matches
-        .next()
-        .with_context(|| format!("pre-launch task `{label}` was not found"))?;
-    if matches.next().is_some() {
-        bail!("pre-launch task reference `{label}` is ambiguous");
-    }
-    let resolved = template
-        .resolve_task(&source.to_id_base(), task_context)
-        .with_context(|| format!("pre-launch task `{label}` could not be resolved"))?;
-    Ok((source, resolved))
-}
 
 impl Workspace {
     fn begin_native_profile_review(

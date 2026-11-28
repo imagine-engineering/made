@@ -20557,11 +20557,28 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
                 "subcommand":"run",
                 "working_directory":"custom",
                 "custom_working_directory":"$ZED_WORKTREE_ROOT",
-                "environment":{"COVERAGE_PRESET_OWNER":"producer"}
+                "environment":{"COVERAGE_PRESET_OWNER":"producer"},
+                "pre_launch_task":"Prepare coverage"
+            }, "failed-preparation":{
+                "subcommand":"run", "pre_launch_task":"Fail coverage preparation"
+            }, "waiting-preparation":{
+                "subcommand":"run", "pre_launch_task":"Wait before coverage"
+            }, "missing-preparation":{
+                "subcommand":"run", "pre_launch_task":"Missing Task"
             }}}
         }"#,
     )
     .expect("explicit host opt-in");
+    std::fs::create_dir(fixture.path().join(".zed")).expect("host Task directory");
+    std::fs::write(
+        fixture.path().join(".zed/tasks.json"),
+        r#"[
+            {"label":"Prepare coverage","command":"mkdir -p target && printf prepared > target/prepared"},
+            {"label":"Fail coverage preparation","command":"exit 9"},
+            {"label":"Wait before coverage","command":"sh","args":["prepare-coverage.sh"]}
+        ]"#,
+    )
+    .expect("authored host Tasks");
     std::fs::create_dir_all(fixture.path().join("src/bin")).expect("binary directory");
     for (path, content) in [
         (
@@ -20598,6 +20615,10 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
             "src/bin/held.rs",
             "fn main() { std::fs::write(\"target/started\", std::process::id().to_string()).expect(\"announce\"); std::thread::sleep(std::time::Duration::from_secs(15)); }",
         ),
+        (
+            "prepare-coverage.sh",
+            "mkdir -p target\nprintf '%s' \"$$\" > target/preparing\nexec sleep 60\n",
+        ),
         (".gitignore", "/target/\n"),
     ] {
         let destination = fixture.path().join(path);
@@ -20611,7 +20632,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
         binary_source,
         source.replacen(
             "    println!",
-            "    std::fs::write(\"target/preset-owner\", std::env::var(\"COVERAGE_PRESET_OWNER\").unwrap_or_default()).expect(\"record preset environment\"); println!",
+            "    let owner = std::env::var(\"COVERAGE_PRESET_OWNER\").unwrap_or_default(); if !owner.is_empty() { assert_eq!(std::fs::read_to_string(\"target/prepared\").unwrap(), \"prepared\"); } std::fs::write(\"target/preset-owner\", owner).expect(\"record preset environment\"); println!",
             1,
         ),
     )
@@ -20750,6 +20771,7 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
                 "cargo":{"presets":{"host-coverage":{
                     "label":"Producing host coverage",
                     "subcommand":"run",
+                    "pre_launch_task":"This client Task must never run",
                     "environment":{"COVERAGE_PRESET_OWNER":"client"}
                 }}}
             }"#,
@@ -20815,6 +20837,50 @@ async fn rust_tools_headless_runtime_coverage_task_capture_registered(cx: &mut T
     drop(capture);
     assert_coverage_workload_stopped(child, cx).await;
     std::fs::remove_file(&marker).expect("retire the provider workload marker");
+    std::fs::remove_file(fixture.path().join("target/preset-owner"))
+        .expect("retire the named main workload marker");
+    let run_with_preset = |operation_id, preset: &str| proto::RunRustCoverageTask {
+        preset_id: Some(preset.into()),
+        ..run(operation_id, "fixture-bin")
+    };
+    for (operation, preset) in [(93, "failed-preparation"), (94, "missing-preparation")] {
+        require_failure(
+            transport
+                .request(run_with_preset(operation, preset))
+                .await
+                .expect("before-launch failure response"),
+            proto::RustCoverageTaskFailure::HostFailed as i32,
+        );
+    }
+    let preparing =
+        cx.background_spawn(transport.request(run_with_preset(95, "waiting-preparation")));
+    let prerequisite_child =
+        wait_for_coverage_workload(&fixture.path().join("target/preparing"), cx).await;
+    assert_eq!(
+        transport
+            .request(proto::CancelRustCoverageTask {
+                project_id: proto::REMOTE_SERVER_PROJECT_ID,
+                operation_id: 95,
+                session_token: session.clone(),
+                authorization: None,
+            })
+            .await
+            .expect("cancel before-launch Task")
+            .outcome,
+        Some(Outcome::Cancelled(true)),
+    );
+    assert_eq!(
+        preparing
+            .await
+            .expect("cancelled prerequisite response")
+            .outcome,
+        Some(Outcome::Cancelled(true))
+    );
+    assert_coverage_workload_stopped(prerequisite_child, cx).await;
+    assert!(
+        !fixture.path().join("target/preset-owner").exists(),
+        "an unsuccessful prerequisite must never start the main workload"
+    );
     require_failure(
         transport
             .request(proto::RunRustCoverageTask {

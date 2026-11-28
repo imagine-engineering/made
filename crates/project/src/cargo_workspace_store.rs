@@ -178,6 +178,29 @@ pub struct PreparedHostCoverageTask {
     snapshot_revision: u64,
     worktree_store: gpui::EntityId,
     preset_settings_source: Option<settings::ServerSettingsSource>,
+    prerequisite: Option<HostCoveragePrerequisite>,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct HostCoveragePrerequisite {
+    pub(crate) reference: String,
+    pub(crate) package: ProjectPath,
+    pub(crate) context: task::TaskContext,
+    preset: HostCoveragePreset,
+    settings: settings::CargoSettingsContent,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl HostCoveragePrerequisite {
+    pub async fn revalidate(&self) -> Result<()> {
+        let current = self
+            .preset
+            .load_settings()
+            .await
+            .context(HostCoveragePresetUnavailable)?;
+        ensure!(current == self.settings, HostCoveragePresetUnavailable);
+        Ok(())
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -254,7 +277,12 @@ impl HostCoveragePreset {
         &self,
         settings: &settings::CargoSettingsContent,
         workspace_directory: &Path,
-    ) -> Result<(task::TaskTemplate, PathBuf, task::TaskContext)> {
+    ) -> Result<(
+        task::TaskTemplate,
+        PathBuf,
+        task::TaskContext,
+        Option<String>,
+    )> {
         use crate::cargo_preset::{CargoPresetScope, CargoSubcommand, compile_preset};
         use feature_flags::{FeatureFlag as _, RustNamedCargoPresetsExperimentalFeatureFlag};
 
@@ -263,10 +291,6 @@ impl HostCoveragePreset {
             .presets
             .remove(&self.identifier)
             .context("The producing project has no valid preset with this identifier")?;
-        ensure!(
-            preset.pre_launch_task.is_none(),
-            "Named Coverage presets with before-launch Tasks require host Task sequencing"
-        );
         ensure!(
             preset.args.iter().all(|argument| {
                 let option = argument.split('=').next().unwrap_or_default();
@@ -326,7 +350,7 @@ impl HostCoveragePreset {
             *argument = task::substitute_variables_in_str(argument, &context)
                 .context("Coverage preset arguments require unavailable Task variables")?;
         }
-        Ok((template, directory, context))
+        Ok((template, directory, context, preset.pre_launch_task))
     }
 }
 
@@ -5742,33 +5766,38 @@ impl CargoWorkspaceStore {
                 );
                 store.host_coverage_context(&selection, cx)
             })??;
-            let (mut template, directory, mut context, preset_settings) = if let Some(preset) =
-                preset
-            {
-                cx.background_spawn(async move {
-                    let settings = preset
-                        .load_settings()
-                        .await
-                        .context(HostCoveragePresetUnavailable)?;
-                    let (template, directory, context) = preset
-                        .compile(&settings, &directory)
-                        .context(HostCoveragePresetUnavailable)?;
-                    Ok::<_, anyhow::Error>((template, directory, context, Some((preset, settings))))
-                })
-                .await?
-            } else {
-                let context = task::TaskContext {
-                    cwd: Some(directory.clone()),
-                    ..Default::default()
+            let (mut template, directory, mut context, preset_settings) =
+                if let Some(preset) = preset {
+                    cx.background_spawn(async move {
+                        let settings = preset
+                            .load_settings()
+                            .await
+                            .context(HostCoveragePresetUnavailable)?;
+                        let (template, directory, context, prerequisite) = preset
+                            .compile(&settings, &directory)
+                            .context(HostCoveragePresetUnavailable)?;
+                        Ok::<_, anyhow::Error>((
+                            template,
+                            directory,
+                            context,
+                            Some((preset, settings, prerequisite)),
+                        ))
+                    })
+                    .await?
+                } else {
+                    let context = task::TaskContext {
+                        cwd: Some(directory.clone()),
+                        ..Default::default()
+                    };
+                    (template, directory, context, None)
                 };
-                (template, directory, context, None)
-            };
             let project_environment = environment
                 .update(cx, |environment, cx| {
                     environment.directory_environment(Arc::from(directory.as_path()), cx)
                 })
                 .await
                 .context("Coverage host environment is unavailable")?;
+            let package = selection.package_manifest.clone();
             let resolved = cx
                 .background_spawn(async move {
                     let mut environment = std::env::vars_os()
@@ -5847,16 +5876,25 @@ impl CargoWorkspaceStore {
                         .resolve_task_with_literal_arguments("host Cargo coverage", &context)
                         .context("Unable to resolve the selected Coverage Task")?
                         .bind_artifact_invocation(&run_id.simple().to_string())?;
-                    let preset_settings_source = match preset_settings {
-                        Some((preset, settings)) => {
+                    let (preset_settings_source, prerequisite) = match preset_settings {
+                        Some((preset, settings, prerequisite)) => {
                             let current = preset
                                 .load_settings()
                                 .await
                                 .context(HostCoveragePresetUnavailable)?;
                             ensure!(current == settings, HostCoveragePresetUnavailable);
-                            Some(preset.source)
+                            let source = preset.source.clone();
+                            let prerequisite =
+                                prerequisite.map(|reference| HostCoveragePrerequisite {
+                                    reference,
+                                    package,
+                                    context,
+                                    preset,
+                                    settings,
+                                });
+                            (Some(source), prerequisite)
                         }
-                        None => None,
+                        None => (None, None),
                     };
                     Ok::<_, anyhow::Error>(PreparedHostCoverageTask {
                         run_id: run_id.to_string(),
@@ -5864,6 +5902,7 @@ impl CargoWorkspaceStore {
                         snapshot_revision: revision,
                         worktree_store,
                         preset_settings_source,
+                        prerequisite,
                     })
                 })
                 .await?;
@@ -6094,12 +6133,26 @@ impl CargoWorkspaceStore {
     }
 
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn take_host_coverage_prerequisite(
+        &self,
+        prepared: &mut PreparedHostCoverageTask,
+        cx: &App,
+    ) -> Result<Option<HostCoveragePrerequisite>> {
+        self.validate_host_coverage_task(prepared, cx)?;
+        Ok(prepared.prerequisite.take())
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
     pub fn take_host_coverage_launch(
         &self,
         prepared: PreparedHostCoverageTask,
         cx: &App,
     ) -> Result<(String, task::SpawnInTerminal, task::TaskArtifactGroup)> {
         self.validate_host_coverage_task(&prepared, cx)?;
+        ensure!(
+            prepared.prerequisite.is_none(),
+            "Coverage prerequisite has not been run"
+        );
         let group = prepared
             .resolved
             .resolved_artifact_group()

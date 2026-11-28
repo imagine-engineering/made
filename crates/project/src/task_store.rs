@@ -16,7 +16,7 @@ use language::{
 };
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
 use settings::{InvalidSettingsError, SettingsLocation};
-use task::{TaskContext, TaskTemplate, TaskVariables, VariableName};
+use task::{ResolvedTask, TaskContext, TaskTemplate, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt};
 use util::ResultExt;
 use worktree::WorktreeId;
@@ -30,6 +30,27 @@ use crate::{
 pub enum TaskStore {
     Functional(StoreState),
     Noop,
+}
+
+pub fn resolve_task_reference(
+    tasks: impl IntoIterator<Item = (TaskSourceKind, TaskTemplate)>,
+    label: &str,
+    context: &TaskContext,
+) -> anyhow::Result<(TaskSourceKind, ResolvedTask)> {
+    let mut matches = tasks
+        .into_iter()
+        .filter(|(_, template)| template.label == label);
+    let (source, template) = matches
+        .next()
+        .with_context(|| format!("pre-launch task `{label}` was not found"))?;
+    anyhow::ensure!(
+        matches.next().is_none(),
+        "pre-launch task reference `{label}` is ambiguous"
+    );
+    let resolved = template
+        .resolve_task(&source.to_id_base(), context)
+        .with_context(|| format!("pre-launch task `{label}` could not be resolved"))?;
+    Ok((source, resolved))
 }
 
 pub struct StoreState {
@@ -1325,6 +1346,211 @@ fn admit_coverage_task_sources(
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 impl TaskStore {
+    pub fn run_host_coverage_prerequisite(
+        &self,
+        prerequisite: &crate::cargo_workspace_store::HostCoveragePrerequisite,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Task<anyhow::Result<()>>> {
+        use crate::trusted_worktrees::{TrustedWorktrees, TrustedWorktreesEvent};
+        use gpui::AppContext as _;
+        use settings::Settings as _;
+        use terminal::{
+            TaskState, TaskStatus, TerminalBuilder, terminal_settings::TerminalSettings,
+        };
+
+        let Self::Functional(StoreState {
+            mode: StoreMode::Local { .. },
+            task_inventory,
+            worktree_store,
+            ..
+        }) = self
+        else {
+            anyhow::bail!("Coverage before-launch Task requires the producing Task store");
+        };
+        anyhow::ensure!(
+            !TrustedWorktrees::has_restricted_worktrees(worktree_store, cx),
+            "Coverage before-launch Task requires a trusted project"
+        );
+        let worktree_id = prerequisite.package.worktree_id;
+        let package_scope = prerequisite
+            .package
+            .path
+            .parent()
+            .context("Coverage package has no directory")?;
+        let tasks = task_inventory
+            .read(cx)
+            .saved_task_templates(worktree_id)
+            .filter(|(source, _)| match source {
+                TaskSourceKind::Worktree {
+                    directory_in_worktree,
+                    ..
+                } => directory_in_worktree
+                    .parent()
+                    .is_some_and(|scope| package_scope.starts_with(scope)),
+                TaskSourceKind::AbsPath { .. } => true,
+                _ => false,
+            });
+        let (_, resolved) =
+            resolve_task_reference(tasks, &prerequisite.reference, &prerequisite.context)?;
+        let resolved = resolved.resolved;
+        validate_experimental_task_requirements(&resolved, cx)?;
+        let worktrees = worktree_store.read(cx);
+        let directory = resolved
+            .cwd
+            .clone()
+            .context("Coverage before-launch Task has no working directory")?;
+        let path = worktrees
+            .project_path_for_absolute_path(&directory, cx)
+            .context("Coverage before-launch Task directory is outside the project")?;
+        let worktree = worktrees
+            .worktree_for_id(path.worktree_id, cx)
+            .filter(|worktree| worktree.read(cx).is_visible() && worktree.read(cx).is_local())
+            .context("Coverage before-launch Task requires a visible local worktree")?;
+        let root = worktree.read(cx).abs_path().to_path_buf();
+        anyhow::ensure!(
+            directory.starts_with(&root),
+            "Coverage before-launch Task is outside its worktree"
+        );
+        let settings = TerminalSettings::get(
+            Some(SettingsLocation {
+                worktree_id: path.worktree_id,
+                path: &path.path,
+            }),
+            cx,
+        )
+        .clone();
+        let (invalidated, invalidation) = async_channel::bounded::<()>(1);
+        let trust = TrustedWorktrees::try_get_global(cx).map(|trust| {
+            let worktree_store = worktree_store.downgrade();
+            let invalidated = invalidated.clone();
+            cx.subscribe(&trust, move |_, _, event, _| {
+                if matches!(event, TrustedWorktreesEvent::Restricted(store, _) if *store == worktree_store) {
+                    invalidated.close();
+                }
+            })
+        });
+        let feature = cx.observe_global::<feature_flags::FeatureFlagStore>(move |_, cx| {
+            if !cx.has_flag::<RustCoverageExperimentalFeatureFlag>()
+                || !cx.has_flag::<feature_flags::RustNamedCargoPresetsExperimentalFeatureFlag>()
+            {
+                invalidated.close();
+            }
+        });
+        let worktree_store = worktree_store.clone();
+        let (observer_released, retained_observer) = async_channel::bounded::<()>(1);
+        let (report_outcome, outcome) = futures::channel::oneshot::channel();
+        cx.spawn(async move |_, cx| {
+            let (_trust, _feature) = (trust, feature);
+            let result = async {
+                anyhow::ensure!(
+                    smol::fs::canonicalize(&directory).await? == directory,
+                    "Coverage before-launch Task directory changed before launch"
+                );
+                let builder = cx.update(|cx| {
+                    anyhow::ensure!(
+                        !invalidation.is_closed()
+                            && !observer_released.is_closed()
+                            && worktree_store
+                                .read(cx)
+                                .worktree_for_id(path.worktree_id, cx)
+                                .is_some()
+                            && !TrustedWorktrees::has_restricted_worktrees(&worktree_store, cx),
+                        "Coverage before-launch Task authority changed"
+                    );
+                    validate_experimental_task_requirements(&resolved, cx)?;
+                    let (program, args) = task::ShellBuilder::new(&resolved.shell, false)
+                        .non_interactive()
+                        .build_with_command_intent(
+                            resolved.command.clone(),
+                            &resolved.args,
+                            resolved.literal_command,
+                            resolved.literal_prefix_args,
+                        );
+                    let mut env = settings.env;
+                    env.extend(resolved.env.clone());
+                    let (completed, completion) = async_channel::bounded(1);
+                    Ok::<_, anyhow::Error>(TerminalBuilder::new(
+                        Some(directory),
+                        Some(TaskState {
+                            spawned_task: resolved,
+                            status: TaskStatus::Running,
+                            completion_rx: completion,
+                            structured_task: None,
+                        }),
+                        task::Shell::WithArguments {
+                            program,
+                            args,
+                            title_override: None,
+                        },
+                        env,
+                        settings.cursor_shape,
+                        settings.alternate_scroll,
+                        settings.max_scroll_history_lines,
+                        settings.path_hyperlink_regexes,
+                        settings.path_hyperlink_timeout_ms,
+                        false,
+                        0,
+                        Some(completed),
+                        cx,
+                        Vec::new(),
+                        util::paths::PathStyle::Unix,
+                    ))
+                })?;
+                let builder = builder.await?;
+                let terminal = cx.new(|cx| builder.subscribe(cx));
+                let completion =
+                    terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let cancelled = smol::future::race(observer_released.closed(), async {
+                    if invalidation.recv().await.is_ok() {
+                        log::error!(
+                            "Coverage Task authority channel received an unexpected message"
+                        );
+                    }
+                });
+                match futures::future::select(completion, Box::pin(cancelled)).await {
+                    futures::future::Either::Left((status, _)) => {
+                        anyhow::ensure!(
+                            !invalidation.is_closed() && !observer_released.is_closed(),
+                            "Coverage before-launch Task authority changed"
+                        );
+                        let status = status
+                            .context("Coverage before-launch Task did not report an exit status")?;
+                        anyhow::ensure!(
+                            status.success(),
+                            "Coverage before-launch Task exited with {status}"
+                        );
+                        Ok(())
+                    }
+                    futures::future::Either::Right(((), completion)) => {
+                        terminal.update(cx, |terminal, _| terminal.kill_active_task());
+                        let deadline = cx
+                            .background_executor()
+                            .timer(std::time::Duration::from_secs(10));
+                        anyhow::ensure!(
+                            matches!(
+                                futures::future::select(completion, deadline).await,
+                                futures::future::Either::Left((Some(_), _))
+                            ),
+                            "Terminal did not observe Coverage before-launch Task cancellation"
+                        );
+                        anyhow::bail!("Coverage before-launch Task was cancelled")
+                    }
+                }
+            }
+            .await;
+            if report_outcome.send(result).is_err() {
+                log::debug!("Coverage caller released the before-launch Task");
+            }
+        })
+        .detach();
+        Ok(cx.spawn(async move |_, _| {
+            let _retained_observer = retained_observer;
+            outcome
+                .await
+                .context("Coverage before-launch Task lost its host owner")?
+        }))
+    }
+
     /// The launch comes from the producing host's Task resolver. A peer request cannot supply it.
     pub fn run_host_coverage_task(
         &self,

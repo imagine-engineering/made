@@ -537,7 +537,21 @@ impl HeadlessProject {
             store.prepare_host_coverage_task(selection, cx)
         })?;
         Ok(cx.spawn(async move |this, cx| {
-            let prepared = planned.await?;
+            let mut prepared = planned.await?;
+            let prerequisite = this.read_with(cx, |host, cx| {
+                host.cargo_workspace_store
+                    .read(cx)
+                    .take_host_coverage_prerequisite(&mut prepared, cx)
+            })??;
+            if let Some(prerequisite) = prerequisite {
+                this.update(cx, |host, cx| {
+                    host.task_store.update(cx, |store, cx| {
+                        store.run_host_coverage_prerequisite(&prerequisite, cx)
+                    })
+                })??
+                .await?;
+                prerequisite.revalidate().await?;
+            }
             this.update(cx, |host, cx| {
                 let (run_id, launch, group) = host
                     .cargo_workspace_store
