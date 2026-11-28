@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::Cell,
-    path::Path,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -13,6 +13,7 @@ use gpui::{BorrowAppContext as _, TestAppContext};
 use language::{
     BufferEvent, FakeLspAdapter, Language, LanguageConfig, LanguageMatcher, LanguageQueries,
 };
+use lsp::LanguageServerSelector;
 use project::{
     DEFAULT_COMPLETION_CONTEXT, LspAction, Project,
     jvm_project::KotlinWorkspaceDependency,
@@ -39,6 +40,241 @@ fn copy_fixture(source: &Path, destination: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[gpui::test]
+#[ignore = "requires a guarded Kotlin fallback 1.3.13 launcher, JDK, and isolated cached Maven or Gradle home"]
+async fn cached_kotlin_fallback_navigates_unsaved_edits_across_restart(cx: &mut TestAppContext) {
+    super::init_test(cx);
+    cx.executor().allow_parking();
+    cx.update(|cx| trusted_worktrees::init(DbTrustedPaths::default(), cx));
+
+    let fixture = std::env::var("GROOVY_KOTLIN_FALLBACK_FIXTURE").expect("fixture kind");
+    assert!(matches!(fixture.as_str(), "maven" | "gradle"));
+    let input = |key| {
+        let path = PathBuf::from(std::env::var_os(key).unwrap_or_else(|| panic!("missing {key}")));
+        assert!(path.is_absolute() && path.exists(), "invalid {key}");
+        path
+    };
+    let launcher = input("GROOVY_KOTLIN_FALLBACK_LAUNCHER");
+    let java_home = input("GROOVY_BUILD_JAVA_HOME");
+    let cache = input("GROOVY_KOTLIN_FALLBACK_CACHE");
+    let state = tempfile::tempdir().expect("isolated fallback state");
+    let root = state.path().join("project");
+    copy_fixture(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("test_data/groovy_jvm_{fixture}")),
+        &root,
+    )
+    .expect("copy the checked-in mixed-language fixture");
+    let root = root.canonicalize().expect("canonical project path");
+    let kotlin = root.join("library/src/main/kotlin/evidence");
+    let greeting = kotlin.join("Greeting.kt");
+    let edited_greeting = kotlin.join("EditedGreetingTarget.kt");
+    let source = kotlin.join("EditedDefinitionProbe.kt");
+    let original = "package evidence\n\nfun editedDefinitionProbe() = Greeting().message()\n";
+    std::fs::write(&source, original).expect("write the definition probe");
+    std::fs::write(
+        &edited_greeting,
+        "package evidence\n\nclass EditedGreetingTarget { fun message(): String = \"edited\" }\n",
+    )
+    .expect("write a distinct definition target");
+    for index in 0..500 {
+        std::fs::write(
+            kotlin.join(format!("GroovyScale{index:03}.kt")),
+            format!("package evidence\n\nclass GroovyScale{index:03} {{ fun value() = Greeting().message() }}\n"),
+        )
+        .expect("write a fixture Kotlin source");
+    }
+
+    let home = state.path().join("home");
+    std::fs::create_dir(&home).expect("isolated Kotlin JVM home");
+    let mut java_options = format!(
+        "-Duser.home={} -Djava.net.preferIPv4Stack=true",
+        home.display()
+    );
+    let mut environment = json!({
+        "JAVA_HOME": java_home,
+        "KOTLIN_LANGUAGE_SERVER_OPTS": "-Xmx4g",
+    });
+    if fixture == "gradle" {
+        environment["GRADLE_USER_HOME"] = json!(cache);
+    } else {
+        environment["MAVEN_REPOSITORY"] = json!(cache);
+        environment["PATH"] = json!(std::env::var("PATH").expect("cached Maven launcher on PATH"));
+        java_options.push_str(&format!(" -Dmaven.repo.local={}", cache.display()));
+    }
+    environment["JAVA_TOOL_OPTIONS"] = json!(java_options);
+    let fallback = "kotlin-language-server";
+    let settings = json!({
+        "languages": {"Kotlin": {"language_servers": [fallback, "!kotlin-lsp", "..."]}},
+        "lsp": {(fallback): {"binary": {"path": launcher, "env": environment}}},
+    });
+    cx.update(|cx| {
+        cx.update_global::<settings::SettingsStore, _>(|store, cx| {
+            store
+                .set_user_settings(&settings.to_string(), cx)
+                .expect("configure the installed fallback binary");
+        })
+    });
+    let project = Project::test_with_worktree_trust(
+        Arc::new(fs::RealFs::new(None, cx.executor())),
+        [root.as_path()],
+        cx,
+    )
+    .await;
+    let worktrees = project.read_with(cx, |project, _| project.worktree_store());
+    let worktree_id = worktrees.read_with(cx, |store, cx| {
+        store
+            .worktrees()
+            .next()
+            .expect("fixture worktree")
+            .read(cx)
+            .id()
+    });
+    cx.update(|cx| {
+        let trusted = TrustedWorktrees::try_get_global(cx).expect("worktree trust store");
+        trusted.update(cx, |trusted, cx| {
+            trusted.trust(
+                &worktrees,
+                HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            );
+        });
+    });
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(Arc::new(Language::new(
+        LanguageConfig {
+            name: "Kotlin".into(),
+            matcher: LanguageMatcher {
+                path_suffixes: vec!["kt".into()],
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        },
+        None,
+    )));
+    languages.register_fake_lsp_adapter(
+        "Kotlin",
+        FakeLspAdapter {
+            name: fallback,
+            ..Default::default()
+        },
+    );
+    let (buffer, _lsp_handle) = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer_with_lsp(&source, cx)
+        })
+        .await
+        .expect("open the real fallback probe document");
+    let start = original.rfind("Greeting").expect("original type reference");
+    let definition = |cx: &mut TestAppContext| {
+        project.update(cx, |project, cx| {
+            project.definitions(&buffer, start + 1, cx)
+        })
+    };
+    let target_paths = |definitions: Vec<project::LocationLink>, cx: &TestAppContext| {
+        definitions
+            .into_iter()
+            .map(|definition| {
+                definition.target.buffer.read_with(cx, |buffer, cx| {
+                    buffer.file()?.as_local().map(|file| file.abs_path(cx))
+                })
+            })
+            .collect::<Option<Vec<_>>>()
+            .expect("only local source-file definitions")
+    };
+    let current_server = |cx: &TestAppContext| {
+        project.read_with(cx, |project, cx| {
+            project
+                .language_server_statuses(cx)
+                .find_map(|(id, status)| {
+                    (status.name == lsp::LanguageServerName::new_static(fallback)
+                        && status.server_version.as_deref() == Some("1.3.13"))
+                    .then(|| status.process_id.map(|pid| (id, pid)))
+                    .flatten()
+                })
+        })
+    };
+    let mut previous = None;
+    for (original_type, original_target, edited_type, edited_target) in [
+        (
+            "Greeting",
+            &greeting,
+            "EditedGreetingTarget",
+            &edited_greeting,
+        ),
+        (
+            "EditedGreetingTarget",
+            &edited_greeting,
+            "Greeting",
+            &greeting,
+        ),
+    ] {
+        let deadline = Instant::now() + Duration::from_secs(180);
+        let server = loop {
+            cx.run_until_parked();
+            if let Some(server) = current_server(cx)
+                && previous.is_none_or(|(id, pid)| server.0 != id && server.1 != pid)
+                && let Some(locations) = definition(cx)
+                    .await
+                    .expect("initial Kotlin definition request")
+                && target_paths(locations, cx).as_slice() == std::slice::from_ref(original_target)
+            {
+                break server;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "failed to establish current {fixture} definition"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        };
+        buffer.update(cx, |buffer, cx| {
+            let end = start + original_type.len();
+            assert_eq!(
+                buffer.text_for_range(start..end).collect::<String>(),
+                original_type
+            );
+            buffer.edit([(start..end, edited_type)], None, cx);
+        });
+        let targets = target_paths(
+            definition(cx)
+                .await
+                .expect("first definition after edit")
+                .expect("Kotlin definition"),
+            cx,
+        );
+        assert_eq!(targets.as_slice(), std::slice::from_ref(edited_target));
+        assert_eq!(
+            std::fs::read_to_string(&source).expect("read original fixture file"),
+            original
+        );
+        println!(
+            "{fixture} PID {} resolved the unsaved definition to {}",
+            server.1,
+            edited_target.display()
+        );
+        if previous.is_none() {
+            assert!(buffer.read_with(cx, |buffer, _| buffer.is_dirty()));
+            project.update(cx, |project, cx| {
+                project.restart_language_servers_for_buffers(
+                    vec![buffer.clone()],
+                    HashSet::from_iter([LanguageServerSelector::Name(
+                        lsp::LanguageServerName::new_static(fallback),
+                    )]),
+                    false,
+                    cx,
+                );
+            });
+        }
+        previous = Some(server);
+    }
+    let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
+    lsp_store
+        .update(cx, |store, cx| store.shutdown_all_language_servers(cx))
+        .await;
 }
 
 #[gpui::test]
