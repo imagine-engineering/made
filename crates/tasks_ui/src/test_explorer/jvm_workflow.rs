@@ -3818,6 +3818,163 @@ async fn assert_cancelled_maven_queue(
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Maven Docker host with saved wrapper hooks"]
+async fn docker_maven_build_and_rebuild_run_saved_hooks(cx: &mut TestAppContext) {
+    verify_docker_wrapper_build_hooks(JvmTestBuildTool::Maven, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Gradle Docker host with saved wrapper hooks"]
+async fn docker_gradle_build_and_rebuild_run_saved_hooks(cx: &mut TestAppContext) {
+    verify_docker_wrapper_build_hooks(JvmTestBuildTool::Gradle, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn verify_docker_wrapper_build_hooks(build_tool: JvmTestBuildTool, cx: &mut TestAppContext) {
+    use project::task_store::JvmTaskTrigger;
+    use std::path::Path;
+
+    let host_root = Path::new("/workspaces/tests/project");
+    let fixture = cached_jvm_fixture_path("GROOVY_CONNECTED_WRAPPER_ROOT");
+    let log = fixture.join(".groovy-build-order");
+    assert!(!log.exists(), "start with a fresh host fixture");
+    let container = docker_test_fixture_container(build_tool);
+    let (project, worktree_id) = connect_ordered_jvm_task_fixture(host_root, &container, cx).await;
+    let source_path =
+        util::rel_path::RelPath::from_unix_str("application/src/main/java/evidence/Main.java")
+            .expect("Java fixture source");
+    let (_java, _open) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(
+                project::ProjectPath {
+                    worktree_id,
+                    path: source_path.into_arc(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("open Java on the build host");
+    let (store, inventory) = project.read_with(cx, |project, cx| {
+        (
+            project.lsp_store(),
+            project
+                .task_store()
+                .read(cx)
+                .task_inventory()
+                .expect("connected Task inventory")
+                .clone(),
+        )
+    });
+    let (workspace, _, cx) = mount_dependencies_panel(project, cx).await;
+    let _terminal = mount_fixture_terminal(&workspace, cx).await;
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let jdtls = lsp::LanguageServerName::new_static("jdtls");
+    loop {
+        cx.run_until_parked();
+        if store.read_with(cx, |store, _| {
+            store
+                .language_server_statuses()
+                .any(|(_, status)| status.name == jdtls && status.worktree == Some(worktree_id))
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "JDTLS did not start on the build host"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
+    let tasks = inventory
+        .read_with(cx, |inventory, cx| {
+            inventory.list_tasks(None, None, Some(worktree_id), cx)
+        })
+        .await;
+    let mut context = task::TaskContext {
+        cwd: Some(host_root.to_path_buf()),
+        ..Default::default()
+    };
+    context.task_variables.insert(
+        task::VariableName::WorktreeRoot,
+        host_root.to_string_lossy().into_owned(),
+    );
+    let (engine, goal) = match build_tool {
+        JvmTestBuildTool::Maven => ("Maven", "package"),
+        JvmTestBuildTool::Gradle => ("Gradle", "build"),
+    };
+    let find_task = |action: &str| {
+        let label = format!("{action} {engine} project");
+        let (source, template) = tasks
+            .iter()
+            .find(|(source, task)| {
+                source.groovy_jvm_build_worktree() == Some(worktree_id) && task.label == label
+            })
+            .unwrap_or_else(|| panic!("{label} is missing from the connected Task picker"));
+        (
+            source.clone(),
+            template
+                .resolve_task(&source.to_id_base(), &context)
+                .expect("exact connected wrapper Task"),
+        )
+    };
+    let build = find_task("Build");
+    let rebuild = find_task("Rebuild");
+    let expected = [
+        "before-build".to_string(),
+        format!("wrapper:{goal}"),
+        "after-build".to_string(),
+        "before-rebuild".to_string(),
+        format!("wrapper:clean {goal}"),
+        "after-rebuild".to_string(),
+    ];
+    for ((source, task), trigger, count) in [
+        (build, JvmTaskTrigger::BeforeBuild, 3),
+        (rebuild, JvmTaskTrigger::BeforeRebuild, 6),
+    ] {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.schedule_resolved_task(source, task, false, window, cx)
+        });
+        let deadline = Instant::now() + Duration::from_secs(100);
+        loop {
+            cx.run_until_parked();
+            let commands = std::fs::read_to_string(&log).unwrap_or_default();
+            let lines: Vec<_> = commands.lines().collect();
+            assert!(
+                expected[..count].starts_with(
+                    &lines
+                        .iter()
+                        .map(|line| line.to_string())
+                        .collect::<Vec<_>>()
+                ),
+                "unexpected connected wrapper or Task order: {lines:?}"
+            );
+            if lines.len() == count
+                && !store.read_with(cx, |store, _| {
+                    store.jvm_trigger_is_armed(worktree_id, trigger)
+                })
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "connected wrapper did not complete: {lines:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+    }
+    println!(
+        "{engine} connected host verified saved Build and Rebuild Task order and exact wrapper arguments"
+    );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 async fn connect_ordered_jvm_task_fixture(
     root: &std::path::Path,
     container: &str,

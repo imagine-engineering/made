@@ -1162,11 +1162,12 @@ impl Workspace {
             return Ok(false);
         };
         let project = self.project.read(cx);
-        if project.is_remote()
-            || project.is_via_collab()
-            || project.remote_connection_state(cx).is_some()
-        {
+        if project.is_via_collab() {
             return Ok(false);
+        }
+        if let Some(message) = structured_task_connection_error(project.remote_connection_state(cx))
+        {
+            bail!("{message}");
         }
         let Some(inventory) = project.task_store().read(cx).task_inventory() else {
             return Ok(false);
@@ -1218,6 +1219,13 @@ impl Workspace {
             store.arm_jvm_trigger(worktree_id, before, cx)
         })?;
         let project_id = self.project.entity_id();
+        let remote_session = self.project.read(cx).is_via_remote_server().then(|| {
+            self.project
+                .read(cx)
+                .environment()
+                .read(cx)
+                .remote_session_generation()
+        });
         let source = source.clone();
         let task = task.clone();
         let label = task.resolved.full_label.clone();
@@ -1241,14 +1249,21 @@ impl Workspace {
                             Task::ready(
                                 owner
                                     .read_with(cx, |workspace, cx| {
-                                        jvm_task_activation_project(
+                                        let project = jvm_task_activation_project(
                                             workspace,
                                             project_id,
                                             worktree_id,
                                             Some(before),
                                             cx,
-                                        )
-                                        .map(|_| ())
+                                        )?;
+                                        if let Some(generation) = remote_session {
+                                            anyhow::ensure!(
+                                                project.remote_connection_state(cx) == Some(ConnectionState::Connected)
+                                                    && project.environment().read(cx).remote_session_generation() == generation,
+                                                "The project host changed during the Groovy build sequence"
+                                            );
+                                        }
+                                        Ok(())
                                     })
                                     .and_then(|result| result),
                             )

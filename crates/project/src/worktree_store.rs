@@ -1063,6 +1063,18 @@ impl WorktreeStore {
         })
     }
 
+    #[cfg(feature = "jvm-tools")]
+    pub(crate) fn is_direct_remote_host(&self) -> bool {
+        matches!(
+            &self.state,
+            WorktreeStoreState::Remote {
+                upstream_client,
+                upstream_project_id: REMOTE_SERVER_PROJECT_ID,
+                ..
+            } if !upstream_client.is_via_collab()
+        )
+    }
+
     fn upstream_client(&self) -> Option<(AnyProtoClient, u64)> {
         match &self.state {
             WorktreeStoreState::Remote {

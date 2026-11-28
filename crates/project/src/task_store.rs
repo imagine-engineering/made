@@ -623,7 +623,14 @@ impl SavedJvmTask {
         let worktree_id = self.worktree_id;
         let connected = matches!(
             trigger,
-            Some(JvmTaskTrigger::BeforeDebug | JvmTaskTrigger::AfterDebug)
+            Some(
+                JvmTaskTrigger::BeforeBuild
+                    | JvmTaskTrigger::AfterBuild
+                    | JvmTaskTrigger::BeforeRebuild
+                    | JvmTaskTrigger::AfterRebuild
+                    | JvmTaskTrigger::BeforeDebug
+                    | JvmTaskTrigger::AfterDebug
+            )
         ) && project.is_via_remote_server()
             && project.remote_connection_state(cx) == Some(remote::ConnectionState::Connected);
         anyhow::ensure!(
@@ -636,7 +643,7 @@ impl SavedJvmTask {
         if connected {
             anyhow::ensure!(
                 matches!(&self.source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id),
-                "A connected Debug Task must be saved in the selected project folder"
+                "A connected Task hook must be saved in the selected project folder"
             );
         }
         let worktree_store = project.worktree_store();
@@ -660,7 +667,7 @@ impl SavedJvmTask {
                     worktree_id,
                     cx
                 ) == Some(true),
-                "Trust the connected project before running its saved Debug Tasks"
+                "Trust the connected project before running its saved Task hooks"
             );
         }
         let inventory = project

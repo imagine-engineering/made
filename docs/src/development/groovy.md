@@ -584,13 +584,14 @@ reload, dependency refresh, and **Synchronize metadata** leave sync Tasks
 idle.
 
 The Tasks picker offers **Build Maven project** and **Build Gradle project**
-when the worktree contains the corresponding wrapper and build files. For
-local worktrees, **Rebuild Maven project** runs the wrapper with
-`clean package` and **Rebuild Gradle project** runs it with `clean build`.
-Saved Tasks can opt in to these explicit local actions with `before-build`
-and `after-build`, or `before-rebuild` and `after-rebuild`. Selecting Rebuild
-uses the rebuild tags. After Tasks wait for the wrapper to exit successfully,
-and the hook sequence requires project trust and its live Java provider.
+when the worktree contains the corresponding wrapper and build files.
+In local and directly connected projects, **Rebuild Maven project** runs the
+wrapper with `clean package` and **Rebuild Gradle project** runs it with
+`clean build`. Saved Tasks can opt in with `before-build` and `after-build`,
+or `before-rebuild` and `after-rebuild`. Rebuild uses the rebuild tags.
+In connected projects, the wrapper and eligible worktree Tasks run on the
+project host. After Tasks wait for the wrapper to exit successfully, and
+the sequence requires project trust and a live Java provider.
 
 When you choose **Debug selected test** for a Java test, saved Tasks can
 opt in with the `before-debug` and `after-debug` tags. In a directly

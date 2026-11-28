@@ -1471,13 +1471,15 @@ impl Inventory {
         };
         let worktree = worktree.read(cx);
         let path_style = worktree.path_style();
+        let supports_rebuild =
+            worktree.is_local() || worktree_store.read(cx).is_direct_remote_host();
         [JvmBuildTool::Maven, JvmBuildTool::Gradle]
             .into_iter()
             .filter(|tool| tool.wrapper_detected(worktree) == Some(true))
             .flat_map(|tool| {
                 [JvmProjectBuildAction::Build, JvmProjectBuildAction::Rebuild]
                     .into_iter()
-                    .filter(|action| *action == JvmProjectBuildAction::Build || worktree.is_local())
+                    .filter(|action| *action == JvmProjectBuildAction::Build || supports_rebuild)
                     .map(move |action| {
                         let (label, args) = match (tool, action) {
                             (JvmBuildTool::Maven, JvmProjectBuildAction::Build) => {

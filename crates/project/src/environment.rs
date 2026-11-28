@@ -357,7 +357,7 @@ impl ProjectEnvironment {
             .clone()
     }
 
-    pub(crate) fn remote_session_generation(&self) -> u64 {
+    pub fn remote_session_generation(&self) -> u64 {
         self.remote_session_generation
     }
 
