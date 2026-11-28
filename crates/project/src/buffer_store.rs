@@ -457,6 +457,9 @@ impl LocalBufferStore {
         cx: &mut Context<BufferStore>,
     ) -> Task<Result<()>> {
         let buffer = buffer_handle.read(cx);
+        if buffer.is_read_only_source() {
+            return Task::ready(Err(anyhow!("Cannot save a read-only source buffer")));
+        }
 
         let text = buffer.as_rope().clone();
         let line_ending = buffer.line_ending();
@@ -1455,8 +1458,23 @@ impl BufferStore {
             .map(language::proto::deserialize_operation)
             .collect::<Result<Vec<_>, _>>()?;
         this.update(&mut cx, |this, cx| {
-            if let Some(project_id) = peer_project_id {
-                let buffer = this.ensure_peer_buffer_mutation(buffer_id, project_id, cx)?;
+            let peer_buffer = peer_project_id
+                .map(|project_id| this.ensure_peer_buffer_mutation(buffer_id, project_id, cx))
+                .transpose()?;
+            if (peer_project_id.is_some() || matches!(&this.state, BufferStoreState::Local(_)))
+                && operations.iter().any(|operation| {
+                    matches!(
+                        operation,
+                        Operation::Buffer(_) | Operation::UpdateLineEnding { .. }
+                    )
+                })
+                && this
+                    .get(buffer_id)
+                    .is_some_and(|buffer| buffer.read(cx).is_read_only_source())
+            {
+                anyhow::bail!("Cannot edit a read-only source buffer");
+            }
+            if let Some(buffer) = peer_buffer {
                 buffer.update(cx, |buffer, cx| buffer.apply_ops(operations, cx));
             } else {
                 match this.opened_buffers.entry(buffer_id) {
@@ -1933,6 +1951,10 @@ impl BufferStore {
             } else {
                 this.get_existing(buffer_id)?
             };
+            anyhow::ensure!(
+                !buffer.read(cx).is_read_only_source(),
+                "Cannot save a read-only source buffer"
+            );
             anyhow::Ok((buffer, *project_id, from_peer))
         })?;
         let wait_for_version = buffer.update(&mut cx, |buffer, _| {

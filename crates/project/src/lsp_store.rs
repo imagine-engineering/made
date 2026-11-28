@@ -13290,9 +13290,7 @@ impl LspStore {
                     .flatten()
                     .is_some()
             {
-                buffer.update(cx, |buffer, cx| {
-                    buffer.set_capability(Capability::ReadOnly, cx)
-                });
+                buffer.update(cx, |buffer, cx| buffer.mark_read_only_source(cx));
             }
             // we want to adhere to the read-only settings of the worktree we came from in case we opened an invisible one
             if let Some((source_ws, worktree_root)) = source_ws {
@@ -13482,7 +13480,7 @@ impl LspStore {
         <T::LspRequest as lsp::request::Request>::Params: Send,
         <T::LspRequest as lsp::request::Request>::Result: Send,
     {
-        let sender_id = envelope.original_sender_id().unwrap_or_default();
+        let sender_id = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         let buffer_id = T::buffer_id_from_proto(&envelope.payload)?;
         let buffer_handle = this.update(&mut cx, |this, cx| {
             this.buffer_store.read(cx).get_existing(buffer_id)
@@ -13522,7 +13520,7 @@ impl LspStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         use proto::lsp_query::Request;
-        let sender_id = envelope.original_sender_id().unwrap_or_default();
+        let sender_id = envelope.original_sender_id.unwrap_or(envelope.sender_id);
         let lsp_query = envelope.payload;
         let lsp_request_id = LspRequestId(lsp_query.lsp_request_id);
         let server_id = lsp_query.server_id.map(LanguageServerId::from_proto);

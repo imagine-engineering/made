@@ -44,6 +44,31 @@ fn init_logger() {
 }
 
 #[gpui::test]
+fn read_only_source_survives_replication_and_role_changes(cx: &mut gpui::App) {
+    let local = cx.new(|cx| Buffer::local("cached source", cx));
+    let unmarked = local.read(cx).to_proto(cx);
+    assert!(!unmarked.read_only_source);
+    assert_eq!(
+        Buffer::from_proto(ReplicaId::LOCAL, Capability::ReadWrite, unmarked, None)
+            .expect("ordinary buffer state")
+            .capability(),
+        Capability::ReadWrite,
+    );
+
+    local.update(cx, |buffer, cx| buffer.mark_read_only_source(cx));
+    let state = local.read(cx).to_proto(cx);
+    let remote = cx.new(|cx| {
+        let mut buffer = Buffer::from_proto(ReplicaId::LOCAL, Capability::ReadOnly, state, None)
+            .expect("read-only source state");
+        buffer.set_capability(Capability::ReadWrite, cx);
+        buffer
+    });
+    assert_eq!(remote.read(cx).capability(), Capability::ReadOnly);
+    assert_eq!(remote.read(cx).snapshot().capability, Capability::ReadOnly);
+    assert!(remote.read(cx).to_proto(cx).read_only_source);
+}
+
+#[gpui::test]
 fn test_line_endings(cx: &mut gpui::App) {
     init_settings(cx, |_| {});
 

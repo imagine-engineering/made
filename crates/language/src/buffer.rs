@@ -131,6 +131,7 @@ pub struct Buffer {
     completion_triggers_timestamp: clock::Lamport,
     deferred_ops: OperationQueue<Operation>,
     capability: Capability,
+    read_only_source: bool,
     has_conflict: bool,
     /// Memoize calls to has_changes_since(saved_version).
     /// The contents of a cell are (self.version, has_changes) at the time of a last call.
@@ -1022,6 +1023,7 @@ impl Buffer {
         ));
         this.saved_version = proto::deserialize_version(&message.saved_version);
         this.saved_mtime = message.saved_mtime.map(|time| time.into());
+        this.read_only_source = message.read_only_source;
         Ok(this)
     }
 
@@ -1034,6 +1036,7 @@ impl Buffer {
             line_ending: proto::serialize_line_ending(self.line_ending()) as i32,
             saved_version: proto::serialize_version(&self.saved_version),
             saved_mtime: self.saved_mtime.map(|time| time.into()),
+            read_only_source: self.read_only_source,
         }
     }
 
@@ -1102,12 +1105,20 @@ impl Buffer {
 
     /// Returns the [`Capability`] of this buffer.
     pub fn capability(&self) -> Capability {
-        self.capability
+        if self.read_only_source {
+            Capability::ReadOnly
+        } else {
+            self.capability
+        }
+    }
+
+    pub fn is_read_only_source(&self) -> bool {
+        self.read_only_source
     }
 
     /// Whether this buffer can only be read.
     pub fn read_only(&self) -> bool {
-        !self.capability.editable()
+        !self.capability().editable()
     }
 
     /// Builds a [`Buffer`] with the given underlying [`TextBuffer`], diff base, [`File`] and [`Capability`].
@@ -1129,6 +1140,7 @@ impl Buffer {
             branch_state: None,
             file,
             capability,
+            read_only_source: false,
             syntax_map,
             reparse: None,
             non_text_state_update_count: 0,
@@ -1277,7 +1289,7 @@ impl Buffer {
             diagnostics: self.diagnostics.clone(),
             language: self.language.clone(),
             non_text_state_update_count: self.non_text_state_update_count,
-            capability: self.capability,
+            capability: self.capability(),
             modeline: self.modeline.clone(),
         }
     }
@@ -1291,6 +1303,7 @@ impl Buffer {
                     merged_operations: Default::default(),
                 }),
                 language: self.language.clone(),
+                read_only_source: self.read_only_source,
                 has_conflict: self.has_conflict,
                 has_unsaved_edits: Cell::new(self.has_unsaved_edits.get_mut().clone()),
                 _subscriptions: vec![cx.subscribe(&this, Self::on_base_buffer_event)],
@@ -1548,9 +1561,19 @@ impl Buffer {
 
     /// Assign the buffer a new [`Capability`].
     pub fn set_capability(&mut self, capability: Capability, cx: &mut Context<Self>) {
-        if self.capability != capability {
-            self.capability = capability;
-            cx.emit(BufferEvent::CapabilityChanged)
+        let previous_capability = self.capability();
+        self.capability = capability;
+        if self.capability() != previous_capability {
+            cx.emit(BufferEvent::CapabilityChanged);
+        }
+    }
+
+    /// Keep generated source read-only across replica and project permission changes.
+    pub fn mark_read_only_source(&mut self, cx: &mut Context<Self>) {
+        let previous_capability = self.capability();
+        self.read_only_source = true;
+        if self.capability() != previous_capability {
+            cx.emit(BufferEvent::CapabilityChanged);
         }
     }
 
@@ -1575,7 +1598,10 @@ impl Buffer {
         self.reload_impl(None, false, cx)
     }
 
-    pub fn reload_if_clean(&mut self, cx: &Context<Self>) -> oneshot::Receiver<Option<Transaction>> {
+    pub fn reload_if_clean(
+        &mut self,
+        cx: &Context<Self>,
+    ) -> oneshot::Receiver<Option<Transaction>> {
         self.reload_impl(None, true, cx)
     }
 
@@ -2438,7 +2464,7 @@ impl Buffer {
 
     /// Checks if the buffer has unsaved changes.
     pub fn is_dirty(&self) -> bool {
-        if self.capability == Capability::ReadOnly {
+        if self.capability() == Capability::ReadOnly {
             return false;
         }
         if self.has_conflict {

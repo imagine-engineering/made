@@ -183,14 +183,8 @@ async fn start_cached_fixture_java_provider(
 #[gpui::test]
 #[ignore = "requires the pinned Java proxy, JDTLS, and a cached Maven Java sources archive"]
 async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut TestAppContext) {
-    use editor::{SelectionEffects, actions::GoToDefinition};
-    use language::{Capability, LocalFile as _, Point};
-    use project::jvm_project::JdtlsImportedBuildKind;
-
     let root = cached_jvm_fixture_path("GROOVY_MAVEN_SOURCE_ROOT");
     let settings = cached_jvm_fixture_path("GROOVY_MAVEN_SOURCE_SETTINGS");
-    let expected = std::fs::read_to_string(cached_jvm_fixture_path("GROOVY_MAVEN_ATTACHED_SOURCE"))
-        .expect("exact cached dependency source");
     let (project, worktree_id, _provider_data) = start_cached_fixture_java_provider(
         &root,
         serde_json::json!({
@@ -207,8 +201,72 @@ async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut T
         cx,
     )
     .await;
-    let path = root.join("src/main/java/evidence/ArtifactProbe.java");
-    let contents = std::fs::read_to_string(&path).expect("fixture source");
+    verify_cached_maven_java_definition(project, worktree_id, &std::env::temp_dir(), cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a disposable Linux ARM64 Docker host with the pinned Java proxy and cached Maven source"]
+async fn docker_maven_java_definition_opens_read_only_attached_source(cx: &mut TestAppContext) {
+    let container = docker_test_fixture_container(JvmTestBuildTool::Maven);
+    let root = std::path::Path::new("/workspaces/maven");
+    let (project, worktree_id) = connect_ordered_jvm_task_fixture(root, &container, cx).await;
+    let languages = project.read_with(cx, |project, _| project.languages().clone());
+    languages.add(Arc::new(language::Language::new(
+        language::LanguageConfig {
+            name: "Java".into(),
+            matcher: language::LanguageMatcher {
+                path_suffixes: vec!["java".into()],
+                ..Default::default()
+            }
+            .into(),
+            ..Default::default()
+        },
+        None,
+    )));
+    languages.register_fake_lsp_adapter(
+        "Java",
+        language::FakeLspAdapter {
+            name: "jdtls",
+            ..Default::default()
+        },
+    );
+    verify_cached_maven_java_definition(
+        project,
+        worktree_id,
+        std::path::Path::new("/qualification/state/tmp"),
+        cx,
+    )
+    .await;
+}
+
+#[cfg(all(test, unix))]
+async fn verify_cached_maven_java_definition(
+    project: Entity<Project>,
+    worktree_id: WorktreeId,
+    cache_root: &std::path::Path,
+    cx: &mut TestAppContext,
+) {
+    use editor::{SelectionEffects, actions::GoToDefinition};
+    use futures::FutureExt as _;
+    use language::{Capability, LocalFile as _, Point};
+    use project::jvm_project::JdtlsImportedBuildKind;
+
+    let expected = std::fs::read_to_string(cached_jvm_fixture_path("GROOVY_MAVEN_ATTACHED_SOURCE"))
+        .expect("exact cached dependency source");
+    let java_project_path = project::ProjectPath {
+        worktree_id,
+        path: util::rel_path::RelPath::from_unix_str("src/main/java/evidence/ArtifactProbe.java")
+            .expect("Maven fixture source path")
+            .into_arc(),
+    };
+    let (buffer, _open) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(java_project_path.clone(), cx)
+        })
+        .await
+        .expect("attach the host Java language server");
+    let contents = buffer.read_with(cx, |buffer, _| buffer.text());
     let (row, column) = contents
         .lines()
         .enumerate()
@@ -218,17 +276,6 @@ async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut T
         })
         .expect("Maven dependency reference");
     let position = Point::new(row as u32, column as u32);
-    let java_project_path = project.read_with(cx, |project, cx| {
-        project
-            .find_project_path(&path, cx)
-            .expect("fixture worktree source")
-    });
-    let (buffer, _open) = project
-        .update(cx, |project, cx| {
-            project.open_local_buffer_with_lsp(path.clone(), cx)
-        })
-        .await
-        .expect("attach the Java language server");
     assert_ne!(
         buffer.read_with(cx, |buffer, _| buffer.capability()),
         Capability::ReadOnly
@@ -264,6 +311,30 @@ async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut T
             .await;
     }
 
+    let definition_deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let request = project
+            .update(cx, |project, cx| project.definitions(&buffer, position, cx))
+            .fuse();
+        let timeout = cx.background_executor.timer(Duration::from_secs(15)).fuse();
+        futures::pin_mut!(request, timeout);
+        let definitions = futures::select_biased! {
+            result = request => result.expect("request Java source definition").unwrap_or_default(),
+            () = timeout => panic!("Java source definition did not complete"),
+        };
+        if !definitions.is_empty() {
+            assert_eq!(definitions.len(), 1, "one cached source destination");
+            break;
+        }
+        assert!(
+            Instant::now() < definition_deadline,
+            "JDTLS did not resolve the cached source"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+
     let (container, cx) =
         cx.add_window_view(|window, cx| workspace::MultiWorkspace::test_new(project, window, cx));
     let workspace = container.read_with(cx, |container, _| container.workspace().clone());
@@ -282,7 +353,8 @@ async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut T
         editor.go_to_definition(&GoToDefinition::default(), window, cx)
     });
     navigation.await.expect("execute Go to Definition");
-    workspace.read_with(cx, |workspace, cx| {
+    cx.run_until_parked();
+    let (project, source) = workspace.read_with(cx, |workspace, cx| {
         let destination = workspace.active_item(cx).expect("the destination editor");
         let editor = destination
             .downcast::<editor::Editor>()
@@ -293,27 +365,43 @@ async fn cached_maven_java_definition_opens_read_only_attached_source(cx: &mut T
             .read(cx)
             .as_singleton()
             .expect("dependency source");
-        let target = target.read(cx);
-        assert!(
-            target.text() == expected,
-            "Go to Definition must open the exact attached source"
-        );
-        let file = project::File::from_dyn(target.file()).expect("Java proxy source file");
+        let source = target.read(cx);
+        let file = project::File::from_dyn(source.file()).expect("Java proxy source file");
         let path = file.abs_path(cx);
+        assert!(
+            source.text() == expected,
+            "Go to Definition must open the exact attached source at {path:?} ({} vs {} bytes)",
+            source.len(),
+            expected.len(),
+        );
         assert_eq!(
             path.file_name().and_then(|name| name.to_str()),
             Some("StringUtils.java")
         );
         let relative = path
-            .strip_prefix(std::env::temp_dir())
-            .expect("disposable proxy cache");
+            .strip_prefix(cache_root)
+            .expect("project-host proxy cache");
+        assert!(
+            !file.worktree.read(cx).is_visible(),
+            "cache source is outside the project tree"
+        );
+        assert_eq!(file.is_local, !workspace.project().read(cx).is_remote());
         assert!(relative.starts_with("jdtls_decompiled"));
         assert_eq!(
-            target.capability(),
+            source.capability(),
             Capability::ReadOnly,
             "Java proxy source must be read-only"
         );
+        (workspace.project().clone(), target)
     });
+    let error = project
+        .update(cx, |project, cx| project.save_buffer(source, cx))
+        .await
+        .expect_err("the owning project must refuse to save a generated source");
+    assert!(
+        format!("{error:#}").contains("Cannot save a read-only source buffer"),
+        "{error:#}"
+    );
 }
 
 #[cfg(all(test, unix))]

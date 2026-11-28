@@ -128,9 +128,10 @@ discovery. It returns the original bytes for a matching cached archive and
 reports absence for missing, wrong-entry, and stale attachments. In the
 stale case the stock content request invokes the source downloader. The probe's
 handler only runs in the test fixture. When the pinned Java proxy resolves an
-attached source in a local Maven project, Go to Definition opens the generated
-copy read-only. The project source stays editable. Native and connected
-acceptance, plus explicit selected-archive acquisition, remain open.
+attached source, Go to Definition opens the generated copy read-only. The
+project source stays editable. The connected Linux ARM64 fixture verifies
+the same result from the project host. Native desktop, separate physical host,
+and explicit selected-archive acquisition remain open.
 
 ## Accepted decisions and remaining gates
 

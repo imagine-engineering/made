@@ -115,6 +115,7 @@ message BufferState {
   LineEnding line_ending = 5;
   repeated VectorClockEntry saved_version = 6;
   Timestamp saved_mtime = 8;
+  bool read_only_source = 9;
 
   reserved 7;
   reserved 4;
