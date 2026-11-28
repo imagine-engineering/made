@@ -1422,7 +1422,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
     };
     if let Some(first_task) = interrupted_task {
         for path in [first_task, SECOND] {
-            select_fixture_gradle_task(&workspace, &panel, path, None, cx);
+            select_fixture_gradle_task(&workspace, &panel, path, &[], cx);
             dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
             assert_eq!(
                 panel.read_with(cx, |panel, _| panel
@@ -1483,7 +1483,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         });
         dispatch_graph_action(cx, "groovy_dependencies_panel::ClearOrderedOperations");
     }
-    select_fixture_gradle_task(&workspace, &panel, FIRST, Some("message"), cx);
+    select_fixture_gradle_task(&workspace, &panel, FIRST, &["message"], cx);
     let option = format!("--message={MESSAGE}");
     type_fixture_options(
         &panel,
@@ -1563,7 +1563,7 @@ async fn run_docker_gradle_ordered_operations(run: DockerGradleRun, cx: &mut Tes
         });
         eprintln!("A host Kotlin LSP restart preserved the Java-owned Gradle queue generation");
     }
-    select_fixture_gradle_task(&workspace, &panel, SECOND, None, cx);
+    select_fixture_gradle_task(&workspace, &panel, SECOND, &[], cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
     assert_gradle_queue_rows(&panel, [&format!("{FIRST} (1 options)"), SECOND], cx);
@@ -2234,7 +2234,7 @@ fn select_fixture_gradle_task(
     workspace: &Entity<Workspace>,
     panel: &Entity<jvm_ui::DependenciesPanel>,
     path: &str,
-    required_option: Option<&str>,
+    required_options: &[&str],
     cx: &mut VisualTestContext,
 ) {
     use jvm_ui::DependenciesPanel;
@@ -2258,7 +2258,7 @@ fn select_fixture_gradle_task(
                 .is_some_and(|label| label.contains("run offline through Tasks"))
         );
         assert!(row.accessibility_label.contains("or Task options"));
-        if let Some(option) = required_option {
+        for option in required_options {
             assert!(
                 rows.iter().any(|row| {
                     row.label == format!("--{option}")
@@ -2308,27 +2308,39 @@ async fn verify_gradle_queue(
     const WRITE: &str = ":application:qualificationQueueWrite";
     const READ: &str = ":application:qualificationQueueRead";
     const MESSAGE: &str = "value $ZED_FILE :library:help";
+    const BOOLEAN_RESULT: &str = "marker=false, receipt=true";
     let output = root.join("application/build/qualification/queue-message.txt");
+    let boolean_output = output.with_file_name("queue-options.txt");
     assert!(
-        !output.exists(),
+        !output.exists() && !boolean_output.exists(),
         "the disposable fixture has no Task output"
     );
     let terminal_panel = mount_fixture_terminal(workspace, cx).await;
-    select_fixture_gradle_task(workspace, panel, WRITE, Some("project-dir"), cx);
-    let option = format!("--project-dir={MESSAGE}");
-    let options = serde_json::to_string(&[&option]).expect("literal Gradle option JSON");
-    type_fixture_options(panel, cx, "Gradle task options", &options);
+    select_fixture_gradle_task(
+        workspace,
+        panel,
+        WRITE,
+        &["project-dir", "emit-marker", "record-receipt"],
+        cx,
+    );
+    let options = [
+        format!("--project-dir={MESSAGE}"),
+        "--no-emit-marker".to_owned(),
+        "--record-receipt".to_owned(),
+    ];
+    let option_json = serde_json::to_string(&options).expect("Gradle option JSON");
+    type_fixture_options(panel, cx, "Gradle task options", &option_json);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
-    select_fixture_gradle_task(workspace, panel, READ, None, cx);
+    select_fixture_gradle_task(workspace, panel, READ, &[], cx);
     dispatch_graph_action(cx, "groovy_dependencies_panel::AddSelectedOrderedOperation");
     dispatch_graph_action(cx, "groovy_dependencies_panel::ShowOrderedOperations");
-    assert_gradle_queue_rows(panel, [&format!("{WRITE} (1 options)"), READ], cx);
+    assert_gradle_queue_rows(panel, [&format!("{WRITE} (3 options)"), READ], cx);
     assert!(
-        !output.exists(),
+        !output.exists() && !boolean_output.exists(),
         "queueing operations does not start a Task"
     );
     dispatch_graph_action(cx, "groovy_dependencies_panel::RunOrderedOfflineOperations");
-    let arguments = [
+    let mut arguments = vec![
         "--offline".to_owned(),
         format!("-Dorg.gradle.java.home={}", build_java.display()),
         "--gradle-user-home".to_owned(),
@@ -2338,9 +2350,9 @@ async fn verify_gradle_queue(
             .to_owned(),
         "--".to_owned(),
         WRITE.to_owned(),
-        option,
-        READ.to_owned(),
     ];
+    arguments.extend(options);
+    arguments.push(READ.to_owned());
     let transcript = assert_fixture_task(
         &terminal_panel,
         root,
@@ -2356,13 +2368,20 @@ async fn verify_gradle_queue(
     let read = transcript
         .find(&format!("QUALIFICATION_QUEUE_READ={MESSAGE}"))
         .expect("Gradle read task saw the exact option");
-    assert!(write < read, "{transcript}");
+    let boolean_read = transcript
+        .find(&format!("QUALIFICATION_QUEUE_OPTIONS={BOOLEAN_RESULT}"))
+        .expect("Gradle read task saw the primitive and property Boolean values");
+    assert!(write < read && read < boolean_read, "{transcript}");
     assert_eq!(
         std::fs::read_to_string(output).expect("Gradle output"),
         MESSAGE
     );
+    assert_eq!(
+        std::fs::read_to_string(boolean_output).expect("Gradle Boolean output"),
+        BOOLEAN_RESULT
+    );
     eprintln!(
-        "Mounted Gradle ran both tasks in order and preserved the literal option in one offline Task"
+        "Mounted Gradle ran both tasks in order and verified the literal and Boolean options in one offline Task"
     );
 }
 

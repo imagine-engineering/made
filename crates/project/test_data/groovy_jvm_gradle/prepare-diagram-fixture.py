@@ -91,25 +91,39 @@ dependencies {
         build_file.write("""
 abstract class QualificationQueueWrite extends DefaultTask {
     private String message = 'default'
+    private boolean markerEnabled = true
 
     @org.gradle.api.tasks.options.Option(option = 'project-dir', description = 'Literal fixture message')
     void setMessage(String value) { message = value }
+
+    @org.gradle.api.tasks.options.Option(option = 'emit-marker', description = 'Record a primitive Boolean')
+    void setEmitMarker(boolean value) { markerEnabled = value }
+
+    @org.gradle.api.tasks.Internal
+    @org.gradle.api.tasks.options.Option(option = 'record-receipt', description = 'Record a Gradle Boolean property')
+    abstract org.gradle.api.provider.Property<Boolean> getRecordReceipt()
 
     @TaskAction
     void report() {
         def output = project.layout.buildDirectory.file('qualification/queue-message.txt').get().asFile
         output.parentFile.mkdirs()
         output.text = message
+        new File(output.parentFile, 'queue-options.txt').text = "marker=${markerEnabled}, receipt=${recordReceipt.get()}"
         println 'QUALIFICATION_QUEUE_WRITE'
     }
 }
 tasks.register('qualificationQueueWrite', QualificationQueueWrite) {
     group = 'qualification'
+    recordReceipt.convention(false)
 }
 def queueMessage = layout.buildDirectory.file('qualification/queue-message.txt')
+def queueOptions = layout.buildDirectory.file('qualification/queue-options.txt')
 tasks.register('qualificationQueueRead') {
     group = 'qualification'
-    doLast { println 'QUALIFICATION_QUEUE_READ=' + queueMessage.get().asFile.text }
+    doLast {
+        println 'QUALIFICATION_QUEUE_READ=' + queueMessage.get().asFile.text
+        println 'QUALIFICATION_QUEUE_OPTIONS=' + queueOptions.get().asFile.text
+    }
 }
 """)
 identities = sorted(f'{name}:{version}' for (name, version) in members if (name, version) != ('shared-version', '1.0'))
