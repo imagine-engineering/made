@@ -196,6 +196,17 @@ async fn cached_kotlin_fallback_navigates_unsaved_edits_across_restart(cx: &mut 
                 })
         })
     };
+    let diagnostic_updates = Rc::new(Cell::new(0));
+    let _diagnostic_subscription = cx.update(|cx| {
+        cx.subscribe(&buffer, {
+            let diagnostic_updates = diagnostic_updates.clone();
+            move |_, event, _| {
+                if matches!(event, BufferEvent::DiagnosticsUpdated) {
+                    diagnostic_updates.set(diagnostic_updates.get() + 1);
+                }
+            }
+        })
+    });
     let mut previous = None;
     for (original_type, original_target, edited_type, edited_target) in [
         (
@@ -255,6 +266,92 @@ async fn cached_kotlin_fallback_navigates_unsaved_edits_across_restart(cx: &mut 
             "{fixture} PID {} resolved the unsaved definition to {}",
             server.1,
             edited_target.display()
+        );
+        let member_offset = start + edited_type.len() + "().".len();
+        buffer.update(cx, |buffer, cx| {
+            let member_end = member_offset + "message".len();
+            assert_eq!(
+                buffer
+                    .text_for_range(member_offset..member_end)
+                    .collect::<String>(),
+                "message"
+            );
+            buffer.edit([(member_offset..member_end, "mess")], None, cx);
+        });
+        let completions = project
+            .update(cx, |project, cx| {
+                project.completions(
+                    &buffer,
+                    member_offset + "mess".len(),
+                    DEFAULT_COMPLETION_CONTEXT,
+                    cx,
+                )
+            })
+            .await
+            .expect("Kotlin fallback completion request");
+        assert!(
+            completions.iter().flat_map(|response| &response.completions).any(|completion| {
+                matches!(completion.source, project::CompletionSource::Lsp { server_id, .. } if server_id == server.0)
+                    && completion.label.text.starts_with("message")
+            }),
+            "the current {fixture} fallback did not complete the unsaved member prefix"
+        );
+        let missing_member = "missingFallbackMember";
+        let mut previous_member = "mess";
+        for (member, expect_error) in [(missing_member, true), ("message", false)] {
+            let prior_update = diagnostic_updates.get();
+            buffer.update(cx, |buffer, cx| {
+                buffer.edit(
+                    [(member_offset..member_offset + previous_member.len(), member)],
+                    None,
+                    cx,
+                );
+            });
+            let deadline = Instant::now() + Duration::from_secs(60);
+            loop {
+                cx.run_until_parked();
+                let expect_state = buffer.read_with(cx, |buffer, _| {
+                    let snapshot = buffer.snapshot();
+                    if expect_error {
+                        snapshot
+                            .diagnostics_in_range::<_, usize>(
+                                member_offset..member_offset + member.len(),
+                                false,
+                            )
+                            .any(|entry| {
+                                entry.diagnostic.severity == lsp::DiagnosticSeverity::ERROR
+                                    && entry.diagnostic.message.contains(missing_member)
+                            })
+                    } else {
+                        !snapshot
+                            .diagnostics_in_range::<_, usize>(0..snapshot.len(), false)
+                            .any(|entry| {
+                                entry.diagnostic.severity == lsp::DiagnosticSeverity::ERROR
+                            })
+                    }
+                });
+                if expect_state && diagnostic_updates.get() > prior_update {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "the current {fixture} fallback did not publish the expected diagnostic state for {member}"
+                );
+                cx.background_executor
+                    .timer(Duration::from_millis(100))
+                    .await;
+            }
+            previous_member = member;
+        }
+        assert_eq!(current_server(cx), Some(server));
+        assert_eq!(
+            std::fs::read_to_string(&source)
+                .expect("read original fixture file after diagnostic recovery"),
+            original
+        );
+        println!(
+            "{fixture} PID {} completed the unsaved member, diagnosed a missing member, and cleared the diagnostic after repair",
+            server.1
         );
         if previous.is_none() {
             assert!(buffer.read_with(cx, |buffer, _| buffer.is_dirty()));
