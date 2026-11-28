@@ -463,15 +463,20 @@ impl NativeProfileTaskDestination {
             parent: parent.to_path_buf(),
             names: [profile_name?, symbols_name?],
         };
-        destination.check_directory()?;
-        for name in &destination.names {
-            match fs::symlink_metadata(destination.descriptor_path().join(name)) {
+        destination.check_available()?;
+        Ok(destination)
+    }
+
+    pub fn check_available(&self) -> io::Result<()> {
+        self.check_directory()?;
+        for name in &self.names {
+            match fs::symlink_metadata(self.descriptor_path().join(name)) {
                 Ok(_) => return Err(io::Error::from(io::ErrorKind::AlreadyExists)),
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
                 Err(error) => return Err(error),
             }
         }
-        Ok(destination)
+        Ok(())
     }
 
     fn descriptor_path(&self) -> PathBuf {
@@ -1545,6 +1550,13 @@ mod tests {
 
         let destination = NativeProfileTaskDestination::open(paths.clone())?;
         fs::write(&paths[0], b"existing recording")?;
+        assert_eq!(
+            destination
+                .check_available()
+                .expect_err("Accepted an occupied recording")
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
         assert_eq!(
             seal()?
                 .retain(destination, || true)

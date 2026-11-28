@@ -1956,11 +1956,37 @@ fn verify_headless_coverage(
 enum HeadlessTaskScenario {
     Coverage,
     SelectedCoverage,
-    Profile { prepare_runtime: bool },
+    Profile(HeadlessProfileStage),
 }
 
-fn write_headless_profile_build_fixture(directory: &Path) -> Result<String> {
+#[derive(Clone, Copy)]
+enum HeadlessProfileStage {
+    Build,
+    Runtime,
+    Capture,
+    OccupiedDestination,
+    RevokedCapture,
+}
+
+fn write_headless_profile_build_fixture(
+    directory: &Path,
+    stage: HeadlessProfileStage,
+) -> Result<String> {
     write_native_cargo_fixture(directory)?;
+    std::fs::write(
+        directory.join("runner/src/main.rs"),
+        r#"fn main() {
+    assert_eq!(std::env::var("COPPER_PROFILE_BUILD_OWNER").as_deref(), Ok("host"));
+    if std::env::var_os("COPPER_PROFILE_TEST_WAIT").is_some() {
+        std::fs::write("target/profile-workload-pid", std::process::id().to_string()).expect("profile workload pid");
+        std::thread::sleep(std::time::Duration::from_secs(20));
+    }
+    std::fs::write("target/profiled-project-workload", "selected").expect("profile workload marker");
+    let values: Vec<_> = (0..4096).collect();
+    let total: u64 = (0..1_200_000).map(|_| stats::score(std::hint::black_box(&values))).sum();
+    println!("Score: {total}");
+}"#,
+    )?;
     let cargo = std::env::var_os("RUST_TOOLS_NATIVE_BUILD_CARGO")
         .map(std::path::PathBuf::from)
         .context("The installed Linux Cargo fixture toolchain is required")?
@@ -1991,7 +2017,16 @@ fn write_headless_profile_build_fixture(directory: &Path) -> Result<String> {
     std::fs::write(marker, "host").expect("record the profile build environment");
 }"#,
     )?;
-    let settings = serde_json::json!({
+    let collector = if matches!(
+        stage,
+        HeadlessProfileStage::Capture | HeadlessProfileStage::RevokedCapture
+    ) {
+        std::env::var("RUST_TOOLS_LINUX_SAMPLY")
+            .context("The installed Linux Samply collector is required")?
+    } else {
+        "/usr/bin/samply".into()
+    };
+    let mut settings = serde_json::json!({
         "load_direnv": "disabled",
         "feature_flags": {
             "rust-native-profiling-experimental": "on",
@@ -2014,24 +2049,28 @@ fn write_headless_profile_build_fixture(directory: &Path) -> Result<String> {
                         "COPPER_PROFILE_BUILD_OWNER": "host"
                     },
                     "native_profiler": {
-                        "collector_path": "/usr/bin/samply",
+                        "collector_path": collector,
                         "profile_path": "target/capture.json"
                     }
                 }
             }
         }
-    })
-    .to_string();
-    Ok(settings)
+    });
+    if matches!(stage, HeadlessProfileStage::RevokedCapture) {
+        settings["cargo"]["presets"]["host-profile"]["environment"]["COPPER_PROFILE_TEST_WAIT"] =
+            serde_json::Value::String("yes".into());
+    }
+    Ok(settings.to_string())
 }
 
 async fn verify_headless_profile_build(
     host: &gpui::Entity<crate::HeadlessProject>,
     worktree_id: project::WorktreeId,
     directory: &Path,
-    prepare_runtime: bool,
+    stage: HeadlessProfileStage,
     cx: &mut gpui::AsyncApp,
 ) -> Result<()> {
+    use gpui::{AppContext as _, UpdateGlobal as _};
     use project::cargo_workspace::{CargoTargetKind, CargoWorkspaceKey};
     use project::cargo_workspace_store::HostCargoProfileSelection;
     use util::rel_path::RelPath;
@@ -2107,20 +2146,149 @@ async fn verify_headless_profile_build(
     println!(
         "Registered headless Cargo store built and verified the exact host-selected profile executable"
     );
-    if prepare_runtime {
-        let _runtime = host
+    if matches!(stage, HeadlessProfileStage::Build) {
+        return Ok(());
+    }
+    let runtime = host
+        .update(cx, |host, cx| {
+            host.prepare_selected_host_cargo_profile_runtime(workload, cx)
+        })?
+        .await?;
+    ensure!(
+        !directory.join("target/profiled-project-workload").exists(),
+        "The runtime observation executed the selected workload"
+    );
+    println!(
+        "Registered headless host observed the real Cargo runtime using its embedded static helper"
+    );
+    if matches!(stage, HeadlessProfileStage::Runtime) {
+        return Ok(());
+    }
+    let prepared = host
+        .update(cx, |host, cx| {
+            host.prepare_selected_host_cargo_profile_capture(runtime, cx)
+        })?
+        .await?;
+    let paths = prepared.paths().clone();
+    let absolute = paths
+        .each_ref()
+        .map(|path| directory.join(path.path.as_std_path()));
+    ensure!(
+        paths.iter().all(|path| path.worktree_id == worktree_id)
+            && absolute
+                .iter()
+                .all(|path| path.starts_with(&target_root) && !path.exists())
+            && !directory.join("target/profiled-project-workload").exists(),
+        "Preparation executed the workload or produced unapproved files"
+    );
+    if matches!(stage, HeadlessProfileStage::OccupiedDestination) {
+        std::fs::write(&absolute[1], b"existing symbols")?;
+        let error = host
             .update(cx, |host, cx| {
-                host.prepare_selected_host_cargo_profile_runtime(workload, cx)
+                host.capture_selected_host_cargo_profile(prepared, cx)
             })?
-            .await?;
+            .await
+            .err()
+            .context("Native capture accepted an occupied destination")?;
         ensure!(
-            !directory.join("target/profiled-project-workload").exists(),
-            "The runtime observation executed the selected workload"
+            error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists)
+                && std::fs::read(&absolute[1])? == b"existing symbols"
+                && !absolute[0].exists()
+                && !target_root.join("profiled-project-workload").exists(),
+            "A new destination occupant was overwritten or the workload started: {error:#}"
         );
-        println!(
-            "Registered headless host observed the real Cargo runtime using its embedded static helper"
+        println!("Registered headless host refused the newly occupied destination before capture");
+        return Ok(());
+    }
+    let capture = host.update(cx, |host, cx| {
+        host.capture_selected_host_cargo_profile(prepared, cx)
+    })?;
+    if matches!(stage, HeadlessProfileStage::RevokedCapture) {
+        let pid_path = target_root.join("profile-workload-pid");
+        let running = async {
+            loop {
+                match std::fs::read_to_string(&pid_path) {
+                    Ok(contents) if !contents.is_empty() => break Ok(contents.parse::<u32>()?),
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(anyhow::Error::from(error)),
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(10))
+                    .await;
+            }
+        };
+        let (pid, capture) = match futures::future::select(Box::pin(running), capture).await {
+            futures::future::Either::Left((pid, capture)) => (pid?, capture),
+            futures::future::Either::Right((result, _)) => {
+                result?;
+                anyhow::bail!("Native capture finished before host settings could be revoked");
+            }
+        };
+        cx.update(|cx| {
+            settings::SettingsStore::update_global(cx, |store, cx| {
+                store.set_local_server_settings(r#"{"load_direnv":"disabled"}"#, cx)
+            })
+        })?;
+        let error = capture
+            .await
+            .err()
+            .context("Revoked native capture succeeded")?;
+        ensure!(
+            format!("{error:#}").contains("approval was revoked on the host"),
+            "Unexpected capture failure: {error:#}"
+        );
+        let process = Path::new("/proc").join(pid.to_string());
+        for _ in 0..500 {
+            if !process.exists() {
+                break;
+            }
+            cx.background_executor()
+                .timer(Duration::from_millis(10))
+                .await;
+        }
+        ensure!(
+            !process.exists() && absolute.iter().all(|path| !path.exists()),
+            "Revoked native capture left a workload or a retained output"
+        );
+        println!("Host settings revocation stopped the running workload and retained no profile");
+        return Ok(());
+    }
+    let capture = capture.await?;
+    ensure!(
+        capture.paths == paths
+            && absolute[0] == target_root.join(format!("capture-{}.json", capture.run_id.simple()))
+            && absolute[1] == absolute[0].with_extension("syms.json")
+            && std::fs::read(target_root.join("profiled-project-workload"))? == b"selected",
+        "The producing host did not run the selected workload and retain its reviewed pair"
+    );
+    use std::os::unix::fs::MetadataExt as _;
+    for (absolute, version) in absolute.iter().zip(capture.versions) {
+        let current = std::fs::symlink_metadata(absolute)?;
+        ensure!(
+            current.is_file()
+                && current.ino() == version.ino()
+                && current.len() == version.len()
+                && current.mode() & 0o777 == 0o600,
+            "A retained native recording file is unbound or not owner-only"
         );
     }
+    let [profile, symbols] = absolute;
+    let samples = cx
+        .background_spawn(async move {
+            verify_samply_profile_bytes(
+                native_task_helper::linux_task_completion::NativeProfileTaskArtifacts {
+                    profile: std::fs::read(profile)?,
+                    symbols: std::fs::read(symbols)?,
+                },
+            )
+        })
+        .await?;
+    println!(
+        "Registered headless host retained the reviewed pair with {samples} samples and mapped stats::weight"
+    );
     Ok(())
 }
 
@@ -2136,8 +2304,8 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
     let directory = std::fs::canonicalize(directory)?;
     let run_id = uuid::Uuid::new_v4();
     let artifact_path = format!("target/zed-coverage-{}.json", run_id.simple());
-    let profile_settings = if matches!(scenario, HeadlessTaskScenario::Profile { .. }) {
-        Some(write_headless_profile_build_fixture(&directory)?)
+    let profile_settings = if let HeadlessTaskScenario::Profile(stage) = scenario {
+        Some(write_headless_profile_build_fixture(&directory, stage)?)
     } else {
         None
     };
@@ -2286,13 +2454,13 @@ fn headless_task(directory: &Path, scenario: HeadlessTaskScenario) -> Result<()>
                             .map(|tree| tree.scan_complete())
                     })?
                     .await;
-                if let HeadlessTaskScenario::Profile { prepare_runtime } = scenario {
+                if let HeadlessTaskScenario::Profile(profile_stage) = scenario {
                     index_published.recv().await?;
                     drop(initial_scan);
                     stage.set("building the host-selected profile workload");
                     let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
                     return verify_headless_profile_build(
-                        &host, worktree_id, &directory, prepare_runtime, cx,
+                        &host, worktree_id, &directory, profile_stage, cx,
                     ).await;
                 }
                 stage.set("running the Cargo LLVM collector");
@@ -2407,6 +2575,9 @@ pub enum Scenario {
     CargoBuildProfileHeadless,
     RegisteredHeadlessProfileBuild,
     RegisteredHeadlessProfileRuntime,
+    RegisteredHeadlessProfileCapture,
+    RegisteredHeadlessProfileOccupiedDestination,
+    RegisteredHeadlessProfileRevokedCapture,
     NativeCargoRuntimeTransition,
     NativeCargoRuntimeProfile,
     HeadlessCollector,
@@ -2463,15 +2634,23 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         }
         Scenario::RegisteredHeadlessProfileBuild => headless_task(
             directory,
-            HeadlessTaskScenario::Profile {
-                prepare_runtime: false,
-            },
+            HeadlessTaskScenario::Profile(HeadlessProfileStage::Build),
         ),
         Scenario::RegisteredHeadlessProfileRuntime => headless_task(
             directory,
-            HeadlessTaskScenario::Profile {
-                prepare_runtime: true,
-            },
+            HeadlessTaskScenario::Profile(HeadlessProfileStage::Runtime),
+        ),
+        Scenario::RegisteredHeadlessProfileCapture => headless_task(
+            directory,
+            HeadlessTaskScenario::Profile(HeadlessProfileStage::Capture),
+        ),
+        Scenario::RegisteredHeadlessProfileOccupiedDestination => headless_task(
+            directory,
+            HeadlessTaskScenario::Profile(HeadlessProfileStage::OccupiedDestination),
+        ),
+        Scenario::RegisteredHeadlessProfileRevokedCapture => headless_task(
+            directory,
+            HeadlessTaskScenario::Profile(HeadlessProfileStage::RevokedCapture),
         ),
     }
 }

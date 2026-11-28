@@ -107,8 +107,21 @@ struct CoverageTaskTransport {
 
 #[cfg(all(target_os = "linux", feature = "rust-tools"))]
 pub struct HostCargoProfileRuntime {
-    pub runtime: project::cargo_workspace_store::LinuxNativeCargoRuntime,
-    _runner: native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime,
+    runtime: project::cargo_workspace_store::LinuxNativeCargoRuntime,
+    runner: native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
+pub struct HostCargoProfileCapture {
+    prepared: project::cargo_workspace_store::PreparedHostCargoProfileCapture,
+    runner: native_task_helper::linux_cargo_runtime::PackagedLinuxCargoRuntime,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-tools"))]
+impl HostCargoProfileCapture {
+    pub fn paths(&self) -> &[ProjectPath; 2] {
+        self.prepared.paths()
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-tools"))]
@@ -571,10 +584,41 @@ impl HeadlessProject {
                     )
                 })?
                 .await?;
-            Ok(HostCargoProfileRuntime {
-                runtime,
-                _runner: runner,
+            Ok(HostCargoProfileRuntime { runtime, runner })
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn prepare_selected_host_cargo_profile_capture(
+        &self,
+        runtime: HostCargoProfileRuntime,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<HostCargoProfileCapture>>> {
+        let HostCargoProfileRuntime { runtime, runner } = runtime;
+        let prepared = self.cargo_workspace_store.update(cx, |store, cx| {
+            store.prepare_selected_headless_cargo_profile_capture(runtime, cx)
+        })?;
+        Ok(cx.spawn(async move |_, _| {
+            Ok(HostCargoProfileCapture {
+                prepared: prepared.await?,
+                runner,
             })
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-tools"))]
+    pub fn capture_selected_host_cargo_profile(
+        &self,
+        capture: HostCargoProfileCapture,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Task<Result<project::cargo_workspace_store::CapturedHostCargoProfile>>> {
+        let HostCargoProfileCapture { prepared, runner } = capture;
+        let capture = self.cargo_workspace_store.update(cx, |store, cx| {
+            store.capture_selected_headless_cargo_profile(prepared, cx)
+        })?;
+        Ok(cx.spawn(async move |_, _| {
+            let _runner = runner;
+            capture.await
         }))
     }
 

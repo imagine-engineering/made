@@ -2,6 +2,8 @@ use crate::cargo_workspace::{
     CargoDiscoveryOmissions, MAX_CARGO_DISCOVERY_CANDIDATES, MAX_CARGO_SNAPSHOT_ENTRIES,
 };
 use feature_flags::{FeatureFlagAppExt as _, RustNativeProfilingExperimentalFeatureFlag};
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+use std::sync::atomic::AtomicBool;
 #[cfg(any(test, feature = "test-support"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
@@ -118,6 +120,38 @@ pub struct HostCargoProfileSelection {
     pub target_kind: crate::cargo_workspace::CargoTargetKind,
     pub target_name: String,
     pub preset_id: String,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct PreparedHostCargoProfileCapture {
+    runtime: LinuxNativeCargoRuntime,
+    collector: PathBuf,
+    paths: [ProjectPath; 2],
+    destination: terminal::NativeProfileTaskDestination,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl PreparedHostCargoProfileCapture {
+    pub fn paths(&self) -> &[ProjectPath; 2] {
+        &self.paths
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct CapturedHostCargoProfile {
+    pub run_id: uuid::Uuid,
+    pub paths: [ProjectPath; 2],
+    pub versions: [std::fs::Metadata; 2],
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+struct HostProfileCaptureLease(Arc<AtomicBool>);
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl Drop for HostProfileCaptureLease {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::Release);
+    }
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
@@ -2865,6 +2899,7 @@ enum NativeCargoBuildOwner {
     Headless {
         buffers: gpui::WeakEntity<crate::buffer_store::BufferStore>,
         settings_revision: u64,
+        preset_id: String,
     },
 }
 
@@ -6574,6 +6609,7 @@ impl CargoWorkspaceStore {
             NativeCargoBuildOwner::Headless {
                 buffers,
                 settings_revision,
+                ..
             } => {
                 ensure!(
                     self.native_profile_host.as_ref() == Some(buffers),
@@ -7733,6 +7769,7 @@ impl CargoWorkspaceStore {
                 .global::<settings::SettingsStore>()
                 .observed_revision()
                 .context("Native profiling host settings revision is unavailable")?,
+            preset_id: selection.preset_id.clone(),
         };
         self.validate_native_build_owner(&owner, cx)?;
         ensure!(
@@ -7958,6 +7995,250 @@ impl CargoWorkspaceStore {
                 })
             })
             .await
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn prepare_selected_headless_cargo_profile_capture(
+        &self,
+        runtime: LinuxNativeCargoRuntime,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<PreparedHostCargoProfileCapture>>> {
+        let intent = &runtime.workload.build.intent;
+        self.validate_native_build_intent(intent, cx)?;
+        let NativeCargoBuildOwner::Headless { preset_id, .. } = &intent.project else {
+            anyhow::bail!("Native capture requires the producing host's Cargo runtime");
+        };
+        let profiler = headless_profile_preset(preset_id, cx)?
+            .native_profiler
+            .context("The producing host has no native collector")?;
+        let continuation = task::TaskNativeProfileContinuation {
+            collector_path: profiler.collector_path,
+            profile_path: profiler.profile_path,
+            workload_arguments: Vec::new(),
+        };
+        let group = continuation.bound_artifact_group(&intent.run_id.to_string())?;
+        let workspace = &intent.workspace.root;
+        let artifact_path = |role| -> Result<ProjectPath> {
+            let artifact = group
+                .files
+                .get(role)
+                .context("Missing native capture role")?;
+            let path = workspace.path.as_std_path().join(&artifact.path);
+            Ok(ProjectPath {
+                worktree_id: workspace.worktree_id,
+                path: RelPath::new(&path, PathStyle::local())?.into_arc(),
+            })
+        };
+        let paths = [artifact_path("profile")?, artifact_path("symbols")?];
+        let absolute = self.headless_profile_capture_paths(&paths, cx)?;
+        Ok(cx.background_spawn(async move {
+            let destination = terminal::NativeProfileTaskDestination::open(absolute)
+                .context("Open the reviewed directory for the profile recording and symbols")?;
+            Ok(PreparedHostCargoProfileCapture {
+                runtime,
+                collector: continuation.collector_path.into(),
+                paths,
+                destination,
+            })
+        }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn headless_profile_capture_paths(
+        &self,
+        paths: &[ProjectPath; 2],
+        cx: &App,
+    ) -> Result<[PathBuf; 2]> {
+        use settings::{Settings as _, SettingsLocation};
+        let tree = self
+            .worktree_store
+            .read(cx)
+            .worktree_for_id(paths[0].worktree_id, cx)
+            .context("The native capture worktree is unavailable")?;
+        let tree = tree.read(cx);
+        let absolute = |path: &ProjectPath| -> Result<PathBuf> {
+            let settings = crate::WorktreeSettings::get(
+                Some(SettingsLocation {
+                    worktree_id: path.worktree_id,
+                    path: &path.path,
+                }),
+                cx,
+            );
+            ensure!(
+                !settings.is_path_private(&path.path)
+                    && !settings.is_path_excluded(&path.path)
+                    && tree.entry_for_path(&path.path).is_none_or(|entry| {
+                        !entry.is_private && !entry.is_external && !entry.is_fifo
+                    }),
+                "The native capture output is private, excluded or external"
+            );
+            let absolute = tree.abs_path().join(path.path.as_std_path());
+            crate::cargo_workspace::validate_native_cargo_path(&absolute)?;
+            Ok(absolute)
+        };
+        Ok([absolute(&paths[0])?, absolute(&paths[1])?])
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn capture_selected_headless_cargo_profile(
+        &mut self,
+        prepared: PreparedHostCargoProfileCapture,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<CapturedHostCargoProfile>>> {
+        use std::sync::atomic::Ordering;
+
+        let PreparedHostCargoProfileCapture {
+            runtime,
+            collector,
+            paths,
+            destination,
+        } = prepared;
+        let intent = &runtime.workload.build.intent;
+        self.validate_native_build_intent(intent, cx)?;
+        let NativeCargoBuildOwner::Headless {
+            settings_revision, ..
+        } = &intent.project
+        else {
+            anyhow::bail!("Native capture requires the producing host's Cargo runtime");
+        };
+        let settings_revision = *settings_revision;
+        self.headless_profile_capture_paths(&paths, cx)?;
+        let run_id = intent.run_id;
+        let launch = runtime
+            .workload
+            .stage_launch("Capture the selected Cargo profile");
+        let filesystem = self
+            .worktree_store
+            .read(cx)
+            .fs()
+            .context("Native capture filesystem is unavailable")?
+            .clone();
+        let executor = cx.background_executor().clone();
+        let current = Arc::new(AtomicBool::new(true));
+        let lease = HostProfileCaptureLease(current.clone());
+        let (revocation, revoked) = async_channel::bounded::<()>(1);
+        let revoke = {
+            let current = current.clone();
+            move || {
+                current.store(false, Ordering::Release);
+                revocation.close();
+            }
+        };
+        let settings_subscription = cx.observe_global::<settings::SettingsStore>({
+            let revoke = revoke.clone();
+            move |_, cx| {
+                if cx.global::<settings::SettingsStore>().observed_revision()
+                    != Some(settings_revision)
+                {
+                    revoke();
+                }
+            }
+        });
+        let trust_subscription = TrustedWorktrees::try_get_global(cx).map(|trust| {
+            cx.subscribe(&trust, move |store, _, _, cx| {
+                if TrustedWorktrees::has_restricted_worktrees(&store.worktree_store, cx) {
+                    revoke();
+                }
+            })
+        });
+        let LinuxNativeCargoRuntime {
+            workload,
+            runner,
+            observed,
+        } = runtime;
+        let renewed = self.renew_linux_native_cargo_workload(workload, cx)?;
+        Ok(cx.spawn(async move |store, cx| {
+            let _lease = lease;
+            let _subscriptions = (settings_subscription, trust_subscription);
+            let capture = async {
+                let runtime = LinuxNativeCargoRuntime {
+                    workload: renewed.await?,
+                    runner,
+                    observed,
+                };
+                let (runtime, report, invocation, collector_image, destination) = cx
+                    .background_spawn({
+                        let filesystem = filesystem.clone();
+                        async move {
+                            destination.check_available()?;
+                            let report = terminal::NativeProfileTaskReservation::new()?;
+                            let (invocation, collector_image) = runtime
+                                .profile_invocation(
+                                    filesystem.as_ref(),
+                                    collector,
+                                    &report,
+                                    &executor,
+                                )
+                                .await?;
+                            Ok::<_, anyhow::Error>((
+                                runtime,
+                                report,
+                                invocation,
+                                collector_image,
+                                destination,
+                            ))
+                        }
+                    })
+                    .await?;
+                let (builder, observation) = store.update(cx, |store, cx| {
+                    store.validate_native_build_intent(&runtime.workload.build.intent, cx)?;
+                    store.headless_profile_capture_paths(&paths, cx)?;
+                    crate::task_store::validate_experimental_task_requirements(&launch, cx)?;
+                    terminal::TerminalBuilder::new_with_native_cargo_profile_task(
+                        launch,
+                        None,
+                        invocation,
+                        report,
+                        cx.entity_id().as_u64(),
+                        cx,
+                    )
+                })??;
+                let builder = builder.await?;
+                let terminal = cx.new(|cx| builder.subscribe(cx));
+                let ordinary =
+                    terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                let (result, status) = futures::future::join(observation.finish(), ordinary).await;
+                let terminal::LinuxNativeTaskOutcome::Completed(observed_status, Some(profile)) =
+                    result?
+                else {
+                    anyhow::bail!("Native capture did not return a sealed recording and symbols");
+                };
+                ensure!(
+                    observed_status.success() && status.is_some_and(|status| status.success()),
+                    "Native capture disagreed with the producing Terminal exit"
+                );
+                let workload = store
+                    .update(cx, |store, cx| {
+                        store.renew_linux_native_cargo_workload(runtime.workload, cx)
+                    })??
+                    .await?;
+                store.update(cx, |store, cx| {
+                    store.validate_native_build_intent(&workload.build.intent, cx)?;
+                    store.headless_profile_capture_paths(&paths, cx)
+                })??;
+                let versions = cx
+                    .background_spawn(async move {
+                        collector_image.revalidate(filesystem.as_ref()).await?;
+                        runtime.runner.revalidate(filesystem.as_ref()).await?;
+                        profile
+                            .retain(destination, || current.load(Ordering::Acquire))
+                            .context("Retaining the sealed native recording and symbols")
+                    })
+                    .await?;
+                Ok(CapturedHostCargoProfile {
+                    run_id,
+                    paths,
+                    versions,
+                })
+            };
+            match futures::future::select(capture.boxed_local(), revoked.recv().boxed_local()).await
+            {
+                Either::Left((result, _)) => result,
+                Either::Right(_) => {
+                    anyhow::bail!("Native capture approval was revoked on the host")
+                }
+            }
         }))
     }
 

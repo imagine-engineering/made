@@ -122,6 +122,14 @@ fn registered_headless_host_observes_the_selected_cargo_runtime() -> io::Result<
 }
 
 #[test]
+#[ignore = "requires a separately built host with the packaged observer, installed Cargo and usable perf"]
+fn registered_headless_host_captures_and_retains_the_selected_rust_profile() -> io::Result<()> {
+    run_terminal_fixture("registered-headless-profile-occupied-destination")?;
+    run_terminal_fixture("registered-headless-profile-capture")?;
+    run_terminal_fixture("registered-headless-profile-revoked-capture")
+}
+
+#[test]
 #[ignore = "requires an independently built host, the pinned Cargo and a Linux perf environment"]
 fn native_cargo_profile_uses_the_fresh_executable_on_both_terminal_backends() -> io::Result<()> {
     run_terminal_fixture("cargo-build-profile-pty")?;
