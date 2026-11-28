@@ -1265,6 +1265,7 @@ impl RunningState {
                             Some(activation),
                             true,
                             Some(handle),
+                            None,
                             window,
                             cx,
                         )

@@ -340,14 +340,62 @@ pub fn plan_before_launch_dependencies(
     context: &TaskContext,
     cx: &mut App,
 ) -> anyhow::Result<Task<anyhow::Result<Vec<task::ResolvedTask>>>> {
+    let labels: Vec<_> = dependencies.iter().map(String::as_str).collect();
+    validate_before_launch_labels(launching_label, &labels)?;
+    let templates = inventory.read(cx).list_tasks(buffer, None, worktree_id, cx);
+    let launching_label = launching_label.to_owned();
+    let dependencies = dependencies.to_vec();
+    let context = context.clone();
+    Ok(cx.spawn(async move |_| {
+        let entries: Vec<_> = templates.await.into_iter()
+            .filter(|(source, _)| matches!(source, TaskSourceKind::Worktree { .. } | TaskSourceKind::AbsPath { .. })
+                && source.groovy_jvm_task_worktree().is_none())
+            .collect();
+        let labels: Vec<_> = dependencies.iter().map(String::as_str).collect();
+        ordered_before_launch_entries(&launching_label, &labels, &entries)?
+            .into_iter()
+            .map(|(source, template)| {
+                let id_base = source.to_id_base();
+                let resolved = if template.literal_arguments {
+                    template.resolve_task_with_literal_arguments(&id_base, &context)
+                } else {
+                    template.resolve_task(&id_base, &context)
+                };
+                resolved.with_context(|| {
+                    format!(
+                        "Before-launch dependency '{}' could not resolve in the launching task's context",
+                        template.label
+                    )
+                })
+            })
+            .collect()
+    }))
+}
+
+fn before_launch_labels(template: &TaskTemplate) -> Vec<&str> {
+    template
+        .tags
+        .iter()
+        .filter_map(|tag| tag.strip_prefix("before-launch:"))
+        .collect()
+}
+
+fn validate_before_launch_labels(
+    launching_label: &str,
+    dependencies: &[&str],
+) -> anyhow::Result<()> {
     anyhow::ensure!(
         dependencies.len() <= MAX_BEFORE_LAUNCH_DEPENDENCIES,
         "Before-launch dependencies exceed the {MAX_BEFORE_LAUNCH_DEPENDENCIES}-dependency limit"
     );
     let mut listed_labels = std::collections::HashSet::new();
-    for label in dependencies {
+    for &label in dependencies {
         anyhow::ensure!(
-            listed_labels.insert(label.as_str()),
+            !label.trim().is_empty() && !label.chars().any(char::is_control),
+            "Before-launch dependency labels must be nonempty and have no control characters"
+        );
+        anyhow::ensure!(
+            listed_labels.insert(label),
             "Before-launch dependency '{label}' is listed more than once"
         );
         anyhow::ensure!(
@@ -355,32 +403,67 @@ pub fn plan_before_launch_dependencies(
             "A before-launch dependency cannot reference its own configuration"
         );
     }
-    let templates = inventory.read(cx).list_tasks(buffer, None, worktree_id, cx);
-    let dependencies = dependencies.to_vec();
-    let context = context.clone();
-    Ok(cx.spawn(async move |_| {
-        let entries = templates.await;
-        let mut planned = Vec::with_capacity(dependencies.len());
-        for label in &dependencies {
-            let (kind, template) = entries
-                .iter()
-                .find(|(_, template)| &template.label == label)
-                .with_context(|| {
-                    format!("Before-launch dependency '{label}' is not a saved task")
-                })?;
-            let id_base = kind.to_id_base();
-            let resolved = if template.literal_arguments {
-                template.resolve_task_with_literal_arguments(&id_base, &context)
-            } else {
-                template.resolve_task(&id_base, &context)
+    Ok(())
+}
+
+fn ordered_before_launch_entries<'a>(
+    launching_label: &'a str,
+    dependencies: &[&str],
+    entries: &'a [(TaskSourceKind, TaskTemplate)],
+) -> anyhow::Result<Vec<&'a (TaskSourceKind, TaskTemplate)>> {
+    fn collect<'a>(
+        owner: &str,
+        dependencies: &[&str],
+        entries: &'a [(TaskSourceKind, TaskTemplate)],
+        ancestors: &mut Vec<&'a str>,
+        ordered: &mut Vec<&'a (TaskSourceKind, TaskTemplate)>,
+    ) -> anyhow::Result<()> {
+        validate_before_launch_labels(owner, dependencies)?;
+        for &label in dependencies {
+            if ordered.iter().any(|(_, template)| template.label == label) {
+                continue;
             }
-            .with_context(|| {
-                format!("Before-launch dependency '{label}' could not resolve in the launching task's context")
+            anyhow::ensure!(
+                !ancestors.contains(&label),
+                "Before-launch dependencies contain a cycle at '{label}'"
+            );
+            anyhow::ensure!(
+                ordered.len() + ancestors.len() <= MAX_BEFORE_LAUNCH_DEPENDENCIES,
+                "Before-launch dependencies exceed the {MAX_BEFORE_LAUNCH_DEPENDENCIES}-dependency limit"
+            );
+            let mut matches = entries
+                .iter()
+                .filter(|(_, template)| template.label == label);
+            let entry = matches.next().with_context(|| {
+                format!("Before-launch dependency '{label}' is not a saved task")
             })?;
-            planned.push(resolved);
+            anyhow::ensure!(
+                matches.next().is_none(),
+                "Before-launch dependency '{label}' is ambiguous across saved tasks"
+            );
+            ancestors.push(&entry.1.label);
+            collect(
+                &entry.1.label,
+                &before_launch_labels(&entry.1),
+                entries,
+                ancestors,
+                ordered,
+            )?;
+            ancestors.pop();
+            ordered.push(entry);
         }
-        Ok(planned)
-    }))
+        Ok(())
+    }
+
+    let mut ordered = Vec::new();
+    collect(
+        launching_label,
+        dependencies,
+        entries,
+        &mut vec![launching_label],
+        &mut ordered,
+    )?;
+    Ok(ordered)
 }
 
 /// The bounded number of ordered saved configurations one activation trigger
@@ -484,6 +567,7 @@ pub fn select_jvm_trigger_tasks(
 }
 
 #[cfg(feature = "jvm-tools")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SavedJvmTask {
     pub worktree_id: WorktreeId,
     pub source: TaskSourceKind,
@@ -491,7 +575,7 @@ pub struct SavedJvmTask {
 }
 
 #[cfg(feature = "jvm-tools")]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PreparedSavedJvmTask {
     pub worktree: gpui::EntityId,
     pub root: Arc<Path>,
@@ -581,6 +665,41 @@ impl SavedJvmTask {
             task: resolved,
         })
     }
+}
+
+#[cfg(feature = "jvm-tools")]
+pub fn prepare_jvm_before_launch_tasks(
+    project: &crate::Project,
+    worktree_id: WorktreeId,
+    main: &PreparedSavedJvmTask,
+    cx: &App,
+) -> anyhow::Result<Vec<(SavedJvmTask, PreparedSavedJvmTask)>> {
+    let template = main.task.original_task();
+    let labels = before_launch_labels(template);
+    if labels.is_empty() {
+        return Ok(Vec::new());
+    }
+    let inventory = project
+        .task_store()
+        .read(cx)
+        .task_inventory()
+        .context("The build Task inventory is unavailable; reopen the project")?;
+    let entries: Vec<_> = inventory
+        .read(cx)
+        .saved_task_templates(worktree_id)
+        .collect();
+    ordered_before_launch_entries(&template.label, &labels, &entries)?
+        .into_iter()
+        .map(|(source, template)| {
+            let target = SavedJvmTask {
+                worktree_id,
+                source: source.clone(),
+                label: template.label.clone(),
+            };
+            let prepared = target.prepare(project, cx)?;
+            Ok((target, prepared))
+        })
+        .collect()
 }
 
 #[cfg(feature = "jvm-tools")]

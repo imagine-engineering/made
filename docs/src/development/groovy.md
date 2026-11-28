@@ -544,6 +544,17 @@ succeed. After-run Tasks start only after the selected run succeeds.
 If a Task fails or you cancel it in the terminal, Groovy skips the rest of
 the sequence. Run hooks require a trusted project and its live Java provider.
 
+A local saved configuration can also declare its own prerequisites with
+`before-launch:` tags in `tasks.json`. For example, a configuration with
+`"tags": ["before-launch:Prepare project", "before-launch:Generate sources"]`
+runs those saved Tasks in the listed order before its command starts. Use
+exact, unique Task labels from the project or user Task files. A prerequisite
+can declare its own prerequisites, and each shared Task runs once per launch.
+Groovy rejects missing or ambiguous labels and dependency cycles before
+starting the sequence. Failure or cancellation skips the remaining Tasks.
+When run hooks are configured, before-run hooks start before the prerequisites
+and after-run hooks follow a successful selected run.
+
 For an explicit local **Reload Maven projects**, **Apply saved Maven
 selection**, **Import Gradle selection**, or **Reload all builds**, saved
 Tasks can also opt in with the `before-sync` or `after-sync` tag. The same
@@ -568,9 +579,8 @@ before starting the Maven or Gradle test wrapper. After-debug Tasks wait
 for the adapter to end naturally and for the selected wrapper to exit
 successfully. A failed Task, Stop, or Detach skips the remaining hooks.
 
-Complete arbitrary-argument handling, configured dependency lists, Debug
-hooks for other launch types, and connected hooks and saved configuration
-runs remain open.
+Complete arbitrary-argument handling, Debug hooks for other launch types,
+and connected hooks and saved configuration runs remain open.
 Selected test results appear in the Tests view. Supported debugging uses
 the Debug panel.
 

@@ -26,7 +26,10 @@ use project::{
     },
     lsp_store::LocalJvmBuildImport,
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
-    task_store::{JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_hook_tasks},
+    task_store::{
+        JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_before_launch_tasks,
+        prepare_jvm_hook_tasks,
+    },
     trusted_worktrees::TrustedWorktrees,
 };
 use ui::{Tooltip, prelude::*};
@@ -724,6 +727,7 @@ pub struct DependenciesPanel {
     preferences_write: Option<gpui::Task<()>>,
     preferences_generation: u64,
     show_graph_search: bool,
+    active_before_launch_runs: HashSet<SavedConfiguration>,
     recent_configurations: VecDeque<SavedConfiguration>,
     configuration_selections: HashMap<LanguageToolNodeId, SavedConfiguration>,
     configuration_notice: Option<String>,
@@ -3169,6 +3173,7 @@ impl DependenciesPanel {
                     preferences_write: None,
                     preferences_generation: 0,
                     show_graph_search: false,
+                    active_before_launch_runs: HashSet::new(),
                     recent_configurations: VecDeque::new(),
                     configuration_selections: HashMap::new(),
                     configuration_notice: None,
@@ -5687,12 +5692,13 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .project
-            .read(cx)
-            .lsp_store()
-            .read(cx)
-            .jvm_trigger_is_armed(target.worktree_id, JvmTaskTrigger::BeforeRun)
+        if self.active_before_launch_runs.contains(&target)
+            || self
+                .project
+                .read(cx)
+                .lsp_store()
+                .read(cx)
+                .jvm_trigger_is_armed(target.worktree_id, JvmTaskTrigger::BeforeRun)
         {
             self.configuration_notice =
                 Some("A saved configuration sequence is already active for this project".into());
@@ -5718,7 +5724,7 @@ impl DependenciesPanel {
     }
 
     fn start_configuration(
-        &self,
+        &mut self,
         target: &SavedConfiguration,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -5735,37 +5741,67 @@ impl DependenciesPanel {
             anyhow::ensure!(
                 &hook.target != target,
                 "A saved configuration cannot also be its own {} Task",
-                hook.trigger.map_or("run", JvmTaskTrigger::label)
+                hook.phase.label()
             );
         }
+        let activation = (!steps.is_empty() || !after.is_empty()).then_some(activation);
+        let dependencies = prepare_jvm_before_launch_tasks(project, worktree_id, &prepared, cx)?;
+        let holds_primary =
+            !dependencies.is_empty() && !prepared.task.resolved.allow_concurrent_runs;
+        let plan = (!dependencies.is_empty()).then(|| {
+            Arc::new(BeforeLaunchConfiguration {
+                primary: target.for_launch(),
+                prepared: prepared.clone(),
+                dependencies,
+            })
+        });
+        if let Some(plan) = &plan {
+            steps.extend(plan.dependencies.iter().cloned().map(|(target, prepared)| {
+                SavedConfigurationStep {
+                    target: SavedConfiguration {
+                        worktree_id: target.worktree_id,
+                        source: target.source,
+                        label: target.label,
+                    },
+                    prepared,
+                    phase: SavedConfigurationPhase::BeforeLaunch,
+                    before_launch: Some(plan.clone()),
+                }
+            }));
+        }
+        let runs_before_launch = plan.is_some();
         steps.push(SavedConfigurationStep {
             target: target.clone(),
             prepared,
-            trigger: None,
+            phase: SavedConfigurationPhase::Run,
+            before_launch: plan,
         });
         steps.extend(after);
-        let runs_hooks = steps.len() > 1;
+        let sequenced = steps.len() > 1;
+        let held_primary = holds_primary.then(|| target.clone());
         let project_id = self.project.entity_id();
         let panel = cx.weak_entity();
 
-        self.with_workspace_window(window, cx, |workspace, window, cx| {
+        self.with_workspace_window(window, cx, |workspace, window, cx| -> anyhow::Result<()> {
             anyhow::ensure!(
                 workspace.project().entity_id() == project_id,
                 "The saved configuration's project changed; select it again"
             );
-            if !runs_hooks {
+            if !sequenced {
                 if let Some(step) = steps.pop() {
                     drop(Self::schedule_configuration_step(step, project_id, None, workspace, window, cx));
                 }
                 return Ok(());
             }
-            store.update(cx, |store, cx| store.arm_jvm_trigger(worktree_id, activation, cx))?;
+            if let Some(activation) = activation {
+                store.update(cx, |store, cx| store.arm_jvm_trigger(worktree_id, activation, cx))?;
+            }
             let workspace = cx.weak_entity();
             let store = store.downgrade();
             window.spawn(cx, async move |cx| {
                 let mut result = async {
                     for step in steps {
-                        let phase = step.trigger.map_or("run", JvmTaskTrigger::label);
+                        let phase = step.phase.label();
                         let label = step.target.label.clone();
                         panel.update(cx, |panel, cx| {
                             panel.configuration_notice = Some(format!("Running {phase} Task '{label}'"));
@@ -5777,19 +5813,25 @@ impl DependenciesPanel {
                     }
                     Ok::<_, anyhow::Error>(())
                 }.await;
-                if result.is_ok() {
-                    result = store.update(cx, |store, cx| {
-                        anyhow::ensure!(
-                            store.complete_jvm_trigger(worktree_id, activation, cx),
-                            "The project or Java provider changed during the saved configuration sequence"
-                        );
-                        Ok(())
-                    }).and_then(|completed| completed);
-                } else {
-                    store.update(cx, |store, _| store.cancel_jvm_trigger(worktree_id, activation)).log_err();
+                if let Some(activation) = activation {
+                    if result.is_ok() {
+                        result = store.update(cx, |store, cx| {
+                            anyhow::ensure!(
+                                store.complete_jvm_trigger(worktree_id, activation, cx),
+                                "The project or Java provider changed during the saved configuration sequence"
+                            );
+                            Ok(())
+                        }).and_then(|completed| completed);
+                    } else {
+                        store.update(cx, |store, _| store.cancel_jvm_trigger(worktree_id, activation)).log_err();
+                    }
                 }
                 panel.update(cx, |panel, cx| {
+                    if let Some(held_primary) = held_primary {
+                        panel.active_before_launch_runs.remove(&held_primary);
+                    }
                     panel.configuration_notice = Some(match result {
+                        Ok(()) if runs_before_launch => "Saved configuration and its before-launch Tasks completed".into(),
                         Ok(()) => "Saved configuration and its run hooks completed".into(),
                         Err(error) => error.to_string(),
                     });
@@ -5798,7 +5840,11 @@ impl DependenciesPanel {
             }).detach();
             Ok(())
         })
-        .context("The workspace is unavailable; reopen the project before running configurations")?
+        .context("The workspace is unavailable; reopen the project before running configurations")??;
+        if holds_primary {
+            self.active_before_launch_runs.insert(target.clone());
+        }
+        Ok(())
     }
 
     fn prepare_configuration_hooks(
@@ -5816,7 +5862,8 @@ impl DependenciesPanel {
                     label: target.label,
                 },
                 prepared,
-                trigger: Some(trigger),
+                phase: SavedConfigurationPhase::Hook(trigger),
+                before_launch: None,
             })
             .collect())
     }
@@ -5825,20 +5872,13 @@ impl DependenciesPanel {
         workspace: &WeakEntity<Workspace>,
         step: SavedConfigurationStep,
         project_id: gpui::EntityId,
-        activation: JvmTaskTrigger,
+        activation: Option<JvmTaskTrigger>,
         cx: &mut AsyncWindowContext,
     ) -> anyhow::Result<()> {
-        let phase = step.trigger.map_or("run", JvmTaskTrigger::label);
+        let phase = step.phase.label();
         let label = step.target.label.clone();
         let scheduled = workspace.update_in(cx, |workspace, window, cx| {
-            Self::schedule_configuration_step(
-                step,
-                project_id,
-                Some(activation),
-                workspace,
-                window,
-                cx,
-            )
+            Self::schedule_configuration_step(step, project_id, activation, workspace, window, cx)
         })?;
         let outcome = scheduled.await?;
         anyhow::ensure!(
@@ -5864,14 +5904,19 @@ impl DependenciesPanel {
         let SavedConfigurationStep {
             target,
             prepared,
-            trigger,
+            phase,
+            before_launch,
         } = step;
         workspace.schedule_saved_jvm_task(
             project_id,
             (target.for_launch(), prepared),
             activation,
-            trigger.is_some(),
+            !matches!(phase, SavedConfigurationPhase::Run),
             None,
+            before_launch.map(|plan| {
+                Box::new(move |project: &Project, cx: &App| plan.validate(project, cx))
+                    as workspace::tasks::SavedJvmTaskCheck
+            }),
             window,
             cx,
         )
@@ -6454,16 +6499,13 @@ impl DependenciesPanel {
         cx: &mut AsyncWindowContext,
     ) -> anyhow::Result<()> {
         for step in steps {
-            let phase = step
-                .trigger
-                .context("Missing saved sync Task activation")?
-                .label();
+            let phase = step.phase.label();
             panel.update(cx, |panel, cx| {
                 panel.build_phase_notice =
                     Some(format!("Running {phase} Task '{}'", step.target.label));
                 cx.notify();
             })?;
-            Self::await_saved_configuration_step(workspace, step, project_id, activation, cx)
+            Self::await_saved_configuration_step(workspace, step, project_id, Some(activation), cx)
                 .await?;
         }
         Ok(())
@@ -8938,17 +8980,58 @@ fn ordered_operation_tree(ordered: &[JvmBuildOperationReceipt]) -> LanguageToolN
 const RECENT_CONFIGURATION_LIMIT: usize = 8;
 const SAVED_CONFIGURATION_LIMIT: usize = 32;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct SavedConfiguration {
     worktree_id: WorktreeId,
     source: TaskSourceKind,
     label: String,
 }
 
+#[derive(Clone, Copy)]
+enum SavedConfigurationPhase {
+    Run,
+    BeforeLaunch,
+    Hook(JvmTaskTrigger),
+}
+
+impl SavedConfigurationPhase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Run => "run",
+            Self::BeforeLaunch => "before-launch",
+            Self::Hook(trigger) => trigger.label(),
+        }
+    }
+}
+
+struct BeforeLaunchConfiguration {
+    primary: SavedJvmTask,
+    prepared: PreparedSavedJvmTask,
+    dependencies: Vec<(SavedJvmTask, PreparedSavedJvmTask)>,
+}
+
+impl BeforeLaunchConfiguration {
+    fn validate(&self, project: &Project, cx: &App) -> anyhow::Result<()> {
+        let current = self.primary.prepare(project, cx)?;
+        anyhow::ensure!(
+            current == self.prepared
+                && prepare_jvm_before_launch_tasks(
+                    project,
+                    self.primary.worktree_id,
+                    &current,
+                    cx
+                )? == self.dependencies,
+            "The saved configuration or its before-launch Tasks changed before launch; select it again"
+        );
+        Ok(())
+    }
+}
+
 struct SavedConfigurationStep {
     target: SavedConfiguration,
     prepared: PreparedSavedJvmTask,
-    trigger: Option<JvmTaskTrigger>,
+    phase: SavedConfigurationPhase,
+    before_launch: Option<Arc<BeforeLaunchConfiguration>>,
 }
 
 impl SavedConfiguration {
@@ -10973,6 +11056,121 @@ mod tests {
                 "re-activation moves the entry to the front"
             );
         });
+
+        let prerequisites = serde_json::json!([
+            {"label":"generate", "command":"primary", "tags":["before-launch:z-first", "before-launch:a-second"]},
+            {"label":"a-second", "command":"second", "tags":["before-launch:shared"]},
+            {"label":"z-first", "command":"first", "tags":["before-launch:shared"]},
+            {"label":"shared", "command":"common"},
+            {"label":"loop", "command":"loop", "tags":["before-launch:loop-peer"]},
+            {"label":"loop-peer", "command":"loop-peer", "tags":["before-launch:loop"]},
+            {"label":"missing", "command":"missing", "tags":["before-launch:unknown"]},
+            {"label":"duplicate", "command":"duplicate", "tags":["before-launch:shared", "before-launch:shared"]},
+            {"label":"ambiguous", "command":"ambiguous", "tags":["before-launch:two-matches"]},
+            {"label":"two-matches", "command":"first-match"},
+            {"label":"two-matches", "command":"second-match"},
+        ]);
+        let set_prerequisites = |tasks: &serde_json::Value, cx: &mut gpui::VisualTestContext| {
+            inventory.update(cx, |inventory, _| {
+                inventory
+                    .update_file_based_tasks(project_tasks(), Some(&tasks.to_string()))
+                    .expect("saved configurations and prerequisites");
+            });
+            panel.update(cx, |panel, cx| panel.rebuild(cx));
+        };
+        set_prerequisites(&prerequisites, cx);
+        let run_with_prerequisites = |label: &str, cx: &mut gpui::VisualTestContext| {
+            panel.update_in(cx, |panel, window, cx| {
+                let row = panel
+                    .configuration_selections
+                    .iter()
+                    .find_map(|(row, target)| (target.label == label).then(|| row.clone()))
+                    .expect("configuration row");
+                panel.host.select(row);
+                panel.run_selected_or_recent_configuration(window, cx);
+            });
+            cx.run_until_parked();
+        };
+        let notice_contains = |phrase: &str, cx: &mut gpui::VisualTestContext| {
+            assert!(
+                panel.read_with(cx, |panel, _| {
+                    panel
+                        .configuration_notice
+                        .as_deref()
+                        .is_some_and(|notice| notice.contains(phrase))
+                }),
+                "expected notice containing {phrase}"
+            );
+        };
+        events.lock().expect("Task events").clear();
+        for (label, phrase) in [
+            ("loop", "cycle"),
+            ("missing", "not a saved task"),
+            ("duplicate", "listed more than once"),
+            ("ambiguous", "ambiguous across saved tasks"),
+        ] {
+            run_with_prerequisites(label, cx);
+            notice_contains(phrase, cx);
+        }
+        assert!(events.lock().expect("Task events").is_empty());
+
+        let (reached, mut reached_terminal) = oneshot::channel();
+        let (release, wait) = oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((reached, wait));
+        run_with_prerequisites("generate", cx);
+        assert_eq!(
+            reached_terminal
+                .try_recv()
+                .expect("first prerequisite preparing"),
+            Some(())
+        );
+        run_with_prerequisites("generate", cx);
+        notice_contains("already active", cx);
+        let mut edited = prerequisites.clone();
+        edited[2]["command"] = "changed-after-schedule".into();
+        set_prerequisites(&edited, cx);
+        release.send(()).expect("release first prerequisite");
+        cx.run_until_parked();
+        assert!(events.lock().expect("Task events").is_empty());
+        notice_contains("Remaining Tasks were skipped", cx);
+
+        set_prerequisites(&prerequisites, cx);
+        let prerequisite_commands = || {
+            events
+                .lock()
+                .expect("Task events")
+                .iter()
+                .filter_map(|event| event.command.clone())
+                .collect::<Vec<_>>()
+        };
+        #[cfg(unix)]
+        let failed_prerequisite = std::os::unix::process::ExitStatusExt::from_raw(256);
+        #[cfg(windows)]
+        let failed_prerequisite = std::os::windows::process::ExitStatusExt::from_raw(1);
+        for (outcome, phrase) in [
+            (Some(failed_prerequisite), "failed"),
+            (None, "was cancelled"),
+        ] {
+            terminal_outcomes
+                .lock()
+                .expect("terminal outcomes")
+                .push_back(outcome);
+            run_with_prerequisites("generate", cx);
+            assert_eq!(prerequisite_commands(), ["common"]);
+            notice_contains(phrase, cx);
+            events.lock().expect("Task events").clear();
+        }
+        run_with_prerequisites("generate", cx);
+        assert_eq!(
+            prerequisite_commands(),
+            ["common", "first", "second", "primary"]
+        );
+        notice_contains("before-launch Tasks completed", cx);
+        assert!(inventory.read_with(cx, |inventory, _| {
+            inventory
+                .last_scheduled_task(None)
+                .is_some_and(|(_, task)| task.original_task().label == "generate")
+        }));
 
         let languages = project.read_with(cx, |project, _| project.languages().clone());
         languages.add(Arc::new(Language::new(

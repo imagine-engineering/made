@@ -135,6 +135,9 @@ impl TaskInvocationContext {
 }
 
 #[cfg(feature = "jvm-tools")]
+pub type SavedJvmTaskCheck = Box<dyn FnOnce(&project::Project, &gpui::App) -> Result<()>>;
+
+#[cfg(feature = "jvm-tools")]
 fn jvm_task_activation_project<'a>(
     workspace: &'a Workspace,
     project_id: gpui::EntityId,
@@ -1131,6 +1134,7 @@ impl Workspace {
         activation: Option<JvmTaskTrigger>,
         omit_history: bool,
         handle: Option<StructuredTaskHandle>,
+        sequence_check: Option<SavedJvmTaskCheck>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<ScheduledTaskResult>> {
@@ -1147,6 +1151,9 @@ impl Workspace {
                         activation,
                         cx,
                     )?;
+                    if let Some(check) = sequence_check {
+                        check(project, cx)?;
+                    }
                     let current = target.prepare(project, cx)?;
                     anyhow::ensure!(
                         current == prepared,
@@ -1354,6 +1361,7 @@ impl Workspace {
                         (target, prepared),
                         Some(activation),
                         true,
+                        None,
                         None,
                         window,
                         cx,
