@@ -217,29 +217,42 @@ if [[ "$bundle_phase" == "all" || "$bundle_phase" == "application" ]]; then
 fi
 
 check_static_runtime_helper() {
-    local helper="$1" headers
+    local helper="$1" target="$2" headers machine expected_machine
     if [[ ! -x "$helper" || -L "$helper" ]]; then
         echo "Missing Linux native Cargo runtime helper: $helper" >&2
         exit 1
     fi
-    headers=$(LC_ALL=C readelf --wide --program-headers --dynamic "$helper")
+    headers=$(LC_ALL=C readelf --wide --file-header --program-headers --dynamic "$helper")
     if [[ "$headers" != *" LOAD "* || "$headers" == *" INTERP "* ||
           "$headers" == *" (NEEDED) "* || "$headers" == *" (RPATH) "* ||
           "$headers" == *" (RUNPATH) "* ]]; then
         echo "The Linux native Cargo runtime helper must be a static ELF executable without a library search path" >&2
         exit 1
     fi
+    case "${target%%-*}" in
+        aarch64) expected_machine="AArch64" ;;
+        x86_64) expected_machine="Advanced Micro Devices X86-64" ;;
+        *)
+            echo "Unsupported Linux native Cargo runtime helper target: $target" >&2
+            exit 1
+            ;;
+    esac
+    machine=$(sed -n 's/^[[:blank:]]*Machine:[[:blank:]]*//p' <<< "$headers")
+    if [[ "$machine" != "$expected_machine" ]]; then
+        echo "Linux native Cargo runtime helper architecture ($machine) does not match target $target" >&2
+        exit 1
+    fi
 }
 
 if "$build_app_runtime" || [[ "$rust_tools" == true && "$bundle_phase" == "package" ]]; then
-    check_static_runtime_helper "$native_runtime_helper"
+    check_static_runtime_helper "$native_runtime_helper" "$target_triple"
 fi
 # Build remote_server in separate invocation to prevent feature unification from other crates
 # from influencing dynamic libraries required by it.
 if [[ "$bundle_phase" == "all" || "$bundle_phase" == "remote-server" ]]; then
     unset ZED_LINUX_RUNTIME_OBSERVER
     if "$build_remote_runtime"; then
-        check_static_runtime_helper "$remote_runtime_helper"
+        check_static_runtime_helper "$remote_runtime_helper" "$remote_server_triple"
         embedded_runtime_helper="${target_dir}/${remote_server_triple}/release/native-cargo-runtime-observer.embedded"
         mkdir -p "$(dirname "$embedded_runtime_helper")"
         llvm-objcopy --strip-debug "$remote_runtime_helper" "$embedded_runtime_helper"
