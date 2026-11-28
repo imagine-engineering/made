@@ -8832,15 +8832,41 @@ impl LspStore {
     }
 
     #[cfg(feature = "jvm-tools")]
-    pub fn reimport_remote_build_projects(
+    pub fn prepare_remote_build_reimport(
         &self,
         tool: JvmBuildTool,
         selected: Option<WorktreeId>,
-        cx: &mut Context<Self>,
-    ) -> Result<Task<Result<()>>> {
+        cx: &App,
+    ) -> Result<RemoteJvmBuildReimport> {
         let (client, session_generation, worktree_id) =
             self.remote_build_action_scope(tool, selected, cx)?;
-        let client = client.clone();
+        Ok(RemoteJvmBuildReimport {
+            tool,
+            worktree_id,
+            session_generation,
+            client: client.clone(),
+        })
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    pub fn reimport_remote_build_projects(
+        &self,
+        reimport: RemoteJvmBuildReimport,
+        cx: &mut Context<Self>,
+    ) -> Result<Task<Result<()>>> {
+        let RemoteJvmBuildReimport {
+            tool,
+            worktree_id,
+            session_generation,
+            client,
+        } = reimport;
+        let (current_client, current_generation, _) =
+            self.remote_build_action_scope(tool, Some(worktree_id), cx)?;
+        ensure!(
+            current_client.is_same_instance(&client) && current_generation == session_generation,
+            "The {} project host changed before reimport; refresh and retry",
+            tool.name()
+        );
         Ok(cx.spawn(async move |this, cx| {
             let name = tool.name();
             let request = async {
@@ -24051,6 +24077,25 @@ pub enum LocalJvmBuildImport {
 }
 
 #[cfg(feature = "jvm-tools")]
+pub struct RemoteJvmBuildReimport {
+    tool: JvmBuildTool,
+    worktree_id: WorktreeId,
+    session_generation: u64,
+    client: AnyProtoClient,
+}
+
+#[cfg(feature = "jvm-tools")]
+impl RemoteJvmBuildReimport {
+    pub fn worktree_id(&self) -> WorktreeId {
+        self.worktree_id
+    }
+
+    pub fn tool(&self) -> JvmBuildTool {
+        self.tool
+    }
+}
+
+#[cfg(feature = "jvm-tools")]
 enum SelectedJdtlsPhaseTarget {
     ReloadBuilds {
         after_build_change: bool,
@@ -28978,7 +29023,10 @@ mod tests {
         let maven_global_settings = serde_json::json!("/fixture/maven-global-settings.xml");
         let live_configuration = serde_json::json!({
             "java": {
-                "configuration": {"maven": {"userSettings": maven_user_settings}},
+                "configuration": {
+                    "maven": {"userSettings": maven_user_settings},
+                    "updateBuildConfiguration": "automatic",
+                },
                 "import": {
                     "gradle": {"java": {"home": build_jdk}},
                     "maven": {"enabled": true, "offline": {"enabled": true}},
@@ -29026,6 +29074,10 @@ mod tests {
         assert_eq!(
             options["settings"]["java.configuration.maven.globalSettings"],
             maven_global_settings
+        );
+        assert_eq!(
+            options["settings"]["java.configuration.updateBuildConfiguration"],
+            "automatic"
         );
         assert_eq!(options["bundles"], serde_json::json!(["fixture-bundle"]));
         assert_eq!(options["settings"]["java"]["autobuild"]["enabled"], false);

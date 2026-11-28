@@ -4156,6 +4156,174 @@ async fn verify_docker_saved_configuration(build_tool: JvmTestBuildTool, cx: &mu
 }
 
 #[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Maven Docker host with saved sync Tasks"]
+async fn docker_maven_reimport_runs_saved_sync_hooks(cx: &mut TestAppContext) {
+    verify_docker_saved_sync_hooks(JvmTestBuildTool::Maven, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+#[gpui::test]
+#[ignore = "requires a network-disabled Gradle Docker host with saved sync Tasks"]
+async fn docker_gradle_reimport_runs_saved_sync_hooks(cx: &mut TestAppContext) {
+    verify_docker_saved_sync_hooks(JvmTestBuildTool::Gradle, cx).await;
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
+async fn verify_docker_saved_sync_hooks(build_tool: JvmTestBuildTool, cx: &mut TestAppContext) {
+    use project::{task_inventory::JvmBuildTool, task_store::JvmTaskTrigger};
+    use std::path::Path;
+
+    let fixture = cached_jvm_fixture_path("GROOVY_CONNECTED_WRAPPER_ROOT");
+    let order = fixture.join(".groovy-sync-order");
+    let fail = fixture.join(".fail-sync-setup");
+    assert!(!order.exists());
+    std::fs::write(&fail, []).expect("arm the disposable setup failure");
+    let container = docker_test_fixture_container(build_tool);
+    let (project, worktree_id) =
+        connect_ordered_jvm_task_fixture(Path::new("/workspaces/tests/project"), &container, cx)
+            .await;
+    let source_path =
+        util::rel_path::RelPath::from_unix_str("application/src/main/java/evidence/Main.java")
+            .expect("Java fixture source");
+    let (_java, _open) = project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp(
+                project::ProjectPath {
+                    worktree_id,
+                    path: source_path.into_arc(),
+                },
+                cx,
+            )
+        })
+        .await
+        .expect("open Java on the project host");
+    let store = project.read_with(cx, |project, _| project.lsp_store());
+    let (workspace, panel, cx) = mount_dependencies_panel(project, cx).await;
+    let _terminal = mount_fixture_terminal(&workspace, cx).await;
+    let (tool, action) = match build_tool {
+        JvmTestBuildTool::Maven => (
+            JvmBuildTool::Maven,
+            "groovy_dependencies_panel::ReloadMavenProjects",
+        ),
+        JvmTestBuildTool::Gradle => (
+            JvmBuildTool::Gradle,
+            "groovy_dependencies_panel::ImportGradleSelection",
+        ),
+    };
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let mut refresh_at = Instant::now();
+    let previous_generation = loop {
+        cx.run_until_parked();
+        if let Some(generation) = store.read_with(cx, |store, cx| {
+            let (snapshot, current) = store.jdtls_project_snapshot(worktree_id)?;
+            (current
+                && snapshot.projects.len() >= 2
+                && store.can_reimport_remote_build_projects(tool, Some(worktree_id), cx))
+            .then_some(snapshot.generation)
+        }) {
+            break generation;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "current connected build facts are unavailable"
+        );
+        if Instant::now() >= refresh_at {
+            store.update(cx, |store, cx| store.refresh_jdtls_project(worktree_id, cx));
+            refresh_at = Instant::now() + Duration::from_secs(5);
+        }
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    };
+    assert!(
+        !order.exists(),
+        "startup and metadata refresh leave saved sync Tasks idle"
+    );
+
+    for (expected, failed) in [
+        (&["before-sync"][..], true),
+        (&["before-sync", "after-sync"][..], false),
+    ] {
+        workspace.update_in(cx, |workspace, window, cx| {
+            workspace.focus_panel::<jvm_ui::DependenciesPanel>(window, cx);
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        dispatch_graph_action(cx, action);
+        let deadline = Instant::now() + Duration::from_secs(130);
+        loop {
+            cx.run_until_parked();
+            let events = std::fs::read_to_string(&order).unwrap_or_default();
+            let lines: Vec<_> = events.lines().collect();
+            assert!(
+                expected.starts_with(&lines),
+                "unexpected connected sync order: {lines:?}"
+            );
+            let notice = panel.read_with(cx, |panel, _| {
+                panel.build_phase_notice_for_test().map(str::to_owned)
+            });
+            let complete = notice.as_deref().is_some_and(|notice| {
+                if failed {
+                    notice.contains("before-sync Task 'sync setup' failed")
+                } else {
+                    notice.contains("Selected build import and sync hooks completed")
+                }
+            });
+            if complete && lines.len() == expected.len() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "sync did not complete: {lines:?}, {notice:?}"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        assert!(!store.read_with(cx, |store, _| {
+            store.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync)
+        }));
+        if failed {
+            assert!(
+                store.read_with(cx, |store, _| {
+                    store
+                        .jdtls_project_snapshot(worktree_id)
+                        .is_some_and(|(snapshot, _)| snapshot.generation == previous_generation)
+                }),
+                "failed setup never requests a provider phase"
+            );
+            std::fs::rename(&order, fixture.join(".groovy-failed-sync-order"))
+                .expect("retain the failed setup receipt");
+            std::fs::remove_file(&fail).expect("repair the disposable setup Task");
+        }
+    }
+    let deadline = Instant::now() + Duration::from_secs(45);
+    loop {
+        cx.run_until_parked();
+        if store.read_with(cx, |store, _| {
+            store
+                .jdtls_project_snapshot(worktree_id)
+                .is_some_and(|(snapshot, current)| {
+                    current && snapshot.generation > previous_generation
+                })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "connected sync did not refresh provider facts"
+        );
+        cx.background_executor
+            .timer(Duration::from_millis(100))
+            .await;
+    }
+    println!(
+        "Connected {} sync verified failed setup, offline provider reimport, and after-sync ordering",
+        tool.name()
+    );
+}
+
+#[cfg(all(test, feature = "jvm-test-actions", target_os = "macos"))]
 async fn connect_ordered_jvm_task_fixture(
     root: &std::path::Path,
     container: &str,

@@ -89,6 +89,7 @@ pub(super) fn apply_build_import_settings_at_startup(
         "java.import.maven.offline.enabled",
         "java.configuration.maven.globalSettings",
         "java.configuration.maven.userSettings",
+        "java.configuration.updateBuildConfiguration",
         "java.jdt.ls.kotlinSupport.enabled",
     ];
     let mut preferences = PREFERENCES
@@ -919,6 +920,7 @@ mod tests {
         let gradle_offline = "java.import.gradle.offline.enabled";
         let maven_offline = "java.import.maven.offline.enabled";
         let maven_user_settings = "java.configuration.maven.userSettings";
+        let build_configuration = "java.configuration.updateBuildConfiguration";
         let workspace_configuration = json!({
             "java": {"import": {"gradle": {
                 "java": {"home": "/gradle/live"},
@@ -928,6 +930,7 @@ mod tests {
             "java.import.gradle.home": "/gradle/distribution",
             "java.import.maven.offline.enabled": true,
             "java.configuration.maven.userSettings": "/maven/live.xml",
+            "java.configuration.updateBuildConfiguration": "automatic",
             "java.format.enabled": false,
         });
         let mut options = Some(json!({
@@ -935,10 +938,13 @@ mod tests {
             "settings": {
                 "java.import.gradle.offline.enabled": false,
                 "java.configuration.maven.userSettings": "/maven/explicit.xml",
-                "java": {"import": {
-                    "gradle": {"java": {"home": null}},
-                    "maven": {"offline": {"enabled": false}},
-                }},
+                "java": {
+                    "configuration": {"updateBuildConfiguration": "disabled"},
+                    "import": {
+                        "gradle": {"java": {"home": null}},
+                        "maven": {"offline": {"enabled": false}},
+                    },
+                },
             },
         }));
 
@@ -956,6 +962,11 @@ mod tests {
             Some(&Value::Bool(false))
         );
         assert_eq!(settings[maven_user_settings], "/maven/explicit.xml");
+        assert!(settings.get(build_configuration).is_none());
+        assert_eq!(
+            jdtls_nested_preference(settings, build_configuration),
+            Some(&json!("disabled"))
+        );
         assert_eq!(settings["java.import.gradle.wrapper.enabled"], false);
         assert_eq!(settings["java.import.gradle.home"], "/gradle/distribution");
         assert!(settings.get("java.format.enabled").is_none());

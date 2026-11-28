@@ -24,7 +24,7 @@ use project::{
         KotlinBuildSystem, KotlinWorkspaceDependency, KotlinWorkspaceSnapshot,
         MavenOperationOptions, MavenOperationProfile, MavenReactorFailurePolicy,
     },
-    lsp_store::LocalJvmBuildImport,
+    lsp_store::{LocalJvmBuildImport, RemoteJvmBuildReimport},
     task_inventory::{JvmBuildTool, MavenSettingsFile, TaskSourceKind},
     task_store::{
         JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_before_launch_tasks,
@@ -4411,9 +4411,8 @@ impl DependenciesPanel {
         let local_import = !project.is_remote()
             && !self.build_controls_busy()
             && self.selected_build_worktree(cx).is_ok();
-        let remote_import = project.is_remote()
-            && !self.host_unavailable(cx)
-            && !self.remote_build_reimport_pending;
+        let remote_import =
+            project.is_remote() && !self.host_unavailable(cx) && !self.build_controls_busy();
         let maven_module = self.view != BuildToolView::Gradle
             && module.is_some_and(|module| {
                 module.maven.is_some()
@@ -5583,7 +5582,7 @@ impl DependenciesPanel {
     }
 
     fn synchronize_gradle_metadata(&mut self, cx: &mut Context<Self>) {
-        if self.remote_build_reimport_pending {
+        if self.build_controls_busy() {
             return;
         }
         let selected_worktree = self.selected_build_worktree_id(cx);
@@ -6251,7 +6250,7 @@ impl DependenciesPanel {
         cx: &mut Context<Self>,
     ) {
         if !maven && self.project.read(cx).is_remote() {
-            self.reimport_remote_build_projects(JvmBuildTool::Gradle, cx);
+            self.reimport_remote_build_projects(JvmBuildTool::Gradle, window, cx);
             return;
         }
         let action = if maven {
@@ -6264,21 +6263,42 @@ impl DependenciesPanel {
 
     fn reload_maven_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.project.read(cx).is_remote() {
-            self.reimport_remote_build_projects(JvmBuildTool::Maven, cx);
+            self.reimport_remote_build_projects(JvmBuildTool::Maven, window, cx);
         } else {
             self.run_build_import(LocalJvmBuildImport::ReloadMaven, window, cx);
         }
     }
 
-    fn reimport_remote_build_projects(&mut self, tool: JvmBuildTool, cx: &mut Context<Self>) {
-        if self.remote_build_reimport_pending || self.host_unavailable(cx) {
+    fn reimport_remote_build_projects(
+        &mut self,
+        tool: JvmBuildTool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.build_controls_busy() || self.host_unavailable(cx) {
             return;
         }
-        let worktree_id = self.selected_build_worktree_id(cx);
-        match self.project.read(cx).lsp_store().update(cx, |store, cx| {
-            store.reimport_remote_build_projects(tool, worktree_id, cx)
-        }) {
-            Ok(import) => {
+        let store = self.project.read(cx).lsp_store();
+        let result = (|| -> anyhow::Result<_> {
+            let plan = store.read(cx).prepare_remote_build_reimport(
+                tool,
+                self.selected_build_worktree_id(cx),
+                cx,
+            )?;
+            let (before, after) = self.prepare_build_sync_hooks(plan.worktree_id(), cx)?;
+            if !before.is_empty() || !after.is_empty() {
+                self.start_build_sync(ExplicitBuildSync::Remote(plan), before, after, window, cx)?;
+                return Ok(None);
+            }
+            store
+                .update(cx, |store, cx| {
+                    store.reimport_remote_build_projects(plan, cx)
+                })
+                .map(Some)
+        })();
+        match result {
+            Ok(None) => return,
+            Ok(Some(import)) => {
                 self.remote_build_reimport_pending = true;
                 self.build_phase_notice = Some(format!(
                     "Reimporting {} projects offline on the project host.",
@@ -6324,38 +6344,21 @@ impl DependenciesPanel {
                 return;
             }
         };
-        let result = (|| -> anyhow::Result<_> {
-            let project = self.project.read(cx);
-            anyhow::ensure!(
-                !project
-                    .lsp_store()
-                    .read(cx)
-                    .jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync),
-                "A saved sync sequence is already active for this project",
-            );
-            Ok((
-                Self::prepare_configuration_hooks(
-                    project,
-                    worktree_id,
-                    JvmTaskTrigger::BeforeSync,
-                    cx,
-                )?,
-                Self::prepare_configuration_hooks(
-                    project,
-                    worktree_id,
-                    JvmTaskTrigger::AfterSync,
-                    cx,
-                )?,
-            ))
-        })();
-        match result {
+        match self.prepare_build_sync_hooks(worktree_id, cx) {
             Ok((before, after)) if before.is_empty() && after.is_empty() => {
                 self.run_build_import_without_hooks(action, worktree_id, cx);
             }
             Ok((before, after)) => {
-                if let Err(error) =
-                    self.start_build_sync(action, worktree_id, before, after, window, cx)
-                {
+                if let Err(error) = self.start_build_sync(
+                    ExplicitBuildSync::Local {
+                        action,
+                        worktree_id,
+                    },
+                    before,
+                    after,
+                    window,
+                    cx,
+                ) {
                     self.build_phase_notice = Some(error.to_string());
                     cx.notify();
                 }
@@ -6367,8 +6370,34 @@ impl DependenciesPanel {
         }
     }
 
+    fn prepare_build_sync_hooks(
+        &self,
+        worktree_id: WorktreeId,
+        cx: &App,
+    ) -> anyhow::Result<(Vec<SavedConfigurationStep>, Vec<SavedConfigurationStep>)> {
+        let project = self.project.read(cx);
+        anyhow::ensure!(
+            !project
+                .lsp_store()
+                .read(cx)
+                .jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeSync),
+            "A saved sync sequence is already active for this project",
+        );
+        Ok((
+            Self::prepare_configuration_hooks(
+                project,
+                worktree_id,
+                JvmTaskTrigger::BeforeSync,
+                cx,
+            )?,
+            Self::prepare_configuration_hooks(project, worktree_id, JvmTaskTrigger::AfterSync, cx)?,
+        ))
+    }
+
     fn build_controls_busy(&self) -> bool {
-        self.build_phase_token.is_some() || self.build_sync_active
+        self.build_phase_token.is_some()
+            || self.build_sync_active
+            || self.remote_build_reimport_pending
     }
 
     fn run_build_import_without_hooks(
@@ -6425,8 +6454,7 @@ impl DependenciesPanel {
 
     fn start_build_sync(
         &mut self,
-        action: LocalJvmBuildImport,
-        worktree_id: WorktreeId,
+        action: ExplicitBuildSync,
         before: Vec<SavedConfigurationStep>,
         after: Vec<SavedConfigurationStep>,
         window: &mut Window,
@@ -6438,13 +6466,19 @@ impl DependenciesPanel {
             .context("No saved sync Tasks")?;
         let worktree_entity = first.prepared.worktree;
         let root = first.prepared.root.clone();
+        let worktree_id = match &action {
+            ExplicitBuildSync::Local { worktree_id, .. } => *worktree_id,
+            ExplicitBuildSync::Remote(plan) => plan.worktree_id(),
+        };
         let store = self.project.read(cx).lsp_store();
         let activation = JvmTaskTrigger::BeforeSync;
         let project_id = self.project.entity_id();
         let panel = cx.weak_entity();
         let started = self.with_workspace_window(window, cx, |workspace, window, cx| -> anyhow::Result<bool> {
             anyhow::ensure!(workspace.project().entity_id() == project_id, "The build project changed; select it again");
-            if !store.update(cx, |store, cx| store.check_local_jvm_build_import(worktree_id, action, cx))? {
+            if let ExplicitBuildSync::Local { action, .. } = &action
+                && !store.update(cx, |store, cx| store.check_local_jvm_build_import(worktree_id, *action, cx))?
+            {
                 return Ok(false);
             }
             store.update(cx, |store, cx| store.arm_jvm_trigger(worktree_id, activation, cx))?;
@@ -6465,24 +6499,33 @@ impl DependenciesPanel {
                             worktree.entity_id() == worktree_entity && worktree.read(cx).abs_path() == root,
                             "The build project folder changed; select it again"
                         );
-                        let (token, waiter) = store.update(cx, |store, cx| {
+                        let (token, waiter, notice) = store.update(cx, |store, cx| {
                             anyhow::ensure!(
                                 store.jvm_trigger_provider_is_current(worktree_id, activation),
                                 "The Java provider changed before sync; refresh and retry"
                             );
-                            let waiter = store.import_local_jvm_build(worktree_id, action, cx)?;
-                            let token = store.jdtls_project_import_token(worktree_id)
-                                .context("No build roots remain to sync")?;
-                            anyhow::Ok((token, waiter))
+                            match action {
+                                ExplicitBuildSync::Local { action, .. } => {
+                                    let waiter = store.import_local_jvm_build(worktree_id, action, cx)?;
+                                    let token = store.jdtls_project_import_token(worktree_id)
+                                        .context("No build roots remain to sync")?;
+                                    Ok((Some(token), waiter, Self::build_import_started_notice(action).into()))
+                                }
+                                ExplicitBuildSync::Remote(plan) => {
+                                    let notice = format!("Reimporting {} projects offline on the project host.", plan.tool().name());
+                                    let waiter = store.reimport_remote_build_projects(plan, cx)?;
+                                    anyhow::Ok((None, waiter, notice))
+                                }
+                            }
                         })??;
-                        panel.build_phase_token = Some(token);
-                        panel.build_phase_notice = Some(Self::build_import_started_notice(action).into());
+                        panel.build_phase_token = token;
+                        panel.build_phase_notice = Some(notice);
                         panel.rebuild(cx);
                         anyhow::Ok((token, waiter))
                     })??;
                     let import_result = waiter.await;
                     let cancelled = panel.update(cx, |panel, cx| {
-                        let cancelled = panel.build_phase_token != Some(token);
+                        let cancelled = token.is_some() && panel.build_phase_token != token;
                         panel.build_phase_token = None;
                         cx.notify();
                         cancelled
@@ -9098,6 +9141,14 @@ impl BeforeLaunchConfiguration {
     }
 }
 
+enum ExplicitBuildSync {
+    Local {
+        action: LocalJvmBuildImport,
+        worktree_id: WorktreeId,
+    },
+    Remote(RemoteJvmBuildReimport),
+}
+
 struct SavedConfigurationStep {
     target: SavedConfiguration,
     prepared: PreparedSavedJvmTask,
@@ -10037,7 +10088,7 @@ impl DependenciesPanel {
                     | LanguageToolTreeStatus::Stale(_)
             )
             && !self.host_unavailable(cx)
-            && !self.remote_build_reimport_pending
+            && !self.build_controls_busy()
             && if project.is_remote() {
                 project
                     .lsp_store()

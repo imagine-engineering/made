@@ -626,6 +626,8 @@ impl SavedJvmTask {
             None | Some(
                 JvmTaskTrigger::BeforeRun
                     | JvmTaskTrigger::AfterRun
+                    | JvmTaskTrigger::BeforeSync
+                    | JvmTaskTrigger::AfterSync
                     | JvmTaskTrigger::BeforeBuild
                     | JvmTaskTrigger::AfterBuild
                     | JvmTaskTrigger::BeforeRebuild
