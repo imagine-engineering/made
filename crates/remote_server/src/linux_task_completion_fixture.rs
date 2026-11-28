@@ -895,6 +895,202 @@ fn weight(value: u64) -> u64 {
     Ok(())
 }
 
+fn native_cargo_runtime_transition(directory: &Path) -> Result<()> {
+    use native_task_helper::{
+        linux_cargo_runtime::LinuxCargoRuntimeObserver,
+        task_completion::TASK_CARGO_RUNTIME_ENDPOINT_ENV,
+    };
+
+    let directory = directory.canonicalize()?;
+    write_native_cargo_fixture(&directory)?;
+    let runner = std::env::var_os("RUST_TOOLS_LINUX_RUNTIME_OBSERVER")
+        .context("The separately linked Linux Cargo runner is required")?;
+    let source_image = directory.join("runtime-observer");
+    std::fs::copy(&runner, &source_image)?;
+    ensure!(
+        LinuxCargoRuntimeObserver::bind(&std::env::current_exe()?).is_err(),
+        "The runtime observer accepted a dynamically linked helper"
+    );
+    std::fs::write(
+        directory.join("runner/build.rs"),
+        r#"
+fn main() {
+    let directory = std::path::PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"))
+        .join("fixture-loader");
+    std::fs::create_dir_all(&directory).expect("fixture loader");
+    println!("cargo:rustc-link-search=native={}", directory.display());
+}
+"#,
+    )?;
+    std::fs::write(
+        directory.join("runner/src/main.rs"),
+        r#"
+fn main() {
+    let actual: Vec<_> = std::env::args().skip(1).collect();
+    assert_eq!(actual, ["literal two words", "", "$FOO"]);
+    assert!(std::env::var("LD_LIBRARY_PATH").is_ok_and(|value| value.contains("fixture-loader")));
+    assert_eq!(std::env::var("COPPER_RUNTIME_FIXTURE").as_deref(), Ok("runtime sentinel"));
+    assert!(std::env::var_os("ZED_PROFILE_CARGO_RUNTIME_ENDPOINT").is_none());
+    println!("Selected native workload received the observed Cargo environment");
+}
+"#,
+    )?;
+    let cargo = std::env::var_os("RUST_TOOLS_NATIVE_BUILD_CARGO")
+        .context("The independently installed native Cargo is required")?;
+    let cargo = std::path::PathBuf::from(cargo).canonicalize()?;
+    let cargo_image = File::open(&cargo)?;
+    let cargo_path = cargo.parent().context("Missing toolchain directory")?;
+    let cargo_home = directory.join("cargo-home");
+    let host = format!("{}-unknown-linux-gnu", std::env::consts::ARCH);
+    let build_root = directory.join("target");
+    let target = build_root.join(&host).join("debug/runner");
+    let literal = ["literal two words", "", "$FOO"].map(str::to_owned);
+    smol::block_on(async {
+        for case in [
+            "replaced-path",
+            "changed-arguments",
+            "wrong-image",
+            "foreign-peer",
+        ] {
+            let mut command = std::process::Command::new(&cargo);
+            command
+                .args([
+                    "run",
+                    "--offline",
+                    "--quiet",
+                    "--target",
+                    &host,
+                    "--package",
+                    "runner",
+                    "--bin",
+                    "runner",
+                    "--",
+                ])
+                .args(&literal)
+                .current_dir(&directory)
+                .env_clear()
+                .env(
+                    "PATH",
+                    std::env::join_paths([cargo_path, Path::new("/usr/bin"), Path::new("/bin")])?,
+                )
+                .env("CARGO_HOME", &cargo_home)
+                .env("CARGO_TARGET_DIR", &build_root)
+                .env("COPPER_RUNTIME_FIXTURE", "runtime sentinel");
+            let observer = LinuxCargoRuntimeObserver::bind(&source_image)?;
+            let pending = observer.configure(&mut command)?;
+            let endpoint = command
+                .get_envs()
+                .find_map(|(name, value)| {
+                    (name == TASK_CARGO_RUNTIME_ENDPOINT_ENV)
+                        .then_some(value)
+                        .flatten()
+                })
+                .context("Missing checked runtime endpoint")?
+                .to_owned();
+            if case == "replaced-path" {
+                std::fs::remove_file(&source_image)?;
+                std::fs::write(&source_image, b"runner path changed after sealing")?;
+            }
+            if case == "wrong-image" {
+                command.env(
+                    format!(
+                        "CARGO_TARGET_{}_RUNNER",
+                        host.replace('-', "_").to_ascii_uppercase()
+                    ),
+                    format!("{} --observe-cargo-runtime --", source_image.display()),
+                );
+            }
+            let foreign = if case == "foreign-peer" {
+                Some(smol::net::unix::UnixStream::connect(&endpoint).await?)
+            } else {
+                None
+            };
+            let mut child = smol::process::Command::from(command)
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+            let actor = OriginalTaskActor::from_smol_child(&mut child, &cargo_image)?;
+            let mut expected = literal.clone();
+            if case == "changed-arguments" {
+                expected[0] = "different argument".into();
+            }
+            let capture = smol::future::race(
+                pending.observe(actor, &target, &expected, &directory),
+                async {
+                    fixture_delay(Duration::from_secs(12)).await;
+                    Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "Real Cargo runner did not connect",
+                    ))
+                },
+            )
+            .await;
+            drop(foreign);
+            let status = wait(&mut child).await?;
+            if case == "replaced-path" {
+                if let Some(mut diagnostics) = child.stderr.take() {
+                    let mut text = String::new();
+                    diagnostics.read_to_string(&mut text).await?;
+                    ensure!(status.success(), "Real Cargo runner failed: {text}");
+                }
+                let invocation = capture?.verify_exit(status)?;
+                ensure!(
+                    invocation.program() == target && invocation.arguments() == literal,
+                    "Wrong observed workload"
+                );
+                let output = smol::process::Command::new(invocation.program())
+                    .args(invocation.arguments())
+                    .env_clear()
+                    .envs(invocation.environment())
+                    .current_dir(invocation.working_directory())
+                    .output()
+                    .await?;
+                ensure!(
+                    output.status.success()
+                        && output
+                            .stdout
+                            .starts_with(b"Selected native workload received"),
+                    "The observed environment did not reproduce Cargo's launch"
+                );
+                ensure!(
+                    !Path::new(&endpoint).exists(),
+                    "The runtime observer kept its socket"
+                );
+                std::fs::remove_file(&source_image)?;
+                std::fs::copy(&runner, &source_image)?;
+            } else {
+                let error = capture
+                    .err()
+                    .context("An unauthorised runtime runner was accepted")?;
+                let (kind, diagnostic) = match case {
+                    "foreign-peer" => (
+                        io::ErrorKind::PermissionDenied,
+                        "connection does not belong to its original actor",
+                    ),
+                    "wrong-image" => (
+                        io::ErrorKind::PermissionDenied,
+                        "Original Task actor image changed",
+                    ),
+                    _ => (
+                        io::ErrorKind::InvalidData,
+                        "Invalid Linux Cargo runtime observation",
+                    ),
+                };
+                ensure!(
+                    error.kind() == kind
+                        && error.to_string().contains(diagnostic)
+                        && !status.success(),
+                    "Invalid runtime control did not fail at admission: {error}"
+                );
+            }
+        }
+        println!(
+            "Real Cargo transitioned to the sealed Linux runner and preserved its selected runtime environment"
+        );
+        Ok(())
+    })
+}
+
 fn native_cargo_profile_terminal(directory: &Path, headless: bool) -> Result<()> {
     use gpui::AppContext as _;
     use project::cargo_workspace::{
@@ -1713,6 +1909,7 @@ pub enum Scenario {
     CargoBuildCancellation,
     CargoBuildProfilePty,
     CargoBuildProfileHeadless,
+    NativeCargoRuntimeTransition,
     HeadlessCollector,
     SelectedHeadlessCollector,
 }
@@ -1759,6 +1956,7 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::CargoBuildCancellation => cancel_cargo_build_report(directory),
         Scenario::CargoBuildProfilePty => native_cargo_profile_terminal(directory, false),
         Scenario::CargoBuildProfileHeadless => native_cargo_profile_terminal(directory, true),
+        Scenario::NativeCargoRuntimeTransition => native_cargo_runtime_transition(directory),
         Scenario::HeadlessCollector => headless_collector(directory, false),
         Scenario::SelectedHeadlessCollector => headless_collector(directory, true),
     }

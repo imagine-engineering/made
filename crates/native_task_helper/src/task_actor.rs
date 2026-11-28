@@ -19,6 +19,20 @@ pub struct AuthenticatedTaskActor {
     actor: OriginalTaskActor,
 }
 
+#[cfg(target_os = "linux")]
+pub(crate) struct ExpectedTaskExec {
+    actor: OriginalTaskActor,
+    image: File,
+    identity: ImageIdentity,
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) struct TaskRuntimeSnapshot {
+    pub arguments: Vec<u8>,
+    pub environment: Vec<u8>,
+    pub directory: Metadata,
+}
+
 impl OriginalTaskActor {
     /// Call inside the spawn owner, before handing the child to a waiter/event loop.
     /// A later PID lookup cannot prove the original actor after the child is reaped.
@@ -69,6 +83,12 @@ impl OriginalTaskActor {
         mut self,
         connection: &S,
     ) -> io::Result<AuthenticatedTaskActor> {
+        self.check_peer(connection)?;
+        self.revalidate()?;
+        Ok(AuthenticatedTaskActor { actor: self })
+    }
+
+    fn check_peer(&self, connection: &impl AsRawFd) -> io::Result<()> {
         let peer = peer_identity(connection.as_raw_fd())?;
         if peer.process_id != self.process_id || peer.user_id != current_user_id() {
             return Err(io::Error::new(
@@ -76,8 +96,24 @@ impl OriginalTaskActor {
                 "Task connection does not belong to its original actor",
             ));
         }
-        self.revalidate()?;
-        Ok(AuthenticatedTaskActor { actor: self })
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn expect_exec(self, image: File) -> io::Result<ExpectedTaskExec> {
+        self.lifetime.ensure_running()?;
+        let identity = ImageIdentity::read(&image)?;
+        if self.image_identity == identity {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "A Task exec transition requires a distinct runner image",
+            ));
+        }
+        Ok(ExpectedTaskExec {
+            actor: self,
+            image,
+            identity,
+        })
     }
 
     fn revalidate(&mut self) -> io::Result<()> {
@@ -108,9 +144,43 @@ impl OriginalTaskActor {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl ExpectedTaskExec {
+    pub(crate) fn authenticate(
+        self,
+        connection: &impl AsRawFd,
+    ) -> io::Result<AuthenticatedTaskActor> {
+        let Self {
+            mut actor,
+            image,
+            identity,
+        } = self;
+        actor.check_peer(connection)?;
+        actor.lifetime.ensure_running()?;
+        if ImageIdentity::read(&actor.expected_image)? != actor.image_identity {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Original Cargo image changed during the Task",
+            ));
+        }
+        actor.expected_image = image;
+        actor.image_identity = identity;
+        actor.revalidate()?;
+        Ok(AuthenticatedTaskActor { actor })
+    }
+}
+
 impl AuthenticatedTaskActor {
     pub fn revalidate(&mut self) -> io::Result<()> {
         self.actor.revalidate()
+    }
+
+    #[cfg(target_os = "linux")]
+    pub(crate) fn runtime_snapshot(&mut self) -> io::Result<TaskRuntimeSnapshot> {
+        self.revalidate()?;
+        let snapshot = self.actor.lifetime.runtime_snapshot()?;
+        self.revalidate()?;
+        Ok(snapshot)
     }
 }
 
@@ -163,6 +233,19 @@ fn current_user_id() -> u32 {
 }
 
 #[cfg(target_os = "linux")]
+pub(crate) fn require_task_parent(connection: &impl AsRawFd) -> io::Result<u32> {
+    let peer = peer_identity(connection.as_raw_fd())?;
+    let parent = unsafe { libc::getppid() } as u32;
+    if parent == 0 || peer.process_id != parent || peer.user_id != current_user_id() {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Task connection does not belong to its launch owner",
+        ));
+    }
+    Ok(parent)
+}
+
+#[cfg(target_os = "linux")]
 pub(crate) struct CoverageTaskParent {
     process_id: u32,
     image: ImageIdentity,
@@ -172,14 +255,7 @@ pub(crate) struct CoverageTaskParent {
 #[cfg(target_os = "linux")]
 impl CoverageTaskParent {
     pub(crate) fn authenticate(connection: &impl AsRawFd) -> io::Result<Self> {
-        let peer = peer_identity(connection.as_raw_fd())?;
-        let parent = Self::current_process_parent();
-        if parent == 0 || peer.process_id != parent || peer.user_id != current_user_id() {
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                "Coverage Task connection does not belong to its launch owner",
-            ));
-        }
+        let parent = require_task_parent(connection)?;
         let parent = Self {
             process_id: parent,
             image: ImageIdentity::read(&File::open("/proc/self/exe")?)?,
@@ -223,7 +299,7 @@ use macos::{ProcessLifetime, peer_identity};
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::{PeerIdentity, exited_actor};
+    use super::{PeerIdentity, TaskRuntimeSnapshot, exited_actor};
     use std::{
         ffi::CStr,
         fs::{File, OpenOptions},
@@ -311,6 +387,17 @@ mod linux {
             )?;
             open_proc_file(&self.directory, c"exe")
         }
+
+        pub(super) fn runtime_snapshot(&self) -> io::Result<TaskRuntimeSnapshot> {
+            let arguments = read_bounded_proc_file(&self.directory, c"cmdline", 40 * 1024)?;
+            let environment = read_bounded_proc_file(&self.directory, c"environ", 66 * 1024)?;
+            let directory = open_proc_file(&self.directory, c"cwd")?.metadata()?;
+            Ok(TaskRuntimeSnapshot {
+                arguments,
+                environment,
+                directory,
+            })
+        }
     }
 
     #[cfg(test)]
@@ -393,6 +480,20 @@ mod linux {
         }
         // openat returned a new descriptor owned by this operation.
         Ok(unsafe { File::from_raw_fd(descriptor) })
+    }
+
+    fn read_bounded_proc_file(directory: &File, name: &CStr, limit: usize) -> io::Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        open_proc_file(directory, name)?
+            .take((limit + 1) as u64)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > limit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Original Task actor runtime exceeds its limit",
+            ));
+        }
+        Ok(bytes)
     }
 
     fn read_start_time(directory: &File) -> io::Result<u64> {

@@ -117,6 +117,12 @@ fn native_cargo_profile_uses_the_fresh_executable_on_both_terminal_backends() ->
 }
 
 #[test]
+#[ignore = "requires an independently built host, pinned Cargo and a separately statically linked Linux runner"]
+fn native_cargo_runtime_transition_preserves_the_actual_cargo_environment() -> io::Result<()> {
+    run_terminal_fixture("native-cargo-runtime-transition")
+}
+
+#[test]
 fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_task_completion::LinuxTaskCompletion;
 
