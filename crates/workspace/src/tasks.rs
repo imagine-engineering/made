@@ -567,8 +567,13 @@ fn native_capture_phase_task_id(build_task_id: &TaskId) -> TaskId {
 }
 
 type TaskCompletionHandler = Box<dyn FnOnce(ScheduledTaskResult, &mut AsyncWindowContext)>;
-type TaskAdmissionHandler =
-    Box<dyn FnOnce(&TaskInvocationContext, &mut Workspace, &mut Context<Workspace>) -> Result<()>>;
+type TaskAdmissionHandler = Box<
+    dyn FnOnce(
+        &TaskInvocationContext,
+        &mut Workspace,
+        &mut Context<Workspace>,
+    ) -> Result<Option<project::terminals::TaskTerminalCheck>>,
+>;
 type TaskAdmissionPreflight = Box<dyn FnOnce(&Workspace, &gpui::App) -> bool>;
 
 pub fn resolve_task_reference(
@@ -1039,6 +1044,28 @@ impl Workspace {
         );
     }
 
+    pub fn schedule_resolved_task_with_terminal_check(
+        &mut self,
+        source: TaskSourceKind,
+        task: ResolvedTask,
+        check: project::terminals::TaskTerminalCheck,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.schedule_resolved_task_internal(
+            source,
+            task,
+            false,
+            None,
+            None,
+            Some(Box::new(move |_, _, _| Ok(Some(check)))),
+            None,
+            None,
+            window,
+            cx,
+        );
+    }
+
     pub fn schedule_resolved_task_with_structured_handle(
         &mut self,
         task_source_kind: TaskSourceKind,
@@ -1143,7 +1170,10 @@ impl Workspace {
             omit_history,
             None,
             Some(Box::new(on_complete)),
-            Some(Box::new(move |_, workspace, cx| admit(workspace, cx))),
+            Some(Box::new(move |_, workspace, cx| {
+                admit(workspace, cx)?;
+                Ok(None)
+            })),
             None,
             None,
             window,
@@ -1168,7 +1198,10 @@ impl Workspace {
             omit_history,
             None,
             Some(Box::new(on_complete)),
-            Some(Box::new(move |_, workspace, cx| admit(workspace, cx))),
+            Some(Box::new(move |_, workspace, cx| {
+                admit(workspace, cx)?;
+                Ok(None)
+            })),
             Some(Box::new(is_owned)),
             None,
             window,
@@ -1198,7 +1231,10 @@ impl Workspace {
             omit_history,
             None,
             Some(Box::new(on_complete)),
-            Some(Box::new(admit)),
+            Some(Box::new(move |invocation, workspace, cx| {
+                admit(invocation, workspace, cx)?;
+                Ok(None)
+            })),
             Some(Box::new(is_owned)),
             None,
             window,
@@ -1847,7 +1883,7 @@ impl Workspace {
                             *task_artifact_directory.borrow_mut() = launch.cwd.clone();
                         }
                     }
-                    if let Some(admit) = admit {
+                    let terminal_check = if let Some(admit) = admit {
                         let mut invocation = TaskInvocationContext::from_launch(
                             task_run_id,
                             &launch,
@@ -1855,8 +1891,10 @@ impl Workspace {
                             task_artifact_group.clone(),
                         );
                         invocation.artifact_directory = task_artifact_directory.borrow().clone();
-                        admit(&invocation, workspace, cx)?;
-                    }
+                        admit(&invocation, workspace, cx)?
+                    } else {
+                        None
+                    };
                     let build_preparation = native_build.map(|report| {
                         let project = workspace.project.downgrade();
                         let workspace = workspace.weak_handle();
@@ -2095,11 +2133,13 @@ impl Workspace {
                         ),
                         (preparation, _) => preparation,
                     };
-                    let preparation = match (preparation, pending_launch) {
-                        (preparation, Some(pending_launch)) => Some(Box::new(
+                    let preparation = if pending_launch.is_some() || terminal_check.is_some() {
+                        Some(Box::new(
                             move |launch: SpawnInTerminal, cx: &mut AsyncWindowContext| {
                                 cx.spawn(async move |cx| {
-                                    cx.update(|_, cx| pending_launch.check(&launch, cx))??;
+                                    if let Some(pending_launch) = pending_launch.as_ref() {
+                                        cx.update(|_, cx| pending_launch.check(&launch, cx))??;
+                                    }
                                     let mut prepared = match preparation {
                                         Some(prepare) => prepare(launch, cx).await?,
                                         None => crate::PreparedTaskLaunch {
@@ -2110,13 +2150,27 @@ impl Workspace {
                                             check_before_spawn: None,
                                         },
                                     };
-                                    cx.update(|_, cx| pending_launch.check(&prepared.launch, cx))??;
-                                    prepared.pending_launch = Some(pending_launch);
+                                    if let Some(pending_launch) = pending_launch {
+                                        cx.update(|_, cx| pending_launch.check(&prepared.launch, cx))??;
+                                        prepared.pending_launch = Some(pending_launch);
+                                    }
+                                    if let Some(check) = terminal_check {
+                                        anyhow::ensure!(
+                                            prepared.check_before_spawn.is_none(),
+                                            "Task preparation already supplied a terminal check"
+                                        );
+                                        if prepared.native_terminal.is_some() {
+                                            check(cx).await?;
+                                        } else {
+                                            prepared.check_before_spawn = Some(check);
+                                        }
+                                    }
                                     Ok(prepared)
                                 })
                             },
-                        ) as crate::TaskLaunchPreparation),
-                        (preparation, None) => preparation,
+                        ) as crate::TaskLaunchPreparation)
+                    } else {
+                        preparation
                     };
                     let spawned = workspace.terminal_provider.as_ref().map(|terminal_provider| {
                         match preparation {

@@ -5678,16 +5678,17 @@ impl DependenciesPanel {
     }
 
     fn prepare_configuration_dispatch(
-        &self,
+        project: &Project,
         target: &SavedConfiguration,
         cx: &App,
-    ) -> anyhow::Result<task::ResolvedTask> {
+    ) -> anyhow::Result<PreparedSavedConfiguration> {
         let worktree_id = target.worktree_id;
         anyhow::ensure!(
-            !self.project.read(cx).is_remote() && !self.host_unavailable(cx),
+            !project.is_remote()
+                && !project.is_disconnected(cx)
+                && project.remote_connection_state(cx).is_none(),
             "The project host is unavailable; reconnect and refresh before running configurations"
         );
-        let project = self.project.read(cx);
         let worktree_store = project.worktree_store();
         let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) else {
             anyhow::bail!("Trust the project before running a named configuration");
@@ -5711,9 +5712,10 @@ impl DependenciesPanel {
         let worktree = project.worktree_for_id(worktree_id, cx).context(
             "The saved configuration's project folder is unavailable; refresh the panel",
         )?;
+        let worktree_entity = worktree.entity_id();
         let worktree = worktree.read(cx);
         anyhow::ensure!(
-            worktree.is_visible(),
+            worktree.is_local() && worktree.is_visible(),
             "The saved configuration's project folder is unavailable; refresh the panel"
         );
         let root = worktree.abs_path();
@@ -5726,14 +5728,21 @@ impl DependenciesPanel {
             root.to_string_lossy().into_owned(),
         );
 
-        let template = inventory
-            .read(cx)
-            .saved_task_templates(worktree_id)
-            .find(|(source, template)| *source == target.source && template.label == target.label)
-            .map(|(_, template)| template)
-            .with_context(|| {
-                format!("Named configuration '{}' is no longer saved", target.label)
-            })?;
+        let mut matching =
+            inventory
+                .read(cx)
+                .saved_task_templates(worktree_id)
+                .filter(|(source, template)| {
+                    *source == target.source && template.label == target.label
+                });
+        let (_, template) = matching.next().with_context(|| {
+            format!("Named configuration '{}' is no longer saved", target.label)
+        })?;
+        anyhow::ensure!(
+            matching.next().is_none(),
+            "Named configuration '{}' is ambiguous in its saved task file; use a unique label",
+            target.label
+        );
         let id_base = target.source.to_id_base();
         let resolved = if template.literal_arguments {
             template.resolve_task_with_literal_arguments(&id_base, &context)
@@ -5744,7 +5753,11 @@ impl DependenciesPanel {
             "Named configuration '{}' did not resolve in the current project context; run it from the task list",
             target.label
         ))?;
-        Ok(resolved)
+        Ok(PreparedSavedConfiguration {
+            worktree: worktree_entity,
+            root,
+            task: resolved,
+        })
     }
 
     fn run_configuration(
@@ -5753,14 +5766,31 @@ impl DependenciesPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let result = self.prepare_configuration_dispatch(&target, cx).and_then(|resolved| {
+        let project_id = self.project.entity_id();
+        let result = Self::prepare_configuration_dispatch(self.project.read(cx), &target, cx).and_then(|prepared| {
             self.with_workspace_window(window, cx, |workspace, window, cx| {
-                    workspace.schedule_resolved_task(
-                        target.source.clone(),
-                        resolved,
-                        false,
-                        window,
-                        cx,
+                    let target = target.clone();
+                    let source = target.source.clone();
+                    let task = prepared.task.clone();
+                    let owner = cx.weak_entity();
+                    workspace.schedule_resolved_task_with_terminal_check(
+                        source, task, Box::new(move |cx| {
+                            let result = owner.read_with(cx, |workspace, cx| {
+                                let project = workspace.project();
+                                anyhow::ensure!(
+                                    project.entity_id() == project_id,
+                                    "The saved configuration's project changed; select it again"
+                                );
+                                let current = Self::prepare_configuration_dispatch(project.read(cx), &target, cx)?;
+                                anyhow::ensure!(
+                                    current == prepared,
+                                    "Named configuration '{}' changed before launch; select it again",
+                                    target.label
+                                );
+                                Ok(())
+                            }).and_then(|result| result);
+                            gpui::Task::ready(result)
+                        }), window, cx,
                     );
                 })
                 .context("The workspace is unavailable; reopen the project before running configurations")
@@ -8657,6 +8687,13 @@ struct SavedConfiguration {
     label: String,
 }
 
+#[derive(PartialEq, Eq)]
+struct PreparedSavedConfiguration {
+    worktree: gpui::EntityId,
+    root: Arc<std::path::Path>,
+    task: task::ResolvedTask,
+}
+
 impl SavedConfiguration {
     fn queue_action(&self) -> RunOrderedConfiguration {
         RunOrderedConfiguration {
@@ -10348,8 +10385,12 @@ mod tests {
             );
         });
         let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let launch_gate = Arc::new(std::sync::Mutex::new(None));
         workspace.update(cx, |workspace, _| {
-            workspace.set_terminal_provider(OperationTerminal(events.clone()))
+            workspace.set_terminal_provider(SavedConfigurationTerminal {
+                terminal: OperationTerminal(events.clone()),
+                launch_gate: launch_gate.clone(),
+            })
         });
         let async_cx = cx.update(|window, cx| window.to_async(cx));
         let panel = DependenciesPanel::load(workspace.downgrade(), async_cx)
@@ -10506,6 +10547,95 @@ mod tests {
             assert_ne!(events[2].id, first);
             assert_eq!(events[3].id, first);
         }
+
+        let project_tasks = || {
+            project::task_store::TaskSettingsLocation::Worktree(settings::SettingsLocation {
+                worktree_id,
+                path: &zed_dir,
+            })
+        };
+        panel.update_in(cx, |panel, window, cx| {
+            panel.run_configuration(project_target.clone(), window, cx);
+            inventory.update(cx, |inventory, _| {
+                inventory
+                    .update_file_based_tasks(
+                        project_tasks(),
+                        Some(r#"[{"label":"provider-build","command":"mvn","args":["--offline","verify"]}]"#),
+                    )
+                    .expect("replace the selected task before its queued launch");
+            });
+        });
+        cx.run_until_parked();
+        let after_replacement = events.lock().expect("Task events").len();
+
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project_tasks(),
+                    Some(r#"[{"label":"provider-build","command":"mvn","args":["--offline","verify"]},
+                             {"label":"provider-build","command":"mvn","args":["--offline","clean"]}]"#),
+                )
+                .expect("duplicate labels from one saved source");
+        });
+        panel.update(cx, |panel, cx| panel.rebuild(cx));
+        panel.update_in(cx, |panel, window, cx| {
+            panel.run_configuration(project_target.clone(), window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            (after_replacement, events.lock().expect("Task events").len()),
+            (4, 4),
+            "an edited or ambiguous saved configuration must never launch"
+        );
+        panel.read_with(cx, |panel, _| {
+            assert!(
+                panel
+                    .configuration_notice
+                    .as_deref()
+                    .is_some_and(|notice| notice.contains("ambiguous"))
+            );
+        });
+
+        inventory.update(cx, |inventory, _| {
+            inventory
+                .update_file_based_tasks(
+                    project_tasks(),
+                    Some(r#"[{"label":"provider-build","command":"mvn","args":["--offline","verify"]}]"#),
+                )
+                .expect("restore the unique configuration");
+        });
+        let (reached_terminal, mut terminal_reached) = futures::channel::oneshot::channel();
+        let (release_terminal, terminal_release) = futures::channel::oneshot::channel();
+        *launch_gate.lock().expect("terminal gate") = Some((reached_terminal, terminal_release));
+        panel.update_in(cx, |panel, window, cx| {
+            panel.run_configuration(project_target.clone(), window, cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(
+            terminal_reached.try_recv().expect("terminal preparing"),
+            Some(())
+        );
+        trusted.update(cx, |trusted, cx| {
+            trusted.restrict(
+                worktree_store.downgrade(),
+                HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            );
+        });
+        release_terminal.send(()).expect("release terminal launch");
+        cx.run_until_parked();
+        assert_eq!(
+            events.lock().expect("Task events").len(),
+            4,
+            "the terminal check must reject trust revoked after preparation"
+        );
+        trusted.update(cx, |trusted, cx| {
+            trusted.trust(
+                &worktree_store,
+                HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            );
+        });
 
         // A removed saved task never dispatches: the entry point reports the
         // configuration stale and drops it from the recent history.
@@ -15153,6 +15283,58 @@ mod tests {
     }
 
     struct OperationTerminal(std::sync::Arc<std::sync::Mutex<Vec<task::SpawnInTerminal>>>);
+
+    type TerminalLaunchGate = (
+        futures::channel::oneshot::Sender<()>,
+        futures::channel::oneshot::Receiver<()>,
+    );
+
+    struct SavedConfigurationTerminal {
+        terminal: OperationTerminal,
+        launch_gate: Arc<std::sync::Mutex<Option<TerminalLaunchGate>>>,
+    }
+
+    impl workspace::TerminalProvider for SavedConfigurationTerminal {
+        fn spawn(
+            &self,
+            task: task::SpawnInTerminal,
+            window: &mut Window,
+            cx: &mut App,
+        ) -> gpui::Task<Option<anyhow::Result<std::process::ExitStatus>>> {
+            self.terminal.spawn(task, window, cx)
+        }
+
+        fn spawn_prepared(
+            &self,
+            task: task::SpawnInTerminal,
+            _handle: Option<task::StructuredTaskHandle>,
+            prepare: workspace::TaskLaunchPreparation,
+            window: &mut Window,
+            cx: &mut App,
+        ) -> gpui::Task<Option<anyhow::Result<std::process::ExitStatus>>> {
+            let events = self.terminal.0.clone();
+            let gate = self.launch_gate.lock().expect("terminal gate").take();
+            window.spawn(cx, async move |cx| {
+                Some(
+                    async {
+                        let prepared = prepare(task.clone(), cx).await?;
+                        prepared.validate_task_identity(&task)?;
+                        if let Some((ready, release)) = gate {
+                            ready.send(()).expect("test awaits terminal readiness");
+                            release.await?;
+                        }
+                        let check = prepared
+                            .check_before_spawn
+                            .context("saved Task terminal check")?;
+                        check(cx).await?;
+                        events.lock().expect("Task events").push(prepared.launch);
+                        Ok(std::process::ExitStatus::default())
+                    }
+                    .await,
+                )
+            })
+        }
+    }
 
     impl workspace::TerminalProvider for OperationTerminal {
         fn spawn(
