@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import queue
+import re
 import shutil
 import signal
 import stat
@@ -16,7 +17,9 @@ import tempfile
 import threading
 import time
 from contextlib import ExitStack, contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 
 REPOSITORY = Path(__file__).resolve().parent.parent
@@ -241,6 +244,44 @@ def isolated_gradle_daemon_process_ids(home):
     return process_ids
 
 
+class ResourceProcess(NamedTuple):
+    parent_id: int
+    group_id: int
+    resident_bytes: int
+    started: str
+    command: str
+
+
+GRADLE_DAEMON_ENTRYPOINT = "org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.13"
+JAVA_PROCESS = re.compile(r"^(?:/.*?)?java\s+-")
+GRADLE_STARTUP_CONTEXT = re.compile(
+    r"^(?P<time>\S+) .*\[org\.gradle\.launcher\.daemon\.server\.Daemon\] "
+    r"start\(\) called on daemon - DefaultDaemonContext\[.*?"
+    r",daemonRegistryDir=(?P<registry>.*?),pid=(?P<pid>\d+),"
+)
+
+
+def gradle_daemon_owns_process(home, process_id, process):
+    if not JAVA_PROCESS.match(process.command) or not process.command.endswith(f" {GRADLE_DAEMON_ENTRYPOINT}"):
+        return False
+    log = home / "daemon/8.13" / f"daemon-{process_id}.out.log"
+    try:
+        with log.open("rb") as stream:
+            startup_lines = stream.read(64 * 1024).decode("utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return False
+    context = next((match for line in startup_lines if (match := GRADLE_STARTUP_CONTEXT.match(line))), None)
+    if (
+        context is None
+        or int(context["pid"]) != process_id
+        or Path(context["registry"]).resolve() != (home / "daemon").resolve()
+    ):
+        return False
+    # A PID registered by a previous run does not own a process launched later.
+    process_start = datetime.strptime(process.started, "%a %b %d %H:%M:%S %Y").replace(tzinfo=timezone.utc)
+    return process_start <= datetime.fromisoformat(context["time"])
+
+
 class KotlinResourceSampler:
     def __init__(self, process, gradle_home, interval=0.5, editor_process_id=None):
         self.process_id = process.pid
@@ -258,6 +299,7 @@ class KotlinResourceSampler:
         self.combined_peak_processes = []
         self.process_count_peak = 0
         self.daemon_ids = set()
+        self.unverified_daemon_ids = set()
         self.error = None
         self.stopped = threading.Event()
         self.sample()
@@ -266,35 +308,47 @@ class KotlinResourceSampler:
 
     def sample(self):
         output = subprocess.check_output(
-            ["/bin/ps", "-axo", "pid=,ppid=,pgid=,rss="], text=True, timeout=10
+            ["/bin/ps", "-ww", "-axo", "pid=,ppid=,pgid=,rss=,lstart=,command="],
+            env={**os.environ, "LC_ALL": "C", "TZ": "UTC0"},
+            text=True,
+            errors="replace",
+            timeout=10,
         )
         rows = {}
         for line in output.splitlines():
-            values = line.split()
-            if len(values) != 4:
+            values = line.split(maxsplit=9)
+            if len(values) not in (9, 10):
                 raise AssertionError("Process resource inventory has an unexpected shape")
-            process_id, parent_id, group_id, resident_kib = map(int, values)
+            process_id, parent_id, group_id, resident_kib = map(int, values[:4])
             if process_id <= 0 or min(parent_id, group_id, resident_kib) < 0:
                 raise AssertionError("Process resource inventory has invalid numeric values")
-            rows[process_id] = (parent_id, group_id, resident_kib * 1024)
+            rows[process_id] = ResourceProcess(
+                parent_id, group_id, resident_kib * 1024, " ".join(values[4:9]),
+                values[9].rstrip() if len(values) == 10 else "",
+            )
 
         def descendants(roots):
             owned = set(roots) & rows.keys()
             while True:
-                added = {process_id for process_id, row in rows.items() if row[0] in owned} - owned
+                added = {process_id for process_id, row in rows.items() if row.parent_id in owned} - owned
                 if not added:
                     return owned
                 owned.update(added)
 
         server_ids = descendants(
-            {process_id for process_id, row in rows.items() if row[1] == self.process_id}
+            {process_id for process_id, row in rows.items() if row.group_id == self.process_id}
             | {self.process_id}
         )
         daemon_ids = set()
         if self.gradle_home is not None:
             # The probe creates a fresh isolated daemon registry; shared host caches
             # cannot safely establish ownership of a reparented Gradle daemon.
-            daemon_ids = isolated_gradle_daemon_process_ids(self.gradle_home) & rows.keys()
+            registered_ids = isolated_gradle_daemon_process_ids(self.gradle_home) & rows.keys()
+            daemon_ids = {
+                process_id for process_id in registered_ids
+                if gradle_daemon_owns_process(self.gradle_home, process_id, rows[process_id])
+            }
+            self.unverified_daemon_ids.update(registered_ids - daemon_ids)
         self.daemon_ids.update(daemon_ids)
         gradle_ids = descendants(daemon_ids)
         editor_ids = set()
@@ -303,18 +357,23 @@ class KotlinResourceSampler:
                 raise RuntimeError("The explicit editor process exited or is unavailable during sampling")
             editor_ids = descendants({self.editor_process_id})
         combined_ids = server_ids | gradle_ids | editor_ids
-        self.editor_peak = max(self.editor_peak, sum(rows[pid][2] for pid in editor_ids))
+        self.editor_peak = max(self.editor_peak, sum(rows[pid].resident_bytes for pid in editor_ids))
         self.samples += 1
-        self.server_peak = max(self.server_peak, sum(rows[pid][2] for pid in server_ids))
-        self.gradle_peak = max(self.gradle_peak, sum(rows[pid][2] for pid in gradle_ids))
-        combined_resident_bytes = sum(rows[process_id][2] for process_id in combined_ids)
+        self.server_peak = max(self.server_peak, sum(rows[pid].resident_bytes for pid in server_ids))
+        self.gradle_peak = max(self.gradle_peak, sum(rows[pid].resident_bytes for pid in gradle_ids))
+        combined_resident_bytes = sum(rows[process_id].resident_bytes for process_id in combined_ids)
         if combined_resident_bytes > self.combined_peak:
             self.combined_peak = combined_resident_bytes
             self.combined_peak_processes = [
                 {
                     "processId": process_id,
-                    "parentProcessId": rows[process_id][0],
-                    "residentBytes": rows[process_id][2],
+                    "parentProcessId": rows[process_id].parent_id,
+                    "residentBytes": rows[process_id].resident_bytes,
+                    "ownership": [
+                        owner for owner, members in (
+                            ("server", server_ids), ("gradle", gradle_ids), ("editor", editor_ids)
+                        ) if process_id in members
+                    ],
                 }
                 for process_id in sorted(combined_ids)
             ]
@@ -348,6 +407,7 @@ class KotlinResourceSampler:
             "processesAtSampledCombinedPeak": self.combined_peak_processes,
             "sampledPeakOwnedProcessCount": self.process_count_peak,
             "observedIsolatedGradleDaemonPids": sorted(self.daemon_ids),
+            "unverifiedIsolatedGradleRegistryPids": sorted(self.unverified_daemon_ids - self.daemon_ids),
             "scope": "server process group/current descendants; isolated Gradle daemon trees; explicit editor/current descendants when supplied",
             "limitations": "sampled sums of RSS can count shared pages more than once and miss between-sample peaks, detached untracked workers or PID reuse; unrelated/shared daemons are excluded; editor is excluded unless an explicit PID is supplied; caller must bind editor identity and every owned worker to the fixture; not whole-project physical memory or alpha acceptance",
         }

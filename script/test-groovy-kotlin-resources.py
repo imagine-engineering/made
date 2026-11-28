@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -38,6 +39,27 @@ def main():
             raise AssertionError("The owned resource fixture did not start")
         return process
 
+    gradle_fixture_ids = set()
+    real_check_output = subprocess.check_output
+
+    def fixture_inventory(*arguments, **keywords):
+        inventory = real_check_output(*arguments, **keywords)
+        return "\n".join(
+            f"{' '.join(fields[:9])} /fixture/bin/java -Xmx512m {probe.GRADLE_DAEMON_ENTRYPOINT}"
+            if int(fields[0]) in gradle_fixture_ids else line
+            for line in inventory.splitlines()
+            if (fields := line.split(maxsplit=9))
+        )
+
+    def register_daemon(directory, process, started):
+        stamp = started.isoformat(timespec="milliseconds")
+        registry = directory.parent.resolve()
+        (directory / f"daemon-{process.pid}.out.log").write_text(
+            f"{stamp} [INFO] [org.gradle.launcher.daemon.server.Daemon] "
+            "start() called on daemon - DefaultDaemonContext[uid=fixture,"
+            f"daemonRegistryDir={registry},pid={process.pid},idleTimeout=10800000]\n"
+        )
+
     def peak_processes(resources, included, excluded):
         processes = resources["processesAtSampledCombinedPeak"]
         identifiers = [process["processId"] for process in processes]
@@ -50,7 +72,10 @@ def main():
         return {process["processId"]: process for process in processes}
 
     try:
-        with tempfile.TemporaryDirectory(prefix="groovy-resource-control-") as directory:
+        # Keep the real process table and RSS, independent of whether Python rewrites argv[0].
+        with tempfile.TemporaryDirectory(prefix="groovy-resource-control-") as directory, mock.patch.object(
+            probe.subprocess, "check_output", side_effect=fixture_inventory
+        ):
             home = Path(directory)
             daemon_directory = home / "daemon/8.13"
             daemon_directory.mkdir(parents=True)
@@ -64,18 +89,28 @@ def main():
                 'import time; allocation=b"x"*(40*1024*1024); '
                 'print("ready",flush=True); time.sleep(60)'
             )
-            (daemon_directory / f"daemon-{daemon.pid}.out.log").write_text("owned fixture daemon")
+            register_daemon(daemon_directory, daemon, datetime.now(timezone.utc))
+            stale_daemon = start(
+                'import time; allocation=b"x"*(40*1024*1024); '
+                'print("ready",flush=True); time.sleep(60)'
+            )
+            register_daemon(daemon_directory, stale_daemon, datetime.now(timezone.utc) - timedelta(days=1))
+            gradle_fixture_ids.update((daemon.pid, stale_daemon.pid))
             unrelated = start(
                 'import time; allocation=b"x"*(256*1024*1024); '
                 'print("ready",flush=True); time.sleep(60)'
             )
+            (daemon_directory / f"daemon-{unrelated.pid}.out.log").write_text("stale registry PID")
             sampler = probe.KotlinResourceSampler(server, home, interval=0.1)
             time.sleep(0.8)
             resources = sampler.finish()
             assert resources["successfulSamples"] >= 2, resources
             assert resources["observedIsolatedGradleDaemonPids"] == [daemon.pid], resources
+            assert resources["unverifiedIsolatedGradleRegistryPids"] == sorted([unrelated.pid, stale_daemon.pid]), resources
             assert resources["sampledPeakOwnedProcessCount"] == 3, resources
-            owned = peak_processes(resources, {server.pid, daemon.pid}, {unrelated.pid})
+            owned = peak_processes(resources, {server.pid, daemon.pid}, {unrelated.pid, stale_daemon.pid})
+            assert owned[daemon.pid]["ownership"] == ["gradle"], owned
+            assert owned[server.pid]["ownership"] == ["server"], owned
             children = set(owned) - {server.pid, daemon.pid}
             assert len(children) == 1 and owned[children.pop()]["parentProcessId"] == server.pid, owned
             assert 65 * 1024 * 1024 < resources["sampledPeakCombinedResidentBytes"] < 200 * 1024 * 1024, resources
@@ -93,7 +128,8 @@ def main():
             editor_resources = sampler.finish()
             assert editor_resources["explicitEditorProcessId"] == editor.pid, editor_resources
             assert editor_resources["sampledPeakOwnedProcessCount"] == 4, editor_resources
-            peak_processes(editor_resources, {server.pid, daemon.pid, editor.pid}, {unrelated.pid})
+            editor_peak = peak_processes(editor_resources, {server.pid, daemon.pid, editor.pid}, {unrelated.pid, stale_daemon.pid})
+            assert editor_peak[editor.pid]["ownership"] == ["editor"], editor_peak
             assert editor_resources["sampledPeakEditorTreeResidentBytes"] > 15 * 1024 * 1024, editor_resources
             assert editor_resources["sampledPeakCombinedResidentBytes"] < 230 * 1024 * 1024, editor_resources
 
@@ -103,7 +139,8 @@ def main():
             time.sleep(0.4)
             overlapping_resources = sampler.finish()
             assert overlapping_resources["sampledPeakOwnedProcessCount"] == 3, overlapping_resources
-            peak_processes(overlapping_resources, {server.pid, daemon.pid}, {unrelated.pid, editor.pid})
+            overlap_peak = peak_processes(overlapping_resources, {server.pid, daemon.pid}, {unrelated.pid, stale_daemon.pid, editor.pid})
+            assert overlap_peak[server.pid]["ownership"] == ["server", "editor"], overlap_peak
             assert overlapping_resources["sampledPeakCombinedResidentBytes"] < 200 * 1024 * 1024, overlapping_resources
             assert overlapping_resources["sampledPeakEditorTreeResidentBytes"] == overlapping_resources["sampledPeakServerGroupResidentBytes"], overlapping_resources
 
@@ -154,6 +191,7 @@ def main():
                 "ownedServerAndChild": server.pid,
                 "ownedDetachedDaemon": daemon.pid,
                 "unrelatedExcluded": unrelated.pid,
+                "staleGradlePidExcluded": stale_daemon.pid,
                 "resources": resources,
                 "editorResources": editor_resources,
                 "overlappingResources": overlapping_resources,
@@ -166,7 +204,7 @@ def main():
                 pass
             process.wait(timeout=5)
             process.stdout.close()
-    print("PASS owned server/daemon/editor aggregation and overlapping PID deduplication; unrelated process excluded; exited editor, denied inventory and malformed registry are actionable errors")
+    print("PASS owned server/daemon/editor aggregation and overlapping PID deduplication; unrelated and reused registry processes excluded; exited editor, denied inventory and malformed registry are actionable errors")
 
 
 if __name__ == "__main__":
