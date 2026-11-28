@@ -21574,6 +21574,7 @@ async fn rust_tools_headless_runtime_imports_real_linux_profile_on_host(cx: &mut
 async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_capture(
     cx: &mut TestAppContext,
 ) {
+    use project::profile_results_wire::PROFILE_PROTOCOL_VERSION;
     use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
     use proto::{LinuxCargoProfileTargetKind, ProfileResultStatus as Status};
     use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
@@ -21596,7 +21597,7 @@ async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_captu
     cx.update(|cx| project::trusted_worktrees::init(Default::default(), cx));
     let connection = Arc::new(
         ProcessRemoteConnection::new(binary, host_data.join("server_state"))
-            .with_test_data_directory(host_data)
+            .with_test_data_directory(host_data.clone())
             .with_isolated_server_namespace(),
     );
     let (_cancel_sender, cancellation) = futures::channel::oneshot::channel();
@@ -21775,6 +21776,16 @@ async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_captu
     assert_eq!(captured.profile_path, review.profile_path);
     assert_eq!(captured.symbols_path, review.symbols_path);
     assert!(run_marker.exists());
+    let original_import = proto::ImportProfileResults {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        import_id: 1,
+        protocol_version: PROFILE_PROTOCOL_VERSION,
+        profile_path: captured.profile_path.clone(),
+        symbols_path: captured.symbols_path.clone(),
+        consent_to_transfer: true,
+        task_run_id: Some(captured.task_run_id.clone()),
+        artifact_format: "samply-0.13.1".into(),
+    };
     let paths = [captured.profile_path, captured.symbols_path].map(|path| {
         project::ProjectPath::from_proto(path.expect("bounded path")).expect("project path")
     });
@@ -21808,6 +21819,128 @@ async fn linux_remote_cargo_profile_requires_review_and_imports_the_sealed_captu
     );
     std::fs::remove_file(&run_marker).expect("reset the fixture workload marker");
     exercise_native_cargo_panel_profile(&project, &workspace, &run_marker, cx).await;
+
+    let held = transport
+        .request(proto::PrepareLinuxCargoProfile {
+            preset_id: "host-profile-held".into(),
+            ..prepare()
+        })
+        .await
+        .expect("review before disconnect");
+    assert_eq!(held.status(), Status::Ready);
+    let interrupted_artifacts = [held.profile_path.clone(), held.symbols_path.clone()]
+        .map(|path| workspace.join(path.expect("reviewed output").path));
+    let interrupted = cx.background_spawn(transport.request(present(held.clone(), true)));
+    let pid_file = workspace.join("target/profile-workload-pid");
+    let child = wait_for_coverage_workload(&pid_file, cx).await;
+    let identity_path = std::fs::read_dir(host_data.join("server_state"))
+        .expect("read host state directory")
+        .map(|entry| {
+            entry
+                .expect("host state entry")
+                .path()
+                .join("server.identity")
+        })
+        .find(|path| path.is_file())
+        .expect("native server identity file");
+    let identity = std::fs::read_to_string(&identity_path).expect("original native server");
+    client
+        .update(cx, |client, cx| {
+            client.shutdown_processes::<proto::ShutdownRemoteServer>(
+                None,
+                cx.background_executor().clone(),
+            )
+        })
+        .expect("the producing proxy is connected")
+        .await;
+    drop(interrupted);
+    drop(transport);
+
+    let (incoming, incoming_receiver) = futures::channel::mpsc::unbounded();
+    let (outgoing, outgoing_receiver) = futures::channel::mpsc::unbounded();
+    let (activity, _activity_receiver) = futures::channel::mpsc::channel(1);
+    let _replacement_proxy = connection.start_proxy(
+        "profile-replacement".into(),
+        remote::ProxyMode::Reconnect,
+        incoming,
+        outgoing_receiver,
+        activity,
+        Arc::new(MockDelegate),
+        &mut cx.to_async(),
+    );
+    let replacement = cx.update(|cx| {
+        RemoteClient::proto_client_from_channels(
+            incoming_receiver,
+            outgoing,
+            cx,
+            "profile replacement client",
+            false,
+        )
+    });
+    // The new channel must advance past the unsolicited RemoteStarted message ID.
+    replacement
+        .send(proto::Ping {})
+        .expect("bootstrap the channel");
+    let deadline = cx
+        .background_executor
+        .timer(std::time::Duration::from_secs(45));
+    let verify_replacement = async {
+        let reused_review = replacement
+            .request(present(held, true))
+            .await
+            .expect("replacement proxy reaches the host");
+        assert_eq!(reused_review.status(), Status::Stale);
+        assert_eq!(
+            std::fs::read_to_string(identity_path).expect("replacement native server"),
+            identity,
+            "reconnect must reach the same server process"
+        );
+        assert_coverage_workload_stopped(child, cx).await;
+        assert!(interrupted_artifacts.iter().all(|path| !path.exists()));
+        let reused_capture = replacement
+            .request(original_import.clone())
+            .await
+            .expect("old receipt is refused by the same server");
+        assert_eq!(reused_capture.status(), Status::Stale);
+        assert!(reused_capture.frames.is_empty() && reused_capture.nodes.is_empty());
+
+        let review = replacement
+            .request(prepare())
+            .await
+            .expect("fresh review after reconnect");
+        assert_eq!(review.status(), Status::Ready);
+        let capture = replacement
+            .request(present(review, true))
+            .await
+            .expect("fresh capture after reconnect");
+        assert_eq!(capture.status(), Status::Ready);
+        let result = replacement
+            .request(proto::ImportProfileResults {
+                import_id: 2,
+                profile_path: capture.profile_path,
+                symbols_path: capture.symbols_path,
+                task_run_id: Some(capture.task_run_id),
+                ..original_import
+            })
+            .await
+            .expect("import the replacement connection’s recording");
+        assert_eq!(result.status(), Status::Ready);
+        assert!(
+            result
+                .summary
+                .is_some_and(|summary| summary.total_samples > 0)
+        );
+        println!(
+            "The replacement Linux connection rejected the old review and receipt, reaped the held workload, and captured a fresh recording"
+        );
+    };
+    assert!(
+        matches!(
+            futures::future::select(Box::pin(verify_replacement), deadline).await,
+            futures::future::Either::Left(_)
+        ),
+        "Linux profile reconnect qualification timed out"
+    );
     connection.kill().await.expect("stop the owned host");
 }
 

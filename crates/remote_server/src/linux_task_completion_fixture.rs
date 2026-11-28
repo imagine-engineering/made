@@ -1979,6 +1979,9 @@ pub(super) fn write_remote_cargo_profile_fixture(directory: &Path) -> Result<Str
     let preset = &mut settings["cargo"]["presets"]["host-profile"];
     preset["trailing_args"] = serde_json::json!(["literal two words", "", "$HOST_ARGUMENT"]);
     preset["environment"]["COPPER_PROFILE_EXPECT_ARGS"] = serde_json::json!("yes");
+    let mut held = preset.clone();
+    held["environment"]["COPPER_PROFILE_TEST_WAIT"] = serde_json::json!("yes");
+    settings["cargo"]["presets"]["host-profile-held"] = held;
     Ok(settings.to_string())
 }
 
