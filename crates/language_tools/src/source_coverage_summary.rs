@@ -478,7 +478,7 @@ impl Render for SourceCoverageToolbar {
                             let message = "No files match this filter";
                             div()
                                 .id("source-coverage-empty-filter")
-                                .role(gpui::Role::Label)
+                                .role(gpui::Role::Status)
                                 .aria_label(message)
                                 .child(Label::new(message).color(Color::Muted))
                                 .into_any_element()
