@@ -327,6 +327,30 @@ async fn run_selected_java_debug(
             .timer(Duration::from_millis(100))
             .await;
     }
+    let before_debug = project_root.join(".groovy-before-debug");
+    let after_debug = project_root.join(".groovy-after-debug");
+    if !connected {
+        let inventory = project.read_with(cx, |project, cx| {
+            project
+                .task_store()
+                .read(cx)
+                .task_inventory()
+                .cloned()
+                .expect("saved Task inventory")
+        });
+        inventory.update(cx, |inventory, _| {
+            inventory.update_file_based_tasks(
+                project::task_store::TaskSettingsLocation::Worktree(settings::SettingsLocation {
+                    worktree_id,
+                    path: util::rel_path::RelPath::from_unix_str(".zed").expect("Task settings path"),
+                }),
+                Some(r#"[
+                    {"label":"debug-setup","command":"/usr/bin/touch","args":[".groovy-before-debug"],"tags":["before-debug"]},
+                    {"label":"debug-finished","command":"/usr/bin/touch","args":[".groovy-after-debug"],"tags":["after-debug"]}
+                ]"#),
+            ).expect("local Java Debug Task setup");
+        });
+    }
     let mut async_cx = cx.update(|window, cx| window.to_async(cx));
     let debug_panel = DebugPanel::load(workspace.downgrade(), &mut async_cx)
         .await
@@ -421,6 +445,16 @@ async fn run_selected_java_debug(
             .await;
     };
     assert!(session.read_with(cx, |session, _| session.is_attached()));
+    if !connected {
+        assert!(
+            before_debug.is_file(),
+            "the before-debug Task runs before the wrapper and DAP attach"
+        );
+        assert!(
+            !after_debug.exists(),
+            "the after-debug Task cannot run at a breakpoint"
+        );
+    }
     let breakpoints = project.read_with(cx, |project, _| project.breakpoint_store());
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -498,6 +532,22 @@ async fn run_selected_java_debug(
             .timer(Duration::from_millis(100))
             .await;
     };
+    if !connected {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !after_debug.is_file() {
+            cx.run_until_parked();
+            assert!(
+                Instant::now() < deadline,
+                "the after-debug Task did not run after the selected wrapper"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(100))
+                .await;
+        }
+        println!(
+            "Verified before-debug at the breakpoint and after-debug after the selected wrapper"
+        );
+    }
     let manifest = match build_tool {
         JvmTestBuildTool::Gradle => "application/build.gradle.kts",
         JvmTestBuildTool::Maven => "application/pom.xml",

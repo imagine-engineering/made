@@ -38,6 +38,10 @@ use gpui::{
 use language::Buffer;
 use loaded_source_list::LoadedSourceList;
 use module_list::ModuleList;
+#[cfg(feature = "jvm-tools")]
+use project::task_store::{
+    JvmTaskTrigger, PreparedSavedJvmTask, SavedJvmTask, prepare_jvm_hook_tasks,
+};
 use project::{
     DebugScenarioContext, LocalJavaTestDebugTask, Project, RemoteJavaTestDebugTask, WorktreeId,
     debugger::session::{self, Session, SessionEvent, SessionStateEvent, ThreadId, ThreadStatus},
@@ -61,9 +65,21 @@ use workspace::{
     ActivePaneDecorator, DraggedTab, Item, ItemHandle, Member, Pane, PaneGroup, SplitDirection,
     Workspace, item::TabContentParams, move_item, pane::Event,
 };
+#[cfg(feature = "jvm-tools")]
+use workspace::{Toast, notifications::NotificationId, tasks::ScheduledTaskResult};
 
 static PROCESS_ID_PLACEHOLDER: LazyLock<String> =
     LazyLock::new(|| task::VariableName::PickProcessId.template_value());
+
+#[cfg(feature = "jvm-tools")]
+struct SelectedJavaDebugHooks {
+    store: WeakEntity<project::LspStore>,
+    worktree_id: WorktreeId,
+    project_id: EntityId,
+    after: Vec<(SavedJvmTask, PreparedSavedJvmTask)>,
+    active_hook: Option<StructuredTaskHandle>,
+    terminal: Option<Entity<terminal::Terminal>>,
+}
 
 enum SelectedJavaTestBuild {
     Local {
@@ -173,6 +189,8 @@ pub struct RunningState {
     loaded_sources_list: Entity<LoadedSourceList>,
     pub debug_terminal: Entity<DebugTerminal>,
     selected_java_test_task: Option<StructuredTaskHandle>,
+    #[cfg(feature = "jvm-tools")]
+    selected_java_debug_hooks: Option<SelectedJavaDebugHooks>,
     module_list: Entity<module_list::ModuleList>,
     console: Entity<Console>,
     breakpoint_list: Entity<BreakpointList>,
@@ -970,7 +988,11 @@ impl RunningState {
         );
 
         let _subscriptions = vec![
+            #[cfg(feature = "jvm-tools")]
+            cx.on_release(|this, cx| this.cancel_selected_java_debug_hooks(cx)),
             cx.on_app_quit(move |this, cx| {
+                #[cfg(feature = "jvm-tools")]
+                this.cancel_selected_java_debug_hooks(cx);
                 this.stop_selected_java_test(cx);
                 let shutdown = this
                     .session
@@ -1030,8 +1052,12 @@ impl RunningState {
                         .handle_run_in_terminal(request, sender.clone(), window, cx)
                         .detach_and_log_err(cx),
 
-                    SessionEvent::DebuggeeTerminated => {
+                    SessionEvent::DebuggeeTerminated { natural: _natural } => {
                         this.selected_java_test_task = None;
+                        #[cfg(feature = "jvm-tools")]
+                        if *_natural {
+                            this.finish_selected_java_debug_hooks(window, cx);
+                        }
                     }
 
                     _ => {}
@@ -1045,6 +1071,8 @@ impl RunningState {
                 &session,
                 |this, session, event: &SessionStateEvent, cx| match event {
                     SessionStateEvent::Shutdown => {
+                        #[cfg(feature = "jvm-tools")]
+                        this.cancel_selected_java_debug_hooks(cx);
                         if session.read(cx).is_building() {
                             this.shutdown(cx);
                         } else {
@@ -1119,6 +1147,8 @@ impl RunningState {
             pane_close_subscriptions,
             debug_terminal,
             selected_java_test_task: None,
+            #[cfg(feature = "jvm-tools")]
+            selected_java_debug_hooks: None,
             dock_axis,
             _schedule_serialize: None,
             scenario: None,
@@ -1154,7 +1184,190 @@ impl RunningState {
     }
 
     pub(crate) fn ensure_experimental_access(&self, cx: &App) -> Result<()> {
+        #[cfg(feature = "jvm-tools")]
+        if let Some(hooks) = &self.selected_java_debug_hooks {
+            anyhow::ensure!(
+                !self.session.read(cx).is_terminated()
+                    && hooks.store.read_with(cx, |store, _| {
+                        store.jvm_trigger_provider_is_current(
+                            hooks.worktree_id,
+                            JvmTaskTrigger::BeforeDebug,
+                        )
+                    })?,
+                "The Java provider changed or Debug stopped during its saved Task sequence"
+            );
+        }
         self.session.read(cx).ensure_experimental_access(cx)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    async fn run_before_selected_java_debug(
+        running: &WeakEntity<Self>,
+        project: &Entity<Project>,
+        worktree_id: WorktreeId,
+        cx: &mut gpui::AsyncWindowContext,
+    ) -> Result<bool> {
+        let activation = JvmTaskTrigger::BeforeDebug;
+        let (before, has_hooks) = running.update(cx, |running, cx| {
+            anyhow::ensure!(
+                !running.session.read(cx).is_terminated(),
+                "The selected Java Debug session stopped"
+            );
+            let project_id = project.entity_id();
+            let project = project.read(cx);
+            let store = project.lsp_store();
+            anyhow::ensure!(
+                !store.read(cx).jvm_trigger_is_armed(worktree_id, activation),
+                "A selected Java Debug Task sequence is already active for this project"
+            );
+            let before = prepare_jvm_hook_tasks(project, worktree_id, activation, cx)?;
+            let after =
+                prepare_jvm_hook_tasks(project, worktree_id, JvmTaskTrigger::AfterDebug, cx)?;
+            if !before.is_empty() || !after.is_empty() {
+                store.update(cx, |store, cx| {
+                    store.arm_jvm_trigger(worktree_id, activation, cx)
+                })?;
+                running.selected_java_debug_hooks = Some(SelectedJavaDebugHooks {
+                    store: store.downgrade(),
+                    worktree_id,
+                    project_id,
+                    after,
+                    active_hook: None,
+                    terminal: None,
+                });
+            }
+            anyhow::Ok((before, running.selected_java_debug_hooks.is_some()))
+        })??;
+        for (target, prepared) in before {
+            let label = target.label.clone();
+            let handle = StructuredTaskHandle::new(prepared.task.id.clone());
+            let outcome = running
+                .update_in(cx, |running, window, cx| {
+                    running.ensure_experimental_access(cx)?;
+                    let hooks = running
+                        .selected_java_debug_hooks
+                        .as_mut()
+                        .context("The selected Java Debug sequence stopped")?;
+                    hooks.active_hook = Some(handle.clone());
+                    running.workspace.update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            Toast::new(
+                                NotificationId::composite::<JvmTaskTrigger>(usize::from(
+                                    worktree_id,
+                                )),
+                                format!("Running before-debug Task '{label}'"),
+                            ),
+                            cx,
+                        );
+                        workspace.schedule_saved_jvm_task(
+                            hooks.project_id,
+                            (target, prepared),
+                            Some(activation),
+                            true,
+                            Some(handle),
+                            window,
+                            cx,
+                        )
+                    })
+                })??
+                .await?;
+            running.update(cx, |running, _| {
+                if let Some(hooks) = &mut running.selected_java_debug_hooks {
+                    hooks.active_hook = None;
+                }
+            })?;
+            anyhow::ensure!(
+                outcome == ScheduledTaskResult::Success,
+                "before-debug Task '{label}' {}. The selected Java Debug session was skipped.",
+                match outcome {
+                    ScheduledTaskResult::Cancelled => "was cancelled",
+                    ScheduledTaskResult::Failure => "failed",
+                    _ => "could not start",
+                }
+            );
+        }
+        Ok(has_hooks)
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn cancel_selected_java_debug_hooks(&mut self, cx: &mut App) {
+        if let Some(hooks) = self.selected_java_debug_hooks.take() {
+            if let Some(handle) = hooks.active_hook {
+                handle.cancel(cx);
+            }
+            hooks
+                .store
+                .update(cx, |store, _| {
+                    store.cancel_jvm_trigger(hooks.worktree_id, JvmTaskTrigger::BeforeDebug);
+                })
+                .log_err();
+        }
+    }
+
+    #[cfg(feature = "jvm-tools")]
+    fn finish_selected_java_debug_hooks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(hooks) = self.selected_java_debug_hooks.take() else {
+            return;
+        };
+        let workspace = self.workspace.clone();
+        window
+            .spawn(cx, async move |cx| {
+                let activation = JvmTaskTrigger::BeforeDebug;
+                let result = async {
+                    let terminal = hooks
+                        .terminal
+                        .context("The selected Java Debug Task is unavailable")?;
+                    // The Debug panel may remove the session before the build wrapper exits.
+                    let exit = terminal
+                        .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
+                        .await
+                        .context("The selected Java Debug Task did not report its exit status")?;
+                    drop(terminal);
+                    anyhow::ensure!(
+                        exit.success(),
+                        "The selected Java Debug Task failed. After-debug Tasks were skipped."
+                    );
+                    Workspace::run_saved_jvm_hook_tasks(
+                        &workspace,
+                        hooks.after,
+                        hooks.project_id,
+                        activation,
+                        JvmTaskTrigger::AfterDebug,
+                        cx,
+                    )
+                    .await?;
+                    hooks.store.update(cx, |store, cx| {
+                    anyhow::ensure!(
+                        store.complete_jvm_trigger(hooks.worktree_id, activation, cx),
+                        "The Java provider or project trust changed during the Debug Task sequence"
+                    );
+                    Ok(())
+                })?
+                }
+                .await;
+                if let Err(error) = result {
+                    hooks
+                        .store
+                        .update(cx, |store, _| {
+                            store.cancel_jvm_trigger(hooks.worktree_id, activation);
+                        })
+                        .log_err();
+                    workspace
+                        .update(cx, |workspace, cx| {
+                            workspace.show_toast(
+                                Toast::new(
+                                    NotificationId::composite::<JvmTaskTrigger>(usize::from(
+                                        hooks.worktree_id,
+                                    )),
+                                    error.to_string(),
+                                ),
+                                cx,
+                            );
+                        })
+                        .log_err();
+                }
+            })
+            .detach();
     }
 
     pub(crate) fn resolve_scenario(
@@ -1397,6 +1610,14 @@ impl RunningState {
                     );
                     std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, *port))
                         .with_context(|| format!("Java test Debug port {port} is unavailable"))?;
+                    #[cfg(feature = "jvm-tools")]
+                    if Self::run_before_selected_java_debug(&this, &project, *worktree_id, cx).await? {
+                        this.read_with(cx, |this, cx| this.ensure_experimental_access(cx))??;
+                        let current = project.update(cx, |project, cx| {
+                            project.selected_java_test_debug_task(*worktree_id, node_id, *generation, Some(*port), cx)
+                        })?;
+                        anyhow::ensure!(current == *plan, "The selected Java test changed before Debug could start; refresh Tests");
+                    }
                 }
 
                 let creation = if selected_java_test.is_some() {
@@ -1437,6 +1658,12 @@ impl RunningState {
                     )
                 })?;
 
+                #[cfg(feature = "jvm-tools")]
+                this.update(cx, |this, _| {
+                    if let Some(hooks) = &mut this.selected_java_debug_hooks {
+                        hooks.terminal = Some(terminal.clone());
+                    }
+                })?;
                 this.update_in(cx, |this, window, cx| {
                     this.ensure_pane_item(DebuggerPaneItem::Terminal, window, cx);
                     this.debug_terminal.update(cx, |debug_terminal, cx| {
@@ -2155,6 +2382,8 @@ impl RunningState {
     }
 
     pub(crate) fn shutdown(&mut self, cx: &mut Context<Self>) {
+        #[cfg(feature = "jvm-tools")]
+        self.cancel_selected_java_debug_hooks(cx);
         let owns_selected_java_test = self.selected_java_test_task.is_some();
         self.stop_selected_java_test(cx);
         self.workspace
@@ -2202,6 +2431,26 @@ impl RunningState {
         if self.session.read(cx).is_terminated() {
             return Task::ready(Err(anyhow!("The selected Java test Debug session stopped")));
         }
+        #[cfg(feature = "jvm-tools")]
+        let preflight = if self.selected_java_debug_hooks.is_some() && preflight.is_none() {
+            let state = cx.weak_entity();
+            let check: project::terminals::TaskTerminalCheck = Box::new(move |cx| {
+                Task::ready(
+                    state
+                        .read_with(cx, |state, cx| {
+                            anyhow::ensure!(
+                                state.selected_java_debug_hooks.is_some(),
+                                "The selected Java Debug sequence stopped"
+                            );
+                            state.ensure_experimental_access(cx)
+                        })
+                        .and_then(|result| result),
+                )
+            });
+            Some(check)
+        } else {
+            preflight
+        };
         let task = StructuredTaskHandle::new(spawn_task.id.clone());
         self.selected_java_test_task = Some(task.clone());
         project.update(cx, |project, cx| {
@@ -2238,7 +2487,9 @@ impl RunningState {
         });
     }
 
-    pub fn detach_client(&self, cx: &mut Context<Self>) {
+    pub fn detach_client(&mut self, cx: &mut Context<Self>) {
+        #[cfg(feature = "jvm-tools")]
+        self.cancel_selected_java_debug_hooks(cx);
         self.session().update(cx, |state, cx| {
             state.disconnect_client(cx);
         });
@@ -2453,6 +2704,341 @@ mod tests {
                     .is_some()
             );
         }
+    }
+
+    #[cfg(all(unix, feature = "jvm-workflow-tests"))]
+    #[gpui::test]
+    #[expect(clippy::result_large_err)]
+    async fn selected_java_debug_hooks_wait_for_natural_termination_and_task_success(
+        cx: &mut TestAppContext,
+    ) {
+        use dap::{
+            StartDebuggingRequestArguments, StartDebuggingRequestArgumentsRequest,
+            adapters::DebugAdapterBinary,
+        };
+        use futures::StreamExt as _;
+        use language::{FakeLspAdapter, Language, LanguageConfig, LanguageMatcher};
+        use project::trusted_worktrees::{self, DbTrustedPaths, PathTrust, TrustedWorktrees};
+        use util::rel_path::RelPath;
+
+        cx.executor().allow_parking();
+        init_test(cx);
+        cx.update(|cx| trusted_worktrees::init(DbTrustedPaths::default(), cx));
+        let root = tempfile::tempdir().expect("disposable selected Debug worktree");
+        let root_path = root.path().canonicalize().expect("canonical project root");
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            &root_path,
+            json!({"pom.xml": "<project/>", "Main.java": "class Main {}"}),
+        )
+        .await;
+        let project = Project::test_with_worktree_trust(fs, [root_path.as_path()], cx).await;
+        let window = init_test_workspace(&project, cx).await;
+        let (dap, lsp, worktrees, worktree, languages, inventory) =
+            project.read_with(cx, |project, cx| {
+                (
+                    project.dap_store(),
+                    project.lsp_store(),
+                    project.worktree_store(),
+                    project.visible_worktrees(cx).next().expect("Java worktree"),
+                    project.languages().clone(),
+                    project
+                        .task_store()
+                        .read(cx)
+                        .task_inventory()
+                        .cloned()
+                        .expect("Task inventory"),
+                )
+            });
+        let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
+        let trust = cx.read(|cx| TrustedWorktrees::try_get_global(cx).expect("Trust owner"));
+        trust.update(cx, |trust, cx| {
+            trust.trust(
+                &worktrees,
+                collections::HashSet::from_iter([PathTrust::Worktree(worktree_id)]),
+                cx,
+            )
+        });
+        languages.add(Arc::new(Language::new(
+            LanguageConfig {
+                name: "Java".into(),
+                matcher: LanguageMatcher {
+                    path_suffixes: vec!["java".into()],
+                    ..Default::default()
+                }
+                .into(),
+                ..Default::default()
+            },
+            None,
+        )));
+        let mut servers = languages.register_fake_lsp(
+            "Java",
+            FakeLspAdapter {
+                name: "jdtls",
+                ..Default::default()
+            },
+        );
+        let (_buffer, _open) = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp(root_path.join("Main.java"), cx)
+            })
+            .await
+            .expect("Java source");
+        let _server = servers.next().await.expect("live Java provider");
+        cx.run_until_parked();
+        let save_tasks = |contents: &str, cx: &mut TestAppContext| {
+            inventory.update(cx, |inventory, _| {
+                inventory
+                    .update_file_based_tasks(
+                        project::task_store::TaskSettingsLocation::Worktree(
+                            settings::SettingsLocation {
+                                worktree_id,
+                                path: RelPath::from_unix_str(".zed").expect("Task settings folder"),
+                            },
+                        ),
+                        Some(contents),
+                    )
+                    .expect("saved Task definitions");
+            });
+        };
+        let _dap = project::debugger::test::intercept_debug_sessions(cx, |client| {
+            client.on_request::<dap::requests::Attach, _>(|_, _| Ok(()));
+        });
+        let create_session = |cx: &mut TestAppContext| {
+            let session = dap.update(cx, |dap, cx| {
+                dap.new_session(
+                    Some("Selected Java test".into()),
+                    "Java".into(),
+                    SharedTaskContext::default(),
+                    None,
+                    Default::default(),
+                    cx,
+                )
+            });
+            let running = window
+                .update(cx, |multi, window, cx| {
+                    let workspace = multi.workspace().downgrade();
+                    cx.new(|cx| {
+                        RunningState::new(
+                            session.clone(),
+                            project.clone(),
+                            workspace,
+                            None,
+                            None,
+                            Axis::Horizontal,
+                            window,
+                            cx,
+                        )
+                    })
+                })
+                .expect("Debug window");
+            (session, running)
+        };
+        let armed = |cx: &mut TestAppContext| {
+            lsp.read_with(cx, |lsp, _| {
+                lsp.jvm_trigger_is_armed(worktree_id, JvmTaskTrigger::BeforeDebug)
+            })
+        };
+
+        for (attempt, exit_code, natural) in [(0, 0, true), (1, 7, true), (2, 0, false)] {
+            let before_marker = format!("before-{attempt}");
+            let after_marker = format!("after-{attempt}");
+            let release_marker = format!("release-{attempt}");
+            save_tasks(&json!([
+                {"label":"prepare-test","command":"/usr/bin/touch","args":[before_marker],"tags":["before-debug"]},
+                {"label":"finish-test","command":"/usr/bin/touch","args":[after_marker],"tags":["after-debug"]},
+                {"label":"unrelated","command":"/usr/bin/touch","args":["unrelated"],"tags":["after-run"]}
+            ]).to_string(), cx);
+            let (session, running) = create_session(cx);
+            let mut async_window = window
+                .update(cx, |_, window, cx| window.to_async(cx))
+                .expect("async Debug window");
+            assert!(
+                RunningState::run_before_selected_java_debug(
+                    &running.downgrade(),
+                    &project,
+                    worktree_id,
+                    &mut async_window
+                )
+                .await
+                .expect("before-debug Tasks")
+            );
+            assert!(root_path.join(&before_marker).is_file());
+            assert!(armed(cx));
+            let terminal = running.update(cx, |running, cx| {
+                running.create_selected_java_test_terminal(
+                    &project,
+                    SpawnInTerminal {
+                        cwd: Some(root_path.clone()),
+                        command: Some("/bin/sh".into()),
+                        args: vec!["-c".into(), format!("while [ ! -f {release_marker} ]; do sleep 0.02; done; exit {exit_code}")],
+                        ..Default::default()
+                    },
+                    None,
+                    cx
+                )
+            }).await.expect("selected Java wrapper terminal");
+            running.update(cx, |running, _| {
+                running
+                    .selected_java_debug_hooks
+                    .as_mut()
+                    .expect("owned Debug hooks")
+                    .terminal = Some(terminal.clone());
+            });
+            session
+                .update(cx, |session, cx| {
+                    session.boot(
+                        DebugAdapterBinary {
+                            command: Some("command".into()),
+                            arguments: Vec::new(),
+                            envs: Default::default(),
+                            cwd: None,
+                            connection: None,
+                            request_args: StartDebuggingRequestArguments {
+                                request: StartDebuggingRequestArgumentsRequest::Attach,
+                                configuration: json!({"request":"attach"}),
+                            },
+                        },
+                        worktree.clone(),
+                        dap.downgrade(),
+                        cx,
+                    )
+                })
+                .await
+                .expect("Mock Java adapter attached");
+            let client = session
+                .read_with(cx, |session, _| session.adapter_client())
+                .expect("attached client");
+            if natural {
+                client
+                    .fake_event(dap::messages::Events::Terminated(None))
+                    .await;
+            } else {
+                running.update(cx, |running, cx| running.shutdown(cx));
+            }
+            cx.run_until_parked();
+            assert!(
+                !root_path.join(&after_marker).exists(),
+                "the after Task must wait for wrapper exit"
+            );
+            std::fs::write(root_path.join(&release_marker), "")
+                .expect("release selected wrapper fixture");
+            terminal
+                .read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx))
+                .await;
+            let deadline = std::time::Instant::now() + Duration::from_secs(8);
+            while armed(cx) && std::time::Instant::now() < deadline {
+                cx.background_executor
+                    .timer(Duration::from_millis(10))
+                    .await;
+                cx.run_until_parked();
+            }
+            assert!(
+                !armed(cx),
+                "Debug must release the activation after completion or Stop"
+            );
+            assert_eq!(
+                root_path.join(&after_marker).is_file(),
+                natural && exit_code == 0
+            );
+            assert!(!root_path.join("unrelated").exists());
+        }
+
+        use std::os::unix::fs::PermissionsExt as _;
+        let blocked_setup = root_path.join("block-debug-setup");
+        std::fs::write(
+            &blocked_setup,
+            "#!/bin/sh\n/usr/bin/touch before-blocking\nread resume\n",
+        )
+        .expect("write the disposable blocking setup Task");
+        std::fs::set_permissions(&blocked_setup, std::fs::Permissions::from_mode(0o755))
+            .expect("make the fixture Task executable");
+        save_tasks(
+            r#"[
+                {"label":"blocked-setup","command":"./block-debug-setup","tags":["before-debug"]},
+                {"label":"finish-test","command":"/usr/bin/touch","args":["after-stop"],"tags":["after-debug"]}
+            ]"#,
+            cx,
+        );
+        let (_session, running) = create_session(cx);
+        let pending = window
+            .update(cx, |_, window, cx| {
+                let running = running.downgrade();
+                let project = project.clone();
+                window.spawn(cx, async move |cx| {
+                    RunningState::run_before_selected_java_debug(
+                        &running,
+                        &project,
+                        worktree_id,
+                        cx,
+                    )
+                    .await
+                })
+            })
+            .expect("start the blocking setup Task");
+        let deadline = std::time::Instant::now() + Duration::from_secs(8);
+        while !root_path.join("before-blocking").exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the setup Task never started"
+            );
+            cx.background_executor
+                .timer(Duration::from_millis(10))
+                .await;
+            cx.run_until_parked();
+        }
+        let handle = running.read_with(cx, |running, _| {
+            running
+                .selected_java_debug_hooks
+                .as_ref()
+                .and_then(|hooks| hooks.active_hook.clone())
+                .expect("the Debug session owns its active setup Task")
+        });
+        running.update(cx, |running, cx| running.shutdown(cx));
+        let completion = futures::future::select(
+            pending,
+            cx.background_executor.timer(Duration::from_secs(8)),
+        )
+        .await;
+        assert!(
+            matches!(completion, futures::future::Either::Left((Err(_), _))),
+            "Stop must cancel the pending Debug"
+        );
+        assert!(matches!(
+            handle.state(),
+            task::StructuredTaskState::Cancelled { .. }
+        ));
+        assert!(!armed(cx));
+        assert!(!root_path.join("after-stop").exists());
+
+        save_tasks(
+            r#"[
+            {"label":"failed-setup","command":"/usr/bin/false","tags":["before-debug"]},
+            {"label":"finish-test","command":"/usr/bin/touch","args":["after-launch-failure"],"tags":["after-debug"]}
+        ]"#,
+            cx,
+        );
+        let (session, running) = create_session(cx);
+        let mut async_window = window
+            .update(cx, |_, window, cx| window.to_async(cx))
+            .expect("async Debug window");
+        let error = RunningState::run_before_selected_java_debug(
+            &running.downgrade(),
+            &project,
+            worktree_id,
+            &mut async_window,
+        )
+        .await
+        .expect_err("the failed setup must prevent launch");
+        assert!(
+            error
+                .to_string()
+                .contains("before-debug Task 'failed-setup' failed")
+        );
+        session.update(cx, |session, cx| session.shutdown(cx)).await;
+        cx.run_until_parked();
+        assert!(!armed(cx));
+        assert!(!root_path.join("after-launch-failure").exists());
     }
 
     #[cfg(all(unix, feature = "jvm-workflow-tests"))]

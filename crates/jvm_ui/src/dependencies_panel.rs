@@ -5871,6 +5871,7 @@ impl DependenciesPanel {
             (target.for_launch(), prepared),
             activation,
             trigger.is_some(),
+            None,
             window,
             cx,
         )

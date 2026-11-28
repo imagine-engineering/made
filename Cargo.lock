@@ -5418,6 +5418,7 @@ dependencies = [
  "sysinfo 0.37.2",
  "task",
  "tasks_ui",
+ "tempfile",
  "terminal",
  "terminal_view",
  "text",

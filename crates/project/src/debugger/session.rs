@@ -848,7 +848,9 @@ pub enum SessionEvent {
     Threads,
     InvalidateInlineValue,
     CapabilitiesLoaded,
-    DebuggeeTerminated,
+    DebuggeeTerminated {
+        natural: bool,
+    },
     RunInTerminal {
         request: RunInTerminalRequestArguments,
         sender: mpsc::Sender<Result<dap::RunInTerminalResponse>>,
@@ -1758,8 +1760,13 @@ impl Session {
             Events::Exited(_event) => {
                 self.clear_active_debug_line(cx);
             }
-            Events::Terminated(_) => {
-                cx.emit(SessionEvent::DebuggeeTerminated);
+            Events::Terminated(event) => {
+                let requests_restart = event
+                    .and_then(|event| event.restart)
+                    .is_some_and(|restart| restart != serde_json::Value::Bool(false));
+                cx.emit(SessionEvent::DebuggeeTerminated {
+                    natural: self.is_started() && !self.is_session_terminated && !requests_restart,
+                });
                 self.shutdown(cx).detach();
             }
             Events::Thread(event) => {

@@ -25,7 +25,8 @@ test-support = [
     "unindent",
 ]
 
-jvm-workflow-tests = ["test-support", "tasks_ui/jvm-workflow-test-support", "tasks_ui/rust-test-actions"]
+jvm-tools = ["project/jvm-tools", "workspace/jvm-tools"]
+jvm-workflow-tests = ["jvm-tools", "test-support", "tasks_ui/jvm-workflow-test-support", "tasks_ui/rust-test-actions"]
 
 [dependencies]
 anyhow.workspace = true
@@ -87,6 +88,7 @@ editor = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 language = { workspace = true, features = ["test-support"] }
 project = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
 tree-sitter-go.workspace = true
 unindent.workspace = true
 util = { workspace = true, features = ["test-support"] }

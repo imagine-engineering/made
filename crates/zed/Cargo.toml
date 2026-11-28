@@ -50,7 +50,7 @@ sim = [
 ]
 sim-test-support = ["sim", "test-support", "sim_ui/test-support"]
 rust-tools = ["dep:cargo_ui", "tasks_ui/rust-test-actions", "diagnostics/rust-tools", "dep:native_task_helper"]
-jvm-tools = ["dep:jvm_ui", "extension_host/jvm-test-runnables", "project/jvm-tools", "tasks_ui/jvm-test-actions", "workspace/jvm-tools", "diagnostics/jvm-tools"]
+jvm-tools = ["dep:jvm_ui", "debugger_ui/jvm-tools", "extension_host/jvm-test-runnables", "project/jvm-tools", "tasks_ui/jvm-test-actions", "workspace/jvm-tools", "diagnostics/jvm-tools"]
 corex = ["sim", "sim_runtime/corex"]
 cuda = ["sim", "sim_runtime/cuda"]
 directml = ["sim", "sim_runtime/directml"]

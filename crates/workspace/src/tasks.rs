@@ -1125,6 +1125,7 @@ impl Workspace {
         (target, prepared): (SavedJvmTask, PreparedSavedJvmTask),
         activation: Option<JvmTaskTrigger>,
         omit_history: bool,
+        handle: Option<StructuredTaskHandle>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<ScheduledTaskResult>> {
@@ -1152,14 +1153,7 @@ impl Workspace {
                 .and_then(|result| result);
             Task::ready(result)
         });
-        self.schedule_resolved_task_with_terminal_check(
-            source,
-            task,
-            omit_history,
-            check,
-            window,
-            cx,
-        )
+        self.schedule_checked_task(source, task, omit_history, check, handle, window, cx)
     }
 
     #[cfg(feature = "jvm-tools")]
@@ -1238,8 +1232,15 @@ impl Workspace {
         let workspace = cx.weak_entity();
         self.scheduled_tasks.push(window.spawn(cx, async move |cx| {
             let result = async {
-                Self::run_jvm_build_hooks(&workspace, before_tasks, project_id, before, before, cx)
-                    .await?;
+                Self::run_saved_jvm_hook_tasks(
+                    &workspace,
+                    before_tasks,
+                    project_id,
+                    before,
+                    before,
+                    cx,
+                )
+                .await?;
                 let owner = workspace.clone();
                 let main = workspace
                     .update_in(cx, |workspace, window, cx| {
@@ -1270,8 +1271,15 @@ impl Workspace {
                     })?
                     .await?;
                 check_jvm_task_outcome(main, phase, &label)?;
-                Self::run_jvm_build_hooks(&workspace, after_tasks, project_id, before, after, cx)
-                    .await
+                Self::run_saved_jvm_hook_tasks(
+                    &workspace,
+                    after_tasks,
+                    project_id,
+                    before,
+                    after,
+                    cx,
+                )
+                .await
             }
             .await;
             let result =
@@ -1313,7 +1321,7 @@ impl Workspace {
     }
 
     #[cfg(feature = "jvm-tools")]
-    async fn run_jvm_build_hooks(
+    pub async fn run_saved_jvm_hook_tasks(
         workspace: &WeakEntity<Self>,
         hooks: Vec<(SavedJvmTask, PreparedSavedJvmTask)>,
         project_id: gpui::EntityId,
@@ -1327,8 +1335,10 @@ impl Workspace {
                 .update_in(cx, |workspace, window, cx| {
                     workspace.show_toast(
                         Toast::new(
-                            NotificationId::composite::<JvmProjectBuildAction>(usize::from(
-                                target.worktree_id,
+                            NotificationId::composite::<JvmTaskTrigger>(format!(
+                                "{}:{}",
+                                activation.label(),
+                                usize::from(target.worktree_id)
                             )),
                             format!("Running {} Task '{label}'", phase.label()),
                         ),
@@ -1339,6 +1349,7 @@ impl Workspace {
                         (target, prepared),
                         Some(activation),
                         true,
+                        None,
                         window,
                         cx,
                     )
@@ -1358,12 +1369,25 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<ScheduledTaskResult>> {
+        self.schedule_checked_task(source, task, omit_history, check, None, window, cx)
+    }
+
+    fn schedule_checked_task(
+        &mut self,
+        source: TaskSourceKind,
+        task: ResolvedTask,
+        omit_history: bool,
+        check: project::terminals::TaskTerminalCheck,
+        handle: Option<StructuredTaskHandle>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<ScheduledTaskResult>> {
         let (sender, receiver) = futures::channel::oneshot::channel();
         self.schedule_resolved_task_internal(
             source,
             task,
             omit_history,
-            None,
+            handle,
             Some(Box::new(move |outcome, _| {
                 if sender.send(outcome).is_err() {
                     log::debug!("The caller no longer awaits its checked Task");
