@@ -21307,6 +21307,241 @@ fn rust_tools_headless_runtime_coverage_task_capture_drops_buffered_replies_for_
     assert_eq!(response.native_receiver, 0);
 }
 
+#[cfg(all(feature = "rust-tools-process-test", target_os = "linux"))]
+#[gpui::test]
+#[ignore = "requires the separately built Rust-tools host, installed Cargo and Samply, and Linux perf"]
+async fn rust_tools_headless_runtime_imports_real_linux_profile_on_host(cx: &mut TestAppContext) {
+    use project::profile_results_store::RemoteProfileError;
+    use project::profile_results_wire::PROFILE_PROTOCOL_VERSION;
+    use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
+    use remote::{ConnectionIdentifier, MockDelegate, ProcessRemoteConnection, RemoteConnection};
+    use std::sync::atomic::AtomicBool;
+    use std::time::Duration;
+
+    let binary = PathBuf::from(
+        std::env::var_os("RUST_TOOLS_ENABLED_HOST_BINARY")
+            .expect("separately built Rust-tools host"),
+    );
+    let fixture = tempfile::tempdir_in("/tmp").expect("owned Linux profiling fixture");
+    let workspace = fixture.path().join("workspace");
+    std::fs::create_dir(&workspace).expect("profiling worktree");
+    cx.executor().allow_parking();
+    let captured = smol::process::Command::new(&binary)
+        .args(["task-completion-fixture", "--directory"])
+        .arg(&workspace)
+        .arg("cargo-build-profile-headless")
+        .env_remove("CARGO_TARGET_DIR")
+        .env("CARGO_NET_OFFLINE", "true")
+        .kill_on_drop(true)
+        .output()
+        .await
+        .expect("start the authenticated Linux Cargo capture");
+    assert!(
+        captured.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&captured.stdout),
+        String::from_utf8_lossy(&captured.stderr)
+    );
+    let recording = std::fs::read_dir(workspace.join("target"))
+        .expect("authenticated output directory")
+        .map(|entry| entry.expect("output entry").path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    name.starts_with("selected-")
+                        && name.ends_with(".json")
+                        && !name.ends_with(".syms.json")
+                })
+        })
+        .expect("retained Samply recording");
+    std::fs::rename(
+        recording.with_extension("syms.json"),
+        workspace.join("capture.syms.json"),
+    )
+    .expect("put the captured symbols in the visible worktree");
+    std::fs::rename(recording, workspace.join("capture.json"))
+        .expect("put the captured recording in the visible worktree");
+    let host_data = fixture.path().join("host-data");
+    std::fs::create_dir_all(host_data.join("config")).expect("isolated host configuration");
+    std::fs::write(
+        host_data.join("config/settings.json"),
+        r#"{"feature_flags":{"rust-native-profiling-experimental":"on"}}"#,
+    )
+    .expect("explicit local opt-in on the host");
+    cx.update(|cx| release_channel::init(semver::Version::new(1, 16, 2), cx));
+    cx.update(|cx| project::trusted_worktrees::init(Default::default(), cx));
+    let connection = Arc::new(
+        ProcessRemoteConnection::new(binary, host_data.join("server_state"))
+            .with_test_data_directory(host_data)
+            .with_isolated_server_namespace(),
+    );
+    let (_cancel_sender, cancel_receiver) = futures::channel::oneshot::channel();
+    let client = cx
+        .update(|cx| {
+            RemoteClient::new(
+                ConnectionIdentifier::Workspace(-i64::from(std::process::id())),
+                connection.clone(),
+                cancel_receiver,
+                Arc::new(MockDelegate),
+                cx,
+            )
+        })
+        .await
+        .expect("connect to the separately built Linux host")
+        .expect("remote client");
+    let project = build_project_with_worktree_trust(client.clone(), true, cx);
+    cx.update(|cx| {
+        project::task_store::set_experimental_feature_for_test(
+            "rust-native-profiling-experimental",
+            true,
+            cx,
+        )
+    });
+    let (worktree, _) = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(&workspace, true, cx)
+        })
+        .await
+        .expect("registered remote profiling worktree");
+    let scan = worktree.update(cx, |tree, _| tree.wait_for_snapshot(1));
+    let deadline = cx.background_executor.timer(Duration::from_secs(10));
+    match futures::future::select(Box::pin(scan), Box::pin(deadline)).await {
+        futures::future::Either::Left((result, _)) => result.expect("initial remote scan"),
+        futures::future::Either::Right(_) => panic!("Linux profile fixture scan timed out"),
+    }
+    let worktree_id = worktree.read_with(cx, |tree, _| tree.id());
+    let worktree_store = project.read_with(cx, |project, _| project.worktree_store());
+    let transport = client.read_with(cx, |client, _| client.proto_client());
+    let paths = project.read_with(cx, |project, cx| {
+        ["capture.json", "capture.syms.json"].map(|name| {
+            project
+                .find_project_path(workspace.join(name), cx)
+                .expect("host-visible output")
+        })
+    });
+    let request = proto::ImportProfileResults {
+        project_id: proto::REMOTE_SERVER_PROJECT_ID,
+        import_id: u64::MAX,
+        protocol_version: PROFILE_PROTOCOL_VERSION,
+        profile_path: Some(paths[0].to_proto()),
+        symbols_path: Some(paths[1].to_proto()),
+        consent_to_transfer: true,
+        artifact_format: "samply-0.13.1".into(),
+        task_run_id: None,
+    };
+    let denied = transport
+        .request(request.clone())
+        .await
+        .expect("host trust control");
+    assert_eq!(denied.status, proto::ProfileResultStatus::Restricted as i32);
+    assert!(denied.frames.is_empty() && denied.nodes.is_empty());
+
+    cx.update(|cx| {
+        TrustedWorktrees::try_get_global(cx)
+            .expect("client trust owner")
+            .update(cx, |trust, cx| {
+                trust.trust(
+                    &worktree_store,
+                    std::iter::once(PathTrust::Worktree(worktree_id)).collect(),
+                    cx,
+                );
+            });
+    });
+    transport
+        .request(proto::TrustWorktrees {
+            project_id: proto::REMOTE_SERVER_PROJECT_ID,
+            trusted_paths: vec![proto::PathTrust {
+                content: Some(proto::path_trust::Content::WorktreeId(
+                    worktree_id.to_proto(),
+                )),
+            }],
+        })
+        .await
+        .expect("explicit host worktree trust");
+
+    let denied = project
+        .read_with(cx, |project, cx| {
+            project.import_remote_profile(
+                paths.clone(),
+                false,
+                Arc::new(AtomicBool::new(false)),
+                cx,
+            )
+        })
+        .expect_err("the client must request explicit transfer consent");
+    assert_eq!(
+        denied.downcast_ref::<RemoteProfileError>(),
+        Some(&RemoteProfileError::Restricted)
+    );
+    for request in [
+        proto::ImportProfileResults {
+            consent_to_transfer: false,
+            ..request.clone()
+        },
+        proto::ImportProfileResults {
+            task_run_id: Some("unverified-local-run".into()),
+            ..request
+        },
+    ] {
+        let expected = if request.task_run_id.is_some() {
+            proto::ProfileResultStatus::Unsupported
+        } else {
+            proto::ProfileResultStatus::Restricted
+        };
+        let result = transport
+            .request(request)
+            .await
+            .expect("registered refusal");
+        assert_eq!(result.status, expected as i32);
+        assert!(result.frames.is_empty() && result.nodes.is_empty());
+    }
+
+    let local_loads = project::profile_results::samply_profile_load_calls_for_test();
+    let result = project
+        .read_with(cx, |project, cx| {
+            project.import_remote_profile(paths, true, Arc::new(AtomicBool::new(false)), cx)
+        })
+        .expect("open the consented Linux import")
+        .await
+        .expect("receive only the normalized host result");
+    assert!(result.total_samples > 0);
+    let (source, line) = result
+        .nodes
+        .iter()
+        .filter(|node| node.inclusive_samples > 0)
+        .filter_map(|node| result.frames.get(node.frame))
+        .filter(|frame| frame.label == "stats::weight")
+        .filter_map(|frame| frame.source.as_ref())
+        .next()
+        .expect("sampled Rust frame has a mapped source");
+    assert_eq!(source.worktree_id, worktree_id);
+    assert_eq!(source.path.as_unix_str(), "stats/src/lib.rs");
+    assert!((5..=7).contains(line), "unexpected source line: {line}");
+    let source = project
+        .update(cx, |project, cx| project.open_buffer(source.clone(), cx))
+        .await
+        .expect("open the mapped source on the registered host");
+    assert!(source.read_with(cx, |buffer, _| buffer.text().contains("fn weight(")));
+    assert_eq!(
+        project::profile_results::samply_profile_load_calls_for_test(),
+        local_loads,
+        "the client must not parse raw artifacts",
+    );
+    let client_fs = project.read_with(cx, |project, _| project.fs().clone());
+    assert!(!client_fs.is_file(&workspace.join("capture.json")).await);
+    assert!(
+        !client_fs
+            .is_file(&workspace.join("capture.syms.json"))
+            .await
+    );
+    println!(
+        "Registered Linux host returned {} samples and a mapped stats::weight frame",
+        result.total_samples
+    );
+    connection.kill().await.expect("stop the owned host");
+}
+
 #[cfg(all(feature = "rust-tools-process-test", target_os = "macos"))]
 #[gpui::test]
 async fn rust_tools_headless_runtime_separate_enabled_host_profile_and_coverage(
