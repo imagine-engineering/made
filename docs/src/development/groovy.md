@@ -110,10 +110,32 @@ fixtures reproduced this on macOS ARM64. The preferred server passed the same
 edit and navigation check on the Gradle fixture.
 
 If **Language Servers** reports a fallback analysis error, open **View Logs**
-for that server. If the fallback runs out of memory, review its JVM memory
-settings on the project host. Restart the fallback or select the preferred
-provider to recover. Native fallback runs have exceeded the 8 GiB qualification
-ceiling, and the 32 GiB reference-host check remains open.
+for that server. With the standard `kotlin-language-server` 1.3.13 launcher,
+you can set a JVM heap limit for the fallback process in its binary environment.
+Add the option to your existing settings for the project and restart the fallback.
+For SSH, WSL, and container projects, the setting applies to the JVM on the
+project host.
+
+```json [settings]
+{
+  "lsp": {
+    "kotlin-language-server": {
+      "binary": {
+        "env": {
+          "KOTLIN_LANGUAGE_SERVER_OPTS": "-Xmx4g"
+        }
+      }
+    }
+  }
+}
+```
+
+Keep any existing binary path and other required JVM options. If you already
+set a heap limit for the fallback, update that option. If analysis still fails,
+check the fallback logs or select the preferred provider. The heap limit covers
+only the fallback JVM heap. The 8 GiB qualification ceiling includes the editor,
+JDTLS and build workers. A cached native Gradle fixture still exceeded that
+ceiling with this setting. The 32 GiB reference-host check remains open.
 
 For offline Maven projects using the alternate server, make its host
 `MAVEN_REPOSITORY` and Maven's `maven.repo.local` refer to the same populated
