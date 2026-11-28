@@ -79,6 +79,27 @@ fn native_profile_observer_drop_reaps_the_real_samply_and_rust_workload() -> io:
 }
 
 #[test]
+#[ignore = "requires the independently built host and a native Linux perf environment"]
+fn native_profile_terminal_receipt_matches_pty_and_headless_child_exits() -> io::Result<()> {
+    run_terminal_fixture("native-profile-pty-terminal")?;
+    run_terminal_fixture("native-profile-headless-terminal")
+}
+
+#[test]
+#[ignore = "requires the independently built host and a native Linux perf environment"]
+fn native_profile_terminal_stop_reaps_pty_and_headless_workloads() -> io::Result<()> {
+    run_terminal_fixture("native-profile-stop-pty")?;
+    run_terminal_fixture("native-profile-stop-headless")
+}
+
+#[test]
+#[ignore = "requires the independently built host and a native Linux perf environment"]
+fn native_profile_terminal_close_reaps_pty_and_headless_workloads() -> io::Result<()> {
+    run_terminal_fixture("native-profile-close-pty")?;
+    run_terminal_fixture("native-profile-close-headless")
+}
+
+#[test]
 fn coverage_helper_refuses_a_different_launcher_image() -> io::Result<()> {
     use native_task_helper::linux_task_completion::LinuxTaskCompletion;
 

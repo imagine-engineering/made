@@ -568,7 +568,6 @@ fn assert_profile_cancellation(
     expected_workload: Option<&Path>,
 ) -> Result<()> {
     smol::block_on(async {
-        let marker = directory.join("profiled-processes");
         let profile_path = report.profile_path();
         let symbols_path = report.symbols_path();
         let completion = LinuxTaskCompletion::bind()?;
@@ -578,38 +577,17 @@ fn assert_profile_cancellation(
             OriginalTaskActor::from_smol_child(&mut helper, &File::open("/proc/self/exe")?)?;
         let (collector, workload) = smol::future::race(
             async {
-                completion.observe_profile(actor, invocation, report).await?;
+                completion
+                    .observe_profile(actor, invocation, report)
+                    .await?;
                 anyhow::bail!("The profile completed before cancellation");
             },
             async {
                 for _ in 0..200 {
-                    match std::fs::read_to_string(&marker) {
-                        Ok(ids) if ids.ends_with('\n') => {
-                            let (collector, workload) = ids
-                                .trim_end()
-                                .split_once(' ')
-                                .context("Malformed profiling fixture process IDs")?;
-                            let collector = collector.parse::<libc::pid_t>()?;
-                            let workload = workload.parse::<libc::pid_t>()?;
-                            ensure!(
-                                collector > 0 && workload > 0 && collector != workload,
-                                "Expected separately identified fixture processes",
-                            );
-                            if let Some(expected) = expected_workload
-                                && std::fs::read_link(format!("/proc/{workload}/exe"))? != expected
-                            {
-                                fixture_delay(Duration::from_millis(5)).await;
-                                continue;
-                            }
-                            ensure!(
-                                unsafe { libc::getpgid(workload) } == collector,
-                                "The Rust workload was not in the original collector's process group",
-                            );
-                            return Ok((collector, workload));
-                        }
-                        Ok(_) => {}
-                        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                        Err(error) => return Err(error.into()),
+                    if let Some(processes) =
+                        running_profile_processes(directory, expected_workload)?
+                    {
+                        return Ok(processes);
                     }
                     fixture_delay(Duration::from_millis(5)).await;
                 }
@@ -621,18 +599,55 @@ fn assert_profile_cancellation(
             !wait(&mut helper).await?.success(),
             "A cancelled profiling helper acknowledged completion",
         );
-        for process_id in [collector, workload] {
-            ensure!(
-                !Path::new("/proc").join(process_id.to_string()).exists(),
-                "The cancelled profiling process {process_id} was not reaped",
-            );
-        }
+        ensure_profile_processes_exited(collector, workload)?;
         ensure!(
             !profile_path.exists() && !symbols_path.exists() && !socket.exists(),
             "Cancelled profiling outputs were retained",
         );
         Ok(())
     })
+}
+
+fn running_profile_processes(
+    directory: &Path,
+    expected_workload: Option<&Path>,
+) -> Result<Option<(libc::pid_t, libc::pid_t)>> {
+    let ids = match std::fs::read_to_string(directory.join("profiled-processes")) {
+        Ok(ids) if ids.ends_with('\n') => ids,
+        Ok(_) => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let (collector, workload) = ids
+        .trim_end()
+        .split_once(' ')
+        .context("Malformed profiling fixture process IDs")?;
+    let collector = collector.parse::<libc::pid_t>()?;
+    let workload = workload.parse::<libc::pid_t>()?;
+    ensure!(
+        collector > 0 && workload > 0 && collector != workload,
+        "Expected separately identified fixture processes"
+    );
+    if let Some(expected) = expected_workload
+        && std::fs::read_link(format!("/proc/{workload}/exe"))? != expected
+    {
+        return Ok(None);
+    }
+    ensure!(
+        unsafe { libc::getpgid(workload) } == collector,
+        "The Rust workload was not in the original collector's process group",
+    );
+    Ok(Some((collector, workload)))
+}
+
+fn ensure_profile_processes_exited(collector: libc::pid_t, workload: libc::pid_t) -> Result<()> {
+    for process_id in [collector, workload] {
+        ensure!(
+            !Path::new("/proc").join(process_id.to_string()).exists(),
+            "The cancelled profiling process {process_id} was not reaped",
+        );
+    }
+    Ok(())
 }
 
 fn samply_invocation(
@@ -671,8 +686,6 @@ fn samply_invocation(
 }
 
 fn native_profile_collector(directory: &Path) -> Result<()> {
-    use project::profile_results::{ProfileHost, parse_samply_profile};
-
     smol::block_on(async {
         let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
         let expected_image = File::open("/proc/self/exe")?;
@@ -688,40 +701,161 @@ fn native_profile_collector(directory: &Path) -> Result<()> {
             .await?;
         let (status, pair) = observed.verify_exit(wait(&mut helper).await?)?;
         ensure!(status.success(), "Samply exited with {status}");
-        let pair = pair
-            .context("Samply did not produce a sealed profile pair")?
-            .read()?;
-        let result = parse_samply_profile(
-            &pair.profile,
-            &pair.symbols,
-            ProfileHost::Linux,
-            &Default::default(),
-            |path, _| {
-                path.ends_with("stats/src/lib.rs")
-                    .then(|| project::ProjectPath {
-                        worktree_id: project::WorktreeId::from_proto(1),
-                        path: util::rel_path::rel_path("stats/src/lib.rs").into_arc(),
-                    })
-            },
-        )?;
-        ensure!(result.total_samples > 0, "Samply returned no samples");
-        ensure!(
-            result.frames.iter().any(|frame| {
-                frame.label.contains("stats::weight")
-                    && frame.source.as_ref().is_some_and(|(_, line)| *line == 7)
-            }),
-            "The sealed profile did not map the sampled Rust frame"
-        );
+        let samples =
+            verify_samply_profile(pair.context("Samply did not produce a sealed profile pair")?)?;
         ensure!(
             !profile_path.exists() && !symbols_path.exists(),
             "Profile pair was retained"
         );
         println!(
             "Linux authenticated collector retained {} samples and mapped stats::weight",
-            result.total_samples
+            samples
         );
         Ok(())
     })
+}
+
+fn verify_samply_profile(profile: terminal::SealedNativeProfileTask) -> Result<u64> {
+    use project::profile_results::{ProfileHost, parse_samply_profile};
+    let pair = profile.read()?;
+    let result = parse_samply_profile(
+        &pair.profile,
+        &pair.symbols,
+        ProfileHost::Linux,
+        &Default::default(),
+        |path, _| {
+            path.ends_with("stats/src/lib.rs")
+                .then(|| project::ProjectPath {
+                    worktree_id: project::WorktreeId::from_proto(1),
+                    path: util::rel_path::rel_path("stats/src/lib.rs").into_arc(),
+                })
+        },
+    )?;
+    ensure!(result.total_samples > 0, "Samply returned no samples");
+    ensure!(
+        result.frames.iter().any(|frame| {
+            frame.label.contains("stats::weight")
+                && frame.source.as_ref().is_some_and(|(_, line)| *line == 7)
+        }),
+        "The sealed profile did not map the sampled Rust frame"
+    );
+    Ok(result.total_samples)
+}
+
+#[derive(Clone, Copy)]
+enum ProfileTerminalAction {
+    Complete,
+    Stop,
+    Close,
+}
+
+fn native_profile_terminal(
+    directory: &Path,
+    headless: bool,
+    action: ProfileTerminalAction,
+) -> Result<()> {
+    use gpui::AppContext as _;
+    use terminal::{HeadlessTerminal, NativeProfileTaskOutcome, TerminalBuilder};
+
+    let workload = std::env::var("RUST_TOOLS_LINUX_PROFILE_WORKLOAD")?;
+    let report = NativeProfileTaskReservation::new()?;
+    let profile_path = report.profile_path();
+    let symbols_path = report.symbols_path();
+    let invocation = match action {
+        ProfileTerminalAction::Complete => {
+            samply_invocation(directory, &profile_path, &[&workload, "1200000"])?
+        }
+        _ => samply_invocation(
+            directory,
+            &profile_path,
+            &[
+                "/bin/bash",
+                "-c",
+                r#"printf '%s %s\n' "$PPID" "$$" > profiled-processes; exec "$1" 1200000"#,
+                "fixture",
+                &workload,
+            ],
+        )?,
+    };
+    let directory = directory.to_path_buf();
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    gpui_platform::headless().run(move |cx| {
+        release_channel::init(semver::Version::new(1, 16, 2), cx);
+        cx.set_global(HeadlessTerminal(headless));
+        let handle = task::StructuredTaskHandle::new(task::TaskId("native-profile-terminal".into()));
+        let (cancelled, confirmed) = async_channel::bounded(1);
+        handle.subscribe(cx, move |event, _| {
+            if matches!(event.state, task::StructuredTaskState::Cancelled { termination_confirmed: true, .. })
+                && let Err(error) = cancelled.try_send(())
+            {
+                log::debug!("Fixture cancellation observer closed: {error}");
+            }
+        });
+        let prepared = TerminalBuilder::new_with_native_profile_task(
+            task::SpawnInTerminal { label: "Native Profile Task fixture".into(), ..Default::default() },
+            Some(handle.clone()), invocation, report, 1, cx,
+        );
+        cx.spawn(async move |cx| {
+            let deadline = cx.background_executor().timer(Duration::from_secs(15));
+            let run = async {
+                let (builder, observation) = prepared?;
+                let builder = builder.await?;
+                let terminal = cx.update(|cx| cx.new(|cx| {
+                    handle.mark_running(Some(task::StructuredTerminalId(cx.entity_id().as_u64())), cx);
+                    builder.subscribe(cx)
+                }));
+                let ordinary_completion = terminal.read_with(cx, |terminal, cx| terminal.wait_for_completed_task(cx));
+                match action {
+                    ProfileTerminalAction::Complete => {
+                        let (observed, ordinary) = futures::future::join(observation.finish(), ordinary_completion).await;
+                        let NativeProfileTaskOutcome::Completed(status, Some(profile)) = observed? else {
+                            anyhow::bail!("The Terminal did not produce a sealed profile");
+                        };
+                        ensure!(status.success() && ordinary == Some(status), "The native receipt and Terminal disagreed on exit");
+                        let samples = cx.background_spawn(async move { verify_samply_profile(profile) }).await?;
+                        println!("Native Profile Terminal retained {samples} samples and mapped stats::weight");
+                    }
+                    ProfileTerminalAction::Stop | ProfileTerminalAction::Close => {
+                        let (collector, workload_pid) = loop {
+                            if let Some(processes) = running_profile_processes(&directory, Some(Path::new(&workload)))? {
+                                break processes;
+                            }
+                            cx.background_executor().timer(Duration::from_millis(5)).await;
+                        };
+                        let terminal = if matches!(action, ProfileTerminalAction::Close) {
+                            cx.update(|_| drop(terminal));
+                            None
+                        } else {
+                            terminal.update(cx, |terminal, _| terminal.kill_active_task());
+                            Some(terminal)
+                        };
+                        ensure!(matches!(observation.finish().await?, NativeProfileTaskOutcome::Cancelled), "The Terminal did not acknowledge cancellation");
+                        confirmed.recv().await?;
+                        ensure_profile_processes_exited(collector, workload_pid)?;
+                        if terminal.is_some() {
+                            ensure!(ordinary_completion.await.is_some(), "Terminal did not publish its stopped status");
+                        }
+                        println!("Native Profile Terminal confirmed cancellation and reaped both processes");
+                    }
+                }
+                Ok(())
+            };
+            let result = match futures::future::select(Box::pin(run), deadline).await {
+                futures::future::Either::Left((result, _)) => result,
+                futures::future::Either::Right(_) => Err(anyhow::anyhow!("Native Profile Terminal fixture timed out")),
+            };
+            if let Err(error) = send.send(result) {
+                log::error!("Native Profile Terminal fixture lost its caller: {error}");
+            }
+            cx.update(|cx| cx.quit());
+        }).detach();
+    });
+    receive.recv()??;
+    ensure!(
+        !profile_path.exists() && !symbols_path.exists(),
+        "Native Profile Terminal retained its reservation"
+    );
+    Ok(())
 }
 
 fn write_collector_fixture(directory: &Path) -> Result<()> {
@@ -1263,6 +1397,12 @@ pub enum Scenario {
     ProfileGroupCancellation,
     NativeProfileCollector,
     NativeProfileCollectorCancellation,
+    NativeProfilePtyTerminal,
+    NativeProfileHeadlessTerminal,
+    NativeProfileStopPty,
+    NativeProfileStopHeadless,
+    NativeProfileClosePty,
+    NativeProfileCloseHeadless,
     HeadlessCollector,
     SelectedHeadlessCollector,
 }
@@ -1286,6 +1426,24 @@ pub fn run(directory: &Path, scenario: Scenario) -> Result<()> {
         Scenario::NativeProfileCollector => native_profile_collector(directory),
         Scenario::NativeProfileCollectorCancellation => {
             native_profile_collector_cancellation(directory)
+        }
+        Scenario::NativeProfilePtyTerminal => {
+            native_profile_terminal(directory, false, ProfileTerminalAction::Complete)
+        }
+        Scenario::NativeProfileHeadlessTerminal => {
+            native_profile_terminal(directory, true, ProfileTerminalAction::Complete)
+        }
+        Scenario::NativeProfileStopPty => {
+            native_profile_terminal(directory, false, ProfileTerminalAction::Stop)
+        }
+        Scenario::NativeProfileStopHeadless => {
+            native_profile_terminal(directory, true, ProfileTerminalAction::Stop)
+        }
+        Scenario::NativeProfileClosePty => {
+            native_profile_terminal(directory, false, ProfileTerminalAction::Close)
+        }
+        Scenario::NativeProfileCloseHeadless => {
+            native_profile_terminal(directory, true, ProfileTerminalAction::Close)
         }
         Scenario::HeadlessCollector => headless_collector(directory, false),
         Scenario::SelectedHeadlessCollector => headless_collector(directory, true),

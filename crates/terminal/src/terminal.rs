@@ -828,7 +828,10 @@ impl NativeTerminalEnvironment {
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
 pub use native_task_helper::{
-    linux_task_completion::{CoverageTaskReportReservation, SealedCoverageTaskReport},
+    linux_task_completion::{
+        CoverageTaskReportReservation, NativeProfileTaskReservation, SealedCoverageTaskReport,
+        SealedNativeProfileTask,
+    },
     task_completion::TaskBuildInvocation,
 };
 
@@ -838,7 +841,7 @@ use native_task_helper::{
 };
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-struct CoverageTaskSpawn {
+struct LinuxTaskSpawn {
     expected_image: std::fs::File,
     original_actor: futures::channel::oneshot::Sender<OriginalTaskActor>,
 }
@@ -882,15 +885,66 @@ impl CoverageTaskObservation {
 }
 
 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-impl CoverageTaskSpawn {
+impl LinuxTaskSpawn {
     fn send_actor(self, actor: OriginalTaskActor) -> std::io::Result<()> {
         self.original_actor.send(actor).map_err(|_| {
             std::io::Error::new(
                 std::io::ErrorKind::Interrupted,
-                "Coverage Task was cancelled before launch",
+                "The Task observer closed before launch",
             )
         })
     }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub enum NativeProfileTaskOutcome {
+    Completed(ExitStatus, Option<SealedNativeProfileTask>),
+    Cancelled,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+pub struct NativeProfileTaskObservation {
+    result: Receiver<Result<NativeProfileTaskOutcome>>,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl NativeProfileTaskObservation {
+    pub async fn finish(self) -> Result<NativeProfileTaskOutcome> {
+        self.result
+            .recv()
+            .await
+            .context("Native Profile Task observer stopped")?
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeProfileTermination {
+    Completed,
+    Cancelled,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+struct NativeProfileControl {
+    cancel: Sender<()>,
+    finished: Sender<()>,
+    termination: Arc<parking_lot::Mutex<Option<NativeProfileTermination>>>,
+    cancellation_requested: bool,
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+impl NativeProfileControl {
+    fn cancel(&mut self) {
+        if !self.cancellation_requested && !self.finished.is_closed() {
+            self.cancellation_requested = self.cancel.try_send(()).is_ok();
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+enum LinuxTerminalTask {
+    Coverage(Sender<Option<ExitStatus>>),
+    NativeProfile(NativeProfileControl, Sender<Option<ExitStatus>>),
 }
 
 enum TerminalEnvironmentMode {
@@ -898,7 +952,7 @@ enum TerminalEnvironmentMode {
     #[cfg(target_os = "macos")]
     ExactNative,
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-    Coverage(CoverageTaskSpawn, Sender<Option<ExitStatus>>),
+    LinuxTask(LinuxTaskSpawn, LinuxTerminalTask),
 }
 
 impl TerminalEnvironmentMode {
@@ -908,7 +962,7 @@ impl TerminalEnvironmentMode {
             #[cfg(target_os = "macos")]
             Self::ExactNative => true,
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            Self::Coverage(..) => true,
+            Self::LinuxTask(..) => true,
         }
     }
 }
@@ -1119,6 +1173,43 @@ impl fmt::Debug for TerminalBackendEvent {
 
 enum PtyEvent {
     Event(TerminalBackendEvent),
+}
+
+#[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+fn native_profile_terminal_events(
+    events: futures::channel::mpsc::UnboundedSender<PtyEvent>,
+    terminal_exit: Sender<Option<ExitStatus>>,
+    finished: Sender<()>,
+    executor: &BackgroundExecutor,
+) -> futures::channel::mpsc::UnboundedSender<PtyEvent> {
+    let (backend, mut incoming) = unbounded();
+    executor
+        .spawn(async move {
+            let mut terminal_exit = Some(terminal_exit);
+            while let Some(event) = incoming.next().await {
+                let status = match &event {
+                    PtyEvent::Event(TerminalBackendEvent::ChildExit(status)) => Some(Some(*status)),
+                    PtyEvent::Event(TerminalBackendEvent::Exit) => Some(None),
+                    _ => None,
+                };
+                if let Some(status) = status
+                    && let Some(terminal_exit) = terminal_exit.take()
+                {
+                    if let Err(error) = terminal_exit.try_send(status) {
+                        log::debug!(
+                            "Native Profile Task observer closed before Terminal exit: {error}"
+                        );
+                    }
+                    // The UI and the result consumer must see the same verified termination.
+                    finished.closed().await;
+                }
+                if events.unbounded_send(event).is_err() && terminal_exit.is_none() {
+                    break;
+                }
+            }
+        })
+        .detach();
+    backend
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1341,6 +1432,8 @@ impl TerminalBuilder {
             completion_tx: None,
             #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
             coverage_exit: None,
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            native_profile: None,
             task_completion: OnceLock::new(),
             term,
             term_config: config,
@@ -1525,17 +1618,135 @@ impl TerminalBuilder {
         window_id: u64,
         cx: &App,
     ) -> Result<(Task<Result<Self>>, CoverageTaskObservation)> {
+        let completion = LinuxTaskCompletion::bind()?;
+        let (terminal_exit_sender, terminal_exit) = bounded(1);
+        let (builder, original_actor) = Self::new_with_linux_task(
+            launch,
+            structured_task,
+            &invocation,
+            &completion,
+            LinuxTerminalTask::Coverage(terminal_exit_sender),
+            window_id,
+            cx,
+        )?;
+        Ok((
+            builder,
+            CoverageTaskObservation {
+                completion,
+                invocation,
+                report,
+                original_actor,
+                terminal_exit,
+                executor: cx.background_executor().clone(),
+            },
+        ))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    pub fn new_with_native_profile_task(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: TaskBuildInvocation,
+        report: NativeProfileTaskReservation,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(Task<Result<Self>>, NativeProfileTaskObservation)> {
+        let completion = LinuxTaskCompletion::bind()?;
+        let (terminal_exit_sender, terminal_exit) = bounded(1);
+        let (cancel_sender, cancel) = bounded(1);
+        let (finished, finish_guard) = bounded(1);
+        let (result_sender, result) = bounded(1);
+        let termination = Arc::new(parking_lot::Mutex::new(None));
+        let control = NativeProfileControl {
+            cancel: cancel_sender,
+            finished,
+            termination: termination.clone(),
+            cancellation_requested: false,
+        };
+        let (builder, original_actor) = Self::new_with_linux_task(
+            launch,
+            structured_task,
+            &invocation,
+            &completion,
+            LinuxTerminalTask::NativeProfile(control, terminal_exit_sender),
+            window_id,
+            cx,
+        )?;
+        let executor = cx.background_executor().clone();
+        cx.background_spawn(async move {
+            let observed = async {
+                let actor = original_actor
+                    .await
+                    .context("Native Profile Task was not launched")?;
+                let cancellation = async {
+                    futures::future::select(
+                        Box::pin(cancel.recv()),
+                        Box::pin(result_sender.closed()),
+                    )
+                    .await;
+                };
+                let receipt = completion
+                    .observe_cancellable_profile(actor, invocation, report, cancellation)
+                    .await;
+                let status = futures::future::select(
+                    Box::pin(terminal_exit.recv()),
+                    executor.timer(Duration::from_secs(10)),
+                )
+                .await;
+                let receipt = receipt?;
+                let status = match status {
+                    futures::future::Either::Left((status, _)) => status?
+                        .context("Native Profile Task closed before Terminal observed its exit")?,
+                    futures::future::Either::Right(_) => {
+                        bail!("Terminal did not observe the Native Profile Task exit")
+                    }
+                };
+                let cancelled = receipt.was_cancelled();
+                let (status, profile) = receipt.verify_exit(status)?;
+                if cancelled {
+                    *termination.lock() = Some(NativeProfileTermination::Cancelled);
+                    Ok(NativeProfileTaskOutcome::Cancelled)
+                } else {
+                    *termination.lock() = Some(NativeProfileTermination::Completed);
+                    Ok(NativeProfileTaskOutcome::Completed(status, profile))
+                }
+            }
+            .await;
+            if let Err(error) = result_sender.try_send(observed) {
+                log::debug!("Native Profile Task result owner closed: {error}");
+            }
+            drop(finish_guard);
+        })
+        .detach();
+        Ok((builder, NativeProfileTaskObservation { result }))
+    }
+
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    fn new_with_linux_task(
+        launch: SpawnInTerminal,
+        structured_task: Option<task::StructuredTaskHandle>,
+        invocation: &TaskBuildInvocation,
+        completion: &LinuxTaskCompletion,
+        observer: LinuxTerminalTask,
+        window_id: u64,
+        cx: &App,
+    ) -> Result<(
+        Task<Result<Self>>,
+        futures::channel::oneshot::Receiver<OriginalTaskActor>,
+    )> {
+        let helper_command = match &observer {
+            LinuxTerminalTask::Coverage(_) => "observe-coverage-task",
+            LinuxTerminalTask::NativeProfile(..) => "observe-native-profile-task",
+        };
         let helper = std::env::current_exe()?;
         let helper = helper
             .to_str()
-            .context("Coverage Task helper path is not Unicode")?;
+            .context("Native Task helper path is not Unicode")?;
         let expected_image = std::fs::File::open("/proc/self/exe")?;
-        let completion = LinuxTaskCompletion::bind()?;
         let socket = completion.socket();
         let socket = socket
             .to_str()
-            .context("Coverage Task socket path is not Unicode")?;
-        let (terminal_exit_sender, terminal_exit) = bounded(1);
+            .context("Native Task socket path is not Unicode")?;
         let (completion_sender, completion_rx) = bounded(1);
         let (actor_sender, original_actor) = futures::channel::oneshot::channel();
         let builder = Self::new_with_environment_mode(
@@ -1548,11 +1759,7 @@ impl TerminalBuilder {
             }),
             Shell::WithArguments {
                 program: helper.to_owned(),
-                args: vec![
-                    "observe-coverage-task".into(),
-                    "--socket".into(),
-                    socket.into(),
-                ],
+                args: vec![helper_command.into(), "--socket".into(), socket.into()],
                 title_override: None,
             },
             HashMap::default(),
@@ -1567,25 +1774,15 @@ impl TerminalBuilder {
             cx,
             Vec::new(),
             PathStyle::local(),
-            TerminalEnvironmentMode::Coverage(
-                CoverageTaskSpawn {
+            TerminalEnvironmentMode::LinuxTask(
+                LinuxTaskSpawn {
                     expected_image,
                     original_actor: actor_sender,
                 },
-                terminal_exit_sender,
+                observer,
             ),
         );
-        Ok((
-            builder,
-            CoverageTaskObservation {
-                completion,
-                invocation,
-                report,
-                original_actor,
-                terminal_exit,
-                executor: cx.background_executor().clone(),
-            },
-        ))
+        Ok((builder, original_actor))
     }
 
     fn new_with_environment_mode(
@@ -1751,6 +1948,25 @@ impl TerminalBuilder {
             //Spawn a task so the Alacritty EventLoop (or the subprocess reader) can communicate with us
             //TODO: Remove with a bounded sender which can be dispatched on &self
             let (events_tx, events_rx) = unbounded();
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            let (linux_spawn, coverage_exit, native_profile, events_tx) = match environment_mode {
+                TerminalEnvironmentMode::LinuxTask(spawn, LinuxTerminalTask::Coverage(exit)) => {
+                    (Some(spawn), Some(exit), None, events_tx)
+                }
+                TerminalEnvironmentMode::LinuxTask(
+                    spawn,
+                    LinuxTerminalTask::NativeProfile(control, exit),
+                ) => {
+                    let events_tx = native_profile_terminal_events(
+                        events_tx,
+                        exit,
+                        control.finished.clone(),
+                        &background_executor,
+                    );
+                    (Some(spawn), None, Some(control), events_tx)
+                }
+                _ => (None, None, None, events_tx),
+            };
             //Set up the terminal...
             let term = new_term(
                 &config,
@@ -1767,11 +1983,6 @@ impl TerminalBuilder {
                 "The structured Task was cancelled before process creation"
             );
 
-            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-            let (coverage, coverage_exit) = match environment_mode {
-                TerminalEnvironmentMode::Coverage(coverage, exit) => (Some(coverage), Some(exit)),
-                _ => (None, None),
-            };
             // When `no_pty` is set (headless hosts), run the task as a plain
             // subprocess and pump its piped output into the same emulator the
             // PTY path would feed.
@@ -1793,7 +2004,7 @@ impl TerminalBuilder {
                     events_tx,
                     &background_executor,
                     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-                    coverage,
+                    linux_spawn,
                 )
                 .await
                 {
@@ -1869,16 +2080,14 @@ impl TerminalBuilder {
                 };
 
                 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-                let pty = if let Some(coverage) = coverage {
+                let pty = if let Some(spawn) = linux_spawn {
                     let mut pty = pty;
-                    let actor = OriginalTaskActor::from_std_child(
-                        pty.child_mut(),
-                        &coverage.expected_image,
-                    )
-                    .and_then(|actor| coverage.send_actor(actor));
+                    let actor =
+                        OriginalTaskActor::from_std_child(pty.child_mut(), &spawn.expected_image)
+                            .and_then(|actor| spawn.send_actor(actor));
                     if let Err(error) = actor {
                         if let Err(stop_error) = pty.child_mut().kill() {
-                            log::debug!("Coverage helper was already unavailable: {stop_error}");
+                            log::debug!("Native Task helper was already unavailable: {stop_error}");
                         }
                         return Err(error.into());
                     }
@@ -1911,6 +2120,8 @@ impl TerminalBuilder {
                 completion_tx,
                 #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
                 coverage_exit,
+                #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+                native_profile,
                 task_completion: OnceLock::new(),
                 term,
                 term_config: config,
@@ -2025,6 +2236,25 @@ impl TerminalBuilder {
     }
 
     pub fn subscribe(mut self, cx: &Context<Terminal>) -> Terminal {
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        if let Some(profile) = &self.terminal.native_profile
+            && let Some(handle) = self
+                .terminal
+                .task
+                .as_ref()
+                .and_then(|task| task.structured_task.clone())
+        {
+            let finished = profile.finished.clone();
+            let termination = profile.termination.clone();
+            let terminal_id = task::StructuredTerminalId(cx.entity_id().as_u64());
+            cx.spawn(async move |_, cx| {
+                finished.closed().await;
+                if *termination.lock() == Some(NativeProfileTermination::Cancelled) {
+                    cx.update(|cx| handle.mark_cancelled(Some(terminal_id), true, cx));
+                }
+            })
+            .detach();
+        }
         if let Some(mut command) = self.remote_task_cancel_command.take() {
             let (send, receive) = bounded(1);
             self.terminal.remote_task_cancellation = Some(RemoteTaskCancellation {
@@ -2246,6 +2476,8 @@ pub struct Terminal {
     completion_tx: Option<Sender<Option<ExitStatus>>>,
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
     coverage_exit: Option<Sender<Option<ExitStatus>>>,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+    native_profile: Option<NativeProfileControl>,
     task_completion:
         OnceLock<futures::future::Shared<futures::future::BoxFuture<'static, Option<ExitStatus>>>>,
     term: Arc<AlacrittyTermLock>,
@@ -3826,6 +4058,11 @@ impl Terminal {
         if let Some(task) = self.task()
             && task.status == TaskStatus::Running
         {
+            #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+            if let Some(profile) = &mut self.native_profile {
+                profile.cancel();
+                return;
+            }
             if self.request_remote_task_cancellation() {
                 return;
             }
@@ -3994,7 +4231,7 @@ impl Terminal {
         if exit_status.and_then(|status| status.code()).is_none() {
             self.request_remote_task_cancellation();
         }
-        let remote_cancellation_requested = self
+        let cancellation_requested = self
             .remote_task_cancellation
             .as_ref()
             .is_some_and(|cancellation| cancellation.requested);
@@ -4002,6 +4239,18 @@ impl Terminal {
             .remote_task_cancellation
             .as_ref()
             .is_none_or(|cancellation| cancellation.confirmed);
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        let (cancellation_requested, termination_confirmed) = self.native_profile.as_ref().map_or(
+            (cancellation_requested, termination_confirmed),
+            |profile| {
+                let termination = *profile.termination.lock();
+                let cancelled = termination == Some(NativeProfileTermination::Cancelled);
+                (
+                    cancelled || termination.is_none() && profile.cancellation_requested,
+                    cancelled,
+                )
+            },
+        );
         let task = match &mut self.task {
             Some(task) => task,
             None => {
@@ -4035,7 +4284,7 @@ impl Terminal {
         if let Some(handle) = task.structured_task.as_ref() {
             match handle.state() {
                 state
-                    if remote_cancellation_requested
+                    if cancellation_requested
                         || matches!(state, task::StructuredTaskState::Cancelled { .. }) =>
                 {
                     handle.mark_cancelled(state.terminal_id(), termination_confirmed, cx);
@@ -4205,7 +4454,7 @@ async fn spawn_task_subprocess(
     term: Arc<AlacrittyTermLock>,
     events_tx: futures::channel::mpsc::UnboundedSender<PtyEvent>,
     executor: &BackgroundExecutor,
-    #[cfg(all(target_os = "linux", feature = "rust-coverage"))] coverage: Option<CoverageTaskSpawn>,
+    #[cfg(all(target_os = "linux", feature = "rust-coverage"))] linux_spawn: Option<LinuxTaskSpawn>,
 ) -> Result<SubprocessHandle> {
     use futures::io::AsyncReadExt as _;
     use std::process::Stdio;
@@ -4223,9 +4472,9 @@ async fn spawn_task_subprocess(
     let mut child =
         util::process::Child::spawn(command, Stdio::null(), Stdio::piped(), Stdio::piped())?;
     #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
-    if let Some(coverage) = coverage {
-        let actor = OriginalTaskActor::from_smol_child(&mut child, &coverage.expected_image)
-            .and_then(|actor| coverage.send_actor(actor));
+    if let Some(spawn) = linux_spawn {
+        let actor = OriginalTaskActor::from_smol_child(&mut child, &spawn.expected_image)
+            .and_then(|actor| spawn.send_actor(actor));
         if let Err(error) = actor {
             use std::ops::DerefMut as _;
             let stop = child.deref_mut().kill();
@@ -4320,6 +4569,26 @@ async fn spawn_task_subprocess(
 
 impl Drop for Terminal {
     fn drop(&mut self) {
+        #[cfg(all(target_os = "linux", feature = "rust-coverage"))]
+        if let Some(mut profile) = self.native_profile.take() {
+            profile.cancel();
+            let terminal_type =
+                std::mem::replace(&mut self.terminal_type, TerminalType::DisplayOnly);
+            let subprocess = self.subprocess.take();
+            self.background_executor
+                .spawn(async move {
+                    // Closing the PTY first would signal the helper before it can reap the group.
+                    profile.finished.closed().await;
+                    if let TerminalType::Pty { pty_tx, .. } = terminal_type {
+                        pty_tx.shutdown();
+                    }
+                    if let Some(subprocess) = subprocess {
+                        subprocess.kill();
+                    }
+                })
+                .detach();
+            return;
+        }
         if !self.process_finished {
             self.request_remote_task_cancellation();
         }

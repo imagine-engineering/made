@@ -21,7 +21,9 @@ use std::{
 
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const CANCELLATION_TIMEOUT: Duration = Duration::from_secs(10);
 const COMPLETION_ACKNOWLEDGED: u8 = 1;
+const CANCEL_NATIVE_PROFILE: u8 = 2;
 const MAX_COVERAGE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_PROFILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SYMBOL_BYTES: usize = 16 * 1024 * 1024;
@@ -380,7 +382,8 @@ impl LinuxTaskCompletion {
         invocation: TaskBuildInvocation,
         report: Option<CoverageTaskReportReservation>,
     ) -> io::Result<LinuxTaskReceipt<SealedCoverageTaskReport>> {
-        self.observe_output(actor, invocation, report).await
+        self.observe_output(actor, invocation, report, future::pending())
+            .await
     }
 
     pub async fn observe_profile(
@@ -389,7 +392,19 @@ impl LinuxTaskCompletion {
         invocation: TaskBuildInvocation,
         profile: NativeProfileTaskReservation,
     ) -> io::Result<LinuxTaskReceipt<SealedNativeProfileTask>> {
-        self.observe_output(actor, invocation, Some(profile)).await
+        self.observe_cancellable_profile(actor, invocation, profile, future::pending())
+            .await
+    }
+
+    pub async fn observe_cancellable_profile(
+        self,
+        actor: OriginalTaskActor,
+        invocation: TaskBuildInvocation,
+        profile: NativeProfileTaskReservation,
+        cancel: impl Future<Output = ()>,
+    ) -> io::Result<LinuxTaskReceipt<SealedNativeProfileTask>> {
+        self.observe_output(actor, invocation, Some(profile), cancel)
+            .await
     }
 
     async fn observe_output<Output: TaskOutputReservation>(
@@ -397,6 +412,7 @@ impl LinuxTaskCompletion {
         actor: OriginalTaskActor,
         invocation: TaskBuildInvocation,
         output: Option<Output>,
+        cancel: impl Future<Output = ()>,
     ) -> io::Result<LinuxTaskReceipt<Output::Sealed>> {
         if let Some(output) = output.as_ref() {
             output.validate_invocation(&invocation)?;
@@ -421,28 +437,30 @@ impl LinuxTaskCompletion {
         .await?;
 
         until_deadline(COMPLETION_TIMEOUT, async {
-            let mut response_challenge = [0; 32];
-            connection.read_exact(&mut response_challenge).await?;
-            if response_challenge != challenge {
-                return Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "Coverage Task receipt did not match its invocation",
-                ));
-            }
-            let mut response = [0; 2];
-            connection.read_exact(&mut response).await?;
-            let mut trailing = [0; 1];
-            if connection.read(&mut trailing).await? != 0 {
-                return Err(invalid_completion());
-            }
-            let termination = match response {
-                [0, code] => LinuxTaskTermination::Exited(code),
-                [1, signal @ 1..=64] => LinuxTaskTermination::Signalled(signal),
-                _ => return Err(invalid_completion()),
+            let response = read_task_termination(connection.clone(), challenge);
+            let mut response = std::pin::pin!(response);
+            let (termination, cancelled) = match future::or(
+                async {
+                    cancel.await;
+                    Ok(None)
+                },
+                async { response.as_mut().await.map(Some) },
+            )
+            .await?
+            {
+                Some(termination) => (termination, false),
+                None => {
+                    let termination = until_deadline(CANCELLATION_TIMEOUT, async {
+                        connection.write_all(&[CANCEL_NATIVE_PROFILE]).await?;
+                        response.await
+                    })
+                    .await?;
+                    (termination, true)
+                }
             };
             actor.revalidate()?;
-            let output = match (termination, output) {
-                (LinuxTaskTermination::Exited(0), Some(output)) => {
+            let output = match (cancelled, termination, output) {
+                (false, LinuxTaskTermination::Exited(0), Some(output)) => {
                     Some(smol::unblock(move || output.seal()).await?)
                 }
                 _ => None,
@@ -452,9 +470,35 @@ impl LinuxTaskCompletion {
             Ok(LinuxTaskReceipt {
                 termination,
                 output,
+                cancelled,
             })
         })
         .await
+    }
+}
+
+async fn read_task_termination(
+    mut connection: UnixStream,
+    challenge: [u8; 32],
+) -> io::Result<LinuxTaskTermination> {
+    let mut response_challenge = [0; 32];
+    connection.read_exact(&mut response_challenge).await?;
+    if response_challenge != challenge {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Coverage Task receipt did not match its invocation",
+        ));
+    }
+    let mut response = [0; 2];
+    connection.read_exact(&mut response).await?;
+    let mut trailing = [0; 1];
+    if connection.read(&mut trailing).await? != 0 {
+        return Err(invalid_completion());
+    }
+    match response {
+        [0, code] => Ok(LinuxTaskTermination::Exited(code)),
+        [1, signal @ 1..=64] => Ok(LinuxTaskTermination::Signalled(signal)),
+        _ => Err(invalid_completion()),
     }
 }
 
@@ -488,9 +532,14 @@ impl LinuxTaskTermination {
 pub struct LinuxTaskReceipt<Output> {
     termination: LinuxTaskTermination,
     output: Option<Output>,
+    cancelled: bool,
 }
 
 impl<Output> LinuxTaskReceipt<Output> {
+    pub fn was_cancelled(&self) -> bool {
+        self.cancelled
+    }
+
     pub fn verify_exit(self, status: ExitStatus) -> io::Result<(ExitStatus, Option<Output>)> {
         if self.termination != LinuxTaskTermination::from_status(status)? {
             return Err(invalid_completion());
@@ -567,6 +616,9 @@ async fn run_task(socket: &Path, kind: TaskKind) -> io::Result<ExitStatus> {
         connection.shutdown(Shutdown::Write)?;
         let mut acknowledged = [0; 1];
         connection.read_exact(&mut acknowledged).await?;
+        if matches!(kind, TaskKind::NativeProfile) && acknowledged == [CANCEL_NATIVE_PROFILE] {
+            connection.read_exact(&mut acknowledged).await?;
+        }
         if acknowledged != [COMPLETION_ACKNOWLEDGED] {
             return Err(invalid_completion());
         }
@@ -581,6 +633,18 @@ async fn observer_interruption(connection: &mut UnixStream) -> io::Error {
         Ok(0) => io::Error::new(io::ErrorKind::Interrupted, "Task observer disconnected"),
         Ok(_) => invalid_completion(),
         Err(error) => error,
+    }
+}
+
+async fn wait_for_profile_cancellation(connection: &mut UnixStream) -> io::Result<()> {
+    let mut command = [0; 1];
+    match connection.read(&mut command).await? {
+        0 => Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "Task observer disconnected",
+        )),
+        _ if command == [CANCEL_NATIVE_PROFILE] => Ok(()),
+        _ => Err(invalid_completion()),
     }
 }
 
@@ -646,9 +710,10 @@ async fn run_profile_workload(
     }
     let child = command.spawn()?;
     let group = child.id() as libc::pid_t;
-    let result = future::race(wait_for_profile_exit(group), async {
-        Err(observer_interruption(connection).await)
-    })
+    let result = future::or(
+        wait_for_profile_cancellation(connection),
+        wait_for_profile_exit(group),
+    )
     .await;
     let status = smol::unblock(move || finish_profile_group(child, group)).await?;
     result.map(|()| status)
