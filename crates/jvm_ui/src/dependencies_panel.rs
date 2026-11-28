@@ -122,11 +122,33 @@ pub enum BuildToolView {
 }
 
 impl BuildToolView {
+    const ALL: [Self; 3] = [Self::Dependencies, Self::Gradle, Self::Maven];
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Dependencies => "Dependencies",
             Self::Gradle => "Gradle",
             Self::Maven => "Maven",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum BuildToolControlsLayout {
+    #[default]
+    Wide,
+    Compact,
+    Narrow,
+}
+
+impl BuildToolControlsLayout {
+    fn for_width(width: Pixels, rem_size: Pixels) -> Self {
+        if width < rem_size * 8.5 {
+            Self::Narrow
+        } else if width < rem_size * 16.5 {
+            Self::Compact
+        } else {
+            Self::Wide
         }
     }
 }
@@ -727,6 +749,7 @@ pub struct DependenciesPanel {
     preferences_write: Option<gpui::Task<()>>,
     preferences_generation: u64,
     show_graph_search: bool,
+    controls_layout: BuildToolControlsLayout,
     active_before_launch_runs: HashSet<SavedConfiguration>,
     recent_configurations: VecDeque<SavedConfiguration>,
     configuration_selections: HashMap<LanguageToolNodeId, SavedConfiguration>,
@@ -3173,6 +3196,7 @@ impl DependenciesPanel {
                     preferences_write: None,
                     preferences_generation: 0,
                     show_graph_search: false,
+                    controls_layout: BuildToolControlsLayout::default(),
                     active_before_launch_runs: HashSet::new(),
                     recent_configurations: VecDeque::new(),
                     configuration_selections: HashMap::new(),
@@ -10130,6 +10154,229 @@ impl DependenciesPanel {
     }
 }
 
+impl DependenciesPanel {
+    fn compact_view_selector(&self, window: &mut Window, cx: &mut Context<Self>) -> gpui::Div {
+        let active = self.view;
+        let panel = cx.weak_entity();
+        let menu = ui::ContextMenu::build(window, cx, move |mut menu, _, _| {
+            for view in BuildToolView::ALL {
+                let panel = panel.clone();
+                menu = menu.toggleable_entry(
+                    format!("{} view", view.label()),
+                    active == view,
+                    ui::IconPosition::End,
+                    None,
+                    move |window, cx| {
+                        panel
+                            .update(cx, |panel, cx| panel.set_view(view, window, cx))
+                            .log_err();
+                    },
+                );
+            }
+            menu
+        });
+        div().min_w_0().flex_1().child(
+            ui::DropdownMenu::new_with_element(
+                "groovy-compact-build-tool-view",
+                div()
+                    .min_w_0()
+                    .child(Label::new(active.label()).size(LabelSize::Small).truncate())
+                    .into_any_element(),
+                menu,
+            )
+            .style(ui::DropdownStyle::Ghost)
+            .full_width(true)
+            .trigger_size(ButtonSize::Compact)
+            .aria_label("Build tool view")
+            .aria_value(active.label())
+            .tab_index(0_isize),
+        )
+    }
+
+    fn tree_expansion_menu(&self) -> ui::PopoverMenu<ui::ContextMenu> {
+        let focus = self.focus_handle.clone();
+        let can_expand = self.host.can_expand_all();
+        let can_collapse = self.host.can_collapse_all();
+        ui::PopoverMenu::new("groovy-tree-expansion-popover")
+            .trigger(
+                IconButton::new("groovy-tree-expansion", IconName::ExpandVertical)
+                    .aria_label("Tree expansion")
+                    .tooltip(Tooltip::text("Tree expansion"))
+                    .tab_index(0_isize),
+            )
+            .menu(move |window, cx| {
+                let focus = focus.clone();
+                Some(ui::ContextMenu::build(window, cx, move |menu, _, _| {
+                    menu.context(focus)
+                        .action_disabled_when(
+                            !can_expand,
+                            "Expand All",
+                            Box::new(language_tool_tree::ExpandAll),
+                        )
+                        .action_disabled_when(
+                            !can_collapse,
+                            "Collapse All",
+                            Box::new(language_tool_tree::CollapseAll),
+                        )
+                }))
+            })
+    }
+
+    fn render_tree_controls(
+        &self,
+        show_search: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
+        let panel = cx.weak_entity();
+        let layout = self.controls_layout;
+        let show_tree_controls = self.preferences.show_toolbar(self.view);
+        v_flex()
+            .w_full()
+            .min_w_0()
+            .flex_shrink_0()
+            .on_children_prepainted(move |bounds, window, cx| {
+                let Some(header) = bounds.first() else {
+                    return;
+                };
+                let next = BuildToolControlsLayout::for_width(header.size.width, window.rem_size());
+                if next == layout {
+                    return;
+                }
+                let panel = panel.clone();
+                cx.defer(move |cx| {
+                    panel
+                        .update(cx, |panel, cx| {
+                            if panel.controls_layout != next {
+                                panel.controls_layout = next;
+                                cx.notify();
+                            }
+                        })
+                        .log_err();
+                });
+            })
+            .child(
+                h_flex()
+                    .id("groovy-build-tool-views")
+                    .debug_selector(|| "groovy-build-tool-views".into())
+                    .key_context("GroovyDependenciesPanelControls")
+                    .role(Role::Group)
+                    .aria_label("Build tool views")
+                    .w_full()
+                    .min_w_0()
+                    .px_2()
+                    .h_8()
+                    .flex_shrink_0()
+                    .gap_1()
+                    .justify_between()
+                    .when(layout == BuildToolControlsLayout::Wide, |header| {
+                        header.children(BuildToolView::ALL.into_iter().map(|view| {
+                            Button::new(format!("groovy-build-view-{}", view.label()), view.label())
+                                .aria_label(format!("{} view", view.label()))
+                                .label_size(LabelSize::Small)
+                                .toggle_state(self.view == view)
+                                .tab_index(0_isize)
+                                .on_click(cx.listener(move |panel, _, window, cx| {
+                                    panel.set_view(view, window, cx)
+                                }))
+                        }))
+                    })
+                    .when(layout != BuildToolControlsLayout::Wide, |header| {
+                        header.child(self.compact_view_selector(window, cx))
+                    })
+                    .child(
+                        div()
+                            .debug_selector(|| "groovy-panel-menu-trigger".into())
+                            .flex_shrink_0()
+                            .child(self.panel_menu(cx)),
+                    ),
+            )
+            .child(
+                h_flex()
+                    .id("groovy-dependencies-toolbar")
+                    .debug_selector(|| "groovy-dependencies-toolbar".into())
+                    .key_context("GroovyDependenciesPanelControls")
+                    .role(Role::Group)
+                    .aria_label("Dependency tree toolbar")
+                    .w_full()
+                    .min_w_0()
+                    .h_8()
+                    .px_2()
+                    .gap_1()
+                    .flex_shrink_0()
+                    .child(
+                        IconButton::new("groovy-dependencies-refresh", IconName::RefreshTitle)
+                            .aria_label("Refresh Dependencies")
+                            .tooltip(Tooltip::text("Refresh Dependencies"))
+                            .tab_index(0_isize)
+                            .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
+                    )
+                    .when(
+                        show_tree_controls && layout != BuildToolControlsLayout::Narrow,
+                        |toolbar| {
+                            toolbar
+                                .child(
+                                    IconButton::new(
+                                        "groovy-dependencies-expand-all",
+                                        IconName::ExpandVertical,
+                                    )
+                                    .aria_label("Expand All")
+                                    .tooltip(Tooltip::text("Expand All"))
+                                    .disabled(!self.host.can_expand_all())
+                                    .tab_index(0_isize)
+                                    .on_click(cx.listener(
+                                        |panel, _, _, cx| {
+                                            panel.set_all_tree_rows_expanded(true, cx)
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    IconButton::new(
+                                        "groovy-dependencies-collapse-all",
+                                        IconName::ListCollapse,
+                                    )
+                                    .aria_label("Collapse All")
+                                    .tooltip(Tooltip::text("Collapse All"))
+                                    .disabled(!self.host.can_collapse_all())
+                                    .tab_index(0_isize)
+                                    .on_click(cx.listener(
+                                        |panel, _, _, cx| {
+                                            panel.set_all_tree_rows_expanded(false, cx)
+                                        },
+                                    )),
+                                )
+                        },
+                    )
+                    .when(
+                        show_tree_controls && layout == BuildToolControlsLayout::Narrow,
+                        |toolbar| toolbar.child(self.tree_expansion_menu()),
+                    )
+                    .child(
+                        IconButton::new(
+                            "groovy-toggle-dependency-search",
+                            IconName::MagnifyingGlass,
+                        )
+                        .aria_label("Search dependency tree")
+                        .tooltip(Tooltip::text("Search dependency tree"))
+                        .toggle_state(show_search)
+                        .tab_index(0_isize)
+                        .on_click(cx.listener(|panel, _, window, cx| {
+                            if panel.show_graph_search
+                                && panel.graph_search.read(cx).text(cx).is_empty()
+                            {
+                                panel.show_graph_search = false;
+                                window.focus(&panel.focus_handle, cx);
+                            } else {
+                                panel.show_graph_search = true;
+                                window.focus(&panel.graph_search.read(cx).focus_handle(cx), cx);
+                            }
+                            cx.notify();
+                        })),
+                    ),
+            )
+    }
+}
+
 impl Render for DependenciesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let rows = self.host.visible_rows_snapshot();
@@ -10305,85 +10552,7 @@ impl Render for DependenciesPanel {
                     panel.activate_selected(window, cx)
                 },
             ))
-            .child(
-                h_flex()
-                    .id("groovy-build-tool-views")
-                    .debug_selector(|| "groovy-build-tool-views".into())
-                    .key_context("GroovyDependenciesPanelControls")
-                    .role(Role::Group)
-                    .aria_label("Build tool views")
-                    .px_2().h_8().flex_shrink_0()
-                    .gap_1().justify_between()
-                    .children(
-                        [
-                            BuildToolView::Dependencies,
-                            BuildToolView::Gradle,
-                            BuildToolView::Maven,
-                        ]
-                        .into_iter()
-                        .map(|view| {
-                            Button::new(format!("groovy-build-view-{}", view.label()), view.label())
-                                .aria_label(format!("{} view", view.label()))
-                                .label_size(LabelSize::Small)
-                                .toggle_state(self.view == view)
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(move |panel, _, window, cx| {
-                                    panel.set_view(view, window, cx)
-                                }))
-                        }),
-                    )
-                    .child(self.panel_menu(cx)),
-            )
-            .child(
-                h_flex()
-                    .id("groovy-dependencies-toolbar")
-                    .debug_selector(|| "groovy-dependencies-toolbar".into())
-                    .key_context("GroovyDependenciesPanelControls")
-                    .role(Role::Group)
-                    .aria_label("Dependency tree toolbar")
-                    .h_8().px_2().gap_1().flex_shrink_0()
-                    .child(
-                        IconButton::new("groovy-dependencies-refresh", IconName::RefreshTitle)
-                            .aria_label("Refresh Dependencies")
-                            .tooltip(Tooltip::text("Refresh Dependencies"))
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, _, cx| panel.refresh(cx))),
-                    )
-                    .when(self.preferences.show_toolbar(self.view), |toolbar| toolbar
-                        .child(
-                            IconButton::new("groovy-dependencies-expand-all", IconName::ExpandVertical)
-                                .aria_label("Expand All")
-                                .tooltip(Tooltip::text("Expand All"))
-                                .disabled(!self.host.can_expand_all())
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.set_all_tree_rows_expanded(true, cx))),
-                        )
-                        .child(
-                            IconButton::new("groovy-dependencies-collapse-all", IconName::ListCollapse)
-                                .aria_label("Collapse All")
-                                .tooltip(Tooltip::text("Collapse All"))
-                                .disabled(!self.host.can_collapse_all())
-                                .tab_index(0_isize)
-                                .on_click(cx.listener(|panel, _, _, cx| panel.set_all_tree_rows_expanded(false, cx))),
-                        ))
-                    .child(
-                        IconButton::new("groovy-toggle-dependency-search", IconName::MagnifyingGlass)
-                            .aria_label("Search dependency tree")
-                            .tooltip(Tooltip::text("Search dependency tree"))
-                            .toggle_state(show_search)
-                            .tab_index(0_isize)
-                            .on_click(cx.listener(|panel, _, window, cx| {
-                                if panel.show_graph_search && panel.graph_search.read(cx).text(cx).is_empty() {
-                                    panel.show_graph_search = false;
-                                    window.focus(&panel.focus_handle, cx);
-                                } else {
-                                    panel.show_graph_search = true;
-                                    window.focus(&panel.graph_search.read(cx).focus_handle(cx), cx);
-                                }
-                                cx.notify();
-                            })),
-                    )
-            )
+            .child(self.render_tree_controls(show_search, window, cx))
             .when(show_search, |panel| panel.child(
                 h_flex()
                     .key_context("GroovyDependenciesPanelControls")
@@ -29209,6 +29378,177 @@ mod tests {
         dock.update_in(cx, |dock, window, cx| {
             dock.resize_active_panel(Some(px(324.)), None, window, cx);
         });
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(px(180.)), None, window, cx);
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.set_view(BuildToolView::Dependencies, window, cx)
+        });
+        for _ in 0..3 {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.run_until_parked();
+        }
+        let compact_header = cx
+            .debug_bounds("groovy-build-tool-views")
+            .expect("compact header");
+        assert!((px(174.)..=px(180.)).contains(&compact_header.size.width));
+        cx.update(|window, _| {
+            let tree: serde_json::Value = serde_json::from_str(
+                &window
+                    .debug_a11y_tree_json()
+                    .expect("compact header accessibility"),
+            )
+            .expect("accessibility JSON");
+            let nodes = tree["nodes"].as_object().expect("nodes");
+            assert!(
+                nodes.values().any(|node| {
+                    node["aria"]["label"] == "Build tool view"
+                        && node["aria"]["role"] == "ComboBox"
+                        && node["aria"]["value"] == "Dependencies"
+                }),
+                "an 180-pixel dock needs a compact view selector with its current value"
+            );
+        });
+        let queries_before_compact_controls = project_queries.load(Ordering::SeqCst);
+        let control_tree = |cx: &mut gpui::VisualTestContext| {
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+                serde_json::from_str::<serde_json::Value>(
+                    &window
+                        .debug_a11y_tree_json()
+                        .expect("build controls accessibility"),
+                )
+                .expect("accessibility JSON")
+            })
+        };
+        cx.update(|_, cx| {
+            let menu_context = std::rc::Rc::new(
+                gpui::KeyBindingContextPredicate::parse("menu").expect("menu key context"),
+            );
+            for (key, action) in [("escape", "menu::Cancel"), ("enter", "menu::Confirm")] {
+                let action = cx.build_action(action, None).expect("standard menu action");
+                cx.bind_keys([gpui::KeyBinding::load(
+                    key,
+                    action,
+                    Some(menu_context.clone()),
+                    false,
+                    None,
+                    &gpui::DummyKeyboardMapper,
+                )
+                .expect("standard menu key binding")]);
+            }
+        });
+        focus_tree_control(cx, "Build tool view");
+        press_tree_key(cx, "enter");
+        settle_tool_menu(cx);
+        select_open_menu_item(cx, "Gradle view");
+        press_tree_key(cx, "escape");
+        settle_tool_menu(cx);
+        let tree = control_tree(cx);
+        let focus = tree["gpui_focus"]
+            .as_str()
+            .expect("focus after dismissing view menu");
+        assert_eq!(tree["nodes"][focus]["aria"]["label"], "Build tool view");
+
+        focus_tree_control(cx, "Search dependency tree");
+        press_tree_key(cx, "enter");
+        cx.simulate_input("application");
+        cx.run_until_parked();
+        for view in [
+            BuildToolView::Gradle,
+            BuildToolView::Maven,
+            BuildToolView::Dependencies,
+        ] {
+            focus_tree_control(cx, "Build tool view");
+            press_tree_key(cx, "enter");
+            settle_tool_menu(cx);
+            select_open_menu_item(cx, &format!("{} view", view.label()));
+            press_tree_key(cx, "enter");
+            panel.read_with(cx, |panel, _| assert_eq!(panel.view, view));
+            let tree = control_tree(cx);
+            let nodes = tree["nodes"].as_object().expect("nodes");
+            assert!(nodes.values().any(|node| {
+                node["aria"]["label"] == "Build tool view" && node["aria"]["value"] == view.label()
+            }));
+            assert!(nodes.values().any(|node| {
+                node["aria"]["label"] == "Search admitted dependency graph facts"
+                    && node["aria"]["value"] == "application"
+            }));
+        }
+
+        let narrow_width = cx.update(|window, _| window.rem_size() * 8.);
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(narrow_width), None, window, cx);
+        });
+        for _ in 0..3 {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            cx.run_until_parked();
+        }
+        let tree = control_tree(cx);
+        let nodes = tree["nodes"].as_object().expect("nodes");
+        for label in [
+            "Build tool view",
+            "Build tools panel menu",
+            "Refresh Dependencies",
+            "Tree expansion",
+            "Search dependency tree",
+        ] {
+            assert!(
+                nodes.values().any(|node| node["aria"]["label"] == label),
+                "narrow panel keeps {label} reachable"
+            );
+        }
+        assert!(nodes.values().any(|node| {
+            node["aria"]["label"] == "Search admitted dependency graph facts"
+                && node["aria"]["value"] == "application"
+        }));
+        focus_tree_control(cx, "Clear dependency graph fact search");
+        press_tree_key(cx, "enter");
+        focus_tree_control(cx, "Search dependency tree");
+        press_tree_key(cx, "enter");
+        panel.update(cx, |panel, cx| panel.set_all_tree_rows_expanded(false, cx));
+        for (label, expanded) in [("Expand All", true), ("Collapse All", false)] {
+            focus_tree_control(cx, "Tree expansion");
+            press_tree_key(cx, "enter");
+            settle_tool_menu(cx);
+            select_open_menu_item(cx, label);
+            press_tree_key(cx, "enter");
+            panel.read_with(cx, |panel, _| {
+                assert_eq!(panel.host.can_collapse_all(), expanded)
+            });
+        }
+        let header = cx
+            .debug_bounds("groovy-build-tool-views")
+            .expect("narrow header");
+        let menu_trigger = cx
+            .debug_bounds("groovy-panel-menu-trigger")
+            .expect("panel menu trigger");
+        assert!(header.left() <= menu_trigger.left() && menu_trigger.right() <= header.right());
+        cx.simulate_click(menu_trigger.center(), Default::default());
+        settle_tool_menu(cx);
+        select_open_menu_item(cx, "Float");
+        press_tree_key(cx, "escape");
+        let toolbar = cx
+            .debug_bounds("groovy-dependencies-toolbar")
+            .expect("narrow toolbar");
+        let tree = cx
+            .debug_bounds("language-tool-tree")
+            .expect("narrow project tree");
+        assert!(tree.top() - toolbar.bottom() <= px(28.));
+        assert_eq!(
+            project_queries.load(Ordering::SeqCst),
+            queries_before_compact_controls
+        );
+
+        dock.update_in(cx, |dock, window, cx| {
+            dock.resize_active_panel(Some(px(324.)), None, window, cx);
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.set_view(BuildToolView::Maven, window, cx)
+        });
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        cx.run_until_parked();
+
         let queries_before_options = project_queries.load(Ordering::SeqCst);
         let navigation_before_options = panel.read_with(cx, |panel, _| {
             panel.navigation.keys().cloned().collect::<HashSet<_>>()

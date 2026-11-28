@@ -358,6 +358,12 @@ Use a POM or `settings.xml` to define profiles for Maven 3.9.16. This version
 ignores standalone `profiles.xml` files beside a POM.
 [Maven 3.9.16 project builder](https://maven.apache.org/ref/3.9.16/maven-core/xref/org/apache/maven/project/DefaultProjectBuilder.html#L698)
 
+As the dock narrows, **Build tool view** shows the active view and lets you
+switch between Dependencies, Gradle, and Maven. **Refresh Dependencies** and
+**Search dependency tree** stay on the toolbar. At the narrowest widths, open
+**Tree expansion** for **Expand All** or **Collapse All**. An active search
+stays visible when you switch views.
+
 Open the project or module row menu for import, reload, unlink, and Gradle
 metadata synchronization. These commands require the relevant provider
 capabilities and a trusted project. These actions can execute build configuration
