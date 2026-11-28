@@ -327,6 +327,8 @@ async fn run_selected_java_debug(
             .timer(Duration::from_millis(100))
             .await;
     }
+    let verify_hooks =
+        !connected || std::env::var_os("GROOVY_VERIFY_CONNECTED_DEBUG_HOOKS").is_some();
     let before_debug = project_root.join(".groovy-before-debug");
     let after_debug = project_root.join(".groovy-after-debug");
     if !connected {
@@ -445,11 +447,8 @@ async fn run_selected_java_debug(
             .await;
     };
     assert!(session.read_with(cx, |session, _| session.is_attached()));
-    if !connected {
-        assert!(
-            before_debug.is_file(),
-            "the before-debug Task runs before the wrapper and DAP attach"
-        );
+    let before_debug_at_breakpoint = before_debug.is_file();
+    if verify_hooks {
         assert!(
             !after_debug.exists(),
             "the after-debug Task cannot run at a breakpoint"
@@ -532,18 +531,19 @@ async fn run_selected_java_debug(
             .timer(Duration::from_millis(100))
             .await;
     };
-    if !connected {
+    if verify_hooks {
         let deadline = Instant::now() + Duration::from_secs(15);
-        while !after_debug.is_file() {
+        while !after_debug.is_file() && Instant::now() < deadline {
             cx.run_until_parked();
-            assert!(
-                Instant::now() < deadline,
-                "the after-debug Task did not run after the selected wrapper"
-            );
             cx.background_executor
                 .timer(Duration::from_millis(100))
                 .await;
         }
+        assert_eq!(
+            (before_debug_at_breakpoint, after_debug.is_file()),
+            (true, true),
+            "expected a before-debug Task at the breakpoint and an after-debug Task after the selected wrapper"
+        );
         println!(
             "Verified before-debug at the breakpoint and after-debug after the selected wrapper"
         );

@@ -592,14 +592,16 @@ and `after-build`, or `before-rebuild` and `after-rebuild`. Selecting Rebuild
 uses the rebuild tags. After Tasks wait for the wrapper to exit successfully,
 and the hook sequence requires project trust and its live Java provider.
 
-When you choose **Debug selected test** for a local Java test, saved Tasks
-can opt in with the `before-debug` and `after-debug` tags. Setup Tasks run
-before starting the Maven or Gradle test wrapper. After-debug Tasks wait
-for the adapter to end naturally and for the selected wrapper to exit
-successfully. A failed Task, Stop, or Detach skips the remaining hooks.
+When you choose **Debug selected test** for a Java test, saved Tasks can
+opt in with the `before-debug` and `after-debug` tags. In a directly
+connected project, eligible Tasks come from the selected worktree's saved
+Task files and run on the project host. Setup Tasks run before starting the
+Maven or Gradle test wrapper. After-debug Tasks wait for the adapter to end
+naturally and for the selected wrapper to exit successfully. A failed Task,
+Stop, or Detach skips the remaining hooks.
 
 Complete arbitrary-argument handling, Debug hooks for other launch types,
-and connected hooks and saved configuration runs remain open.
+and connected saved configuration runs and other lifecycle hooks remain open.
 Selected test results appear in the Tests view. Supported debugging uses
 the Debug panel.
 

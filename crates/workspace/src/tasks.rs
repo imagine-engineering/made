@@ -1135,7 +1135,7 @@ impl Workspace {
                     if let Some(check) = sequence_check {
                         check(project, cx)?;
                     }
-                    let current = target.prepare(project, cx)?;
+                    let current = target.prepare_for_hook(project, activation, cx)?;
                     anyhow::ensure!(
                         current == prepared,
                         "Named configuration '{}' changed before launch; select it again",

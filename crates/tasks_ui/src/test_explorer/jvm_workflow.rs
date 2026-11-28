@@ -4740,6 +4740,16 @@ async fn selected_java_case_with_debug_hooks(
                 std::fs::create_dir_all(root.path().join(".zed")).expect("remote fixture settings");
                 std::fs::copy(settings, root.path().join(".zed/settings.json"))
                     .expect("host-pinned Java provider settings");
+                if std::env::var_os("GROOVY_VERIFY_CONNECTED_DEBUG_HOOKS").is_some() {
+                    std::fs::write(
+                        root.path().join(".zed/tasks.json"),
+                        r#"[
+                          {"label":"debug-setup","command":"/usr/bin/touch","args":[".groovy-before-debug","/qualification/state/.groovy-before-debug"],"tags":["before-debug"]},
+                          {"label":"debug-finished","command":"/usr/bin/touch","args":[".groovy-after-debug","/qualification/state/.groovy-after-debug"],"tags":["after-debug"]}
+                        ]"#,
+                    )
+                    .expect("save before- and after-debug Tasks on the project host");
+                }
                 if use_gradle {
                     std::fs::write(
                         root.path().join("gradle.properties"),

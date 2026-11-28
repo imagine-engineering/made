@@ -601,6 +601,7 @@ pub struct PreparedSavedJvmTask {
     pub worktree: gpui::EntityId,
     pub root: Arc<Path>,
     pub task: task::ResolvedTask,
+    remote_session: Option<u64>,
 }
 
 #[cfg(feature = "jvm-tools")]
@@ -610,13 +611,34 @@ impl SavedJvmTask {
         project: &crate::Project,
         cx: &App,
     ) -> anyhow::Result<PreparedSavedJvmTask> {
+        self.prepare_for_hook(project, None, cx)
+    }
+
+    pub fn prepare_for_hook(
+        &self,
+        project: &crate::Project,
+        trigger: Option<JvmTaskTrigger>,
+        cx: &App,
+    ) -> anyhow::Result<PreparedSavedJvmTask> {
         let worktree_id = self.worktree_id;
+        let connected = matches!(
+            trigger,
+            Some(JvmTaskTrigger::BeforeDebug | JvmTaskTrigger::AfterDebug)
+        ) && project.is_via_remote_server()
+            && project.remote_connection_state(cx) == Some(remote::ConnectionState::Connected);
         anyhow::ensure!(
-            !project.is_remote()
-                && !project.is_disconnected(cx)
-                && project.remote_connection_state(cx).is_none(),
+            connected
+                || (!project.is_remote()
+                    && !project.is_disconnected(cx)
+                    && project.remote_connection_state(cx).is_none()),
             "The project host is unavailable; reconnect and refresh before running configurations"
         );
+        if connected {
+            anyhow::ensure!(
+                matches!(&self.source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id),
+                "A connected Debug Task must be saved in the selected project folder"
+            );
+        }
         let worktree_store = project.worktree_store();
         let Some(trusted_worktrees) =
             crate::trusted_worktrees::TrustedWorktrees::try_get_global(cx)
@@ -631,6 +653,16 @@ impl SavedJvmTask {
                 .any(|(restricted_id, _)| restricted_id == worktree_id),
             "Trust the project before running a named configuration"
         );
+        if connected {
+            anyhow::ensure!(
+                trusted_worktrees.read(cx).observed_worktree_trust(
+                    &worktree_store,
+                    worktree_id,
+                    cx
+                ) == Some(true),
+                "Trust the connected project before running its saved Debug Tasks"
+            );
+        }
         let inventory = project
             .task_store()
             .read(cx)
@@ -645,7 +677,7 @@ impl SavedJvmTask {
         let worktree_entity = worktree.entity_id();
         let worktree = worktree.read(cx);
         anyhow::ensure!(
-            worktree.is_local() && worktree.is_visible(),
+            worktree.is_local() != connected && worktree.is_visible(),
             "The saved configuration's project folder is unavailable; refresh the panel"
         );
         let root = worktree.abs_path();
@@ -684,6 +716,8 @@ impl SavedJvmTask {
             worktree: worktree_entity,
             root,
             task: resolved,
+            remote_session: connected
+                .then(|| project.environment().read(cx).remote_session_generation()),
         })
     }
 }
@@ -734,7 +768,13 @@ pub fn prepare_jvm_hook_tasks(
         return Ok(Vec::new());
     };
     select_jvm_trigger_tasks(
-        inventory.read(cx).saved_task_templates(worktree_id),
+        inventory
+            .read(cx)
+            .saved_task_templates(worktree_id)
+            .filter(|(source, _)| {
+                !project.is_remote()
+                    || matches!(source, TaskSourceKind::Worktree { id, .. } if *id == worktree_id)
+            }),
         trigger,
     )?
     .into_iter()
@@ -744,7 +784,7 @@ pub fn prepare_jvm_hook_tasks(
             source,
             label: template.label,
         };
-        let prepared = target.prepare(project, cx)?;
+        let prepared = target.prepare_for_hook(project, Some(trigger), cx)?;
         Ok((target, prepared))
     })
     .collect()

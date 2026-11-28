@@ -1619,6 +1619,15 @@ impl RunningState {
                         })?;
                         anyhow::ensure!(current == *plan, "The selected Java test changed before Debug could start; refresh Tests");
                     }
+                } else if remote_selected_test {
+                    #[cfg(feature = "jvm-tools")]
+                    Self::run_before_selected_java_debug(
+                        &this,
+                        &project,
+                        worktree_id.context("Select a Java test worktree")?,
+                        cx,
+                    )
+                    .await?;
                 }
 
                 let creation = if selected_java_test.is_some() {
